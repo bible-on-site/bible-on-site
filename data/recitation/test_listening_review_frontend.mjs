@@ -384,6 +384,46 @@ test("an editor control with focus prevents a replacement version from appearing
   assert.equal(p.run("cutRows.get(2).endMs.number"),control);
 });
 
+test("reset keeps a previously heard word visible and restores both original slider windows",async()=>{
+  const p=await page();
+  const playback=p.run("play('word',caseNow().words[2])");await p.flush();await p.finish();await playback;
+  const row=p.run("cutRows.get(3)"),other=p.run("cutRows.get(2)");
+  p.run("setCutBoundary(2,'endMs',650)");
+  for(const [field,value] of [["startMs","1.100"],["endMs","1.300"]]){
+    row[field].number.value=value;row[field].number.oninput();row[field].number.onchange();
+  }
+  assert.equal(row.startMs.range.min,"950");assert.equal(row.endMs.range.min,"1150");
+  row.reset.onclick();
+  assert.equal(p.run("cutRows.get(3)"),row,"reset must keep the same visible word controls");
+  assert.equal(p.run("cutRows.get(2)"),other,"reset must not rebuild neighboring controls");
+  for(const [field,value,min,max] of [["startMs","0.700","550","850"],["endMs","0.900","750","1050"]]){
+    assert.equal(row[field].number.value,value);
+    assert.equal(row[field].range.value,String(Number(value)*1000));
+    assert.equal(row[field].range.min,min);assert.equal(row[field].range.max,max);
+    assert.equal(row[field].delta.textContent,"0 ms");
+  }
+  assert.equal(row.reset.disabled,true);assert.equal(row.row.classList.contains("edited"),false);
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),true);
+  assert.equal(p.run("caseNow().words[2].startMs"),700);assert.equal(p.run("caseNow().words[2].endMs"),900);
+  await p.run("refreshQueue()");assert.equal(p.run("cutRows.get(3)"),row);
+  assert.equal(p.posts.length,0);assert.equal(p.editPosts.length,0);assert.equal(p.legacyPosts.length,0);
+});
+
+test("reset after hearing only edited coordinates still requires hearing the original cut",async()=>{
+  const p=await page();p.run("setCutBoundary(3,'endMs',1000)");
+  const row=p.run("cutRows.get(3)");
+  const playback=p.run("play('word',caseNow().words[2])");await p.flush();await p.finish();await playback;
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),true);
+  row.reset.onclick();
+  assert.equal(p.run("cutRows.get(3)"),row);
+  assert.equal(row.endMs.number.value,"0.900");
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),false);
+  assert.equal(p.elements.good.disabled,true);
+  assert.equal(p.run("heardNow().fresh.has(3)"),false);
+  assert.equal(p.posts.length,0);assert.equal(p.editPosts.length,0);
+});
+
 test("resetting an edited word restores genuine original hearing without carrying edited approval",async()=>{
   const p=await page();const playback=p.run("play('word',caseNow().words[1])");await p.flush();await p.finish();await playback;
   p.run("setCutBoundary(2,'endMs',650)");assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);

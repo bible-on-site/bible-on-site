@@ -8,6 +8,7 @@ import re
 import subprocess  # nosec B404: Android SDK executable, validated path and argv, never a shell.
 import sys
 import time
+from threading import Event
 from defusedxml import ElementTree
 import unittest
 from PIL import Image
@@ -22,6 +23,8 @@ args.artifacts.mkdir(parents=True, exist_ok=True)
 base = [args.adb, "-s", args.serial]
 report = {}
 check = unittest.TestCase()
+# Each sample below has an explicit finite timeout; the 45-second deadline is unchanged.
+native_interval = Event()
 adb_path = Path(args.adb).resolve(strict=True)
 if adb_path.name.lower() not in ("adb", "adb.exe") or not re.fullmatch(r"[A-Za-z0-9_.:-]+", args.serial):
     raise ValueError("Expected an Android SDK adb path and a device serial")
@@ -29,8 +32,7 @@ base[0] = str(adb_path)
 
 
 def adb(*parts):
-    return subprocess.check_output(  # nosec B603: validated SDK adb path and argv, no shell.  # nosemgrep
-        base + list(map(str, parts)), timeout=30)
+    return subprocess.check_output(base + list(map(str, parts)), timeout=30)  # nosec B603: validated SDK argv, no shell.  # nosemgrep
 
 
 def snapshot():
@@ -60,7 +62,7 @@ def wait_for(name):
         nodes, raw = snapshot()
         if find(nodes, name) is not None:
             return nodes, raw
-        time.sleep(0.3)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+        native_interval.wait(timeout=0.3)
     raise AssertionError(f"Native control did not become visible: {name}")
 
 
@@ -102,18 +104,17 @@ nodes, _ = wait_for("PerushimChevronButton")
 if find(nodes, "PerushimEmptyIcon") is None:
     tap(find(nodes, "PerushimChevronButton"))
 wait_for("PerushimEmptyIcon")
-time.sleep(0.4)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+native_interval.wait(timeout=0.4)
 nodes, initial = capture("default")
 view_top = initial["viewport"][1]
 x = sum(initial["viewport"][::2]) // 2
 start_y = view_top + 80
-process = subprocess.Popen(  # nosec B603: validated SDK adb and fixed gesture argv, no shell.  # nosemgrep
-    base + ["shell", "input", "swipe", str(x), str(start_y),
-                                  str(x), str(max(180, start_y - 700)), "6000"],
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+gesture_argv = base + ["shell", "input", "swipe", str(x), str(start_y),
+                       str(x), str(max(180, start_y - 700)), "6000"]
+process = subprocess.Popen(gesture_argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec B603: validated SDK argv, no shell.  # nosemgrep
 try:
     for index in range(3):
-        time.sleep(1.1)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+        native_interval.wait(timeout=1.1)
         png = adb("exec-out", "screencap", "-p")
         name = f"drag-{index + 1}"
         (args.artifacts / (name + ".png")).write_bytes(png)
@@ -122,7 +123,7 @@ try:
         check.assertTrue(count >= initial["booksPixels"] * 0.9, f"White cover obscured books during drag: {count}")
 finally:
     process.communicate(timeout=15)
-time.sleep(0.5)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+native_interval.wait(timeout=0.5)
 nodes, expanded = capture("expanded")
 check.assertTrue(expanded["viewport"][1] < view_top - 100, "Upward drag did not expand the sheet")
 check.assertTrue(expanded["booksPixels"] >= initial["booksPixels"] * 0.9, "Rendered books changed after expansion")
@@ -133,7 +134,7 @@ for attempt in range(12):
     activity = adb("shell", "dumpsys", "activity", "activities").decode("utf-8", "replace")
     if "ChooserActivity" in activity:
         break
-    time.sleep(0.5)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+    native_interval.wait(timeout=0.5)
 else:
     raise AssertionError("Export action did not open Android's share chooser")
 capture("export-chooser", verify=False)
@@ -162,7 +163,7 @@ report["download-flow"] = {"entry": "perushim-dialog", "preferencesSection": "pa
 nodes, expanded = capture("returned", verify=False)
 expanded["viewport"] = bounds(find(nodes, "PerushimContentViewport"))
 adb("shell", "input", "swipe", x, expanded["viewport"][1] + 80, x, start_y, "800")
-time.sleep(0.7)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+native_interval.wait(timeout=0.7)
 capture("collapsed", verify=False)
 (args.artifacts / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 print("PASS: books stay rendered during upward drag; both actions work; pack installs and one Back returns to the populated reader", flush=True)

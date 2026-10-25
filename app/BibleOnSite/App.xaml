@@ -46,7 +46,6 @@
 
             <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
-            <converters:TopEdgeShadowOffsetConverter x:Key="TopEdgeShadowOffsetConverter"/>
             <converters:ZeroToTrueConverter x:Key="ZeroToTrueConverter"/>
             <converters:NotNullConverter x:Key="NotNullConverter"/>
             <converters:FontFactorToSizeConverter x:Key="FontFactorToSizeConverter"/>

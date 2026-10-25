@@ -276,8 +276,8 @@ public partial class FloatingSearchBar : ContentView
         {
             await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
         }
-        #pragma warning disable S2221 // Deliberate failure boundary: keyboard dismissal is best-effort
-        catch (Exception ex) //NOSONAR — failure boundary: a navigation failure must not crash the picker.
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure is log-only
+        catch (Exception ex) //NOSONAR — a navigation failure must not crash the picker.
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Navigate to perushim download failed: {ex}");

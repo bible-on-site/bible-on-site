@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      xmlns:fonts="clr-namespace:Fonts"
+      x:Class="BibleOnSite.Controls.ReaderBottomBar"
+      x:Name="Root"
+      HeightRequest="90"
+      VerticalOptions="End"
+      BackgroundColor="Transparent">
+    <AbsoluteLayout BackgroundColor="Transparent">
+        <GraphicsView AbsoluteLayout.LayoutBounds="0,0,1,1"
+                      AbsoluteLayout.LayoutFlags="All"
+                      BackgroundColor="Transparent"
+                      Drawable="{StaticResource BottomBarDrawable}"/>
+
+        <!-- Perushim Chevron Button at 8% -->
+        <Button x:Name="PerushimChevronButton"
+                AutomationId="PerushimChevronButton"
+                Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
+                FontFamily="FluentIcons"
+                FontSize="20"
+                WidthRequest="44"
+                HeightRequest="44"
+                Padding="0"
+                BackgroundColor="Transparent"
+                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                Clicked="OnPerushimChevronClicked"
+                AbsoluteLayout.LayoutBounds="0.08,0.55"
+                AbsoluteLayout.LayoutFlags="PositionProportional"/>
+
+        <!-- Text Button at 28% - vertical א ב ג -->
+        <Button x:Name="TextButton"
+                AutomationId="TextButton"
+                Text="א&#x0a;ב&#x0a;ג"
+                FontAutoScalingEnabled="False"
+                SemanticProperties.Description="הצגת הטקסט"
+                FontSize="10"
+                FontAttributes="Bold"
+                WidthRequest="44"
+                HeightRequest="44"
+                Padding="0"
+                LineBreakMode="WordWrap"
+                BackgroundColor="Transparent"
+                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                Clicked="OnTextButtonClicked"
+                AbsoluteLayout.LayoutBounds="0.28,0.55"
+                AbsoluteLayout.LayoutFlags="PositionProportional"/>
+
+        <!-- Articles Button with Badge at 72% -->
+        <Grid WidthRequest="50"
+              HeightRequest="44"
+              AbsoluteLayout.LayoutBounds="0.72,0.55"
+              AbsoluteLayout.LayoutFlags="PositionProportional">
+            <Button x:Name="ArticlesButton"
+                    Text="{x:Static fonts:FluentUI.document_24_regular}"
+                    FontFamily="FluentIcons"
+                    FontSize="20"
+                    WidthRequest="44"
+                    HeightRequest="44"
+                    Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                    Clicked="OnArticlesButtonClicked"
+                    HorizontalOptions="Center"/>
+            <Border x:Name="ArticlesBadge"
+                    BackgroundColor="#E53935"
+                    StrokeShape="RoundRectangle 10"
+                    Stroke="Transparent"
+                    Padding="4,1"
+                    MinimumWidthRequest="16"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Start"
+                    Margin="8,-2,0,0"
+                    IsVisible="False">
+                <Label x:Name="ArticlesBadgeLabel"
+                       FontSize="11"
+                       FontAttributes="Bold"
+                       TextColor="White"
+                       HorizontalTextAlignment="Center"
+                       VerticalTextAlignment="Center"/>
+            </Border>
+        </Grid>
+
+        <!-- Full Screen Button at 92% -->
+        <Button x:Name="FullScreenButton"
+                AutomationId="FullScreenButton"
+                Text="{x:Static fonts:FluentUI.full_screen_maximize_24_regular}"
+                FontFamily="FluentIcons"
+                FontSize="22"
+                WidthRequest="44"
+                HeightRequest="44"
+                Padding="0"
+                BackgroundColor="Transparent"
+                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                Clicked="OnFullScreenClicked"
+                AbsoluteLayout.LayoutBounds="0.92,0.55"
+                AbsoluteLayout.LayoutFlags="PositionProportional"/>
+
+    </AbsoluteLayout>
+</Grid>

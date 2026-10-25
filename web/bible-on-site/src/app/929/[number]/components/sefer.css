@@ -1,6 +1,6 @@
 /* ===================================================================
  * Base flipbook styles — replicated from html-flip-book-vanilla pages.scss
- * & flipbook.scss (v0.0.0-alpha.46) because the vanilla CSS is not
+ * & flipbook.scss (v0.0.0-alpha.49) because the vanilla CSS is not
  * importable from this Next.js project (transitive dep; the package's
  * "./style.css" export points at a file the tarball does not ship).
  * IMPORTANT: keep in sync with the library version.
@@ -145,6 +145,60 @@ html[data-sefer-view] {
   height: 100%;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* alpha.49 inward page scrollbars: the React adapter now wraps every page
+   child in .flipbook-page-scrollport > .flipbook-page-content so the
+   scrollport can own page scrolling with the scrollbar beside the spine.
+   data-scrollbar-side keeps scrollbar direction independent of reading
+   direction (nothing writes these attributes in alpha.49 — the rules
+   replicate pages.scss for parity). */
+.he-book .page[data-scrollbar-side="left"] {
+  --flipbook-page-scroll-direction: rtl;
+}
+.he-book .page[data-scrollbar-side="right"] {
+  --flipbook-page-scroll-direction: ltr;
+}
+.he-book .page[data-reading-direction="ltr"] {
+  --flipbook-page-content-direction: ltr;
+}
+.he-book .page[data-reading-direction="rtl"] {
+  --flipbook-page-content-direction: rtl;
+}
+
+.he-book .flipbook-page-scrollport {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  direction: var(--flipbook-page-scroll-direction, ltr);
+}
+
+.he-book .flipbook-page-content {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.he-book .flipbook-page-content:not([dir]) {
+  direction: var(--flipbook-page-content-direction, ltr);
+}
+
+/* Divergence from upstream pages.scss, which gives content roots
+   height:auto so the shared scrollport scrolls the whole page: Sefer
+   pages are app-like panels — fixed headers and footers with inner scroll
+   panes (perekTextScrollWrapper, blankPageArticles, perushNotesInBook) —
+   so their roots stay bounded to the page and the scrollport never
+   engages. Same height semantics as the pre-alpha.49 .page > * rule. */
+.he-book .flipbook-page-content > * {
+  width: 100%;
+  min-height: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 /* coverConfig.noShadow: the React wrapper tags cover pages with

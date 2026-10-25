@@ -148,10 +148,8 @@ public partial class FloatingSearchBar
             await PerushimNotesService.Instance.InitializeAsync();
         }
         #pragma warning disable S2221 // Deliberate failure boundary: commentary-pack probe: any failure counts as unavailable
-        #pragma warning disable S2221 // Deliberate failure boundary: commentary-pack probe: any failure counts as unavailable
         catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR — commentary-pack probe: any failure counts as unavailable.
         {
-            #pragma warning restore S2221
             #pragma warning restore S2221
             Console.Error.WriteLine($"Commentary-pack check failed: {ex}");
         }

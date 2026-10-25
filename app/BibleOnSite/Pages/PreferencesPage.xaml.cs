@@ -6,7 +6,9 @@ namespace BibleOnSite.Pages;
 /// <summary>
 /// Settings overview: six category rows, each opening its own detail page.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class PreferencesPage : PreferencesPageBase, IQueryAttributable
+#pragma warning restore S2333
 {
     private readonly PreferencesViewModel _viewModel;
 

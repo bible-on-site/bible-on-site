@@ -1,10 +1,10 @@
 "use client";
 
+import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
-import DOMPurify from "isomorphic-dompurify";
 import { demoteHeadings } from "@/lib/html-headings";
 import articleStyles from "../[slug]/page.module.css";
 import { ShareButton } from "./ShareButton";
@@ -13,8 +13,12 @@ import styles from "./sefer.module.css";
 interface ArticleFullViewProps {
 	article: Article;
 	onBack: () => void;
-	/** When true, layout fills container: title fixed, body scrolls (flipbook blank page). */
+	/** When true, layout fills container: header fixed, body scrolls (flipbook blank page). */
 	fullPage?: boolean;
+	/** Article-only fullscreen is active (the caller renders the overlay). */
+	fullscreen?: boolean;
+	/** Toggles the article's own fullscreen overlay (#2544 item 7). */
+	onToggleFullscreen?: () => void;
 }
 
 /**
@@ -25,6 +29,8 @@ export function ArticleFullView({
 	article,
 	onBack,
 	fullPage = false,
+	fullscreen = false,
+	onToggleFullscreen,
 }: ArticleFullViewProps) {
 	const rootClass = fullPage
 		? `${articleStyles.expandedArticle} ${styles.articleFullViewInBook}`
@@ -68,12 +74,23 @@ export function ArticleFullView({
 					canonicalPath={canonicalPath}
 					title={`${article.name} - ${article.authorName}`}
 				/>
+				{onToggleFullscreen && (
+					<button
+						type="button"
+						className={styles.fullscreenToggle}
+						onClick={onToggleFullscreen}
+						aria-pressed={fullscreen}
+					>
+						{fullscreen ? "צמצם" : "מסך מלא"}
+					</button>
+				)}
 			</header>
 
 			{article.content && (
 				<div className={fullPage ? styles.articleBodyWrapper : undefined}>
 					<div
 						className={articleStyles.articleBody}
+						// nosemgrep -- DOMPurify-sanitized article HTML
 						// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 						dangerouslySetInnerHTML={{
 							__html: DOMPurify.sanitize(demoteHeadings(article.content)),

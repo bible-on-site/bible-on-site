@@ -2,7 +2,9 @@ using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Controls;
 
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class ExtensionPacksView : ContentView
+#pragma warning restore S2333
 {
     public ExtensionPacksView() => InitializeComponent();
 

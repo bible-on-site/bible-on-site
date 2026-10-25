@@ -3,85 +3,49 @@ using FluentAssertions;
 
 namespace BibleOnSite.Tests.Pages;
 
-/// <summary>
-/// #2574: the perushim sheet must not paint an extra opaque rectangle around its
-/// edges — most visibly the band it lays over the bottom toolbar. Border.Shadow on
-/// Android routes the panel through PlatformWrapperView, which renders the shadow
-/// via a pooled bitmap whose uncleared padding ring surfaces as a stale white
-/// rectangle. The sheet keeps its rounded fill + stroke on the Border and gets its
-/// top-edge shadow from a bound PerushimPanelShadow strip instead.
-/// </summary>
+/// <summary>Guards the shared reader sheet against the painted-cover and empty-view regressions.</summary>
 public class PerushimPanelShadowTests
 {
     private static readonly string AppRoot = FindAppRoot();
-
-    private static readonly string[] ReaderPages =
-    [
-        "PerekPage.xaml",
-        "ParashaPage.xaml",
-        "MasoraPage.xaml",
-    ];
-
-    public static TheoryData<string> Pages => new(ReaderPages);
+    private static readonly XNamespace Maui = "http://schemas.microsoft.com/dotnet/2021/maui";
+    private static XDocument Sheet => XDocument.Load(Path.Join(AppRoot, "Controls", "PerushimSheet.xaml"));
 
     [Theory]
-    [MemberData(nameof(Pages))]
-    public void PerushimPanel_does_not_declare_a_shadow(string pageFile)
+    [InlineData("PerekPage.xaml")]
+    [InlineData("ParashaPage.xaml")]
+    [InlineData("MasoraPage.xaml")]
+    public void Reader_uses_the_shared_sheet(string pageFile)
     {
-        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
         var doc = XDocument.Load(Path.Join(AppRoot, "Pages", pageFile));
-
-        var panel = doc.Descendants(p + "Border")
-            .First(e => (string?)e.Attribute("{http://schemas.microsoft.com/winfx/2009/xaml}Name") == "PerushimPanel");
-
-        panel.Element(p + "Border.Shadow").Should().BeNull(
-            "Border.Shadow is the layer that painted the rectangle artifact on Android");
+        XNamespace controls = "clr-namespace:BibleOnSite.Controls";
+        doc.Descendants(controls + "PerushimSheet").Should().ContainSingle();
     }
 
-    [Theory]
-    [MemberData(nameof(Pages))]
-    public void PerushimPanel_keeps_its_rounded_stroke_edge(string pageFile)
+    [Fact]
+    public void Sheet_does_not_use_the_native_shadow_wrapper()
     {
-        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
-        var doc = XDocument.Load(Path.Join(AppRoot, "Pages", pageFile));
-
-        var panel = doc.Descendants(p + "Border")
-            .First(e => (string?)e.Attribute("{http://schemas.microsoft.com/winfx/2009/xaml}Name") == "PerushimPanel");
-
-        ((string?)panel.Attribute("StrokeShape")).Should().Contain("RoundRectangle",
-            "the sheet still needs its rounded top corners");
-        panel.Attribute("Stroke").Should().NotBeNull("the sheet keeps its border edge");
-        ((string?)panel.Attribute("StrokeThickness")).Should().Be("1");
+        Sheet.Root!.Element(Maui + "Border.Shadow").Should().BeNull();
+        ((string?)Sheet.Root.Attribute("StrokeShape")).Should().Contain("RoundRectangle");
+        ((string?)Sheet.Root.Attribute("StrokeThickness")).Should().Be("1");
     }
 
-    [Theory]
-    [MemberData(nameof(Pages))]
-    public void PerushimPanelShadow_strip_tracks_the_sheet_transforms(string pageFile)
+    [Fact]
+    public void Entire_content_viewport_reserves_the_bottom_bar()
     {
-        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
-        var doc = XDocument.Load(Path.Join(AppRoot, "Pages", pageFile));
+        var viewport = Sheet.Root!.Element(Maui + "Grid")!;
+        ((string?)viewport.Attribute("Margin")).Should().Be("0,0,0,90");
+        ((string?)viewport.Attribute("IsClippedToBounds")).Should().Be("True");
+    }
 
-        var strip = doc.Descendants(p + "BoxView")
-            .First(e => (string?)e.Attribute("{http://schemas.microsoft.com/winfx/2009/xaml}Name") == "PerushimPanelShadow");
-
-        ((string?)strip.Attribute("InputTransparent")).Should().Be("True",
-            "the shadow strip must never block input to the reader");
-        ((string?)strip.Attribute("ZIndex")).Should().Be("49",
-            "the strip renders just under the sheet and above the content");
-
-        var translation = strip.Element(p + "BoxView.TranslationY")
-            ?.Element(p + "MultiBinding")
-            ?? throw new Xunit.Sdk.XunitException(
-                "the strip must follow the sheet's slide/drag transforms");
-
-        var paths = translation.Elements(p + "Binding")
-            .Select(b => (string?)b.Attribute("Path"))
-            .ToArray();
-        paths.Should().BeEquivalentTo(["TranslationY", "HeightRequest"],
-            "the offset combines the slide translation and the sheet height");
-
-        ((string?)strip.Attribute("IsVisible")).Should().Contain("IsVisible",
-            "the strip hides whenever the sheet is hidden");
+    [Fact]
+    public void Empty_content_uses_a_separate_scroll_host_without_a_scroll_indicator()
+    {
+        var doc = Sheet;
+        doc.Descendants(Maui + "CollectionView.EmptyView").Should().BeEmpty();
+        var empty = doc.Descendants(Maui + "ScrollView").Single();
+        ((string?)empty.Attribute("VerticalScrollBarVisibility")).Should().Be("Never");
+        empty.Descendants(Maui + "Button").Should().HaveCount(2,
+            "download and support actions stay inside the same bounded empty-content host");
     }
 
     private static string FindAppRoot()

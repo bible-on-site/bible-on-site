@@ -79,6 +79,7 @@
     <Compile Include="..\BibleOnSite\Services\TanahpediaService.cs" Link="Services\TanahpediaService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\FlyoutMenuState.cs" Link="ViewModels\FlyoutMenuState.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\IPerushimSheetViewModel.cs" Link="ViewModels\IPerushimSheetViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
@@ -94,6 +95,10 @@
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs" Link="ViewModels\TanahpediaEntityTypeViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaSearchViewModel.cs" Link="ViewModels\TanahpediaSearchViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs" Link="ViewModels\TanahpediaEntryViewModel.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\sedra-schedule.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
