@@ -17,6 +17,7 @@ public class MasoraViewModelTests
         public InMemoryPreferencesStorage Prefs { get; } = new();
         public MasoraDataService MasoraService { get; }
         public MasoraViewModel Model { get; }
+        public PerushimNotesService Notes { get; }
         private readonly bool _includeCatalog;
         private readonly bool _includeNotes;
         private readonly string[] _extraPerushInserts;
@@ -38,6 +39,7 @@ public class MasoraViewModelTests
             }
             var catalog = new PerushimCatalogService(Storage.FileSystem.Object);
             var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
+            Notes = notes;
             var preferences = PreferencesService.CreateForTesting(Prefs);
             Preferences = preferences;
             preferences.Load();
@@ -494,6 +496,11 @@ public class MasoraViewModelTests
         await using var fixture = new Fixture(includeNotes: false);
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
+
+        // First-launch notes materialization is kicked, not awaited — see #2430.
+        // The page reloads perushim once the operation settles; emulate that here.
+        await fixture.Notes.InitializeAsync();
+        await fixture.Model.LoadPerushimAsync(fixture.Model.Unit!);
 
         fixture.Model.PerushimCatalogAvailable.Should().BeTrue();
         fixture.Model.PerushimNotesAvailable.Should().BeFalse();

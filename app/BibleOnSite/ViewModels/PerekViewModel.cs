@@ -11,7 +11,7 @@ namespace BibleOnSite.ViewModels;
 /// ViewModel for perek display and navigation.
 /// Uses CommunityToolkit.Mvvm for observable properties and commands.
 /// </summary>
-public partial class PerekViewModel : ObservableObject
+public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
 {
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Perek?> _perekLoader;
