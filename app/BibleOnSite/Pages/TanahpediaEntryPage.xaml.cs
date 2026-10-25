@@ -17,6 +17,7 @@ public partial class TanahpediaEntryPage : ContentPage
 #pragma warning restore S2333
 {
     private readonly TanahpediaEntryViewModel _viewModel;
+    private bool _backToPediaPending;
 
     public string UniqueName { get; set; } = string.Empty;
 
@@ -42,9 +43,11 @@ public partial class TanahpediaEntryPage : ContentPage
     {
         var prefs = PreferencesService.Instance;
         UpdateFontSizeResources(prefs.ArticleFontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        // The singleton must not retain a pushed entry page - repeated entry
+        // navigation would accumulate pages and native views forever (#2640).
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.ArticleFontFactor));
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor)));
     }
 
     private void UpdateFontSizeResources(double factor)
@@ -140,11 +143,29 @@ public partial class TanahpediaEntryPage : ContentPage
 
     private async void OnBackToPediaClicked(object? sender, EventArgs e)
     {
-        if (Shell.Current is not { } shell)
+        // async void + Shell navigation: an unobserved GoToAsync exception is a
+        // crash, and a second tap during the transition must not stack another
+        // absolute-route navigation on top of the in-flight one (#2640).
+        if (_backToPediaPending || Shell.Current is not { } shell)
         {
             return;
         }
-        var location = shell.CurrentState.Location.OriginalString;
-        await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+        _backToPediaPending = true;
+        try
+        {
+            var location = shell.CurrentState.Location.OriginalString;
+            await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — back navigation failure alerts the user.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
+            await DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+        }
+        finally
+        {
+            _backToPediaPending = false;
+        }
     }
 }

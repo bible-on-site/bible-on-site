@@ -273,8 +273,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         var prefs = PreferencesService.Instance;
         UpdateFontSizeResources(prefs);
-        prefs.PreferencesChanged += (_, _) =>
-            MainThread.BeginInvokeOnMainThread(() => UpdateFontSizeResources(prefs));
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
+            MainThread.BeginInvokeOnMainThread(() => page.UpdateFontSizeResources(prefs)));
     }
 
     // Reading-text category inventory (#2461): פסוקים covers the pasuk body
