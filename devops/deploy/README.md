@@ -53,11 +53,33 @@ or database changes.
 Run `python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"`
 from the repository root to verify that additive migrations preserve existing rows.
 
+#### Schema-only releases
+
+Data CI and parser tests still run for migration-only changes. When there is at
+least one changed file under data/ and every such file matches
+data/mysql/tanahpedia_alter_*.sql, the master release skips the full data CD job.
+Related deploy-tooling, parser, test, and documentation changes do not turn that
+case into a bootstrap deployment. Static/scripture SQL, pipeline data, and mixed
+data changes retain the normal full-release path.
+
+This is a routing safeguard, not proof that SQL is additive or approved. Deleted
+migration files also take the manual route and must never be invoked. Deliver
+each reviewed schema migration separately after explicit AWS approval and record
+the production validation; merging a schema-only PR does not apply its SQL.
+A tooling-only change retains the existing full-release behavior, so review its
+production impact separately.
+
 #### Mention-decoration schema recovery
 
 The schema migration `data/mysql/tanahpedia_alter_mention_decoration.sql` creates
 the missing table without replacing existing rows. It does not import annotations
 or change scripture, articles, or public URLs.
+
+Before merging, confirm that this change takes the schema-only/manual release
+route. A mixed data change still triggers full data CD; do not use that route for
+this single-table recovery. Keep the PR unmerged until its current AWS-impacting
+changes receive explicit approval. Independently verify the live parser before
+any migration execution, even when the repository tests are green.
 
 After explicit approval of the AWS changes, use this bounded recovery procedure:
 
@@ -117,6 +139,26 @@ If application rollback is needed, leave the additive table and any rows in
 place. Keep the original Lambda ZIP available, but do not restore its destructive
 parser while this migration remains in the deployment manifest. A parser
 rollback must first exclude the migration from subsequent data deployments.
+
+#### Verified production recovery (2026-10-25)
+
+The bounded recovery was applied in account 250598594267, il-central-1. The live
+parser-only package has CodeSha256
+lYrF4yIyfwnLBEy40yprsny6jQ8h01GK9rdbiUbU1NU=. Only the two parser expressions in
+index.py changed; the credential handler and all 51 dependency entries were
+preserved. The original ZIP and its verified hash are retained as private
+rollback artifacts.
+
+Only the mention-decoration CREATE TABLE migration was executed, then repeated.
+Production checks passed for the 22 columns, declared indexes and foreign-key
+support indexes, both foreign keys, article deletion cascade, and zero rows
+before and after the repeat. The exact reader SELECT now succeeds. The sole
+active website instance's mention-reference cache was invalidated, and both
+public domains' health plus fresh chapter requests returned 200.
+
+The router is not permitted to connect to RDS by the existing security groups.
+Verification used read-only SQL through the existing Lambda instead; no network
+policy was widened. No full bootstrap or commentary payload was run.
 
 **Required Environment Variables (set via OIDC in CI):**
 - `AWS_REGION` - AWS region (e.g., `il-central-1`)
