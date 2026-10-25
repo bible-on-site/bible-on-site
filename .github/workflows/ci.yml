@@ -771,6 +771,12 @@ jobs:
       checks: write # Required by Bencher to create GitHub Check on push to master
       pull-requests: write # Required by Bencher to add comment on PRs
 
+    # sccache wraps every rustc call in jobs that install it; per-object cache
+    # complements rust-cache's whole-target-dir reuse when a key misses. Set
+    # per-job: version-only jobs (package_*, shared-dockerize) run cargo on the
+    # runner without sccache on PATH, so a global wrapper breaks them.
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -885,6 +891,9 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Populate MySQL for build
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -1005,6 +1014,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1103,6 +1114,9 @@ jobs:
           # Release-profile cache shared with admin_ci; data_ci keeps its own
           # key because its coverage builds produce debug-profile artifacts.
           shared-key: "e2e-release-crates"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Build only the seeders used by the E2E launchers, not every data
       # pipeline. Both shared-key consumers must build the same crate set:
@@ -1399,6 +1413,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1486,6 +1502,9 @@ jobs:
           workspaces: ${{ env.DATA_DIRECTORY }}
           # Same release-profile populator cache as website_ci.
           shared-key: "e2e-release-crates"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Build only the two seeders used by the E2E launcher.
       # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test.
@@ -1743,6 +1762,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1766,6 +1787,9 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Lint
         id: lint
@@ -2087,6 +2111,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2212,6 +2238,9 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Publish App Unit Report To Codecov
         if: ${{ !cancelled() }}
@@ -2359,6 +2388,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2382,6 +2413,9 @@ jobs:
           workspaces: ${{ env.BULLETIN_DIRECTORY }}
           cache-on-failure: true
           shared-key: "bulletin-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Lint
         id: lint
@@ -2528,6 +2562,8 @@ jobs:
       contents: read
       packages: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2552,6 +2588,9 @@ jobs:
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-ci-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Overlap the image pull with lint/unit coverage; integration tests wait below.
       - name: Pull Sefaria MongoDB Docker Image
@@ -2742,6 +2781,8 @@ jobs:
       contents: read
       packages: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -2778,6 +2819,9 @@ jobs:
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "perushim-data-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Wait for Sefaria MongoDB Docker Image
         wait: pull-sefaria-mongo

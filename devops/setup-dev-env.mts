@@ -9,6 +9,10 @@ import {
 	RevokeSecurityGroupIngressCommand,
 } from "@aws-sdk/client-ec2";
 import * as dotenv from "dotenv";
+import {
+	isCheckpointCurrent,
+	parseTableTimes,
+} from "./dev-db-checkpoint.mts";
 import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
@@ -29,6 +33,10 @@ async function main() {
 	}
 	if (subcommand === "decompress-perushim-notes") {
 		decompressPerushimNotes();
+		return;
+	}
+	if (subcommand === "check-dev-db-freshness") {
+		await runCheckFreshness();
 		return;
 	}
 
@@ -224,10 +232,20 @@ function fetchSecurityGroupId(sgName: string, region: string): string {
 	return result.stdout.trim();
 }
 
-async function runSyncFromProd(): Promise<void> {
-	const dryRun = process.argv.includes("--dry-run");
-	if (dryRun) console.info("[dry-run] Would execute the following steps.");
+interface SyncContext {
+	prodDb: MysqlUrlParts;
+	devDb: MysqlUrlParts;
+	devDbUrl: string;
+	sgId: string;
+	awsRegion: string;
+	prodS3Bucket: string;
+	devS3Bucket: string;
+	s3Endpoint?: string;
+	publicIp: string;
+	ec2: EC2Client;
+}
 
+async function resolveSyncContext(): Promise<SyncContext> {
 	dotenv.config({ path: path.resolve(projectDir, "data", ".dev.env") });
 
 	// Use hardcoded region for production
@@ -263,29 +281,94 @@ async function runSyncFromProd(): Promise<void> {
 	const publicIp = await getPublicIp();
 	console.info(`Public IP: ${publicIp}`);
 
-	const ec2 = new EC2Client({ region: awsRegion });
+	return {
+		prodDb,
+		devDb,
+		devDbUrl,
+		sgId,
+		awsRegion,
+		prodS3Bucket,
+		devS3Bucket,
+		s3Endpoint,
+		publicIp,
+		ec2: new EC2Client({ region: awsRegion }),
+	};
+}
+
+function ingressPermission(publicIp: string) {
+	return {
+		IpProtocol: "tcp",
+		FromPort: 3306,
+		ToPort: 3306,
+		IpRanges: [{ CidrIp: `${publicIp}/32`, Description: DEV_SYNC_TAG }],
+	};
+}
+
+async function authorizeIngress(
+	ec2: EC2Client,
+	sgId: string,
+	publicIp: string,
+): Promise<void> {
+	console.info("Authorizing RDS security group ingress for your IP...");
+	try {
+		await ec2.send(
+			new AuthorizeSecurityGroupIngressCommand({
+				GroupId: sgId,
+				IpPermissions: [ingressPermission(publicIp)],
+			}),
+		);
+	} catch (e) {
+		// A rule left behind by an interrupted run shouldn't block the next one.
+		if (!String(e).includes("InvalidPermission.Duplicate")) throw e;
+	}
+}
+
+async function revokeIngress(
+	ec2: EC2Client,
+	sgId: string,
+	publicIp: string,
+): Promise<void> {
+	console.info("Revoking RDS security group ingress...");
+	try {
+		await ec2.send(
+			new RevokeSecurityGroupIngressCommand({
+				GroupId: sgId,
+				IpPermissions: [ingressPermission(publicIp)],
+			}),
+		);
+	} catch (e) {
+		console.warn(
+			"Revoke ingress failed (you may need to remove the rule manually):",
+			e,
+		);
+	}
+}
+
+async function runSyncFromProd(): Promise<void> {
+	const dryRun = process.argv.includes("--dry-run");
+	if (dryRun) console.info("[dry-run] Would execute the following steps.");
+
+	const {
+		prodDb,
+		devDb,
+		devDbUrl,
+		sgId,
+		awsRegion,
+		prodS3Bucket,
+		devS3Bucket,
+		s3Endpoint,
+		publicIp,
+		ec2,
+	} = await resolveSyncContext();
+
+	// Watermark captured before the dump: prod writes racing the restore mark
+	// the checkpoint older-or-equal to the synced content, never newer.
+	let prodWatermark = new Map<string, string | null>();
 
 	try {
 		if (!dryRun) {
-			console.info("Authorizing RDS security group ingress for your IP...");
-			await ec2.send(
-				new AuthorizeSecurityGroupIngressCommand({
-					GroupId: sgId,
-					IpPermissions: [
-						{
-							IpProtocol: "tcp",
-							FromPort: 3306,
-							ToPort: 3306,
-							IpRanges: [
-								{
-									CidrIp: `${publicIp}/32`,
-									Description: DEV_SYNC_TAG,
-								},
-							],
-						},
-					],
-				}),
-			);
+			await authorizeIngress(ec2, sgId, publicIp);
+			prodWatermark = queryTableUpdateTimes(prodDb);
 		} else {
 			console.info(
 				`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
@@ -582,6 +665,8 @@ async function runSyncFromProd(): Promise<void> {
 				);
 			}
 			console.info("  Tanahpedia safe structure + baseline seed complete");
+
+			writeDevCheckpoint(devDb, prodWatermark);
 		}
 
 		// S3 sync (optional if buckets are set)
@@ -732,38 +817,123 @@ async function runSyncFromProd(): Promise<void> {
 		}
 	} finally {
 		if (!dryRun) {
-			console.info("Revoking RDS security group ingress...");
-			try {
-				await ec2.send(
-					new RevokeSecurityGroupIngressCommand({
-						GroupId: sgId,
-						IpPermissions: [
-							{
-								IpProtocol: "tcp",
-								FromPort: 3306,
-								ToPort: 3306,
-								IpRanges: [
-									{
-										CidrIp: `${publicIp}/32`,
-										Description: DEV_SYNC_TAG,
-									},
-								],
-							},
-						],
-					}),
-				);
-			} catch (e) {
-				console.warn(
-					"Revoke ingress failed (you may need to remove the rule manually):",
-					e,
-				);
-			}
+			await revokeIngress(ec2, sgId, publicIp);
 		} else {
 			console.info("[dry-run] Would revoke ingress on", sgId);
 		}
 	}
 
 	console.info("sync-from-prod finished.");
+}
+
+// --- dev/prod freshness checkpoint ---
+
+const CHECKPOINT_TABLE = "dev_sync_checkpoint";
+
+function mysqlQuery(db: MysqlUrlParts, sql: string): string {
+	const res = spawnSync(
+		"mysql",
+		[
+			"-h",
+			db.host,
+			"-P",
+			String(db.port),
+			"-u",
+			db.user,
+			db.database,
+			"-N",
+			"-B",
+			"-e",
+			sql,
+		],
+		{
+			env: { ...process.env, MYSQL_PWD: db.password },
+			encoding: "utf-8",
+		},
+	);
+	if (res.error) throw res.error;
+	if (res.status !== 0)
+		throw new Error(`mysql query failed: ${res.stderr || `exit ${res.status}`}`);
+	return res.stdout ?? "";
+}
+
+/** Per-table UPDATE_TIME on the given DB — cheap freshness watermark. */
+function queryTableUpdateTimes(db: MysqlUrlParts): Map<string, string | null> {
+	// stats_expiry=0 in this session returns live values instead of the
+	// default day-cached information_schema statistics.
+	return parseTableTimes(
+		mysqlQuery(
+			db,
+			`SET SESSION information_schema_stats_expiry=0; SELECT TABLE_NAME, UPDATE_TIME FROM information_schema.TABLES WHERE TABLE_SCHEMA='${db.database.replace(/'/g, "")}' ORDER BY TABLE_NAME`,
+		),
+	);
+}
+
+function queryDevCheckpoint(db: MysqlUrlParts): Map<string, string | null> {
+	try {
+		return parseTableTimes(
+			mysqlQuery(
+				db,
+				`SELECT table_name, update_time FROM ${CHECKPOINT_TABLE}`,
+			),
+		);
+	} catch {
+		// Missing checkpoint table = never synced by this flow → empty → stale.
+		// A real query failure ends up the same: the sync attempt that follows
+		// reports its own error.
+		return new Map();
+	}
+}
+
+function writeDevCheckpoint(
+	db: MysqlUrlParts,
+	times: ReadonlyMap<string, string | null>,
+): void {
+	if (times.size === 0) return;
+	mysqlQuery(
+		db,
+		`CREATE TABLE IF NOT EXISTS ${CHECKPOINT_TABLE} (table_name VARCHAR(128) NOT NULL PRIMARY KEY, update_time DATETIME NULL, recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+	);
+	const values = [...times.entries()]
+		.map(
+			([name, t]) =>
+				`('${name.replace(/'/g, "''")}', ${t === null ? "NULL" : `'${t}'`})`,
+		)
+		.join(",");
+	mysqlQuery(
+		db,
+		`REPLACE INTO ${CHECKPOINT_TABLE} (table_name, update_time) VALUES ${values}`,
+	);
+	console.info(
+		`  Recorded prod checkpoint for ${times.size} tables in dev DB`,
+	);
+}
+
+/**
+ * `check-dev-db-freshness` — the cheap probe `ensure-dev-db --sync-from-prod`
+ * runs each predev instead of a blind time throttle. Same SSM/SG plumbing as
+ * the sync, but one information_schema read in place of dump+restore.
+ * Exit 0 = dev DB matches the recorded prod checkpoint; non-zero = sync needed
+ * (or couldn't be disproven — the sync attempt then reports its own error).
+ */
+async function runCheckFreshness(): Promise<void> {
+	const { prodDb, devDb, sgId, publicIp, ec2 } = await resolveSyncContext();
+	let fresh = false;
+	try {
+		await authorizeIngress(ec2, sgId, publicIp);
+		fresh = isCheckpointCurrent(
+			queryDevCheckpoint(devDb),
+			queryTableUpdateTimes(prodDb),
+		);
+	} finally {
+		await revokeIngress(ec2, sgId, publicIp);
+	}
+	console.info(
+		fresh
+			? "dev DB matches the recorded prod checkpoint — sync not needed"
+			: "dev DB is stale vs prod (or checkpoint missing) — sync required",
+	);
+	process.exit(fresh ? 0 : 4);
 }
 
 function ensureRustfsRunning(): void {

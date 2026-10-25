@@ -90,6 +90,16 @@ AWS_PROFILE=AdministratorAccess-250598594267 pnpm exec tsx devops/setup-dev-env.
 
 This auto-fetches prod DB credentials from SSM and temporarily opens RDS access for your IP. See [Sync from production](../../../data/README.md#sync-from-production-optional) in `data/README.md` for details.
 
+### Keeping `npm run dev` cheap
+
+`predev` skips work that already ran on this machine:
+
+- **Prod sync checkpoint** — the website's `predev` syncs `tanah-dev` from prod only when production data actually changed. Each sync records prod's per-table `UPDATE_TIME` watermark in the dev DB (`dev_sync_checkpoint`); `predev` then probes it with a single `information_schema` read via `npx tsx devops/setup-dev-env.mts check-dev-db-freshness`. No prod writes → skip indefinitely; any write → sync immediately. `npx tsx devops/setup-dev-env.mts sync-from-prod` always forces a full sync; `DEV_DB_SYNC_FROM_PROD=0` disables syncing entirely.
+- **S3 seed check** — the admin's `predev` runs `cargo make s3-populate-dev` only when the dev bucket is empty (the RustFS volume is shared across worktrees). `npm run s3:populate:dev` forces a reseed.
+- **Install skip** — the website's `predev` runs `npm install` only when `package.json`/`package-lock.json` changed since the last install (hash stamp in `node_modules`), and refreshes the local `html-flip-book` build via `USE_LOCAL_FLIP_BOOK` copy instead of rewriting `package.json` to a `file:` dependency.
+- **Lower OS priority** — `npm run dev` (dev-all) starts servers one priority notch lower so builds and watchers can't starve the machine. `--normal-priority` restores default behavior.
+- **Shared Rust compilation cache** — installing `sccache` and setting `RUSTC_WRAPPER=sccache` reuses dependency builds across all worktrees and checkouts; otherwise every fresh worktree compiles the same crates from scratch.
+
 ### VS Code
 
 Install recommended extensions:

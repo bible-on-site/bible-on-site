@@ -210,6 +210,12 @@ const argv = await yargs(hideBin(process.argv))
 		default: false,
 		describe: "Restart modules that are already listening",
 	})
+	.option("normal-priority", {
+		type: "boolean",
+		default: false,
+		describe:
+			"Run servers at the default OS priority instead of a lower one (e.g. for latency measurements)",
+	})
 	.strict()
 	.parse();
 
@@ -235,6 +241,19 @@ process.on("SIGINT", () => {
 	shutdown(0);
 });
 
+/**
+ * Dev work shouldn't starve the user's machine: servers and everything they
+ * spawn (compilers, bundlers, watchers) launch one priority notch lower.
+ * An idle machine still builds at full speed; a busy one stays responsive.
+ */
+function launchCommand(mod: DevModule): string {
+	if (argv["normal-priority"]) return mod.command;
+	// `start /wait` alone drops the child's exit code; /v:on lets us re-emit it.
+	if (IS_WINDOWS)
+		return `cmd /v:on /c "start "" /b /belownormal /wait ${mod.command} & exit !ERRORLEVEL!"`;
+	return `nice -n 10 ${mod.command}`;
+}
+
 const started: DevModule[] = [];
 const alreadyUp: DevModule[] = [];
 const failed: DevModule[] = [];
@@ -254,7 +273,7 @@ for (const mod of selected) {
 	}
 
 	console.log(`${label(mod)} starting: ${mod.command} (in ${mod.dir})`);
-	const child = spawn(mod.command, {
+	const child = spawn(launchCommand(mod), {
 		cwd: join(REPO_ROOT, mod.dir),
 		shell: true,
 		stdio: ["ignore", "pipe", "pipe"],

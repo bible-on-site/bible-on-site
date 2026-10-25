@@ -1,10 +1,10 @@
 {
 	"name": "admin",
-	"version": "0.1.138",
+	"version": "0.1.139",
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"predev": "pnpm run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && pnpm run s3:populate:dev",
+		"predev": "pnpm run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
 		"dev": "dotenv -e .dev.env -- pnpm run dev:app",
 		"dev:app": "vite --port 3101 --strictPort",
 		"build": "vite build",
