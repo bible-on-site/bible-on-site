@@ -178,12 +178,15 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         }
     }
 
-    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselPerekChanged(Perek? oldValue, Perek? newValue)
+    partial void OnPerekChanged(Perek? oldValue, Perek? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Perek always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
     }
 
     /// <summary>
