@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("@tanstack/react-start", () => ({
+	createServerOnlyFn: (fn: unknown) => fn,
 	createServerFn: () => ({
 		validator: (validate: (data: unknown) => unknown) => ({
 			handler:
@@ -40,9 +41,14 @@ vi.mock("~/server/tanahpedia/entry-loader.server", () => ({
 	loadTanahpediaEntryById: mocks.loadEntryMock,
 }));
 
-vi.mock("~/server/tanahpedia/revisions", () => ({
-	saveEntryRevisioned: mocks.saveRevisionedMock,
-}));
+vi.mock("~/server/tanahpedia/revisions", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/server/tanahpedia/revisions")>();
+	return {
+		...actual,
+		saveEntryRevisioned: mocks.saveRevisionedMock,
+	};
+});
 
 import {
 	assignEntity,
@@ -295,6 +301,37 @@ describe("tanahpedia entry server functions", () => {
 				}),
 			).rejects.toThrow("Entry not found");
 		});
+
+		it("translates a duplicate unique_name into a validation error", async () => {
+			mocks.txExecute.mockRejectedValue({ code: "ER_DUP_ENTRY" });
+
+			await expect(
+				createEntry({
+					data: {
+						id: "entry-new",
+						unique_name: "שם-תפוס",
+						title: "כותרת",
+						content: "",
+					},
+				}),
+			).rejects.toThrow("VALIDATION: השם הייחודי כבר תפוס על ידי ערך אחר");
+		});
+
+		it("rethrows a non-mysql failure unchanged", async () => {
+			const boom = new Error("connection lost");
+			mocks.txExecute.mockRejectedValue(boom);
+
+			await expect(
+				createEntry({
+					data: {
+						id: "entry-new",
+						unique_name: "שם",
+						title: "כותרת",
+						content: "",
+					},
+				}),
+			).rejects.toBe(boom);
+		});
 	});
 
 	describe("updateEntry", () => {
@@ -375,10 +412,7 @@ describe("tanahpedia entry server functions", () => {
 	});
 
 	describe("website cache invalidation", () => {
-		const ENV_KEYS = [
-			"VITE_WEBSITE_URL",
-			"REVALIDATE_SECRET",
-		] as const;
+		const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
 		let savedEnv: Record<string, string | undefined>;
 		let fetchSpy: ReturnType<typeof vi.spyOn>;
 
