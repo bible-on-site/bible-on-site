@@ -62,7 +62,6 @@ This document describes the DevOps tools and practices used in the Bible on Site
 | [![Playwright](https://custom-icon-badges.demolab.com/badge/Playwright-2EAD33?logo=playwright&logoColor=fff&style=for-the-badge)](https://playwright.dev) | E2E and performance testing | website, admin, api |
 | [![cargo-llvm-cov](https://img.shields.io/badge/cargo--llvm--cov-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/taiki-e/cargo-llvm-cov) | Rust code coverage | api, bulletin, data |
 | [![nextest](https://img.shields.io/badge/nextest-000?style=for-the-badge&logo=rust&logoColor=white)](https://nexte.st/) | Rust test runner (JUnit reports) | api, bulletin, data |
-| [![lcov](https://img.shields.io/badge/lcov-000?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/linux-test-project/lcov) | Coverage report merging | * |
 | [![monocart-coverage-reports](https://custom-icon-badges.demolab.com/badge/monocart--coverage--reports-000?logo=monocart-coverage-reports&style=for-the-badge)](https://github.com/cenfun/monocart-coverage-reports) | Typescript code coverage reporting | website |
 | [![web-vitals](https://img.shields.io/badge/web--vitals-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://github.com/GoogleChrome/web-vitals) | performance measuring | website |
 | [![SWC-coverage-instrument](https://img.shields.io/badge/SWC--coverage--instrument-000?style=for-the-badge&logo=next.js&logoColor=white)](https://github.com/kwonoj/swc-plugin-coverage-instrument) | istanbuljs coverage instrumentation for nextjs | website |

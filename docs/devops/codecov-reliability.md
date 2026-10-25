@@ -91,7 +91,7 @@ keeping coverage enforcement active whenever Codecov is reachable.
 Codacy already receives the merged cross-module LCOV report and enforces a
 diff-coverage gate on PRs. A harder migration would replace the per-flag
 codecov.yml thresholds with an in-CI LCOV comparison job (the repo already
-builds an LCOV Docker image and merges module coverage). This removes the
+merges module coverage natively via `devops/merge-lcov.mts`). This removes the
 third-party dependency entirely but loses per-module flag dashboards and
 requires reimplementing threshold logic. Kept as a fallback if SaaS reliability
 degrades further.

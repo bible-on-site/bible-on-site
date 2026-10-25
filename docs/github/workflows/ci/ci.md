@@ -45,8 +45,8 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
   `perushim-sqlite-v2-indexed.master`) and per-platform app E2E coverage
   (`app-e2e-coverage.master.{android,ios}`).
 - **Determine Docker Image Availability**
-  (`determine_docker_image_availability`): checks the cached LCOV Docker
-  artifact and the GHCR Sefaria MongoDB image (tagged by the git tree hash of
+  (`determine_docker_image_availability`): checks the GHCR Sefaria MongoDB
+  image (tagged by the git tree hash of
   `data/sefaria/mongodb-docker`); computes `can_publish_sefaria_mongo` (fork
   PRs get a read-only token and cannot push to GHCR).
 - **Determine Changes** (`determine_changes`): one job running
@@ -60,8 +60,6 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
-- **Build LCOV Docker Image** (`build_lcov_docker`): rebuilds the coverage
-  image only when the cached artifact is missing.
 - **Build Sefaria MongoDB Docker Image** (`build_sefaria_mongo_docker`):
   publishes the Data integration-test MongoDB image to GHCR, tagged by the git
   tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing.
@@ -253,7 +251,6 @@ save can only rewrite the state that same key already describes.
 | Android AVD state | config recipe + emulator/SDK package stamps | One snapshot: booted state, system certs, resolved marker |
 | Android SDK | license fingerprint + `SDK-PACKAGE` recipe | Save trusted pushes only |
 | Playwright browsers | `playwright-<version>` (+ webkit variant for `app_ios_ci`) | Version pinned by `setup_env` |
-| Docker LCOV image | action-cache artifact `github-workflow-lcov` | Rebuilt only on miss |
 
 Toolchain identity is stamped into every key via
 `compute-ios-toolchain-id.mjs` / `hash-native-deps.mjs`, so Xcode/macOS/Node

@@ -44,7 +44,7 @@ Treat small e2e coverage variance as noise; only block or revert on sustained dr
                     └───────────┬───────────────┘
                                 ▼
                     ┌─────────────────────────┐
-                    │   LCOV Merge (Docker)   │
+                    │  LCOV Merge (Node.js)   │
                     │   normalize + combine   │
                     └─────────────────────────┘
                                 │
@@ -163,7 +163,7 @@ bun run coverage:merge
 This runs [merge-coverage.mts](../../../../web/bible-on-site/tests/util/coverage/merge-coverage.mts) which:
 
 1. Normalizes function names in both LCOV files
-2. Uses Docker `lcov-cli` to merge the normalized files
+2. Merges the normalized files with the repo's pure-Node [`merge-lcov.mts`](../../../../devops/merge-lcov.mts) (records for the same file are unioned by covered location)
 3. Outputs combined coverage to `.coverage/merged/lcov.info`
 
 ## Ignore Patterns
@@ -208,7 +208,7 @@ If needed, to revert to the previous ts-jest approach:
 2. Add `coverageReporters: ["none"]` and `collectCoverageFrom` patterns
 3. Remove `setupFilesAfterEnv` for coverage setup
 4. Change `transform` to use `ts-jest` instead of `swcCoverageConfig`
-5. Accept that branch line mappings may differ from E2E coverage, requiring `--ignore-errors inconsistent` flag in LCOV merge
+5. Accept that branch line mappings may differ from E2E coverage — the normalization step (`fixInconsistentBranches()` in `normalize-coverage.mts`) currently relies on aligned instrumentation
 
 ## Running Coverage
 
@@ -238,7 +238,7 @@ When Codecov reports a lower project coverage (e.g. 89.84% vs target 92%) but th
 
 2. **Possible causes**
    - **Non-determinism**: E2E or unit runs may hit different code paths (timing, order), so coverage can vary between runs.
-   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `bun run coverage:merge` and **fails the job** on error (the earlier `continue-on-error` masking was removed — the LCOV container now runs with the caller's UID/GID so root-owned output stays writable); the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
+   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `bun run coverage:merge` and **fails the job** on error (the earlier `continue-on-error` masking was removed); the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
    - **Path/flag mismatch**: Codecov applies the `website` flag path `web/bible-on-site/src/`. If LCOV `SF:` paths differ (e.g. absolute vs repo-relative), more or fewer files can be counted and the percentage can shift.
    - **New files in denominator**: Only files under `src/` are in the project. New test files under `tests/` are not in the flag path and do not affect project coverage.
 
