@@ -70,6 +70,19 @@ test.describe("sitemap.xml", () => {
 		expect(body).toContain("/929/500</loc>");
 	});
 
+	test("excludes Masora and includes only the 55 canonical Parasha URLs", async ({
+		request,
+	}) => {
+		const response = await request.get("/sitemap.xml");
+		const body = decodeURIComponent(await response.text());
+		expect(body).not.toMatch(/\/(?:מסורה|masora)(?:\/|<)/);
+		const parashaUrls = body.match(/<loc>[^<]*\/פרשה(?:\/\d+)?<\/loc>/g) ?? [];
+		expect(parashaUrls).toHaveLength(55);
+		for (let unit = 1; unit <= 54; unit++) {
+			expect(body).toContain(`/פרשה/${unit}</loc>`);
+		}
+	});
+
 	test("contains authors index URL", async ({ request }) => {
 		const response = await request.get("/sitemap.xml");
 		const body = await response.text();
@@ -128,12 +141,11 @@ test.describe("sitemap.xml", () => {
 		// Pedia URLs use URL-encoded Hebrew unique names: /pedia/%D7...
 		const pediaEntries = (body.match(/\/pedia\/[^<]+<\/loc>/g) || []).length;
 
-		// Expected: 1 root + sections + 1 929 index + 1 מסורה index + 1 פרשה index + 929 perakim + N articles + N perushim + 1 authors index + N authors + 1 pedia index + N pedias
+		// Root, sections, 929 index, 55 Parasha URLs, chapters, content and pedia.
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
-			1 +
-			1 +
+			55 +
 			1 +
 			TOTAL_PERAKIM +
 			articleEntries +

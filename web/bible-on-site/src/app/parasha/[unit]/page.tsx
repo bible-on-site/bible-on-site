@@ -29,7 +29,7 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getPerushimForRanges } from "@/lib/perushim/service";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
-import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import { unitPerekIds } from "@/lib/reading/ranges";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { AliyahControls } from "./components/AliyahControls";
@@ -89,17 +89,10 @@ function seferUnitsPerekIds(seferName: string): number[] {
 }
 
 /**
- * Deliberate SEO policy for the פרשה division: these pages re-slice the
- * same canonical corpus as /929, so they must not compete with the
- * canonical perek pages in the index.
- *
- * - A unit spanning exactly one whole perek with no auxiliary readings
- *   would consolidate to the /929 perek (none today — every parasha
- *   carries Haftarot).
- * - Every other unit is a deliberate alternate slicing — `noindex` with
- *   `follow`, so crawlers still discover links but the pages stay out of
- *   the index. The canonical stays self-referential rather than pointing
- *   at an unrelated span.
+ * Each weekly parasha has one indexable, self-canonical page, including
+ * its auxiliary Haftarah readings. Presentation and selected-content
+ * variants are excluded by the proxy response policy without making
+ * this prerendered metadata depend on request query parameters.
  */
 export async function generateMetadata({
 	params,
@@ -112,21 +105,12 @@ export async function generateMetadata({
 		notFound();
 	}
 	const unit = getParashaUnitById(unitId);
-	const equivalentPerekId = unitEquivalentPerekId(unit, canonicalPasukCount);
 	const title = `פרשת ${unit.heading} | ${PARASHA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description = `קריאת פרשת ${unit.heading} (${parashaRefSpan(unit)}) וההפטרה למנהגי הספרדים האשכנזים והתימנים, עם פירושים ומאמרים.`;
-	if (equivalentPerekId !== null) {
-		return {
-			title,
-			description,
-			alternates: { canonical: `/929/${equivalentPerekId}` },
-		};
-	}
 	return {
 		title,
 		description,
-		alternates: { canonical: `${PARASHA_DIVISION.rootPath}/${unitId}` },
-		robots: { index: false, follow: true },
+		alternates: { canonical: `${PARASHA_DIVISION.rootPath}/${unit.slug}` },
 	};
 }
 
