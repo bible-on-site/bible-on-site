@@ -123,6 +123,26 @@ describe("saveEntryRevisioned", () => {
 		expect(txExecuteMock).not.toHaveBeenCalled();
 	});
 
+	it("resolves the head topologically via base_revision_id, not timestamps", async () => {
+		mockSaveQueries();
+		await saveEntryRevisioned(fakeConn, {
+			id: "entry-1",
+			unique_name: "yaakov",
+			title: "יעקב",
+			content: "<p>old</p>",
+			baseRevisionId: "rev-head",
+		});
+
+		const headQuery = txQueryOneMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("FROM tanahpedia_entry_revision"),
+		);
+		// created_at has second resolution and ids are random UUIDs — the
+		// head must be the APPLIED row no APPLIED child is based on.
+		expect(headQuery?.[1]).toContain("NOT EXISTS");
+		expect(headQuery?.[1]).toContain("base_revision_id");
+		expect(headQuery?.[1]).toContain("c.entry_id = ?");
+	});
+
 	it("inserts an APPLIED revision based on the current head", async () => {
 		mockSaveQueries();
 		const result = await saveEntryRevisioned(fakeConn, {

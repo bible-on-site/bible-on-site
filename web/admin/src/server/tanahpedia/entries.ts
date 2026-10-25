@@ -236,12 +236,20 @@ export const getEntry = createServerFn({ method: "GET" })
 	.handler(async ({ data: id }) => {
 		const entry = await loadTanahpediaEntryById(id);
 		if (!entry) throw new Error("Entry not found");
+		// Head is resolved topologically — the APPLIED row no APPLIED child
+		// bases on — because second-resolution created_at plus random UUIDs
+		// cannot order two commits made within the same second.
 		const head = await queryOne<Pick<EntryRevisionRow, "id">>(
 			`SELECT id FROM tanahpedia_entry_revision
 			 WHERE entry_id = ? AND status = 'APPLIED'
+			 AND NOT EXISTS (
+				 SELECT 1 FROM tanahpedia_entry_revision c
+				 WHERE c.entry_id = ? AND c.status = 'APPLIED'
+				   AND c.base_revision_id = tanahpedia_entry_revision.id
+			 )
 			 ORDER BY created_at DESC, id DESC
 			 LIMIT 1`,
-			[id],
+			[id, id],
 		);
 		return { ...entry, currentRevisionId: head?.id ?? null };
 	});

@@ -26,7 +26,13 @@ interface EntryRow {
 	updated_at: string;
 }
 
-/** The entry's latest APPLIED revision — the row that produced its content. */
+/**
+ * The entry's latest APPLIED revision — the row that produced its content.
+ * Resolved topologically, not by timestamp: every APPLIED row records the
+ * head it displaced in base_revision_id, so the head is the one no APPLIED
+ * child points at. `created_at` has second resolution — ordering by it (and
+ * a random UUID) could pick the wrong tip when two commits share a second.
+ */
 async function headRevision(
 	conn: mysql.PoolConnection,
 	entryId: string,
@@ -36,9 +42,14 @@ async function headRevision(
 		`SELECT ${REVISION_COLUMNS}
 		 FROM tanahpedia_entry_revision
 		 WHERE entry_id = ? AND status = 'APPLIED'
+		 AND NOT EXISTS (
+			 SELECT 1 FROM tanahpedia_entry_revision c
+			 WHERE c.entry_id = ? AND c.status = 'APPLIED'
+			   AND c.base_revision_id = tanahpedia_entry_revision.id
+		 )
 		 ORDER BY created_at DESC, id DESC
 		 LIMIT 1`,
-		[entryId],
+		[entryId, entryId],
 	);
 }
 

@@ -846,11 +846,10 @@ describe("EntryEditPage", () => {
 			expect(updateEntryMock).not.toHaveBeenCalled();
 		});
 
-		it("commits a restored draft over the current head, not its stale base", async () => {
-			updateEntryMock.mockResolvedValue({
-				id: "entry-1",
-				headRevisionId: "rev-3",
-			});
+		it("commits a restored stale draft on its own base so the conflict guard applies", async () => {
+			updateEntryMock.mockRejectedValue(
+				new RevisionConflictError("stale base"),
+			);
 			localStorage.setItem(
 				DRAFT_KEY,
 				JSON.stringify(storedDraft({ baseRevisionId: "rev-old" })),
@@ -871,8 +870,36 @@ describe("EntryEditPage", () => {
 			);
 			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
 
-			// The commit proposes on the CURRENT head (rev-1) — the user saw
-			// the stale marker and chose to apply the draft anyway.
+			// The commit proposes on the DRAFT's base (rev-old), not the
+			// current head — a stale-base restore cannot silently rebase over
+			// edits it never saw; the server's guard rejects it instead.
+			await waitFor(() =>
+				expect(updateEntryMock).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						baseRevisionId: "rev-old",
+						title: "טיוטה מקומית",
+					}),
+				}),
+			);
+			expect(
+				await screen.findByRole("button", { name: "טען מחדש" }),
+			).toBeInTheDocument();
+		});
+
+		it("commits a restored fresh-base draft cleanly", async () => {
+			updateEntryMock.mockResolvedValue({
+				id: "entry-1",
+				headRevisionId: "rev-3",
+			});
+			localStorage.setItem(DRAFT_KEY, JSON.stringify(storedDraft()));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+
+			fireEvent.click(
+				await screen.findByRole("button", { name: "שחזר טיוטה" }),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
 			await waitFor(() =>
 				expect(updateEntryMock).toHaveBeenCalledWith({
 					data: expect.objectContaining({
@@ -881,6 +908,172 @@ describe("EntryEditPage", () => {
 					}),
 				}),
 			);
+		});
+
+		it("keeps an unanswered draft offer through a no-op save", async () => {
+			updateEntryMock.mockResolvedValue({
+				id: "entry-1",
+				headRevisionId: "rev-2",
+			});
+			localStorage.setItem(DRAFT_KEY, JSON.stringify(storedDraft()));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			expect(
+				await screen.findByRole("button", { name: "שחזר טיוטה" }),
+			).toBeInTheDocument();
+
+			// A clean save commits nothing — it must not delete the stored
+			// copy of the unreviewed offer or dismiss the banner.
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() => expect(updateEntryMock).toHaveBeenCalled());
+
+			expect(
+				screen.getByRole("button", { name: "שחזר טיוטה" }),
+			).toBeInTheDocument();
+			expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy();
+		});
+
+		it("persists dirty edits synchronously when accepting the server version", async () => {
+			updateEntryMock.mockRejectedValue(
+				new RevisionConflictError("stale base"),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			// Do NOT wait for the debounced mirror — the whole point is that
+			// choosing the server version must not lose un-mirrored work.
+			fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			fireEvent.click(await screen.findByRole("button", { name: "טען מחדש" }));
+
+			await waitFor(() => {
+				const raw = localStorage.getItem(DRAFT_KEY);
+				expect(raw).toBeTruthy();
+				expect(JSON.parse(raw as string).form.content).toBe("<p>תוכן חדש</p>");
+			});
+		});
+
+		it("re-bases the re-offered draft on the adopted head so its commit succeeds", async () => {
+			updateEntryMock
+				.mockRejectedValueOnce(new RevisionConflictError("stale base"))
+				.mockResolvedValue({ id: "entry-1", headRevisionId: "rev-9" });
+			getEntryMock
+				.mockResolvedValueOnce(existingEntry)
+				.mockResolvedValue({ ...existingEntry, currentRevisionId: "rev-9" });
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+			await waitFor(() => expect(localStorage.getItem(DRAFT_KEY)).toBeTruthy());
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			fireEvent.click(await screen.findByRole("button", { name: "טען מחדש" }));
+
+			// The work is re-offered — now based on the adopted head, so the
+			// explicit re-commit lands instead of re-throwing the conflict.
+			fireEvent.click(
+				await screen.findByRole("button", { name: "שחזר טיוטה" }),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			await waitFor(() =>
+				expect(updateEntryMock).toHaveBeenLastCalledWith({
+					data: expect.objectContaining({ baseRevisionId: "rev-9" }),
+				}),
+			);
+		});
+
+		it("carries edits made during a /new create into the created entry's scope", async () => {
+			paramsMock.mockReturnValue({ id: "new" });
+			let resolveCreate: (v: { id: string; headRevisionId: string }) => void =
+				() => {};
+			createEntryMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveCreate = resolve;
+					}),
+			);
+			renderPage();
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "ערך חדש" },
+			});
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() => expect(createEntryMock).toHaveBeenCalled());
+
+			// Edits typed while the create is still in flight outlive it.
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "ערך חדש - עודכן" },
+			});
+			await act(async () => {
+				resolveCreate({ id: "created-1", headRevisionId: "rev-c1" });
+			});
+
+			const transferredKey = `tanahpedia-draft:v2:${ACCOUNT}:entry:created-1`;
+			await waitFor(() =>
+				expect(localStorage.getItem(transferredKey)).toBeTruthy(),
+			);
+			const transferred = JSON.parse(
+				localStorage.getItem(transferredKey) as string,
+			);
+			expect(transferred.form.title).toBe("ערך חדש - עודכן");
+			expect(transferred.scope).toBe("entry:created-1");
+			expect(transferred.baseRevisionId).toBe("rev-c1");
+			// And the `new:` key is gone — it must not resurface as an offer.
+			expect(Object.keys(localStorage).some((k) => k.includes(":new:"))).toBe(
+				false,
+			);
+		});
+
+		it("offers the next new-entry draft after the newest is discarded", async () => {
+			paramsMock.mockReturnValue({ id: "new" });
+			localStorage.setItem(
+				`tanahpedia-draft:v2:${ACCOUNT}:new:older-draft`,
+				JSON.stringify(
+					storedDraft({
+						scope: "new:older-draft",
+						savedAt: "2020-01-01T00:00:00.000Z",
+						form: {
+							unique_name: "ישן",
+							title: "טיוטה ישנה",
+							content: "<p>ישן</p>",
+						},
+					}),
+				),
+			);
+			localStorage.setItem(
+				`tanahpedia-draft:v2:${ACCOUNT}:new:latest-draft`,
+				JSON.stringify(
+					storedDraft({
+						scope: "new:latest-draft",
+						savedAt: "2026-01-01T00:00:00.000Z",
+						form: {
+							unique_name: "חדש",
+							title: "הטיוטה האחרונה",
+							content: "<p>חדש</p>",
+						},
+					}),
+				),
+			);
+			renderPage();
+			await screen.findByRole("tab", { name: "תוכן" });
+
+			// The newest is offered first; discarding it surfaces the next one.
+			fireEvent.click(await screen.findByRole("button", { name: "מחק טיוטה" }));
+			fireEvent.click(
+				await screen.findByRole("button", { name: "שחזר טיוטה" }),
+			);
+			fireEvent.click(screen.getByRole("tab", { name: "מטא-דאטה" }));
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("טיוטה ישנה");
+		});
+
+		it("surfaces an unresolvable editor identity as a local-protection failure", async () => {
+			getEditorIdentityMock.mockRejectedValue(
+				new Error("editor identity unavailable"),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+
+			expect(
+				await screen.findByText(/הטיוטה המקומית לא נשמרה/),
+			).toBeInTheDocument();
 		});
 
 		it("drops a stored draft that already matches the server", async () => {

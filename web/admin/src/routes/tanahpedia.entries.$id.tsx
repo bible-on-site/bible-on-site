@@ -90,6 +90,12 @@ function EntryEditPage() {
 		draft: StoredEntryDraft;
 		staleBase: boolean;
 	} | null>(null);
+	// Render-assigned mirror so save-ack callbacks see the latest offer state.
+	const pendingDraftRef = useRef<{
+		draft: StoredEntryDraft;
+		staleBase: boolean;
+	} | null>(null);
+	pendingDraftRef.current = pendingDraft;
 	// The stored draft exists but is unreadable (truncated/old shape).
 	const [malformedDraft, setMalformedDraft] = useState(false);
 	// The debounced mirror failed (storage unavailable/full) or the editor
@@ -249,13 +255,19 @@ function EntryEditPage() {
 	}, [isNew, entry, accountId, draftStorageKey, draftScope, id, draftCheckGen]);
 
 	// Unsaved entries have no server record to compare against — the latest
-	// account `new:` draft is offered on mount.
+	// account `new:` draft is offered on mount. Resolving one offer re-arms
+	// the scan (via draftCheckGen) so the next-oldest can surface; the
+	// mount's own live scope is skipped — offering a tab its own buffer
+	// would loop.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: draftCheckGen is the deliberate re-arm trigger after an offer resolves
 	useEffect(() => {
 		if (!isNew || !accountId) return;
 		const checkId = `new:${accountId}`;
 		if (draftCheckedRef.current === checkId) return;
 		draftCheckedRef.current = checkId;
-		const [latest] = listNewEntryDrafts(accountId);
+		const [latest] = listNewEntryDrafts(accountId).filter(
+			(d) => d.scope !== draftScope,
+		);
 		if (latest) {
 			setPendingDraft({ draft: latest, staleBase: false });
 			return;
@@ -279,7 +291,7 @@ function EntryEditPage() {
 				staleBase: false,
 			});
 		}
-	}, [isNew, accountId, draftScope]);
+	}, [isNew, accountId, draftScope, draftCheckGen]);
 
 	// Cross-tab mirroring: a write under our key from another sessionId is
 	// surfaced, never merged into this tab's buffer.
@@ -345,34 +357,61 @@ function EntryEditPage() {
 			// latest — edits typed after this request began are still pending,
 			// and so is their source/notes attribution (e.g. an LLM apply that
 			// landed mid-flight belongs to the next save, not this one).
-			if (job.editCount === editCounterRef.current) {
+			const editsOutlived = job.editCount !== editCounterRef.current;
+			if (!editsOutlived) {
 				cleanCounterRef.current = editCounterRef.current;
 				setHasChanges(false);
-				if (draftStorageKey) clearEntryDraft(draftStorageKey);
-				setLastDraftAt(null);
-				setPendingDraft(null);
+				// An unanswered recovery offer is not acknowledged by this
+				// commit — a no-op save must not delete the only copy of that
+				// work or dismiss the offer it is still waiting on.
+				if (!pendingDraftRef.current && draftStorageKey) {
+					clearEntryDraft(draftStorageKey);
+					setLastDraftAt(null);
+				}
 				setSaveSource(REVISION_SOURCE_ADMIN);
 				setPendingNotes(null);
-			} else {
-				// Newer edits outlived the ack — re-anchor the draft's base on
-				// the head this commit just produced.
-				persistDraftRef.current();
 			}
 			if (isNew && savedEntry?.id) {
 				createdIdRef.current = savedEntry.id;
-				// The new-entry draft's content is now committed (or lives on
-				// under the created entry's scope) — never leave it behind to be
-				// re-offered on the next /new visit.
 				if (accountId && newDraftIdRef.current) {
-					clearEntryDraft(
-						draftKey(accountId, newEntryDraftScope(newDraftIdRef.current)),
+					const newKey = draftKey(
+						accountId,
+						newEntryDraftScope(newDraftIdRef.current),
 					);
+					if (editsOutlived) {
+						// Edits typed during the create outlived it — carry them to
+						// the created entry's scope (base = the head just committed)
+						// so the navigated page offers them for recovery instead
+						// of silently dropping them with the `new:` key.
+						writeEntryDraft(
+							draftKey(accountId, entryDraftScope(savedEntry.id)),
+							{
+								version: LOCAL_DRAFT_VERSION,
+								accountId,
+								scope: entryDraftScope(savedEntry.id),
+								sessionId: sessionIdRef.current as string,
+								baseRevisionId: savedEntry.headRevisionId ?? null,
+								savedAt: new Date().toISOString(),
+								form: formData,
+								source: saveSource,
+								notes: pendingNotes,
+							},
+						);
+					}
+					// The new-entry draft's content is now committed (or lives on
+					// under the created entry's scope) — never leave it behind to
+					// be re-offered on the next /new visit.
+					clearEntryDraft(newKey);
 				}
 				navigate({
 					to: "/tanahpedia/entries/$id",
 					params: { id: savedEntry.id },
 					replace: true,
 				});
+			} else if (editsOutlived) {
+				// Newer edits outlived the ack — re-anchor the draft's base on
+				// the head this commit just produced.
+				persistDraftRef.current();
 			}
 		},
 		onError: (error) => {
@@ -427,6 +466,10 @@ function EntryEditPage() {
 			setHasChanges(true);
 			setSaveSource(REVISION_SOURCE_ADMIN);
 			setPendingNotes(null);
+			// Typing over an unanswered offer mirrors the new work to its key,
+			// replacing the offered content — the banner reflects that by
+			// closing rather than offering what no longer exists.
+			setPendingDraft(null);
 		},
 		[],
 	);
@@ -437,6 +480,7 @@ function EntryEditPage() {
 		setHasChanges(true);
 		setSaveSource(REVISION_SOURCE_ADMIN);
 		setPendingNotes(null);
+		setPendingDraft(null);
 	}, []);
 
 	// The ONLY automatic persistence: typed edits mirror into the
@@ -454,6 +498,12 @@ function EntryEditPage() {
 	// recovery — structural sharing can keep the refetched entry
 	// reference-equal, so the state bump is what re-runs the check.
 	const adoptServerState = async () => {
+		// A dirty form whose debounce has not fired yet must reach the local
+		// draft BEFORE the clean mark cancels the timer — choosing the server
+		// version re-offers the local work, never drops it.
+		if (editCounterRef.current !== cleanCounterRef.current) {
+			persistDraftRef.current();
+		}
 		editCounterRef.current += 1;
 		cleanCounterRef.current = editCounterRef.current;
 		setHasChanges(false);
@@ -462,13 +512,34 @@ function EntryEditPage() {
 		await queryClient.invalidateQueries({
 			queryKey: ["tanahpedia-entry", id],
 		});
+		// Re-base the just-stashed draft on the adopted head: the user has
+		// seen the server state and chosen it, so restoring now means
+		// applying the draft content on top — keeping the displaced base
+		// would re-throw the same conflict in a loop. Load-time offers keep
+		// their original base instead, because there the user has not yet
+		// seen what the draft would overwrite.
+		if (draftStorageKey) {
+			const stored = readEntryDraft(draftStorageKey);
+			if (stored.kind === "ok") {
+				const adoptedHead =
+					queryClient.getQueryData<{ currentRevisionId?: string | null }>([
+						"tanahpedia-entry",
+						id,
+					])?.currentRevisionId ?? null;
+				writeEntryDraft(draftStorageKey, {
+					...stored.draft,
+					baseRevisionId: adoptedHead,
+				});
+			}
+		}
 		draftCheckedRef.current = null;
 		setDraftCheckGen((g) => g + 1);
 	};
 
-	// Restoring applies the draft's content over the CURRENT head — the
-	// stale marker told the user the server moved, and their commit still
-	// carries the base guard, so a restored draft can never silently rebase.
+	// Restoring keeps the draft's own base as the commit's concurrency base:
+	// a stale-base restore therefore stays subject to the server's conflict
+	// guard — it cannot silently rebase over edits it never saw. The stale
+	// marker already told the user the server moved.
 	const restorePendingDraft = () => {
 		if (!pendingDraft) return;
 		const { draft } = pendingDraft;
@@ -478,9 +549,16 @@ function EntryEditPage() {
 		setFormData(draft.form);
 		setSaveSource(draft.source || REVISION_SOURCE_ADMIN);
 		setPendingNotes(draft.notes);
+		baseRevisionIdRef.current = draft.baseRevisionId;
+		setBaseRevisionId(draft.baseRevisionId);
 		editCounterRef.current += 1;
 		setHasChanges(true);
 		setPendingDraft(null);
+		if (isNew) {
+			// Resolving this offer may reveal an older `new:` draft.
+			draftCheckedRef.current = null;
+			setDraftCheckGen((g) => g + 1);
+		}
 	};
 
 	const discardPendingDraft = () => {
@@ -489,6 +567,11 @@ function EntryEditPage() {
 			clearEntryDraft(draftKey(accountId, pendingDraft.draft.scope));
 		if (!isNew) clearLegacyEntryDraft(id);
 		setPendingDraft(null);
+		if (isNew) {
+			// The next-oldest `new:` draft may still be waiting to be offered.
+			draftCheckedRef.current = null;
+			setDraftCheckGen((g) => g + 1);
+		}
 	};
 
 	// Explicit revert: drop every uncommitted edit AND its local draft, then
@@ -577,9 +660,9 @@ function EntryEditPage() {
 					<div className="text-sm text-red-800">
 						<p className="font-medium">{saveError.message}</p>
 						<p className="mt-1">
-							השינויים שלך נשמרו מקומית ולא אבדו —{" "}
+							השינויים שלך נשמרו מקומית ולא אבדו -{" "}
 							{saveError.kind === "session"
-								? "התחבר מחדש והשמירה תושלם אוטומטית."
+								? "התחבר מחדש, שחזר את הטיוטה ושמור שוב."
 								: "אפשר לנסות שוב עכשיו."}
 						</p>
 					</div>
@@ -623,8 +706,8 @@ function EntryEditPage() {
 						</p>
 						<p className="mt-1">
 							{pendingDraft.staleBase
-								? "הערך בשרת עודכן מאז נכתבה הטיוטה — שחזור יחיל את תוכנה על העריכה הנוכחית, והשמירה תישאר כפופה לאישורך."
-								: "הטיוטה נשמרה במכשיר זה בלבד ולא פורסמה — אפשר לשחזר אותה או למחוק."}
+								? "הערך בשרת עודכן מאז נכתבה הטיוטה - שחזור יחיל את תוכנה על העריכה הנוכחית, והשמירה תישאר כפופה לאישורך."
+								: "הטיוטה נשמרה במכשיר זה בלבד ולא פורסמה - אפשר לשחזר אותה או למחוק."}
 						</p>
 					</div>
 					<div className="flex gap-2">
@@ -649,7 +732,7 @@ function EntryEditPage() {
 			{malformedDraft && (
 				<div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-3">
 					<p className="text-sm text-amber-900">
-						נמצאה טיוטה מקומית פגומה שלא ניתן לשחזר — העריכה ממשיכה רגיל,
+						נמצאה טיוטה מקומית פגומה שלא ניתן לשחזר - העריכה ממשיכה רגיל,
 						והטיוטה תוחלף בשמירה המקומית הבאה.
 					</p>
 					<button
@@ -667,7 +750,7 @@ function EntryEditPage() {
 
 			{otherTabDraft && (
 				<div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-					הטיוטה המקומית עודכנה מכרטיסייה אחרת הפתוחה לאותו ערך — הטיוטות לא
+					הטיוטה המקומית עודכנה מכרטיסייה אחרת הפתוחה לאותו ערך - הטיוטות לא
 					מתמזגות אוטומטית כדי לא לדרוס עבודה.
 					<button
 						type="button"
@@ -681,7 +764,7 @@ function EntryEditPage() {
 
 			{(draftWriteFailed || identityError) && !saveError && (
 				<div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-					הטיוטה המקומית לא נשמרה — השינויים מוגנים רק בזיכרון עמוד זה. בדוק את
+					הטיוטה המקומית לא נשמרה - השינויים מוגנים רק בזיכרון עמוד זה. בדוק את
 					האחסון או התחברותך לפני סגירת הכרטיסייה.
 				</div>
 			)}
@@ -690,7 +773,7 @@ function EntryEditPage() {
 				<div className="rounded-lg border border-red-300 bg-red-50 p-4 flex flex-wrap items-center justify-between gap-3">
 					<p className="text-sm text-red-800">
 						הערך נשמר על ידי סשן אחר מאז שהטענת אותו - השמירה נדחתה כדי לא לדרוס
-						שינויים. טען מחדש את הערך כדי לראות את הגרסה העדכנית — השינויים שלך
+						שינויים. טען מחדש את הערך כדי לראות את הגרסה העדכנית - השינויים שלך
 						יישארו כטיוטה מקומית ותוצע לשחזור.
 					</p>
 					<button
