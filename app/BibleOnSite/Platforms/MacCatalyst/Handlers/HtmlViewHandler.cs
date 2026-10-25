@@ -66,6 +66,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
     {
         if (VirtualView?.DispatchLinkTapped(url).Handled == true) { return true; }
         using var nativeUrl = new NSUrl(url);
+        if (nativeUrl is null) { return false; }
         var options = new UIApplicationOpenUrlOptions();
         UIApplication.SharedApplication.OpenUrl(nativeUrl, options, null);
         return true;
@@ -77,7 +78,12 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange characterRange, UITextItemInteraction interaction)
 #pragma warning restore S1172
         {
-            var url = URL.AbsoluteString ?? URL.Description;
+            // The Link attribute stores an NSString (non-ASCII slugs fail NSUrl
+            // parsing), so the object UIKit hands here can be an NSString in an
+            // NSUrl-typed parameter — AbsoluteString is an unrecognized
+            // selector on it and crashes. `description` returns the string
+            // itself for NSString and the absolute URL for NSUrl.
+            var url = URL.Description;
             if (interaction == UITextItemInteraction.InvokeDefaultAction &&
                 viewProvider()?.DispatchLinkTapped(url).Handled == true)
             {

@@ -9,3 +9,39 @@
 	font-size: 0.75em;
 	font-weight: 600;
 }
+
+/* Aliyah boundary marker — the prominent separator treatment the perek
+   label used to have, slightly enlarged (issue #2519): the reading's
+   liturgical divisions visually outrank plain chapter breaks. */
+.aliyahBreakLabel {
+	display: inline-block;
+	margin: 0 6px;
+	padding: 1px 10px;
+	border-radius: 5px;
+	background: rgba(21, 82, 172, 0.14);
+	border: 1px solid rgba(21, 82, 172, 0.28);
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
+	font-size: 0.85em;
+	font-weight: 700;
+}
+
+/* `hidden` loses to the inline-block display above without this. */
+.aliyahBreakLabel[hidden] {
+	display: none;
+}
+
+.aliyahBreakLabel[data-aliyah-role="maftir"] {
+	background: rgba(21, 82, 172, 0.24);
+	border-color: rgba(21, 82, 172, 0.42);
+}
+
+/* Chapter break inside an aliyah-annotated reading — demoted to the
+   pasuk-number visual language (same color/weight), only a touch
+   larger, so the prominent treatment belongs to the aliyah markers. */
+.perekBreakLabelModest {
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-size: 1.05em;
+	font-weight: 600;
+	margin: 0 2px;
+}

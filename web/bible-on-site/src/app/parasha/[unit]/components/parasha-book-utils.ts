@@ -1,5 +1,6 @@
 import { toLetters, toNumber } from "gematry";
 import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
+import type { UnitBoundaryMarker } from "@/app/components/reading/UnitTextBody";
 import bookPageSlugs from "@/data/book-page-slugs.json";
 import divisionData from "@/data/parasha/parasha-division.json";
 import type { AuxiliaryReading, ScriptureRange } from "@/lib/reading/contract";
@@ -32,6 +33,15 @@ export interface ParashaBookUnit {
 	/** Scripture reference span of the primary range, formatted server-side. */
 	refSpan: string;
 	ranges: ScriptureRange[];
+	/** Aliyah boundary markers for the unit's standalone Shabbat scheme
+	 * (issue #2519): `"{perekId}:{pasuk}"` → marker specs, serialized
+	 * server-side and rebuilt into the renderer's map client-side. */
+	aliyahMarkers?: Record<
+		string,
+		readonly { key: string; label: string; role?: "aliyah" | "maftir" }[]
+	>;
+	/** The single marker key this unit's book spread shows. */
+	aliyahMarkerKey?: string;
 	haftarot: ParashaBookHaftara[];
 	notes: string[];
 }
@@ -142,8 +152,7 @@ export function buildParashaHistoryMapper(
 	units: ParashaBookUnit[],
 	seferName: string,
 ): HistoryMapper {
-	const backCoverIndex =
-		PARASHA_CONTENT_OFFSET + units.length * PAGES_PER_UNIT;
+	const backCoverIndex = PARASHA_CONTENT_OFFSET + units.length * PAGES_PER_UNIT;
 	return {
 		pageToRoute: (pageIndex) => {
 			if (!units.length) return null;
@@ -247,9 +256,7 @@ export function parashaBookExitPath(
 	if (parashaBookPageFromPath(pathname)) {
 		return `${PARASHA_ROOT}/${fallbackUnitId}`;
 	}
-	const match = decodeURIComponent(pathname).match(
-		/\/(?:פרשה|parasha)\/(\d+)/,
-	);
+	const match = decodeURIComponent(pathname).match(/\/(?:פרשה|parasha)\/(\d+)/);
 	return match
 		? `${PARASHA_ROOT}/${match[1]}`
 		: `${PARASHA_ROOT}/${fallbackUnitId}`;
@@ -258,6 +265,19 @@ export function parashaBookExitPath(
 /** Title of a flat parasha unit page, matching generateMetadata. */
 export function parashaUnitDocumentTitle(name: string): string {
 	return `פרשת ${name} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+}
+
+/**
+ * Rebuild the renderer's coord→markers map from a book unit's
+ * serialized standalone-Shabbat marker layer (issue #2519); undefined
+ * when the unit carries no markers.
+ */
+export function unitBoundaryMarkers(
+	unit: ParashaBookUnit,
+): ReadonlyMap<string, readonly UnitBoundaryMarker[]> | undefined {
+	return unit.aliyahMarkers
+		? new Map(Object.entries(unit.aliyahMarkers))
+		: undefined;
 }
 
 /** Title of a parasha's Haftarah spread inside the book. */
@@ -271,9 +291,7 @@ export function parashaPerushDocumentTitle(
 	unitName: string,
 	haftara: boolean,
 ): string {
-	const reading = haftara
-		? `הפטרת ${unitName}`
-		: `פרשת ${unitName}`;
+	const reading = haftara ? `הפטרת ${unitName}` : `פרשת ${unitName}`;
 	return `${perushName} על ${reading} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
 }
 

@@ -78,6 +78,13 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SetupCircularMenuLayout();
+        // פרשת השבוע on a festival Shabbat: explain the displaced reading
+        // and offer the next regular one instead of jumping silently.
+        _viewModel.ConfirmHolidayReading = target =>
+            DisplayAlertAsync("פרשת השבוע",
+                $"שבת {target.HolidayShabbatDateText} היא {target.HolidayName} ואין בה פרשת שבוע רגילה.\n" +
+                $"הקריאה הבאה: {target.ReadingTitle} ({target.ShabbatDateText}).",
+                $"עבור ל{target.ReadingTitle}", "ביטול");
         SetupExitButtonDragHandler();
         SetupUnitPickerEvents();
         SubscribePerushimSearch();
@@ -683,7 +690,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             return;
         }
 
-        var satellites = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
+        var satellites = new[] { PrevUnitButton, WeeklyParashaButton, UnitPickerButton, NextUnitButton };
         var layout = Helpers.FanMenuGeometry.Compute(width, height, satellites.Length);
         ApplyMenuBounds(CircularMenuButton, layout.Toggle);
         for (var i = 0; i < satellites.Length && i < layout.Items.Count; i++)
@@ -716,7 +723,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     /// <summary>Opens the circular menu with animated expansion.</summary>
     private async Task OpenCircularMenuAsync()
     {
-        var buttons = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
+        var buttons = new[] { PrevUnitButton, WeeklyParashaButton, UnitPickerButton, NextUnitButton };
 
         // Set prev/next enabled state before animating
         PrevUnitButton.IsEnabled = _viewModel.CanGoToPreviousUnit;
@@ -752,7 +759,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     /// <summary>Closes the circular menu with animated contraction.</summary>
     private async Task CloseCircularMenuAsync()
     {
-        var buttons = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
+        var buttons = new[] { PrevUnitButton, WeeklyParashaButton, UnitPickerButton, NextUnitButton };
 
         CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
         CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
@@ -1001,7 +1008,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         if (_isMenuOpen)
         {
             _isMenuOpen = false;
-            var buttons = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
+            var buttons = new[] { PrevUnitButton, WeeklyParashaButton, UnitPickerButton, NextUnitButton };
             foreach (var b in buttons)
             {
                 b.Opacity = 0;
