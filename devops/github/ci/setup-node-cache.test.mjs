@@ -77,6 +77,14 @@ describe("setupNodeCacheFindings", () => {
 		assert.deepEqual(setupNodeCacheFindings(workflow), []);
 	});
 
+	test("flags flow-style with maps", () => {
+		const workflow = [
+			"      - uses: actions/setup-node@v7",
+			'        with: { node-version-file: "devops/package.json", cache: bun }',
+		].join("\n");
+		assert.equal(setupNodeCacheFindings(workflow).length, 1);
+	});
+
 	test("flags a dangling cache-dependency-path left after removing cache", () => {
 		const workflow = [
 			"      - uses: actions/setup-node@v7",

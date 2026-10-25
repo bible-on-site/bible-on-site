@@ -55,7 +55,23 @@ export function setupNodeCacheFindings(text) {
 			if (!line.trim() || line.trimStart().startsWith("#")) continue;
 			if (indentOf(line) < keyIndent) break;
 			if (indentOf(line) === keyIndent) {
-				insideWith = /^with:\s*$/.test(line.trim());
+				const key = line.trim();
+				insideWith = /^with:\s*$/.test(key);
+				// Flow style `with: { cache: bun }` keeps inputs on one line.
+				const flow = /^with:\s*\{(.*)\}\s*$/.exec(key);
+				if (flow) {
+					for (const pair of flow[1].split(",")) {
+						const input =
+							/^\s*(cache|cache-dependency-path|package-manager-cache)\s*:\s*(.*?)\s*$/.exec(
+								pair,
+							);
+						if (input)
+							inputs.set(input[1], {
+								value: scalarValue(input[2]),
+								line: j + 1,
+							});
+					}
+				}
 				continue;
 			}
 			if (!insideWith) continue;
