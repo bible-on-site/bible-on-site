@@ -75,7 +75,6 @@ const ADAM_HEAD = {
 	base_revision_id: null,
 	created_at: "2024-01-01",
 	updated_at: "2024-01-01",
-	age_seconds: 7200,
 };
 
 const fakeConn = {} as never;
