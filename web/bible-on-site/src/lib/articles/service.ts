@@ -328,7 +328,8 @@ export async function getArticleById(
 		};
 	} catch (error) {
 		console.warn(
-			`Failed to fetch article ${articleId}:`,
+			"Failed to fetch article %s:",
+			articleId,
 			error instanceof Error ? error.message : error,
 		);
 		throw error;

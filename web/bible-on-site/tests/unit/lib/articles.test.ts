@@ -360,7 +360,8 @@ describe("articles service", () => {
 
 			await expect(getArticleById(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
-				"Failed to fetch article 1:",
+				"Failed to fetch article %s:",
+				1,
 				"DB error",
 			);
 		});
@@ -370,7 +371,8 @@ describe("articles service", () => {
 
 			await expect(getArticleById(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
-				"Failed to fetch article 1:",
+				"Failed to fetch article %s:",
+				1,
 				"string error",
 			);
 		});
