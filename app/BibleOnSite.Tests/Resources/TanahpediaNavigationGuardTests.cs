@@ -31,7 +31,7 @@ public class TanahpediaNavigationGuardTests
     {
         var source = File.ReadAllText(Path.Join(PagesRoot, "TanahpediaEntryPage.xaml.cs"));
         var handler = SliceFrom(source, "OnBackToPediaClicked");
-        Assert.Contains("_backToPediaPending", handler);
+        Assert.Contains("_backToPediaGate", handler);
         Assert.Contains("catch (Exception", handler);
         Assert.Contains("Tanahpedia back navigation failed", handler);
     }

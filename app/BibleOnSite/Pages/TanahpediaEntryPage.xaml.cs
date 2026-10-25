@@ -17,7 +17,10 @@ public partial class TanahpediaEntryPage : ContentPage
 #pragma warning restore S2333
 {
     private readonly TanahpediaEntryViewModel _viewModel;
-    private bool _backToPediaPending;
+
+    /// <summary>A second tap during the in-flight transition must not stack
+    /// another absolute-route navigation on top of it (#2640).</summary>
+    private readonly NavigationGate _backToPediaGate = new();
 
     public string UniqueName { get; set; } = string.Empty;
 
@@ -144,28 +147,25 @@ public partial class TanahpediaEntryPage : ContentPage
     private async void OnBackToPediaClicked(object? sender, EventArgs e)
     {
         // async void + Shell navigation: an unobserved GoToAsync exception is a
-        // crash, and a second tap during the transition must not stack another
-        // absolute-route navigation on top of the in-flight one (#2640).
-        if (_backToPediaPending || Shell.Current is not { } shell)
+        // crash, so the route runs inside a failure boundary (#2640).
+        if (Shell.Current is not { } shell)
         {
             return;
         }
-        _backToPediaPending = true;
-        try
+        await _backToPediaGate.RunAsync(async () =>
         {
-            var location = shell.CurrentState.Location.OriginalString;
-            await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
-        catch (Exception ex) //NOSONAR — back navigation failure alerts the user.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
-            await DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
-        }
-        finally
-        {
-            _backToPediaPending = false;
-        }
+            try
+            {
+                var location = shell.CurrentState.Location.OriginalString;
+                await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+            }
+            #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
+            catch (Exception ex) //NOSONAR — back navigation failure alerts the user.
+            {
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
+                await DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+            }
+        });
     }
 }
