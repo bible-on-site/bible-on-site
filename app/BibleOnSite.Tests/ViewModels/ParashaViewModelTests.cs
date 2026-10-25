@@ -62,8 +62,7 @@ public class ParashaViewModelTests
                 // Never touch RecitationService.Instance — its lazy filesystem
                 // singleton has no host in a unit-test process.
                 hasPerekAudio ?? (_ => false),
-                null, null, null,
-                hebrewDateProvider);
+                hebrewDateProvider, null, null, null);
         }
 
         /// <summary>
