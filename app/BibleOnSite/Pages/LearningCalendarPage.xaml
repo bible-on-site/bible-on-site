@@ -282,6 +282,7 @@
                 <DataTemplate x:DataType="viewmodels:MiniMonthViewModel">
                     <VerticalStackLayout Margin="0,6" Spacing="2">
                         <Label Text="{Binding Title}"
+                               AutomationId="MiniMonthTitle"
                                FontSize="14"
                                FontAttributes="Bold"
                                HorizontalTextAlignment="Center"
@@ -306,6 +307,7 @@
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="viewmodels:MiniMonthWeekViewModel">
                                     <Grid ColumnDefinitions="*,*,*,*,*,*,*"
+                                          AutomationId="MiniMonthWeek"
                                           BindableLayout.ItemsSource="{Binding Cells}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
