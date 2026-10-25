@@ -65,9 +65,19 @@ export default createServerEntry({
 
 		if (SKIP_AUTH) {
 			return handler.fetch(request);
-		}
+		if (!sessionToken) {
 
 		const { origin, isSecure } = resolveRequestOrigin(request);
+
+		try {
+			const isValidToken = await verifyIdToken(sessionToken);
+			if (!isValidToken) {
+				return Response.redirect(getLoginUrl(origin), 302);
+			}
+		} catch (error) {
+			console.error("Token verification error:", error);
+			return new Response("Authentication service unavailable", { status: 500 });
+		}
 
 		if (url.pathname === "/auth/callback") {
 			return handleCallback(url, origin, isSecure);
