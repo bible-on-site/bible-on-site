@@ -13,6 +13,7 @@ import { describe, test } from "node:test";
 import {
 	baseRevision,
 	detectChanges,
+	isSchemaOnlyDataChange,
 	MODULES,
 	type ModuleKey,
 	main,
@@ -433,6 +434,74 @@ const SHARED_FILES = [
 	"devops/github/ci/determine-changes.ts",
 ];
 
+describe("isSchemaOnlyDataChange", () => {
+	for (const [name, files, expected] of [
+		["no data changes", [], false],
+		["tooling-only changes retain normal deployment behavior", [
+			"devops/deploy/data-deploy/sql-files.json",
+			"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+			"devops/deploy/README.md",
+		], false],
+		["schema recovery with associated tooling and documentation", [
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			"devops/deploy/data-deploy/sql-files.json",
+			"devops/deploy/data-deploy/index.mts",
+			"devops/deploy/data-deploy/test_lambda_parser.py",
+			"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+			"devops/deploy/README.md",
+			".github/workflows/ci.yml",
+		], true],
+		["multiple schema migrations", [
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			"data/mysql/tanahpedia_alter_source_citation.sql",
+		], true],
+		["schema plus static SQL requires full deployment", [
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			"data/mysql/tanah_static_structure.sql",
+		], false],
+		["schema plus pipeline changes requires full deployment", [
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+		], false],
+		["schema plus external pipeline scripture requires full deployment", [
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			...MODULES.perushim_pipeline.extraModulePaths,
+		], false],
+		["scripture data requires full deployment", [
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+		], false],
+		["recitation data retains normal deployment behavior", [
+			"data/recitation/recitation.sqlite",
+		], false],
+		["nested migration names do not qualify", [
+			"data/mysql/nested/tanahpedia_alter_mention_decoration.sql",
+		], false],
+		["non-SQL migration names do not qualify", [
+			"data/mysql/tanahpedia_alter_mention_decoration.sql.bak",
+		], false],
+		["an empty migration name does not qualify", [
+			"data/mysql/tanahpedia_alter_.sql",
+		], false],
+		["data path itself does not qualify", ["data"], false],
+	] as const) {
+		test(name, () => {
+			assert.equal(isSchemaOnlyDataChange([...files]), expected);
+		});
+	}
+
+	test("the workflow skips the entire release job only for an explicit full-data decision", () => {
+		const ci = readFileSync(
+			new URL("../../../.github/workflows/ci.yml", import.meta.url),
+			"utf8",
+		).replace(/\r/g, "");
+		assert.match(ci, /^      data_schema_only_changed: \$\{\{ steps\.determine\.outputs\.data_schema_only_changed \}\}$/m);
+		const release = ci.split("  release_data:\n")[1].split("\n  bump_versions:")[0];
+		const condition = release.match(/^    if: (.+)$/m)?.[1];
+		assert.ok(condition, "Data release requires a job-level condition");
+		assert.ok(condition.includes("needs.determine_changes.outputs.data_schema_only_changed == 'false'"));
+	});
+});
+
 describe("baseRevision", () => {
 	test("uses the tested PR merge parent even when the event base is stale", () => {
 		assert.deepEqual(
@@ -497,6 +566,7 @@ describe("main", () => {
 		eventName: string,
 		event: (shas: { root: string; replaced: string; base: string }) => object,
 		changedPath = "web/bible-on-site/src/page.tsx",
+		changeKind: "write" | "delete" = "write",
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -508,7 +578,7 @@ describe("main", () => {
 			git(work, "config", "user.name", "CI fixture");
 			git(work, "config", "user.email", "ci-fixture@example.invalid");
 			git(work, "config", "core.autocrlf", "false");
-			const root = commit(work, "README.md");
+			const root = commit(work, changeKind === "delete" ? changedPath : "README.md");
 			git(work, "checkout", "--quiet", "-b", "replaced");
 			const replaced = commit(work, "web/admin/src/main.tsx");
 			git(work, "checkout", "--quiet", "master");
@@ -528,6 +598,10 @@ describe("main", () => {
 					"-m",
 					"Tested PR merge",
 				);
+			} else if (changeKind === "delete") {
+				rmSync(join(work, changedPath));
+				git(work, "add", ".");
+				git(work, "commit", "--quiet", "-m", "Remove migration");
 			} else {
 				commit(work, changedPath);
 			}
@@ -559,7 +633,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2,
+				Object.keys(MODULES).length * 2 + 1,
 			);
 			return { changes, output };
 		} finally {
@@ -590,6 +664,7 @@ describe("main", () => {
 		assert.match(output, /^website_module_changed=true$/m);
 		assert.match(output, /^api_module_changed=false$/m);
 		assert.match(output, /^website_ci_changed=false$/m);
+		assert.match(output, /^data_schema_only_changed=false$/m);
 		assert.match(output, /^admin_module_changed=false$/m);
 		assert.match(output, /^bulletin_module_changed=false$/m);
 	});
@@ -608,6 +683,27 @@ describe("main", () => {
 		);
 		assert.match(output, /^app_module_changed=true$/m);
 		assert.match(output, /^website_module_changed=true$/m);
+	});
+
+	test("a schema-only push stays selected for data checks and emits the manual deployment decision", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
+	});
+
+	test("a deleted schema migration stays manual without asserting the SQL still exists", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			"delete",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
 	});
 
 	test("push compares with the commit before the push", () => {
