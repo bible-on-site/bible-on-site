@@ -107,13 +107,19 @@ public class ReaderFanMenu : Grid
 
         _satellites.CollectionChanged += (_, e) =>
         {
-            if (e.NewItems == null)
+            if (e.OldItems != null)
             {
-                return;
+                foreach (View item in e.OldItems)
+                {
+                    _container.Children.Remove(item);
+                }
             }
-            foreach (View item in e.NewItems)
+            if (e.NewItems != null)
             {
-                _container.Children.Insert(0, item); // satellites sit under the toggle
+                foreach (View item in e.NewItems)
+                {
+                    _container.Children.Insert(0, item); // satellites sit under the toggle
+                }
             }
             LayoutFan();
         };
