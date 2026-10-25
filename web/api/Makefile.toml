@@ -114,9 +114,12 @@ command = "cargo"
 args = ["run", "--profile", "dev"]
 
 
+# bun is a shell shim (no .exe) on Windows — CreateProcess cannot spawn it,
+# so run it through Git Bash (BASH_BIN). -c (not -lc) so the shell inherits the
+# parent PATH; a login shell would drop CI's GITHUB_PATH-injected bun dir.
 [tasks.test-e2e]
-command = "bun"
-args = ["run", "--cwd", "tests", "test:e2e"]
+command = "${BASH_BIN}"
+args = ["-c", "bun run --cwd tests test:e2e"]
 
 [tasks.test-unit]
 command = "cargo"
@@ -145,8 +148,8 @@ args = ["nextest", "run", "--profile", "ci"]
 dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
 
 [tasks.coverage-e2e]
-command = "bun"
-args = ["run", "--cwd", "tests", "coverage:e2e"]
+command = "${BASH_BIN}"
+args = ["-c", "bun run --cwd tests coverage:e2e"]
 
 [tasks.coverage-merge]
 command = "docker"
