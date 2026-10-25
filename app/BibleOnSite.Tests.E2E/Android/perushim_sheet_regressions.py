@@ -18,6 +18,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--adb", default=str(Path(os.environ.get("ANDROID_HOME", "")) / "platform-tools/adb.exe"))
 parser.add_argument("--serial", required=True)
 parser.add_argument("--artifacts", type=Path, required=True)
+parser.add_argument("--back-source", choices=("emulator", "injected"), default="emulator")
+parser.add_argument("--emulator-grpc-port", type=int, default=8554)
 args = parser.parse_args()
 args.artifacts.mkdir(parents=True, exist_ok=True)
 base = [args.adb, "-s", args.serial]
@@ -63,6 +65,10 @@ def wait_for(name):
         if find(nodes, name) is not None:
             return nodes, raw
         native_interval.wait(timeout=0.3)
+    (args.artifacts / "failure.png").write_bytes(adb("exec-out", "screencap", "-p"))
+    (args.artifacts / "failure.xml").write_bytes(raw)
+    report["failure"] = {"expectedControl": name, "backSource": args.back_source}
+    (args.artifacts / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     raise AssertionError(f"Native control did not become visible: {name}")
 
 
@@ -150,7 +156,15 @@ check.assertTrue(any(n.get("text") == "העדפות - חבילות הרחבה" f
 tap(find(nodes, "DownloadPerushimButton"))
 wait_for("RemovePerushimButton")
 capture("download-complete", verify=False)
-adb("shell", "input", "keyevent", "4")
+if args.back_source == "emulator":
+    import grpc
+    # SDK emulator_controller.proto KeyboardEvent: Evdev, keypress, KEY_BACK (158).
+    # The console's generic EV_KEY command takes a different path from toolbar keys.
+    with grpc.insecure_channel(f"127.0.0.1:{args.emulator_grpc_port}") as channel:
+        send_key = channel.unary_unary("/android.emulation.control.EmulatorController/sendKey")
+        send_key(b"\x08\x01\x10\x02\x18\x9e\x01", timeout=5)
+else:
+    adb("shell", "input", "keyevent", "4")
 nodes, _ = wait_for("PerushimChevronButton")
 check.assertIsNone(find(nodes, "DownloadPerushimButton"), "One Back must leave preferences")
 check.assertIsNone(find(nodes, "PerushimEmptyIcon"), "Installed commentary must replace the empty state")
@@ -158,7 +172,7 @@ check.assertTrue(any(n.get("class") == "android.widget.CheckBox" for n in nodes)
                  "Downloaded commentary choices must be usable after returning")
 report["download-flow"] = {"entry": "perushim-dialog", "preferencesSection": "packs",
                            "sharedTopBar": True, "inAppBackVisible": False,
-                           "downloadInstalled": True, "oneSystemBackReturnedToReader": True}
+                           "downloadInstalled": True, "oneSystemBackReturnedToReader": True, "backSource": args.back_source}
 
 nodes, expanded = capture("returned", verify=False)
 expanded["viewport"] = bounds(find(nodes, "PerushimContentViewport"))

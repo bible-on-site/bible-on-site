@@ -15,6 +15,10 @@ Each swipe must reach a different chapter and fully snap within 10 seconds. Sele
 Run on a dedicated emulator with no manual input during the check. Open a chapter and use the extension settings to remove the commentary pack first. The reported reproduction was checked at a 360 by 800 logical viewport with font scale 1.3.
 
 ```powershell
-python -m pip install Pillow defusedxml
+python -m pip install Pillow defusedxml grpcio
 python BibleOnSite.Tests.E2E/Android/perushim_sheet_regressions.py --adb <sdk>/platform-tools/adb.exe --serial emulator-5554 --artifacts <output-directory>
 ```
+
+The default Back check uses the emulator SDK's `EmulatorController.sendKey` API, which follows the toolbar's key input path. Launch the dedicated emulator with `-grpc 8554` (localhost only), or select another local port with `--emulator-grpc-port`. The app-only alternative is `--back-source injected`, which uses Android's injected Back key and does not validate the emulator toolbar. The console's generic `event send EV_KEY:KEY_BACK` command takes a different path and is not a toolbar regression check.
+
+For the API 36 image used here, `hw.keyboard=no` omits the emulator's virtio keyboard device. Toolbar Back then delivers no key, including in Android Settings. Set `hw.keyboard=yes` in that dedicated AVD's `config.ini` and cold-start it without wiping data. Keep `hw.mainKeys=no` and the normal touch driver. Confirm Back leaves Android Settings before checking download and return in the app.

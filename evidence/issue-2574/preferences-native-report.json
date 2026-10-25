@@ -63,7 +63,7 @@
     ]
   },
   "export-chooser": {
-    "booksPixels": 2737
+    "booksPixels": 2697
   },
   "download-settings": {
     "booksPixels": 0
@@ -77,7 +77,8 @@
     "sharedTopBar": true,
     "inAppBackVisible": false,
     "downloadInstalled": true,
-    "oneSystemBackReturnedToReader": true
+    "oneSystemBackReturnedToReader": true,
+    "backSource": "emulator"
   },
   "returned": {
     "booksPixels": 0,
