@@ -76,8 +76,15 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.MODULE_DIRECTORY }}/package.json
-          cache-dependency-path: ${{ env.MODULE_DIRECTORY }}/bun.lock
-          cache: bun
+
+      - name: Restore bun store cache
+        if: ${{ env.IS_NPM == 'true' }}
+        id: module-bun-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ env.MODULE_NAME }}-${{ hashFiles(format('{0}/bun.lock', env.MODULE_DIRECTORY)) }}
+          restore-keys: ${{ runner.os }}-bun-${{ env.MODULE_NAME }}-
 
       - name: Install dev dependencies
         if: ${{ env.IS_NPM == 'true' }}
@@ -85,6 +92,13 @@ jobs:
         id: bun_ci
         run: |
           bun install --frozen-lockfile
+
+      - name: Save bun store cache
+        if: ${{ env.IS_NPM == 'true' && github.ref == 'refs/heads/master' && steps.module-bun-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.module-bun-cache.outputs.cache-primary-key }}
 
       - name: Setup Rust
         if: ${{ env.IS_CARGO == 'true' }}
