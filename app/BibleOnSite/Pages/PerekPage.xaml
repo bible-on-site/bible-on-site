@@ -645,7 +645,7 @@
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
                         <Button x:Name="GoToPerushimSettingsButton" AutomationId="GoToPerushimSettingsButton"
-                                Text="עבור להגדרות להורדת חבילת הפירושים"
+                                Text="הורדת חבילת פירושים"
                                 IsVisible="{Binding ShowDownloadPerushimButton}"
                                 Clicked="OnGoToPerushimSettingsClicked"/>
                         <Button Text="ייצוא לוגים לתמיכה"
@@ -801,6 +801,8 @@
                 <Button x:Name="TextButton"
                         AutomationId="TextButton"
                         Text="א&#x0a;ב&#x0a;ג"
+                        FontAutoScalingEnabled="False"
+                        SemanticProperties.Description="טקסט הפרק"
                         FontSize="10"
                         FontAttributes="Bold"
                         WidthRequest="44"

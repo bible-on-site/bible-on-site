@@ -1,3 +1,4 @@
+using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -8,7 +9,7 @@ namespace BibleOnSite.Pages;
 /// תצוגה settings: font size with a live text preview.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML supplies the other partial declaration.
-public partial class DisplayPreferencesPage : ContentPage
+public partial class DisplayPreferencesPage : PreferencesPageBase
 #pragma warning restore S2333
 {
     public DisplayPreferencesPage()

@@ -104,7 +104,7 @@ public partial class ParashaPage //NOSONAR
     {
         try
         {
-            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
         }
         catch (Exception ex) //NOSONAR — failure boundary: settings navigation is best-effort and must not crash the reader.
         {

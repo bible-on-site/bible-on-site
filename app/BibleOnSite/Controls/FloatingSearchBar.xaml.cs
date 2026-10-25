@@ -274,7 +274,7 @@ public partial class FloatingSearchBar : ContentView
     {
         try
         {
-            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: keyboard dismissal is best-effort
         catch (Exception ex) //NOSONAR — failure boundary: a navigation failure must not crash the picker.

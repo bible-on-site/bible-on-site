@@ -10,11 +10,11 @@ Each swipe must reach a different chapter and fully snap within 10 seconds. Sele
 
 ## Commentary sheet visual regression
 
-`perushim_sheet_regressions.py` uses ADB and Pillow against the Perek reader with the commentary pack removed. It checks that the books icon remains painted through a sustained upward drag, checks the native bounds of the icon and both actions, taps log export and verifies Android's share chooser, follows the download action to extension settings, returns, and collapses the sheet. It saves the actual screenshots, view hierarchies, and a JSON report.
+`perushim_sheet_regressions.py` uses ADB, Pillow and defusedxml against the Perek reader with the commentary pack removed. It checks that the books icon remains painted through a sustained upward drag, checks the native bounds of the icon and both actions, taps log export and verifies Android's share chooser, follows the download action to extension settings, installs the pack, verifies one Back returns to the populated reader, and collapses the sheet. It saves the actual screenshots, view hierarchies, and a JSON report.
 
 Run on a dedicated emulator with no manual input during the check. Open a chapter and use the extension settings to remove the commentary pack first. The reported reproduction was checked at a 360 by 800 logical viewport with font scale 1.3.
 
 ```powershell
-python -m pip install Pillow
+python -m pip install Pillow defusedxml
 python BibleOnSite.Tests.E2E/Android/perushim_sheet_regressions.py --adb <sdk>/platform-tools/adb.exe --serial emulator-5554 --artifacts <output-directory>
 ```

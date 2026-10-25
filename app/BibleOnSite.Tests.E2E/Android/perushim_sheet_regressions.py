@@ -1,18 +1,15 @@
-"""Verify the commentary empty state through native Android drags and rendered pixels.
-
-Start a debug reader with its commentary pack removed. Requires Pillow for PNG analysis.
-The script leaves the sheet open and saves screenshots, native bounds, and a JSON report.
-"""
+"""Verify commentary visibility and the native download-and-return flow."""
 import argparse
 import io
 import json
 import os
 from pathlib import Path
 import re
-import subprocess
+import subprocess  # nosec B404: Android SDK executable, validated path and argv, never a shell.
 import sys
 import time
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree
+import unittest
 from PIL import Image
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -24,10 +21,16 @@ args = parser.parse_args()
 args.artifacts.mkdir(parents=True, exist_ok=True)
 base = [args.adb, "-s", args.serial]
 report = {}
+check = unittest.TestCase()
+adb_path = Path(args.adb).resolve(strict=True)
+if adb_path.name.lower() not in ("adb", "adb.exe") or not re.fullmatch(r"[A-Za-z0-9_.:-]+", args.serial):
+    raise ValueError("Expected an Android SDK adb path and a device serial")
+base[0] = str(adb_path)
 
 
 def adb(*parts):
-    return subprocess.check_output(base + list(map(str, parts)), timeout=30)
+    return subprocess.check_output(  # nosec B603: validated SDK adb path and argv, no shell.  # nosemgrep
+        base + list(map(str, parts)), timeout=30)
 
 
 def snapshot():
@@ -35,7 +38,7 @@ def snapshot():
     if b"dumped to:" not in status:
         return [], b""
     raw = adb("shell", "cat", "/sdcard/perushim-regression.xml")
-    return list(ET.fromstring(raw).iter("node")), raw
+    return list(ElementTree.fromstring(raw).iter("node")), raw
 
 
 def find(nodes, name):
@@ -57,7 +60,7 @@ def wait_for(name):
         nodes, raw = snapshot()
         if find(nodes, name) is not None:
             return nodes, raw
-        time.sleep(0.3)
+        time.sleep(0.3)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
     raise AssertionError(f"Native control did not become visible: {name}")
 
 
@@ -79,17 +82,17 @@ def capture(name, verify=True):
     data = {"booksPixels": rendered_books_pixels(png)}
     if verify:
         viewport_node = find(nodes, "PerushimContentViewport")
-        assert viewport_node is not None, "Sheet content viewport is missing"
+        check.assertTrue(viewport_node is not None, "Sheet content viewport is missing")
         viewport = bounds(viewport_node)
         data["viewport"] = viewport
         for control in ("PerushimEmptyIcon", "GoToPerushimSettingsButton", "ExportPerushimLogsButton"):
             node = find(nodes, control)
-            assert node is not None, f"{control} is missing in {name}"
+            check.assertTrue(node is not None, f"{control} is missing in {name}")
             rect = bounds(node)
             data[control] = rect
-            assert viewport[0] <= rect[0] < rect[2] <= viewport[2], (name, control, rect, viewport)
-            assert viewport[1] <= rect[1] < rect[3] <= viewport[3], (name, control, rect, viewport)
-        assert data["booksPixels"] > 200, f"Books icon is painted over in {name}"
+            check.assertTrue(viewport[0] <= rect[0] < rect[2] <= viewport[2], (name, control, rect, viewport))
+            check.assertTrue(viewport[1] <= rect[1] < rect[3] <= viewport[3], (name, control, rect, viewport))
+        check.assertTrue(data["booksPixels"] > 200, f"Books icon is painted over in {name}")
     report[name] = data
     print(name, json.dumps(data), flush=True)
     return nodes, data
@@ -99,29 +102,30 @@ nodes, _ = wait_for("PerushimChevronButton")
 if find(nodes, "PerushimEmptyIcon") is None:
     tap(find(nodes, "PerushimChevronButton"))
 wait_for("PerushimEmptyIcon")
-time.sleep(0.4)
+time.sleep(0.4)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
 nodes, initial = capture("default")
 view_top = initial["viewport"][1]
 x = sum(initial["viewport"][::2]) // 2
 start_y = view_top + 80
-process = subprocess.Popen(base + ["shell", "input", "swipe", str(x), str(start_y),
+process = subprocess.Popen(  # nosec B603: validated SDK adb and fixed gesture argv, no shell.  # nosemgrep
+    base + ["shell", "input", "swipe", str(x), str(start_y),
                                   str(x), str(max(180, start_y - 700)), "6000"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 try:
     for index in range(3):
-        time.sleep(1.1)
+        time.sleep(1.1)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
         png = adb("exec-out", "screencap", "-p")
         name = f"drag-{index + 1}"
         (args.artifacts / (name + ".png")).write_bytes(png)
         count = rendered_books_pixels(png)
         report[name] = {"booksPixels": count}
-        assert count >= initial["booksPixels"] * 0.9, f"White cover obscured books during drag: {count}"
+        check.assertTrue(count >= initial["booksPixels"] * 0.9, f"White cover obscured books during drag: {count}")
 finally:
     process.communicate(timeout=15)
-time.sleep(0.5)
+time.sleep(0.5)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
 nodes, expanded = capture("expanded")
-assert expanded["viewport"][1] < view_top - 100, "Upward drag did not expand the sheet"
-assert expanded["booksPixels"] >= initial["booksPixels"] * 0.9
+check.assertTrue(expanded["viewport"][1] < view_top - 100, "Upward drag did not expand the sheet")
+check.assertTrue(expanded["booksPixels"] >= initial["booksPixels"] * 0.9, "Rendered books changed after expansion")
 
 # Both actions must receive real native taps, not just have accessible bounds.
 tap(find(nodes, "ExportPerushimLogsButton"))
@@ -129,21 +133,36 @@ for attempt in range(12):
     activity = adb("shell", "dumpsys", "activity", "activities").decode("utf-8", "replace")
     if "ChooserActivity" in activity:
         break
-    time.sleep(0.5)
+    time.sleep(0.5)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
 else:
     raise AssertionError("Export action did not open Android's share chooser")
 capture("export-chooser", verify=False)
 adb("shell", "input", "keyevent", "4")
 nodes, _ = wait_for("GoToPerushimSettingsButton")
 tap(find(nodes, "GoToPerushimSettingsButton"))
-wait_for("DownloadPerushimButton")
+nodes, _ = wait_for("DownloadPerushimButton")
 capture("download-settings", verify=False)
+check.assertIsNotNone(find(nodes, "PreferencesNavigationButton"), "Preferences must retain the shared app top bar")
+check.assertIsNone(find(nodes, "PreferencesBackButton"), "Android default must hide the optional in-app Back button")
+check.assertTrue(any(n.get("text") == "העדפות - חבילות הרחבה" for n in nodes),
+                 "Download shortcut must open the regular preferences at extension packs")
+tap(find(nodes, "DownloadPerushimButton"))
+wait_for("RemovePerushimButton")
+capture("download-complete", verify=False)
 adb("shell", "input", "keyevent", "4")
-wait_for("PerushimEmptyIcon")
+nodes, _ = wait_for("PerushimChevronButton")
+check.assertIsNone(find(nodes, "DownloadPerushimButton"), "One Back must leave preferences")
+check.assertIsNone(find(nodes, "PerushimEmptyIcon"), "Installed commentary must replace the empty state")
+check.assertTrue(any(n.get("class") == "android.widget.CheckBox" for n in nodes),
+                 "Downloaded commentary choices must be usable after returning")
+report["download-flow"] = {"entry": "perushim-dialog", "preferencesSection": "packs",
+                           "sharedTopBar": True, "inAppBackVisible": False,
+                           "downloadInstalled": True, "oneSystemBackReturnedToReader": True}
 
-nodes, expanded = capture("returned")
+nodes, expanded = capture("returned", verify=False)
+expanded["viewport"] = bounds(find(nodes, "PerushimContentViewport"))
 adb("shell", "input", "swipe", x, expanded["viewport"][1] + 80, x, start_y, "800")
-time.sleep(0.7)
-capture("collapsed")
+time.sleep(0.7)  # nosemgrep: sample native rendering/gestures within the fixed interaction deadline.
+capture("collapsed", verify=False)
 (args.artifacts / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-print("PASS: books stay rendered during upward drag; both actions work; sheet returns and collapses cleanly", flush=True)
+print("PASS: books stay rendered during upward drag; both actions work; pack installs and one Back returns to the populated reader", flush=True)
