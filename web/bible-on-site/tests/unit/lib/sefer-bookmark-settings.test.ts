@@ -19,6 +19,15 @@ beforeEach(() => {
 	saveSeferBookmarkSettings(DEFAULT_SEFER_BOOKMARK_SETTINGS);
 });
 
+/**
+ * Cross-tab storage event the listener can inspect. The subscriber only
+ * reads `event.key`, so a plain Event carrying the property is enough —
+ * the DOM externs CodeQL checks declare a narrower StorageEvent
+ * constructor than the runtime one and flag the two-argument call.
+ */
+const storageEvent = (key: string) =>
+	Object.assign(new Event("storage"), { key });
+
 describe("normalizeSeferBookmarkSettings", () => {
 	it("falls back to defaults for garbage input", () => {
 		for (const raw of [null, undefined, 5, "x", []])
@@ -126,19 +135,63 @@ describe("persistence and change notifications", () => {
 		expect(seen).toEqual(["top"]);
 	});
 	it("re-reads localStorage on cross-tab storage events", () => {
-		subscribeSeferBookmarks(() => {});
+		const unsubscribe = subscribeSeferBookmarks(() => {});
 		expect(getSeferBookmarkSnapshot().placement).toBe("sides");
 		localStorage.setItem(
 			SEFER_BOOKMARKS_KEY,
 			JSON.stringify({ placement: "right" }),
 		);
 		// Events for other keys are ignored; only our key re-reads.
-		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		window.dispatchEvent(storageEvent("otherPref"));
 		expect(getSeferBookmarkSnapshot().placement).toBe("sides");
-		window.dispatchEvent(
-			new StorageEvent("storage", { key: SEFER_BOOKMARKS_KEY }),
-		);
+		window.dispatchEvent(storageEvent(SEFER_BOOKMARKS_KEY));
 		expect(getSeferBookmarkSnapshot().placement).toBe("right");
+		unsubscribe();
+	});
+	it("refreshes the stale snapshot when the first subscriber returns", () => {
+		const first = subscribeSeferBookmarks(() => {});
+		expect(getSeferBookmarkSnapshot().placement).toBe("sides");
+		first();
+		// Another tab writes while no storage listener is attached; the
+		// cached snapshot can no longer observe the change.
+		localStorage.setItem(
+			SEFER_BOOKMARKS_KEY,
+			JSON.stringify({ placement: "bottom" }),
+		);
+		const seen: string[] = [];
+		const second = subscribeSeferBookmarks(() =>
+			seen.push(getSeferBookmarkSnapshot().placement),
+		);
+		expect(getSeferBookmarkSnapshot().placement).toBe("bottom");
+		expect(seen).toEqual(["bottom"]);
+		second();
+	});
+	it("does not notify the first subscriber when nothing changed", () => {
+		const first = subscribeSeferBookmarks(() => {});
+		first();
+		let calls = 0;
+		const second = subscribeSeferBookmarks(() => {
+			calls += 1;
+		});
+		expect(calls).toBe(0);
+		second();
+	});
+	it("seeds the snapshot for a first subscriber that never read it", async () => {
+		// A fresh module has snapshot === null — reachable for a direct
+		// (non-useSyncExternalStore) subscriber before any snapshot read.
+		jest.resetModules();
+		const fresh = await import("@/lib/sefer-bookmark-settings");
+		localStorage.setItem(
+			fresh.SEFER_BOOKMARKS_KEY,
+			JSON.stringify({ placement: "top" }),
+		);
+		const seen: string[] = [];
+		const unsubscribe = fresh.subscribeSeferBookmarks(() =>
+			seen.push(fresh.getSeferBookmarkSnapshot().placement),
+		);
+		expect(fresh.getSeferBookmarkSnapshot().placement).toBe("top");
+		expect(seen).toEqual(["top"]);
+		unsubscribe();
 	});
 	it("keeps the snapshot object stable between changes", () => {
 		const first = getSeferBookmarkSnapshot();

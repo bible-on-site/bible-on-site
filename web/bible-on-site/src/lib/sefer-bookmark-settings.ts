@@ -119,6 +119,22 @@ export function getSeferBookmarkSettings(): SeferBookmarkSettings {
  */
 let snapshot: SeferBookmarkSettings | null = null;
 
+/**
+ * Active external-store subscribers. The cache can only go stale while
+ * nobody is listening — a cross-tab storage write needs a storage event
+ * listener to reach this tab's cache — so the first subscriber after a
+ * silent stretch re-syncs before anyone renders the stale value.
+ */
+let subscribers = 0;
+
+const seferBookmarkSettingsEqual = (
+	a: SeferBookmarkSettings,
+	b: SeferBookmarkSettings,
+): boolean =>
+	(Object.keys(a) as (keyof SeferBookmarkSettings)[]).every(
+		(key) => a[key] === b[key],
+	);
+
 export function saveSeferBookmarkSettings(
 	settings: Partial<SeferBookmarkSettings>,
 ): void {
@@ -157,7 +173,20 @@ export function subscribeSeferBookmarks(onChange: () => void): () => void {
 	};
 	window.addEventListener(SEFER_BOOKMARKS_EVENT, handler);
 	window.addEventListener("storage", onStorage);
+	// First listener after a silent stretch: catch up on cross-tab writes the
+	// detached storage listener could not receive, and notify when the value
+	// moved so useSyncExternalStore re-reads the fresh snapshot instead of
+	// painting the stale configuration a closed reader left behind.
+	if (subscribers === 0) {
+		const latest = getSeferBookmarkSettings();
+		if (snapshot === null || !seferBookmarkSettingsEqual(latest, snapshot)) {
+			snapshot = latest;
+			onChange();
+		}
+	}
+	subscribers += 1;
 	return () => {
+		subscribers -= 1;
 		window.removeEventListener(SEFER_BOOKMARKS_EVENT, handler);
 		window.removeEventListener("storage", onStorage);
 	};

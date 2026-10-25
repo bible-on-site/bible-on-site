@@ -1,7 +1,3 @@
-/* biome-ignore-all lint/style/noDescendingSpecificity: faithful
-   alpha.49 replication — the library's own source order descends in
-   specificity (hidden/edge/state overrides follow base layout rules),
-   and the flagged pairs target different elements. */
 /* ===================================================================
  * Base flipbook styles — replicated from html-flip-book-vanilla pages.scss
  * & flipbook.scss (v0.0.0-alpha.49) because the vanilla CSS is not
@@ -324,6 +320,41 @@ html[data-sefer-view] {
 	z-index: 0;
 }
 
+/* Slot base precedes every rail/leaf child selector below: biome's
+   noDescendingSpecificity requires a subject's lower-specificity rules to
+   come before its higher-specificity ones. */
+.flipbook-bookmark-slot {
+	--bookmark-exposed-depth: var(
+		--flipbook-bookmark-depth,
+		var(--bookmark-default-depth, 52px)
+	);
+	--bookmark-exposed-length: var(
+		--flipbook-bookmark-length,
+		var(--bookmark-default-length, 24px)
+	);
+	--bookmark-exposed-major: var(--bookmark-exposed-depth);
+	--bookmark-full-horizontal: max(
+		var(--bookmark-exposed-major),
+		min(var(--flipbook-bookmark-full-length, 220px), calc(100vw - 16px))
+	);
+	--bookmark-full-vertical: max(
+		var(--bookmark-exposed-major),
+		min(var(--flipbook-bookmark-full-length, 220px), calc(100vh - 16px))
+	);
+	position: relative;
+	flex: 0 0 var(--bookmark-exposed-length);
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	pointer-events: auto;
+}
+
+.flipbook-bookmark-slot[data-orientation="parallel"] {
+	--bookmark-exposed-major: var(--bookmark-exposed-length);
+}
+
 .flipbook-bookmarks__rail--left > .flipbook-bookmark-slot,
 .flipbook-bookmarks__rail--right > .flipbook-bookmark-slot {
 	position: absolute;
@@ -382,36 +413,27 @@ html[data-sefer-view] {
 	grid-row: 1;
 }
 
-.flipbook-bookmark-slot {
-	--bookmark-exposed-depth: var(
-		--flipbook-bookmark-depth,
-		var(--bookmark-default-depth, 52px)
-	);
-	--bookmark-exposed-length: var(
-		--flipbook-bookmark-length,
-		var(--bookmark-default-length, 24px)
-	);
-	--bookmark-exposed-major: var(--bookmark-exposed-depth);
-	--bookmark-full-horizontal: max(
-		var(--bookmark-exposed-major),
-		min(var(--flipbook-bookmark-full-length, 220px), calc(100vw - 16px))
-	);
-	--bookmark-full-vertical: max(
-		var(--bookmark-exposed-major),
-		min(var(--flipbook-bookmark-full-length, 220px), calc(100vh - 16px))
-	);
+.flipbook-bookmark {
 	position: relative;
-	flex: 0 0 var(--bookmark-exposed-length);
-	width: 100%;
-	height: 100%;
+	flex: 0 0 var(--flipbook-bookmark-length, var(--bookmark-default-length));
+	display: grid;
+	place-items: center;
 	min-width: 0;
 	min-height: 0;
+	margin: 0;
+	padding: 3px;
+	box-sizing: border-box;
 	overflow: hidden;
-	pointer-events: auto;
-}
-
-.flipbook-bookmark-slot[data-orientation="parallel"] {
-	--bookmark-exposed-major: var(--bookmark-exposed-length);
+	border: 1px solid #71869c;
+	border-radius: 2px;
+	background: #dce8f4;
+	color: #20364b;
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.2;
+	cursor: pointer;
+	-webkit-user-select: none;
+	user-select: none;
 }
 
 .flipbook-bookmark-slot > .flipbook-bookmark {
@@ -422,14 +444,14 @@ html[data-sefer-view] {
 	flex: none;
 }
 
-.flipbook:not(.flipbook--select-text) .flipbook-bookmark-slot,
-.flipbook:not(.flipbook--select-text) .flipbook-bookmark {
-	touch-action: pan-y;
-}
-
 .flipbook--select-text .flipbook-bookmark-slot,
 .flipbook--select-text .flipbook-bookmark {
 	touch-action: auto;
+}
+
+.flipbook:not(.flipbook--select-text) .flipbook-bookmark-slot,
+.flipbook:not(.flipbook--select-text) .flipbook-bookmark {
+	touch-action: pan-y;
 }
 
 .flipbook-bookmark-slot[data-orientation="parallel"][data-edge="left"]
@@ -458,29 +480,6 @@ html[data-sefer-view] {
 	> .flipbook-bookmark {
 	top: auto;
 	bottom: 0;
-}
-
-.flipbook-bookmark {
-	position: relative;
-	flex: 0 0 var(--flipbook-bookmark-length, var(--bookmark-default-length));
-	display: grid;
-	place-items: center;
-	min-width: 0;
-	min-height: 0;
-	margin: 0;
-	padding: 3px;
-	box-sizing: border-box;
-	overflow: hidden;
-	border: 1px solid #71869c;
-	border-radius: 2px;
-	background: #dce8f4;
-	color: #20364b;
-	font: inherit;
-	font-size: 12px;
-	line-height: 1.2;
-	cursor: pointer;
-	-webkit-user-select: none;
-	user-select: none;
 }
 
 .flipbook-bookmark:hover,
@@ -519,6 +518,26 @@ html[data-sefer-view] {
 	display: none;
 }
 
+/* Base expanded-content rule precedes the select-mode qualified rule below
+   (noDescendingSpecificity); it is kept next to the other content bases. */
+.flipbook-bookmark__expanded-content {
+	position: absolute;
+	inset: 3px;
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	writing-mode: inherit;
+	opacity: 0;
+	transition: opacity 0.18s ease;
+}
+
+.flipbook-bookmark__expanded-content[hidden] {
+	display: none;
+}
+
 .flipbook-bookmark[data-mouse-mode="turn"] {
 	touch-action: pan-y;
 }
@@ -543,6 +562,16 @@ html[data-sefer-view] {
 .flipbook-bookmark[data-orientation="perpendicular"][data-edge="top"],
 .flipbook-bookmark[data-orientation="perpendicular"][data-edge="bottom"] {
 	writing-mode: vertical-rl;
+}
+
+/* Preview-open state overrides sit ahead of the orientation/edge geometry
+   rules — equal subject (.__content) must stay non-descending. */
+.flipbook-bookmark-preview[data-open="false"] .flipbook-bookmark__content {
+	opacity: 1;
+}
+
+.flipbook-bookmark[data-preview-open="true"] > .flipbook-bookmark__content {
+	opacity: 0;
 }
 
 .flipbook-bookmark[data-orientation="parallel"][data-edge="left"]
@@ -573,10 +602,6 @@ html[data-sefer-view] {
 	bottom: 0;
 }
 
-.flipbook-bookmark[data-preview-open="true"] > .flipbook-bookmark__content {
-	opacity: 0;
-}
-
 .flipbook-bookmark-preview {
 	position: fixed;
 	z-index: 2147483000;
@@ -591,32 +616,10 @@ html[data-sefer-view] {
 	display: none;
 }
 
-.flipbook-bookmark-preview[data-open="false"] .flipbook-bookmark__content {
-	opacity: 1;
-}
-
 .flipbook-bookmark--expanded {
 	position: absolute;
 	width: 100%;
 	height: 100%;
-}
-
-.flipbook-bookmark__expanded-content {
-	position: absolute;
-	inset: 3px;
-	display: flex;
-	align-items: center;
-	min-width: 0;
-	min-height: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	writing-mode: inherit;
-	opacity: 0;
-	transition: opacity 0.18s ease;
-}
-
-.flipbook-bookmark__expanded-content[hidden] {
-	display: none;
 }
 
 .flipbook-bookmark-default {
@@ -652,20 +655,27 @@ html[data-sefer-view] {
  * without global theming.
  * =================================================================== */
 
-.he-book .sefer-bookmarks .flipbook-bookmark {
+/* The provider's className lands on the library's layer element itself
+   (class="flipbook-bookmarks sefer-bookmarks"), so the .flipbook-bookmarks
+   compound is both accurate and needed: it keeps these selectors at or
+   above the specificity of the slot-scoped .flipbook-bookmark rules
+   earlier in this file. */
+.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark {
 	background: var(--cover-color, #333);
 	border-color: rgb(255 255 255 / 0.25);
 	color: rgb(255 255 255 / 0.95);
 }
 
-.he-book .sefer-bookmarks .flipbook-bookmark:hover,
-.he-book .sefer-bookmarks .flipbook-bookmark[aria-current="page"] {
+.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark:hover,
+.he-book
+	.sefer-bookmarks.flipbook-bookmarks
+	.flipbook-bookmark[aria-current="page"] {
 	background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
 }
 
 /* White inner frame — the same convention the cover's inset border uses —
    stays visible on every cover color, light and dark. */
-.he-book .sefer-bookmarks .flipbook-bookmark:focus-visible {
+.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark:focus-visible {
 	outline: 2px solid #fff;
 	outline-offset: -3px;
 }
