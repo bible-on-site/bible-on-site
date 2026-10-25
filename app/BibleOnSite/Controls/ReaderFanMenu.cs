@@ -47,6 +47,12 @@ public class ReaderFanMenu : Grid
 
     public ReaderFanMenu()
     {
+        // The control covers the whole reader but must not swallow touches —
+        // only the scrim, toggle and satellites take input (pre-refactor
+        // FloatingMenuContainer had the same InputTransparent contract).
+        InputTransparent = true;
+        CascadeInputTransparent = false;
+
         // Scrim: dims the page (verses included) while the fan is open.
         // A tap anywhere dismisses the menu instead of hitting what is behind it.
         _scrim = new Grid
