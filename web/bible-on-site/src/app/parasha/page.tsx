@@ -53,8 +53,8 @@ export default function ParashaLanding() {
 		<div className={styles.container}>
 			<h1 className={styles.heading}>{PARASHA_DIVISION.menuLabel}</h1>
 			<p className={styles.intro}>
-				קריאת פרשיות השבוע של התורה — חמישה-עשר הפרשיות לכל חומש, כל פרשה עם
-				קריאת התורה שלה וההפטרה שלה למנהגי הספרדים, האשכנזים והתימנים.
+				קריאת פרשיות השבוע של התורה - כל פרשה עם קריאת התורה שלה וההפטרה שלה
+				למנהגי הספרדים, האשכנזים והתימנים.
 			</p>
 
 			{torahSefarim.map((sefer) => {

@@ -1,5 +1,10 @@
 import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
+import {
+	getParashaUnitById,
+	getParashaUnitCount,
+	PARASHA_DIVISION,
+} from "../data/parasha/parasha-units";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
@@ -85,25 +90,8 @@ export function generate929IndexEntry(
 }
 
 /**
- * Generates the מסורה landing entry. Only the hub is listed: unit pages
- * carry a deliberate non-indexing policy (see the מסורה unit page
- * metadata), so they must not appear in the sitemap.
- */
-export function generateMasoraIndexEntry(
-	config: SitemapConfig,
-): MetadataRoute.Sitemap[0] {
-	return {
-		url: `${config.baseUrl}/מסורה`,
-		lastModified: config.lastModified,
-		changeFrequency: "monthly",
-		priority: 0.7,
-	};
-}
-
-/**
- * Generates the פרשה landing entry. Same policy as מסורה: only the hub
- * is listed because unit pages carry a deliberate non-indexing policy
- * (see the פרשה unit page metadata).
+ * Generates the פרשה landing entry. Unlike the noindex מסורה section,
+ * the weekly parasha hub and its 54 base readings are indexable.
  */
 export function generateParashaIndexEntry(
 	config: SitemapConfig,
@@ -114,6 +102,18 @@ export function generateParashaIndexEntry(
 		changeFrequency: "monthly",
 		priority: 0.7,
 	};
+}
+
+/** One canonical base URL per parasha; presentation/content variants stay out. */
+export function generateParashaUnitEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
+	return Array.from({ length: getParashaUnitCount() }, (_, index) => ({
+		url: `${config.baseUrl}${PARASHA_DIVISION.rootPath}/${getParashaUnitById(index + 1).slug}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
 }
 
 /**
@@ -261,8 +261,8 @@ export function generateSitemapEntries(
 		generatePediaIndexEntry(config),
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
-		generateMasoraIndexEntry(config),
 		generateParashaIndexEntry(config),
+		...generateParashaUnitEntries(config),
 	];
 }
 

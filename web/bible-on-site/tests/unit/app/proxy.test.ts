@@ -11,6 +11,59 @@ function makeRequest(pathname: string, opts?: { ua?: string }): NextRequest {
 }
 
 describe("proxy", () => {
+	describe("parasha search exclusion", () => {
+		it.each([
+			"/פרשה?book",
+			"/פרשה/1?perush=Rashi",
+			"/פרשה/1?article=123",
+			"/פרשה/54?haftaraPerush=Rashi",
+			"/פרשה/54?haftaraArticle=123",
+			"/פרשה/1?bookPage=front",
+			"/פרשה/1?toc",
+			"/פרשה/1?haftara",
+			"/פרשה/1?reading=weekday&scheme=default",
+			"/פרשה/1?scheme=default",
+			"/פרשה/1?perush=",
+			"/פרשה/בראשית/כריכה",
+			"/פרשה/דברים/גב",
+			"/parasha/1?book&article=123",
+			`/${encodeURIComponent("פרשה").toLowerCase()}/1?book`,
+		])("keeps the reader usable but excludes %s", async (path) => {
+			const response = await proxy(makeRequest(path, { ua: "Googlebot/2.1" }));
+			expect(response?.status).toBe(200);
+			expect(response?.headers.get("x-middleware-next")).toBe("1");
+			expect(response?.headers.get("x-robots-tag")).toBe("noindex, follow");
+		});
+
+		it.each([
+			"/פרשה",
+			"/פרשה/1",
+			"/פרשה/54",
+			"/parasha",
+			"/parasha/1",
+			"/פרשה/1?utm_source=test",
+			"/פרשה/not-a-book/כריכה",
+			"/פרשה/בראשית/not-a-book-page",
+			"/929/153",
+			"/929/1/123?book&article=123",
+			"/929/1/Rashi?perush=Rashi",
+			"/other?perush=Rashi",
+			"/parasha-other/1?book",
+			"/%invalid/1?book",
+		])("does not exclude base content or unrelated %s", async (path) => {
+			expect(await proxy(makeRequest(path))).toBeUndefined();
+		});
+
+		it("does not carry a variant's exclusion into later base requests", async () => {
+			for (const suffix of ["", "?perush=Rashi", "", "?book", ""]) {
+				const response = await proxy(makeRequest(`/פרשה/1${suffix}`));
+				expect(response?.headers.get("x-robots-tag")).toBe(
+					suffix ? "noindex, follow" : undefined,
+				);
+			}
+		});
+	});
+
 	describe("bypassed paths", () => {
 		it.each([
 			"/api/health",

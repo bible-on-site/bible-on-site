@@ -13,21 +13,22 @@ import {
 	generateStaticParams,
 } from "@/app/parasha/[unit]/page";
 import { generateMetadata as generateLandingMetadata } from "@/app/parasha/page";
-import { getParashaUnitCount } from "@/data/parasha/parasha-units";
+import {
+	getAllParashaUnits,
+	getParashaUnitCount,
+} from "@/data/parasha/parasha-units";
 
 describe("פרשה landing metadata", () => {
 	it("canonicalizes to the Hebrew root", async () => {
 		const metadata = await generateLandingMetadata();
 		expect(metadata.alternates?.canonical).toBe("/פרשה");
 		expect(metadata.title).toContain("פרשה על הפרק");
+		expect(metadata.robots).toBeUndefined();
 	});
 });
 
 describe("פרשה unit metadata", () => {
-	it("keeps parasha pages self-canonical and noindex", async () => {
-		// Every parasha carries Haftarah auxiliary readings, so no unit
-		// consolidates to a /929 perek — all stay deliberate alternate
-		// slicings with a self canonical.
+	it("keeps the weekly parasha and its Haftarah indexable under its own URL", async () => {
 		const metadata = await generateMetadata({
 			params: Promise.resolve({ unit: "1" }),
 		});
@@ -35,10 +36,19 @@ describe("פרשה unit metadata", () => {
 		expect(metadata.title).toContain("פרשת בראשית");
 		expect(metadata.title).toContain("פרשה על הפרק");
 		expect(metadata.description).toContain("הפטרה");
-		expect(metadata.robots).toEqual(
-			expect.objectContaining({ index: false, follow: true }),
-		);
+		expect(metadata.robots).toBeUndefined();
 	});
+
+	it.each(getAllParashaUnits())(
+		"keeps parasha $unitId ($heading) indexable with its existing canonical slug",
+		async (unit) => {
+			const metadata = await generateMetadata({
+				params: Promise.resolve({ unit: String(unit.unitId) }),
+			});
+			expect(metadata.alternates?.canonical).toBe(`/פרשה/${unit.slug}`);
+			expect(metadata.robots).toBeUndefined();
+		},
+	);
 
 	it.each(["0", "-1", "55", "abc"])(
 		"calls notFound for out-of-range unit %s",

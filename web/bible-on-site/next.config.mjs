@@ -206,13 +206,15 @@ const nextConfig = {
 				{ source: `/${encodeURIComponent("פרשה")}`, destination: "/parasha" },
 				...parashaSeferFirstUnits.flatMap(([sefer, unitId]) =>
 					Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
-						[
-							`/פרשה/${sefer}/${slug}`,
-							`/פרשה/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
-						].map((source) => ({
-							source,
-							destination: `/parasha/${unitId}?book&bookPage=${page}`,
-						})),
+						["פרשה", encodeURIComponent("פרשה")].flatMap((root) =>
+							[
+								`/${root}/${sefer}/${slug}`,
+								`/${root}/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
+							].map((source) => ({
+								source,
+								destination: `/parasha/${unitId}?book&bookPage=${page}`,
+							})),
+						),
 					),
 				),
 				{ source: "/פרשה/:path*", destination: "/parasha/:path*" },
