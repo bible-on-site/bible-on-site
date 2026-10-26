@@ -811,44 +811,21 @@ jobs:
           python ../../data/recitation/publish.py
           python ../../data/recitation/audit.py
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup bun, Node.js and dependencies
         id: bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-website-
-
-      - name: Restore playwright binaries
-        uses: actions/cache/restore@v6
-        id: playwright-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
-
-      - name: Install dependencies
-        id: bun_ci
-        run: |
-          bun install --frozen-lockfile
+          module: website
+          directory: ${{ env.WEBSITE_DIRECTORY }}
+          playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # The browser install only needs node_modules; it runs in the background
@@ -858,7 +835,7 @@ jobs:
         id: playwright-install
         background: true
         run: |
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+          if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
             bun x playwright install --with-deps chromium
@@ -948,12 +925,12 @@ jobs:
       # install produced. The upload itself backgrounds too — nothing writes
       # ~/.cache/ms-playwright afterwards.
       - name: Save playwright binaries
-        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.playwright-cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       - name: Perf Test
         id: bun-perf-test
@@ -1049,49 +1026,27 @@ jobs:
           python ../../data/recitation/publish.py
           python ../../data/recitation/audit.py
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup bun, Node.js and dependencies
         id: bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-website-
+          module: website
+          directory: ${{ env.WEBSITE_DIRECTORY }}
+          playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
 
-      - name: Restore playwright binaries
-        uses: actions/cache/restore@v6
-        id: playwright-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+      # Unit tests verify the shipped native decoder through its app-owned
+      # generator (scripts/check-opus-decoder.mjs), which resolves esbuild
+      # and the decoder packages from this manifest (#2391).
+      - name: Install recitation decoder dependencies
+        run: bun install --cwd ../../app/devops/recitation-decoder --frozen-lockfile
 
-      - name: Install dependencies
-        id: bun_ci
-        run: |
-          node --version && bun --version
-          bun install --frozen-lockfile
-          # Unit tests verify the shipped native decoder through its app-owned
-          # generator (scripts/check-opus-decoder.mjs), which resolves esbuild
-          # and the decoder packages from this manifest (#2391).
-          bun install --cwd ../../app/devops/recitation-decoder --frozen-lockfile
-
-      # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
-      # the background; the implicit wait-all before job cleanup completes it.
+      # Both bun install --frozen-lockfile runs are done here, so ~/.bun/install/cache is frozen — the tar+upload
+      # can run in the background; the implicit wait-all before job cleanup completes it.
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging bun
@@ -1111,7 +1066,7 @@ jobs:
         id: playwright-install
         background: true
         run: |
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+          if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
             bun x playwright install --with-deps chromium
@@ -1201,12 +1156,12 @@ jobs:
       # install produced. The upload itself backgrounds too — nothing writes
       # ~/.cache/ms-playwright afterwards.
       - name: Save playwright binaries
-        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.playwright-cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
       # push runs. A missing baseline is not an error — the selector falls
@@ -1456,35 +1411,20 @@ jobs:
           fi
           docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup bun, Node.js and dependencies
         id: bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-admin-${{ hashFiles(env.ADMIN_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-admin-
-
-      - name: Install dependencies
-        id: bun_ci
-        run: bun install --frozen-lockfile
+          module: admin
+          directory: ${{ env.ADMIN_DIRECTORY }}
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging bun
@@ -1818,34 +1758,19 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make coverage-unit
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup DevOps Node.js
-        id: setup-devops-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup devops bun, Node.js and dependencies
         id: devops-bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-devops-
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Install devops Dependencies
-        id: devops_bun_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          bun install --frozen-lockfile
-
+      # The save runs synchronously: the api-tests install below still mutates
+      # ~/.bun/install/cache, so the tar must finish before it starts.
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Install and start MySQL
@@ -1857,37 +1782,20 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Tests Node.js
-        id: setup-tests-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup tests bun, Node.js and dependencies
         id: tests-bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-api-tests-${{ hashFiles(env.API_TESTS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-api-tests-
-
-      - name: Install Tests Dependencies
-        id: tests_bun_ci
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: |
-          bun install --frozen-lockfile
+          module: api-tests
+          directory: ${{ env.API_TESTS_DIRECTORY }}
 
       # Both bun install --frozen-lockfile runs are done here, so ~/.bun/install/cache is frozen — the tar+upload
       # can run in the background; implicit wait-all completes it at job end.
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.tests-bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.tests-bun-cache.outputs.cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
@@ -3273,37 +3181,20 @@ jobs:
       - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup DevOps Node.js
-        id: setup-devops-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup devops bun, Node.js and dependencies
         id: devops-bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-devops-
-
-      - name: Install devops Dependencies
-        id: devops_bun_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          bun install --frozen-lockfile
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Test release, deployment, and CI reporting guards
@@ -3660,31 +3551,17 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup devops bun, Node.js and dependencies
         id: devops-bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-devops-
-
-      - name: Install devops dependencies
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: bun install --frozen-lockfile
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Publish release and collision version bumps together

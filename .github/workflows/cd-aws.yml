@@ -54,38 +54,18 @@ jobs:
         with:
           ref: ${{ steps.guard.outputs.ref }}
 
-      - name: Setup bun
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
-        id: setup-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-
-      - name: Restore bun store cache
+      - name: Setup devops bun, Node.js and dependencies
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: devops-bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-bun-devops-
-
-      - name: Install dependencies
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
-        id: bun_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          bun install --frozen-lockfile
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Save bun store cache
         if: ${{ steps.guard.outputs.deploy == 'true' && github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       # Preflight the post-rollout verifier's imports through the same

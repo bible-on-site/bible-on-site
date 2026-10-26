@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
+import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import {
+	gatedFiles,
 	SETUP_NODE_SUPPORTED_CACHES,
 	setupNodeCacheFindings,
-	WORKFLOWS_DIR,
 } from "./setup-node-cache.mjs";
 
 describe("setupNodeCacheFindings", () => {
@@ -98,21 +97,18 @@ describe("setupNodeCacheFindings", () => {
 	});
 });
 
-describe("workflow setup-node cache inputs", () => {
-	const files = readdirSync(WORKFLOWS_DIR).filter(
-		(name) => name.endsWith(".yml") || name.endsWith(".yaml"),
-	);
+describe("workflow and action setup-node cache inputs", () => {
+	const files = gatedFiles();
 
-	test("workflow files exist", () => {
+	test("gated files exist", () => {
 		assert.ok(files.length > 0);
 		assert.ok(SETUP_NODE_SUPPORTED_CACHES.has("npm"));
 	});
 
-	for (const name of files) {
+	for (const file of files) {
+		const name = file.replace(/\\/g, "/").split(".github/")[1];
 		test(`${name} only uses supported setup-node caches`, () => {
-			const findings = setupNodeCacheFindings(
-				readFileSync(path.join(WORKFLOWS_DIR, name), "utf8"),
-			);
+			const findings = setupNodeCacheFindings(readFileSync(file, "utf8"));
 			assert.deepEqual(
 				findings.map((f) => `${name}:${f.line} ${f.detail}`),
 				[],
