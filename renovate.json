@@ -4,6 +4,7 @@
 		"config:recommended",
 		":dependencyDashboard"
 	],
+	"minimumReleaseAge": "1 day",
 	"packageRules": [
 		{
 			"matchUpdateTypes": [
