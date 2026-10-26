@@ -244,6 +244,9 @@ public sealed class PlaybackAudioOwnership
 
     private async Task ReleaseWhenQuietAsync(CancellationTokenSource cts)
     {
+        // Disposed at scope exit — after the finally below detaches it from
+        // _pendingRelease, so a racing Cancel cannot land on a disposed source.
+        using var _ = cts;
         try
         {
             await _delay(_releaseDelay, cts.Token).ConfigureAwait(false);
@@ -260,8 +263,7 @@ public sealed class PlaybackAudioOwnership
         finally
         {
             // A newer claim may already have replaced the pending release, so
-            // detach before disposing so a racing Cancel cannot land on a
-            // disposed source.
+            // detach before the using disposes the source.
             lock (_gate)
             {
                 if (ReferenceEquals(_pendingRelease, cts))
@@ -269,7 +271,6 @@ public sealed class PlaybackAudioOwnership
                     _pendingRelease = null;
                 }
             }
-            cts.Dispose();
         }
     }
 
