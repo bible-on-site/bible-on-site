@@ -1,6 +1,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import type { ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import styles from "./articles-section.module.css";
@@ -99,6 +100,11 @@ export function ArticlesSection({
 								/>
 							</div>
 							<span className={styles.authorName}>{article.authorName}</span>
+							{/* Pre-entry estimate over the FULL content (#2607). */}
+							<ReadingTime
+								estimatedSeconds={article.metric?.estimatedSeconds}
+								className={styles.readingTime}
+							/>
 							{article.abstract && (
 								<div
 									className={styles.articleAbstract}

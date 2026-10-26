@@ -309,13 +309,13 @@
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                         <Grid ColumnDefinitions="*,*,*,*,*,*,*">
-                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                         </Grid>
                         <!-- Week rows of plain layout cells: a nested CollectionView per
                              mini-month spun up a whole adapter/recycler per section and
@@ -337,6 +337,7 @@
                                                     HeightRequest="24"
                                                     Grid.Column="{Binding Column}"
                                                     Grid.ColumnSpan="{Binding ColumnSpan}"
+                                                    AutomationId="MiniMonthDay"
                                                     StrokeShape="RoundRectangle 4"
                                                     Stroke="Transparent"
                                                     StrokeThickness="1"
@@ -381,6 +382,7 @@
                                                            IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                                            HorizontalOptions="CenterAndExpand"
                                                            VerticalTextAlignment="Center"
+                                                           AutomationId="MiniMonthDayText"
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                                                     <Label Text="{Binding MergedDayText}"
                                                            FontSize="11"

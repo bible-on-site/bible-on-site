@@ -452,11 +452,25 @@ jobs:
       # Shared commentary-search pilot builds the notes FTS index, so a missing
       # or mismatched pair must fail here — before the build, not mid-suite.
       - name: Download perushim SQLite pair
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
           path: ${{ runner.temp }}/perushim-sqlite
+
+      # Master baseline lives outside this run's artifact namespace: fetch it
+      # through the REST API (no gh binary dependency on the xcode-27 legs).
+      - name: Download perushim SQLite pair (master baseline)
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}" \
+            --out "${{ runner.temp }}/perushim-sqlite"
+          # baseline-download is nonfatal on a missing artifact, but this pair
+          # is required: assert the extraction produced files.
+          test -n "$(ls -A "${{ runner.temp }}/perushim-sqlite" 2>/dev/null)"
 
       - name: Install matching perushim catalog and notes
         if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'

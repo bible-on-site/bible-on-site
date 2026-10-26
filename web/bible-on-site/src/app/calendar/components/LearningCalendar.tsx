@@ -26,6 +26,7 @@ import {
 	prevMonth,
 } from "@/data/learning-schedule";
 import { parseNumericalDateToHebcalDate } from "@/util/hebdates-util";
+import { CalendarPdfDownload } from "./CalendarPdfDownload";
 import styles from "./learning-calendar.module.css";
 
 const WEEKDAY_NAMES = [
@@ -254,6 +255,16 @@ export function LearningCalendar({
 
 	const resolvedCycle = viewedCycle ?? contextualCycle;
 
+	// The PDF request captures this label+URL at click time (#2621) — a
+	// pending download always keeps the period it was started for.
+	const pdfScopeLabel =
+		viewMode === "cycle"
+			? `מחזור ${resolvedCycle}`
+			: viewMode === "year"
+				? `שנת ${getYearLabel(viewed.year)}`
+				: getMonthLabel(viewed);
+	const pdfUrl = `/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`;
+
 	const yearMonths = useMemo(
 		() =>
 			viewMode === "year"
@@ -341,14 +352,6 @@ export function LearningCalendar({
 					</button>
 				))}
 			</div>
-
-			<a
-				className={styles.downloadLink}
-				href={`/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`}
-				download
-			>
-				הורדת PDF
-			</a>
 
 			<div className={styles.controls}>
 				<button
@@ -438,6 +441,7 @@ export function LearningCalendar({
 						</select>
 					</label>
 				)}
+				<CalendarPdfDownload url={pdfUrl} scopeLabel={pdfScopeLabel} />
 			</div>
 
 			<h2 className={styles.monthTitle}>

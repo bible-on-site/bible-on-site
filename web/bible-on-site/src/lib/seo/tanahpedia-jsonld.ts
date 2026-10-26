@@ -1,4 +1,5 @@
 import type { Graph, Thing } from "schema-dts";
+import { isoDurationSeconds } from "@/lib/reading-metrics";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import type {
@@ -201,6 +202,14 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		name: entry.title,
 		url: pageUrl,
 		inDefinedTermSet: { "@id": TANAHPEDIA_SET_ID },
+		// Stored complete-text baseline (#2607) — on the DefinedTerm content
+		// node, never on the entity (Person/Place) nodes.
+		...(entry.metric?.wordCount != null
+			? { wordCount: entry.metric.wordCount }
+			: {}),
+		...(entry.metric?.estimatedSeconds != null
+			? { timeRequired: isoDurationSeconds(entry.metric.estimatedSeconds) }
+			: {}),
 	};
 	if (hasContent(entry.content)) {
 		/* Normalized HTML keeps generated footnote markers (data-marker
