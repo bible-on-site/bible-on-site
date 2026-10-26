@@ -79,7 +79,7 @@ export default async function TanahpediaLandingPage() {
 									cargo make mysql-populate-dev
 								</code>
 								, ואז הריצו שוב{" "}
-								<code className={styles.dbLoadWarningCode}>npm run dev</code>.
+								<code className={styles.dbLoadWarningCode}>bun run dev</code>.
 							</p>
 							<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
 						</>

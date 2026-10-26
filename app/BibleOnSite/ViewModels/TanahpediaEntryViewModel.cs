@@ -23,6 +23,14 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private readonly IAppNavigator _navigator;
     private readonly PerekDataService _perekData;
 
+    /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid link or
+    /// badge taps must not stack duplicate pushed pages (#2640).</summary>
+    private readonly NavigationGate _navigationGate = new();
+
+    /// <summary>A second Back trigger during an in-flight pop or absolute
+    /// navigation must not consume another trail entry or page (#2640).</summary>
+    private readonly NavigationGate _goBackGate = new();
+
     /// <summary>Person-to-person trail for in-place family-tree switches, so
     /// Back steps through prior people before leaving the page.</summary>
     private readonly Stack<string> _entryHistory = new();
@@ -184,11 +192,13 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
             if (targets.Count > 0)
             {
+                ResetEntryBody();
                 SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>(targets);
                 IsDisambiguation = true;
             }
             else
             {
+                ResetEntryBody();
                 IsNotFound = true;
             }
             IsLoaded = true;
@@ -203,6 +213,9 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia entry load failed for {UniqueName}: {ex}");
             ErrorMessage = "התוכן אינו זמין כרגע";
+            // The error pane is exclusive - a failed in-place switch must not
+            // leave the previous entry's content rendered underneath (#2640).
+            IsLoaded = false;
         }
         finally
         {
@@ -225,6 +238,27 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         _loadCts?.Dispose();
         var cts = _loadCts = new CancellationTokenSource();
         await LoadCoreAsync(cts.Token);
+    }
+
+    /// <summary>
+    /// Clears the entry-body surface for a non-entry terminal state
+    /// (disambiguation chooser, not-found): the toolbar title tracks the
+    /// requested name and no title, entities, family tree, map or occurrence
+    /// rows from a previously loaded entry may linger (#2640).
+    /// </summary>
+    private void ResetEntryBody()
+    {
+        Title = UniqueName;
+        Content = null;
+        Entities = new ObservableCollection<TanahpediaLinkedEntity>();
+        FamilyTree = null;
+        PlaceMarkers = [];
+        Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
+        SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+        OnPropertyChanged(nameof(HasContent));
+        OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasOccurrences));
+        OnPropertyChanged(nameof(ShowNoContentNotice));
     }
 
     private async Task SetEntryAsync(TanahpediaEntryDetail detail)
@@ -378,7 +412,8 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
-        await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
+        await _navigationGate.RunAsync(() =>
+            _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
     }
 
     /// <summary>
@@ -415,7 +450,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
-        await _navigator.GoToAsync(route);
+        await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
     }
 
     /// <summary>
@@ -425,14 +460,17 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [RelayCommand]
     public async Task GoBackAsync()
     {
-        if (_entryHistory.Count > 0)
+        await _goBackGate.RunAsync(async () =>
         {
-            UniqueName = _entryHistory.Pop();
-            await SwitchToCurrentEntryAsync();
-            return;
-        }
+            if (_entryHistory.Count > 0)
+            {
+                UniqueName = _entryHistory.Pop();
+                await SwitchToCurrentEntryAsync();
+                return;
+            }
 
-        await _navigator.GoToAsync("..");
+            await _navigator.GoToAsync("..");
+        });
     }
 }
 

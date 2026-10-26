@@ -566,9 +566,19 @@ jobs:
           MODULE_VERSION=$(cargo make version | grep -v 'INFO')
           echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       - name: Build Bulletin Binary (Docker)
         run: |
-          DOCKER_BUILDKIT=0 docker build \
+          docker buildx build --load \
+            --cache-from type=gha,scope=bulletin \
+            --cache-to type=gha,mode=max,scope=bulletin \
+            --progress=plain \
             -f ${{ env.BULLETIN_DIRECTORY }}/Dockerfile \
             -t bulletin-build:latest \
             ${{ env.SHARED_ROOT_DIR }}
@@ -630,9 +640,19 @@ jobs:
           echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       - name: Dockerize Admin
         run: |
-          DOCKER_BUILDKIT=0 docker build \
+          docker buildx build --load \
+            --cache-from type=gha,scope=admin \
+            --cache-to type=gha,mode=max,scope=admin \
+            --progress=plain \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
