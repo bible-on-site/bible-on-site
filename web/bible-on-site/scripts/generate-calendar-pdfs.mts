@@ -169,7 +169,7 @@ function desiredInputShas(
 
 async function renderKey(
 	key: string,
-	dir: string,
+	dir: string | null,
 	inputSha: string,
 	cellsCache?: MonthCellsCache,
 ): Promise<CalendarPdfCacheArtifact> {
@@ -180,12 +180,15 @@ async function renderKey(
 	const bytes = await generateCalendarPdf(input);
 	const sha256 = sha256Bytes(bytes);
 	const objectName = `${sha256}.pdf`;
-	const objectsDir = join(dir, "objects");
-	mkdirSync(objectsDir, { recursive: true });
-	const objectPath = join(objectsDir, objectName);
-	// Content-addressed: identical bytes already on disk need no rewrite.
-	if (!existsSync(objectPath)) {
-		writeFileSync(objectPath, bytes);
+	// Verification renders stay in memory, including when interrupted.
+	if (dir !== null) {
+		const objectsDir = join(dir, "objects");
+		mkdirSync(objectsDir, { recursive: true });
+		const objectPath = join(objectsDir, objectName);
+		// Content-addressed: identical bytes already on disk need no rewrite.
+		if (!existsSync(objectPath)) {
+			writeFileSync(objectPath, bytes);
+		}
 	}
 	const parsed = parseCalendarArtifactKey(key);
 	if (parsed === null) {
@@ -204,11 +207,13 @@ async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	const started = Date.now();
 
-	// The catalog is a fingerprinted input; regenerate it first so hashing and
-	// cell building read current data (the script is idempotent).
-	execFileSync(process.execPath, [
-		join(WEBSITE_ROOT, "scripts", "generate-client-catalog.mjs"),
-	]);
+	// Install/CI prepares the generated catalog before verification. Check
+	// mode must not rewrite assets or even create their output directories.
+	if (!args.check) {
+		execFileSync(process.execPath, [
+			join(WEBSITE_ROOT, "scripts", "generate-client-catalog.mjs"),
+		]);
+	}
 
 	const fingerprint = computeCalendarPdfFingerprint();
 	const renderFingerprint = computeCalendarPdfRenderFingerprint();
@@ -229,7 +234,6 @@ async function main(): Promise<void> {
 		// are computed for a strided sample only; the publish workflow owns the
 		// full (re)generation.
 		const cellsCache: MonthCellsCache = new Map();
-		const verifyDir = join(args.dir, ".verify");
 		const fpMatch = cache?.fingerprint === fingerprint;
 		const planStarted = Date.now();
 		let fresh: string[];
@@ -267,29 +271,25 @@ async function main(): Promise<void> {
 		const renderSample = keys
 			.filter((_, i) => i % renderStride === 0)
 			.slice(0, args.sample);
-		try {
-			for (const key of renderSample) {
-				const expected = cache?.artifacts[key];
-				const rendered = await renderKey(
-					key,
-					verifyDir,
-					"", // input sha is unused for verification renders
-					cellsCache,
-				);
-				// Byte-compare only entries proven fresh: a stale entry may render
-				// different bytes legitimately when its inputs changed.
-				if (freshSet.has(key) && expected !== undefined) {
-					if (rendered.sha256 === expected.sha256) {
-						verified += 1;
-					} else {
-						mismatches.push(key);
-					}
+		for (const key of renderSample) {
+			const expected = cache?.artifacts[key];
+			const rendered = await renderKey(
+				key,
+				null,
+				"", // input sha is unused for verification renders
+				cellsCache,
+			);
+			// Byte-compare only entries proven fresh: a stale entry may render
+			// different bytes legitimately when its inputs changed.
+			if (freshSet.has(key) && expected !== undefined) {
+				if (rendered.sha256 === expected.sha256) {
+					verified += 1;
 				} else {
-					smoke += 1;
+					mismatches.push(key);
 				}
+			} else {
+				smoke += 1;
 			}
-		} finally {
-			rmSync(verifyDir, { recursive: true, force: true });
 		}
 		const report = {
 			mode: "check",

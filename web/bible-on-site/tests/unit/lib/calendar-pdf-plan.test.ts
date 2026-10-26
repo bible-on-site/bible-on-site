@@ -292,8 +292,11 @@ describe("parseCalendarPdfManifest", () => {
 	});
 
 	it("parses a manifest produced by buildCalendarPdfManifest", () => {
-		const parsed = parseCalendarPdfManifest(JSON.stringify(valid));
-		expect(parsed).not.toBeNull();
+		// This is wire-format input, not an object key or content fingerprint.
+		// nosemgrep
+		const serialized = JSON.stringify(valid);
+		const parsed = parseCalendarPdfManifest(serialized);
+		expect(parsed).toEqual(valid);
 		expect(parsed?.fingerprint).toBe(FP);
 		expect(parsed?.artifacts["month:578512"].object).toBe(
 			calendarPdfObjectKey("s"),

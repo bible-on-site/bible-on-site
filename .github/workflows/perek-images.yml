@@ -26,24 +26,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: devops/perek-images/package.json
-      - name: Restore bun store cache
+      - name: Setup bun, Node.js and dependencies
         id: bun-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/setup-js
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-perek-images-${{ hashFiles('devops/perek-images/bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-perek-images-
-      - run: bun install --cwd devops/perek-images --frozen-lockfile
+          module: perek-images
+          directory: devops/perek-images
       - name: Save bun store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.bun/install/cache
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
       - run: bun run --cwd devops/perek-images test

@@ -154,3 +154,11 @@ VALUES
     (2, 1, 2, 0, 'תהו ובהו - תהו הוא דבר שאין בו ממש, ובהו דבר שיש בו ממש'),
     (3, 1, 1, 0, 'בקדמין ברא ה׳ ית שמיא וית ארעא'),
     (3, 1, 2, 0, 'וארעא הות צדיא וריקניא');
+
+-- ---------------------------------------------------------------------------
+-- Mention-decoration fixtures (issue #2516) live in
+-- tanah_mention_test_data.sql instead. Never insert tanahpedia_entry rows in
+-- this file: it runs BEFORE the Tanahpedia seed chain, and the legacy
+-- migration only fires while tanahpedia_entry is empty — an entry inserted
+-- here silently disables it and starves every Tanahpedia e2e of content.
+-- ---------------------------------------------------------------------------

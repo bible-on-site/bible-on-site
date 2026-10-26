@@ -96,6 +96,29 @@ export async function publishCalendarPdfArtifacts({
 	readObject,
 	concurrency = 8,
 }: CalendarPdfPublishInput): Promise<CalendarPdfPublishReport> {
+	const current = await store.get(CALENDAR_PDF_MANIFEST_OBJECT);
+	const currentManifest =
+		current === null
+			? null
+			: parseCalendarPdfManifest(new TextDecoder().decode(current));
+	// CI caches can be evicted or immutable under an already-saved key.
+	// Keep published URLs alive even when the local cache lost their extras.
+	const retained = Object.entries(currentManifest?.artifacts ?? {}).filter(
+		([key]) => manifest.artifacts[key] === undefined,
+	);
+	for (const [, artifact] of retained) {
+		const head = await store.head(artifact.object);
+		if (!head || head.contentLength !== artifact.bytes) {
+			throw new Error(`Retained artifact ${artifact.object} is not served`);
+		}
+	}
+	manifest = {
+		...manifest,
+		artifacts: {
+			...Object.fromEntries(retained),
+			...manifest.artifacts,
+		},
+	};
 	const entries = Object.entries(manifest.artifacts);
 	let uploaded = 0;
 	let alreadyPresent = 0;
@@ -132,11 +155,6 @@ export async function publishCalendarPdfArtifacts({
 	const manifestBody = new TextEncoder().encode(
 		`${JSON.stringify(manifest)}\n`,
 	);
-	const current = await store.get(CALENDAR_PDF_MANIFEST_OBJECT);
-	const currentManifest =
-		current === null
-			? null
-			: parseCalendarPdfManifest(new TextDecoder().decode(current));
 	const manifestChanged =
 		currentManifest === null ||
 		currentManifest.fingerprint !== manifest.fingerprint ||

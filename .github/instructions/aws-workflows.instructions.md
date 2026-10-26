@@ -21,10 +21,17 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
   replacement. The 2026-10-23 audit in `docs/aws/cost-risk-audit-2026-10-23.md`
   supersedes #2563's unsafe rollout steps.
 - Dorad permits admin-only interruptions for cost savings (one current admin
-  user). Admin may use Fargate Spot after interruption-safe saves are deployed
-  and the rollout checks in `docs/aws/admin-spot-rollout.md` pass. Keep public
+  user). Admin runs one Fargate Spot task since 2026-10-24; the rollout and
+  manual on-demand recovery are in `docs/aws/admin-spot-rollout.md`. Keep public
   website/API capacity and routing unchanged. Spot has no automatic on-demand
   fallback: preserve a tested recovery path. No shutdown schedule is implied.
+- The remaining #2576 migrations stay gated behind that per-PR approval:
+  db-populator Lambda redeploy and SSM endpoint removal, any CDN/OAC change to
+  the public assets bucket, ARM64 service images (#2562), nginx router
+  replacement or resize (#2561), edge caching in front of the router (#2508),
+  admin scale-to-zero scheduling, and further log-retention reduction. Each
+  item's prerequisites are in `docs/aws/cost-risk-audit-2026-10-23.md`; the
+  withdrawn #2563 recipes must not be rerun.
 
 - Connect: `aws sso login --profile AdministratorAccess-<AccountID>`.
 - Every accepted change must be reflected in the existing reference IaC under `docs/aws/cloudformation/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.

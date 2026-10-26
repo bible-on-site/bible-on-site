@@ -219,6 +219,52 @@ describe("publishCalendarPdfArtifacts", () => {
 		expect(JSON.parse(live).artifacts["month:578512"].sha256).toBe(sha);
 	});
 
+	it("retains a published extra when the local artifact cache was lost", async () => {
+		const extra = ARTIFACT("a".repeat(64));
+		const previous = manifestWith({ "cycle:14": extra });
+		const manifest = manifestWith({ "month:578512": ARTIFACT("b".repeat(64)) });
+		const { store, objects } = fakeStore({
+			[extra.object]: objectBody(3),
+			[CALENDAR_PDF_MANIFEST_OBJECT]: new TextEncoder().encode(
+				JSON.stringify(previous),
+			),
+		});
+		const readObject = jest.fn(async () => objectBody(3));
+		const report = await publishCalendarPdfArtifacts({
+			store,
+			manifest,
+			readObject,
+		});
+		const live = JSON.parse(
+			new TextDecoder().decode(objects.get(CALENDAR_PDF_MANIFEST_OBJECT)?.body),
+		);
+		expect(live.artifacts).toEqual({
+			...previous.artifacts,
+			...manifest.artifacts,
+		});
+		expect(report.totalArtifacts).toBe(2);
+		expect(report.verified).toBe(2);
+		expect(readObject).toHaveBeenCalledTimes(1);
+		expect(readObject).toHaveBeenCalledWith("b".repeat(64));
+	});
+
+	it("does not flip the manifest if a retained published object is missing", async () => {
+		const previous = manifestWith({ "cycle:14": ARTIFACT("a".repeat(64)) });
+		const { store, putOrder } = fakeStore({
+			[CALENDAR_PDF_MANIFEST_OBJECT]: new TextEncoder().encode(
+				JSON.stringify(previous),
+			),
+		});
+		await expect(
+			publishCalendarPdfArtifacts({
+				store,
+				manifest: manifestWith({}),
+				readObject: async () => objectBody(3),
+			}),
+		).rejects.toThrow("Retained artifact");
+		expect(putOrder).not.toContain(CALENDAR_PDF_MANIFEST_OBJECT);
+	});
+
 	it("does not rewrite an identical live manifest", async () => {
 		const sha = "e".repeat(64);
 		const manifest = manifestWith({

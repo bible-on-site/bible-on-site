@@ -36,8 +36,10 @@ with `--include` and are then served through the manifest.
 Extras persist: a key published via `--include` stays in the local cache
 index, so every later run carries it in the desired set and re-renders it
 when its inputs change — regular publishes never silently drop an
-out-of-band artifact. To retire an extra, remove its entry (and object) from
-`.cache/calendar-pdf` before generating.
+out-of-band artifact. If the local cache is evicted, publication also carries
+forward entries from the live manifest after verifying their objects. Such
+entries keep their last published PDF until regenerated with `--include`;
+retiring a public key requires an explicit manifest change.
 
 ## Commands (run from `web/bible-on-site`)
 

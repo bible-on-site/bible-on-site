@@ -75,7 +75,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         // פרשת השבוע on a festival Shabbat: explain the displaced reading
         // and offer the next regular one instead of jumping silently.
         _viewModel.ConfirmHolidayReading = target =>
-            DisplayAlertAsync("פרשת השבוע",
+            ShellAppNavigator.Instance.DisplayChoiceAsync("פרשת השבוע",
                 $"שבת {target.HolidayShabbatDateText} היא {target.HolidayName} ואין בה פרשת שבוע רגילה.\n" +
                 $"הקריאה הבאה: {target.ReadingTitle} ({target.ShabbatDateText}).",
                 $"עבור ל{target.ReadingTitle}", "ביטול");
