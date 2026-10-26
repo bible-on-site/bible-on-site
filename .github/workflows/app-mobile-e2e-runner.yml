@@ -80,7 +80,7 @@ jobs:
       # the toolchain cache id and the workload install read from here, and the
       # Verify step asserts the resolved SDK matches. SDK installation itself
       # is pinned by the root global.json, which must stay identical to this.
-      DOTNET_SDK_VERSION: "10.0.402"
+      DOTNET_SDK_VERSION: "10.0.403"
       # Workload sets are band-scoped (10.0.4xx), not SDK-locked: 10.0.401.1 is
       # the last set selecting iOS 27.0, which the xcode-27 image's Xcode 27.0
       # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
