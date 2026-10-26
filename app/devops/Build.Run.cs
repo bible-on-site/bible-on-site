@@ -39,7 +39,7 @@ partial class Build
     /// </summary>
     void WriteApiConfigFile()
     {
-        var apiConfigPath = System.IO.Path.Combine(SourceDirectory, "Resources", "Raw", "api-config.txt");
+        var apiConfigPath = SourceDirectory / "Resources" / "Raw" / "api-config.txt";
         System.IO.File.WriteAllText(apiConfigPath, IsProdApi ? ProdApiUrl : "");
         if (IsProdApi)
         {
@@ -115,24 +115,19 @@ partial class Build
         // Start API as a fully detached process that survives parent exit.
         // We use UseShellExecute=true to create a completely independent process
         // that is NOT part of the parent's job object/process tree.
-        ProcessStartInfo startInfo;
-        if (OperatingSystem.IsWindows())
-        {
+        var startInfo = OperatingSystem.IsWindows()
             // UseShellExecute=true creates a truly independent process on Windows
             // WindowStyle=Hidden keeps it hidden but running independently
-            startInfo = new ProcessStartInfo
+            ? new ProcessStartInfo
             {
                 FileName = "cmd.exe",
                 Arguments = $"/c cargo make {ApiMakeTarget}",
                 WorkingDirectory = apiPath,
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
-            };
-        }
-        else
-        {
+            }
             // On Unix-like systems, use setsid to create a new session (detached process)
-            startInfo = new ProcessStartInfo
+            : new ProcessStartInfo
             {
                 FileName = "/bin/bash",
                 Arguments = $"-c \"setsid cargo make {ApiMakeTarget} > /dev/null 2>&1 &\"",
@@ -140,7 +135,6 @@ partial class Build
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-        }
 
         // Start the process - don't wait for it since it's meant to run independently
         Process.Start(startInfo);
@@ -180,9 +174,8 @@ partial class Build
                 return;
             }
 
-            foreach (var rawLine in System.IO.File.ReadAllLines(AppEnvFile))
+            foreach (var line in System.IO.File.ReadAllLines(AppEnvFile).Select(rawLine => rawLine.Trim()))
             {
-                var line = rawLine.Trim();
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
                 {
                     continue;
@@ -594,7 +587,7 @@ partial class Build
     string GetAdbPath()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return System.IO.Path.Combine(localAppData, "Android", "Sdk", "platform-tools", "adb.exe");
+        return System.IO.Path.Join(localAppData, "Android", "Sdk", "platform-tools", "adb.exe");
     }
 
     /// <summary>
@@ -619,16 +612,11 @@ partial class Build
             process?.WaitForExit();
 
             // Find emulator line (starts with "emulator-")
-            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                if (trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
-                {
-                    return trimmed.Split('\t')[0].Trim();
-                }
-            }
-            return null;
+            return output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(trimmed => trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
+                .Select(trimmed => trimmed.Split('\t')[0].Trim())
+                .FirstOrDefault();
         }
         #pragma warning disable S2221 // Deliberate failure boundary: adb id probe: any failure counts as absent
         catch //NOSONAR — adb id probe: any failure counts as absent.
@@ -657,7 +645,7 @@ partial class Build
     string GetEmulatorPath()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return System.IO.Path.Combine(localAppData, "Android", "Sdk", "emulator", "emulator.exe");
+        return System.IO.Path.Join(localAppData, "Android", "Sdk", "emulator", "emulator.exe");
     }
 
     /// <summary>
@@ -846,8 +834,8 @@ partial class Build
     void EnsurePerushimOnDevice()
     {
         // Notes DB: lives in asset pack dir locally, push if missing from device
-        var notesLocalPath = System.IO.Path.Combine(
-            SourceDirectory, "Platforms", "Android", "AssetPacks", "perushim_notes", NotesDbName);
+        var notesLocalPath =
+            SourceDirectory / "Platforms" / "Android" / "AssetPacks" / "perushim_notes" / NotesDbName;
 
         if (System.IO.File.Exists(notesLocalPath) && !DeviceFileExists(NotesDbName))
         {

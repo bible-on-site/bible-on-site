@@ -106,7 +106,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
 
         if (!completed)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            try { process.Kill(entireProcessTree: true); } catch { /* The timed-out process may have already exited; nothing more to kill. */ }
             Console.WriteLine("[DatabasePopulatorFixture] WARNING: Database drop timed out");
             return;
         }
@@ -202,7 +202,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
 
         if (!completed)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            try { process.Kill(entireProcessTree: true); } catch { /* The timed-out process may have already exited; the timeout still throws below. */ }
             throw new TimeoutException("Database population timed out after 5 minutes");
         }
 
@@ -225,11 +225,11 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         var dir = new DirectoryInfo(currentDir);
         while (dir != null)
         {
-            var dataPath = Path.Combine(dir.FullName, "data");
+            var dataPath = Path.Join(dir.FullName, "data");
             if (Directory.Exists(dataPath))
             {
                 // Verify it's the right data directory by checking for Makefile.toml
-                var makefileToml = Path.Combine(dataPath, "Makefile.toml");
+                var makefileToml = Path.Join(dataPath, "Makefile.toml");
                 if (File.Exists(makefileToml))
                 {
                     return dataPath;
@@ -237,10 +237,10 @@ public class DatabasePopulatorFixture : IAsyncLifetime
             }
 
             // Also check if we're in the repo root (has bible-on-site.slnx)
-            var slnPath = Path.Combine(dir.FullName, "bible-on-site.slnx");
+            var slnPath = Path.Join(dir.FullName, "bible-on-site.slnx");
             if (File.Exists(slnPath))
             {
-                var dataPath2 = Path.Combine(dir.FullName, "data");
+                var dataPath2 = Path.Join(dir.FullName, "data");
                 if (Directory.Exists(dataPath2))
                 {
                     return dataPath2;

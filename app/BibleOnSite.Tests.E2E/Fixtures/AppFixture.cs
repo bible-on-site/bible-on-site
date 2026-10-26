@@ -60,7 +60,7 @@ public class AppFixture : IAsyncLifetime
             var baseDir = Path.GetDirectoryName(typeof(AppFixture).Assembly.Location)
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
             // Go up 6 levels (win-x64 -> net10.0... -> Debug -> bin -> BibleOnSite.Tests.E2E -> app) then into web/api
-            return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
+            return Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
         }
     }
 
@@ -77,8 +77,8 @@ public class AppFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
 
             // Navigate from test output to app output (go up to app/, then into BibleOnSite/bin/...)
-            var appDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
-            var exePath = Path.Combine(appDir, "BibleOnSite.exe");
+            var appDir = Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
+            var exePath = Path.Join(appDir, "BibleOnSite.exe");
 
             if (!File.Exists(exePath))
             {
@@ -185,7 +185,7 @@ public class AppFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        SetProcessDPIAware();
+        SetProcessDPIAware(); //NOSONAR — process DPI awareness has no managed API; synthetic-input coordinates must map to physical pixels.
         _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
@@ -207,7 +207,7 @@ public class AppFixture : IAsyncLifetime
         await Task.Delay(1000); // Give time for processes to fully terminate
 
         // Start the application using dotnet run (which handles Windows App SDK properly)
-        var projectDir = Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
+        var projectDir = Path.GetFullPath(Path.Join(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
         var startInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
@@ -369,7 +369,7 @@ public class AppFixture : IAsyncLifetime
             // Cargo can detach its API child before the launcher exits.
             if (_weStartedApi)
             {
-                var executable = Path.Combine(ApiDirectory, "target", "debug", "api.exe");
+                var executable = Path.Join(ApiDirectory, "target", "debug", "api.exe");
                 foreach (var process in Process.GetProcessesByName("api"))
                 {
                     using (process)
@@ -391,9 +391,12 @@ public class AppFixture : IAsyncLifetime
         }
         finally
         {
-            _automation?.Dispose();
-            _appProcess?.Dispose();
-            _apiProcess?.Dispose();
+            // `using var` aliases keep the field lifetimes spanning
+            // Initialize/Dispose while disposing in the original order:
+            // automation, then app process, then API process.
+            using var apiProcess = _apiProcess;
+            using var appProcess = _appProcess;
+            using var automation = _automation;
         }
     }
 
@@ -450,24 +453,24 @@ public class AppFixture : IAsyncLifetime
     }
 
     [DllImport("user32.dll")]
-    private static extern bool SetProcessDPIAware();
+    private static extern bool SetProcessDPIAware(); //NOSONAR — DPI awareness has no managed equivalent.
     [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
+    private static extern IntPtr GetForegroundWindow(); //NOSONAR — no managed API reports the foreground HWND; UIA focus is not the same check.
     [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(Point point);
+    private static extern IntPtr WindowFromPoint(Point point); //NOSONAR — HWND hit-testing is Win32-only; UIA FromPoint can return a child element instead of the covering window.
     [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId); //NOSONAR — HWND→PID mapping has no managed API.
 
     private void AssertOwnedWindow(IntPtr window)
     {
-        GetWindowThreadProcessId(window, out var processId);
+        GetWindowThreadProcessId(window, out var processId); //NOSONAR — HWND→PID mapping has no managed API.
         if (processId != App.ProcessId)
         {
             throw new InvalidOperationException("Native gesture tests require an isolated desktop with BibleOnSite in the foreground. No input was sent.");
         }
     }
 
-    public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow());
+    public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow()); //NOSONAR — foreground HWND lookup has no managed equivalent.
 
     /// <summary>Fail before synthetic input if another app covers the test window.</summary>
     public void Click(AutomationElement element) => Click(element, MouseButton.Left, false);
@@ -485,7 +488,7 @@ public class AppFixture : IAsyncLifetime
             var bounds = element.BoundingRectangle;
             point = new Point((int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2));
         }
-        AssertOwnedWindow(WindowFromPoint(point));
+        AssertOwnedWindow(WindowFromPoint(point)); //NOSONAR — HWND hit-testing has no managed equivalent; the ownership guard must see the covering window, not a UIA child.
         if (doubleClick)
         {
             Mouse.DoubleClick(point);
