@@ -6,6 +6,7 @@ import {
 	pediaNameFromInput,
 	pediaPublicUrl,
 	reservedCategoryLabelFor,
+	sameAliasTargetSet,
 	validateAliasSpec,
 } from "~/lib/tanahpedia/pedia-names";
 
@@ -191,5 +192,46 @@ describe("validateAliasSpec", () => {
 		expect(
 			validateAliasSpec("משה", [{ entryId: "a", label: "א".repeat(256) }]),
 		).toEqual(expect.objectContaining({ ok: false }));
+	});
+});
+
+describe("sameAliasTargetSet", () => {
+	it("matches the same set regardless of order and label form", () => {
+		expect(
+			sameAliasTargetSet(
+				[
+					{ entryId: "a", label: "אחד" },
+					{ entryId: "b", label: null },
+				],
+				[
+					{ entryId: "b", label: "" },
+					{ entryId: "a", label: " אחד " },
+				],
+			),
+		).toBe(true);
+	});
+
+	it("detects an added or removed target", () => {
+		expect(
+			sameAliasTargetSet([{ entryId: "a", label: "" }], []),
+		).toBe(false);
+		expect(
+			sameAliasTargetSet(
+				[{ entryId: "a", label: "" }],
+				[
+					{ entryId: "a", label: "" },
+					{ entryId: "b", label: "x" },
+				],
+			),
+		).toBe(false);
+	});
+
+	it("detects a label drift on the same targets", () => {
+		expect(
+			sameAliasTargetSet(
+				[{ entryId: "a", label: "ישן" }],
+				[{ entryId: "a", label: "חדש" }],
+			),
+		).toBe(false);
 	});
 });

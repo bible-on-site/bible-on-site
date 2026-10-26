@@ -334,6 +334,45 @@ describe("approveEntryRevision", () => {
 		expect(result.entryId).toEqual(expect.any(String));
 	});
 
+	it("stores the normalized name when a proposal carries an encoded name", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				entry_id: null,
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_unique_name: "%D7%9E%D7%A9%D7%94",
+				proposed_title: "ערך חדש",
+			});
+		const result = await approveEntryRevision({ data: { id: "r1" } });
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry"),
+		);
+		// The stored unique_name must be the decoded form — the public router
+		// resolves /pedia/משה, never /pedia/%D7%9E%D7%A9%D7%94.
+		expect(insert?.[2]?.[1]).toBe("משה");
+		expect(result.entryId).toEqual(expect.any(String));
+	});
+
+	it("stores the normalized name when approving a rename proposal", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_unique_name: "%D7%99%D7%A2%D7%A7%D7%91",
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD);
+		await approveEntryRevision({ data: { id: "r1" } });
+		const entryUpdate = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("UPDATE tanahpedia_entry\n"),
+		);
+		expect(entryUpdate?.[2]?.[0]).toBe("יעקב");
+	});
+
 	it("requires proposedUniqueName/proposedTitle for new entries", async () => {
 		txQueryOneMock.mockResolvedValueOnce({
 			...HEAD,
@@ -439,6 +478,29 @@ describe("restoreEntryRevision", () => {
 		expect(insert?.[1]).toContain("'APPLIED'");
 		// last param is base_revision_id — the displaced head
 		expect(insert?.[2]?.[7]).toBe("rev-head");
+	});
+
+	it("restores an encoded snapshot name in its normalized stored form", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "old-rev",
+				proposed_unique_name: "%D7%9E%D7%A9%D7%94",
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD)
+			.mockResolvedValueOnce({ ...ENTRY, unique_name: "משה" });
+		await restoreEntryRevision({
+			data: { id: "old-rev", baseRevisionId: "rev-head" },
+		});
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
+		);
+		expect(insert?.[2]?.[2]).toBe("משה");
+		const entryUpdate = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("UPDATE tanahpedia_entry SET"),
+		);
+		expect(entryUpdate?.[2]?.[0]).toBe("משה");
 	});
 
 	it("rejects a missing revision", async () => {

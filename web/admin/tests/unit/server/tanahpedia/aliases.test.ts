@@ -329,7 +329,13 @@ describe("saveEntryAlias", () => {
 
 	it("rejects an invalid spec before opening a transaction", async () => {
 		await expect(
-			saveEntryAlias({ data: { name: "", targets: [{ entryId: "e-a" }] } }),
+			saveEntryAlias({
+				data: {
+					name: "",
+					targets: [{ entryId: "e-a" }],
+					expectedTargets: [],
+				},
+			}),
 		).rejects.toThrow("VALIDATION");
 		expect(mocks.transaction).not.toHaveBeenCalled();
 	});
@@ -337,7 +343,11 @@ describe("saveEntryAlias", () => {
 	it("rejects a missing name and target list", async () => {
 		await expect(
 			saveEntryAlias({
-				data: {} as { name: string; targets: { entryId: string }[] },
+				data: {} as {
+					name: string;
+					targets: { entryId: string }[];
+					expectedTargets: { entryId: string }[];
+				},
 			}),
 		).rejects.toThrow("VALIDATION");
 		expect(mocks.transaction).not.toHaveBeenCalled();
@@ -349,6 +359,7 @@ describe("saveEntryAlias", () => {
 				data: {
 					name: "משה",
 					targets: [{ entryId: "e-a", label: "הנביא" }, { entryId: "e-b" }],
+					expectedTargets: [],
 				},
 			}),
 		).rejects.toThrow("VALIDATION");
@@ -358,7 +369,11 @@ describe("saveEntryAlias", () => {
 	it("rejects a reserved category name", async () => {
 		await expect(
 			saveEntryAlias({
-				data: { name: "אישים", targets: [{ entryId: "e-a" }] },
+				data: {
+					name: "אישים",
+					targets: [{ entryId: "e-a" }],
+					expectedTargets: [],
+				},
 			}),
 		).rejects.toThrow("VALIDATION");
 		expect(mocks.transaction).not.toHaveBeenCalled();
@@ -369,7 +384,11 @@ describe("saveEntryAlias", () => {
 
 		await expect(
 			saveEntryAlias({
-				data: { name: "משה", targets: [{ entryId: "e-a" }] },
+				data: {
+					name: "משה",
+					targets: [{ entryId: "e-a" }],
+					expectedTargets: [],
+				},
 			}),
 		).rejects.toThrow("VALIDATION");
 		expect(mocks.txExecute).not.toHaveBeenCalledWith(
@@ -394,6 +413,7 @@ describe("saveEntryAlias", () => {
 						{ entryId: "e-a", label: "א" },
 						{ entryId: "ghost", label: "ב" },
 					],
+					expectedTargets: [],
 				},
 			}),
 		).rejects.toThrow("VALIDATION");
@@ -406,7 +426,11 @@ describe("saveEntryAlias", () => {
 		});
 
 		const result = await saveEntryAlias({
-			data: { name: "משה", targets: [{ entryId: "e-a" }] },
+			data: {
+				name: "משה",
+				targets: [{ entryId: "e-a" }],
+				expectedTargets: [],
+			},
 		});
 
 		expect(result).toEqual({ name: "משה", targetCount: 1, kind: "alias" });
@@ -429,6 +453,7 @@ describe("saveEntryAlias", () => {
 					{ entryId: "e-a", label: "הנביא" },
 					{ entryId: "e-b", label: "החוטם" },
 				],
+				expectedTargets: [],
 			},
 		});
 
@@ -455,7 +480,11 @@ describe("saveEntryAlias", () => {
 		});
 
 		await saveEntryAlias({
-			data: { name: "משה", targets: [{ entryId: "e-a" }] },
+			data: {
+				name: "משה",
+				targets: [{ entryId: "e-a" }],
+				expectedTargets: [],
+			},
 		});
 
 		const calls = mocks.txExecute.mock.calls.map((c) => String(c[1]));
@@ -479,6 +508,7 @@ describe("saveEntryAlias", () => {
 			data: {
 				name: "משה",
 				targets: [{ entryId: "e-a" }, { entryId: "e-a", label: "הנביא" }],
+				expectedTargets: [],
 			},
 		});
 
@@ -493,13 +523,99 @@ describe("saveEntryAlias", () => {
 		});
 
 		await saveEntryAlias({
-			data: { name: "משה", targets: [{ entryId: "e-a" }] },
+			data: {
+				name: "משה",
+				targets: [{ entryId: "e-a" }],
+				expectedTargets: [],
+			},
 		});
 
 		expect(mocks.revalidateWebsite).toHaveBeenCalledWith({
 			kind: "pedia",
 			urls: ["/pedia/משה"],
 		});
+	});
+
+	it("rejects the save when the name drifted from the editor's baseline", async () => {
+		// The shared name gained a second target since the editor opened — a
+		// blind replace would silently drop it.
+		mocks.txQuery.mockImplementation(async (_c: unknown, sql: string) => {
+			if (isTargetsSql(String(sql)))
+				return [
+					{ ...ENTRY_A, label: "הנביא" },
+					{ ...ENTRY_B, label: "החוטם" },
+				];
+			if (String(sql).includes("WHERE id IN")) return [{ id: "e-a" }];
+			return [];
+		});
+
+		await expect(
+			saveEntryAlias({
+				data: {
+					name: "משה",
+					targets: [{ entryId: "e-a" }],
+					expectedTargets: [{ entryId: "e-a", label: "הנביא" }],
+				},
+			}),
+		).rejects.toThrow("REVISION_CONFLICT");
+		expect(mocks.txExecute).not.toHaveBeenCalledWith(
+			mocks.conn,
+			expect.stringContaining("DELETE FROM tanahpedia_entry_synonym"),
+			expect.anything(),
+		);
+		expect(mocks.revalidateWebsite).not.toHaveBeenCalled();
+	});
+
+	it("rejects a first save that arrived after another admin created the name", async () => {
+		// Editor opened while the name was free (baseline: empty); the name now
+		// has rows — the stale write must not clobber them.
+		mocks.txQuery.mockImplementation(async (_c: unknown, sql: string) => {
+			if (isTargetsSql(String(sql))) return [{ ...ENTRY_B, label: null }];
+			if (String(sql).includes("WHERE id IN")) return [{ id: "e-a" }];
+			return [];
+		});
+
+		await expect(
+			saveEntryAlias({
+				data: {
+					name: "משה",
+					targets: [{ entryId: "e-a" }],
+					expectedTargets: [],
+				},
+			}),
+		).rejects.toThrow("REVISION_CONFLICT");
+		expect(synonymInserts()).toHaveLength(0);
+		expect(mocks.revalidateWebsite).not.toHaveBeenCalled();
+	});
+
+	it("replaces the set when the baseline matches the locked current rows", async () => {
+		mocks.txQuery.mockImplementation(async (_c: unknown, sql: string) => {
+			if (isTargetsSql(String(sql)))
+				return [
+					{ ...ENTRY_A, label: "הנביא" },
+					{ ...ENTRY_B, label: "החוטם" },
+				];
+			if (String(sql).includes("WHERE id IN"))
+				return [{ id: "e-a" }, { id: "e-b" }];
+			return [];
+		});
+
+		const result = await saveEntryAlias({
+			data: {
+				name: "משה",
+				targets: [
+					{ entryId: "e-a", label: "הנביא" },
+					{ entryId: "e-b", label: "אותו אחד" },
+				],
+				expectedTargets: [
+					{ entryId: "e-b", label: "החוטם" },
+					{ entryId: "e-a", label: "הנביא" },
+				],
+			},
+		});
+
+		expect(result.targetCount).toBe(2);
+		expect(synonymInserts()).toHaveLength(2);
 	});
 });
 

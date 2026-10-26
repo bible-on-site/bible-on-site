@@ -257,7 +257,7 @@ describe("MainAddressSection", () => {
 		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 
-	it("explains a shared old name instead of offering the checkbox", async () => {
+	it("explains a shared old name that already targets this entry", async () => {
 		checkPediaNameMock.mockImplementation(
 			async ({ data }: { data: { name: string } }) =>
 				data.name === "משה-רבנו"
@@ -283,9 +283,42 @@ describe("MainAddressSection", () => {
 		);
 		renderSection({ value: "משה-הנביא" });
 
+		// The entry's own association under the old name survives the rename —
+		// the old address keeps listing it inside the disambiguation page.
 		expect(
 			await screen.findByText(/משותף גם עם «משה אחר»/),
 		).toBeInTheDocument();
+		expect(
+			screen.getByText(/דף פירושונים שכולל גם את ערך זה/),
+		).toBeInTheDocument();
+		expect(screen.getByText(/כבר רשומה כשם חלופי של ערך זה/)).toBeInTheDocument();
+		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+	});
+
+	it("warns that a shared old name leads only to the other entries", async () => {
+		checkPediaNameMock.mockImplementation(
+			async ({ data }: { data: { name: string } }) =>
+				data.name === "משה-רבנו"
+					? {
+							kind: "self-main",
+							name: "משה-רבנו",
+							aliasTargets: [
+								{
+									entryId: "e-b",
+									uniqueName: "משה-אחר",
+									title: "משה אחר",
+									label: "אחר",
+								},
+							],
+						}
+					: { kind: "free", name: data.name },
+		);
+		renderSection({ value: "משה-הנביא" });
+
+		expect(
+			await screen.findByText(/הכתובת הישנה תוביל אליהם בלבד/),
+		).toBeInTheDocument();
+		expect(screen.getByText(/הוסף אותו במקטע «כתובות נוספות»/)).toBeInTheDocument();
 		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 

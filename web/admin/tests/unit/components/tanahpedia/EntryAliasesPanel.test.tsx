@@ -130,7 +130,7 @@ describe("EntryAliasesPanel", () => {
 		renderPanel();
 
 		expect(
-			await screen.findByText(/דף פירושונים — 2 ערכים/),
+			await screen.findByText(/דף פירושונים - 2 ערכים/),
 		).toBeInTheDocument();
 		expect(screen.getByText(/משה רבנו/)).toBeInTheDocument();
 		expect(screen.getByText(/משה החוטם/)).toBeInTheDocument();
@@ -191,6 +191,7 @@ describe("EntryAliasesPanel", () => {
 				data: {
 					name: "משה",
 					targets: [{ entryId: "e-a", label: "" }],
+					expectedTargets: [],
 				},
 			}),
 		);
@@ -317,6 +318,8 @@ describe("EntryAliasesPanel", () => {
 						{ entryId: "e-b", label: "החוטם" },
 						{ entryId: "e-a", label: "הנביא" },
 					],
+					// The baseline is the target set the check returned.
+					expectedTargets: [{ entryId: "e-b", label: "החוטם" }],
 				},
 			}),
 		);
@@ -426,7 +429,7 @@ describe("EntryAliasesPanel", () => {
 		renderPanel();
 
 		expect(
-			await screen.findByText("זהה לכתובת הראשית — ללא אפקט"),
+			await screen.findByText("זהה לכתובת הראשית - ללא אפקט"),
 		).toBeInTheDocument();
 		expect(screen.getByText(/שמור לנתיב הקטגוריה «אישים»/)).toBeInTheDocument();
 		expect(screen.getByText("לא נגיש")).toBeInTheDocument();
@@ -450,7 +453,7 @@ describe("EntryAliasesPanel", () => {
 		renderPanel();
 
 		expect(
-			await screen.findByText(/דף פירושונים — 2 ערכים/),
+			await screen.findByText(/דף פירושונים - 2 ערכים/),
 		).toBeInTheDocument();
 		expect(screen.getByText(/משה רבנו/)).toBeInTheDocument();
 		expect(screen.getByText(/- החוטם/)).toBeInTheDocument();
@@ -620,7 +623,7 @@ describe("EntryAliasesPanel", () => {
 		});
 
 		expect(
-			await screen.findByText("השם פנוי — ייווצר כהפניה."),
+			await screen.findByText("השם פנוי - ייווצר כהפניה."),
 		).toBeInTheDocument();
 	});
 
@@ -635,7 +638,7 @@ describe("EntryAliasesPanel", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "הסר יעד" }));
 
-		expect(screen.getByText("אין יעדים — השם יימחק.")).toBeInTheDocument();
+		expect(screen.getByText("אין יעדים - השם יימחק.")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeDisabled();
 	});
 
@@ -697,7 +700,7 @@ describe("EntryAliasesPanel", () => {
 		});
 
 		expect(
-			await screen.findByText(/שמור לנתיב הקטגוריה «אישים» — בחר שם אחר/),
+			await screen.findByText(/שמור לנתיב הקטגוריה «אישים» - בחר שם אחר/),
 		).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeDisabled();
 	});
@@ -778,7 +781,7 @@ describe("EntryAliasesPanel", () => {
 		expect(await screen.findByText("סיבה שרירותית מהשרת")).toBeInTheDocument();
 	});
 
-	it("does not re-merge targets for a name that was already merged", async () => {
+	it("clears the merged target set when the typed name changes", async () => {
 		mocks.checkPediaName.mockImplementation(
 			async ({ data }: { data: { name: string } }) =>
 				data.name === "משה"
@@ -802,26 +805,57 @@ describe("EntryAliasesPanel", () => {
 		);
 		const input = screen.getByLabelText("שם / כתובת");
 		fireEvent.change(input, { target: { value: "משה" } });
+		await screen.findByLabelText("תווית מבדנת עבור משה החוטם");
 
-		// First merge lands the shared target — edit its label, then retype the
-		// same name: the merge must not clobber the in-flight edit.
+		// The name keys the target set — typing a different name drops the old
+		// name's merged targets so they can never leak into the new save.
+		fireEvent.change(input, { target: { value: "אחר" } });
+
+		expect(screen.getAllByLabelText(/תווית מבדנת עבור/)).toHaveLength(1);
+		expect(
+			screen.queryByLabelText("תווית מבדנת עבור משה החוטם"),
+		).not.toBeInTheDocument();
+	});
+
+	it("re-merges a shared name freshly after the name was changed and retyped", async () => {
+		mocks.checkPediaName.mockImplementation(
+			async ({ data }: { data: { name: string } }) =>
+				data.name === "משה"
+					? {
+							kind: "alias",
+							name: "משה",
+							targets: [
+								{
+									entryId: "e-b",
+									uniqueName: "משה-החוטם",
+									title: "משה החוטם",
+									label: "החוטם",
+								},
+							],
+						}
+					: { kind: "free", name: data.name },
+		);
+		renderPanel();
+		fireEvent.click(
+			await screen.findByRole("button", { name: /הוסף שם חלופי/ }),
+		);
+		const input = screen.getByLabelText("שם / כתובת");
+		fireEvent.change(input, { target: { value: "משה" } });
 		const otherLabel = await screen.findByLabelText(
 			"תווית מבדנת עבור משה החוטם",
 		);
 		fireEvent.change(otherLabel, { target: { value: "ערוך" } });
+
+		// Leaving and returning to the shared name is a fresh merge — the
+		// in-flight label edit belonged to the discarded draft.
 		fireEvent.change(input, { target: { value: "אחר" } });
-		await screen.findByText("השם פנוי — ייווצר כהפניה.");
+		await screen.findByText("השם פנוי - ייווצר כהפניה.");
 		fireEvent.change(input, { target: { value: "משה" } });
 		await screen.findByText(/כבר משותף/);
-		// The re-merge effect is a scheduled passive effect — yield a real
-		// macrotask inside act so it (and its "already merged" guard) runs.
-		await act(async () => {
-			await new Promise((r) => setTimeout(r, 0));
-		});
 
-		expect(screen.getByLabelText("תווית מבדנת עבור משה החוטם")).toHaveValue(
-			"ערוך",
-		);
+		expect(
+			await screen.findByLabelText("תווית מבדנת עבור משה החוטם"),
+		).toHaveValue("החוטם");
 	});
 
 	it("does not re-merge targets when the same name resolves again", async () => {
@@ -1038,5 +1072,151 @@ describe("EntryAliasesPanel", () => {
 
 		await screen.findByLabelText("תווית מבדנת עבור משה החוטם");
 		expect(screen.getAllByLabelText(/תווית מבדנת עבור/)).toHaveLength(2);
+	});
+
+	it("blocks saving until the typed name's check resolves and merges", async () => {
+		let resolveCheck: ((value: unknown) => void) | null = null;
+		mocks.checkPediaName.mockImplementation(
+			({ data }: { data: { name: string } }) =>
+				data.name === "משה"
+					? new Promise((resolve) => {
+							resolveCheck = resolve;
+						})
+					: Promise.resolve({ kind: "free", name: data.name }),
+		);
+		mocks.saveEntryAlias.mockResolvedValue({
+			name: "משה",
+			targetCount: 2,
+			kind: "disambiguation",
+		});
+		renderPanel();
+		fireEvent.click(
+			await screen.findByRole("button", { name: /הוסף שם חלופי/ }),
+		);
+		fireEvent.change(screen.getByLabelText("שם / כתובת"), {
+			target: { value: "משה" },
+		});
+
+		// The check is in flight — a fast click must not replace the shared
+		// name with a single-target set before its targets were loaded.
+		await waitFor(() =>
+			expect(mocks.checkPediaName).toHaveBeenCalledWith({
+				data: { name: "משה", forEntryId: "e-a" },
+			}),
+		);
+		expect(screen.getByText("בודק את השם…")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeDisabled();
+
+		await act(async () => {
+			resolveCheck?.({
+				kind: "alias",
+				name: "משה",
+				targets: [
+					{
+						entryId: "e-b",
+						uniqueName: "משה-החוטם",
+						title: "משה החוטם",
+						label: "החוטם",
+					},
+				],
+			});
+		});
+
+		// The merged target still needs this entry's label before the spec is
+		// valid — the save stays blocked until then, then carries the full set.
+		await screen.findByLabelText("תווית מבדנת עבור משה החוטם");
+		expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText("תווית מבדנת עבור משה רבנו"), {
+			target: { value: "הנביא" },
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeEnabled(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "שמור כתובת" }));
+
+		await waitFor(() =>
+			expect(mocks.saveEntryAlias).toHaveBeenCalledWith({
+				data: {
+					name: "משה",
+					targets: [
+						{ entryId: "e-b", label: "החוטם" },
+						{ entryId: "e-a", label: "הנביא" },
+					],
+					expectedTargets: [{ entryId: "e-b", label: "החוטם" }],
+				},
+			}),
+		);
+	});
+
+	it("blocks saving and reports it when the name check fails", async () => {
+		mocks.checkPediaName.mockRejectedValue(new Error("network down"));
+		renderPanel();
+		fireEvent.click(
+			await screen.findByRole("button", { name: /הוסף שם חלופי/ }),
+		);
+		fireEvent.change(screen.getByLabelText("שם / כתובת"), {
+			target: { value: "משה" },
+		});
+
+		expect(
+			await screen.findByText(/בדיקת השם נכשלה/),
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeDisabled();
+	});
+
+	it("shows a conflict message when the name changed since the edit opened", async () => {
+		mocks.saveEntryAlias.mockRejectedValue(
+			new Error("REVISION_CONFLICT: the name drifted"),
+		);
+		renderPanel();
+		fireEvent.click(
+			await screen.findByRole("button", { name: /הוסף שם חלופי/ }),
+		);
+		fireEvent.change(screen.getByLabelText("שם / כתובת"), {
+			target: { value: "משה" },
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeEnabled(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "שמור כתובת" }));
+
+		expect(
+			await screen.findByText(/שונה על ידי מנהל אחר מאז שהעריכה נפתחה/),
+		).toBeInTheDocument();
+	});
+
+	it("sends the loaded target set as the baseline when editing a shared name", async () => {
+		mocks.getEntryAliases.mockResolvedValue([sharedAlias]);
+		mocks.saveEntryAlias.mockResolvedValue({
+			name: "משה",
+			targetCount: 2,
+			kind: "disambiguation",
+		});
+		renderPanel();
+
+		fireEvent.click(await screen.findByRole("button", { name: "ערוך יעדים" }));
+		fireEvent.change(screen.getByLabelText("תווית מבדנת עבור משה החוטם"), {
+			target: { value: "החוטם המלך" },
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeEnabled(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "שמור כתובת" }));
+
+		await waitFor(() =>
+			expect(mocks.saveEntryAlias).toHaveBeenCalledWith({
+				data: {
+					name: "משה",
+					targets: [
+						{ entryId: "e-a", label: "הנביא" },
+						{ entryId: "e-b", label: "החוטם המלך" },
+					],
+					expectedTargets: [
+						{ entryId: "e-a", label: "הנביא" },
+						{ entryId: "e-b", label: "החוטם" },
+					],
+				},
+			}),
+		);
 	});
 });

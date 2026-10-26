@@ -109,7 +109,7 @@ export function MainAddressSection({
 				</h3>
 				<p className="mt-1 text-sm text-gray-600 leading-relaxed">
 					הכותרת היא טקסט התצוגה של הערך בלבד. השם הייחודי קובע את המקטע האחרון
-					של הכתובת הציבורית — הוא מה שמופיע בקישור. אפשר להקליד רק את השם או
+					של הכתובת הציבורית - הוא מה שמופיע בקישור. אפשר להקליד רק את השם או
 					להדביק כתובת מלאה מהאתר; המערכת תיקח את המקטע האחרון. מזהה הערך הפנימי
 					אינו חלק מהכתובת.
 				</p>
@@ -136,7 +136,7 @@ export function MainAddressSection({
 					dir="auto"
 				/>
 				<p className="mt-1 text-xs text-gray-500">
-					הקלד שם (אותיות, ספרות, רווחים ומקפים) או הדבק כתובת קיימת — למשל: משה
+					הקלד שם (אותיות, ספרות, רווחים ומקפים) או הדבק כתובת קיימת - למשל: משה
 					רבנו, משה-רבנו.
 				</p>
 			</div>
@@ -181,13 +181,13 @@ export function MainAddressSection({
 			)}
 			{status?.kind === "reserved" && (
 				<p className="text-sm text-red-700">
-					השם «{status.name}» שמור לנתיב הקטגוריה «{status.categoryLabel}» — הדף
+					השם «{status.name}» שמור לנתיב הקטגוריה «{status.categoryLabel}» - הדף
 					הציבורי שלו תמיד יציג את הקטגוריה. בחר שם אחר.
 				</p>
 			)}
 			{status?.kind === "canonical" && (
 				<p className="text-sm text-red-700">
-					השם «{status.name}» תפוס על ידי הערך «{status.entry.title}» — הכתובת
+					השם «{status.name}» תפוס על ידי הערך «{status.entry.title}» - הכתובת
 					הראשית של ערך תמיד גוברת. בחר שם אחר.
 				</p>
 			)}
@@ -195,7 +195,7 @@ export function MainAddressSection({
 				<div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
 					השם «{status.name}» משמש היום ככתובת נוספת של{" "}
 					{status.targets.map((t) => `«${t.title}»`).join(", ")}. הפיכתו לכתובת
-					הראשית של ערך זה תקפה את ההפניות האלה — הן יישארו רשומות אך יוצלו על
+					הראשית של ערך זה תקפה את ההפניות האלה - הן יישארו רשומות אך יוצלו על
 					ידי הכתובת הראשית.
 				</div>
 			)}
@@ -216,18 +216,27 @@ export function MainAddressSection({
 						</span>
 					</p>
 
-					{otherOldTargets.length > 0 ? (
+					{selfOldTarget ? (
+						// This entry already has an association under the old name — the
+						// rename keeps it, so the old address still reaches this entry
+						// (alone as a redirect, or inside a shared disambiguation page).
+						<p className="text-sm text-gray-600">
+							הכתובת הקודמת כבר רשומה כשם חלופי של ערך זה - קישורים אליה ימשיכו
+							לעבוד אוטומטית.
+							{otherOldTargets.length > 0 &&
+								` השם משותף גם עם ${otherOldTargets
+									.map((t) => `«${t.title}»`)
+									.join(", ")} - לאחר השינוי היא תציג דף פירושונים שכולל גם את ערך זה.`}
+						</p>
+					) : otherOldTargets.length > 0 ? (
+						// No self association survives the rename — the shared old
+						// address leads only to the other entries.
 						<p className="text-sm text-amber-800">
 							השם «{savedUniqueName}» משותף גם עם{" "}
-							{otherOldTargets.map((t) => `«${t.title}»`).join(", ")} — לאחר
+							{otherOldTargets.map((t) => `«${t.title}»`).join(", ")} - לאחר
 							השינוי הכתובת הישנה תוביל אליהם בלבד. כדי לשמור גם ערך זה כיעד של
 							השם המשותף, הוסף אותו במקטע «כתובות נוספות» לאחר השמירה יחד עם
 							תווית מבדנת.
-						</p>
-					) : selfOldTarget ? (
-						<p className="text-sm text-gray-600">
-							הכתובת הקודמת כבר רשומה כשם חלופי של ערך זה — קישורים אליה ימשיכו
-							לעבוד אוטומטית.
 						</p>
 					) : (
 						<label className="flex items-start gap-2 text-sm text-gray-800">
@@ -238,7 +247,7 @@ export function MainAddressSection({
 								className="mt-1"
 							/>
 							<span>
-								שמור את הכתובת הקודמת כשם חלופי שמפנה לערך זה — מומלץ, כך
+								שמור את הכתובת הקודמת כשם חלופי שמפנה לערך זה - מומלץ, כך
 								קישורים קיימים ממשיכים לעבוד.
 							</span>
 						</label>

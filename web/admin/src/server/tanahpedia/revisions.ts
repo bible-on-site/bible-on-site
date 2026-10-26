@@ -100,7 +100,7 @@ export function assertEntryNameAllowed(name: string): void {
 	const reserved = reservedCategoryLabelFor(name);
 	if (reserved) {
 		throw new Error(
-			`${VALIDATION_PREFIX}: השם «${name}» שמור לנתיב הקטגוריה «${reserved}» — בחר שם אחר`,
+			`${VALIDATION_PREFIX}: השם «${name}» שמור לנתיב הקטגוריה «${reserved}» - בחר שם אחר`,
 		);
 	}
 }
@@ -273,6 +273,13 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 			let targetEntryId = revision.entry_id;
 			let previousUniqueName: string | null = null;
 
+			// Normalize once and persist the stored form: the public router
+			// decodes the URL segment before lookup, so a proposal carrying
+			// escapes would otherwise land as an unresolvable unique_name.
+			const proposedName = revision.proposed_unique_name
+				? normalizePediaName(revision.proposed_unique_name)
+				: null;
+
 			if (revision.entry_id) {
 				const entry = await lockEntry(conn, revision.entry_id);
 				if (!entry) {
@@ -288,10 +295,8 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 						"the revision's declared base is stale - the entry head has moved",
 					);
 				}
-				if (revision.proposed_unique_name) {
-					assertEntryNameAllowed(
-						normalizePediaName(revision.proposed_unique_name),
-					);
+				if (proposedName !== null) {
+					assertEntryNameAllowed(proposedName);
 				}
 				await txExecute(
 					conn,
@@ -301,28 +306,26 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 					     content = COALESCE(?, content)
 					 WHERE id = ?`,
 					[
-						revision.proposed_unique_name,
+						proposedName,
 						revision.proposed_title,
 						revision.proposed_content,
 						revision.entry_id,
 					],
 				);
 			} else {
-				if (!revision.proposed_unique_name || !revision.proposed_title) {
+				if (!proposedName || !revision.proposed_title) {
 					throw new Error(
 						"applying a new-entry revision requires proposedUniqueName and proposedTitle",
 					);
 				}
-				assertEntryNameAllowed(
-					normalizePediaName(revision.proposed_unique_name),
-				);
+				assertEntryNameAllowed(proposedName);
 				targetEntryId = crypto.randomUUID();
 				await txExecute(
 					conn,
 					"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
 					[
 						targetEntryId,
-						revision.proposed_unique_name,
+						proposedName,
 						revision.proposed_title,
 						revision.proposed_content,
 					],
@@ -340,7 +343,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				revisionId: revision.id,
 				entryId: targetEntryId,
 				headRevisionId: revision.id,
-				uniqueName: revision.proposed_unique_name ?? previousUniqueName,
+				uniqueName: proposedName ?? previousUniqueName,
 				previousUniqueName,
 			};
 		});
@@ -398,9 +401,12 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 			const head = await headRevision(conn, revision.entry_id);
 			assertFreshBase(head?.id ?? null, data.baseRevisionId);
 
-			const restoredUniqueName =
-				revision.proposed_unique_name ?? entry.unique_name;
-			assertEntryNameAllowed(normalizePediaName(restoredUniqueName));
+			// Normalize once so an encoded snapshot name lands in its stored
+			// (URL-decoded) form — same reasoning as in approveEntryRevision.
+			const restoredUniqueName = normalizePediaName(
+				revision.proposed_unique_name ?? entry.unique_name,
+			);
+			assertEntryNameAllowed(restoredUniqueName);
 			const restoredTitle = revision.proposed_title ?? entry.title;
 			const restoredContent = revision.proposed_content ?? entry.content;
 

@@ -12,6 +12,7 @@ import {
 	pediaPublicUrl,
 	validateAliasSpec,
 } from "~/lib/tanahpedia/pedia-names";
+import { isRevisionConflictError } from "~/lib/tanahpedia/revisions-shared";
 import {
 	checkPediaName,
 	deleteAliasName,
@@ -44,6 +45,12 @@ interface EditorState {
 	pickingTarget: boolean;
 	/** Name whose existing targets were already merged in — merge runs once. */
 	mergedFrom: string | null;
+	/**
+	 * The name's target set as the server held it when the editor opened (or
+	 * when a shared name's check resolved) — sent as the optimistic-concurrency
+	 * baseline so a replace never silently covers another admin's change.
+	 */
+	baselineTargets: { entryId: string; label: string }[];
 }
 
 const NAME_CHECK_DEBOUNCE_MS = 300;
@@ -81,7 +88,7 @@ function CopyButton({ url }: { url: string }) {
 }
 
 /**
- * כתובות נוספות / שמות חלופיים — the alias manager.
+ * כתובות נוספות / שמות חלופיים - the alias manager.
  *
  * Explicit save boundary (separate from the entry draft): every "שמור כתובת"
  * applies the whole target set of that name atomically and publishes it
@@ -113,6 +120,7 @@ export function EntryAliasesPanel({
 		mutationFn: (input: {
 			name: string;
 			targets: { entryId: string; label: string }[];
+			expectedTargets: { entryId: string; label: string }[];
 		}) => saveEntryAlias({ data: input }),
 		onSuccess: (saved) => {
 			void invalidate();
@@ -120,11 +128,16 @@ export function EntryAliasesPanel({
 			setActionError(null);
 			setNotice(
 				saved.kind === "disambiguation"
-					? `נשמר — «${saved.name}» מציג כעת דף פירושונים עם ${saved.targetCount} ערכים.`
-					: `נשמר — «${saved.name}» מפנה ישירות לערך היעד.`,
+					? `נשמר - «${saved.name}» מציג כעת דף פירושונים עם ${saved.targetCount} ערכים.`
+					: `נשמר - «${saved.name}» מפנה ישירות לערך היעד.`,
 			);
 		},
-		onError: (err) => setActionError(classifySaveError(err).message),
+		onError: (err) =>
+			setActionError(
+				isRevisionConflictError(err)
+					? "השם שונה על ידי מנהל אחר מאז שהעריכה נפתחה - סגור את העריכה ופתח אותה מחדש כדי לראות את המצב העדכני."
+					: classifySaveError(err).message,
+			),
 	});
 
 	const removeMutation = useMutation({
@@ -136,7 +149,7 @@ export function EntryAliasesPanel({
 			setNotice(
 				result.remainingTargets === 0
 					? `השם «${result.name}» נמחק לגמרי.`
-					: `הערך הוסר מהשם «${result.name}» — ${result.remainingTargets} יעדים נותרו.`,
+					: `הערך הוסר מהשם «${result.name}» - ${result.remainingTargets} יעדים נותרו.`,
 			);
 		},
 		onError: (err) => setActionError(classifySaveError(err).message),
@@ -171,6 +184,7 @@ export function EntryAliasesPanel({
 			targets: [selfTarget],
 			pickingTarget: false,
 			mergedFrom: null,
+			baselineTargets: [],
 		});
 	};
 
@@ -188,6 +202,10 @@ export function EntryAliasesPanel({
 			})),
 			pickingTarget: false,
 			mergedFrom: alias.name,
+			baselineTargets: alias.targets.map((t) => ({
+				entryId: t.entryId,
+				label: t.label ?? "",
+			})),
 		});
 	};
 
@@ -195,7 +213,7 @@ export function EntryAliasesPanel({
 		const shared = alias.targets.length > 1;
 		const message = shared
 			? `להסיר את הערך מהשם המשותף «${alias.name}»? שאר ${alias.targets.length - 1} היעדים יישארו כפי שהם.`
-			: `הערך הוא היעד היחיד של «${alias.name}» — ההסרה תמחק את השם לגמרי. להמשיך?`;
+			: `הערך הוא היעד היחיד של «${alias.name}» - ההסרה תמחק את השם לגמרי. להמשיך?`;
 		if (window.confirm(message)) {
 			removeMutation.mutate({ name: alias.name, entryId });
 		}
@@ -215,8 +233,8 @@ export function EntryAliasesPanel({
 						כתובות נוספות / שמות חלופיים
 					</h3>
 					<p className="mt-1 text-sm text-gray-600 leading-relaxed max-w-3xl">
-						שמות נוספים שמובילים לערך זה — או לדף פירושונים כשאותו שם משותף לכמה
-						ערכים. שינויים כאן נשמרים ומתפרסמים מיד עם «שמור כתובת» — הם אינם
+						שמות נוספים שמובילים לערך זה - או לדף פירושונים כשאותו שם משותף לכמה
+						ערכים. שינויים כאן נשמרים ומתפרסמים מיד עם «שמור כתובת» - הם אינם
 						חלק מטיוטת הערך.
 					</p>
 				</div>
@@ -270,10 +288,13 @@ export function EntryAliasesPanel({
 					editor={editor}
 					setEditor={setEditor}
 					entryId={entryId}
+					selfTarget={selfTarget}
 					websiteBase={websiteBase}
 					saving={saveMutation.isPending}
 					deleting={deleteMutation.isPending}
-					onSave={(name, targets) => saveMutation.mutate({ name, targets })}
+					onSave={(name, targets, expectedTargets) =>
+						saveMutation.mutate({ name, targets, expectedTargets })
+					}
 					onDeleteName={(name) => {
 						const count = editor.targets.length;
 						if (
@@ -305,9 +326,9 @@ function AliasRow({
 }) {
 	const url = pediaPublicUrl(websiteBase, alias.name);
 	const problem = alias.reservedCategory
-		? `השם שמור לנתיב הקטגוריה «${alias.reservedCategory}» — הכתובת אינה נגישה`
+		? `השם שמור לנתיב הקטגוריה «${alias.reservedCategory}» - הכתובת אינה נגישה`
 		: alias.shadowedByCanonical
-			? `הכתובת מוצלת על ידי הכתובת הראשית של «${alias.shadowedByCanonical.title}» — היא אינה נגישה כרגע`
+			? `הכתובת מוצלת על ידי הכתובת הראשית של «${alias.shadowedByCanonical.title}» - היא אינה נגישה כרגע`
 			: null;
 
 	return (
@@ -317,11 +338,11 @@ function AliasRow({
 					<span className="font-bold text-gray-900">«{alias.name}»</span>
 					{alias.isSelfMain ? (
 						<span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-							זהה לכתובת הראשית — ללא אפקט
+							זהה לכתובת הראשית - ללא אפקט
 						</span>
 					) : alias.kind === "disambiguation" ? (
 						<span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-							דף פירושונים — {alias.targets.length} ערכים
+							דף פירושונים - {alias.targets.length} ערכים
 						</span>
 					) : (
 						<span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800">
@@ -398,6 +419,7 @@ function AliasEditor({
 	editor,
 	setEditor,
 	entryId,
+	selfTarget,
 	websiteBase,
 	saving,
 	deleting,
@@ -407,10 +429,15 @@ function AliasEditor({
 	editor: EditorState;
 	setEditor: React.Dispatch<React.SetStateAction<EditorState | null>>;
 	entryId: string;
+	selfTarget: DraftTarget;
 	websiteBase: string;
 	saving: boolean;
 	deleting: boolean;
-	onSave: (name: string, targets: { entryId: string; label: string }[]) => void;
+	onSave: (
+		name: string,
+		targets: { entryId: string; label: string }[],
+		expectedTargets: { entryId: string; label: string }[],
+	) => void;
 	onDeleteName: (name: string) => void;
 }) {
 	const isEditingExisting = editor.editingName !== null;
@@ -421,7 +448,7 @@ function AliasEditor({
 
 	// In create mode the name lookup decides whether this is a fresh name or a
 	// shared name this entry is joining.
-	const { data: nameStatus } = useQuery({
+	const { data: nameStatus, isError: nameCheckFailed } = useQuery({
 		queryKey: ["alias-name-check", debouncedName, entryId],
 		queryFn: () =>
 			checkPediaName({ data: { name: debouncedName, forEntryId: entryId } }),
@@ -456,6 +483,12 @@ function AliasEditor({
 				...prev,
 				mergedFrom: mergedForName,
 				targets: [...merged.values()],
+				// The freshly observed server set becomes the stale-write baseline:
+				// the save may then remove merged targets but never ones it never saw.
+				baselineTargets: nameStatus.targets.map((t) => ({
+					entryId: t.entryId,
+					label: t.label ?? "",
+				})),
 			};
 		});
 	}, [isEditingExisting, nameStatus, mergedForName, setEditor]);
@@ -470,16 +503,31 @@ function AliasEditor({
 	const nameBlockReason = isEditingExisting
 		? null
 		: nameStatus?.kind === "reserved"
-			? `השם «${nameStatus.name}» שמור לנתיב הקטגוריה «${nameStatus.categoryLabel}» — בחר שם אחר.`
+			? `השם «${nameStatus.name}» שמור לנתיב הקטגוריה «${nameStatus.categoryLabel}» - בחר שם אחר.`
 			: nameStatus?.kind === "canonical"
-				? `השם «${nameStatus.name}» הוא הכתובת הראשית של «${nameStatus.entry.title}» — כדי לשתף אותו, שנה תחילה את הכתובת הראשית של אותו ערך.`
+				? `השם «${nameStatus.name}» הוא הכתובת הראשית של «${nameStatus.entry.title}» - כדי לשתף אותו, שנה תחילה את הכתובת הראשית של אותו ערך.`
 				: nameStatus?.kind === "self-main"
-					? "זוהי הכתובת הראשית של הערך — אין צורך בשם חלופי זהה."
+					? "זוהי הכתובת הראשית של הערך - אין צורך בשם חלופי זהה."
 					: nameStatus?.kind === "invalid"
 						? nameStatus.reason
 						: null;
 
-	const canSave = spec.ok && !nameBlockReason && !saving;
+	// Saving stays blocked until the check for the *current* name has resolved
+	// and — for a shared name — its server targets have been merged in. The
+	// save replaces the whole shared set, so writing while the check is still
+	// in flight (or before the merge landed) would silently drop other
+	// entries' associations.
+	const nameCheckPending =
+		!isEditingExisting &&
+		parsedName.length > 0 &&
+		(debouncedName !== parsedName ||
+			nameStatus === undefined ||
+			nameStatus.name !== parsedName ||
+			(nameStatus.kind === "alias" && editor.mergedFrom !== parsedName));
+	const nameCheckSettled =
+		isEditingExisting || (parsedName.length > 0 && !nameCheckPending);
+
+	const canSave = spec.ok && !nameBlockReason && nameCheckSettled && !saving;
 
 	// Functional updates can be processed after the editor was already closed,
 	// so a null guard is kept in this one spot instead of at every call site.
@@ -541,9 +589,28 @@ function AliasEditor({
 						id="alias-name-input"
 						type="text"
 						value={editor.nameInput}
-						onChange={(e) =>
-							updateEditor((prev) => ({ ...prev, nameInput: e.target.value }))
-						}
+						onChange={(e) => {
+							const raw = e.target.value;
+							updateEditor((prev) => {
+								// The name keys the whole target set: typing a different
+								// name starts a fresh set so targets merged from (or picked
+								// for) the previous name can never leak into this save.
+								if (
+									prev.editingName === null &&
+									pediaNameFromInput(raw) !==
+										pediaNameFromInput(prev.nameInput)
+								) {
+									return {
+										...prev,
+										nameInput: raw,
+										targets: [selfTarget],
+										mergedFrom: null,
+										baselineTargets: [],
+									};
+								}
+								return { ...prev, nameInput: raw };
+							});
+						}}
 						onBlur={() =>
 							updateEditor((prev) => ({
 								...prev,
@@ -566,19 +633,27 @@ function AliasEditor({
 					{nameBlockReason}
 				</p>
 			)}
+			{!isEditingExisting && nameCheckFailed && (
+				<p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+					בדיקת השם נכשלה - נסה שוב מאוחר יותר.
+				</p>
+			)}
+			{nameCheckPending && !nameCheckFailed && !nameBlockReason && (
+				<p className="text-sm text-gray-500">בודק את השם…</p>
+			)}
 			{!isEditingExisting && nameStatus?.kind === "alias" && (
 				<p className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg p-3">
-					השם «{nameStatus.name}» כבר משותף — רשימת היעדים שלו נטענה לעריכה,
+					השם «{nameStatus.name}» כבר משותף - רשימת היעדים שלו נטענה לעריכה,
 					וערך זה נוסף אליה. שמירה תחול על כל היעדים.
 				</p>
 			)}
 			{!isEditingExisting && nameStatus?.kind === "free" && (
-				<p className="text-sm text-green-700">השם פנוי — ייווצר כהפניה.</p>
+				<p className="text-sm text-green-700">השם פנוי - ייווצר כהפניה.</p>
 			)}
 
 			<div className="space-y-2">
 				<p className="text-sm font-medium text-gray-700">
-					יעדים — הערכים שהשם יוביל אליהם:
+					יעדים - הערכים שהשם יוביל אליהם:
 				</p>
 				<ul className="space-y-2">
 					{editor.targets.map((t) => (
@@ -593,7 +668,7 @@ function AliasEditor({
 									(/pedia/{t.uniqueName})
 								</span>
 								{t.entryId === entryId && (
-									<span className="text-xs text-blue-700"> — ערך זה</span>
+									<span className="text-xs text-blue-700"> - ערך זה</span>
 								)}
 							</span>
 							<input
@@ -602,7 +677,7 @@ function AliasEditor({
 								onChange={(e) => updateTargetLabel(t.entryId, e.target.value)}
 								placeholder={
 									editor.targets.length > 1
-										? "תווית מבדנת — חובה"
+										? "תווית מבדנת - חובה"
 										: "תווית מבדנת"
 								}
 								aria-label={`תווית מבדנת עבור ${t.title}`}
@@ -638,7 +713,7 @@ function AliasEditor({
 				{kind === "disambiguation" ? (
 					<>
 						<p className="text-gray-600">
-							«{parsedName || "…"}» יציג דף פירושונים — השם מוביל ליותר מערך
+							«{parsedName || "…"}» יציג דף פירושונים - השם מוביל ליותר מערך
 							אחד:
 						</p>
 						<ul className="pr-4 list-disc space-y-0.5">
@@ -652,13 +727,13 @@ function AliasEditor({
 					</>
 				) : editor.targets.length === 1 ? (
 					<p className="text-gray-600">
-						יעד יחיד — «{parsedName || "…"}» יפנה ישירות אל{" "}
+						יעד יחיד - «{parsedName || "…"}» יפנה ישירות אל{" "}
 						<span dir="ltr" className="font-mono">
 							/pedia/{editor.targets[0].uniqueName}
 						</span>
 					</p>
 				) : (
-					<p className="text-gray-500">אין יעדים — השם יימחק.</p>
+					<p className="text-gray-500">אין יעדים - השם יימחק.</p>
 				)}
 				{parsedName && (
 					<p className="text-gray-500" dir="ltr">
@@ -669,7 +744,7 @@ function AliasEditor({
 
 			{sharesWithOthers && (
 				<p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-					שם זה משותף עם ערכים נוספים — «שמור כתובת» ישנה את הדף הציבורי של השם
+					שם זה משותף עם ערכים נוספים - «שמור כתובת» ישנה את הדף הציבורי של השם
 					עבור כל היעדים, לא רק עבור ערך זה.
 				</p>
 			)}
@@ -688,6 +763,7 @@ function AliasEditor({
 									entryId: t.entryId,
 									label: t.label,
 								})),
+								editor.baselineTargets,
 							)
 						}
 						className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"

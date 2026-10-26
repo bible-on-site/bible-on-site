@@ -143,6 +143,22 @@ export function dedupeAliasTargets(
 	return [...byId.values()];
 }
 
+/**
+ * Order-insensitive multiset comparison of an alias name's target set — the
+ * baseline an editor opened with vs the set the server holds at save time.
+ * Labels compare after the same normalization saves apply (null → "", trim).
+ */
+export function sameAliasTargetSet(
+	a: { entryId: string; label?: string | null }[],
+	b: { entryId: string; label?: string | null }[],
+): boolean {
+	const key = (t: { entryId: string; label?: string | null }) =>
+		`${t.entryId} ${(t.label ?? "").trim()}`;
+	const ka = a.map(key).sort();
+	const kb = b.map(key).sort();
+	return ka.length === kb.length && ka.every((k, i) => k === kb[i]);
+}
+
 export type AliasKind = "alias" | "disambiguation";
 
 /** Public behavior of a name with the given number of targets. */

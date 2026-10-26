@@ -6,8 +6,10 @@ import {
 	dedupeAliasTargets,
 	normalizePediaName,
 	reservedCategoryLabelFor,
+	sameAliasTargetSet,
 	validateAliasSpec,
 } from "~/lib/tanahpedia/pedia-names";
+import { RevisionConflictError } from "~/lib/tanahpedia/revisions-shared";
 import {
 	query,
 	queryOne,
@@ -128,9 +130,14 @@ function validationError(message: string): Error {
 }
 
 /**
- * Locks the name's existing rows for update so concurrent writers serialize;
- * for a brand-new name there is nothing to lock (dedupe reads still merge
- * whatever two racing inserts could produce).
+ * Locks the name's existing rows for update so concurrent writers serialize.
+ * `name` has no index, so under MySQL's default REPEATABLE READ the locking
+ * scan next-key-locks the whole table — first writes of the same name
+ * serialize too, and the expectedTargets check that follows sees the
+ * just-committed winner's rows (locking reads bypass the snapshot). Under
+ * READ COMMITTED only existing rows lock; a racing first save then merges
+ * rows, which the target-dedupe reads still resolve consistently, and the
+ * stale-baseline check catches what the lock could not.
  */
 async function lockAliasName(
 	conn: mysql.PoolConnection,
@@ -255,12 +262,18 @@ export const checkPediaName = createServerFn({ method: "GET" })
  * Replaces the whole target set of a name atomically — one target makes it a
  * plain alias, several make it a disambiguation page (labels required).
  * Adding or removing a single target is enough to flip the public behavior.
+ *
+ * `expectedTargets` is the snapshot the editor opened with (an empty array for
+ * a name that was free then): because the save replaces the complete shared
+ * set, a name that drifted under it is rejected as a conflict instead of
+ * silently overwriting another admin's edit.
  */
 export const saveEntryAlias = createServerFn({ method: "POST" })
 	.validator(
 		(data: {
 			name: string;
 			targets: { entryId: string; label?: string | null }[];
+			expectedTargets: { entryId: string; label?: string | null }[];
 		}) => data,
 	)
 	.handler(async ({ data }) => {
@@ -276,7 +289,7 @@ export const saveEntryAlias = createServerFn({ method: "POST" })
 		const reserved = reservedCategoryLabelFor(name);
 		if (reserved) {
 			throw validationError(
-				`השם «${name}» שמור לנתיב הקטגוריה «${reserved}» — בחר שם אחר`,
+				`השם «${name}» שמור לנתיב הקטגוריה «${reserved}» - בחר שם אחר`,
 			);
 		}
 
@@ -289,7 +302,16 @@ export const saveEntryAlias = createServerFn({ method: "POST" })
 			);
 			if (holder) {
 				throw validationError(
-					`השם «${name}» הוא הכתובת הראשית של הערך «${holder.title}» — שנה תחילה את הכתובת הראשית של אותו ערך`,
+					`השם «${name}» הוא הכתובת הראשית של הערך «${holder.title}» - שנה תחילה את הכתובת הראשית של אותו ערך`,
+				);
+			}
+			// Compare while holding the name lock: any concurrent writer who
+			// slipped in first is visible here (locking reads see the latest
+			// committed rows), so a stale editor never replaces what it never saw.
+			const current = await loadAliasTargetsTx(conn, name);
+			if (!sameAliasTargetSet(current, data.expectedTargets ?? [])) {
+				throw new RevisionConflictError(
+					`the name "${name}" was changed by another admin since this edit opened - close the editor and reopen it to see the current state`,
 				);
 			}
 			const idRows = await txQuery<{ id: string }>(
@@ -298,7 +320,7 @@ export const saveEntryAlias = createServerFn({ method: "POST" })
 				targets.map((t) => t.entryId),
 			);
 			if (idRows.length !== targets.length) {
-				throw validationError("אחד היעדים אינו ערך קיים — רענן ונסה שוב");
+				throw validationError("אחד היעדים אינו ערך קיים - רענן ונסה שוב");
 			}
 
 			// Replace-in-transaction: old rows (and their label rows, via FK
