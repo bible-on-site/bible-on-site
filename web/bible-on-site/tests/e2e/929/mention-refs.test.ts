@@ -3,7 +3,8 @@ import { expect, test } from "../../util/playwright/test-fixture";
 /**
  * E2E tests for the mention-decoration pipeline (issue #2516).
  *
- * Test data (tanah_test_data.sql):
+ * Test data (tanah_mention_test_data.sql — runs after the Tanahpedia seed
+ * chain because it inserts tanahpedia_entry rows):
  * - perek 1 pasuk 1: a pasuk decoration for אלהים, which has a live entry.
  * - article 1 of perek 1: an article decoration for ישראל (has an entry) and
  *   one for יצחק (entity exists but no entry -> must stay plain text).

@@ -99,6 +99,12 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_family_edge_lab_data.sql")]
     tanahpedia_edge_lab_script: String,
 
+    /// Path to mention-decoration e2e fixture SQL file. Must run after the
+    /// Tanahpedia seed chain — it inserts tanahpedia_entry rows, which would
+    /// satisfy the legacy-migration "empty table" gate if loaded earlier.
+    #[arg(long, default_value = "../tanah_mention_test_data.sql")]
+    tanah_mention_test_data_script: String,
+
     /// Skip structure script execution
     #[arg(long, default_value = "false")]
     skip_structure: bool,
@@ -322,6 +328,15 @@ async fn main() -> Result<()> {
         }
 
         apply_tanahpedia_full_seed(&mut conn, &tanahpedia_scripts).await?;
+
+        if !cli.skip_tanah_test_data {
+            // E2e mention fixtures insert tanahpedia_entry rows; loading them
+            // any earlier would satisfy the legacy migration's empty-table
+            // gate and silently skip the seeded entries.
+            let mention_test_data_path = base_path.join(&cli.tanah_mention_test_data_script);
+            execute_optional_script(&mut conn, &mention_test_data_path, "mention-test-data")
+                .await?;
+        }
     }
 
     conn.close().await.context("Failed to close connection")?;

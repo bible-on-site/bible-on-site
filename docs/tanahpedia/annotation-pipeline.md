@@ -193,8 +193,8 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   (standalone `/929/[perek]/[slug]` and the in-book `ArticleFullView`),
   integrity-checking `surface` against the stored bytes and refusing
   spans inside existing anchors. Covered by unit tests plus e2e
-  fixtures (`tanah_test_data.sql`) proving resolved→link and
-  unresolved→plain.
+  fixtures (`tanah_mention_test_data.sql`, loaded after the Tanahpedia
+  seed chain) proving resolved→link and unresolved→plain.
 
 Remaining sequence: golden-set harness → encoder classifier
 comparison (BEREL license check first) → production import of the
