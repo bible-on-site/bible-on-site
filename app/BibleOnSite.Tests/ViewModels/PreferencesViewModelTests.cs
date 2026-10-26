@@ -117,7 +117,7 @@ public class PreferencesViewModelTests : IDisposable
         // Arrange
         var display = new DisplayPreferencesViewModel(_service);
 
-        // Act — the service (e.g. another surface or the slider) moves the factor.
+        // Act - the service (e.g. another surface or the slider) moves the factor.
         _service.FontFactor = 0.8;
 
         // Assert

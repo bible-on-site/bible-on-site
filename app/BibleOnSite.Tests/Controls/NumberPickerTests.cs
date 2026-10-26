@@ -27,6 +27,43 @@ public class NumberPickerTests
     }
 
     [Fact]
+    public void BoundValue_KeepsOffGridPrecision()
+    {
+        var picker = new NumberPicker { Minimum = 50, Maximum = 200, Increment = 5 };
+        // A TwoWay binding push bypasses the CLR setter, so this path stands
+        // in for a slider writing the same underlying setting (#2692 review):
+        // the picker presents the precise value instead of snapping it onto
+        // the increment grid and writing the snapped value back.
+        picker.SetValue(NumberPicker.ValueProperty, 123);
+        picker.Value.Should().Be(123);
+        picker.ValueEntry.Text.Should().Be("123");
+
+        picker.SetValue(NumberPicker.ValueProperty, 123.4);
+        picker.Value.Should().Be(123.4);
+        picker.ValueEntry.Text.Should().Be("123");
+    }
+
+    [Fact]
+    public void Step_FromOffGridValue_LandsOnNextGridPoint()
+    {
+        var picker = new NumberPicker { Minimum = 50, Maximum = 200, Increment = 5 };
+        picker.SetValue(NumberPicker.ValueProperty, 123);
+
+        picker.IncrementButton.SendClicked();
+        picker.Value.Should().Be(125);
+        picker.DecrementButton.SendClicked();
+        picker.Value.Should().Be(120);
+    }
+
+    [Fact]
+    public void BoundValue_StillClampsOutOfRange()
+    {
+        var picker = new NumberPicker { Minimum = 1, Maximum = 100 };
+        picker.SetValue(NumberPicker.ValueProperty, 250);
+        picker.Value.Should().Be(100);
+    }
+
+    [Fact]
     public void StepButtons_AdjustWithinBounds()
     {
         var picker = new NumberPicker { Minimum = 1, Maximum = 3 };
