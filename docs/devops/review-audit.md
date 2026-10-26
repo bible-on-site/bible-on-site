@@ -96,7 +96,30 @@ diagnose-then-`throw` catches need no annotation.
 
 - `.editorconfig` — second-wave severities: `S2221`, `S2933`, `S2930`, `S1215`,
   `S3267`, `S2583`, `S1764`, `S2696`, `IDE0045`, `IDE0063`.
-- `.pre-commit-config.yaml` — `dotnet-analyzers` hook + widened `ruff-check`
-  select (`F,D2,BLE001,E722,S110,RET502`).
+- `.pre-commit-config.yaml` — `dotnet-analyzers` + `catch-boundary` hooks +
+  widened `ruff-check` select (`F,D2,BLE001,E722,S110,RET502`).
 - `devops/precommit-dotnet.mjs` — per-project `dotnet build` bucket hook.
-- `devops/review-audit/` — collector, catch scanner, annotation tool.
+- `devops/review-audit/` — collector (`collect-review-findings.mjs`) and the
+  generic-catch justification gate (`scan-catch.cjs`, wired as the
+  `catch-boundary` pre-commit hook). The one-off justification/dump tools
+  were retired by #2599 in favor of [catch-ledger.md](catch-ledger.md).
+
+## Second wave: the async-void hole
+
+Post-merge evidence showed S2221 alone is not enough: SonarAnalyzer.CSharp
+deliberately does not fire inside `async void` methods (a broad catch is the
+only safe perimeter there), on catch-rethrow sites, or in test code. New
+async-void handlers added in #2596 carried only a prose comment, compiled
+cleanly, and were flagged post-push by github-code-quality — the same class
+that reopened this issue, seen again on #2644. `scan-catch.cjs` is the
+deterministic complement, wired as the `catch-boundary` hook on every staged
+`app/**/*.cs` (test assemblies excluded — the audited no-annotation surface):
+an unfiltered `catch (Exception)`/`catch` without `//NOSONAR — <reason>` on
+the catch line or the contiguous comment/`#pragma` run above it fails the
+commit. It needs no restore or SDK, so it also covers the environments the
+`dotnet-analyzers` build gate skips; the devops CI step additionally runs it
+in audit mode on the whole tree so hook-less commits cannot bypass the
+gate. First-run sites it caught and this change annotated:
+`TanahpediaEntryPage.OnEntryLinkTapped`,
+`TanahpediaEntityTypePage.OnIntroLinkTapped` (async-void link handlers) and
+`SearchViewModel`'s bare catch-rethrow.

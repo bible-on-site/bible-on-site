@@ -27,6 +27,11 @@ beforeEach(() => {
 	localStorage.clear();
 	document.documentElement.removeAttribute("style");
 });
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; the subscriber only reads `event.key`, so a plain Event
+// carrying the property is enough.
+const storageEvent = (key: string | null) =>
+	Object.assign(new Event("storage"), { key });
 test("one settings button opens display controls and preserves existing preferences", () => {
 	localStorage.setItem(
 		READER_SETTINGS_STORAGE_KEY,
@@ -183,13 +188,11 @@ test("Escape closes the modal and cross-tab preferences update its controls", ()
 			JSON.stringify({ fontStep: 0, lineStep: 2, wordStep: 1 }),
 		);
 		// Unrelated keys must not refresh the panel; the owned key does.
-		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		window.dispatchEvent(storageEvent("otherPref"));
 		// A null key (e.g. localStorage.clear() in another tab) is ignored too.
-		window.dispatchEvent(new StorageEvent("storage"));
+		window.dispatchEvent(storageEvent(null));
 		expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("2");
-		window.dispatchEvent(
-			new StorageEvent("storage", { key: READER_SETTINGS_STORAGE_KEY }),
-		);
+		window.dispatchEvent(storageEvent(READER_SETTINGS_STORAGE_KEY));
 	});
 	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("0");
 	fireEvent(

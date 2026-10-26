@@ -46,8 +46,9 @@
     <Compile Include="..\BibleOnSite\ViewModels\PerekPreferencesViewModel.cs" Link="ViewModels\PerekPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SoundPreferencesViewModel.cs" Link="ViewModels\SoundPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SupportPreferencesViewModel.cs" Link="ViewModels\SupportPreferencesViewModel.cs" />
-    <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
-    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs" Link="Controls\%(Filename)%(Extension)" />
+    <!-- Exclude XAML code-behind files as they require MAUI XAML compilation,
+         and DeferredMediaElement which needs the MediaElement package. -->
+    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs;..\BibleOnSite\Controls\DeferredMediaElement.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Resources\Fonts\FluentUI.cs" Link="Resources\FluentUI.cs" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
@@ -70,6 +71,7 @@
     <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PlaybackAudioOwnership.cs" Link="Services\PlaybackAudioOwnership.cs" />
     <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />

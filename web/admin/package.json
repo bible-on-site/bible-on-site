@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.140",
+	"version": "0.1.143",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -15,6 +15,7 @@
 		"test": "dotenv -e .test.env -- bun run test:all",
 		"test:all": "bun run test:unit && bun run test:e2e",
 		"test:unit": "vitest run",
+		"test:unit:related": "vitest related --run",
 		"test:e2e": "dotenv -e .test.env -- playwright test",
 		"test:s3": "node scripts/check-local-s3.mjs",
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
