@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -140,7 +141,7 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
                 }
             }
 
-            IntroContent = homepage?.Content;
+            IntroContent = TanahpediaFootnotes.Normalize(homepage?.Content);
             LayoutType = homepage?.LayoutType ?? "LIST";
             Entities = new ObservableCollection<TanahpediaEntityItem>(
                 entities.Select(TanahpediaEntityItem.ForListing));

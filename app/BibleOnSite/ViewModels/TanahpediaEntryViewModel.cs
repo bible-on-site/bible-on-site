@@ -237,7 +237,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
 
         Title = detail.Title;
-        Content = detail.Content;
+        Content = TanahpediaFootnotes.Normalize(detail.Content);
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         IsLoaded = true;
         OnPropertyChanged(nameof(HasContent));
