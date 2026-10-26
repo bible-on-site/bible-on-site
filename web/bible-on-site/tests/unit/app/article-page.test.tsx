@@ -25,6 +25,12 @@ jest.mock("../../../src/lib/tanahpedia/perek-entity-refs", () => ({
 	fetchAllEntityRefs: jest.fn(async () => ({})),
 }));
 
+// Decoration wiring is covered by article-mention-refs.test.ts; here the
+// page only needs the stored content to pass through.
+jest.mock("../../../src/lib/tanahpedia/article-mention-refs", () => ({
+	decorateArticleContent: jest.fn(async (article: unknown) => article),
+}));
+
 jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
