@@ -20,6 +20,9 @@
 		"prebuild": "node scripts/generate-client-catalog.mjs && node --test scripts/verify-public-content.test.mjs",
 		"build": "next build",
 		"postinstall": "node scripts/generate-client-catalog.mjs && node scripts/copy-local-flip-book.mjs",
+		"generate:calendar-pdf": "node --import tsx scripts/generate-calendar-pdfs.mts",
+		"check:calendar-pdf": "node --import tsx scripts/generate-calendar-pdfs.mts --check",
+		"publish:calendar-pdf": "node --import tsx scripts/publish-calendar-pdfs.mts",
 		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && bun install",
 		"flip-book:npm": "node scripts/toggle-flip-book-dep.mjs npm && bun install",
 		"flip-book:check": "node scripts/toggle-flip-book-dep.mjs check",
@@ -71,6 +74,7 @@
 		"temporal-polyfill": "1.0.6"
 	},
 	"devDependencies": {
+		"@aws-sdk/client-s3": "3.1156.0",
 		"@biomejs/biome": "2.6.3",
 		"@playwright/test": "1.64.1",
 		"@swc/core": "1.16.20",

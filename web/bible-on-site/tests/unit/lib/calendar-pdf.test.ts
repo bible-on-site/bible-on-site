@@ -324,3 +324,25 @@ describe("calendar PDF text stays searchable", () => {
 		expect([...title!.text].sort()).toEqual([..."ימוי דומיל חול"].sort());
 	});
 });
+
+describe("deterministic output (#2608)", () => {
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it("produces byte-identical PDFs regardless of wall-clock time", async () => {
+		// The artifact pipeline content-addresses objects by sha256 — the
+		// render must not embed CreationDate/ModDate or any other timestamp.
+		const input: CalendarPdfInput = {
+			title: "לוח לימוד יומי",
+			subtitle: "מחזור 4",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
+			dayLabel: () => "א",
+		};
+		jest.useFakeTimers().setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		const first = await generateCalendarPdf(input);
+		jest.setSystemTime(new Date("2031-06-15T12:34:56Z"));
+		const second = await generateCalendarPdf(input);
+		expect(Buffer.from(first).equals(Buffer.from(second))).toBe(true);
+	});
+});

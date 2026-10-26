@@ -2,14 +2,55 @@
  * @jest-environment node
  */
 import { GET } from "@/app/api/calendar-pdf/route";
+import {
+	getCalendarArtifactBounds,
+	listCalendarArtifactKeys,
+} from "@/lib/download/calendar-artifacts";
+import { resetCalendarPdfManifestCache } from "@/lib/download/calendar-pdf-manifest";
+import { calendarPdfObjectKey } from "@/lib/download/calendar-pdf-plan";
+
+const SHA256_A = "a".repeat(64);
+const SHA256_B = "b".repeat(64);
+
+function manifestFor(
+	artifacts: Record<
+		string,
+		{ sha256?: string; bytes?: number; filename?: string }
+	>,
+) {
+	return {
+		version: 1,
+		fingerprint: "fp-test",
+		generatedAt: "2026-01-01T00:00:00.000Z",
+		bounds: getCalendarArtifactBounds(),
+		artifacts: Object.fromEntries(
+			Object.entries(artifacts).map(([key, a]) => [
+				key,
+				{
+					object: calendarPdfObjectKey(a.sha256 ?? SHA256_A),
+					sha256: a.sha256 ?? SHA256_A,
+					bytes: a.bytes ?? 1000,
+					filename: a.filename ?? "learning-calendar.pdf",
+				},
+			]),
+		),
+	};
+}
+
+function mockManifestFetch(manifest: unknown) {
+	return jest.spyOn(globalThis, "fetch").mockImplementation(async () => {
+		return new Response(JSON.stringify(manifest), { status: 200 });
+	});
+}
 
 function requestFor(path: string) {
 	return GET(new Request(`http://localhost/api/calendar-pdf${path}`));
 }
 
-async function pdfBytes(res: Response): Promise<Buffer> {
-	return Buffer.from(await res.arrayBuffer());
-}
+beforeEach(() => {
+	resetCalendarPdfManifestCache();
+	jest.restoreAllMocks();
+});
 
 describe("GET /api/calendar-pdf", () => {
 	it("rejects a missing or invalid month param", async () => {
@@ -18,55 +59,100 @@ describe("GET /api/calendar-pdf", () => {
 		expect((await requestFor("?month=5785")).status).toBe(400);
 	});
 
-	it("returns a PDF for a single month", async () => {
+	it("redirects a month request to the published artifact", async () => {
+		mockManifestFetch(manifestFor({ "month:578512": {} }));
 		const res = await requestFor("?month=578512");
-		expect(res.status).toBe(200);
-		expect(res.headers.get("Content-Type")).toBe("application/pdf");
-		expect(res.headers.get("Content-Disposition")).toContain(
-			'filename="learning-calendar-578512.pdf"',
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Location")).toContain(
+			`/generated/calendar-pdf/objects/${SHA256_A}.pdf`,
 		);
-		const buf = await pdfBytes(res);
-		expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
-		expect(buf.length).toBeGreaterThan(10_000);
 	});
 
-	// ~12 months of cells with real font shaping — same "legitimately
-	// multi-second" class as the cycle test below (~2s warm, ~6s cold on a
-	// loaded dev box; the previous implementation was ~8s).
-	it(
-		"renders a full year across all months",
-		async () => {
-			const res = await requestFor("?month=578501&view=year");
-			expect(res.status).toBe(200);
-			const buf = await pdfBytes(res);
-			expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
-			expect(res.headers.get("Content-Disposition")).toContain(
-				'filename="learning-calendar-year-5785.pdf"',
-			);
-		},
-		30_000,
-	);
-
-	// ~45 months of cells; generation is legitimately multi-second.
-	it(
-		"renders a full cycle with dimmed out-of-cycle days",
-		async () => {
-			const res = await requestFor("?month=578512&view=cycle&cycle=4");
-			expect(res.status).toBe(200);
-			const buf = await pdfBytes(res);
-			expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
-			expect(res.headers.get("Content-Disposition")).toContain(
-				'filename="learning-calendar-cycle-4.pdf"',
-			);
-		},
-		30_000,
-	);
-
-	it("falls back to the month view for an invalid cycle param", async () => {
-		const res = await requestFor("?month=578512&view=cycle&cycle=abc");
-		expect(res.status).toBe(200);
-		expect(res.headers.get("Content-Disposition")).toContain(
-			'filename="learning-calendar-578512.pdf"',
+	it("canonicalizes cycle requests — the unused month param selects the same artifact", async () => {
+		mockManifestFetch(manifestFor({ "cycle:4": { sha256: SHA256_B } }));
+		const withMonth = await requestFor("?month=578702&view=cycle&cycle=4");
+		const bare = await requestFor("?view=cycle&cycle=4");
+		expect(withMonth.status).toBe(302);
+		expect(bare.status).toBe(302);
+		expect(withMonth.headers.get("Location")).toBe(
+			bare.headers.get("Location"),
 		);
+		expect(bare.headers.get("Location")).toContain(`${SHA256_B}.pdf`);
+	});
+
+	it("redirects a year request to the published artifact", async () => {
+		mockManifestFetch(manifestFor({ "year:5785": {} }));
+		const res = await requestFor("?month=578501&view=year");
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Location")).toContain(`${SHA256_A}.pdf`);
+	});
+
+	it("falls back to the month artifact for an invalid cycle param", async () => {
+		mockManifestFetch(manifestFor({ "month:578512": {} }));
+		const res = await requestFor("?month=578512&view=cycle&cycle=abc");
+		expect(res.status).toBe(302);
+		expect(res.headers.get("Location")).toContain(`${SHA256_A}.pdf`);
+	});
+
+	it("404s for valid requests outside the generated bounds", async () => {
+		mockManifestFetch(manifestFor({}));
+		expect((await requestFor("?month=999912")).status).toBe(404);
+		expect(
+			(await requestFor("?month=578512&view=cycle&cycle=999")).status,
+		).toBe(404);
+		expect((await requestFor("?month=000101")).status).toBe(404);
+	});
+
+	it("503s with Retry-After for in-bounds keys missing from the manifest", async () => {
+		mockManifestFetch(manifestFor({}));
+		const res = await requestFor("?month=578512");
+		expect(res.status).toBe(503);
+		expect(res.headers.get("Retry-After")).toBe("30");
+		expect((await requestFor("?month=578512&view=cycle&cycle=4")).status).toBe(
+			503,
+		);
+	});
+
+	it("serves out-of-bounds keys that the manifest lists anyway", async () => {
+		// Out-of-band artifacts published via --include are in the manifest but
+		// outside the default bounds — they must still resolve.
+		mockManifestFetch(manifestFor({ "cycle:99": {}, "month:999912": {} }));
+		expect((await requestFor("?view=cycle&cycle=99&month=578512")).status).toBe(
+			302,
+		);
+		expect((await requestFor("?month=999912")).status).toBe(302);
+	});
+
+	it("503s when the manifest cannot be fetched", async () => {
+		jest.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
+		const res = await requestFor("?month=578512");
+		expect(res.status).toBe(503);
+	});
+
+	it("503s when the manifest is malformed", async () => {
+		jest
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(
+				async () => new Response("not json", { status: 200 }),
+			);
+		expect((await requestFor("?month=578512")).status).toBe(503);
+	});
+
+	it("503s when the manifest endpoint errors", async () => {
+		jest
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () => new Response("", { status: 500 }));
+		expect((await requestFor("?month=578512")).status).toBe(503);
+	});
+
+	it("covers the whole generated set in the manifest contract", () => {
+		// Guard: the bounded set stays bounded and keys keep their format —
+		// the route can only answer for keys the pipeline publishes.
+		const keys = listCalendarArtifactKeys();
+		expect(keys.length).toBeGreaterThan(500);
+		expect(keys.length).toBeLessThan(1000);
+		for (const key of keys) {
+			expect(key).toMatch(/^(month:\d{6}|year:\d{1,4}|cycle:\d+)$/);
+		}
 	});
 });

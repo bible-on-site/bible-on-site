@@ -63,6 +63,18 @@ describe("detectChanges", () => {
 		});
 	});
 
+	test("calendar-PDF publish workflow changes require website checks without a release", () => {
+		// The publisher defines the generation/publish contract verified by the
+		// calendar_pdf_artifacts job (#2608) — CI-only, never a website release.
+		const changes = detectChanges([
+			".github/workflows/calendar-pdf-publish.yml",
+		]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
 	test("nginx redirects select the deploy verifier guard without a website release", () => {
 		const changes = detectChanges([
 			"docs/aws/cloudformation/ec2-nginx/router/router.conf",

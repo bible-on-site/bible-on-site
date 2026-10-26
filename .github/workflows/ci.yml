@@ -454,6 +454,72 @@ jobs:
         id: determine
         run: node devops/github/ci/determine-changes.ts
 
+  # Fixed ~30-second verification of the pre-generated calendar-PDF artifact
+  # cache (#2608). Full (re)generation and S3 publication live in
+  # calendar-pdf-publish.yml — a cold or broadly invalidated render must never
+  # inflate this pipeline.
+  calendar_pdf_artifacts:
+    name: Calendar PDF Artifacts
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true')
+      }}
+    defaults:
+      run:
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      # The generated catalog is a fingerprinted input — regenerate before
+      # hashing so the fingerprint always reflects current data.
+      - name: Generate client catalog
+        run: node scripts/generate-client-catalog.mjs
+
+      - name: Compute calendar-PDF input fingerprint
+        id: fp
+        run: echo "fingerprint=$(node scripts/calendar-pdf-inputs.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore calendar-PDF artifact cache
+        id: artifacts-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.cache/calendar-pdf
+          # Content-addressed key: a relevant-input change opens a new cache
+          # lineage while the previous lineage is still restored for partial
+          # regeneration (per-artifact input shas decide what re-renders).
+          key: ${{ runner.os }}-calendar-pdf-${{ steps.fp.outputs.fingerprint }}
+          restore-keys: ${{ runner.os }}-calendar-pdf-
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
+          cache: bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # On an unchanged fingerprint this is an O(keys) manifest check plus a
+      # small re-rendered byte-compare sample; on drift it measures the
+      # partial-invalidation rate on a bounded sample. Never a full render.
+      # The cache is write-owned by calendar-pdf-publish.yml (serialized by
+      # its concurrency group) — this job only restores + verifies, so two
+      # overlapping CI runs can never race on a cache save.
+      - name: Verify calendar-PDF artifacts
+        run: bun run check:calendar-pdf
+
   package_website:
     name: Package Website
     needs: [setup_env, determine_changes]
@@ -2979,6 +3045,7 @@ jobs:
         build_lcov_docker,
         determine_baseline_availability,
         determine_docker_image_availability,
+        calendar_pdf_artifacts,
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
@@ -3031,6 +3098,15 @@ jobs:
             PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          # The artifacts job is only triggered by website module/CI changes —
+          # the same condition that gates it — so check it only then (#2608).
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ]; then
+            if [ "${{ needs.calendar_pdf_artifacts.result }}" != "success" ]; then
+              echo "Calendar PDF artifact verification did not pass."
               exit 1
             fi
           fi
