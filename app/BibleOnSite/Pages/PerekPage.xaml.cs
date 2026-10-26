@@ -1360,7 +1360,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>
     private void OnTikkunLoaded(object? sender, EventArgs e)
     {
-        if (sender is ScrollView scrollView)
+        if (sender is Microsoft.Maui.Controls.ScrollView scrollView)
         {
             ReaderScrollTop.NoteScrollOffset(sender, scrollView.ScrollY);
         }
