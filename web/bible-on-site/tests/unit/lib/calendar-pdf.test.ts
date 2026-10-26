@@ -14,15 +14,23 @@
  * reverses RTL glyph runs during layout, so the stream held logical order —
  * every label painted backwards.
  */
-import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
+
 import bidiFactory from "bidi-js";
 import {
+	decodePDFRawStream,
+	PDFArray,
+	PDFDict,
+	PDFDocument,
+	PDFName,
+	PDFRawStream,
+} from "pdf-lib";
+import {
 	buildMonth,
+	type CalendarDay,
 	getCycle,
 	getCycleLabel,
 	getMonthLabel,
 	getPerekSource,
-	type CalendarDay,
 	type MonthCell,
 } from "@/data/learning-schedule";
 import {
@@ -66,7 +74,9 @@ function parseToUnicodeCMap(cmap: string): Map<number, string> {
 			map.set(parseInt(m[1], 16), dstString(m[2]));
 		}
 	}
-	for (const block of cmap.matchAll(/beginbfrange\s*([\s\S]*?)\s*endbfrange/g)) {
+	for (const block of cmap.matchAll(
+		/beginbfrange\s*([\s\S]*?)\s*endbfrange/g,
+	)) {
 		for (const m of block[1].matchAll(
 			/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g,
 		)) {
@@ -141,7 +151,9 @@ async function extractTextOps(pdf: Uint8Array): Promise<TextOp[][]> {
 				x = Number(m[4]);
 				y = Number(m[5]);
 			} else {
-				const hexes = m[6] ? [m[6]] : [...(m[7] ?? "").matchAll(/<([0-9A-Fa-f]+)>/g)].map((h) => h[1]);
+				const hexes = m[6]
+					? [m[6]]
+					: [...(m[7] ?? "").matchAll(/<([0-9A-Fa-f]+)>/g)].map((h) => h[1]);
 				const cmap = cmaps.get(fontName) ?? new Map<number, string>();
 				const codes: number[] = [];
 				let text = "";
@@ -167,7 +179,10 @@ function opsAtY(ops: TextOp[], y: number): TextOp[] {
 
 /** UAX #9 visual-order oracle for a logical string. */
 function visualOrder(logical: string): string {
-	return bidi.getReorderedString(logical, bidi.getEmbeddingLevels(logical, "auto"));
+	return bidi.getReorderedString(
+		logical,
+		bidi.getEmbeddingLevels(logical, "auto"),
+	);
 }
 
 /* ───────────────────────────── fixtures ───────────────────────────── */
@@ -189,7 +204,9 @@ const REVIEW = scheduleDay({
 });
 const UNNUMBERED = scheduleDay({ day: 14, status: "none", perekId: undefined });
 
-async function generateAndExtract(input: CalendarPdfInput): Promise<TextOp[][]> {
+async function generateAndExtract(
+	input: CalendarPdfInput,
+): Promise<TextOp[][]> {
 	return extractTextOps(await generateCalendarPdf(input));
 }
 
@@ -276,7 +293,9 @@ describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
 		const digitOp = pages[0].find((o) => o.text === "4");
 		expect(digitOp).toBeDefined();
 		// biome-ignore lint/style/noNonNullAssertion: asserted defined above
-		const line = opsAtY(pages[0], digitOp!.y).map((o) => o.text).join("");
+		const line = opsAtY(pages[0], digitOp!.y)
+			.map((o) => o.text)
+			.join("");
 		expect(line).toBe(visualOrder(subtitle));
 	});
 
@@ -302,6 +321,95 @@ function getCycleStartMonthLabel(): CalendarPdfMonth {
 	};
 	return { title: getMonthLabel(ref), cells: buildMonth(ref.year, ref.month) };
 }
+
+describe("merged Friday-Shabbat review block (issue #2365)", () => {
+	const PAIR_IDS = [1, 2, 3, 4, 5, 6, 7];
+	const pair: CalendarDay[] = [
+		scheduleDay({
+			day: 12,
+			status: "review",
+			perekId: 7,
+			reviewPerekIds: PAIR_IDS,
+			dayOfWeek: 5,
+			cycle: 4,
+		}),
+		scheduleDay({
+			day: 13,
+			status: "review",
+			perekId: 7,
+			reviewPerekIds: PAIR_IDS,
+			dayOfWeek: 6,
+			cycle: 4,
+		}),
+	];
+
+	it("draws one block with both day numbers instead of two cells", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays(pair) }],
+			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		// י"ב - י"ג in visual order.
+		expect(texts).toContain(visualOrder('י"ב - י"ג'));
+		// Saturday draws no second number of its own.
+		expect(
+			pages[0].filter((o) => o.text.includes('ב"י') || o.text.includes('ג"י')),
+		).toHaveLength(1);
+		// The review label still lands inside the merged cell.
+		expect(texts).toContain(visualOrder(getPerekSource(7)));
+	});
+
+	it("dims the block only when both days dim", async () => {
+		const input = (
+			dimmed: (day: CalendarDay) => boolean,
+		): CalendarPdfInput => ({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays(pair) }],
+			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			dimmed,
+		});
+		const source = visualOrder(getPerekSource(7));
+
+		// Friday alone dimmed: the shared block stays an active review cell.
+		const partial = await generateAndExtract(input((d) => d.day === 12));
+		expect(partial[0].map((o) => o.text).join("")).toContain(source);
+
+		// Both dimmed: the label is suppressed with the rest of the cell.
+		const full = await generateAndExtract(input(() => true));
+		expect(full[0].map((o) => o.text).join("")).not.toContain(source);
+	});
+
+	it("keeps adjacent review days unmerged when their sets differ", async () => {
+		const mismatched: CalendarDay[] = [
+			scheduleDay({
+				day: 12,
+				status: "review",
+				perekId: 7,
+				reviewPerekIds: PAIR_IDS,
+				dayOfWeek: 5,
+				cycle: 4,
+			}),
+			scheduleDay({
+				day: 13,
+				status: "review",
+				perekId: 8,
+				reviewPerekIds: [...PAIR_IDS, 8],
+				dayOfWeek: 6,
+				cycle: 4,
+			}),
+		];
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays(mismatched) }],
+			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		expect(texts).toContain(visualOrder('י"ב'));
+		expect(texts).toContain(visualOrder('י"ג'));
+		expect(texts).not.toContain(visualOrder('י"ב - י"ג'));
+	});
+});
 
 describe("calendar PDF text stays searchable", () => {
 	it("maps every drawn glyph to Unicode via ToUnicode CMaps", async () => {
