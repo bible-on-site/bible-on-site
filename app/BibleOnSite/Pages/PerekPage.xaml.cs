@@ -907,8 +907,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         // If in selection mode, tap toggles selection
-        if (e.Parameter is int pasukNum &&
-            _viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
+        if (e.Parameter is int pasukNum
+            && _viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
         {
             await HandlePasukTapAsync(pasuk);
         }

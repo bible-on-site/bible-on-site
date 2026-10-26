@@ -420,6 +420,22 @@ public static class HebrewDateHelper
     }
 
     /// <summary>
+    /// Spoken Hebrew weekday name ("יום ראשון" ... "יום שישי", "שבת") for a
+    /// day-of-week index (0=Sunday ... 6=Saturday).
+    /// </summary>
+    public static string GetHebrewWeekdayName(int dayOfWeek) => dayOfWeek switch
+    {
+        0 => "יום ראשון",
+        1 => "יום שני",
+        2 => "יום שלישי",
+        3 => "יום רביעי",
+        4 => "יום חמישי",
+        5 => "יום שישי",
+        6 => "שבת",
+        _ => string.Empty
+    };
+
+    /// <summary>
     /// Adds days to a numeric Hebrew date using real calendar arithmetic.
     /// </summary>
     public static int AddDays(int dateNum, int days)

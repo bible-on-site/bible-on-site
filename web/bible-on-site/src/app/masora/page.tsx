@@ -7,6 +7,7 @@ import {
 	MASORA_DIVISION,
 } from "@/data/masora/masora-units";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
 
 const HELEK_ORDER = ["תורה", "נביאים", "כתובים"];
@@ -15,18 +16,11 @@ export async function generateMetadata(): Promise<Metadata> {
 	const title = `${MASORA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description =
 		'קריאת התנ"ך לפי חלוקת המסורה — פרשיות פתוחות וסתומות בכל התנ"ך, עם פירושים ומאמרים.';
-	return {
+	return pageMetadata({
 		title,
 		description,
-		alternates: { canonical: MASORA_DIVISION.rootPath },
-		openGraph: {
-			title,
-			description,
-			url: MASORA_DIVISION.rootPath,
-			siteName: SITE_NAME,
-			locale: "he_IL",
-		},
-	};
+		canonical: MASORA_DIVISION.rootPath,
+	});
 }
 
 /**
@@ -56,9 +50,7 @@ export default function MasoraLanding() {
 							.filter((sefer) => sefer.helek === helek)
 							.map((sefer) => {
 								const first = firstUnitBySefer.get(sefer.name);
-								const unitCount = getMasoraUnitsForSefer(
-									sefer.name,
-								).length;
+								const unitCount = getMasoraUnitsForSefer(sefer.name).length;
 								return (
 									<li key={sefer.name} className={styles.seferItem}>
 										{first ? (

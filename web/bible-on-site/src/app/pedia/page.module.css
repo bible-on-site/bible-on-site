@@ -17,6 +17,15 @@
   text-align: center;
 }
 
+/* Shared reading-metrics badge (#2607). */
+.readingTime {
+  display: block;
+  color: var(--muted-text, #666);
+  font-size: 0.85rem;
+  text-align: center;
+  margin: -4px 0 12px;
+}
+
 .pageSubtitle {
   font-size: 1rem;
   color: #6b7280;
