@@ -3,6 +3,11 @@
 skip_core_tasks = true
 default_to_workspace = false
 
+[env]
+# bun is a shell shim (no .exe) on Windows — CreateProcess cannot spawn it,
+# so run it through Git Bash rather than directly.
+BASH_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "bash", mapping = { "windows" = "C:\\Program Files\\Git\\bin\\bash.exe" } }
+
 [tasks.lint]
 command = "cargo"
 args = ["clippy", "--", "-D", "warnings"]
@@ -46,5 +51,5 @@ command = "echo"
 args = ["${CARGO_MAKE_CRATE_VERSION}"]
 
 [tasks.bump-version]
-command = "bun"
-args = ["run", "--cwd", "../../devops", "bump:cargo", "--module", "bulletin"]
+command = "${BASH_BIN}"
+args = ["-c", "bun run --cwd ../../devops bump:cargo --module bulletin"]
