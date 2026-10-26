@@ -1310,11 +1310,11 @@ SELECT 1";
             apply_reading_metrics_upgrade(&mut conn, base_path).await?;
             for table in [
                 "tanah_perek_metric",
-                "tanah_perek_metric_block",
+                "tanah_perek_pasuk_metric",
                 "tanah_article_metric",
                 "tanah_article_metric_block",
+                "tanah_note_metric",
                 "tanah_perush_metric",
-                "tanah_perush_metric_block",
                 "tanahpedia_entry_metric",
                 "tanahpedia_entry_metric_block",
             ] {
