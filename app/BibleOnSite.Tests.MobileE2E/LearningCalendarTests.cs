@@ -114,9 +114,8 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
             .ToArray();
         Assert.NotEmpty(dayLabels);
         var usedColumns = new HashSet<int>();
-        foreach (var day in dayLabels)
+        foreach (var center in dayLabels.Select(day => CenterX(day.Frame)))
         {
-            var center = CenterX(day.Frame);
             var column = Array.FindIndex(columns, x => Math.Abs(x - center) <= tolerance);
             Assert.True(column >= 0,
                 $"Day cell centered at x={center:F0} aligns with no weekday column " +
