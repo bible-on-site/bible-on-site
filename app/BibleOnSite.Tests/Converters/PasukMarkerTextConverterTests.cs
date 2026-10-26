@@ -68,6 +68,20 @@ public class PasukMarkerTextConverterTests
     }
 
     [Fact]
+    public void an_explicitly_nan_font_size_is_not_cloned()
+    {
+        // FontSize can be marked IsSet while holding the NaN default — the
+        // clone must treat that like unset so the label's size still flows.
+        var nan = new Span { Text = "תוהו" };
+        nan.SetValue(Span.FontSizeProperty, double.NaN);
+        var text = PasukText("פסוק", nan);
+
+        var clone = ((FormattedString)Convert(text, "א", 16.0)).Spans[2];
+
+        clone.IsSet(Span.FontSizeProperty).Should().BeFalse();
+    }
+
+    [Fact]
     public void the_source_span_is_not_touched_by_the_clone()
     {
         // A read through the FontSize getter would already evaluate the NaN

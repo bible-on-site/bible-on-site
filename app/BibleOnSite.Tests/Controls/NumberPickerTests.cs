@@ -164,6 +164,31 @@ public class NumberPickerTests
     }
 
     [Fact]
+    public void Step_WithInvalidIncrement_StepsByOne()
+    {
+        var picker = new NumberPicker { Minimum = 0, Maximum = 10 };
+        picker.SetValue(NumberPicker.IncrementProperty, 0.0);
+        picker.Value = 3;
+
+        picker.IncrementButton.SendClicked();
+        picker.Value.Should().Be(4);
+        picker.DecrementButton.SendClicked();
+        picker.Value.Should().Be(3);
+    }
+
+    [Fact]
+    public void BoundValue_NonFinite_FallsBackToMinimum()
+    {
+        // A binding push of a non-finite value bypasses the CLR setter and
+        // reaches OnValueChanged directly — it must clamp like the setter.
+        var picker = new NumberPicker { Minimum = 5, Maximum = 50 };
+        picker.SetValue(NumberPicker.ValueProperty, double.NaN);
+        picker.Value.Should().Be(5);
+        picker.SetValue(NumberPicker.ValueProperty, double.PositiveInfinity);
+        picker.Value.Should().Be(5);
+    }
+
+    [Fact]
     public void IncrementSetter_RejectsZero()
     {
         var picker = new NumberPicker();
