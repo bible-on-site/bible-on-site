@@ -1,5 +1,7 @@
 "use client";
 import type {
+	Bookmark,
+	BookmarkContext,
 	BookmarkProvider,
 	CoverConfig,
 	FlipBookHandle,
@@ -232,18 +234,18 @@ const Sefer = (props: {
 	);
 	const bookmarkProvider = useMemo<BookmarkProvider>(
 		() => ({
-			getBookmarks: (context) =>
+			getBookmarks: (context: BookmarkContext) =>
 				filterUpcomingBookmarks(
 					chapterBookmarks,
 					context,
 					bookmarkSettings.upcomingOnly,
 				),
-			renderBookmark: (bookmark) => (
+			renderBookmark: (bookmark: Bookmark) => (
 				<span className="sefer-bookmark-label">
 					{(bookmark.data as SeferBookmarkData).compact}
 				</span>
 			),
-			renderExpandedBookmark: (bookmark) => {
+			renderExpandedBookmark: (bookmark: Bookmark) => {
 				const data = bookmark.data as SeferBookmarkData;
 				return (
 					<span

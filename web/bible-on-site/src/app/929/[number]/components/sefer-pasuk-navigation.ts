@@ -58,14 +58,35 @@ export function findSeferPasuk(
 	);
 }
 
-/** Marks the destination and clears the previous marker within its pane. */
+const highlightCleanup = new WeakMap<Element, () => void>();
+
+/** Marks the destination, then fades after four seconds or clears on click. */
 function movePasukHighlight(scope: Element, target: Element): void {
 	for (const el of scope.querySelectorAll(`[${PASUK_HIGHLIGHT_ATTR}]`)) {
-		el.removeAttribute(PASUK_HIGHLIGHT_ATTR);
-		el.removeAttribute("aria-current");
+		const clear = highlightCleanup.get(el);
+		if (clear) clear();
+		else {
+			el.removeAttribute(PASUK_HIGHLIGHT_ATTR);
+			el.removeAttribute("aria-current");
+		}
 	}
 	target.setAttribute(PASUK_HIGHLIGHT_ATTR, "");
 	target.setAttribute("aria-current", "location");
+	let fadeTimer: ReturnType<typeof setTimeout>;
+	const clear = () => {
+		clearTimeout(holdTimer);
+		clearTimeout(fadeTimer);
+		target.removeAttribute(PASUK_HIGHLIGHT_ATTR);
+		target.removeAttribute("aria-current");
+		target.removeEventListener("click", clear);
+		highlightCleanup.delete(target);
+	};
+	const holdTimer = setTimeout(() => {
+		target.setAttribute(PASUK_HIGHLIGHT_ATTR, "fading");
+		fadeTimer = setTimeout(clear, 600);
+	}, 4000);
+	highlightCleanup.set(target, clear);
+	target.addEventListener("click", clear, { once: true });
 }
 
 /**
