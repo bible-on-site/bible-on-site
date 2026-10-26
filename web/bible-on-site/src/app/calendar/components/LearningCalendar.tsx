@@ -16,8 +16,10 @@ import {
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
+	getPerekRangeLabel,
 	getPerekSource,
 	getYearLabel,
+	isMergedReviewPair,
 	type MonthCell,
 	type MonthRef,
 	nextMonth,
@@ -289,16 +291,32 @@ export function LearningCalendar({
 		if (day.perekId === undefined) {
 			return `${dateLabel} - לא משובץ`;
 		}
-		const perekLabel = getPerekSource(day.perekId);
-		const first = day.reviewPerekIds?.[0];
-		const reviewLabel =
-			day.status === "review" && first !== undefined && first !== day.perekId
-				? `${getPerekSource(first)} - ${perekLabel}`
-				: perekLabel;
+		const perekLabel =
+			day.status === "review" && day.reviewPerekIds?.length
+				? getPerekRangeLabel(day.reviewPerekIds)
+				: getPerekSource(day.perekId);
 		return day.status === "review"
-			? `${dateLabel} - חזרה: ${reviewLabel}`
+			? `${dateLabel} - חזרה: ${perekLabel}`
 			: `${dateLabel} - ${perekLabel}`;
 	};
+
+	/** One accessible name covering both dates of a merged review block. */
+	const mergedAriaLabel = (friday: CalendarDay, shabbat: CalendarDay): string =>
+		`${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(
+			friday.reviewPerekIds ?? [],
+		)}`;
+
+	/** Saturday dates swallowed by Friday's merged block in `cells`. */
+	const mergedSaturdays = useMemo(() => {
+		const merged = new Set<number>();
+		for (let i = 0; i + 1 < cells.length; i++) {
+			const shabbat = cells[i + 1].day;
+			if (isMergedReviewPair(cells[i].day, shabbat)) {
+				merged.add(shabbat.dateNumber);
+			}
+		}
+		return merged;
+	}, [cells]);
 
 	return (
 		<main className={styles.page}>
@@ -465,6 +483,7 @@ export function LearningCalendar({
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 						/>
 					))}
 				</div>
@@ -483,6 +502,7 @@ export function LearningCalendar({
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 							dimmed={(day) => day.cycle !== resolvedCycle}
 						/>
 					))}
@@ -501,23 +521,40 @@ export function LearningCalendar({
 					</div>
 
 					<div className={styles.grid}>
-						{cells.map((cell) =>
-							cell.day === undefined ? (
-								<div
-									key={`blank-${cell.blankColumn}`}
-									className={styles.blankCell}
-									aria-hidden="true"
-								/>
-							) : (
+						{cells.map((cell, index) => {
+							if (cell.day === undefined) {
+								return (
+									<div
+										key={`blank-${cell.blankColumn}`}
+										className={styles.blankCell}
+										aria-hidden="true"
+									/>
+								);
+							}
+							const day = cell.day;
+							if (mergedSaturdays.has(day.dateNumber)) {
+								return null;
+							}
+							const shabbat = cells[index + 1]?.day;
+							const merged = isMergedReviewPair(day, shabbat)
+								? shabbat
+								: undefined;
+							return (
 								<CalendarCell
-									key={cell.day.dateNumber}
-									day={cell.day}
-									isToday={cell.day.dateNumber === todayDateNumber}
+									key={day.dateNumber}
+									day={day}
+									mergedWith={merged}
+									isToday={
+										day.dateNumber === todayDateNumber ||
+										merged?.dateNumber === todayDateNumber
+									}
 									onOpen={openPerek}
-									ariaLabel={dayAriaLabel(cell.day)}
+									ariaLabel={
+										merged ? mergedAriaLabel(day, merged) : dayAriaLabel(day)
+									}
 								/>
-							),
-						)}
+							);
+						})}
 					</div>
 				</>
 			)}
@@ -551,11 +588,14 @@ export function LearningCalendar({
 
 function CalendarCell({
 	day,
+	mergedWith,
 	isToday,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	/** Called only for tappable cells, so the perek id is always present. */
 	onOpen: (perekId: number) => void;
@@ -564,13 +604,24 @@ function CalendarCell({
 	const classNames = [
 		styles.cell,
 		day.status === "review" ? styles.reviewCell : "",
+		mergedWith ? styles.mergedReviewCell : "",
 		day.status === "none" ? styles.noneCell : "",
 		isToday ? styles.todayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
 
-	const dayNumber = (
+	const dayNumber = mergedWith ? (
+		<span className={styles.dayNumber}>
+			<span className={styles.mergedDate}>
+				ו {toLetters(day.day, { addQuotes: true })}
+			</span>
+			<span className={styles.mergedDate}>
+				ש {toLetters(mergedWith.day, { addQuotes: true })}
+			</span>
+			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
+		</span>
+	) : (
 		<span className={styles.dayNumber}>
 			{toLetters(day.day, { addQuotes: true })}
 			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
@@ -587,6 +638,10 @@ function CalendarCell({
 	}
 
 	const perekId = day.perekId;
+	const perekLabel =
+		day.status === "review" && day.reviewPerekIds?.length
+			? getPerekRangeLabel(day.reviewPerekIds)
+			: getPerekSource(perekId);
 	return (
 		<button
 			type="button"
@@ -595,7 +650,7 @@ function CalendarCell({
 			onClick={() => onOpen(perekId)}
 		>
 			{dayNumber}
-			<span className={styles.perekRef}>{getPerekSource(perekId)}</span>
+			<span className={styles.perekRef}>{perekLabel}</span>
 			{day.status === "review" && (
 				<span className={styles.reviewBadge}>חזרה</span>
 			)}
@@ -616,6 +671,7 @@ function MiniMonth({
 	todayDateNumber,
 	onOpen,
 	dayAriaLabel,
+	mergedDayAriaLabel,
 	dimmed,
 }: {
 	title: string;
@@ -623,6 +679,8 @@ function MiniMonth({
 	todayDateNumber: number;
 	onOpen: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
+	/** Both dates in one name for a merged review block (#2365). */
+	mergedDayAriaLabel?: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	dimmed?: (day: CalendarDay) => boolean;
 }) {
 	return (
@@ -636,24 +694,41 @@ function MiniMonth({
 				))}
 			</div>
 			<div className={styles.miniGrid}>
-				{cells.map((cell) =>
-					cell.day === undefined ? (
-						<span
-							key={`blank-${cell.blankColumn}`}
-							className={styles.miniCell}
-							aria-hidden="true"
-						/>
-					) : (
+				{cells.map((cell, index) => {
+					if (cell.day === undefined) {
+						return (
+							<span
+								key={`blank-${cell.blankColumn}`}
+								className={styles.miniCell}
+								aria-hidden="true"
+							/>
+						);
+					}
+					const day = cell.day;
+					if (index > 0 && isMergedReviewPair(cells[index - 1].day, day)) {
+						return null;
+					}
+					const shabbat = cells[index + 1]?.day;
+					const merged = isMergedReviewPair(day, shabbat) ? shabbat : undefined;
+					return (
 						<MiniCell
-							key={cell.day.dateNumber}
-							day={cell.day}
-							isToday={cell.day.dateNumber === todayDateNumber}
-							dimmed={dimmed?.(cell.day) === true}
+							key={day.dateNumber}
+							day={day}
+							mergedWith={merged}
+							isToday={
+								day.dateNumber === todayDateNumber ||
+								merged?.dateNumber === todayDateNumber
+							}
+							dimmed={dimmed?.(day) === true && (!merged || dimmed(merged))}
 							onOpen={onOpen}
-							ariaLabel={dayAriaLabel(cell.day)}
+							ariaLabel={
+								merged
+									? (mergedDayAriaLabel?.(day, merged) ?? dayAriaLabel(day))
+									: dayAriaLabel(day)
+							}
 						/>
-					),
-				)}
+					);
+				})}
 			</div>
 		</section>
 	);
@@ -661,12 +736,15 @@ function MiniMonth({
 
 function MiniCell({
 	day,
+	mergedWith,
 	isToday,
 	dimmed,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	dimmed: boolean;
 	onOpen: (perekId: number) => void;
@@ -675,13 +753,16 @@ function MiniCell({
 	const classNames = [
 		styles.miniCell,
 		day.status === "review" ? styles.miniReviewCell : "",
+		mergedWith ? styles.miniMergedCell : "",
 		day.status === "none" ? styles.miniNoneCell : "",
 		dimmed ? styles.miniDimmed : "",
 		isToday ? styles.miniTodayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
-	const content = toLetters(day.day, { addQuotes: true });
+	const content = mergedWith
+		? `${toLetters(day.day, { addQuotes: true })} - ${toLetters(mergedWith.day, { addQuotes: true })}`
+		: toLetters(day.day, { addQuotes: true });
 
 	if (day.perekId === undefined || dimmed) {
 		return (

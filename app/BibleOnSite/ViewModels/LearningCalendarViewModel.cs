@@ -37,6 +37,18 @@ public class CalendarCellViewModel
 
     /// <summary>Weekday column (0-6, Sunday first) inside a grouped-view week row.</summary>
     public int Column { get; init; }
+
+    /// <summary>
+    /// Grid columns the cell covers: 2 for a merged Friday+Shabbat review
+    /// block (#2365), 1 otherwise.
+    /// </summary>
+    public int ColumnSpan { get; init; } = 1;
+
+    /// <summary>
+    /// On a merged Friday cell (#2365), the Shabbat date it shares the block
+    /// with — e.g. "כט" when the cell's <see cref="DayText"/> is "כח".
+    /// </summary>
+    public string MergedDayText { get; init; } = string.Empty;
 }
 
 /// <summary>One 7-column week row inside a <see cref="MiniMonthViewModel"/> (#2455).</summary>
@@ -104,6 +116,13 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     [ObservableProperty]
     private ObservableCollection<CalendarCellViewModel> _cells = new();
+
+    /// <summary>
+    /// Month view's cells chunked into week rows, with Friday+Shabbat review
+    /// pairs merged into a single two-column block (#2365).
+    /// </summary>
+    [ObservableProperty]
+    private IReadOnlyList<MiniMonthWeekViewModel> _monthWeeks = [];
 
     [ObservableProperty]
     private ObservableCollection<MiniMonthViewModel> _monthGroups = new();
@@ -286,8 +305,11 @@ public partial class LearningCalendarViewModel : ObservableObject
     private void RebuildCells()
     {
         var cells = _schedule.BuildMonth(_year, _month);
+        // Cells keeps one entry per date — the canonical daily assignments.
+        // MonthWeeks is the merged layout the month grid renders (#2365).
         Cells = new ObservableCollection<CalendarCellViewModel>(
             cells.Select((cell, index) => ToCellViewModel(cell, column: index % 7)));
+        MonthWeeks = BuildWeekRows(cells, dimmed: null);
     }
 
     private void RebuildGroups()
@@ -344,12 +366,98 @@ public partial class LearningCalendarViewModel : ObservableObject
             {
                 Title = group.Title,
                 Cells = new ObservableCollection<CalendarCellViewModel>(cells),
-                Weeks = cells
-                    .Chunk(7)
-                    .Select(row => new MiniMonthWeekViewModel { Cells = row })
-                    .ToList(),
+                Weeks = BuildWeekRows(group.Cells, dimmed),
             };
         }));
+    }
+
+    /// <summary>
+    /// Chunks a BuildMonth cell list into 7-column week rows, merging an
+    /// adjacent Friday/Shabbat pair into one two-column cell when both are
+    /// review days of the same cycle covering the identical studied set
+    /// (#2365). Blank placeholder cells pass through untouched.
+    /// </summary>
+    private List<MiniMonthWeekViewModel> BuildWeekRows(
+        IReadOnlyList<PerekScheduleService.MonthCell> cells,
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed)
+    {
+        var weeks = new List<MiniMonthWeekViewModel>();
+        var row = new List<CalendarCellViewModel>(7);
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var column = i % 7;
+            var day = cells[i].Day;
+            var next = i + 1 < cells.Count ? cells[i + 1].Day : null;
+            if (IsMergedReviewPair(day, next))
+            {
+                row.Add(ToMergedCellViewModel(day!, next!, dimmed, column));
+                i++; // Saturday is part of Friday's merged block.
+            }
+            else
+            {
+                row.Add(ToCellViewModel(cells[i], dimmed, column));
+            }
+            if (i % 7 == 6 || i == cells.Count - 1)
+            {
+                weeks.Add(new MiniMonthWeekViewModel { Cells = row });
+                row = new List<CalendarCellViewModel>(7);
+            }
+        }
+        return weeks;
+    }
+
+    /// <summary>
+    /// True when `friday` and `shabbat` are the adjacent review cells of one
+    /// merged block (#2365): both review days of the same cycle covering the
+    /// identical studied set, at week columns 5 and 6.
+    /// </summary>
+    private static bool IsMergedReviewPair(
+        PerekScheduleService.CalendarDay? friday,
+        PerekScheduleService.CalendarDay? shabbat)
+    {
+        if (friday is not { Status: PerekScheduleService.DayStatus.Review, DayOfWeek: 5 } ||
+            shabbat is not { Status: PerekScheduleService.DayStatus.Review, DayOfWeek: 6 } ||
+            friday.Cycle is null ||
+            friday.Cycle != shabbat.Cycle)
+        {
+            return false;
+        }
+        return friday.ReviewPerekIds is { } a &&
+            shabbat.ReviewPerekIds is { } b &&
+            a.SequenceEqual(b);
+    }
+
+    /// <summary>
+    /// The Friday cell of a merged review block (#2365): spans the Friday and
+    /// Shabbat columns, carries both dates, one חזרה range and both dates'
+    /// accessibility text.
+    /// </summary>
+    private CalendarCellViewModel ToMergedCellViewModel(
+        PerekScheduleService.CalendarDay friday,
+        PerekScheduleService.CalendarDay shabbat,
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed,
+        int column)
+    {
+        var source = friday.ReviewPerekIds is { Count: > 0 } ids
+            ? _perekData.GetPerekRangeSource(ids)
+            : string.Empty;
+        var fridayLabel = HebrewDateHelper.FormatHebrewDate(friday.DateNumber);
+        var shabbatLabel = HebrewDateHelper.FormatHebrewDate(shabbat.DateNumber);
+        return new CalendarCellViewModel
+        {
+            DateNumber = friday.DateNumber,
+            DayText = friday.DayOfMonth.ToHebrewLetters(),
+            MergedDayText = shabbat.DayOfMonth.ToHebrewLetters(),
+            PerekSource = source,
+            PerekId = friday.PerekId,
+            IsReview = true,
+            IsToday = friday.DateNumber == _todayDateNumber ||
+                shabbat.DateNumber == _todayDateNumber,
+            AccessibilityText = $"יום שישי {fridayLabel} - שבת {shabbatLabel} - חזרה: {source}",
+            IsDimmed = dimmed?.Invoke(friday) == true && dimmed(shabbat),
+            Column = column,
+            ColumnSpan = 2,
+        };
     }
 
     private CalendarCellViewModel ToCellViewModel(
@@ -366,8 +474,8 @@ public partial class LearningCalendarViewModel : ObservableObject
         var reviewIds = day.Status == PerekScheduleService.DayStatus.Review
             ? day.ReviewPerekIds
             : null;
-        var source = reviewIds is { Count: > 1 }
-            ? $"{_perekData.GetPerekSource(reviewIds[0])} - {_perekData.GetPerekSource(reviewIds[^1])}"
+        var source = reviewIds is { Count: > 0 } ids
+            ? _perekData.GetPerekRangeSource(ids)
             : day.PerekId is int perekId
                 ? _perekData.GetPerekSource(perekId) ?? string.Empty
                 : string.Empty;

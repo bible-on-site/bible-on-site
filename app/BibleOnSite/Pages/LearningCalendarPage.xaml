@@ -198,79 +198,100 @@
             <Label Grid.Column="6" Text="ש" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שבת" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
         </Grid>
 
-        <!-- Month grid -->
-        <CollectionView Grid.Row="5"
-                        ItemsSource="{Binding Cells}"
-                        ItemsLayout="VerticalGrid, 7"
-                        SelectionMode="None"
-                        IsVisible="{Binding IsMonthView}"
-                        AutomationId="CalendarGrid">
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
-                    <Border Margin="1"
-                            Padding="2"
-                            HeightRequest="58"
-                            StrokeShape="RoundRectangle 6"
-                            Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
-                            StrokeThickness="1"
-                            BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}">
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnCellTapped"
-                                                  CommandParameter="{Binding .}"/>
-                        </Border.GestureRecognizers>
-                        <Border.Triggers>
-                            <DataTrigger TargetType="Border"
-                                         Binding="{Binding IsToday}"
-                                         Value="True">
-                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
-                                <Setter Property="StrokeThickness" Value="2"/>
-                            </DataTrigger>
-                            <DataTrigger TargetType="Border"
-                                         Binding="{Binding IsReview}"
-                                         Value="True">
-                                <Setter Property="StrokeDashArray" Value="3,3"/>
-                                <Setter Property="BackgroundColor" Value="Transparent"/>
-                            </DataTrigger>
-                            <DataTrigger TargetType="Border"
-                                         Binding="{Binding IsNone}"
-                                         Value="True">
-                                <Setter Property="Stroke" Value="Transparent"/>
-                                <Setter Property="BackgroundColor" Value="Transparent"/>
-                            </DataTrigger>
-                            <DataTrigger TargetType="Border"
-                                         Binding="{Binding IsBlank}"
-                                         Value="True">
-                                <Setter Property="Stroke" Value="Transparent"/>
-                                <Setter Property="BackgroundColor" Value="Transparent"/>
-                            </DataTrigger>
-                        </Border.Triggers>
-                        <Grid SemanticProperties.Description="{Binding AccessibilityText}">
-                            <VerticalStackLayout IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
-                                                 VerticalOptions="Center"
-                                                 Spacing="0">
-                                <Label Text="{Binding DayText}"
-                                       FontSize="15"
-                                       FontAttributes="Bold"
-                                       HorizontalTextAlignment="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                <Label Text="{Binding PerekSource}"
-                                       FontSize="10"
-                                       LineBreakMode="TailTruncation"
-                                       MaxLines="2"
-                                       HorizontalTextAlignment="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
-                                <Label Text="חזרה"
-                                       FontSize="9"
-                                       FontAttributes="Bold"
-                                       HorizontalTextAlignment="Center"
-                                       IsVisible="{Binding IsReview}"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                            </VerticalStackLayout>
+        <!-- Month grid: week rows of plain layout cells, like the grouped
+             mini-months — a Grid with Grid.ColumnSpan can host the merged
+             Friday+Shabbat review block (#2365), which a fixed 7-column
+             CollectionView cannot express. -->
+        <ScrollView Grid.Row="5"
+                    IsVisible="{Binding IsMonthView}"
+                    AutomationId="CalendarGrid">
+            <VerticalStackLayout Spacing="0"
+                                 BindableLayout.ItemsSource="{Binding MonthWeeks}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="viewmodels:MiniMonthWeekViewModel">
+                        <Grid ColumnDefinitions="*,*,*,*,*,*,*"
+                              AutomationId="MonthWeek"
+                              BindableLayout.ItemsSource="{Binding Cells}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
+                                    <Border Margin="1"
+                                            Padding="2"
+                                            HeightRequest="58"
+                                            Grid.Column="{Binding Column}"
+                                            Grid.ColumnSpan="{Binding ColumnSpan}"
+                                            StrokeShape="RoundRectangle 6"
+                                            Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                                            StrokeThickness="1"
+                                            BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnCellTapped"
+                                                                  CommandParameter="{Binding .}"/>
+                                        </Border.GestureRecognizers>
+                                        <Border.Triggers>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsToday}"
+                                                         Value="True">
+                                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                                <Setter Property="StrokeThickness" Value="2"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsReview}"
+                                                         Value="True">
+                                                <Setter Property="StrokeDashArray" Value="3,3"/>
+                                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsNone}"
+                                                         Value="True">
+                                                <Setter Property="Stroke" Value="Transparent"/>
+                                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsBlank}"
+                                                         Value="True">
+                                                <Setter Property="Stroke" Value="Transparent"/>
+                                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                            </DataTrigger>
+                                        </Border.Triggers>
+                                        <Grid SemanticProperties.Description="{Binding AccessibilityText}">
+                                            <VerticalStackLayout IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
+                                                                 VerticalOptions="Center"
+                                                                 Spacing="0">
+                                                <HorizontalStackLayout Spacing="0">
+                                                    <Label Text="{Binding DayText}"
+                                                           FontSize="15"
+                                                           FontAttributes="Bold"
+                                                           HorizontalOptions="CenterAndExpand"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                    <Label Text="{Binding MergedDayText}"
+                                                           FontSize="15"
+                                                           FontAttributes="Bold"
+                                                           HorizontalOptions="CenterAndExpand"
+                                                           IsVisible="{Binding MergedDayText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                </HorizontalStackLayout>
+                                                <Label Text="{Binding PerekSource}"
+                                                       FontSize="10"
+                                                       LineBreakMode="TailTruncation"
+                                                       MaxLines="2"
+                                                       HorizontalTextAlignment="Center"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                                                <Label Text="חזרה"
+                                                       FontSize="9"
+                                                       FontAttributes="Bold"
+                                                       HorizontalTextAlignment="Center"
+                                                       IsVisible="{Binding IsReview}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                            </VerticalStackLayout>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
                         </Grid>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </ScrollView>
 
         <!-- Yearly / full-cycle views: grouped mini-months (#2364) -->
         <CollectionView Grid.Row="5"
@@ -315,6 +336,7 @@
                                                     Padding="0"
                                                     HeightRequest="24"
                                                     Grid.Column="{Binding Column}"
+                                                    Grid.ColumnSpan="{Binding ColumnSpan}"
                                                     StrokeShape="RoundRectangle 4"
                                                     Stroke="Transparent"
                                                     StrokeThickness="1"
@@ -352,13 +374,21 @@
                                                         <Setter Property="Opacity" Value="0.3"/>
                                                     </DataTrigger>
                                                 </Border.Triggers>
-                                                <Label Text="{Binding DayText}"
-                                                       FontSize="11"
-                                                       IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
-                                                       HorizontalTextAlignment="Center"
-                                                       VerticalTextAlignment="Center"
-                                                       SemanticProperties.Description="{Binding AccessibilityText}"
-                                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                <HorizontalStackLayout Spacing="0"
+                                                                       SemanticProperties.Description="{Binding AccessibilityText}">
+                                                    <Label Text="{Binding DayText}"
+                                                           FontSize="11"
+                                                           IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
+                                                           HorizontalOptions="CenterAndExpand"
+                                                           VerticalTextAlignment="Center"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                    <Label Text="{Binding MergedDayText}"
+                                                           FontSize="11"
+                                                           HorizontalOptions="CenterAndExpand"
+                                                           VerticalTextAlignment="Center"
+                                                           IsVisible="{Binding MergedDayText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                </HorizontalStackLayout>
                                             </Border>
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>

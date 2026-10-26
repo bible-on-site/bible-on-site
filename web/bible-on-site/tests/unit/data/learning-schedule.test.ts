@@ -1,26 +1,28 @@
 import { toLetters } from "gematry";
+import catalog from "../../../src/data/db/client-catalog.generated.json";
+import { cycles } from "../../../src/data/db/cycles";
 import {
 	buildMonth,
-	compareMonths,
 	CYCLE_DAYS,
 	CYCLE_SPAN_DAYS,
+	compareMonths,
 	getConfirmedCycleCount,
 	getCycle,
 	getCycleForDate,
-	getProgrammeYearsElapsed,
 	getCycleLabel,
 	getCycleStartMonth,
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
+	getPerekRangeLabel,
 	getPerekSource,
+	getProgrammeYearsElapsed,
 	getYearLabel,
+	isMergedReviewPair,
 	nextMonth,
 	prevMonth,
 	resolveCalendarDay,
 } from "../../../src/data/learning-schedule";
-import catalog from "../../../src/data/db/client-catalog.generated.json";
-import { cycles } from "../../../src/data/db/cycles";
 import {
 	HebrewDate,
 	parseNumericalDateToHebcalDate,
@@ -41,12 +43,17 @@ describe("getCycle", () => {
 			number: index + 1,
 			start,
 		})),
-	)("returns confirmed cycle $number with its exact range", ({ number, start }) => {
-		const cycle = getCycle(number);
-		expect(cycle.projected).toBe(false);
-		expect(cycle.start.deltaDays(parseNumericalDateToHebcalDate(start))).toBe(0);
-		expect(cycle.end.deltaDays(cycle.start)).toBe(CYCLE_DAYS - 1);
-	});
+	)(
+		"returns confirmed cycle $number with its exact range",
+		({ number, start }) => {
+			const cycle = getCycle(number);
+			expect(cycle.projected).toBe(false);
+			expect(cycle.start.deltaDays(parseNumericalDateToHebcalDate(start))).toBe(
+				0,
+			);
+			expect(cycle.end.deltaDays(cycle.start)).toBe(CYCLE_DAYS - 1);
+		},
+	);
 
 	it("projects cycle 11 exactly 1302 days after cycle 10", () => {
 		const cycle10 = getCycle(10);
@@ -69,31 +76,35 @@ describe("getCycle", () => {
 
 describe("resolveCalendarDay", () => {
 	describe("confirmed cycles", () => {
-		it.each(
-			cycles.map((start, index) => ({ number: index + 1, start })),
-		)("assigns perek 1 to the first day of cycle $number", ({ number, start }) => {
-			const result = day(start);
-			expect(result).toMatchObject({
-				status: "study",
-				perekId: 1,
-				cycle: number,
-			});
-			expect(result.projected).not.toBe(true);
-		});
+		it.each(cycles.map((start, index) => ({ number: index + 1, start })))(
+			"assigns perek 1 to the first day of cycle $number",
+			({ number, start }) => {
+				const result = day(start);
+				expect(result).toMatchObject({
+					status: "study",
+					perekId: 1,
+					cycle: number,
+				});
+				expect(result.projected).not.toBe(true);
+			},
+		);
 
 		it.each(
 			catalog.schedule[928].date.map((end, index) => ({
 				number: index + 1,
 				end,
 			})),
-		)("assigns perek 929 to the last day of cycle $number", ({ number, end }) => {
-			const result = day(end);
-			expect(result).toMatchObject({
-				status: "study",
-				perekId: 929,
-				cycle: number,
-			});
-		});
+		)(
+			"assigns perek 929 to the last day of cycle $number",
+			({ number, end }) => {
+				const result = day(end);
+				expect(result).toMatchObject({
+					status: "study",
+					perekId: 929,
+					cycle: number,
+				});
+			},
+		);
 
 		it("assigns the exact scheduled perek to a mid-cycle date", () => {
 			// שמואל ב ה (perek 268) of cycle 4 is scheduled on כח כסלו תשפ"ו.
@@ -127,8 +138,7 @@ describe("resolveCalendarDay", () => {
 			const saturday = catalog.schedule
 				.map(({ perekId, date }) => ({ perekId, date: date[8] }))
 				.find(
-					({ date }) =>
-						parseNumericalDateToHebcalDate(date).getDay() === 6,
+					({ date }) => parseNumericalDateToHebcalDate(date).getDay() === 6,
 				);
 			expect(saturday).toBeDefined();
 			if (saturday === undefined) {
@@ -458,5 +468,64 @@ describe("getPerekSource", () => {
 			throw new Error("catalog is missing שמואל ב");
 		}
 		expect(getPerekSource(shmuel2.perekFrom + 4)).toBe("שמואל ב ה");
+	});
+});
+
+describe("getPerekRangeLabel", () => {
+	it("collapses a contiguous same-sefer run to a compact range", () => {
+		expect(getPerekRangeLabel([1, 2, 3, 4, 5])).toBe("בראשית א-ה");
+	});
+
+	it("returns a plain reference for a single perek", () => {
+		expect(getPerekRangeLabel([5])).toBe("בראשית ה");
+	});
+
+	it("spells both ends out for a cross-sefer run", () => {
+		// בראשית נ (perek 50) followed by שמות א (perek 51).
+		expect(getPerekRangeLabel([50, 51])).toBe("בראשית נ - שמות א");
+		expect(getPerekRangeLabel([49, 50, 51, 52])).toBe("בראשית מט - שמות ב");
+	});
+
+	it("lists separate runs without implying unstudied perakim", () => {
+		// בראשית א-ב + ד — ג was never studied.
+		expect(getPerekRangeLabel([1, 2, 4])).toBe("בראשית א-ב, בראשית ד");
+	});
+
+	it("returns an empty label for an empty set", () => {
+		expect(getPerekRangeLabel([])).toBe("");
+	});
+});
+
+describe("isMergedReviewPair", () => {
+	const friday = day(57851212); // יב אלול תשפ"ה, cycle 4 week 1
+	const saturday = day(57851213);
+
+	it("merges the adjacent Friday/Shabbat review cells of one week", () => {
+		expect(isMergedReviewPair(friday, saturday)).toBe(true);
+	});
+
+	it("does not merge when either side is missing", () => {
+		expect(isMergedReviewPair(undefined, saturday)).toBe(false);
+		expect(isMergedReviewPair(friday, undefined)).toBe(false);
+	});
+
+	it("does not merge differing review sets", () => {
+		const different = { ...saturday, reviewPerekIds: [1, 2, 3] };
+		expect(isMergedReviewPair(friday, different)).toBe(false);
+	});
+
+	it("does not merge non-review days", () => {
+		const studyDay = day(57851211); // Thursday, a study day
+		expect(isMergedReviewPair(studyDay, saturday)).toBe(false);
+	});
+
+	it("does not merge cells on different weekdays", () => {
+		const thursday = day(57851211);
+		expect(isMergedReviewPair(thursday, friday)).toBe(false);
+	});
+
+	it("does not merge across cycle boundaries", () => {
+		const otherCycle = { ...saturday, cycle: 5 };
+		expect(isMergedReviewPair(friday, otherCycle)).toBe(false);
 	});
 });

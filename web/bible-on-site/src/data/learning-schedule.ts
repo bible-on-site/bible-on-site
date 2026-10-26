@@ -471,6 +471,76 @@ export function getPerekSource(perekId: number): string {
 	return `${volume.name} ${toLetters(perekId - volume.perekFrom + 1)}`;
 }
 
+/**
+ * Readable label for a set of reviewed perakim (#2365).
+ * A contiguous run inside one sefer collapses to "ספר א-ה"; a run that
+ * crosses a sefer boundary spells both ends out ("בראשית נ - שמות א");
+ * non-contiguous material lists each run so the label never implies
+ * perakim that were not actually studied.
+ */
+export function getPerekRangeLabel(perekIds: readonly number[]): string {
+	if (perekIds.length === 0) {
+		return "";
+	}
+	const runs: number[][] = [[perekIds[0]]];
+	for (const id of perekIds.slice(1)) {
+		const run = runs[runs.length - 1];
+		if (id === run[run.length - 1] + 1) {
+			run.push(id);
+		} else {
+			runs.push([id]);
+		}
+	}
+	return runs
+		.map((run) => {
+			const first = run[0];
+			const last = run[run.length - 1];
+			if (first === last) {
+				return getPerekSource(first);
+			}
+			const firstVolume = catalog.volumes.find(
+				(v) => v.perekFrom <= first && v.perekTo >= first,
+			);
+			const lastVolume = catalog.volumes.find(
+				(v) => v.perekFrom <= last && v.perekTo >= last,
+			);
+			if (firstVolume && firstVolume === lastVolume) {
+				return `${firstVolume.name} ${toLetters(first - firstVolume.perekFrom + 1)}-${toLetters(last - firstVolume.perekFrom + 1)}`;
+			}
+			return `${getPerekSource(first)} - ${getPerekSource(last)}`;
+		})
+		.join(", ");
+}
+
+/**
+ * True when `friday` and `shabbat` are the adjacent review cells of one
+ * merged block (#2365): both review days of the same cycle covering the
+ * identical studied set, sitting at week columns 5 and 6.
+ */
+export function isMergedReviewPair(
+	friday: CalendarDay | undefined,
+	shabbat: CalendarDay | undefined,
+): shabbat is CalendarDay {
+	if (
+		friday?.status !== "review" ||
+		shabbat?.status !== "review" ||
+		friday.dayOfWeek !== 5 ||
+		shabbat.dayOfWeek !== 6 ||
+		friday.cycle === undefined ||
+		friday.cycle !== shabbat.cycle
+	) {
+		return false;
+	}
+	const a = friday.reviewPerekIds;
+	const b = shabbat.reviewPerekIds;
+	return (
+		a !== undefined &&
+		b !== undefined &&
+		a.length === b.length &&
+		a.every((id, i) => id === b[i])
+	);
+}
+
 /** MonthRef of the Hebrew month containing a cycle's first day. */
 export function getCycleStartMonth(cycle: StudyCycle): MonthRef {
 	return { year: cycle.start.year, month: cycle.start.getUniformMonth() };

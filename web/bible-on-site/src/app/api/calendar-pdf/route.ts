@@ -9,6 +9,7 @@ import {
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
+	getPerekRangeLabel,
 	getPerekSource,
 	getYearLabel,
 	type MonthCell,
@@ -27,9 +28,8 @@ function dayLabel(day: CalendarDay): string {
 	if (day.perekId === undefined) {
 		return "";
 	}
-	const ids = day.status === "review" ? day.reviewPerekIds : undefined;
-	if (ids && ids.length > 1) {
-		return `${getPerekSource(ids[0])} - ${getPerekSource(ids[ids.length - 1])}`;
+	if (day.status === "review" && day.reviewPerekIds?.length) {
+		return getPerekRangeLabel(day.reviewPerekIds);
 	}
 	return getPerekSource(day.perekId);
 }
@@ -90,7 +90,13 @@ export async function GET(request: Request) {
 		);
 	}
 
-	const pdf = await generateCalendarPdf({ title, subtitle, months, dimmed, dayLabel });
+	const pdf = await generateCalendarPdf({
+		title,
+		subtitle,
+		months,
+		dimmed,
+		dayLabel,
+	});
 	const filename =
 		view === "cycle" && Number.isInteger(cycleParam)
 			? `learning-calendar-cycle-${cycleParam}.pdf`
