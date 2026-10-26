@@ -82,7 +82,7 @@ describe("sefer-perush-selection", () => {
 			});
 			expect(resolveSeferPerushSelection("בראשית")).toEqual({
 				ids: [1, 2],
-				isOverride: false,
+				isOverride: true,
 			});
 		});
 
@@ -98,19 +98,20 @@ describe("sefer-perush-selection", () => {
 	});
 
 	describe("writes", () => {
-		it("writes the global default while the sefer inherits", () => {
+		it("automatically saves the global default and the current sefer", () => {
 			setSeferPerushSelection("בראשית", [4, 5]);
 			const stored = getStoredSeferPerushSelection();
 			expect(stored.global).toEqual([4, 5]);
-			expect(stored.sefer).toEqual({});
+			expect(stored.sefer).toEqual({ בראשית: [4, 5] });
 		});
 
-		it("keeps edits sefer-scoped once an override exists", () => {
+		it("updates the default without overwriting other saved sefarim", () => {
 			setSeferPerushSelection("בראשית", [1, 2]);
 			setSeferPerushOverride("שמות", [9]);
 			setSeferPerushSelection("שמות", [9, 8]);
 			const stored = getStoredSeferPerushSelection();
-			expect(stored.global).toEqual([1, 2]);
+			expect(stored.global).toEqual([9, 8]);
+			expect(stored.sefer.בראשית).toEqual([1, 2]);
 			expect(stored.sefer.שמות).toEqual([9, 8]);
 		});
 
