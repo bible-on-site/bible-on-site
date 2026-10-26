@@ -152,6 +152,24 @@ repos:
         files: ^(app/.*\.(cs|csproj)|\.editorconfig|global\.json|app/Directory\.Build\.props)$
         pass_filenames: false
         priority: 10
+      # Generic-catch justification gate (#2114 second wave): S2221 does not
+      # fire inside async-void methods, on catch-rethrow sites, or in test
+      # code, so an unannotated generic catch there compiles cleanly and is
+      # only flagged post-push by github-code-quality (#2596, again on
+      # #2644). scan-catch.cjs closes the hole deterministically: every
+      # `catch (Exception)`/bare `catch` without a type-narrowing `when`
+      # filter must carry `//NOSONAR — <reason>` on the catch line or the
+      # contiguous comment/#pragma run above it. The script itself skips
+      # `*.Tests*` assemblies (the audited no-annotation surface); runs even
+      # when the project was never restored.
+      - id: catch-boundary
+        name: generic-catch justification (S2221-exempt sites)
+        entry: node devops/review-audit/scan-catch.cjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^app/.*\.cs$
+        pass_filenames: true
+        priority: 10
       # One hook covers all Rust modules: precommit-rust.mjs buckets staged
       # changes per module and runs that module's cargo-make lint tasks.
       - id: rust-checks

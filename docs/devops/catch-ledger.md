@@ -248,4 +248,11 @@ is already the right shape.
   evidenced narrow catches.
 
 Regenerate the site table: `node devops/review-audit/scan-catch.cjs` lists
-any unannotated sites that slip back in.
+any unannotated sites that slip back in — the same check runs as the
+`catch-boundary` pre-commit hook on staged `app/**/*.cs`, so new generic
+catches can no longer slip without a `//NOSONAR` reason (S2221's async-void/
+catch-rethrow exemption included). Post-audit additions it caught on first
+run: `TanahpediaEntryPage.xaml.cs` `OnEntryLinkTapped` and
+`TanahpediaEntityTypePage.xaml.cs` `OnIntroLinkTapped` (#2596 async-void
+link handlers) and `SearchViewModel.cs` `:595` bare catch-rethrow — all now
+annotated with their retained-boundary reasons.
