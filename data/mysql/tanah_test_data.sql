@@ -211,6 +211,8 @@ VALUES (
 -- Article decorations on article 1: ישראל resolves to its entry; יצחק has no
 -- entry so the same span must render as ordinary text. content_hash and
 -- surface are computed from the stored column so the fixture cannot drift.
+-- span_* are UTF-16 code-unit offsets; LOCATE/CHAR_LENGTH count characters,
+-- which coincides for this BMP-only fixture content.
 INSERT INTO tanahpedia_mention_decoration (
     id,
     source_kind,

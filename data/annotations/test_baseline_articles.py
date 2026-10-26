@@ -232,6 +232,39 @@ class TestDecorationsForArticle(unittest.TestCase):
     def test_empty_content(self):
         self.assertEqual(ba.decorations_for_article(1, "", self.gazetteer), [])
 
+    def test_astral_chars_emit_utf16_offsets(self):
+        # The render side slices by UTF-16 units: an astral emoji before
+        # the mention shifts the stored span by one extra unit while
+        # `surface` keeps the exact source substring.
+        html = "<p>😀 אברם</p>"
+        rows = ba.decorations_for_article(1, html, {"אברם": "PERSON"})
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["surface"], "אברם")
+        self.assertEqual(rows[0]["span_start"], html.index("אברם") + 1)
+        self.assertEqual(rows[0]["span_end"], html.index("אברם") + 1 + 4)
+
+    def test_sentence_punctuation_blocks_multiword_names(self):
+        html = "<p>בית. אל הגיע</p>"
+        rows = ba.decorations_for_article(1, html, {"בית אל": "PLACE"})
+        self.assertEqual(rows, [])
+
+    def test_maqaf_and_hyphen_gaps_still_join_multiword_names(self):
+        gazetteer = {"בית אל": "PLACE"}
+        for html in ("<p>בית־אל הגיע</p>", "<p>בית-אל הגיע</p>"):
+            rows = ba.decorations_for_article(1, html, gazetteer)
+            self.assertEqual(len(rows), 1, html)
+            self.assertEqual(rows[0]["intended_name"], "בית אל")
+
+    def test_blocked_long_match_falls_back_to_shorter_name(self):
+        # "אברם. אבינו" must not join, but the real name אברם alone wins.
+        html = "<p>אברם. אבינו</p>"
+        rows = ba.decorations_for_article(
+            1, html, {"אברם": "PERSON", "אברם אבינו": "PERSON"}
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["intended_name"], "אברם")
+        self.assertEqual(rows[0]["surface"], "אברם")
+
     def test_stripped_match_dominated_by_ordinary_usage_is_held(self):
         # היה -> יה: fused-prefix stripping manufactures a name match out
         # of an ordinary word; surface dominance keeps it triageable only.

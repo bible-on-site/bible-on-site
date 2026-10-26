@@ -93,7 +93,7 @@ The existing link contract is `tanahpedia_entity_tanah_source`
 | ----- | ------- |
 | `source_kind` | `pasuk` \| `article` |
 | `perek_id`, `pasuk_number`, `segment_start`, `segment_end` | canonical coordinates for scripture mentions (same semantics as the existing table) |
-| `article_id`, `content_hash`, `span_start`, `span_end` | article mentions: character offsets into `tanah_article.content` at `content_hash` — the hash is the staleness key since the article row carries no revision column |
+| `article_id`, `content_hash`, `span_start`, `span_end` | article mentions: **UTF-16 code-unit** offsets into `tanah_article.content` at `content_hash` (the unit JavaScript string indexing uses; BMP-only content makes them equal code-point offsets) — the hash is the staleness key since the article row carries no revision column |
 | `surface` | exact original mention text (no normalization of stored data) |
 | `intended_name` | the entry's intended `unique_name`/resolution key — indexed, deliberately not an FK |
 | `entity_type` | one of the 13 `entity_type` enum values in `tanahpedia_entity` |

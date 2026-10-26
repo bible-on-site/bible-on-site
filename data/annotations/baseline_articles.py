@@ -58,6 +58,36 @@ MAX_PREFIX_STRIP = 2
 # A single letter is never a meaningful mention target.
 MIN_NAME_LENGTH = 2
 
+# Raw text between consecutive words that may sit inside a multiword
+# name: whitespace, maqaf (canonical form) and the ASCII hyphen
+# (authored-text convention). Sentence punctuation ends a candidate —
+# "בית. אל" is two sentences, not the place בית אל.
+SEPARATOR_RE = re.compile(r"[\s\-־]+")
+
+
+def utf16_index_map(text):
+    """Cumulative UTF-16 code units per Python code-point index.
+
+    The render side slices by JavaScript string indices (UTF-16 units),
+    so span offsets must be emitted in that unit — astral characters
+    (emoji) count double. Code-point and UTF-16 indexes agree below
+    U+10000, so only astral runs shift the map.
+    """
+    index_map = [0] * (len(text) + 1)
+    units = 0
+    for i, char in enumerate(text):
+        units += 2 if ord(char) > 0xFFFF else 1
+        index_map[i + 1] = units
+    return index_map
+
+
+def gaps_are_separators(content, words, first, last):
+    """All raw gaps between words[first..last) are name-internal separators."""
+    for k in range(first, last - 1):
+        if not SEPARATOR_RE.fullmatch(content[words[k][1] : words[k + 1][0]]):
+            return False
+    return True
+
 
 def build_gazetteer(decorations):
     """intended_name -> majority entity_type over the pasuk decoration set."""
@@ -177,6 +207,7 @@ def decorations_for_article(
     """
     max_words = max((name.count(" ") + 1 for name in gazetteer), default=1)
     content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    utf16_map = utf16_index_map(content)
     rows = []
     for run_start, run_end in iter_text_runs(content):
         words = list(run_words(content, run_start, run_end))
@@ -184,12 +215,16 @@ def decorations_for_article(
         while i < len(words):
             hit = None
             # Longest match wins; within a length the un-stripped form is
-            # preferred over fused-prefix removals.
+            # preferred over fused-prefix removals. A candidate whose
+            # inter-word gaps contain sentence punctuation is skipped so a
+            # shorter, legitimate match may still win.
             for j in range(min(i + max_words, len(words)), i, -1):
                 tail = " ".join(w[2] for w in words[i + 1 : j])
                 for first in prefix_variants(words[i][2]):
                     phrase = first if not tail else f"{first} {tail}"
-                    if phrase in gazetteer:
+                    if phrase in gazetteer and gaps_are_separators(
+                        content, words, i, j
+                    ):
                         hit = (j, phrase, first)
                         break
                 if hit:
@@ -205,17 +240,20 @@ def decorations_for_article(
                 and tagged_counts is not None
                 and word_counts.get(words[i][2], 0) > tagged_counts.get(phrase, 0)
             )
-            span_start, span_end = words[i][0], words[end_index - 1][1]
+            cp_start, cp_end = words[i][0], words[end_index - 1][1]
             rows.append(
                 {
                     "source_kind": "article",
                     "article_id": article_id,
                     "content_hash": content_hash,
-                    "span_start": span_start,
-                    "span_end": span_end,
+                    # UTF-16 code-unit offsets — the unit JS string
+                    # indexing (and therefore the render integrity check)
+                    # uses against the same stored content.
+                    "span_start": utf16_map[cp_start],
+                    "span_end": utf16_map[cp_end],
                     # Exact original span (fused prefixes included) — the
                     # render-side integrity check compares it verbatim.
-                    "surface": content[span_start:span_end],
+                    "surface": content[cp_start:cp_end],
                     "intended_name": phrase,
                     "entity_type": gazetteer[phrase],
                     "disambiguation": None,

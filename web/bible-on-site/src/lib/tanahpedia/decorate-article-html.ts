@@ -41,7 +41,19 @@ function blockedRanges(html: string): Array<readonly [number, number]> {
 	for (const start of open) {
 		ranges.push([start, html.length]);
 	}
-	return ranges;
+	// Nested skip elements close inner-first, so ranges arrive unsorted —
+	// normalize into ascending, non-overlapping zones for the linear scan.
+	ranges.sort((a, b) => a[0] - b[0]);
+	const merged: Array<[number, number]> = [];
+	for (const [start, end] of ranges) {
+		const last = merged[merged.length - 1];
+		if (last && start <= last[1]) {
+			last[1] = Math.max(last[1], end);
+		} else {
+			merged.push([start, end]);
+		}
+	}
+	return merged;
 }
 
 export function decorateArticleHtml(

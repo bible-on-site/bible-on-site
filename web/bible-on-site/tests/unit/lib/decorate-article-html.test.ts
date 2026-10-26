@@ -158,4 +158,19 @@ describe("decorateArticleHtml", () => {
 		]);
 		expect(out).toContain(">אברם</a>");
 	});
+
+	it("blocks mentions inside an anchor that wraps a nested skip element", () => {
+		// Nested ranges close inner-first, so the script's range precedes
+		// the anchor's — the scan must still see both as one merged zone.
+		const html = '<p><a href="/old">אברם<script>x</script> עוד</a> מצרים</p>';
+		const insideAnchor = html.indexOf("אברם");
+		const after = html.indexOf("מצרים");
+		const out = decorateArticleHtml(html, [
+			ref(html, insideAnchor, insideAnchor + 4, "אברם"),
+			ref(html, after, after + 5, "מצרים"),
+		]);
+		expect(out).not.toContain('a href="/old">אברם<a');
+		expect(out).not.toContain('">אברם</a>');
+		expect(out).toContain('href="/pedia/%D7%9E%D7%A6%D7%A8%D7%99%D7%9D"');
+	});
 });
