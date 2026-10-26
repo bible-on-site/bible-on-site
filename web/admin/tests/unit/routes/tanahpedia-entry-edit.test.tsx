@@ -133,6 +133,11 @@ const existingEntry = {
 const ACCOUNT = "acct-1";
 const DRAFT_KEY = `tanahpedia-draft:v2:${ACCOUNT}:entry:entry-1`;
 
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; a plain Event carrying the properties is enough.
+const storageEvent = (key: string | null, newValue: string | null = null) =>
+	Object.assign(new Event("storage"), { key, newValue });
+
 const storedDraft = (
 	over: Record<string, unknown> = {},
 ): Record<string, unknown> => ({
@@ -1194,12 +1199,12 @@ describe("EntryEditPage", () => {
 
 			act(() => {
 				window.dispatchEvent(
-					new StorageEvent("storage", {
-						key: DRAFT_KEY,
-						newValue: JSON.stringify(
+					storageEvent(
+						DRAFT_KEY,
+						JSON.stringify(
 							storedDraft({ sessionId: "a-different-tab" }),
 						),
-					}),
+					),
 				);
 			});
 

@@ -27,7 +27,7 @@ public sealed record MobileTestConfiguration(
         var appPath = Path.GetFullPath(Required("MOBILE_APP_PATH"));
         if (!File.Exists(appPath) && !Directory.Exists(appPath))
         {
-            throw new FileNotFoundException("Build the simulator app with npm run build:app first.", appPath);
+            throw new FileNotFoundException("Build the simulator app with bun run build:app first.", appPath);
         }
 
         return new(platform, appPath, Required("MOBILE_UDID"),

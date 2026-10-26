@@ -73,9 +73,24 @@ function temporalMonthCodeToUniformMonth(
  */
 export class HebrewDate {
 	private readonly date: Temporal.PlainDate;
+	private epochDays?: number;
 
 	constructor(date: Temporal.PlainDate) {
 		this.date = date.withCalendar("hebrew");
+	}
+
+	/**
+	 * Days since the ISO epoch (1970-01-01), cached after first use.
+	 * Field reads on the ISO view are far cheaper than building a
+	 * `until` Duration, which matters in schedule scans that compare
+	 * every day against cycle entries.
+	 */
+	private get epochDayCount(): number {
+		if (this.epochDays === undefined) {
+			const iso = this.date.withCalendar("iso8601");
+			this.epochDays = Date.UTC(iso.year, iso.month - 1, iso.day) / 86_400_000;
+		}
+		return this.epochDays;
 	}
 
 	static fromGregorian(gregorianDate: Date): HebrewDate {
@@ -167,12 +182,9 @@ export class HebrewDate {
 	 * Returns negative if this date is before other
 	 */
 	deltaDays(other: HebrewDate): number {
-		// Convert both to ISO calendar for comparison
-		const thisIso = this.date.withCalendar("iso8601");
-		const otherIso = other.date.withCalendar("iso8601");
-		// Temporal.until returns (other - this), we want (this - other)
-		const diff = thisIso.until(otherIso, { largestUnit: "days" }).days;
-		return diff === 0 ? 0 : -diff;
+		// Epoch-day difference — equivalent to an ISO `until` in days but
+		// avoids building a Duration per call (hot loop in buildMonth).
+		return this.epochDayCount - other.epochDayCount;
 	}
 
 	/**

@@ -120,7 +120,7 @@ After explicit approval of the AWS changes, use this bounded recovery procedure:
    ```
 
    The unchanged live handler retrieves its credentials from SSM. Do not add
-   `db_url` or log credential values. Do not run the full `npm run deploy:data`
+   `db_url` or log credential values. Do not run the full `bun run deploy:data`
    payload for this recovery: it also replaces bootstrap tables and commentary
    data. Remove the temporary SQL object after verifying the invocation result.
 

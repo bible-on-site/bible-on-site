@@ -13,6 +13,7 @@ import {
 	categoryHref,
 	type ResolvedCategoryRoute,
 } from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	CATEGORY_LABELS,
 	ENTITY_TYPE_LABELS,
@@ -162,7 +163,9 @@ export async function CategoryView({
 					className={styles.homepageContent}
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
-						__html: DOMPurify.sanitize(demoteHeadings(homepage.content)),
+						__html: DOMPurify.sanitize(
+							normalizeFootnoteHtml(demoteHeadings(homepage.content)),
+						),
 					}}
 				/>
 			)}

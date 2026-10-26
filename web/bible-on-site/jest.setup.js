@@ -1,10 +1,21 @@
 process.env.IS_TEST_ENV = 1;
 
+/* jest-environment-jsdom strips the Node globals that server-side deps
+   (jsdom via whatwg-url) need at module load — restore them globally. */
+const { TextDecoder, TextEncoder } = require("node:util");
+globalThis.TextEncoder ??= TextEncoder;
+globalThis.TextDecoder ??= TextDecoder;
+
 // Mock isomorphic-dompurify so we don't need to transform its ESM deps (jsdom, @exodus/bytes, etc.)
 jest.mock("isomorphic-dompurify", () => ({
 	__esModule: true,
 	default: { sanitize: (html) => html },
 }));
+
+// The store-metadata build snapshot is generated per environment; unit tests
+// must always run against an empty seed so results are deterministic (#2395).
+// Individual tests override this factory with jest.doMock when needed.
+jest.mock("@/data/db/store-metadata-snapshot.generated.json", () => ({}));
 
 // Setup for SWC coverage instrumentation
 // The swc-plugin-coverage-instrument stores coverage in the global object

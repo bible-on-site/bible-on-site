@@ -5,7 +5,6 @@ default_to_workspace = false
 [env]
 
 # TODO: support better binaries locating on windows (maybe make it configurable outside this file).
-NPM_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "npm", mapping = { "windows" = "C:\\Program Files\\nodejs\\npm.cmd" } }
 BASH_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "bash", mapping = { "windows" = "C:\\Program Files\\Git\\bin\\bash.exe" } }
 
 HOST = "127.0.0.1"
@@ -115,9 +114,12 @@ command = "cargo"
 args = ["run", "--profile", "dev"]
 
 
+# bun is a shell shim (no .exe) on Windows — CreateProcess cannot spawn it,
+# so run it through Git Bash (BASH_BIN). -c (not -lc) so the shell inherits the
+# parent PATH; a login shell would drop CI's GITHUB_PATH-injected bun dir.
 [tasks.test-e2e]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "tests", "test:e2e"]
+command = "${BASH_BIN}"
+args = ["-c", "bun run --cwd tests test:e2e"]
 
 [tasks.test-unit]
 command = "cargo"
@@ -146,8 +148,8 @@ args = ["nextest", "run", "--profile", "ci"]
 dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
 
 [tasks.coverage-e2e]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "tests", "coverage:e2e"]
+command = "${BASH_BIN}"
+args = ["-c", "bun run --cwd tests coverage:e2e"]
 
 [tasks.coverage-merge]
 command = "docker"
