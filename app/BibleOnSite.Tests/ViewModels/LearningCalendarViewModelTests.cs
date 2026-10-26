@@ -440,6 +440,8 @@ public class LearningCalendarViewModelTests
         merged.PerekSource.Should().Be("בראשית א-ג");
         merged.AccessibilityText.Should()
             .Contain("יום שישי").And.Contain("שבת").And.Contain("חזרה: בראשית א-ג");
+        merged.MergedDayAccessibilityText.Should()
+            .StartWith("שבת").And.Contain("חזרה: בראשית א-ג");
         // Saturday's standalone cell is folded into the merged block.
         week.Cells.Should().NotContain(c => c.DateNumber == 57750405);
         week.Cells.Should().HaveCount(6);

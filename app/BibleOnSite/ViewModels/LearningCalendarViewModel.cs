@@ -49,6 +49,13 @@ public class CalendarCellViewModel
     /// with — e.g. "כט" when the cell's <see cref="DayText"/> is "כח".
     /// </summary>
     public string MergedDayText { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Spoken label for the Shabbat half of a merged block (#2365): each
+    /// rendered day numeral is its own element under its weekday column, so
+    /// <see cref="AccessibilityText"/> alone cannot describe both halves.
+    /// </summary>
+    public string MergedDayAccessibilityText { get; init; } = string.Empty;
 }
 
 /// <summary>One 7-column week row inside a <see cref="MiniMonthViewModel"/> (#2455).</summary>
@@ -454,7 +461,8 @@ public partial class LearningCalendarViewModel : ObservableObject
             IsReview = true,
             IsToday = friday.DateNumber == _todayDateNumber ||
                 shabbat.DateNumber == _todayDateNumber,
-            AccessibilityText = $"יום שישי {fridayLabel} - שבת {shabbatLabel} - חזרה: {source}",
+            AccessibilityText = $"יום שישי, {fridayLabel} - שבת {shabbatLabel} - חזרה: {source}",
+            MergedDayAccessibilityText = $"שבת, {shabbatLabel} - חזרה: {source}",
             IsDimmed = dimmed?.Invoke(friday) == true && dimmed(shabbat),
             Column = column,
             ColumnSpan = 2,

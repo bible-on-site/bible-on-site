@@ -375,20 +375,22 @@
                                                         <Setter Property="Opacity" Value="0.3"/>
                                                     </DataTrigger>
                                                 </Border.Triggers>
-                                                <HorizontalStackLayout Spacing="0"
-                                                                       SemanticProperties.Description="{Binding AccessibilityText}">
+                                                <HorizontalStackLayout Spacing="0">
                                                     <Label Text="{Binding DayText}"
                                                            FontSize="11"
                                                            IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                                            HorizontalOptions="CenterAndExpand"
                                                            VerticalTextAlignment="Center"
                                                            AutomationId="MiniMonthDayText"
+                                                           SemanticProperties.Description="{Binding AccessibilityText}"
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                                                     <Label Text="{Binding MergedDayText}"
                                                            FontSize="11"
                                                            HorizontalOptions="CenterAndExpand"
                                                            VerticalTextAlignment="Center"
                                                            IsVisible="{Binding MergedDayText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                           AutomationId="MiniMonthDayText"
+                                                           SemanticProperties.Description="{Binding MergedDayAccessibilityText}"
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                                                 </HorizontalStackLayout>
                                             </Border>
