@@ -247,27 +247,30 @@ async function main(): Promise<void> {
 		const renderSample = keys
 			.filter((_, i) => i % renderStride === 0)
 			.slice(0, args.sample);
-		for (const key of renderSample) {
-			const expected = cache?.artifacts[key];
-			const rendered = await renderKey(
-				key,
-				verifyDir,
-				"", // input sha is unused for verification renders
-				cellsCache,
-			);
-			// Byte-compare only entries proven fresh: a stale entry may render
-			// different bytes legitimately when its inputs changed.
-			if (freshSet.has(key) && expected !== undefined) {
-				if (rendered.sha256 === expected.sha256) {
-					verified += 1;
+		try {
+			for (const key of renderSample) {
+				const expected = cache?.artifacts[key];
+				const rendered = await renderKey(
+					key,
+					verifyDir,
+					"", // input sha is unused for verification renders
+					cellsCache,
+				);
+				// Byte-compare only entries proven fresh: a stale entry may render
+				// different bytes legitimately when its inputs changed.
+				if (freshSet.has(key) && expected !== undefined) {
+					if (rendered.sha256 === expected.sha256) {
+						verified += 1;
+					} else {
+						mismatches.push(key);
+					}
 				} else {
-					mismatches.push(key);
+					smoke += 1;
 				}
-			} else {
-				smoke += 1;
 			}
+		} finally {
+			rmSync(verifyDir, { recursive: true, force: true });
 		}
-		rmSync(verifyDir, { recursive: true, force: true });
 		const report = {
 			mode: "check",
 			fingerprint,
