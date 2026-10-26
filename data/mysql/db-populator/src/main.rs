@@ -287,6 +287,10 @@ async fn main() -> Result<()> {
         }
 
         apply_tanahpedia_rebuild_structure(&mut conn, &tanahpedia_scripts).await?;
+
+        // Reading-metrics tables last: their FKs reference tanah_article and
+        // tanahpedia_entry, which exist only after the structures above ran.
+        apply_reading_metrics_upgrade(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -322,6 +326,10 @@ async fn main() -> Result<()> {
         }
 
         apply_tanahpedia_full_seed(&mut conn, &tanahpedia_scripts).await?;
+
+        // Re-applied here so `mysql-populate-data-only` still creates the
+        // reading-metrics tables on databases populated before this schema.
+        apply_reading_metrics_upgrade(&mut conn, base_path).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -520,6 +528,17 @@ async fn apply_perek_pasuk_count_upgrade(
         conn,
         &base_path.join("../tanah_perek_pasuk_count_upgrade.sql"),
         "perek-pasuk-count-upgrade",
+    )
+    .await
+}
+
+/// Creates the shared reading-metrics tables (#2607). Runs last: the metric
+/// tables hold FKs to tanah_article and tanahpedia_entry.
+async fn apply_reading_metrics_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_reading_metrics_upgrade.sql"),
+        "reading-metrics-upgrade",
     )
     .await
 }

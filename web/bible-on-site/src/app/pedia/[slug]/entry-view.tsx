@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { demoteHeadings } from "@/lib/html-headings";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
@@ -169,6 +170,10 @@ export async function EntryView({ slug }: { slug: string }) {
 				siblingEntries={siblingEntries}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
+			<ReadingTime
+				estimatedSeconds={entry.metric?.estimatedSeconds}
+				className={styles.readingTime}
+			/>
 
 			{entry.entities.length > 0 && (
 				<div className={styles.entityBadges}>

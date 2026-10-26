@@ -33,6 +33,7 @@ import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../../components/JsonLd";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerekHeading } from "../components/PerekHeading";
@@ -282,6 +283,10 @@ export default async function ArticlePage({
 							<span className={styles.authorName}>{article.authorName}</span>
 						</Link>
 						<h1 className={styles.articleTitle}>{article.name}</h1>
+						<ReadingTime
+							estimatedSeconds={article.metric?.estimatedSeconds}
+							className={styles.readingTime}
+						/>
 					</header>
 
 					{article.content && (
@@ -363,6 +368,10 @@ export default async function ArticlePage({
 						{perushDetail.name} על {perekObj.source}
 					</h1>
 					<h2 className={styles.parshanName}>{perushDetail.parshanName}</h2>
+					<ReadingTime
+						estimatedSeconds={perushDetail.metric?.estimatedSeconds}
+						className={styles.readingTime}
+					/>
 					<ShareButton
 						canonicalPath={perushPath(perekId, perushDetail.name)}
 						title={`${perushDetail.name} - ${perushDetail.parshanName}`}
@@ -391,7 +400,9 @@ export default async function ArticlePage({
 									className={styles.noteContent}
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
+										__html: DOMPurify.sanitize(
+											demoteHeadings(note.noteContent),
+										),
 									}}
 								/>
 							</div>

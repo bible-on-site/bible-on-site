@@ -14,6 +14,7 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
 import {
 	pediaEntryPath,
 	pediaInvalidation,
@@ -300,6 +301,8 @@ export const createEntry = createServerFn({ method: "POST" })
 				[data.id],
 			);
 			if (!entry) throw new Error("Entry not found");
+			// Same-transaction reading metrics (#2607).
+			await recomputeEntryMetrics(conn, data.id, entry.content);
 			return { ...entry, headRevisionId: headId };
 		});
 		await revalidateWebsite(
