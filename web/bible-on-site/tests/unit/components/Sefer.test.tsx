@@ -523,14 +523,34 @@ describe("Sefer component", () => {
 			({ name, additional, chapter }) => {
 				const perakim = Array.from({ length: 12 }, () => ({
 					header: "כותרת הפרק",
+					date: [],
+					star_rise: [],
 					pesukim: [],
 				}));
-				const sefer = {
+				const metadata = {
 					name,
-					...(additional
-						? { additionals: [{ letter: additional, perakim }] }
-						: { perakim }),
-				} as ComponentProps<typeof SeferContents>["sefer"];
+					helek: name === "בראשית" ? "תורה" : "נביאים",
+					tanachUsName: name,
+					pesukimCount: 0,
+					perekFrom: 1,
+					perekTo: perakim.length,
+				};
+				const sefer: ComponentProps<typeof SeferContents>["sefer"] = additional
+					? {
+							...metadata,
+							perekTo: perakim.length * 2,
+							additionals: [
+								{ ...metadata, letter: "א", perakim },
+								{
+									...metadata,
+									letter: "ב",
+									perakim,
+									perekFrom: perakim.length + 1,
+									perekTo: perakim.length * 2,
+								},
+							],
+						}
+					: { ...metadata, perakim };
 				render(
 					<SeferContents
 						perekObj={{ ...minimalPerek, sefer: name }}
@@ -544,7 +564,7 @@ describe("Sefer component", () => {
 					currentPageIndex: 0,
 					currentLeafIndex: 0,
 					direction: "rtl",
-				})[11];
+				})[additional === "ב" ? 23 : 11];
 				const { container } = render(p.renderExpandedBookmark?.(bookmark));
 				expect(
 					container.querySelector(".sefer-bookmark-expanded-perek"),

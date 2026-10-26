@@ -99,6 +99,41 @@ test.describe("Sefer chapter tabs", () => {
 		});
 	});
 
+	test("keeps the additional with the chapter in an expanded Kings bookmark", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		// The canonical catalog places מלכים א טו at 302 and מלכים א יב at 299.
+		await seferPage.openSeferViewForPerek(302);
+		const tab = page.locator(
+			'.flipbook-bookmark[data-bookmark-id="perek-299"]',
+		);
+		await expect(tab.locator(".sefer-bookmark-label")).toHaveText("א יב", {
+			timeout: bookMountTimeoutMs,
+		});
+		await page
+			.locator('.flipbook-bookmark-slot:has([data-bookmark-id="perek-299"])')
+			.hover();
+		const preview = page.locator(
+			'.flipbook-bookmark-preview[data-open="true"]',
+		);
+		await expect(preview.locator(".sefer-bookmark-expanded-perek")).toHaveText(
+			"פרק א יב",
+		);
+		await expect(
+			preview.locator(".sefer-bookmark-expanded-title"),
+		).toBeVisible();
+		await expect(
+			preview.locator(".sefer-bookmark-expanded-source"),
+		).toHaveCount(0);
+		await expect(tab).toHaveAttribute("aria-label", /^מלכים א יב(?: - |$)/);
+		await test.info().attach("sefer-bookmark-kings-a12-after", {
+			body: await page.screenshot(),
+			contentType: "image/png",
+		});
+	});
+
 	test("סימניות disabled in settings renders no tabs", async ({ page }) => {
 		test.setTimeout(90_000);
 		await page.addInitScript(() => {
