@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 
 import { CalendarPdfDownload } from "@/app/calendar/components/CalendarPdfDownload";
 
@@ -18,7 +19,8 @@ function pdfResponse(
 		headers: new Headers(
 			disposition ? { "Content-Disposition": disposition } : {},
 		),
-		blob: () => Promise.resolve(new Blob(["%PDF"], { type: "application/pdf" })),
+		blob: () =>
+			Promise.resolve(new Blob(["%PDF"], { type: "application/pdf" })),
 	} as Response;
 }
 
@@ -86,9 +88,9 @@ describe("CalendarPdfDownload", () => {
 		fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
 
 		await waitFor(() => expect(clickSpy).toHaveBeenCalled());
-		expect(
-			(clickSpy.mock.contexts[0] as HTMLAnchorElement).download,
-		).toBe("learning-calendar.pdf");
+		expect((clickSpy.mock.contexts[0] as HTMLAnchorElement).download).toBe(
+			"learning-calendar.pdf",
+		);
 	});
 
 	it("reports preparing then downloading while a slow request proceeds", async () => {
@@ -184,6 +186,23 @@ describe("CalendarPdfDownload", () => {
 			),
 		);
 		expect(global.fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it("still downloads under Strict Mode effect replay", async () => {
+		(global.fetch as jest.Mock).mockResolvedValue(pdfResponse(true));
+		render(
+			<StrictMode>
+				<CalendarPdfDownload url={PDF_URL} scopeLabel={SCOPE} />
+			</StrictMode>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+
+		await waitFor(() =>
+			expect(screen.getByRole("status")).toHaveTextContent(
+				`הורדת PDF של ${SCOPE} החלה`,
+			),
+		);
 	});
 
 	it("surfaces a network failure as a retryable error", async () => {

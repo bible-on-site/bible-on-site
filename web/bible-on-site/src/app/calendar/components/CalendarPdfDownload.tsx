@@ -32,12 +32,12 @@ export function CalendarPdfDownload({
 	// Guards late async completions after unmount or a superseded request.
 	const requestId = useRef(0);
 	const mounted = useRef(true);
-	useEffect(
-		() => () => {
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
 			mounted.current = false;
-		},
-		[],
-	);
+		};
+	}, []);
 
 	const begin = useCallback(() => {
 		const id = ++requestId.current;
@@ -69,7 +69,8 @@ export function CalendarPdfDownload({
 				}
 				setPhase("done");
 				setStatusText(`הורדת PDF של ${label} החלה`);
-			} catch {
+			} catch (error) {
+				console.error(`calendar PDF download failed for ${label}`, error);
 				if (!alive()) {
 					return;
 				}

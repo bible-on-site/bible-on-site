@@ -23,8 +23,11 @@ export function attachmentFilename(
 				if (decoded) {
 					return decoded;
 				}
-			} catch {
-				/* malformed percent-encoding — try the plain form below */
+			} catch (error) {
+				console.warn(
+					"Content-Disposition filename* is malformed; falling back",
+					error,
+				);
 			}
 		}
 		const plain = /filename="([^"]*)"|filename=([^;\s]+)/i.exec(header);
@@ -50,5 +53,8 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
 	document.body.append(anchor);
 	anchor.click();
 	anchor.remove();
-	setTimeout(() => URL.revokeObjectURL(url), 0);
+	// Browsers do not necessarily read the blob during click(): Firefox and
+	// Safari queue the download and fetch it later, so an immediate revoke
+	// can cancel it. Release the object URL after a generous window instead.
+	setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
