@@ -125,7 +125,11 @@ function createStore(bucket: string): ArtifactObjectStore {
 			} catch (error) {
 				const status = (error as { $metadata?: { httpStatusCode?: number } })
 					.$metadata?.httpStatusCode;
-				if (status === 404) {
+				// S3 answers 403 (not 404) for a missing object when the caller
+				// lacks s3:ListBucket — the deploy role is object-scoped, so treat
+				// both as absent. A genuinely denied object fails loudly on the
+				// put that follows instead of silently skipping the manifest flip.
+				if (status === 404 || status === 403) {
 					return null;
 				}
 				throw error;

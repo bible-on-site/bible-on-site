@@ -48,6 +48,7 @@ import {
 	type CalendarPdfCacheArtifact,
 	type CalendarPdfCacheIndex,
 	calendarArtifactInputSha,
+	carriedExtraKeys,
 	parseCalendarPdfCacheIndex,
 	planCalendarPdfGeneration,
 	sha256Bytes,
@@ -99,10 +100,27 @@ function parseArgs(argv: string[]): Args {
 	return args;
 }
 
-/** Extra keys must be canonical and generatable — they are the out-of-band path. */
-function resolveKeys(includes: string[]): string[] {
+/**
+ * The desired key set = bounded set + extras. Extras come from `--include`
+ * args AND from keys a previous run published that are outside the bounded
+ * set — carrying them forward keeps their URLs live across regular publishes
+ * instead of the manifest silently dropping them on the next run. Only
+ * canonical, still-generatable keys carry (a key that can no longer render
+ * is dropped rather than published stale).
+ */
+function resolveKeys(
+	includes: string[],
+	cache: CalendarPdfCacheIndex | null,
+): string[] {
 	const keys = listCalendarArtifactKeys();
 	const seen = new Set(keys);
+	for (const key of carriedExtraKeys(keys, cache)) {
+		const parsed = parseCalendarArtifactKey(key);
+		if (parsed !== null && isGeneratableArtifactKey(parsed)) {
+			seen.add(key);
+			keys.push(key);
+		}
+	}
 	for (const key of includes) {
 		const parsed = parseCalendarArtifactKey(key);
 		if (!parsed || !isGeneratableArtifactKey(parsed)) {
@@ -195,9 +213,11 @@ async function main(): Promise<void> {
 	const fingerprint = computeCalendarPdfFingerprint();
 	const renderFingerprint = computeCalendarPdfRenderFingerprint();
 	const bounds = getCalendarArtifactBounds();
-	const keys = resolveKeys(args.includes);
 
+	// The cache loads before resolving keys: previously published out-of-band
+	// keys carry forward so regular publishes never drop them.
 	const cache = loadCacheIndex(args.dir);
+	const keys = resolveKeys(args.includes, cache);
 	const objectPresent = (sha256: string) =>
 		existsSync(join(args.dir, "objects", `${sha256}.pdf`));
 

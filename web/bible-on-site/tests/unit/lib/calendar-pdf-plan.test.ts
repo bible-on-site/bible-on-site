@@ -14,6 +14,7 @@ import {
 	calendarArtifactInputSha,
 	calendarPdfArchivedManifestObject,
 	calendarPdfObjectKey,
+	carriedExtraKeys,
 	parseCalendarPdfCacheIndex,
 	parseCalendarPdfManifest,
 	planCalendarPdfGeneration,
@@ -57,8 +58,8 @@ describe("object keys", () => {
 		expect(CALENDAR_PDF_MANIFEST_OBJECT).toBe(
 			`${CALENDAR_PDF_S3_PREFIX}/manifest.json`,
 		);
-		expect(calendarPdfArchivedManifestObject("fp")).toBe(
-			`${CALENDAR_PDF_S3_PREFIX}/manifest-fp.json`,
+		expect(calendarPdfArchivedManifestObject("fp", "ab".repeat(32))).toBe(
+			`${CALENDAR_PDF_S3_PREFIX}/manifest-fp-abababababab.json`,
 		);
 	});
 });
@@ -198,6 +199,41 @@ describe("planCalendarPdfGeneration", () => {
 		const plan = planCalendarPdfGeneration(desired, null, () => false);
 		expect(plan.fresh).toEqual([]);
 		expect(plan.regenerate).toEqual(["month:578512"]);
+	});
+});
+
+describe("carriedExtraKeys", () => {
+	const cacheWith = (...keys: string[]): CalendarPdfCacheIndex => ({
+		version: 1,
+		fingerprint: FP,
+		artifacts: Object.fromEntries(
+			keys.map((k) => [
+				k,
+				{
+					inputSha: "i",
+					object: "o",
+					sha256: "s",
+					bytes: 1,
+					filename: "f",
+				},
+			]),
+		),
+	});
+
+	it("carries only keys outside the bounded set", () => {
+		const base = ["month:578512", "cycle:4"];
+		const cache = cacheWith(
+			"month:578512",
+			"cycle:4",
+			"cycle:99",
+			"month:999912",
+		);
+		expect(carriedExtraKeys(base, cache)).toEqual(["cycle:99", "month:999912"]);
+	});
+
+	it("returns nothing for a cold or bounded-only cache", () => {
+		expect(carriedExtraKeys(["cycle:1"], null)).toEqual([]);
+		expect(carriedExtraKeys(["cycle:1"], cacheWith("cycle:1"))).toEqual([]);
 	});
 });
 

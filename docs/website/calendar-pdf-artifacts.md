@@ -9,10 +9,15 @@ only resolves a request to a canonical artifact and 302-redirects to it.
 
 ```
 generated/calendar-pdf/
-  objects/<sha256>.pdf      # content-addressed bodies — immutable, never deleted
-  manifest.json             # the publish switch: key → object map (flipped last)
-  manifest-<fp>.json        # archived manifests for one-copy rollback
+  objects/<sha256>.pdf            # content-addressed bodies — immutable, never deleted
+  manifest.json                   # the publish switch: key → object map (flipped last)
+  manifest-<fp>-<sha12>.json      # archived manifests for one-copy rollback
 ```
+
+Archive keys carry the fingerprint **and** a hash of the manifest's own
+artifact map, so two publishes sharing one fingerprint but different artifact
+sets (e.g. a dispatch that added `--include` keys) keep distinct restorable
+archives.
 
 Canonical artifact keys collapse equivalent legacy URLs onto one artifact:
 
@@ -27,6 +32,12 @@ cycles follow the same scheduling rules), every Hebrew year they span, and
 every month of those years — 641 keys today (`577501`–`582112`, cycles
 1–13). Valid keys outside the set 404; they can be produced out of band
 with `--include` and are then served through the manifest.
+
+Extras persist: a key published via `--include` stays in the local cache
+index, so every later run carries it in the desired set and re-renders it
+when its inputs change — regular publishes never silently drop an
+out-of-band artifact. To retire an extra, remove its entry (and object) from
+`.cache/calendar-pdf` before generating.
 
 ## Commands (run from `web/bible-on-site`)
 
@@ -79,13 +90,15 @@ are idempotent.
 ## Publication ordering + rollback
 
 `publishCalendarPdfArtifacts` uploads and HEAD-verifies **every** object
-before writing `manifest-<fp>.json` and finally `manifest.json` — a manifest
-that parses never references a missing object. Unreferenced objects are
-never deleted, so rolling back is a single copy:
+before writing `manifest-<fp>-<sha12>.json` and finally `manifest.json` — a
+manifest that parses never references a missing object. Unreferenced objects
+are never deleted, so rolling back is a single copy: list the archives
+(`aws s3 ls s3://bible-on-site-assets/generated/calendar-pdf/`), pick the
+desired one, and copy it over `manifest.json`:
 
 ```bash
 aws s3 cp \
-  s3://bible-on-site-assets/generated/calendar-pdf/manifest-<fp>.json \
+  s3://bible-on-site-assets/generated/calendar-pdf/manifest-<fp>-<sha12>.json \
   s3://bible-on-site-assets/generated/calendar-pdf/manifest.json
 ```
 

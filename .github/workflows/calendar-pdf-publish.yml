@@ -10,8 +10,10 @@ name: Calendar PDF Artifacts
 # CI pipeline (main CI only runs the ~30s `check:calendar-pdf` verification).
 #
 # Rollback: artifacts are content-addressed and never deleted. Re-publishing a
-# prior manifest is a single object copy:
-#   aws s3 cp s3://bible-on-site-assets/generated/calendar-pdf/manifest-<fp>.json \
+# prior manifest is a single object copy — archives are keyed by fingerprint +
+# manifest-content hash (manifest-<fp>-<sha12>.json), so distinct artifact sets
+# under one fingerprint keep distinct restorable copies:
+#   aws s3 cp s3://bible-on-site-assets/generated/calendar-pdf/manifest-<fp>-<sha12>.json \
 #             s3://bible-on-site-assets/generated/calendar-pdf/manifest.json
 
 on:
@@ -119,10 +121,14 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Generate artifacts
+        env:
+          # Dispatch input arrives via env, never interpolated into the script —
+          # this job can assume the AWS deploy role, so the input must never
+          # be evaluated as shell. The generator validates each key itself.
+          EXTRA_KEYS: ${{ inputs.extra_keys }}
         run: |
-          EXTRA="${{ inputs.extra_keys }}"
-          if [ -n "$EXTRA" ]; then
-            bun run generate:calendar-pdf -- --include "$EXTRA"
+          if [ -n "$EXTRA_KEYS" ]; then
+            bun run generate:calendar-pdf -- --include "$EXTRA_KEYS"
           else
             bun run generate:calendar-pdf
           fi

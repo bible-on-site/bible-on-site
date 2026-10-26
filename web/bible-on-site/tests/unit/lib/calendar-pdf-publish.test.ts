@@ -6,11 +6,21 @@ import { getCalendarArtifactBounds } from "@/lib/download/calendar-artifacts";
 import {
 	CALENDAR_PDF_MANIFEST_OBJECT,
 	type CalendarPdfManifest,
+	calendarPdfArchivedManifestObject,
+	sha256Bytes,
 } from "@/lib/download/calendar-pdf-plan";
 import {
 	type ArtifactObjectStore,
 	publishCalendarPdfArtifacts,
 } from "@/lib/download/calendar-pdf-publish";
+
+/** The archive key a publish of `manifest` would write (content-addressed). */
+function archiveKeyFor(manifest: CalendarPdfManifest): string {
+	return calendarPdfArchivedManifestObject(
+		manifest.fingerprint,
+		sha256Bytes(new TextEncoder().encode(`${JSON.stringify(manifest)}\n`)),
+	);
+}
 
 interface StoredObject {
 	body: Uint8Array;
@@ -97,12 +107,9 @@ describe("publishCalendarPdfArtifacts", () => {
 			expect(key).toMatch(/objects\/[a-f0-9]{64}\.pdf$/);
 		}
 		// The archived manifest is also written before the live one.
-		expect(putOrder.indexOf(manifest.fingerprint)).toBe(-1);
-		expect(
-			putOrder.indexOf(
-				`generated/calendar-pdf/manifest-${manifest.fingerprint}.json`,
-			),
-		).toBeLessThan(manifestIndex);
+		expect(putOrder.indexOf(archiveKeyFor(manifest))).toBeLessThan(
+			manifestIndex,
+		);
 	});
 
 	it("sets download semantics on artifact objects", async () => {

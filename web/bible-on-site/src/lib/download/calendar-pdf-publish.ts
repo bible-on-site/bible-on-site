@@ -6,7 +6,7 @@
  *   1. Every artifact object is uploaded to its content-addressed key
  *      (`generated/calendar-pdf/objects/<sha256>.pdf`) and HEAD-verified.
  *   2. Only then is `manifest.json` replaced (plus an immutable archived
- *      copy `manifest-<fingerprint>.json` kept for one-copy rollback).
+ *      copy `manifest-<fingerprint>-<sha12>.json` kept for one-copy rollback).
  *   3. A final pass re-verifies every referenced object.
  *
  * Objects are immutable — identical bytes keep the same key, so uploads are
@@ -23,6 +23,7 @@ import {
 	type CalendarPdfManifest,
 	calendarPdfArchivedManifestObject,
 	parseCalendarPdfManifest,
+	sha256Bytes,
 } from "./calendar-pdf-plan";
 
 export interface PutObjectOptions {
@@ -141,7 +142,12 @@ export async function publishCalendarPdfArtifacts({
 		currentManifest.fingerprint !== manifest.fingerprint ||
 		JSON.stringify(currentManifest.artifacts) !==
 			JSON.stringify(manifest.artifacts);
-	const archivedKey = calendarPdfArchivedManifestObject(manifest.fingerprint);
+	// The archive key carries the manifest's own content hash, so distinct
+	// artifact sets under one fingerprint each keep a restorable copy.
+	const archivedKey = calendarPdfArchivedManifestObject(
+		manifest.fingerprint,
+		sha256Bytes(manifestBody),
+	);
 	if (manifestChanged) {
 		await store.put(archivedKey, manifestBody, {
 			contentType: "application/json",

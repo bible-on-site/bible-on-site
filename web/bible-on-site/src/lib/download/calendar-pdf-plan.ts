@@ -34,9 +34,16 @@ export function calendarPdfObjectKey(sha256: string): string {
 	return `${CALENDAR_PDF_S3_PREFIX}/objects/${sha256}.pdf`;
 }
 
-/** Archived manifest object kept per fingerprint for instant rollback. */
-export function calendarPdfArchivedManifestObject(fingerprint: string): string {
-	return `${CALENDAR_PDF_S3_PREFIX}/manifest-${fingerprint}.json`;
+/**
+ * Archived manifest object kept per fingerprint+content for instant rollback.
+ * The content hash distinguishes archives that share a fingerprint but carry
+ * different artifact sets (e.g. a dispatch published extra --include keys).
+ */
+export function calendarPdfArchivedManifestObject(
+	fingerprint: string,
+	manifestSha256: string,
+): string {
+	return `${CALENDAR_PDF_S3_PREFIX}/manifest-${fingerprint}-${manifestSha256.slice(0, 12)}.json`;
 }
 
 export interface CalendarPdfManifestArtifact {
@@ -183,6 +190,27 @@ export function planCalendarPdfGeneration(
 		}
 	}
 	return { fresh, regenerate, reused };
+}
+
+/**
+ * Out-of-band keys a previous `--include` run published. They are not part of
+ * the bounded set, but their immutable objects still exist — dropping them
+ * from the manifest would break their URLs. Carried keys stay in the desired
+ * set, so they also re-render whenever their own inputs change. Only
+ * generatable keys carry forward.
+ */
+export function carriedExtraKeys(
+	baseKeys: readonly string[],
+	cache: CalendarPdfCacheIndex | null,
+): string[] {
+	const base = new Set(baseKeys);
+	const extras: string[] = [];
+	for (const key of Object.keys(cache?.artifacts ?? {})) {
+		if (!base.has(key)) {
+			extras.push(key);
+		}
+	}
+	return extras;
 }
 
 export interface ParsedCacheIndexOk {
