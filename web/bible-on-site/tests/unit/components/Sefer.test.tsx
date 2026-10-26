@@ -188,6 +188,7 @@ import {
 	saveSeferBookmarkSettings,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { CONTENT_OFFSET } from "@/app/929/[number]/components/sefer-page-utils";
 
 function timeframe(from: string, to: string): QriSegment["recordingTimeFrame"] {
 	return { from, to } as unknown as QriSegment["recordingTimeFrame"];
@@ -1072,5 +1073,96 @@ describe("Sefer component", () => {
 
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
+	});
+
+	it("dispatches qa-widget-toggle from the toolbar button", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		const events: Event[] = [];
+		document.addEventListener("qa-widget-toggle", (e) => events.push(e));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שאלה על הפרק" }),
+		);
+		expect(events).toHaveLength(1);
+	});
+
+	it("jumps to the answer chapter and pushes its route on qa-navigate-sefer", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2, 3]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: {
+						type: "perush",
+						name: 'רש"י',
+						author: 'רש"י',
+						perekId: 2,
+						perushSlug: "rashi",
+						pasuk: 3,
+						noteIdx: 1,
+					},
+				}),
+			);
+		});
+		expect(mockJumpToPage).toHaveBeenCalledWith(1 * 2 + CONTENT_OFFSET + 1);
+		expect(window.location.pathname).toBe("/929/2");
+		expect(window.location.search).toBe("?book");
+	});
+
+	it("uses the article id as the slug for article answers", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2, 3]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: {
+						type: "article",
+						name: "מאמר",
+						author: "author",
+						perekId: 3,
+						articleId: 42,
+					},
+				}),
+			);
+		});
+		expect(mockJumpToPage).toHaveBeenCalledWith(2 * 2 + CONTENT_OFFSET + 1);
+		expect(window.location.pathname).toBe("/929/3");
+	});
+
+	it("ignores qa-navigate-sefer for a chapter outside the book", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		act(() => {
+			document.dispatchEvent(
+				new CustomEvent("qa-navigate-sefer", {
+					detail: { type: "perush", name: "x", author: "x", perekId: 99, perushSlug: "rashi" },
+				}),
+			);
+		});
+		expect(mockJumpToPage).not.toHaveBeenCalled();
 	});
 });

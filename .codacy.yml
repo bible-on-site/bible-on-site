@@ -38,6 +38,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
+  - "data/mysql/tanah_dev_data.sql"
   - "data/mysql/tanah_perek_images_structure.sql"
   - "data/mysql/tanah_truncate.sql"
   # Same class of T-SQL-dialect false positive: "Use of unicode characters in
@@ -62,6 +63,8 @@ exclude_paths:
   # Android SDK manifest parser test fixtures embed Google's repository XML;
   # markup rules flag the fixture strings as interpolated HTML/XSS.
   - "devops/github/ci/android-sdk-manifest.test.mjs"
+  # pip requirement pins are not Python source; Codacy lints them anyway.
+  - "web/qa-service/scripts/requirements.txt"
   # Local-dev/test helpers whose fs paths are legitimately dynamic — a
   # developer-chosen recordings dir, fixed node_modules/sibling-repo roots,
   # or fixture-owned temp dirs. non-literal-fs-filename is a systemic false

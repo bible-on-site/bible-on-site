@@ -1,0 +1,5 @@
+target/
+# Model weights live at the crate root (models/embedder, models/qa). Anchored
+# so src/models/ source code is NOT ignored — that ate the module once.
+/models/
+/embeddings_cache.bin

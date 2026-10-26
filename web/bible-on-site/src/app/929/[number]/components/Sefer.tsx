@@ -195,6 +195,49 @@ const Sefer = (props: {
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
 
+	const toggleQa = useCallback(() => {
+		document.dispatchEvent(new Event("qa-widget-toggle"));
+	}, []);
+
+	const [qaExpandTarget, setQaExpandTarget] = useState<{
+		perekId: number;
+		slug: string;
+		pasuk?: number;
+		noteIdx?: number;
+		token: number;
+	} | null>(null);
+
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const source = (e as CustomEvent).detail;
+			if (!source?.perekId || !perekIds) return;
+			const idx = perekIds.indexOf(source.perekId);
+			if (idx < 0) return;
+			const blankPageIndex = idx * 2 + CONTENT_OFFSET + 1;
+			flipBookRef.current?.jumpToPage(blankPageIndex);
+
+			const slug =
+				source.type === "article" && source.articleId != null
+					? String(source.articleId)
+					: source.perushSlug ?? "";
+			setQaExpandTarget({
+				perekId: source.perekId,
+				slug,
+				pasuk: source.pasuk,
+				noteIdx: source.noteIdx,
+				token: Date.now(),
+			});
+
+			// Update URL to reflect the navigated perek
+			const targetId = perekIds[idx];
+			if (targetId != null) {
+				window.history.pushState(null, "", `/929/${targetId}?book`);
+			}
+		};
+		document.addEventListener("qa-navigate-sefer", handler);
+		return () => document.removeEventListener("qa-navigate-sefer", handler);
+	}, [perekIds]);
+
 	const entityRefLookupsByPerekIdx = useMemo(() => {
 		if (!entityRefsByPerek || !perekIds) return {};
 		const result: Record<number, ReturnType<typeof buildEntityRefLookup>> = {};
@@ -588,6 +631,26 @@ const Sefer = (props: {
 							? undefined
 							: (slug) => contentNavigation.navigate(pagePerekId, slug)
 					}
+					expandSlug={
+						qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+							? qaExpandTarget.slug
+							: undefined
+					}
+					expandToken={
+						qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+							? qaExpandTarget.token
+							: undefined
+					}
+					expandNotePasuk={
+						qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+							? qaExpandTarget.pasuk
+							: undefined
+					}
+					expandNoteIdx={
+						qaExpandTarget && qaExpandTarget.perekId === (perekIds?.[perekIdx] ?? 0)
+							? qaExpandTarget.noteIdx
+							: undefined
+					}
 					perekTitleParts={seferPerekTitles[perekIdx]}
 					onContentTitle={setInBookContentTitle}
 				/>
@@ -717,6 +780,9 @@ const Sefer = (props: {
 							</p>
 						)}
 						<DownloadDropdown ariaLabel="הורדה" />
+						<ActionButton onClick={toggleQa} ariaLabel="שאלה על הפרק">
+							<span style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>?</span>
+						</ActionButton>
 						<DownloadMaskingHint toolbarRef={toolbarEndRef} />
 					</div>
 				</Toolbar>

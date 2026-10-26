@@ -578,3 +578,64 @@ describe("commentary batch lifecycle", () => {
 		}
 	});
 });
+
+describe("expand props", () => {
+	const scrollIntoView = jest.fn();
+	beforeEach(() => {
+		scrollIntoView.mockClear();
+		Element.prototype.scrollIntoView = scrollIntoView;
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 3, noteIdx: 1, noteContent: "<p>note</p>" }],
+		});
+	});
+
+	it("expands the expandSlug perush and scrolls to the target note", async () => {
+		const onNavigate = jest.fn();
+		await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				expandSlug={'רש"י'}
+				expandToken={1}
+				expandNotePasuk={3}
+				expandNoteIdx={1}
+				onNavigate={onNavigate}
+			/>,
+		);
+
+		expect(onNavigate).toHaveBeenCalledWith('רש"י');
+		await screen.findByText("note");
+		await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+		expect(document.getElementById("book-note-ג-2")).not.toBeNull();
+	});
+
+	it("re-expands when the token changes with the same slug", async () => {
+		const onNavigate = jest.fn();
+		const props = {
+			...PROPS,
+			expandSlug: 'רש"י' as string,
+			onNavigate,
+		};
+		const view = await renderPanel(<SeferPanel {...props} expandToken={1} />);
+		expect(onNavigate).toHaveBeenCalledTimes(1);
+
+		view.rerender(<SeferPanel {...props} expandToken={2} />);
+		await waitFor(() => expect(onNavigate).toHaveBeenCalledTimes(2));
+		expect(onNavigate).toHaveBeenLastCalledWith('רש"י');
+	});
+
+	it("does not re-expand on the same token", async () => {
+		const onNavigate = jest.fn();
+		const props = {
+			...PROPS,
+			expandSlug: 'רש"י' as string,
+			expandToken: 7,
+			onNavigate,
+		};
+		const view = await renderPanel(<SeferPanel {...props} />);
+		expect(onNavigate).toHaveBeenCalledTimes(1);
+
+		view.rerender(<SeferPanel {...props} />);
+		await flushAsync();
+		expect(onNavigate).toHaveBeenCalledTimes(1);
+	});
+});
