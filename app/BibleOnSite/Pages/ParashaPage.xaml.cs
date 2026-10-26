@@ -802,6 +802,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
     }
 
+    /// <summary>Feeds the Debug-only תיקון scroll-offset E2E probe (#2624).</summary>
+    private void OnTikkunScrolled(object? sender, ScrolledEventArgs e) =>
+        ReaderScrollTop.NoteScrollOffset(sender, e);
+
     #endregion
 
     #region Articles

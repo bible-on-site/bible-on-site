@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using BibleOnSite.Tests.MobileE2E.Configuration;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
@@ -78,9 +80,10 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
 
         Page.Tap("TextButton");
 
-        // The same scroll offset renders the same pixels; once the scrollbar
-        // fades, the capture of the start state is byte-for-byte stable.
-        WaitForTikkun(() => TikkunFrame(scrollView).SequenceEqual(topFrame),
+        // The Debug build mirrors the live תיקון offset into the view's
+        // accessibility description ("tsy:{dips}") — an exact position signal
+        // instead of pixel equality, which a fading scrollbar can defeat.
+        WaitForTikkun(() => TikkunReturnedToStart(scrollView, topFrame),
             "reselecting א ב ג must return the תיקון קוראים flow to its start");
         Assert.Equal("בראשית א", Page.Source);
     });
@@ -156,19 +159,25 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
     }
 
     /// <summary>
-    /// Scrolls the תיקון flow away from its start, then proves the capture
-    /// actually changed. UiAutomator2 reports a scrollable's children with
-    /// viewport-clipped bounds — the flow view's top edge never leaves the
-    /// viewport — so position evidence comes from pixels, not frames.
+    /// Scrolls the תיקון flow away from its start, verifying every attempt
+    /// against the reported offset before trusting it: an injected drag can
+    /// land while the flow is still laying out or while a child gesture
+    /// recognizer settles, so the other injection path tries next whenever one
+    /// did not move the view. UiAutomator2 reports a scrollable's children
+    /// with viewport-clipped bounds — the flow view's top edge never leaves
+    /// the viewport — so position evidence comes from the offset probe, or
+    /// from pixels on builds without it.
     /// </summary>
     private void ScrollTikkunDown(AppiumElement scrollView, byte[] topFrame)
     {
-        if (Configuration.Platform == MobilePlatform.Android)
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var attempt = 0;
+        while (DateTime.UtcNow < deadline)
         {
-            // The driver-level scroll gesture drives the scrollable surface
-            // itself, independent of where its clipped child bounds sit.
-            for (var i = 0; i < 6; i++)
+            if (Configuration.Platform == MobilePlatform.Android && attempt % 2 == 0)
             {
+                // The driver-level scroll gesture drives the scrollable surface
+                // itself, independent of where its clipped child bounds sit.
                 Driver!.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
                 {
                     ["elementId"] = scrollView.Id,
@@ -176,13 +185,65 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
                     ["percent"] = 0.9,
                 });
             }
+            else
+            {
+                ScrollReaderDown(scrollView);
+            }
+            var settled = DateTime.UtcNow.AddSeconds(4);
+            while (DateTime.UtcNow < settled)
+            {
+                if (TikkunMovedFromStart(scrollView, topFrame))
+                {
+                    return;
+                }
+                Thread.Sleep(250);
+            }
+            attempt++;
         }
-        else
-        {
-            ScrollReaderDown(scrollView);
-        }
-        WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(topFrame),
+        throw new WebDriverTimeoutException(
             "the תיקון קוראים content stayed at the top after the scroll gestures");
+    }
+
+    /// <summary>True once the תיקון flow reports a real offset — or, without
+    /// the probe, once its pixels differ from the start capture.</summary>
+    private bool TikkunMovedFromStart(AppiumElement scrollView, byte[] topFrame) =>
+        TikkunOffsetY(scrollView) is { } offset
+            ? offset > 200
+            : !TikkunFrame(scrollView).SequenceEqual(topFrame);
+
+    private bool TikkunReturnedToStart(AppiumElement scrollView, byte[] topFrame) =>
+        TikkunOffsetY(scrollView) is { } offset
+            ? offset <= 2
+            : TikkunFrame(scrollView).SequenceEqual(topFrame);
+
+    /// <summary>
+    /// Reads the תיקון scroll offset that Debug builds mirror into the view's
+    /// accessibility description as "tsy:{dips}" (#2624); null when the probe
+    /// has not reported yet or the build predates it.
+    /// </summary>
+    private int? TikkunOffsetY(AppiumElement scrollView)
+    {
+        var names = Configuration.Platform == MobilePlatform.Android
+            ? new[] { "contentDescription", "content-desc" }
+            : new[] { "label", "value", "name" };
+        foreach (var name in names)
+        {
+            string? raw;
+            try
+            {
+                raw = scrollView.GetAttribute(name);
+            }
+            catch (WebDriverException)
+            {
+                continue;
+            }
+            var match = Regex.Match(raw ?? string.Empty, @"tsy:(\d+)");
+            if (match.Success)
+            {
+                return int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+            }
+        }
+        return null;
     }
 
     /// <summary>The scroll view's current visible pixels.</summary>

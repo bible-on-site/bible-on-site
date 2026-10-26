@@ -80,6 +80,23 @@ public static class ReaderScrollTop
         }
     }
 
+    /// <summary>
+    /// Debug-only mobile-E2E probe (#2624): mirrors the live תיקון scroll
+    /// offset into the view's accessibility description ("tsy:{dips}") so
+    /// tests read the exact position deterministically — the custom-drawn
+    /// content reports no scroll state through accessibility bounds, and pixel
+    /// captures flap against scrollbar fades. A no-op in release builds.
+    /// </summary>
+    internal static void NoteScrollOffset(object? sender, ScrolledEventArgs e)
+    {
+#if DEBUG
+        if (sender is BindableObject element)
+        {
+            SemanticProperties.SetDescription(element, $"tsy:{(int)Math.Round(e.ScrollY)}");
+        }
+#endif
+    }
+
     // Seam so tests can assert the preference reaches the scroll request; the
     // platform implementations keep the reduced-motion/system-animation flags.
     internal static Func<bool> AnimateScroll { get; set; } = PlatformPrefersAnimatedScroll;

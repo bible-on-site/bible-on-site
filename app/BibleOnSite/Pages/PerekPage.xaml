@@ -300,7 +300,8 @@
                             <ScrollView Grid.Row="1"
                                         AutomationId="TikkunScrollView"
                                         IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}}"
-                                        Margin="8,0,8,0">
+                                        Margin="8,0,8,0"
+                                        Scrolled="OnTikkunScrolled">
                                 <VerticalStackLayout>
                                     <!-- MAUI TapGestureRecognizer fails inside CarouselView
                                          templates on Android; LongPressBehavior.NativeTapped
