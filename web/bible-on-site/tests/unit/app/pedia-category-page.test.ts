@@ -26,6 +26,7 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn().mockResolvedValue([]),
 	getEntryByUniqueName: jest.fn().mockResolvedValue(null),
+	getEntriesBySynonym: jest.fn().mockResolvedValue([]),
 	getEntitiesWithEntries: jest.fn(),
 	getEntitiesWithEntriesByRole: jest.fn(),
 	getAnimalsByClassification: jest.fn(),

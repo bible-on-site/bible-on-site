@@ -43,6 +43,7 @@ import {
 	restoreEntryRevision,
 	saveEntryRevisioned,
 } from "~/server/tanahpedia/revisions";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 const ENTRY = {
 	id: "entry-1",
@@ -507,6 +508,7 @@ describe("website cache invalidation", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -520,13 +522,15 @@ describe("website cache invalidation", () => {
 		fetchSpy.mockRestore();
 	});
 
-	function calledUrls(): URL[] {
-		return fetchSpy.mock.calls.map(
-			(call: unknown[]) => new URL(String(call[0])),
-		);
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
 	}
 
-	it("expires pedia surfaces when a proposal goes live", async () => {
+	it("sends the entry change when a proposal goes live", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -539,14 +543,13 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		const urls = calledUrls();
-		expect(urls.length).toBeGreaterThan(0);
-		expect(urls.map((u) => u.searchParams.get("tag"))).toContain(
-			"tanahpedia-entity-refs",
-		);
+		expect(fetchSpy).toHaveBeenCalled();
+		expect(sentChanges()).toEqual([
+			{ kind: "pedia-entry", uniqueName: "yaakov" },
+		]);
 	});
 
-	it("expires pedia surfaces when a revision is restored", async () => {
+	it("sends the entry change when a revision is restored", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
 			.mockResolvedValueOnce(ENTRY)
@@ -557,16 +560,12 @@ describe("website cache invalidation", () => {
 			data: { id: "old-rev", baseRevisionId: "rev-head" },
 		});
 
-		expect(calledUrls().length).toBeGreaterThan(0);
+		expect(sentChanges()).toEqual([
+			{ kind: "pedia-entry", uniqueName: "yaakov" },
+		]);
 	});
 
-	function notifiedUrls(): string[] {
-		// The urls ride on the third (/pedia index) invalidation call.
-		const url = new URL(String(fetchSpy.mock.calls[2]?.[0] ?? ""));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports the old and new entry urls when approval renames the entry", async () => {
+	it("carries the old and new names when approval renames the entry", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -580,10 +579,16 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/yaakov-avenu", "/pedia/yaakov"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entry",
+				uniqueName: "yaakov-avenu",
+				oldUniqueName: "yaakov",
+			},
+		]);
 	});
 
-	it("keeps the entry's url when approval does not rename it", async () => {
+	it("keeps the entry's name only when approval does not rename it", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -597,12 +602,14 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/yaakov"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "pedia-entry", uniqueName: "yaakov" },
+		]);
 	});
 
-	it("submits no urls when the approved entry has no name to notify", async () => {
+	it("sends nothing when the approved entry has no name to notify", async () => {
 		// Defensive: unique_name is NOT NULL, but a missing row value must not
-		// produce a bogus /pedia/null submission.
+		// produce a bogus /pedia/null notification.
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -616,11 +623,10 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		expect(fetchSpy).toHaveBeenCalled();
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it("reports the old and new entry urls when a restore renames the entry", async () => {
+	it("carries the old and new names when a restore renames the entry", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -635,10 +641,16 @@ describe("website cache invalidation", () => {
 			data: { id: "old-rev", baseRevisionId: "rev-head" },
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/yaakov-old", "/pedia/yaakov"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entry",
+				uniqueName: "yaakov-old",
+				oldUniqueName: "yaakov",
+			},
+		]);
 	});
 
-	it("submits no urls when the restored row is gone and the entry had no name", async () => {
+	it("sends nothing when the restored row is gone and the entry had no name", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
 			.mockResolvedValueOnce({ ...ENTRY, unique_name: null })
@@ -649,8 +661,7 @@ describe("website cache invalidation", () => {
 			data: { id: "old-rev", baseRevisionId: "rev-head" },
 		});
 
-		expect(fetchSpy).toHaveBeenCalled();
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it("does not invalidate when a proposal is rejected", async () => {

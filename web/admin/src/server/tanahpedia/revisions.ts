@@ -9,8 +9,7 @@ import {
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
 import {
-	pediaEntryPath,
-	pediaInvalidation,
+	pediaEntryChange,
 	revalidateWebsite,
 } from "../website-revalidate";
 
@@ -304,13 +303,18 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 			};
 		});
 		// Post-commit: the proposal is now live content, so pedia caches
-		// expire. Old and new URLs are both notified after a rename.
-		const urls = new Set<string>();
-		if (applied.uniqueName) urls.add(pediaEntryPath(applied.uniqueName));
-		if (applied.previousUniqueName) {
-			urls.add(pediaEntryPath(applied.previousUniqueName));
+		// expire. A rename's destroyed name rides along as oldUniqueName.
+		if (applied.uniqueName) {
+			await revalidateWebsite([
+				pediaEntryChange({
+					uniqueName: applied.uniqueName,
+					...(applied.previousUniqueName &&
+					applied.previousUniqueName !== applied.uniqueName
+						? { oldUniqueName: applied.previousUniqueName }
+						: {}),
+				}),
+			]);
 		}
-		await revalidateWebsite(pediaInvalidation(...urls));
 		// uniqueName/previousUniqueName are notification bookkeeping, not part
 		// of the handler's public result.
 		const { uniqueName, previousUniqueName, ...result } = applied;
@@ -396,15 +400,19 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 				previousUniqueName: entry.unique_name,
 			};
 		});
-		// Notify the restored URL and the pre-restore one if the rename moved it.
-		const urls = new Set<string>();
+		// The restored name and the pre-restore name both revalidate after a
+		// rename restore.
 		if (restored.entry?.unique_name) {
-			urls.add(pediaEntryPath(restored.entry.unique_name));
+			await revalidateWebsite([
+				pediaEntryChange({
+					uniqueName: restored.entry.unique_name,
+					...(restored.previousUniqueName &&
+					restored.previousUniqueName !== restored.entry.unique_name
+						? { oldUniqueName: restored.previousUniqueName }
+						: {}),
+				}),
+			]);
 		}
-		if (restored.previousUniqueName) {
-			urls.add(pediaEntryPath(restored.previousUniqueName));
-		}
-		await revalidateWebsite(pediaInvalidation(...urls));
 		const { previousUniqueName, ...result } = restored;
 		return result;
 	});

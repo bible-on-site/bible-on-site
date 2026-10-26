@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 import { loadRecitation } from "@/lib/recitation-loader";
 import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
+import {
+	cachedPerKey,
+	COLLECTION_TAGS,
+	perekArticlesTag,
+	perekPerushimTag,
+} from "../../../lib/revalidate/tags";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { absUrl } from "../../../lib/seo/jsonld";
 import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
@@ -35,26 +40,24 @@ export const dynamicParams = false;
  * - On-demand revalidation provides precise control over when content updates
  *
  * To invalidate:
- * - Single page: revalidatePath('/929/{perekId}')
+ * - One perek's articles: revalidateTag('perek:{perekId}:articles') — the
+ *   entity-scoped tag `/api/revalidate` resolves from an article change.
  * - All articles: revalidateTag('articles')
+ * - Single page: revalidatePath('/929/{perekId}')
  */
-const getCachedArticleSummaries = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticleSummaries = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
 /** Cache perushim summaries per perek (same caching strategy as articles). */
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 export async function generateMetadata({
 	params,

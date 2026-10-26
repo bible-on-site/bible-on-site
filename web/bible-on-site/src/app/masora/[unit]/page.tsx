@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
@@ -20,6 +19,12 @@ import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getPerushimForRanges } from "@/lib/perushim/service";
 import { rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import {
+	cachedPerKey,
+	COLLECTION_TAGS,
+	masoraArticlesTag,
+	masoraPerushimTag,
+} from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { MasoraSeferComposite } from "./components/MasoraSeferComposite";
@@ -38,27 +43,23 @@ export function generateStaticParams() {
 	}));
 }
 
-const getCachedRangePerushim = unstable_cache(
+const getCachedRangePerushim = cachedPerKey(
+	"range-perushim",
+	(unitId: number) => String(unitId),
+	(key) => [COLLECTION_TAGS.perushim, masoraPerushimTag(Number(key))],
 	async (unitId: number) => {
 		const unit = getMasoraUnitById(unitId);
 		return getPerushimForRanges(unit.ranges);
 	},
-	["range-perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
 );
 
-const getCachedRangeArticles = unstable_cache(
+const getCachedRangeArticles = cachedPerKey(
+	"range-article-summaries",
+	(unitId: number) => String(unitId),
+	(key) => [COLLECTION_TAGS.articles, masoraArticlesTag(Number(key))],
 	async (unitId: number) => {
 		const unit = getMasoraUnitById(unitId);
 		return getArticleSummariesForRanges(unit.ranges);
-	},
-	["range-article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
 	},
 );
 

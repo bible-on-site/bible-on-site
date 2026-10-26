@@ -634,13 +634,15 @@ describe("tanahpedia service", () => {
 		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["12"]);
 	});
 
-	it("logs and returns no entity references when the perek query fails", async () => {
+	it("logs and rethrows when the perek query fails so a false empty is never cached", async () => {
 		const consoleErrorSpy = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => undefined);
 		mockQuery.mockRejectedValueOnce(new Error("database unavailable"));
 
-		await expect(getEntityReferencesForPerek(99)).resolves.toEqual([]);
+		await expect(getEntityReferencesForPerek(99)).rejects.toThrow(
+			"database unavailable",
+		);
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
 			"Failed to fetch entity references for perek 99:",
 			"database unavailable",
