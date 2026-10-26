@@ -101,8 +101,10 @@ public partial class TanahpediaEntryPage : ContentPage
                 await Launcher.OpenAsync(uri);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
         {
+            #pragma warning restore S2221
             // async void - an unhandled navigation/launcher exception is a crash.
             Console.Error.WriteLine($"Tanahpedia link navigation failed for {e.Url}: {ex}");
         }

@@ -117,6 +117,7 @@ post-commit `flip-book-local-restore` never runs on pre-commit.ci by design.
 | `admin-unit-tests` | `web/admin` | `bun run test:unit` | Admin unit tests (vitest) |
 | `rust-checks` | `web/api`, `web/bulletin`, `data` | `cargo make lint` (+ `fmt-check` for bulletin and data) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
 | `dotnet-analyzers` | `app/**` `.cs`/`.csproj`, `.editorconfig`, `global.json`, `Directory.Build.props` | `dotnet build` per touched project | SonarAnalyzer severities fail locally instead of surfacing as post-push annotations ([devops/precommit-dotnet.mjs](../../devops/precommit-dotnet.mjs)); skips projects without a prior restore |
+| `catch-boundary` | `app/**` `.cs` files | `node devops/review-audit/scan-catch.cjs` | Generic `catch (Exception)`/bare `catch` must carry `//NOSONAR — <reason>` — covers the sites S2221 cannot see (async-void, catch-rethrow) plus unrestored projects; skips `*.Tests*` assemblies and type-narrowed `when` filters |
 | `codacy-gate` | `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
 | `parasha-aliyot-drift` | aliyah importer / vendored source / generated JSON | `node devops/import-parasha-aliyot.mjs --check` | Fails when the generated `parasha-aliyot.json` drifts from the vendored hebcal source or importer ([devops/import-parasha-aliyot.mjs](../../devops/import-parasha-aliyot.mjs)) |
 | `flip-book-local-restore` | post-commit | `bun run flip-book:local` | Restores local flip-book dep when the guard switched it |
@@ -136,7 +137,7 @@ the repo's toolchains can enforce it:
 | Switch without `default` (S131) | Same |
 | Public `const` fields (S3869 family) | Same (generated `FluentUI.cs` constants are excluded — regenerating that file would undo any manual conversion) |
 | Commented-out code (S125) | Same |
-| Generic `catch (Exception)` (S2221) | Same — `dotnet-analyzers` + `.editorconfig` severity `error`. Deliberate failure boundaries carry the dual convention: `//NOSONAR` with a reason for Codacy/Qodana **plus** `#pragma warning disable/restore S2221` for the Roslyn analyzer (which does not honor `//NOSONAR`). The rule does not fire inside test methods. |
+| Generic `catch (Exception)` (S2221) | Same — `dotnet-analyzers` + `.editorconfig` severity `error`. Deliberate failure boundaries carry the dual convention: `//NOSONAR` with a reason for Codacy/Qodana **plus** `#pragma warning disable/restore S2221` for the Roslyn analyzer (which does not honor `//NOSONAR`). The rule does not fire inside test methods, async-void methods, or on catch-rethrow sites — the `catch-boundary` hook (`scan-catch.cjs`) deterministically requires the `//NOSONAR` justification on every remaining unfiltered generic catch in production app code. |
 | Undisposed `IDisposable` locals (S2930) | Same analyzer set |
 | `readonly` candidate fields (S2933) | Same |
 | Explicit `GC.Collect()` (S1215) | Same — memory tests use `BibleOnSite.Tests.Support.GarbageCollection.CollectCycles()`, which carries the justification once |
