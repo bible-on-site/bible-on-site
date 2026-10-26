@@ -12,15 +12,18 @@ jest.mock("../../../../src/lib/api-client", () => ({
 }));
 
 // Closed fixture: parasha unit 1 covers perek 5 (torah) and perek 6
-// (haftara); masora unit 1 covers perek 9. rangesPerekSlices is the
-// identity here because the fixture ranges are already perek slices.
+// (haftara); unit 2 has no auxiliary ranges; masora unit 1 covers perek 9.
+// rangesPerekSlices is the identity here because the fixture ranges are
+// already perek slices.
 jest.mock("../../../../src/data/parasha/parasha-units", () => ({
 	getAllParashaUnits: () => [
 		{ unitId: 1, ranges: [{ perekId: 5, startPasuk: 1, endPasuk: 10 }] },
+		{ unitId: 2, ranges: [{ perekId: 500, startPasuk: 1, endPasuk: 10 }] },
 	],
-	parashaAuxiliaryRanges: () => [
-		{ perekId: 6, startPasuk: 1, endPasuk: 8 },
-	],
+	parashaAuxiliaryRanges: (unit: { unitId: number }) =>
+		unit.unitId === 1
+			? [{ perekId: 6, startPasuk: 1, endPasuk: 8 }]
+			: [],
 }));
 jest.mock("../../../../src/data/masora/masora-units", () => ({
 	getAllMasoraUnits: () => [
@@ -159,6 +162,60 @@ describe("resolveEntityChanges", () => {
 		).rejects.toThrow("conn reset");
 	});
 
+	it("degrades article covering to primary-perek matching while the covering-source schema is absent", async () => {
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/covering_source/.test(sql))
+				throw Object.assign(new Error("missing table"), {
+					code: "ER_NO_SUCH_TABLE",
+				});
+			return [];
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "article", id: 7, perekIds: [5] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"article:7",
+				"perek:5:articles",
+				"parasha:1:torah:articles",
+			]),
+		);
+	});
+
+	it("degrades the author covering lookup the same way", async () => {
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/covering_source cs/.test(sql))
+				throw Object.assign(new Error("missing table"), {
+					code: "ER_NO_SUCH_TABLE",
+				});
+			if (/FROM tanah_article\s/.test(sql))
+				return [{ id: 12, perek_id: 5 }];
+			return [];
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"author:רשי",
+				"article:12",
+				"perek:5:articles",
+				"parasha:1:torah:articles",
+			]),
+		);
+	});
+
+	it("skips author page deps when the author row no longer exists", async () => {
+		stubDb({ authorName: null });
+		const out = await resolveEntityChanges([
+			{ kind: "article", id: 1, perekIds: [5], authorIds: [9] },
+		]);
+		expect(out.tags).toContain("author:9:articles");
+		expect(
+			out.paths.some((p) => p.startsWith("/929/authors/")),
+		).toBe(false);
+	});
+
 	it("resolves an author rename to old+new pages and every article surface", async () => {
 		stubDb({
 			authorArticles: [{ id: 12, perek_id: 5 }],
@@ -189,6 +246,21 @@ describe("resolveEntityChanges", () => {
 				"/929/5/12",
 				"/parasha/1",
 				"/masora/1",
+			]),
+		);
+	});
+
+	it("resolves an author change carrying no previous name", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"authors",
+				"author:רשי",
+				"author:3",
+				"author:3:articles",
 			]),
 		);
 	});
@@ -253,6 +325,17 @@ describe("resolveEntityChanges", () => {
 		expect(out.tags).toContain("perek:9:entity-refs");
 	});
 
+	it("resolves a pedia-entry change carrying only its name", async () => {
+		stubDb({ entryId: null });
+		const out = await resolveEntityChanges([
+			{ kind: "pedia-entry", uniqueName: "נמחק" },
+		]);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/pedia/נמחק", "/pedia"]),
+		);
+		expect(out.tags).toContain("tanahpedia-mention-refs");
+	});
+
 	it("resolves a pedia entity through its live links unioned with the event", async () => {
 		stubDb({
 			entityEntries: ["משה"],
@@ -284,6 +367,15 @@ describe("resolveEntityChanges", () => {
 				"perek:5:entity-refs",
 			]),
 		);
+	});
+
+	it("resolves a pedia-entity with no surviving entry links", async () => {
+		stubDb({ entityEntries: [], entityRefPereks: [], entityTypes: [] });
+		const out = await resolveEntityChanges([
+			{ kind: "pedia-entity", entityId: "e-gone" },
+		]);
+		expect(out.paths).toContain("/pedia");
+		expect(out.tags).toContain("tanahpedia-mention-refs");
 	});
 
 	it("resolves a bulk pedia-entries change without touching the DB", async () => {

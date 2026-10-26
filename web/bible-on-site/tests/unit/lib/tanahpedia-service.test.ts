@@ -651,6 +651,23 @@ describe("tanahpedia service", () => {
 		consoleErrorSpy.mockRestore();
 	});
 
+	it("logs a non-Error rejection verbatim and still rethrows", async () => {
+		const consoleErrorSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
+		mockQuery.mockRejectedValueOnce("raw failure");
+
+		await expect(getEntityReferencesForPerek(99)).rejects.toBe(
+			"raw failure",
+		);
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			"Failed to fetch entity references for perek 99:",
+			"raw failure",
+		);
+
+		consoleErrorSpy.mockRestore();
+	});
+
 	it("returns null when a person has no family rows", async () => {
 		mockQuery
 			.mockResolvedValueOnce([{ personId: "person-lone" }])

@@ -142,6 +142,62 @@ describe("parseEntityChanges", () => {
 		expect(changes[3].kind).toBe("pedia-entries");
 	});
 
+	it("rejects non-array optional lists", () => {
+		expect(() =>
+			parseEntityChanges({
+				changes: [
+					{
+						kind: "pedia-entry",
+						uniqueName: "x",
+						entityTypes: "PERSON",
+					},
+				],
+			}),
+		).toThrow(ChangeValidationError);
+		expect(() =>
+			parseEntityChanges({
+				changes: [
+					{
+						kind: "article",
+						id: 1,
+						perekIds: [1],
+						coveringSpans: "x",
+					},
+				],
+			}),
+		).toThrow(ChangeValidationError);
+	});
+
+	it("rejects oversized string and span lists", () => {
+		expect(() =>
+			parseEntityChanges({
+				changes: [
+					{
+						kind: "pedia-entry",
+						uniqueName: "x",
+						entityTypes: Array.from({ length: 513 }, () => "y"),
+					},
+				],
+			}),
+		).toThrow(ChangeValidationError);
+		expect(() =>
+			parseEntityChanges({
+				changes: [
+					{
+						kind: "article",
+						id: 1,
+						perekIds: [1],
+						coveringSpans: Array.from({ length: 513 }, () => ({
+							perekId: 1,
+							pasukFrom: 1,
+							pasukTo: 1,
+						})),
+					},
+				],
+			}),
+		).toThrow(ChangeValidationError);
+	});
+
 	it("rejects invalid fields inside each kind", () => {
 		const bad = [
 			{ kind: "author", id: 1, name: "" },

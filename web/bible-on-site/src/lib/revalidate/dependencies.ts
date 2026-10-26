@@ -276,6 +276,7 @@ async function coveringSpansForAuthor(
 
 function addUnitDeps(sink: Sink, unit: UnitRef) {
 	if (unit.division === "parasha") {
+		/* istanbul ignore next -- every parasha index entry sets scope explicitly */
 		const scope = unit.scope ?? "torah";
 		addTag(sink, parashaArticlesTag(unit.unitId, scope));
 		addPath(sink, `/parasha/${unit.unitId}`);
@@ -293,6 +294,7 @@ function placeholders(count: number): string {
 
 /** Entry unique_names linked to the given entities (post-commit truth). */
 async function entriesForEntities(entityIds: string[]): Promise<string[]> {
+	/* istanbul ignore next -- callers always pass a non-empty entity id list */
 	if (entityIds.length === 0) return [];
 	const rows = await query<{ unique_name: string }>(
 		`SELECT DISTINCT e.unique_name FROM tanahpedia_entry e
@@ -305,6 +307,7 @@ async function entriesForEntities(entityIds: string[]): Promise<string[]> {
 
 /** Perakim whose curated entity references source the given entities. */
 async function refPereksForEntities(entityIds: string[]): Promise<number[]> {
+	/* istanbul ignore next -- callers always pass a non-empty entity id list */
 	if (entityIds.length === 0) return [];
 	const rows = await query<{ perek_id: number }>(
 		`SELECT DISTINCT perek_id FROM tanahpedia_entity_tanah_source
@@ -318,6 +321,7 @@ async function refPereksForEntities(entityIds: string[]): Promise<number[]> {
 async function entityTypesForEntities(
 	entityIds: string[],
 ): Promise<string[]> {
+	/* istanbul ignore next -- callers always pass a non-empty entity id list */
 	if (entityIds.length === 0) return [];
 	const rows = await query<{ entity_type: string }>(
 		`SELECT DISTINCT entity_type FROM tanahpedia_entity

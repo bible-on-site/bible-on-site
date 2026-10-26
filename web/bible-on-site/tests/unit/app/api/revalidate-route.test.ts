@@ -30,9 +30,22 @@ jest.mock("../../../../src/lib/revalidate/dependencies", () => ({
 	resolveEntityChanges: jest.fn(),
 }));
 
+// The real contract stays in place — the mock only exists so one test can
+// make the parser throw a non-validation error (the route's rethrow arm).
+jest.mock("../../../../src/lib/revalidate/contract", () => {
+	const actual = jest.requireActual(
+		"../../../../src/lib/revalidate/contract",
+	);
+	return {
+		...actual,
+		parseEntityChanges: jest.fn(actual.parseEntityChanges),
+	};
+});
+
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
 import { POST } from "../../../../src/app/api/revalidate/route";
+import { parseEntityChanges } from "../../../../src/lib/revalidate/contract";
 import { resolveEntityChanges } from "../../../../src/lib/revalidate/dependencies";
 import {
 	collectSubmissionPaths,
@@ -53,6 +66,9 @@ const mockCollect = collectSubmissionPaths as jest.MockedFunction<
 >;
 const mockResolve = resolveEntityChanges as jest.MockedFunction<
 	typeof resolveEntityChanges
+>;
+const mockParse = parseEntityChanges as jest.MockedFunction<
+	typeof parseEntityChanges
 >;
 
 function req(url: string, headers?: Record<string, string>) {
@@ -109,6 +125,13 @@ describe("POST /api/revalidate", () => {
 		const res = await POST(
 			req("/api/revalidate?path=/pedia/[slug]&type=page"),
 		);
+
+		expect(res.status).toBe(200);
+		expect(mockRevalidatePath).toHaveBeenCalledWith("/pedia/[slug]", "page");
+	});
+
+	it("defaults a dynamic route pattern to the page type", async () => {
+		const res = await POST(req("/api/revalidate?path=/pedia/[slug]"));
 
 		expect(res.status).toBe(200);
 		expect(mockRevalidatePath).toHaveBeenCalledWith("/pedia/[slug]", "page");
@@ -406,6 +429,23 @@ describe("POST /api/revalidate", () => {
 			);
 
 			expect(res.status).toBe(400);
+			expect(mockResolve).not.toHaveBeenCalled();
+			expect(mockRevalidateTag).not.toHaveBeenCalled();
+		});
+
+		it("rethrows an unexpected parser error instead of masking it as a 400", async () => {
+			mockParse.mockImplementationOnce(() => {
+				throw new TypeError("unexpected validator crash");
+			});
+
+			await expect(
+				POST(
+					jsonReq(
+						"/api/revalidate",
+						JSON.stringify({ changes: [{ kind: "bogus" }] }),
+					),
+				),
+			).rejects.toThrow("unexpected validator crash");
 			expect(mockResolve).not.toHaveBeenCalled();
 			expect(mockRevalidateTag).not.toHaveBeenCalled();
 		});
