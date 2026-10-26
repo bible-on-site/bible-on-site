@@ -128,6 +128,9 @@ test.describe("Sefer chapter tabs", () => {
 			preview.locator(".sefer-bookmark-expanded-source"),
 		).toHaveCount(0);
 		await expect(tab).toHaveAttribute("aria-label", /^מלכים א יב(?: - |$)/);
+		await expect(
+			preview.locator(".flipbook-bookmark__expanded-content"),
+		).toHaveCSS("opacity", "1");
 		await test.info().attach("sefer-bookmark-kings-a12-after", {
 			body: await page.screenshot(),
 			contentType: "image/png",
