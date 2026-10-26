@@ -202,7 +202,7 @@ public partial class RecitationPacksViewModel : ObservableObject
             return;
         }
 
-        if (!await _navigator.DisplayChoiceAsync("הסרת כל ההקלטות",
+        if (!await _navigator.DisplayDestructiveChoiceAsync("הסרת כל ההקלטות",
             "כל הקלטות הקריינות יוסרו מהמכשיר. ניתן להתקין אותן שוב בכל עת.", "הסרה", "ביטול"))
         {
             return;
@@ -240,7 +240,7 @@ public partial class RecitationPacksViewModel : ObservableObject
             return;
         }
 
-        if (!await _navigator.DisplayChoiceAsync("הסרת הקלטות",
+        if (!await _navigator.DisplayDestructiveChoiceAsync("הסרת הקלטות",
             $"ההקלטות של ספר {book.Name} יוסרו מהמכשיר. ניתן להתקין אותן שוב בכל עת.", "הסרה", "ביטול"))
         {
             return;

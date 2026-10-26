@@ -142,7 +142,7 @@ public partial class TanahpediaEntryPage : ContentPage
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia occurrence navigation failed: {ex}");
-            await DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
         }
     }
 
@@ -166,7 +166,7 @@ public partial class TanahpediaEntryPage : ContentPage
             {
                 #pragma warning restore S2221
                 Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
-                await DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
             }
         });
     }
