@@ -219,7 +219,6 @@
                                             HeightRequest="58"
                                             Grid.Column="{Binding Column}"
                                             Grid.ColumnSpan="{Binding ColumnSpan}"
-                                            AutomationProperties.IsInAccessibleTree="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                             StrokeShape="RoundRectangle 6"
                                             Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
                                             StrokeThickness="1"
@@ -252,6 +251,7 @@
                                                          Value="True">
                                                 <Setter Property="Stroke" Value="Transparent"/>
                                                 <Setter Property="BackgroundColor" Value="Transparent"/>
+                                                <Setter Property="AutomationProperties.IsInAccessibleTree" Value="False"/>
                                             </DataTrigger>
                                         </Border.Triggers>
                                         <Grid SemanticProperties.Description="{Binding AccessibilityText}">
@@ -351,7 +351,6 @@
                                                     Grid.Column="{Binding Column}"
                                                     Grid.ColumnSpan="{Binding ColumnSpan}"
                                                     AutomationId="MiniMonthDay"
-                                                    AutomationProperties.IsInAccessibleTree="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                                     StrokeShape="RoundRectangle 4"
                                                     Stroke="Transparent"
                                                     StrokeThickness="1"
@@ -382,6 +381,7 @@
                                                                  Binding="{Binding IsBlank}"
                                                                  Value="True">
                                                         <Setter Property="BackgroundColor" Value="Transparent"/>
+                                                        <Setter Property="AutomationProperties.IsInAccessibleTree" Value="False"/>
                                                     </DataTrigger>
                                                     <DataTrigger TargetType="Border"
                                                                  Binding="{Binding IsDimmed}"
