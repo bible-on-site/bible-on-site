@@ -65,17 +65,39 @@ public class MiniMonthWeekViewModel
     public required IReadOnlyList<CalendarCellViewModel> Cells { get; init; }
 }
 
+/// <summary>Cell and week-row content of one <see cref="MiniMonthViewModel"/>.</summary>
+public sealed record MiniMonthContent(
+    ObservableCollection<CalendarCellViewModel> Cells,
+    IReadOnlyList<MiniMonthWeekViewModel> Weeks);
+
 /// <summary>A named month section inside the yearly / full-cycle views (#2364).</summary>
 public class MiniMonthViewModel
 {
-    public required string Title { get; init; }
-    public required ObservableCollection<CalendarCellViewModel> Cells { get; init; }
+    private readonly Lazy<MiniMonthContent> _content;
+
+    /// <summary>
+    /// A grouped-view month section whose cells and week rows materialize on
+    /// first access. The full-cycle view lists ~31 months: building every
+    /// section's cells eagerly at view-switch time blocked the UI thread long
+    /// enough to ANR on device, so only the shells are built up front.
+    /// </summary>
+    public MiniMonthViewModel(string title, Func<MiniMonthContent> content)
+    {
+        Title = title;
+        _content = new Lazy<MiniMonthContent>(content);
+    }
+
+    /// <summary>Month title shown above the mini calendar.</summary>
+    public string Title { get; }
+
+    /// <summary>One cell per date — the canonical daily assignments.</summary>
+    public ObservableCollection<CalendarCellViewModel> Cells => _content.Value.Cells;
 
     /// <summary>
     /// Cells chunked into 7-column weeks; the grouped XAML renders each week
     /// as a plain Grid row instead of a nested CollectionView (#2455).
     /// </summary>
-    public required IReadOnlyList<MiniMonthWeekViewModel> Weeks { get; init; }
+    public IReadOnlyList<MiniMonthWeekViewModel> Weeks => _content.Value.Weeks;
 }
 
 /// <summary>Which period the learning calendar renders (#2364).</summary>
@@ -312,12 +334,14 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     private void RebuildCells()
     {
-        var cells = _schedule.BuildMonth(_year, _month);
+        var days = _schedule.BuildMonth(_year, _month);
         // Cells keeps one entry per date — the canonical daily assignments.
-        // MonthWeeks is the merged layout the month grid renders (#2365).
-        Cells = new ObservableCollection<CalendarCellViewModel>(
-            cells.Select((cell, index) => ToCellViewModel(cell, column: index % 7)));
-        MonthWeeks = BuildWeekRows(cells, dimmed: null);
+        // MonthWeeks is the merged layout the month grid renders (#2365); it
+        // reuses the same cell instances instead of building a second model.
+        var cells = days.Select((cell, index) =>
+            ToCellViewModel(cell, column: index % 7)).ToList();
+        Cells = new ObservableCollection<CalendarCellViewModel>(cells);
+        MonthWeeks = BuildWeekRows(cells, days, dimmed: null);
     }
 
     private void RebuildGroups()
@@ -328,13 +352,18 @@ public partial class LearningCalendarViewModel : ObservableObject
             return;
         }
 
-        IEnumerable<(string Title, IReadOnlyList<PerekScheduleService.MonthCell> Cells)> groups;
+        // Each group's day cells resolve lazily with the rest of its content,
+        // so switching to the ~31-month cycle view only pays for the visible
+        // sections instead of blocking on ~2500 view models up front.
+        IEnumerable<(string Title, Func<IReadOnlyList<PerekScheduleService.MonthCell>> Days)> groups;
         Func<PerekScheduleService.CalendarDay, bool>? dimmed = null;
         if (ViewMode == CalendarViewMode.Year)
         {
-            groups = HebrewDateHelper.GetMonthOrder(_year).Select(month =>
-                ($"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(_year))}",
-                    (IReadOnlyList<PerekScheduleService.MonthCell>)_schedule.BuildMonth(_year, month)));
+            var year = _year;
+            groups = HebrewDateHelper.GetMonthOrder(year).Select(month =>
+                ($"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))}",
+                    (Func<IReadOnlyList<PerekScheduleService.MonthCell>>)(
+                        () => _schedule.BuildMonth(year, month))));
         }
         else
         {
@@ -344,7 +373,7 @@ public partial class LearningCalendarViewModel : ObservableObject
             // Legacy month numbering is not chronological (Adar I/II are 13/14),
             // so compare positions inside the year's month order.
             var endMonthIndex = HebrewDateHelper.GetMonthOrder(endYear).IndexOf(endMonth);
-            var months = new List<(string, IReadOnlyList<PerekScheduleService.MonthCell>)>();
+            var months = new List<(string, Func<IReadOnlyList<PerekScheduleService.MonthCell>>)>();
             var (year, month) = (startYear, startMonth);
             for (var guard = 0; guard < 50; guard++)
             {
@@ -354,10 +383,12 @@ public partial class LearningCalendarViewModel : ObservableObject
                 {
                     break;
                 }
+                var monthYear = year;
+                var monthNumber = month;
                 months.Add((
                     $"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))} " +
                         $"ה'{GimatryHelper.ToLetters(year % 1000)}",
-                    _schedule.BuildMonth(year, month)));
+                    () => _schedule.BuildMonth(monthYear, monthNumber)));
                 (year, month) = HebrewDateHelper.NextMonth(year, month);
             }
             groups = months;
@@ -366,27 +397,29 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
 
         MonthGroups = new ObservableCollection<MiniMonthViewModel>(groups.Select(group =>
-        {
-            var cells = group.Cells
-                .Select((cell, index) => ToCellViewModel(cell, dimmed, index % 7))
-                .ToList();
-            return new MiniMonthViewModel
+            new MiniMonthViewModel(group.Title, () =>
             {
-                Title = group.Title,
-                Cells = new ObservableCollection<CalendarCellViewModel>(cells),
-                Weeks = BuildWeekRows(group.Cells, dimmed),
-            };
-        }));
+                var days = group.Days();
+                var cells = days
+                    .Select((cell, index) => ToCellViewModel(cell, dimmed, index % 7))
+                    .ToList();
+                return new MiniMonthContent(
+                    new ObservableCollection<CalendarCellViewModel>(cells),
+                    BuildWeekRows(cells, days, dimmed));
+            })));
     }
 
     /// <summary>
     /// Chunks a BuildMonth cell list into 7-column week rows, merging an
     /// adjacent Friday/Shabbat pair into one two-column cell when both are
     /// review days of the same cycle covering the identical studied set
-    /// (#2365). Blank placeholder cells pass through untouched.
+    /// (#2365). `cells` reuses the already-built per-date view models so the
+    /// merged layout never formats a day twice; `days` supplies the raw
+    /// schedule entry each cell came from for the merge check.
     /// </summary>
     private List<MiniMonthWeekViewModel> BuildWeekRows(
-        IReadOnlyList<PerekScheduleService.MonthCell> cells,
+        IReadOnlyList<CalendarCellViewModel> cells,
+        IReadOnlyList<PerekScheduleService.MonthCell> days,
         Func<PerekScheduleService.CalendarDay, bool>? dimmed)
     {
         var weeks = new List<MiniMonthWeekViewModel>();
@@ -397,8 +430,8 @@ public partial class LearningCalendarViewModel : ObservableObject
             var weekEnd = Math.Min(i + 7, cells.Count);
             while (i < weekEnd)
             {
-                var day = cells[i].Day;
-                var next = i + 1 < weekEnd ? cells[i + 1].Day : null;
+                var day = days[i].Day;
+                var next = i + 1 < weekEnd ? days[i + 1].Day : null;
                 if (IsMergedReviewPair(day, next))
                 {
                     row.Add(ToMergedCellViewModel(day!, next!, dimmed, row.Count));
@@ -406,7 +439,7 @@ public partial class LearningCalendarViewModel : ObservableObject
                 }
                 else
                 {
-                    row.Add(ToCellViewModel(cells[i], dimmed, row.Count));
+                    row.Add(cells[i]);
                     i++;
                 }
             }
