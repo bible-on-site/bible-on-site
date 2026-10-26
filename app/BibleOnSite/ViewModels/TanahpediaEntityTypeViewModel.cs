@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -18,6 +19,10 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
 {
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
+
+    /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid entry
+    /// taps must not stack duplicate pushed pages (#2640).</summary>
+    private readonly NavigationGate _navigationGate = new();
 
     public TanahpediaEntityTypeViewModel() : this(TanahpediaService.Instance, ShellAppNavigator.Instance)
     {
@@ -168,6 +173,7 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
             return;
         }
 
-        await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
+        await _navigationGate.RunAsync(() =>
+            _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
     }
 }
