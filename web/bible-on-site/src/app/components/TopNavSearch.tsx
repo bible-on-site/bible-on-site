@@ -26,6 +26,35 @@ export function isReaderPathname(pathname: string): boolean {
 }
 
 /**
+ * Segments under /929 that render the gearless authors layout: the authors
+ * route itself and its /rabbis rewrite alias — the browser keeps the alias
+ * in the address bar while the gearless layout renders (next.config.mjs).
+ */
+const PEREK_GEARLESS_SEGMENTS = ["authors", "rabbis"];
+
+/**
+ * Routes whose layout actually mounts the reader preferences gear in the
+ * top-left corner — a narrower set than isReaderPathname: the search button
+ * is suppressed across the whole reader section, but the gear itself only
+ * exists on unit pages (929/[number], masora/[unit], parasha/[unit]
+ * layouts). Non-unit reader routes such as /929/authors and its /929/rabbis
+ * alias hide the search button yet mount no gear, so the accessibility
+ * trigger must not dock at the gear-adjacent offset there (#2396).
+ */
+export function hasReaderSettingsGear(pathname: string): boolean {
+	const decoded = decodeURIComponent(pathname);
+	const gearless = PEREK_GEARLESS_SEGMENTS.some(
+		(segment) =>
+			decoded === `${PEREK_READER_ROOT}/${segment}` ||
+			decoded.startsWith(`${PEREK_READER_ROOT}/${segment}/`),
+	);
+	return (
+		(decoded.startsWith(`${PEREK_READER_ROOT}/`) && !gearless) ||
+		UNIT_READER_ROOTS.some((root) => decoded.startsWith(`${root}/`))
+	);
+}
+
+/**
  * Icon-only search button pinned to the physical left edge of the top nav.
  * Omitted entirely on reader pages — their settings button occupies that
  * corner, so no clickable or focusable remnant may stay (#2274).

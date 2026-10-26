@@ -18,6 +18,10 @@ public partial class TanahpediaEntryPage : ContentPage
 {
     private readonly TanahpediaEntryViewModel _viewModel;
 
+    /// <summary>A second tap during the in-flight transition must not stack
+    /// another absolute-route navigation on top of it (#2640).</summary>
+    private readonly NavigationGate _backToPediaGate = new();
+
     public string UniqueName { get; set; } = string.Empty;
 
     public TanahpediaEntryPage()
@@ -41,10 +45,12 @@ public partial class TanahpediaEntryPage : ContentPage
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs.FontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        UpdateFontSizeResources(prefs.ArticleFontFactor);
+        // The singleton must not retain a pushed entry page - repeated entry
+        // navigation would accumulate pages and native views forever (#2640).
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.FontFactor));
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor)));
     }
 
     private void UpdateFontSizeResources(double factor)
@@ -88,15 +94,25 @@ public partial class TanahpediaEntryPage : ContentPage
     private async void OnEntryLinkTapped(object? sender, LinkTappedEventArgs e)
     {
         e.Handled = true;
-        if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+        try
         {
-            await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
-            return;
-        }
+            if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+            {
+                await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+                return;
+            }
 
-        if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
+            if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
+            {
+                await Launcher.OpenAsync(uri);
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
         {
-            await Launcher.OpenAsync(uri);
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Tanahpedia link navigation failed for {e.Url}: {ex}");
         }
     }
 
@@ -121,20 +137,37 @@ public partial class TanahpediaEntryPage : ContentPage
                 ["searchResult"] = result
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: occurrence navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — occurrence navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia occurrence navigation failed: {ex}");
-            await DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
         }
     }
 
     private async void OnBackToPediaClicked(object? sender, EventArgs e)
     {
+        // async void + Shell navigation: an unobserved GoToAsync exception is a
+        // crash, so the route runs inside a failure boundary (#2640).
         if (Shell.Current is not { } shell)
         {
             return;
         }
-        var location = shell.CurrentState.Location.OriginalString;
-        await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+        await _backToPediaGate.RunAsync(async () =>
+        {
+            try
+            {
+                var location = shell.CurrentState.Location.OriginalString;
+                await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+            }
+            #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
+            catch (Exception ex) //NOSONAR — back navigation failure alerts the user.
+            {
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+            }
+        });
     }
 }

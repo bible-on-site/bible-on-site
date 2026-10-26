@@ -267,8 +267,10 @@ public partial class TanahpediaSearchPanel : ContentView
         {
             // Replaced queries and closing the panel intentionally cancel this search.
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — failure boundary: a failed search must not crash the overlay.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia search failed: {ex}");
         }
         UpdateStatus();
@@ -294,8 +296,10 @@ public partial class TanahpediaSearchPanel : ContentView
         {
             await SearchInput.HideSoftInputAsync(CancellationToken.None);
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — keyboard dismissal is best-effort and must not crash the panel.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not dismiss search keyboard: {ex}");
         }
         SearchInput.Unfocus();

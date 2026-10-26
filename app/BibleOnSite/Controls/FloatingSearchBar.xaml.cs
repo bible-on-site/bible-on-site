@@ -70,8 +70,10 @@ public partial class FloatingSearchBar : ContentView
             _notesService ??= PerushimNotesService.Instance;
             _notesService.OperationCompleted += OnNotesOperationCompleted;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack watcher attach is best-effort; a host without packs keeps static availability
+        catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR — pack watcher attach is best-effort; a host without packs keeps static availability.
         {
+            #pragma warning restore S2221
             // A host without the pack service simply keeps static availability.
             Console.Error.WriteLine($"Commentary-pack watcher unavailable: {ex}");
         }
@@ -170,8 +172,10 @@ public partial class FloatingSearchBar : ContentView
                 ScheduleSearch();
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: search-init failure surfaces as a user-facing error message
+        catch (Exception ex) //NOSONAR — search-init failure surfaces as a user-facing error message.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Search initialization failed: {ex}");
             _viewModel.ErrorMessage = "שגיאה בטעינת החיפוש. נסו שוב";
         }
@@ -253,7 +257,9 @@ public partial class FloatingSearchBar : ContentView
         {
             // Replaced queries and closing the panel intentionally cancel this search.
         }
-        catch (Exception ex) { Console.Error.WriteLine($"Search failed: {ex}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: user-triggered search failure is logged; status refresh continues
+        catch (Exception ex) { Console.Error.WriteLine($"Search failed: {ex}"); } //NOSONAR — user-triggered search failure is logged; status refresh continues.
+        #pragma warning restore S2221
         UpdateStatus();
     }
 
@@ -268,10 +274,12 @@ public partial class FloatingSearchBar : ContentView
     {
         try
         {
-            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
         }
-        catch (Exception ex) //NOSONAR — failure boundary: a navigation failure must not crash the picker.
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure is log-only
+        catch (Exception ex) //NOSONAR — a navigation failure must not crash the picker.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigate to perushim download failed: {ex}");
         }
     }
@@ -283,8 +291,10 @@ public partial class FloatingSearchBar : ContentView
             // Unfocus alone can leave Android's floating keyboard over the results.
             await SearchInput.HideSoftInputAsync(CancellationToken.None);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: keyboard dismissal is best-effort
+        catch (Exception ex) //NOSONAR — keyboard dismissal is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not dismiss search keyboard: {ex}");
         }
         SearchInput.Unfocus();
@@ -640,8 +650,10 @@ public partial class FloatingSearchBar : ContentView
         {
             RecentList.ItemsSource = _history.Read();
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: recent-searches load degrades to an empty list
+        catch (Exception ex) //NOSONAR — recent-searches load degrades to an empty list.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not load recent searches: {ex}");
             RecentList.ItemsSource = Array.Empty<string>();
         }
@@ -653,8 +665,10 @@ public partial class FloatingSearchBar : ContentView
         {
             _history.Remember(_viewModel.SearchPhrase);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: recent-search persistence is best-effort
+        catch (Exception ex) //NOSONAR — recent-search persistence is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not save recent search: {ex}");
         }
     }

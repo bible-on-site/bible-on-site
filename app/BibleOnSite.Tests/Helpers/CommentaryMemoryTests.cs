@@ -2,6 +2,7 @@ using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
 
@@ -30,9 +31,7 @@ public class CommentaryMemoryTests
     {
         var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var reader = CreateClosedReader(preferences);
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        GarbageCollection.CollectCycles();
         reader.IsAlive.Should().BeFalse("the singleton preferences must not retain a closed reader and its commentary cache");
         preferences.FontFactor = 1.2;
         GC.KeepAlive(preferences);
@@ -48,9 +47,7 @@ public class CommentaryMemoryTests
     {
         var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var settings = CreateClosedSettings(preferences, screen);
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        GarbageCollection.CollectCycles();
         settings.IsAlive.Should().BeFalse("category settings pages must not remain owned by singleton services");
         preferences.FontFactor = 1.2;
         GC.KeepAlive(preferences);

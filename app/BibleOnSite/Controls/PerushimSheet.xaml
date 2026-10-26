@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Border xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+        xmlns:controls="clr-namespace:BibleOnSite.Controls"
+        xmlns:models="clr-namespace:BibleOnSite.Models"
+        xmlns:converters="clr-namespace:BibleOnSite.Converters"
+        x:Class="BibleOnSite.Controls.PerushimSheet"
+        x:Name="SheetRoot"
+        BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+        StrokeShape="RoundRectangle 16,16,0,0"
+        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+        StrokeThickness="1"
+        VerticalOptions="End"
+        IsVisible="False">
+    <Border.Resources>
+        <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
+        <converters:PerushEnabledConverter x:Key="PerushEnabledConverter"/>
+    </Border.Resources>
+    <Grid x:Name="PerushimContentViewport" AutomationId="PerushimContentViewport"
+          RowDefinitions="Auto,*"
+          IsClippedToBounds="True">
+        <!-- Header with drag handle - draggable to dismiss -->
+        <VerticalStackLayout x:Name="PerushimDragHandle" AutomationId="PerushimDragHandle" Grid.Row="0" Spacing="4" Padding="16,12,16,0">
+            <VerticalStackLayout.GestureRecognizers>
+                <PanGestureRecognizer PanUpdated="OnPanelPan"/>
+            </VerticalStackLayout.GestureRecognizers>
+            <!-- Drag handle indicator -->
+            <BoxView WidthRequest="40"
+                     HeightRequest="4"
+                     CornerRadius="2"
+                     BackgroundColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray500}}"
+                     HorizontalOptions="Center"
+                     Margin="0,0,0,4"/>
+            <!-- Title -->
+            <Label Text="פירושים"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+            <!-- Divider -->
+            <VerticalStackLayout Spacing="4">
+                <VerticalStackLayout.Triggers>
+                    <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding Perushim.Count}" Value="0">
+                        <Setter Property="IsVisible" Value="False"/>
+                    </DataTrigger>
+                </VerticalStackLayout.Triggers>
+                <controls:RtlSearchBar x:Name="SearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
+                           AutomationId="PerushNameSearch" SearchButtonPressed="OnSearchSubmitted"/>
+                <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
+                       HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
+                <!-- Live selected count; turns Primary and bold at the configured limit (#2471) -->
+                <Label Text="{Binding PerushimSelectionStatus}"
+                       SemanticProperties.Description="{Binding PerushimSelectionStatus}"
+                       FontSize="13" FontAttributes="Bold"
+                       HorizontalTextAlignment="Center"
+                       AutomationId="PerushimSelectionStatus"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding PerushimLimitReached}" Value="True">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+            </VerticalStackLayout>
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                     Margin="0,4,0,0"/>
+        </VerticalStackLayout>
+        <!-- Scrollable content area for perushim list -->
+        <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="16,8,16,0"
+                        ItemsSource="{Binding Perushim}"
+                        VerticalScrollBarVisibility="Never"
+                        SelectionMode="None"
+                        VerticalOptions="Fill">
+                <CollectionView.Triggers>
+                    <DataTrigger TargetType="CollectionView" Binding="{Binding Perushim.Count}" Value="0">
+                        <Setter Property="IsVisible" Value="False"/>
+                    </DataTrigger>
+                </CollectionView.Triggers>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:Perush">
+                    <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnPerushRowTapped"/>
+                        </Grid.GestureRecognizers>
+                        <Grid.IsEnabled>
+                            <MultiBinding Converter="{StaticResource PerushEnabledConverter}" Mode="OneWay">
+                                <Binding Path="Id"/>
+                                <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference SheetRoot}"/>
+                                <Binding Path="BindingContext.InlineCommentaryLimit" Source="{x:Reference SheetRoot}"/>
+                            </MultiBinding>
+                        </Grid.IsEnabled>
+                        <CheckBox Grid.Column="0"
+                                  AutomationId="PerushCheckBox"
+                                  VerticalOptions="Center"
+                                  Margin="0,0,8,0"
+                                  CheckedChanged="OnPerushCheckboxChanged">
+                            <CheckBox.IsChecked>
+                                <MultiBinding Converter="{StaticResource PerushCheckedConverter}" Mode="OneWay">
+                                    <Binding Path="Id"/>
+                                    <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference SheetRoot}"/>
+                                </MultiBinding>
+                            </CheckBox.IsChecked>
+                        </CheckBox>
+                        <Label Grid.Column="1"
+                               Text="{Binding Name}"
+                               FontSize="16"
+                               FlowDirection="RightToLeft"
+                               VerticalOptions="Center">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
+                                             Value="False">
+                                    <Setter Property="Opacity" Value="0.4"/>
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.Footer>
+                <!-- Scrolling clearance keeps the final row reachable while the
+                     viewport still paints through the bottom bar's curved notch. -->
+                <BoxView HeightRequest="90" BackgroundColor="Transparent"/>
+            </CollectionView.Footer>
+        </CollectionView>
+        <!-- A separate, bounded scroll view avoids CollectionView.EmptyView's
+             native measurement/overflow and its nested scroll indicator. -->
+        <ScrollView x:Name="PerushimEmptyState" AutomationId="PerushimEmptyState"
+                    Grid.Row="1" Margin="16,8,16,0"
+                    IsVisible="{Binding Perushim.Count, Converter={StaticResource ZeroToTrueConverter}}"
+                    VerticalScrollBarVisibility="Never">
+            <VerticalStackLayout Spacing="8" Padding="0,8,0,102">
+                <Label Text="📚" FontSize="32" HorizontalTextAlignment="Center"
+                       AutomationId="PerushimEmptyIcon"/>
+                <Label Text="{Binding PerushimEmptyMessage}" FontSize="14"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+                <Button x:Name="GoToPerushimSettingsButton" AutomationId="GoToPerushimSettingsButton"
+                        Text="הורדת חבילת פירושים"
+                        IsVisible="{Binding ShowDownloadPerushimButton}"
+                        Clicked="OnGoToPerushimSettingsClicked"/>
+                <Button Text="ייצוא לוגים לתמיכה"
+                        Command="{Binding ExportPerushimLogsCommand}"
+                        AutomationId="ExportPerushimLogsButton"
+                        IsVisible="{Binding ShowDownloadPerushimButton}"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</Border>

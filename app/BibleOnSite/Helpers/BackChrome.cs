@@ -26,6 +26,10 @@ public static class BackChrome
 	public static void Apply(ContentPage page)
 	{
 		var show = BackChromePolicy.ShowInAppBack(CurrentPlatform, PreferencesService.Instance.InAppBackButton);
+		if (page is BibleOnSite.Controls.PreferencesPageBase preferences)
+		{
+			preferences.ShowBack = show;
+		}
 
 		// Pages that hide the nav bar (reader, custom-chrome pages) own their
 		// chrome; a hidden bar makes the behavior moot, and PerekPage toggles

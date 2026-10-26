@@ -1,6 +1,7 @@
 namespace BibleOnSite.Pages;
 
 using BibleOnSite.Behaviors;
+using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
@@ -140,6 +141,7 @@ public partial class ParashaPage
         }
 
         _longPressTokenSource?.Cancel();
+        _longPressTokenSource?.Dispose();
         _longPressTokenSource = new CancellationTokenSource();
 
         if (sender is Border border && border.BindingContext is ParashaDisplayItem row && row.Display != null)
@@ -227,37 +229,36 @@ public partial class ParashaPage
         }
 
         var count = _viewModel.SelectedPasukCount;
-        // The recitation bar is also the pause/resume control surface: it must
-        // stay reachable for the whole life of a playback — a pasuk tap, a word
-        // preview, or a unit started from the header all count (#2370). The
-        // same set owns the Android Back press (TryHandleReaderBack), so both
-        // read it from one place.
-        var isSelectionMode = ReaderSurfaceState.IsActive(count, _unitRecitationSelection,
-            _focusedPasuk != null, _recitationCursor.PlayingKey != null);
+        var focused = _focusedPasuk != null;
+        // The focused pasuk keeps the shared reader toolbar (full pasuk source,
+        // scoped search, #2466); the Back-only selection bar is for the other
+        // transient surfaces — a pesukim selection, the unit recitation mode,
+        // or an in-flight clip with no focused pasuk (#2370). The IsActive set
+        // still owns the Android Back press (TryHandleReaderBack) — both read
+        // their answer from ReaderSurfaceState.
+        var isSelectionMode = ReaderSurfaceState.ShowsSelectionBar(count, _unitRecitationSelection,
+            focused, _recitationCursor.PlayingKey != null);
+        ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_unitRecitationSelection && _focusedPasuk == null;
-        SelectionCountBadge.IsVisible = ordinarySelection;
-        SelectionShareButton.IsVisible = ordinarySelection;
-        SelectionCopyButton.IsVisible = ordinarySelection;
-        SelectionRecitationButton.IsVisible = RecitationAvailable;
+        SelectionBar.SetSelectionActionsVisible(ordinarySelection);
+        SelectionBar.SetRecitationVisible(RecitationAvailable);
         // An active playback can always be paused — even while more of the
         // unit's tracks are still pending alignment.
-        SelectionRecitationButton.IsEnabled = !_recitationBusy && _viewModel.Unit != null &&
+        var recitationEnabled = !_recitationBusy && _viewModel.Unit != null &&
             (_recitationCursor.PlayingKey != null || _unitRecitationSelection || CanPlayFocusedPasuk ||
                 CanPlaySelectedPasukim());
-        SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
         // The glyph must match what the button does: only bar-issued playback
         // pauses, so a word preview still playing shows Play (it starts the
         // unit at the bookmark), like the website's preview state.
-        SelectionRecitationButton.Text =
+        var recitationVisual =
             RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
-                ? Fonts.FluentUI.pause_24_regular
+                ? ReaderSelectionBar.RecitationVisual.Pause
                 : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
-                    ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
+                    ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = _recitationBusy ? "טוען את הקלטת הפרשה..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו — הורידו את הקלטות הספר בהעדפות" :
-            SelectionRecitationButton.IsEnabled ? "הקראה" : "הקראת מילים ופסוקים עדיין בהכנה";
-        ToolTipProperties.SetText(SelectionRecitationButton, hint);
-        SemanticProperties.SetDescription(SelectionRecitationButton, hint);
+            recitationEnabled ? "הקראה" : "הקראת מילים ופסוקים אינה זמינה";
+        SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
 
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
@@ -271,13 +272,27 @@ public partial class ParashaPage
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        NormalNavigationBar.BarVisible = !isSelectionMode && !searching;
+        // The header names the focused pasuk — its perek source and pasuk
+        // together — instead of the plain unit title (#2466).
+        NormalNavigationTitle.Text = focused && _focusedPerekId > 0
+            ? $"{PerekDataService.Instance.GetPerekSource(_focusedPerekId)} {_focusedPasuk!.PasukNumHeb}"
+            : _viewModel.Title;
+        // iOS has no system Back for the overlay, so the navigation slot turns
+        // into the close control there; platforms with system Back keep the
+        // shared hamburger (#2467).
+        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
+        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
+            ? Fonts.FluentUI.arrow_right_24_regular
+            : Fonts.FluentUI.navigation_24_regular;
+        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
+            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
         ContentArea.IsVisible = !searching;
         SelectionBar.IsVisible = isSelectionMode && !searching;
-        SelectionCountLabel.Text = count.ToString();
+        SelectionBar.SetCount(count);
     }
 
     private void ClearAllSelections()
@@ -313,10 +328,8 @@ public partial class ParashaPage
 
         await Clipboard.SetTextAsync(text);
         TriggerHapticFeedback();
-        // Inline feedback: show clipboard-checkmark icon for 1.5s then restore copy icon
-        SelectionCopyButton.Text = "\ue34c"; // clipboard_checkmark_24_regular
-        await Task.Delay(1500);
-        SelectionCopyButton.Text = "\uf32b"; // copy_24_regular
+        // Inline feedback: the bar flashes the clipboard-checkmark glyph.
+        await SelectionBar.FlashCopiedAsync();
     }
 
     private string GetSelectedPesukimText()
@@ -353,8 +366,10 @@ public partial class ParashaPage
             HapticFeedback.Perform(HapticFeedbackType.LongPress);
 #endif
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
+        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
         }
     }

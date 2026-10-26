@@ -11,22 +11,22 @@ applyTo: "web/bible-on-site/**"
 
 ## Development
 
-- Drive Playwright against http://localhost:3001 (`npm run dev` if needed).
+- Drive Playwright against http://localhost:3001 (`bun run dev` if needed).
 - **Server components by default.** Content (text, articles, sections) stays server-rendered for SEO/AIO; client components are only interaction glue (navigation, animation, scroll, menu) and stay minimal and isolated.
-- **Routes are static by default.** A route may be dynamic only for a real production reason (e.g. a per-request redirect). Never force a route dynamic — or otherwise weaken production rendering — to dodge local staleness; `next dev` re-renders per request, so local problems stay local. Check the route table in `npm run build` output after touching rendering.
+- **Routes are static by default.** A route may be dynamic only for a real production reason (e.g. a per-request redirect). Never force a route dynamic — or otherwise weaken production rendering — to dodge local staleness; `next dev` re-renders per request, so local problems stay local. Check the route table in `bun run build` output after touching rendering.
 - Parse `.env` files with `dotenv`/`dotenv-cli`, never line-based regexes — Windows CRLF leaves `\r` in matches or breaks end-of-line matching.
-- Line endings are LF everywhere (root `.gitattributes`: `* text=auto eol=lf`), matching the LF blobs and CI. Lint with `npm run lint` (`biome lint`) only — never `biome check` or `biome format --write`: Biome is a linter here, not a formatter/import-sorter, and those commands re-sort imports and reflow code the repo does not enforce.
-- Start specialized dev environments through their package script or local `node_modules/.bin`; `npx dotenv` can resolve a different package and silently fall back to the default database.
+- Line endings are LF everywhere (root `.gitattributes`: `* text=auto eol=lf`), matching the LF blobs and CI. Lint with `bun run lint` (`biome lint`) only — never `biome check` or `biome format --write`: Biome is a linter here, not a formatter/import-sorter, and those commands re-sort imports and reflow code the repo does not enforce.
+- Start specialized dev environments through their package script or local `node_modules/.bin`; `bun x dotenv` can resolve a different package and silently fall back to the default database.
 - After replacing data behind `unstable_cache(..., { revalidate: false })`, delete the whole `.next` directory and restart — clearing `.next/cache` alone does not invalidate Next.js 16 data-cache state.
 
 ## Commands
 
 | Task          | Command                 |
 | ------------- | ----------------------- |
-| Unit Tests    | `npm run test:unit`     |
-| E2E Tests     | `npm run test:e2e`      |
-| Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage  | `npm run coverage:e2e`  |
+| Unit Tests    | `bun run test:unit`     |
+| E2E Tests     | `bun run test:e2e`      |
+| Unit Coverage | `bun run coverage:unit` |
+| E2E Coverage  | `bun run coverage:e2e`  |
 
 ## Implementation Notes
 

@@ -8,8 +8,10 @@ public partial class App : Application
         {
             InitializeComponent();
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: init failure is logged then rethrown
+        catch (Exception ex) //NOSONAR — init failure is logged then rethrown.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"InitializeComponent failed: {ex}");
             Console.Error.WriteLine($"InitializeComponent failed: {ex}");
             throw;
@@ -29,8 +31,10 @@ public partial class App : Application
             Services.SearchIndexService.WarmupForE2e();
             return window;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: window-creation failure is logged then rethrown
+        catch (Exception ex) //NOSONAR — window-creation failure is logged then rethrown.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"CreateWindow failed: {ex}");
             Console.Error.WriteLine($"CreateWindow failed: {ex}");
             throw;
@@ -58,10 +62,12 @@ public partial class App : Application
             HeightRequest = 32,
             Padding = 0,
             BackgroundColor = Colors.Transparent,
-            SemanticProperties.Description = "חזור",
             AutomationId = "TitleBarBackButton",
             IsEnabled = false,
         };
+        // SemanticProperties.Description is an attached property; it cannot be
+        // assigned inside an object initializer.
+        SemanticProperties.SetDescription(back, "חזור");
         shell.Navigated += (_, _) =>
             back.IsEnabled = shell.Navigation.NavigationStack.Count > 1;
         back.Clicked += (_, _) => _ = ((Microsoft.Maui.IWindow)window).BackButtonClicked();

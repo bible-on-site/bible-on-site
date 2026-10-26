@@ -46,14 +46,17 @@
     <Compile Include="..\BibleOnSite\ViewModels\PerekPreferencesViewModel.cs" Link="ViewModels\PerekPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SoundPreferencesViewModel.cs" Link="ViewModels\SoundPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SupportPreferencesViewModel.cs" Link="ViewModels\SupportPreferencesViewModel.cs" />
-    <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
-    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs" Link="Controls\%(Filename)%(Extension)" />
+    <!-- Exclude XAML code-behind files as they require MAUI XAML compilation,
+         and DeferredMediaElement which needs the MediaElement package. -->
+    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs;..\BibleOnSite\Controls\DeferredMediaElement.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Resources\Fonts\FluentUI.cs" Link="Resources\FluentUI.cs" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PreferencesNavigation.cs" Link="Services\PreferencesNavigation.cs" />
     <Compile Include="..\BibleOnSite\Services\IAppNavigator.cs" Link="Services\IAppNavigator.cs" />
+    <Compile Include="..\BibleOnSite\Services\AppDialog.cs" Link="Services\AppDialog.cs" />
     <Compile Include="..\BibleOnSite\Services\ArticleService.cs" Link="Services\ArticleService.cs" />
     <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
     <Compile Include="..\BibleOnSite\Services\LocalDatabaseService.cs" Link="Services\LocalDatabaseService.cs" />
@@ -65,11 +68,11 @@
     <Compile Include="..\BibleOnSite\Services\SearchHistoryService.cs" Link="Services\SearchHistoryService.cs" />
     <Compile Include="..\BibleOnSite\Services\NetworkService.cs" Link="Services\NetworkService.cs" />
     <Compile Include="..\BibleOnSite\Services\IAnalyticsService.cs" Link="Services\IAnalyticsService.cs" />
-    <Compile Include="..\BibleOnSite\Services\AnalyticsConsent.cs" Link="Services\AnalyticsConsent.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PlaybackAudioOwnership.cs" Link="Services\PlaybackAudioOwnership.cs" />
     <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
@@ -79,6 +82,7 @@
     <Compile Include="..\BibleOnSite\Services\TanahpediaService.cs" Link="Services\TanahpediaService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\FlyoutMenuState.cs" Link="ViewModels\FlyoutMenuState.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\IPerushimSheetViewModel.cs" Link="ViewModels\IPerushimSheetViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
@@ -94,6 +98,10 @@
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs" Link="ViewModels\TanahpediaEntityTypeViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaSearchViewModel.cs" Link="ViewModels\TanahpediaSearchViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs" Link="ViewModels\TanahpediaEntryViewModel.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\sedra-schedule.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

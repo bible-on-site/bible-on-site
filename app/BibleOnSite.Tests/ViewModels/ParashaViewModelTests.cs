@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Services;
@@ -21,16 +22,23 @@ public class ParashaViewModelTests
         public PreferencesService Preferences { get; }
         public ParashaViewModel Model { get; }
         public ParashaDataService Parasha { get; }
+        public PerushimNotesService Notes { get; }
         private readonly bool _includeCatalog;
         private readonly bool _includeNotes;
+
+        private readonly bool _allUnits;
+        private readonly bool _skipParashaSeed;
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
             bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
             Func<int, Task<List<Article>>>? articlesLoader = null,
-            Func<int, bool>? hasPerekAudio = null)
+            Func<int, bool>? hasPerekAudio = null, Func<int>? hebrewDateProvider = null,
+            bool allUnits = false, bool skipParashaSeed = false)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
+            _allUnits = allUnits;
+            _skipParashaSeed = skipParashaSeed;
             if (lastLearntPerek is int lastLearnt)
             {
                 // PreferencesService caches LastLearntPerek at construction — set first.
@@ -38,6 +46,7 @@ public class ParashaViewModelTests
             }
             var catalog = new PerushimCatalogService(Storage.FileSystem.Object);
             var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
+            Notes = notes;
             Preferences = PreferencesService.CreateForTesting(Prefs);
             Preferences.Load();
             var localDb = new LocalDatabaseService(Storage.FileSystem.Object);
@@ -52,12 +61,74 @@ public class ParashaViewModelTests
                     : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())),
                 // Never touch RecitationService.Instance — its lazy filesystem
                 // singleton has no host in a unit-test process.
-                hasPerekAudio ?? (_ => false));
+                hasPerekAudio ?? (_ => false),
+                hebrewDateProvider, null, null, null);
+        }
+
+        /// <summary>
+        /// Canonical parasha headings in unit order — the 54-unit division
+        /// the packaged database ships, for calendar-target tests that must
+        /// resolve real schedule indexes.
+        /// </summary>
+        internal static readonly string[] ParashaHeadings =
+        [
+            "בראשית", "נח", "לך לך", "וירא", "חיי שרה", "תולדות", "ויצא",
+            "וישלח", "וישב", "מקץ", "ויגש", "ויחי", "שמות", "וארא", "בא",
+            "בשלח", "יתרו", "משפטים", "תרומה", "תצוה", "כי תשא", "ויקהל",
+            "פקודי", "ויקרא", "צו", "שמיני", "תזריע", "מצורע", "אחרי מות",
+            "קדושים", "אמור", "בהר", "בחוקותי", "במדבר", "נשא", "בהעלותך",
+            "שלח", "קורח", "חוקת", "בלק", "פינחס", "מטות", "מסעי", "דברים",
+            "ואתחנן", "עקב", "ראה", "שופטים", "כי תצא", "כי תבוא", "נצבים",
+            "וילך", "האזינו", "וזאת הברכה",
+        ];
+
+        /// <summary>
+        /// Seeds the shared schema with the full 54-unit division (one
+        /// minimal Torah range each) so weekly-resolution tests exercise
+        /// the real index→unit mapping, including joined pairs.
+        /// </summary>
+        public async Task SeedFullDivisionAsync()
+        {
+            var db = await Storage.CreateDatabaseAsync(
+                "sefaria-dump-5784-sivan-4.tanah_view.sqlite", ParashaDataServiceTests.Schema);
+            await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,3),(16,'ישעיהו','Isaiah',4,5)");
+            await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,'h1'),(2,2,'h2'),(3,3,'h3'),(4,40,'h40'),(5,41,'h41')");
+            var segmentId = 0;
+            for (var perekId = 1; perekId <= 5; perekId++)
+            {
+                for (var pasukId = 1; pasukId <= 5; pasukId++)
+                {
+                    segmentId++;
+                    await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment VALUES (?,?,?,'qri')", segmentId, perekId, pasukId);
+                    await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment_value VALUES (?,?)", segmentId, $"word{perekId}-{pasukId}");
+                }
+            }
+            await db.ExecuteAsync("INSERT INTO tanah_reading_division VALUES ('parasha',1,'/פרשה','פרשה על הפרק')");
+            var units = string.Join(",", ParashaHeadings.Select((heading, i) =>
+                $"('parasha',{i + 1},'{i + 1}',1,{i + 1},'{heading}',NULL)"));
+            await db.ExecuteAsync($"INSERT INTO tanah_reading_unit VALUES {units}");
+            var ranges = string.Join(",", ParashaHeadings.Select((_, i) =>
+                $"('parasha',{i + 1},0,NULL,NULL,NULL,1,1,NULL,1,5,NULL)"));
+            await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+                "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+                $"start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES {ranges}");
         }
 
         public async Task Initialize()
         {
-            await ParashaDataServiceTests.SeedAsync(Storage);
+            if (_skipParashaSeed)
+            {
+                // Leave the packaged tanah_view database absent so the
+                // service's first load fails exactly like a missing asset.
+            }
+            else if (_allUnits)
+            {
+                await SeedFullDivisionAsync();
+            }
+            else
+            {
+                await ParashaDataServiceTests.SeedAsync(Storage);
+            }
 
             if (_includeCatalog)
             {
@@ -286,12 +357,38 @@ public class ParashaViewModelTests
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
+        async Task ApplyPreferenceAsync(Action change)
+        {
+            var rowsUpdated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var unit = fixture.Model.Unit!;
+            void OnRowsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+            {
+                if (args.PropertyName == nameof(ParashaUnit.Rows))
+                {
+                    rowsUpdated.TrySetResult();
+                }
+            }
+
+            unit.PropertyChanged += OnRowsChanged;
+            try
+            {
+                change();
+                // Preference refreshes read SQLite asynchronously. Let the
+                // resulting rows arrive before the next change or teardown.
+                await rowsUpdated.Task.WaitAsync(TestContext.Current.CancellationToken);
+            }
+            finally
+            {
+                unit.PropertyChanged -= OnRowsChanged;
+            }
+        }
+
         // A preference change reaches the view-model through the weak
         // subscription and refreshes reader state.
-        fixture.Preferences.FontFactor = 1.5;
+        await ApplyPreferenceAsync(() => fixture.Preferences.FontFactor = 1.5);
         fixture.Model.FontFactor.Should().Be(1.5);
 
-        fixture.Model.DivineNameMaskingEnabled = false;
+        await ApplyPreferenceAsync(() => fixture.Model.DivineNameMaskingEnabled = false);
         fixture.Model.DivineNameMaskingEnabled.Should().BeFalse();
         fixture.Prefs.Get("divineNameMaskingEnabled", true).Should().BeFalse();
     }
@@ -380,6 +477,27 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task PerushimSelectionStatus_ReflectsCheckedCountOutOfConfiguredLimit()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 0 מתוך 5");
+        fixture.Model.PerushimLimitReached.Should().BeFalse();
+
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+
+        fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 2 מתוך 5");
+        fixture.Model.PerushimLimitReached.Should().BeFalse();
+
+        fixture.Preferences.InlineCommentaryLimit = 2;
+
+        fixture.Model.PerushimLimitReached.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task LoadPerushim_UnitWithoutNotes_EmptiesTheCatalog()
     {
         await using var fixture = new Fixture();
@@ -435,6 +553,11 @@ public class ParashaViewModelTests
         await noNotes.Initialize();
         await noNotes.Model.LoadByUnitIdAsync(1);
 
+        // First-launch notes materialization is kicked, not awaited — see #2430.
+        // The page reloads perushim once the operation settles; emulate that here.
+        await noNotes.Notes.InitializeAsync();
+        await noNotes.Model.LoadPerushimAsync(noNotes.Model.Unit!);
+
         noNotes.Model.PerushimCatalogAvailable.Should().BeTrue();
         noNotes.Model.PerushimNotesAvailable.Should().BeFalse();
         noNotes.Model.ShowDownloadPerushimButton.Should().BeTrue();
@@ -443,6 +566,9 @@ public class ParashaViewModelTests
         await using var noCatalog = new Fixture(includeCatalog: false, includeNotes: false);
         await noCatalog.Initialize();
         await noCatalog.Model.LoadByUnitIdAsync(1);
+
+        await noCatalog.Notes.InitializeAsync();
+        await noCatalog.Model.LoadPerushimAsync(noCatalog.Model.Unit!);
 
         noCatalog.Model.PerushimCatalogAvailable.Should().BeFalse();
         noCatalog.Model.ShowDownloadPerushimButton.Should().BeFalse();
@@ -509,10 +635,12 @@ public class ParashaViewModelTests
         await fixture.Model.LoadByUnitIdAsync(1);
 
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();
-        // Audio exists but the button stays hidden until קריינות is checked.
-        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
-        fixture.Model.IsQriynotEnabled = true;
+        // קריינות ships on globally (#2472), so downloaded audio surfaces the
+        // header button immediately; turning the preference off hides it.
+        fixture.Model.IsQriynotEnabled.Should().BeTrue();
         fixture.Model.ShowHeaderPlayButton.Should().BeTrue();
+        fixture.Model.IsQriynotEnabled = false;
+        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
 
         await fixture.Model.NavigateToUnitAsync(2);
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue(); // unit 2's ספרדים covers perek 4
@@ -588,17 +716,25 @@ public class ParashaViewModelTests
     }
 
     [Fact]
-    public async Task CurrentCarouselUnit_SwapsTheOffscreenAccessibilityFlag()
+    public async Task Unit_ExposesOnlyTheDisplayedPageToAccessibility()
     {
         await using var fixture = new Fixture();
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
-        var other = fixture.Model.CarouselUnits[1];
-        fixture.Model.CurrentCarouselUnit = other;
+        var first = fixture.Model.Unit!;
+        first.IsOffscreenCarouselPage.Should().BeFalse();
 
-        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeTrue();
-        other.IsOffscreenCarouselPage.Should().BeFalse();
+        await fixture.Model.LoadByUnitIdAsync(2);
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeFalse();
+
+        // A stale CurrentItem pushback must not re-hide the displayed page
+        // (the carousel does not push CurrentItem on programmatic ScrollTo).
+        var stale = fixture.Model.CarouselUnits[0];
+        fixture.Model.CurrentCarouselUnit = stale;
+        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeFalse();
+        stale.IsOffscreenCarouselPage.Should().BeTrue();
     }
 
     [Fact]
@@ -790,5 +926,150 @@ public class ParashaViewModelTests
             .GetValue(null)!;
 
         (await loader(1)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LoadWeeklyParasha_OrdinaryWeek_NavigatesToWeeklyUnit()
+    {
+        // 29 Tishrei 5785 (Thu) — the coming Shabbat reads נח (index 1).
+        await using var fixture = new Fixture(allUnits: true, hebrewDateProvider: () => 57850129);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(10);
+
+        var target = fixture.Model.ResolveWeeklyParasha();
+        target.Should().NotBeNull();
+        target!.ReadingTitle.Should().Be("פרשת נח");
+        target.HolidayName.Should().BeNull();
+        target.UnitId.Should().Be(2);
+
+        var requested = new List<int>();
+        fixture.Model.NavigationRequested += (_, index) => requested.Add(index);
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+
+        fixture.Model.UnitId.Should().Be(2);
+        fixture.Model.Title.Should().Be("פרשת נח");
+        requested.Should().Equal(1); // carousel index of unit 2
+    }
+
+    [Fact]
+    public async Task LoadWeeklyParasha_AlreadyThere_DoesNotReload()
+    {
+        await using var fixture = new Fixture(allUnits: true, hebrewDateProvider: () => 57850129);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(2);
+
+        var requested = new List<int>();
+        fixture.Model.NavigationRequested += (_, index) => requested.Add(index);
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+
+        fixture.Model.UnitId.Should().Be(2);
+        requested.Should().BeEmpty("reselecting the current parasha is a no-op");
+    }
+
+    [Fact]
+    public async Task LoadWeeklyParasha_JoinedWeek_LandsOnFirstPortionWithPairTitle()
+    {
+        // Shabbat of Mar 21 2020 — ויקהל-פקודי joined (indexes 21, 22).
+        var gregorian = new DateTime(2020, 3, 21);
+        var calendar = new System.Globalization.HebrewCalendar();
+        var dateNum = HebrewDateHelper.HebrewDateToNumber(
+            (calendar.GetYear(gregorian), calendar.GetMonth(gregorian), calendar.GetDayOfMonth(gregorian)));
+
+        await using var fixture = new Fixture(allUnits: true, hebrewDateProvider: () => dateNum);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        var target = fixture.Model.ResolveWeeklyParasha();
+        target.Should().NotBeNull();
+        target!.ReadingTitle.Should().Be("פרשת ויקהל-פקודי");
+        target.UnitId.Should().Be(22);
+
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+        fixture.Model.UnitId.Should().Be(22);
+        fixture.Model.Title.Should().Be("פרשת ויקהל");
+    }
+
+    [Fact]
+    public async Task LoadWeeklyParasha_FestivalWeek_ConfirmsThenOffersNextRegular()
+    {
+        // 17 Tishrei 5785 — שבת חול המועד סוכות: no ordinary parasha; the
+        // offer targets בראשית of the following Shabbat (24 Tishrei).
+        await using var fixture = new Fixture(allUnits: true, hebrewDateProvider: () => 57850117);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(5);
+
+        var target = fixture.Model.ResolveWeeklyParasha();
+        target.Should().NotBeNull();
+        target!.HolidayName.Should().Be("סוכות");
+        target.HolidayShabbatDateText.Should().NotBeNullOrEmpty();
+        target.UnitId.Should().Be(1);
+        target.ReadingTitle.Should().Be("פרשת בראשית");
+
+        // Declining keeps the reader where it is.
+        WeeklyParashaTarget? asked = null;
+        fixture.Model.ConfirmHolidayReading = t =>
+        {
+            asked = t;
+            return Task.FromResult(false);
+        };
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+        asked.Should().Be(target);
+        fixture.Model.UnitId.Should().Be(5);
+
+        // Accepting navigates to the next regular reading.
+        fixture.Model.ConfirmHolidayReading = _ => Task.FromResult(true);
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+        fixture.Model.UnitId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ResolveWeeklyParasha_ShortCatalog_NoOpsGracefully()
+    {
+        // A partial catalog (fresh install with the minimal seed) cannot
+        // materialize a late-cycle index — the action no-ops rather than
+        // navigating to an arbitrary unit.
+        await using var fixture = new Fixture(hebrewDateProvider: () => 57850301); // ויגש/מקץ week — index ≥ 8
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.ResolveWeeklyParasha().Should().BeNull();
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+        fixture.Model.UnitId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ResolveWeeklyParasha_UnloadedCatalog_ReturnsNull()
+    {
+        // A direct call ahead of the service warm-up has no catalog to map
+        // parasha indexes onto — resolution no-ops instead of navigating.
+        await using var fixture = new Fixture(hebrewDateProvider: () => 57850129);
+        await fixture.Initialize();
+
+        fixture.Parasha.IsLoaded.Should().BeFalse();
+        fixture.Model.ResolveWeeklyParasha().Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LoadWeeklyParasha_LoadFailure_StaysPutThenRecovers()
+    {
+        // No packaged tanah database at all: the first tap fails inside
+        // LoadAsync — the command must not fault or move the reader, and the
+        // service must stay unloaded so the next tap retries.
+        await using var fixture = new Fixture(allUnits: true, skipParashaSeed: true,
+            hebrewDateProvider: () => 57850129);
+        await fixture.Initialize();
+
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+
+        fixture.Parasha.IsLoaded.Should().BeFalse();
+        fixture.Model.UnitId.Should().Be(0);
+
+        // Once the catalog arrives (a later refresh or install repair), the
+        // same tap resolves the weekly reading and navigates to it.
+        await fixture.SeedFullDivisionAsync();
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+
+        fixture.Model.UnitId.Should().Be(2);
+        fixture.Model.Title.Should().Be("פרשת נח");
     }
 }

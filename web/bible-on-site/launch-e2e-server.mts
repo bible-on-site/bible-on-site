@@ -5,7 +5,7 @@
  * the Next.js server for E2E tests. This approach is more reliable than using
  * Playwright's globalSetup for database operations.
  *
- * Usage: node --import tsx ./launch-e2e-server.mts [--coverage]
+ * Usage: node ./launch-e2e-server.mts [--coverage]
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
@@ -227,14 +227,14 @@ async function main() {
 	// flip-book to local and runs docker compose — both break in CI)
 	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
-	log(`[Server] Starting Next.js server: npx next dev -p 3001`);
+	log(`[Server] Starting Next.js server: bun x next dev -p 3001`);
 
 	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
 	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).
 	const serverLogPath = path.resolve(logDir, "server.log");
 	const serverLog = createWriteStream(serverLogPath, { flags: "w" });
 
-	const server = spawn("npx", ["next", "dev", "-p", "3001"], {
+	const server = spawn("bun", ["x", "next", "dev", "-p", "3001"], {
 		cwd: __dirname,
 		stdio: ["inherit", "pipe", "pipe"],
 		shell: true,

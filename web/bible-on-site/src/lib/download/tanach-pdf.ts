@@ -30,6 +30,13 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "@/data/sefer-dto";
 import { getArticlesByPerekId } from "@/lib/articles/service";
 import { getPerushimByPerekId } from "@/lib/perushim";
+import {
+	bidiRunsWidth,
+	bidiTextWidth,
+	drawBidiRuns,
+	memoizeGlyphEncoding,
+	visualTextRuns,
+} from "./bidi-text";
 import { ExportError } from "./export-error";
 import type { SemanticPageInfo } from "./types";
 
@@ -88,21 +95,6 @@ export function segmentsToText(segments: Segment[]): string {
  */
 export function stripTaamim(text: string): string {
 	return text.replace(/[\u0591-\u05AF]/g, "");
-}
-
-/**
- * Reverse grapheme clusters so pdf-lib (which draws LTR) renders
- * Hebrew text in the correct visual RTL order.
- *
- * Uses Intl.Segmenter to keep combining marks (nikud) attached to
- * their base character during reversal.
- */
-export function reverseGraphemes(text: string): string {
-	const segmenter = new Intl.Segmenter("he", { granularity: "grapheme" });
-	return [...segmenter.segment(text)]
-		.map((s) => s.segment)
-		.reverse()
-		.join("");
 }
 
 /** Strip HTML tags from a string, decode common entities. */
@@ -249,16 +241,11 @@ function drawRtlLine(
 	color = rgb(0, 0, 0),
 ): void {
 	const page = currentPage(ctx);
-	const visual = reverseGraphemes(text);
-	const textWidth = font.widthOfTextAtSize(visual, size);
+	// One UAX #9 pass per line — reused for both width and draw.
+	const runs = visualTextRuns(text);
+	const textWidth = bidiRunsWidth(font, runs, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
-	page.drawText(visual, {
-		x: Math.max(MARGIN, x),
-		y: ctx.y,
-		size,
-		font,
-		color,
-	});
+	drawBidiRuns(page, runs, font, size, Math.max(MARGIN, x), ctx.y, color);
 }
 
 function drawRtlWrapped(
@@ -269,7 +256,11 @@ function drawRtlWrapped(
 	lineHeight: number,
 	color = rgb(0, 0, 0),
 ): void {
-	const lines = wrapText(text, font, size, MAX_WIDTH);
+	// Measure via bidi runs so wrapping uses the same shaped runs as drawing.
+	const measuringFont = {
+		widthOfTextAtSize: (t: string, s: number) => bidiTextWidth(font, t, s),
+	};
+	const lines = wrapText(text, measuringFont, size, MAX_WIDTH);
 	for (const line of lines) {
 		ensureSpace(ctx, lineHeight);
 		drawRtlLine(ctx, line, font, size, color);
@@ -307,8 +298,12 @@ export async function buildTanachPdfForPerekRange(
 
 	const regularBytes = getRegularFontBytes();
 	const boldBytes = getBoldFontBytes();
-	const font = await doc.embedFont(regularBytes, { subset: true });
-	const boldFont = await doc.embedFont(boldBytes, { subset: true });
+	const font = memoizeGlyphEncoding(
+		await doc.embedFont(regularBytes, { subset: true }),
+	);
+	const boldFont = memoizeGlyphEncoding(
+		await doc.embedFont(boldBytes, { subset: true }),
+	);
 
 	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
 

@@ -1,0 +1,6 @@
+{
+  "input": "EmulatorController.sendKey: Evdev KEY_BACK keypress",
+  "before": "topResumedActivity=ActivityRecord{56351122 u0 com.android.settings/.Settings$DisplaySettingsActivity t33}",
+  "after": "topResumedActivity=ActivityRecord{1793378 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t2}",
+  "passed": true
+}

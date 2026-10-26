@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
@@ -81,11 +82,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { section } = await params;
 	const meta = getSection(section);
 	if (!meta) notFound();
-	return {
+	return pageMetadata({
 		title: `${meta.title} | ${SITE_NAME}`,
 		description: meta.description,
-		alternates: { canonical: `/${section}` },
-	};
+		canonical: `/${section}`,
+	});
 }
 
 export default async function Home({ params }: Props) {
@@ -128,8 +129,9 @@ export default async function Home({ params }: Props) {
 								className="icon-white"
 								src="/icons/smartphone.svg"
 								alt="עלון יומי"
-								width={34}
-								height={34}
+								width={320}
+								height={512}
+								style={{ width: 34, height: "auto" }}
 							/>
 							<span>ישומון תנ&quot;ך על הפרק</span>
 						</h2>

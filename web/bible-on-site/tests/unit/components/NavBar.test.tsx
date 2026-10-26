@@ -81,12 +81,13 @@ describe("NavBar", () => {
 		);
 	});
 
-	it("renders the accessibility statement link", () => {
+	it("keeps the accessibility statement out of the side nav (#2396)", () => {
 		render(<NavBar />);
-		expect(screen.getByRole("link", { name: /הצהרת נגישות/ })).toHaveAttribute(
-			"href",
-			"/accessibility",
-		);
+		// The entry point moved to the top-bar accessibility menu; the footer
+		// link (Footer.tsx) remains the secondary access route.
+		expect(
+			screen.queryByRole("link", { name: /הצהרת נגישות/ }),
+		).not.toBeInTheDocument();
 	});
 
 	describe("menu toggle", () => {

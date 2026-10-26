@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env node
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
@@ -71,16 +71,14 @@ export function rewritePackageVersions(
 	nextVersion: string,
 ): { packageText: string; lockText: string } {
 	const packageData = JSON.parse(packageText) as { version?: string };
-	const lockData = JSON.parse(lockText) as {
-		version?: string;
-		packages?: { ""?: { version?: string } };
-	};
-	if (
-		!packageData.version ||
-		lockData.version !== packageData.version ||
-		lockData.packages?.[""]?.version !== packageData.version
-	) {
-		throw new Error("Package and lockfile versions differ");
+	if (!packageData.version) {
+		throw new Error("Missing package version field");
+	}
+	// bun.lock does not record the importer's own version, so there is
+	// nothing to keep in sync — but requiring the bun lockfile format stops a
+	// stale package-lock.json from silently passing the version bump.
+	if (!/"lockfileVersion":\s*\d/.test(lockText.slice(0, 200))) {
+		throw new Error("Expected bun.lock content");
 	}
 
 	const versionField = /("version"\s*:\s*")([^"]+)(")/g;
@@ -94,20 +92,10 @@ export function rewritePackageVersions(
 			return `${before}${nextVersion}${after}`;
 		},
 	);
-	let lockCount = 0;
-	const updatedLock = lockText.replace(
-		versionField,
-		(match, before, value, after) => {
-			if (lockCount++ > 1) return match;
-			if (value !== packageData.version)
-				throw new Error("Unexpected lockfile version field");
-			return `${before}${nextVersion}${after}`;
-		},
-	);
-	if (packageCount < 1 || lockCount < 2) {
-		throw new Error("Missing package or lockfile version field");
+	if (packageCount < 1) {
+		throw new Error("Missing package version field");
 	}
-	return { packageText: updatedPackage, lockText: updatedLock };
+	return { packageText: updatedPackage, lockText };
 }
 
 /** `search` must be a global regex literal. */
@@ -185,7 +173,7 @@ function writeVersion(
 	cwd: string,
 ): void {
 	function writePackage(): void {
-		const lockFile = `${module.path}/package-lock.json`;
+		const lockFile = `${module.path}/bun.lock`;
 		const updated = rewritePackageVersions(
 			read(module.versionFile, cwd),
 			read(lockFile, cwd),

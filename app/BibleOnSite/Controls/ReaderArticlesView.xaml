@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<CollectionView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+                xmlns:controls="clr-namespace:BibleOnSite.Controls"
+                xmlns:models="clr-namespace:BibleOnSite.Models"
+                xmlns:converters="clr-namespace:BibleOnSite.Converters"
+                x:Class="BibleOnSite.Controls.ReaderArticlesView"
+                x:Name="ArticlesRoot"
+                IsVisible="False"
+                SelectionMode="Single"
+                Margin="8,8,8,0">
+    <CollectionView.Resources>
+        <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
+    </CollectionView.Resources>
+    <!-- Footer spacer so last item can scroll above the bottom bar -->
+    <CollectionView.Footer>
+        <ContentView HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
+    </CollectionView.Footer>
+    <CollectionView.ItemsLayout>
+        <GridItemsLayout Orientation="Vertical"
+                         Span="2"
+                         HorizontalItemSpacing="8"
+                         VerticalItemSpacing="8"/>
+    </CollectionView.ItemsLayout>
+    <CollectionView.ItemTemplate>
+        <DataTemplate x:DataType="models:Article">
+            <Border Padding="0"
+                    StrokeShape="RoundRectangle 12"
+                    Stroke="Transparent"
+                    StrokeThickness="2.5"
+                    BackgroundColor="Transparent">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Value="True">
+                        <DataTrigger.Binding>
+                            <MultiBinding Converter="{StaticResource IntEqualityConverter}">
+                                <Binding Path="Id"/>
+                                <Binding Source="{x:Reference ArticlesRoot}" Path="SelectedArticleId"/>
+                            </MultiBinding>
+                        </DataTrigger.Binding>
+                        <Setter Property="Stroke"
+                                Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                    </DataTrigger>
+                </Border.Triggers>
+                <controls:ArticleCard Article="{Binding .}"/>
+            </Border>
+        </DataTemplate>
+    </CollectionView.ItemTemplate>
+
+    <CollectionView.EmptyView>
+        <VerticalStackLayout VerticalOptions="Center"
+                             HorizontalOptions="Center"
+                             Padding="20">
+            <Label Text="{Binding EmptyText, Source={x:Reference ArticlesRoot}}"
+                   FontSize="18"
+                   HorizontalTextAlignment="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+        </VerticalStackLayout>
+    </CollectionView.EmptyView>
+</CollectionView>

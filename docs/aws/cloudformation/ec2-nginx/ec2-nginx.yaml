@@ -5,73 +5,12 @@
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: |
-  EC2 Instance for nginx Reverse Proxy / Router.
-
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
-
-  This template documents the EC2 instance that runs nginx as a reverse proxy,
-  routing traffic to ECS services via Cloud Map service discovery.
-
-  The EC2 instance was created via the AWS Console launch wizard.
-  Some resources (like the key pair) cannot be created via CloudFormation.
-
-  Architecture:
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │                              Internet                                    │
-  │           תנך.co.il / תנך.com / admin.תנך.co.il / admin.תנך.com         │
-  └───────────────────────────────┬─────────────────────────────────────────┘
-                                  │
-                                  ▼
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │  EC2: nginx Reverse Proxy                                               │
-  │  ─────────────────────────                                              │
-  │  Instance: <INSTANCE_ID>                                                │
-  │  Type: t3.small                                                         │
-  │  Public IP: <MASKED - see retrieval command>                            │
-  │  Private IP: <PRIVATE_IP>                                               │
-  │  Security Group: launch-wizard-1 (<SECURITY_GROUP_ID>)                  │
-  │  Key Pair: nginx                                                        │
-  │                                                                         │
-  │  nginx config: /etc/nginx/conf.d/router.conf                            │
-  │  SSL certs: /etc/letsencrypt/live/xn--febl3a.{co.il,com}/               │
-  │    (covers admin/api/www subdomains and both bare domains)            │
-  │                                                                         │
-  │  Uses VPC DNS (172.31.0.2) to resolve:                                  │
-  │  - website.bible-on-site.local → ECS task IPs                           │
-  │  - api.bible-on-site.local → (future) ECS API task IPs                  │
-  │  - admin.bible-on-site.local → (future) ECS admin task IPs              │
-  └───────────────────────────────┬─────────────────────────────────────────┘
-                                  │
-                    VPC Private Network (172.31.0.0/16)
-                                  │
-                                  ▼
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │  ECS Fargate Tasks                                                      │
-  │  ─────────────────                                                      │
-  │  website.bible-on-site.local:3000                                       │
-  │  (Cloud Map DNS → private IPs like <ECS_TASK_IP>)                       │
-  └─────────────────────────────────────────────────────────────────────────┘
-
-  Sensitive Information Restoration:
-  | Placeholder | Description | Restoration Command |
-  |---|---|---|
-  | `<INSTANCE_ID>` | EC2 Instance ID | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].InstanceId" --output text` |
-  | `<MASKED>` | Public IP Address | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
-  | `<PRIVATE_IP>` | Private IP Address | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].PrivateIpAddress" --output text` |
-  | `<SECURITY_GROUP_ID>` | Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=launch-wizard-1" --query "SecurityGroups[0].GroupId" --output text` |
-  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
-  | `<SUBNET_ID>` | Subnet ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].SubnetId" --output text` |
-  | `<AMI_ID>` | AMI ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].ImageId" --output text` |
-  | `<VOLUME_ID>` | EBS Volume ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" --output text` |
-  | `<ECS_TASK_IP>` | ECS Task Private IP | `aws ecs list-tasks --cluster bible-on-site-cluster --service-name bible-on-site-website --query "taskArns[0]" --output text | xargs aws ecs describe-tasks --cluster bible-on-site-cluster --tasks | jq -r ".tasks[0].containers[0].networkInterfaces[0].privateIpv4Address"` |
-  | `<EXTERNAL_API_IP>` | External API IP | Check external service configuration |
-  | Key pair private key | SSH Private Key | Stored securely, not in version control |
+Description: "EC2 Instance for nginx Reverse Proxy / Router. Reference documentation only; not a deployed stack."
 
 Parameters:
   InstanceType:
     Type: String
-    Default: t3.small
+    Default: t3.small # Verified live; do not stop the sole production router to resize it
     AllowedValues:
       - t3.micro
       - t3.small
@@ -103,6 +42,68 @@ Parameters:
     Description: Amazon Linux 2023 AMI ID (auto-updated via SSM parameter)
 
 Metadata:
+  Documentation: |
+    EC2 Instance for nginx Reverse Proxy / Router.
+
+    ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+    This template documents the EC2 instance that runs nginx as a reverse proxy,
+    routing traffic to ECS services via Cloud Map service discovery.
+
+    The EC2 instance was created via the AWS Console launch wizard.
+    Some resources (like the key pair) cannot be created via CloudFormation.
+
+    Architecture:
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                              Internet                                    │
+    │           תנך.co.il / תנך.com / admin.תנך.co.il / admin.תנך.com         │
+    └───────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  EC2: nginx Reverse Proxy                                               │
+    │  ─────────────────────────                                              │
+    │  Instance: <INSTANCE_ID>                                                │
+    │  Type: t3.small                                                         │
+    │  Public IP: <MASKED - see retrieval command>                            │
+    │  Private IP: <PRIVATE_IP>                                               │
+    │  Security Group: launch-wizard-1 (<SECURITY_GROUP_ID>)                  │
+    │  Key Pair: nginx                                                        │
+    │                                                                         │
+    │  nginx config: /etc/nginx/conf.d/router.conf                            │
+    │  SSL certs: /etc/letsencrypt/live/xn--febl3a.{co.il,com}/               │
+    │    (covers admin/api/www subdomains and both bare domains)            │
+    │                                                                         │
+    │  Uses VPC DNS (172.31.0.2) to resolve:                                  │
+    │  - website.bible-on-site.local → ECS task IPs                           │
+    │  - api.bible-on-site.local → (future) ECS API task IPs                  │
+    │  - admin.bible-on-site.local → (future) ECS admin task IPs              │
+    └───────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                      VPC Private Network (172.31.0.0/16)
+                                    │
+                                    ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  ECS Fargate Tasks                                                      │
+    │  ─────────────────                                                      │
+    │  website.bible-on-site.local:3000                                       │
+    │  (Cloud Map DNS → private IPs like <ECS_TASK_IP>)                       │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+    Sensitive Information Restoration:
+    | Placeholder | Description | Restoration Command |
+    |---|---|---|
+    | `<INSTANCE_ID>` | EC2 Instance ID | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].InstanceId" --output text` |
+    | `<MASKED>` | Public IP Address | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
+    | `<PRIVATE_IP>` | Private IP Address | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].PrivateIpAddress" --output text` |
+    | `<SECURITY_GROUP_ID>` | Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=launch-wizard-1" --query "SecurityGroups[0].GroupId" --output text` |
+    | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
+    | `<SUBNET_ID>` | Subnet ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].SubnetId" --output text` |
+    | `<AMI_ID>` | AMI ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].ImageId" --output text` |
+    | `<VOLUME_ID>` | EBS Volume ID | `aws ec2 describe-instances --instance-ids <INSTANCE_ID> --query "Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId" --output text` |
+    | `<ECS_TASK_IP>` | ECS Task Private IP | `aws ecs list-tasks --cluster bible-on-site-cluster --service-name bible-on-site-website --query "taskArns[0]" --output text | xargs aws ecs describe-tasks --cluster bible-on-site-cluster --tasks | jq -r ".tasks[0].containers[0].networkInterfaces[0].privateIpv4Address"` |
+    | `<EXTERNAL_API_IP>` | External API IP | Check external service configuration |
+    | Key pair private key | SSH Private Key | Stored securely, not in version control |
   # =========================================================================
   # HARDWARE REQUIREMENTS
   # =========================================================================
@@ -386,9 +387,12 @@ Outputs:
 # Get public IP:
 #   aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1
 #
-# Start/Stop instance:
-#   aws ec2 start-instances --instance-ids <INSTANCE_ID> --region il-central-1
-#   aws ec2 stop-instances --instance-ids <INSTANCE_ID> --region il-central-1
+# Production safety: this is the sole public router. Do not stop/resize it
+# for cost savings. A smaller/ARM router requires a separately tested candidate,
+# measured memory/connection headroom, an approved traffic migration and a
+# retained working router for rollback. An EIP reassociation can also interrupt
+# existing connections; do not describe it as a zero-downtime cutover.
+# See ../../cost-risk-audit-2026-10-23.md and issue #2561.
 #
 # =============================================================================
 

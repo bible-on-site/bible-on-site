@@ -34,16 +34,16 @@ jest.mock("../../../src/lib/authors", () => ({
 }));
 
 import { render, screen } from "@testing-library/react";
+import AuthorPage, {
+	generateMetadata,
+	generateStaticParams,
+} from "../../../src/app/929/authors/[authorParam]/page";
 import {
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
 	getAuthorById,
 	getAuthorByName,
 } from "../../../src/lib/authors";
-import AuthorPage, {
-	generateMetadata,
-	generateStaticParams,
-} from "../../../src/app/929/authors/[authorParam]/page";
 
 const mockGetAllAuthorSlugs = getAllAuthorSlugs as jest.MockedFunction<
 	typeof getAllAuthorSlugs
@@ -100,10 +100,24 @@ describe("[authorParam] page", () => {
 				params: Promise.resolve({ authorParam: "1" }),
 			});
 
-			expect(result).toEqual({
-				title: 'הרב לדוגמא | תנ"ך באתר',
-				description: "תיאור ארוך מאוד",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: 'הרב לדוגמא | תנ"ך באתר',
+					description: "תיאור ארוך מאוד",
+				}),
+			);
+			expect(result.openGraph).toEqual(
+				expect.objectContaining({
+					type: "profile",
+					images: [
+						expect.objectContaining({
+							url: "https://example.com/1.jpg",
+							alt: "הרב לדוגמא",
+							type: "image/jpeg",
+						}),
+					],
+				}),
+			);
 			expect(mockGetAuthorById).toHaveBeenCalledWith(1);
 		});
 
@@ -121,10 +135,12 @@ describe("[authorParam] page", () => {
 				}),
 			});
 
-			expect(result).toEqual({
-				title: 'הרב לדוגמא | תנ"ך באתר',
-				description: "מאמרים מאת הרב לדוגמא",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: 'הרב לדוגמא | תנ"ך באתר',
+					description: "מאמרים מאת הרב לדוגמא",
+				}),
+			);
 			expect(mockGetAuthorByName).toHaveBeenCalledWith("הרב לדוגמא");
 		});
 

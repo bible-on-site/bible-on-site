@@ -110,6 +110,15 @@ const nextConfig = {
 				protocol: "https",
 				hostname: "*.s3.*.amazonaws.com",
 			},
+			// Assets CDN (ASSETS_BASE_URL) — custom domain or raw distribution host
+			{
+				protocol: "https",
+				hostname: "assets.xn--febl3a.co.il",
+			},
+			{
+				protocol: "https",
+				hostname: "**.cloudfront.net",
+			},
 		],
 	},
 	experimental: {
@@ -197,13 +206,15 @@ const nextConfig = {
 				{ source: `/${encodeURIComponent("פרשה")}`, destination: "/parasha" },
 				...parashaSeferFirstUnits.flatMap(([sefer, unitId]) =>
 					Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
-						[
-							`/פרשה/${sefer}/${slug}`,
-							`/פרשה/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
-						].map((source) => ({
-							source,
-							destination: `/parasha/${unitId}?book&bookPage=${page}`,
-						})),
+						["פרשה", encodeURIComponent("פרשה")].flatMap((root) =>
+							[
+								`/${root}/${sefer}/${slug}`,
+								`/${root}/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
+							].map((source) => ({
+								source,
+								destination: `/parasha/${unitId}?book&bookPage=${page}`,
+							})),
+						),
 					),
 				),
 				{ source: "/פרשה/:path*", destination: "/parasha/:path*" },

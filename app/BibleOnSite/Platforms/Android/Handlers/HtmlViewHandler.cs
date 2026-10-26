@@ -697,14 +697,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
                 _ => Android.Views.TextAlignment.TextStart
             };
 
-            if (view.TextAlignment == HtmlTextAlignment.Center)
-            {
-                handler.PlatformView.Gravity = Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top;
-            }
-            else
-            {
-                handler.PlatformView.Gravity = Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
-            }
+            handler.PlatformView.Gravity = view.TextAlignment == HtmlTextAlignment.Center
+                ? Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top
+                : Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
         }
 
         // Justify complete lines in either direction. TextDirection and the RLM

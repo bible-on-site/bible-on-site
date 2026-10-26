@@ -11,7 +11,7 @@ namespace BibleOnSite.ViewModels;
 /// ViewModel for perek display and navigation.
 /// Uses CommunityToolkit.Mvvm for observable properties and commands.
 /// </summary>
-public partial class PerekViewModel : ObservableObject
+public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
 {
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Perek?> _perekLoader;
@@ -178,12 +178,15 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
-    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselPerekChanged(Perek? oldValue, Perek? newValue)
+    partial void OnPerekChanged(Perek? oldValue, Perek? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Perek always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
     }
 
     /// <summary>
@@ -241,12 +244,12 @@ public partial class PerekViewModel : ObservableObject
         _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
-        _fontFactor = _preferencesService.FontFactor;
+        _fontFactor = _preferencesService.PasukFontFactor;
         _divineNameMaskingRevision = DivineNameMasking.Revision;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
-    /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
+    /// <summary>Effective pasuk scaling factor: master × pasuk percent (#2461).</summary>
     [ObservableProperty]
     private double _fontFactor = 1.0;
 
@@ -505,8 +508,10 @@ public partial class PerekViewModel : ObservableObject
             await stale;
             DebugLog.Write($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: a superseded load attempt's late failure is log-only
+        catch (Exception ex) //NOSONAR — a superseded load attempt's late failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[PerekLoad] stale attempt {attempt} failed late (perekId={perekId}): {ex.Message}");
         }
     }
@@ -1139,8 +1144,10 @@ public partial class PerekViewModel : ObservableObject
                     _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, chapter);
                 }
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: carousel preload is best-effort
+            catch (Exception ex) //NOSONAR — carousel preload is best-effort.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"[Carousel] PreloadPerushim perekId={id} failed: {ex.Message}");
             }
         }
@@ -1188,8 +1195,10 @@ public partial class PerekViewModel : ObservableObject
             var encodedTitle = Uri.EscapeDataString(Source);
             await _navigator.GoToAsync($"ArticlesPage?perekId={PerekId}&perekTitle={encodedTitle}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigation to ArticlesPage failed: {ex}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
         }
@@ -1205,8 +1214,10 @@ public partial class PerekViewModel : ObservableObject
         {
             await _navigator.GoToAsync("AuthorsPage");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigation to AuthorsPage failed: {ex}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
         }
@@ -1222,7 +1233,7 @@ public partial class PerekViewModel : ObservableObject
         {
             var report = await _notesService.GetDiagnosticsAsync();
             var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
+            var path = Path.Join(_fileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(path, report);
             await _share.RequestAsync(new ShareFileRequest
             {
@@ -1230,8 +1241,10 @@ public partial class PerekViewModel : ObservableObject
                 File = new ShareFile(path),
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: log export failure alerts the user
+        catch (Exception ex) //NOSONAR — log export failure alerts the user.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
@@ -1300,9 +1313,9 @@ public partial class PerekViewModel : ObservableObject
 
     private void RefreshPreferences()
     {
-        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        if (Math.Abs(_fontFactor - _preferencesService.PasukFontFactor) > 0.001)
         {
-            FontFactor = _preferencesService.FontFactor;
+            FontFactor = _preferencesService.PasukFontFactor;
         }
         if (_divineNameMaskingRevision != DivineNameMasking.Revision)
         {

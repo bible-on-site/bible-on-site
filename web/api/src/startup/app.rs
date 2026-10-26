@@ -109,7 +109,7 @@ impl ActixApp {
                 )
                 .service(
                     web::resource("/health")
-                        .guard(guard::Get())
+                        .guard(guard::Any(guard::Get()).or(guard::Head()))
                         .to(health_check),
                 );
 
@@ -139,7 +139,7 @@ struct HealthResponse {
     version: &'static str,
 }
 
-/// GET /health — returns API status and version (embedded at compile time).
+/// GET/HEAD /health — returns API status and version (embedded at compile time).
 /// Used by ECS health checks and for version introspection.
 async fn health_check() -> HttpResponse {
     HttpResponse::Ok().json(HealthResponse {
@@ -154,7 +154,7 @@ mod tests {
     use actix_web::{
         App,
         body::to_bytes,
-        http::{StatusCode, header},
+        http::{Method, StatusCode, header},
         test,
     };
     use sea_orm::{DatabaseBackend, MockDatabase};
@@ -180,6 +180,105 @@ mod tests {
         let body = std::str::from_utf8(&body).expect("health body should be utf8");
         assert!(body.contains(r#""status":"ok""#));
         assert!(body.contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[actix_web::test]
+    async fn health_route_accepts_head_and_rejects_other_methods() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+        )))
+        .await;
+
+        let response = test::call_service(
+            &app,
+            test::TestRequest::default()
+                .method(Method::HEAD)
+                .uri("/health")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+
+        for method in [
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::TRACE,
+            Method::CONNECT,
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method.clone())
+                    .uri("/health")
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method}");
+        }
+    }
+
+    #[actix_web::test]
+    async fn health_head_has_no_body_over_http() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind health test listener");
+        let address = listener.local_addr().expect("health test address");
+        let server = HttpServer::new(move || {
+            App::new().configure(ActixApp::build_app_config(
+                &db,
+                &article_index,
+                Arc::new(AtomicBool::new(false)),
+            ))
+        })
+        .workers(1)
+        .disable_signals()
+        .listen(listener)
+        .expect("listen for health test")
+        .run();
+        let handle = server.handle();
+        let server_task = actix_web::rt::spawn(server);
+        let response = tokio::task::spawn_blocking(move || {
+            use std::io::{Read, Write};
+
+            let timeout = Duration::from_secs(5);
+            let mut stream = std::net::TcpStream::connect_timeout(&address, timeout)?;
+            stream.set_read_timeout(Some(timeout))?;
+            stream.set_write_timeout(Some(timeout))?;
+            stream.write_all(
+                b"HEAD /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            )?;
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            Ok::<_, io::Error>(response)
+        })
+        .await;
+        handle.stop(true).await;
+        server_task
+            .await
+            .expect("health server task")
+            .expect("health server");
+        let response = response
+            .expect("health client task")
+            .expect("health request");
+        let (headers, body) = response.split_once("\r\n\r\n").expect("HTTP response");
+        assert!(headers.starts_with("HTTP/1.1 200 OK"));
+        assert!(
+            headers
+                .to_ascii_lowercase()
+                .contains("content-type: application/json")
+        );
+        assert!(body.is_empty(), "HEAD must not send the GET response body");
     }
 
     #[actix_web::test]

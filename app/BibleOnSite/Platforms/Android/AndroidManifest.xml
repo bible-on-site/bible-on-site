@@ -6,6 +6,8 @@
 		     so collection starts off and MainActivity enables it only for launches
 		     outside the e2e suite. -->
 		<meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+		<meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
+		<meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
 		<!-- #2120: test builds (DisableAnalytics — every Debug build, and the
 		     mobile-e2e CompileMobileE2E target passes it explicitly) permanently
 		     deactivate collection for the build's lifetime: runtime opt-in cannot

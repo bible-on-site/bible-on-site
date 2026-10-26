@@ -7,7 +7,7 @@
  * record overwrite a rich unit record and silently dropping coverage.
  *
  * Usage:
- *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--hits-only <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
+ *   node merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--hits-only <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
  *
  * --require   input must exist; a missing one fails the merge (exit 1)
  * --hits-only like --require, but the input's instrumented universe is

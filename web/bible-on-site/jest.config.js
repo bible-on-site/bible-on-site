@@ -99,8 +99,13 @@ async function nextJestConfigPromise() {
 	const nextJestConfig = await createNextJestConfig(config)();
 	// This cannot be set directly in the jest config because it is overridden by next/jest.
 	nextJestConfig.transformIgnorePatterns = [
-		// ESM modules that need to be transformed for Jest's CommonJS runtime
-		"/node_modules/(?!(gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js)/)",
+		// ESM modules that need to be transformed for Jest's CommonJS runtime.
+		// bun installs flat via `linker = "hoisted"` (bunfig.toml), so the
+		// node_modules layout matches npm's — no store indirection to unwrap.
+		// The @exodus/@asamuzakjp/@bramus/@csstools scopes and
+		// css-tree/entities/lru-cache/parse5/tough-cookie are jsdom 30's
+		// ESM-only dependency subtree.
+		"/node_modules/(?!(?:gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js|@exodus|@asamuzakjp|@bramus|@csstools|css-tree|entities|lru-cache|parse5|tough-cookie)/)",
 	];
 
 	return nextJestConfig;

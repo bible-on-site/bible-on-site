@@ -7,8 +7,8 @@ const PARASHA_ROOT = `/${encodeURIComponent("פרשה")}`;
  * פרשה reader e2e — the weekly Torah-reading division under its own
  * root. Covers the landing (five Torah sefarim only), a unit's Torah
  * text, the labeled Haftarah custom variants, multi-range auxiliary
- * readings, unit navigation, and the deliberate alternate-slice SEO
- * policy (noindex + self canonical).
+ * readings, unit navigation, and indexable base readings with duplicate
+ * presentation/content variants excluded from search.
  */
 test.describe("פרשה reading root", () => {
 	// Unit pages render Torah text, every Haftarah variant, perushim,
@@ -157,18 +157,53 @@ test.describe("פרשה reading root", () => {
 		).toBeVisible();
 	});
 
-	test("seo policy: parasha units are noindex alternate slices", async ({
+	test("seo policy: base parasha units stay indexable and self-canonical", async ({
 		page,
 	}) => {
 		await page.goto(`${PARASHA_ROOT}/1`);
-		await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-			"content",
-			/noindex/,
-		);
+		await expect(
+			page.locator('meta[name="robots"][content*="noindex"]'),
+		).toHaveCount(0);
 		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
 			"href",
 			/%D7%A4%D7%A8%D7%A9%D7%94\/1|פרשה\/1/,
 		);
+	});
+
+	test("seo policy: duplicate views stay usable without contaminating base responses", async ({
+		request,
+	}) => {
+		for (const suffix of [
+			"",
+			"?perush=Rashi",
+			"",
+			"?book&article=123",
+			"",
+			"?haftaraPerush=Rashi",
+			"?haftaraArticle=123",
+			"?book",
+			"?utm_source=test",
+			"",
+		]) {
+			const response = await request.get(`${PARASHA_ROOT}/1${suffix}`);
+			expect(response.status()).toBe(200);
+			expect(response.headers()["x-robots-tag"]).toBe(
+				suffix && !suffix.startsWith("?utm_") ? "noindex, follow" : undefined,
+			);
+			const html = await response.text();
+			expect(html).not.toMatch(/<meta name="robots" content="[^"]*noindex/);
+			expect(html).toMatch(
+				/<link rel="canonical" href="[^"]*(?:%D7%A4%D7%A8%D7%A9%D7%94|פרשה)\/1"/,
+			);
+		}
+		for (const path of [
+			"/parasha/1?perush=Rashi",
+			`${PARASHA_ROOT}/${encodeURIComponent("בראשית")}/${encodeURIComponent("כריכה")}`,
+		]) {
+			const response = await request.get(path);
+			expect(response.status(), path).toBe(200);
+			expect(response.headers()["x-robots-tag"], path).toBe("noindex, follow");
+		}
 	});
 
 	test("book view opens on ?book and shows the sefer book", async ({

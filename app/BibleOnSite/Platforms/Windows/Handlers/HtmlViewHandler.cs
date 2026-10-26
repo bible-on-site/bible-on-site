@@ -111,8 +111,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
             ParseNode(doc.DocumentNode, paragraph.Inlines);
             PlatformView.Blocks.Add(paragraph);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: HTML render failure falls back to plain text
+        catch (Exception ex) //NOSONAR — HTML render failure falls back to plain text.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"HtmlViewHandler Windows error: {ex.Message}");
             // Fallback to plain text
             var paragraph = new Paragraph { FontSize = VirtualView.FontSize };
