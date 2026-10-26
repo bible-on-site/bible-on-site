@@ -382,26 +382,27 @@ public partial class LearningCalendarViewModel : ObservableObject
         Func<PerekScheduleService.CalendarDay, bool>? dimmed)
     {
         var weeks = new List<MiniMonthWeekViewModel>();
-        var row = new List<CalendarCellViewModel>(7);
-        for (var i = 0; i < cells.Count; i++)
+        var i = 0;
+        while (i < cells.Count)
         {
-            var column = i % 7;
-            var day = cells[i].Day;
-            var next = i + 1 < cells.Count ? cells[i + 1].Day : null;
-            if (IsMergedReviewPair(day, next))
+            var row = new List<CalendarCellViewModel>(7);
+            var weekEnd = Math.Min(i + 7, cells.Count);
+            while (i < weekEnd)
             {
-                row.Add(ToMergedCellViewModel(day!, next!, dimmed, column));
-                i++; // Saturday is part of Friday's merged block.
+                var day = cells[i].Day;
+                var next = i + 1 < weekEnd ? cells[i + 1].Day : null;
+                if (IsMergedReviewPair(day, next))
+                {
+                    row.Add(ToMergedCellViewModel(day!, next!, dimmed, row.Count));
+                    i += 2; // Saturday is part of Friday's merged block.
+                }
+                else
+                {
+                    row.Add(ToCellViewModel(cells[i], dimmed, row.Count));
+                    i++;
+                }
             }
-            else
-            {
-                row.Add(ToCellViewModel(cells[i], dimmed, column));
-            }
-            if (i % 7 == 6 || i == cells.Count - 1)
-            {
-                weeks.Add(new MiniMonthWeekViewModel { Cells = row });
-                row = new List<CalendarCellViewModel>(7);
-            }
+            weeks.Add(new MiniMonthWeekViewModel { Cells = row });
         }
         return weeks;
     }
