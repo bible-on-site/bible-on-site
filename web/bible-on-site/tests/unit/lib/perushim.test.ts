@@ -11,11 +11,11 @@ import { query } from "../../../src/lib/api-client";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
-	getPerushimByPerekId,
-	getPerushimForRanges,
 	getPerushNotes,
 	getPerushNotesBatch,
 	getPerushNotesForRanges,
+	getPerushimByPerekId,
+	getPerushimForRanges,
 } from "../../../src/lib/perushim";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -50,7 +50,11 @@ describe("perushim service", () => {
 				},
 			];
 
-			mockQuery.mockResolvedValue(mockRows);
+			mockQuery
+				.mockResolvedValueOnce(mockRows)
+				.mockResolvedValueOnce([
+					{ perush_id: 2, word_count: 50, estimated_seconds: 14 },
+				]);
 
 			const result = await getPerushimByPerekId(1);
 
@@ -58,10 +62,48 @@ describe("perushim service", () => {
 				expect.stringContaining("ORDER BY p.priority ASC, note_count DESC"),
 				[1],
 			);
+			// Second query: perush×perek reading metrics (#2607).
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("tanah_perush_metric"),
+				[1],
+			);
 			expect(result).toEqual([
 				{ id: 1, name: "Ibn Ezra", parshanName: "אבן עזרא", noteCount: 10 },
+				{
+					id: 2,
+					name: "Rashi",
+					parshanName: 'רש"י',
+					noteCount: 5,
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				},
+			]);
+		});
+
+		it("keeps loaded summaries when the optional metric read fails", async () => {
+			// A non-schema metric failure must degrade to no badge — it must
+			// not hide the commentaries the summary query already loaded.
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perush_id: 2,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						note_count: 5,
+						priority: 100,
+					},
+				])
+				.mockRejectedValueOnce(new Error("metric timeout"));
+
+			const result = await getPerushimByPerekId(1);
+
+			expect(result).toEqual([
 				{ id: 2, name: "Rashi", parshanName: 'רש"י', noteCount: 5 },
 			]);
+			expect(console.warn).toHaveBeenCalledWith(
+				expect.stringContaining("Reading metric read failed"),
+				"perushim perek 1",
+				"metric timeout",
+			);
 		});
 
 		it("queries with priority in SELECT and GROUP BY", async () => {
@@ -111,7 +153,8 @@ describe("perushim service", () => {
 				])
 				.mockResolvedValueOnce([
 					{ pasuk: 1, note_idx: 0, note_content: "<p>Comment</p>" },
-				]);
+				])
+				.mockResolvedValueOnce([{ word_count: 50, estimated_seconds: 14 }]);
 
 			const result = await getPerushDetail(38, 1);
 
@@ -119,6 +162,10 @@ describe("perushim service", () => {
 			expect(result?.parshanName).toBe('רש"י');
 			expect(result?.parshanBirthYear).toBe(1040);
 			expect(result?.notes).toHaveLength(1);
+			expect(result?.metric).toEqual({
+				wordCount: 50,
+				estimatedSeconds: 14,
+			});
 		});
 
 		it("omits parshanBirthYear when DB returns null", async () => {
@@ -130,6 +177,7 @@ describe("perushim service", () => {
 						parshan_birth_year: null,
 					},
 				])
+				.mockResolvedValueOnce([])
 				.mockResolvedValueOnce([]);
 
 			const result = await getPerushDetail(2, 1);
@@ -137,6 +185,28 @@ describe("perushim service", () => {
 			expect(result).not.toBeNull();
 			expect(result?.parshanName).toBe("לא ידוע");
 			expect(result).not.toHaveProperty("parshanBirthYear");
+			expect(result).not.toHaveProperty("metric");
+		});
+
+		it("keeps the loaded detail when the optional metric read fails", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perush_name: "Rashi on Torah",
+						parshan_name: 'רש"י',
+						parshan_birth_year: 1040,
+					},
+				])
+				.mockResolvedValueOnce([
+					{ pasuk: 1, note_idx: 0, note_content: "<p>Comment</p>" },
+				])
+				.mockRejectedValueOnce(new Error("metric timeout"));
+
+			const result = await getPerushDetail(38, 1);
+
+			expect(result).not.toBeNull();
+			expect(result?.notes).toHaveLength(1);
+			expect(result).not.toHaveProperty("metric");
 		});
 
 		it("returns null when perush not found", async () => {

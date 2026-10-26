@@ -9,12 +9,9 @@ public static class ReaderSafeArea
     {
         // MAUI includes root in GetVisualTreeDescendants. Apply its insets last
         // so clearing nested layouts cannot put the toolbar under the status bar.
-        foreach (var element in root.GetVisualTreeDescendants())
+        foreach (var layout in root.GetVisualTreeDescendants().OfType<Layout>())
         {
-            if (element is Layout layout)
-            {
-                layout.SafeAreaEdges = SafeAreaEdges.None;
-            }
+            layout.SafeAreaEdges = SafeAreaEdges.None;
         }
         root.SafeAreaEdges = new SafeAreaEdges(
             SafeAreaRegions.None,

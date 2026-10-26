@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 import { loadRecitation } from "@/lib/recitation-loader";
 import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
@@ -11,8 +12,10 @@ import {
 	perekArticlesTag,
 	perekPerushimTag,
 } from "../../../lib/revalidate/tags";
+import { getPerekMetric, metricOrFallback } from "../../../lib/reading-metrics";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
-import { absUrl } from "../../../lib/seo/jsonld";
+import { pageMetadata } from "../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
@@ -59,6 +62,21 @@ const getCachedPerushim = cachedPerKey(
 	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
 	(perekId: number) => getPerushimByPerekId(perekId),
 );
+
+/**
+ * Perek word counts decorate fixed canonical content (#2607) — the metric can
+ * only change on a counting-policy redeploy, so the same `perushim`-style
+ * build-time cache is correct: `reading-metrics` tag lets an operator flush it
+ * explicitly without waiting for a deploy.
+ */
+const getCachedPerekMetric = unstable_cache(
+	async (perekId: number) => getPerekMetric(perekId),
+	["perek-metric"],
+	{
+		tags: ["reading-metrics"],
+		revalidate: false,
+	},
+);
 export async function generateMetadata({
 	params,
 }: {
@@ -73,31 +91,23 @@ export async function generateMetadata({
 		illustration?.description ??
 		`קריאת ${perekObj.source} בתנ"ך, עם פירושים ומאמרים על הפרק.`;
 	return {
-		title,
-		description,
-		alternates: { canonical: `/929/${perekId}` },
+		...pageMetadata({
+			title,
+			description,
+			canonical: `/929/${perekId}`,
+			image: illustration
+				? {
+						url: illustration.socialSrc,
+						width: illustration.socialWidth,
+						height: illustration.socialHeight,
+						alt: illustration.alt,
+					}
+				: undefined,
+		}),
 		...(illustration
 			? {
 					robots: {
 						googleBot: { "max-image-preview": "large" as const },
-					},
-					openGraph: {
-						title,
-						description,
-						url: `/929/${perekId}`,
-						locale: "he_IL",
-						images: [
-							{
-								url: absUrl(illustration.socialSrc),
-								width: illustration.socialWidth,
-								height: illustration.socialHeight,
-								alt: illustration.alt,
-							},
-						],
-					},
-					twitter: {
-						card: "summary_large_image" as const,
-						images: [absUrl(illustration.socialSrc)],
 					},
 				}
 			: {}),
@@ -116,6 +126,12 @@ export default async function Perek({
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articles = await getCachedArticleSummaries(perekId);
 	const perushim = await getCachedPerushim(perekId);
+	// The metric is optional decoration — a failed read renders the page
+	// badge-less rather than erroring, and stays uncached so the next render
+	// retries. getCachedPerekMetric itself only caches a successful read.
+	const perekMetric = await metricOrFallback(`perek ${perekId}`, null, () =>
+		getCachedPerekMetric(perekId),
+	);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
@@ -128,6 +144,7 @@ export default async function Perek({
 					perekObj,
 					imagesByPerek[perekId] ?? [],
 					recitation,
+					perekMetric,
 				)}
 			/>
 			<Suspense>
@@ -143,6 +160,10 @@ export default async function Perek({
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
+				<ReadingTime
+					estimatedSeconds={perekMetric?.estimatedSeconds}
+					className={styles.readingTime}
+				/>
 				<PerekIntro images={imagesByPerek[perekId] ?? []} />
 				<PerekText
 					perekObj={perekObj}

@@ -1,4 +1,10 @@
 import { query } from "../api-client";
+import {
+	getPerushMetric,
+	getPerushMetricsByPerekId,
+	metricOrFallback,
+} from "../reading-metrics";
+import type { ReadingMetric } from "../reading-metrics";
 import type { ScriptureRange } from "../reading/contract";
 import {
 	noteSliceCondition,
@@ -44,12 +50,24 @@ export async function getPerushimByPerekId(
 			[perekId],
 		);
 
-		return rows.map((row) => ({
+		const summaries = rows.map((row) => ({
 			id: row.perush_id,
 			name: row.perush_name,
 			parshanName: row.parshan_name,
 			noteCount: Number(row.note_count),
 		}));
+		// Attach stored perush×perek reading metrics (#2607); a missing schema
+		// or uncomputed row leaves `metric` absent (distinct from verified-empty
+		// zeros), and a failed metric read must not hide loaded commentaries.
+		const metrics = await metricOrFallback(
+			`perushim perek ${perekId}`,
+			new Map<number, ReadingMetric>(),
+			() => getPerushMetricsByPerekId(perekId),
+		);
+		return summaries.map((summary) => {
+			const metric = metrics.get(summary.id);
+			return metric ? { ...summary, metric } : summary;
+		});
 	} catch (error) {
 		console.warn(
 			"Failed to fetch perushim for perek %d:",
@@ -353,6 +371,12 @@ export async function getPerushDetail(
 		if (metaRows.length === 0) return null;
 
 		const notes = await getPerushNotes(perushId, perekId);
+		// Optional decoration: a failed metric read keeps the loaded detail.
+		const metric = await metricOrFallback(
+			`perush ${perushId} perek ${perekId}`,
+			null,
+			() => getPerushMetric(perushId, perekId),
+		);
 		const r = metaRows[0];
 
 		return {
@@ -362,6 +386,7 @@ export async function getPerushDetail(
 			...(r.parshan_birth_year != null && {
 				parshanBirthYear: r.parshan_birth_year,
 			}),
+			...(metric ? { metric } : {}),
 			notes,
 		};
 	} catch (error) {

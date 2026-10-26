@@ -99,6 +99,12 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_family_edge_lab_data.sql")]
     tanahpedia_edge_lab_script: String,
 
+    /// Path to mention-decoration e2e fixture SQL file. Must run after the
+    /// Tanahpedia seed chain — it inserts tanahpedia_entry rows, which would
+    /// satisfy the legacy-migration "empty table" gate if loaded earlier.
+    #[arg(long, default_value = "../tanah_mention_test_data.sql")]
+    tanah_mention_test_data_script: String,
+
     /// Skip structure script execution
     #[arg(long, default_value = "false")]
     skip_structure: bool,
@@ -287,6 +293,10 @@ async fn main() -> Result<()> {
         }
 
         apply_tanahpedia_rebuild_structure(&mut conn, &tanahpedia_scripts).await?;
+
+        // Reading-metrics tables last: their FKs reference tanah_article and
+        // tanahpedia_entry, which exist only after the structures above ran.
+        apply_reading_metrics_upgrade(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -322,6 +332,12 @@ async fn main() -> Result<()> {
         }
 
         apply_tanahpedia_full_seed(&mut conn, &tanahpedia_scripts).await?;
+
+        apply_mention_test_data(&mut conn, base_path, &cli).await?;
+
+        // Re-applied here so `mysql-populate-data-only` still creates the
+        // reading-metrics tables on databases populated before this schema.
+        apply_reading_metrics_upgrade(&mut conn, base_path).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -449,6 +465,21 @@ async fn apply_tanahpedia_full_seed(
     apply_tanahpedia_family_and_place_content(conn, scripts, false).await
 }
 
+/// Loads the mention-decoration e2e fixture. Must run after the Tanahpedia
+/// seed chain — the fixture inserts `tanahpedia_entry` rows, which would
+/// satisfy the legacy migration's empty-table gate if loaded earlier.
+async fn apply_mention_test_data(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+    cli: &Cli,
+) -> Result<()> {
+    if cli.skip_tanah_test_data {
+        return Ok(());
+    }
+    let mention_test_data_path = base_path.join(&cli.tanah_mention_test_data_script);
+    execute_optional_script(conn, &mention_test_data_path, "mention-test-data").await
+}
+
 async fn apply_tanahpedia_family_and_place_content(
     conn: &mut MySqlConnection,
     scripts: &TanahpediaScripts,
@@ -520,6 +551,17 @@ async fn apply_perek_pasuk_count_upgrade(
         conn,
         &base_path.join("../tanah_perek_pasuk_count_upgrade.sql"),
         "perek-pasuk-count-upgrade",
+    )
+    .await
+}
+
+/// Creates the shared reading-metrics tables (#2607). Runs last: the metric
+/// tables hold FKs to tanah_article and tanahpedia_entry.
+async fn apply_reading_metrics_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_reading_metrics_upgrade.sql"),
+        "reading-metrics-upgrade",
     )
     .await
 }
@@ -1232,6 +1274,52 @@ SELECT 1";
 
             assert!(tanahpedia_entry_exists(&mut conn, "יעקב").await?);
             assert!(tanahpedia_entry_exists(&mut conn, "eretz-yisrael").await?);
+
+            // Article row so the fixture's article-side decorations land;
+            // perek 1 already exists from the covering-source step above.
+            raw_sql(
+                "INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content) \
+                 VALUES (1, 1, 1, 'mention fixture article', 1, '<p>ישראל ויצחק</p>')",
+            )
+            .execute(&mut conn)
+            .await
+            .context("Failed to insert mention-fixture article")?;
+
+            apply_mention_test_data(&mut conn, base_path, &cli).await?;
+            assert!(tanahpedia_entry_exists(&mut conn, "ישראל").await?);
+            assert_eq!(
+                table_count(&mut conn, "tanahpedia_mention_decoration").await?,
+                3
+            );
+
+            // The skip flag must short-circuit before touching the database.
+            apply_mention_test_data(
+                &mut conn,
+                base_path,
+                &cli_from(&["--skip-tanah-test-data"]),
+            )
+            .await?;
+            assert_eq!(
+                table_count(&mut conn, "tanahpedia_mention_decoration").await?,
+                3
+            );
+
+            // The reading-metrics upgrade is idempotent and must survive
+            // re-application on a database that already has it (#2607).
+            apply_reading_metrics_upgrade(&mut conn, base_path).await?;
+            apply_reading_metrics_upgrade(&mut conn, base_path).await?;
+            for table in [
+                "tanah_perek_metric",
+                "tanah_perek_pasuk_metric",
+                "tanah_article_metric",
+                "tanah_article_metric_block",
+                "tanah_note_metric",
+                "tanah_perush_metric",
+                "tanahpedia_entry_metric",
+                "tanahpedia_entry_metric_block",
+            ] {
+                assert_eq!(table_count(&mut conn, table).await?, 0, "{table}");
+            }
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())

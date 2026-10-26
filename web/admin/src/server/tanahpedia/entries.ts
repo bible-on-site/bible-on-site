@@ -14,10 +14,15 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
 import {
 	pediaEntryChange,
 	revalidateWebsite,
 } from "../website-revalidate";
+import {
+	dropSelfShadowedAliasInTx,
+	keepOldNameAsAliasInTx,
+} from "./alias-ops.server";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { pediaChangesForEntryIds } from "./paths";
 import {
@@ -299,6 +304,8 @@ export const createEntry = createServerFn({ method: "POST" })
 				[data.id],
 			);
 			if (!entry) throw new Error("Entry not found");
+			// Same-transaction reading metrics (#2607).
+			await recomputeEntryMetrics(conn, data.id, entry.content);
 			return { ...entry, headRevisionId: headId };
 		});
 		await revalidateWebsite([
@@ -317,6 +324,8 @@ export const updateEntry = createServerFn({ method: "POST" })
 			baseRevisionId?: string | null;
 			source?: string;
 			notes?: string | null;
+			/** Rename flow: keep the previous unique_name as a live alias to this entry. */
+			keepOldNameAsAlias?: boolean;
 		}) => data,
 	)
 	.handler(async ({ data }) => {
@@ -324,7 +333,36 @@ export const updateEntry = createServerFn({ method: "POST" })
 		const updated = await transaction(async (conn) => {
 			const { entry, headRevisionId, unchanged, previousUniqueName } =
 				await saveEntryRevisioned(conn, data);
-			return { ...entry, headRevisionId, unchanged, previousUniqueName };
+			let oldNameAliasCreated = false;
+			if (
+				!unchanged &&
+				previousUniqueName &&
+				previousUniqueName !== entry.unique_name
+			) {
+				// The new canonical name shadows a self-referencing alias row — drop it.
+				await dropSelfShadowedAliasInTx(conn, data.id, entry.unique_name);
+				if (data.keepOldNameAsAlias) {
+					// Same commit as the rename — no window where the old URL 404s.
+					oldNameAliasCreated = await keepOldNameAsAliasInTx(
+						conn,
+						data.id,
+						previousUniqueName,
+					);
+				}
+			}
+			return {
+				...entry,
+				headRevisionId,
+				unchanged,
+				previousUniqueName,
+				oldNameAliasCreated,
+				// Surfaced to the editor so it can report what happened to the
+				// old URL after a committed rename.
+				renamedFrom:
+					!unchanged && previousUniqueName !== entry.unique_name
+						? previousUniqueName
+						: null,
+			};
 		});
 		// A no-op save changes no public content, so nothing expires.
 		if (!updated.unchanged) {
