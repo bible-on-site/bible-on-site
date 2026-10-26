@@ -12,15 +12,14 @@
  * --require   input must exist; a missing one fails the merge (exit 1)
  * --hits-only like --require, but the input's instrumented universe is
  *             untrusted: it may only confirm hits on coordinates the other
- *             layers already enumerate — file, DA line, and a function
- *             declared at the same FN line in both builds. Use for inputs
- *             built by a different instrumented compilation (e.g. a
- *             separately built e2e app), whose sequence-point set is not
- *             comparable: its unhit lines never enter the report, its hits
- *             on unknown coordinates are dropped — a foreign hit without
- *             its unhit siblings would fake a fully covered file — and
- *             foreign BRDA arms never merge, since the same tuple can name
- *             a different branch in another build.
+ *             layers already enumerate — file, DA line, a function
+ *             declared at the same FN line in both builds, and a BRDA
+ *             tuple present verbatim in both. Use for inputs built by a
+ *             different instrumented compilation (e.g. a separately built
+ *             e2e app), whose sequence-point set is not comparable: its
+ *             unhit lines never enter the report and its hits on unknown
+ *             coordinates are dropped — a foreign hit without its unhit
+ *             siblings would fake a fully covered file.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
@@ -99,7 +98,12 @@ export function mergeLcovTexts(
 				}
 				// BRDA block/branch indices are the instrumenter's own
 				// coordinates — the same tuple can name a different arm in
-				// another build, so untrusted branch hits never merge.
+				// another build. A tuple the canonical layer also enumerates
+				// is plausibly the same arm (same instrumenter, same source),
+				// so its hit confirms; unmatched foreign tuples stay dropped.
+				for (const [key, h] of foreign.brda) {
+					if (rec.brda.has(key)) rec.brda.set(key, Math.max(rec.brda.get(key) ?? 0, h));
+				}
 				for (const [name, h] of foreign.fnda) {
 					// A function is provably the same only when the untrusted
 					// block declared it at the exact FN "line,name" the
