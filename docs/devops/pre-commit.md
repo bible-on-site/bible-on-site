@@ -53,6 +53,11 @@ When you commit, the `pre-commit` git hook runs the framework, which:
    its module directory via `devops/precommit-run.mjs` (single-command modules)
    or `devops/precommit-rust.mjs` (per-module cargo-make tasks); the
    merge-aware change detection lives in `devops/precommit-changes.mjs`.
+   Unit-test hooks use `precommit-run.mjs --related`: the argv after `::` runs
+   with the staged module files appended (e.g. `jest --findRelatedTests`,
+   `vitest related --run` via `test:unit:related`), and falls back to the
+   full-suite argv before `::` when a staged path can invalidate the whole
+   suite or no related tests match.
 4. **Post-commit**: `flip-book-local-restore` restores the local
    `html-flip-book-react` dependency when the pre-commit guard switched it to
    npm for the commit.
@@ -113,8 +118,8 @@ post-commit `flip-book-local-restore` never runs on pre-commit.ci by design.
 |------|---------|---------|-------------|
 | `biome-lint` | `web/bible-on-site`, `web/admin` code files | per-module `biome lint` on staged files | Lint via [devops/precommit-biome.mjs](../../devops/precommit-biome.mjs) |
 | `flip-book-npm-dep` | `web/bible-on-site` | `bun run flip-book:check` → `flip-book:npm` + stage | Keeps `html-flip-book-react` on the npm version in commits ([devops/flip-book-dep.mjs](../../devops/flip-book-dep.mjs)) |
-| `web-unit-tests` | `web/bible-on-site` | `bun run test:unit` | Website unit tests (Jest) |
-| `admin-unit-tests` | `web/admin` | `bun run test:unit` | Admin unit tests (vitest) |
+| `web-unit-tests` | `web/bible-on-site` | `bun run test:unit --findRelatedTests <staged files>` | Website unit tests (Jest) — related-tests mode: runs only tests covering the staged files; suite-wide paths (config/dotfiles/setup, `public/`, `scripts/`) or a zero-match related run fall back to `bun run test:unit` |
+| `admin-unit-tests` | `web/admin` | `bun run test:unit:related <staged files>` | Admin unit tests (vitest) — same related/fallback semantics via `vitest related --run` |
 | `rust-checks` | `web/api`, `web/bulletin`, `data` | `cargo make lint` (+ `fmt-check` for bulletin and data) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
 | `dotnet-analyzers` | `app/**` `.cs`/`.csproj`, `.editorconfig`, `global.json`, `Directory.Build.props` | `dotnet build` per touched project | SonarAnalyzer severities fail locally instead of surfacing as post-push annotations ([devops/precommit-dotnet.mjs](../../devops/precommit-dotnet.mjs)); skips projects without a prior restore |
 | `catch-boundary` | `app/**` `.cs` files | `node devops/review-audit/scan-catch.cjs` | Generic `catch (Exception)`/bare `catch` must carry `//NOSONAR — <reason>` — covers the sites S2221 cannot see (async-void, catch-rethrow) plus unrestored projects; skips `*.Tests*` assemblies and type-narrowed `when` filters |
