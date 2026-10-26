@@ -899,7 +899,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     #region Full Screen
 
-    /// <summary>Text button — returns to the unit view from articles, else scrolls to top.</summary>
+    /// <summary>Text button — returns to the unit view from articles, else
+    /// animates the visible unit's vertical content back to its start (#2624).</summary>
     private void OnTextButtonClicked(object? sender, EventArgs e)
     {
         if (_isShowingArticles)
@@ -908,7 +909,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
         else
         {
-            ParashaCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
+            ReaderScrollTop.ScrollCurrentUnitToStart(ParashaCarousel, _viewModel.Unit);
         }
     }
 

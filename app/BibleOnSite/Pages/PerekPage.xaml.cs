@@ -1380,7 +1380,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     /// <summary>
     /// Handles text button click - returns to perek view if showing articles,
-    /// otherwise scrolls to header/top of perek.
+    /// otherwise animates the visible perek's vertical content back to its
+    /// first pasuk (#2624). The shared helper resolves the realized scroll
+    /// surface of the current carousel item (regular list or תיקון קוראים),
+    /// so a stale or off-screen item can never be scrolled.
     /// </summary>
     private void OnTextButtonClicked(object? sender, EventArgs e)
     {
@@ -1391,8 +1394,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         else
         {
-            // Scroll the pasukim CollectionView to top within the current carousel item
-            PerekCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
+            ReaderScrollTop.ScrollCurrentUnitToStart(PerekCarousel, _viewModel.Perek);
         }
     }
 
