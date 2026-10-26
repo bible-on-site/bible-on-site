@@ -194,10 +194,17 @@ describe("TopNavAccessibility", () => {
 	});
 
 	it("docks at the left-edge slot where reader routes mount no gear", () => {
-		// /929/authors suppresses the search button like the rest of the
-		// reader section, but its layout mounts no preferences gear —
+		// /929/authors (and its /929/rabbis rewrite alias — the browser keeps
+		// the alias in the pathname) suppresses the search button like the
+		// rest of the reader section, but mounts no preferences gear —
 		// docking at the gear offset would leave an unexplained void.
-		for (const pathname of ["/929/authors", "/929/authors/1", "/929"]) {
+		for (const pathname of [
+			"/929/authors",
+			"/929/authors/1",
+			"/929/rabbis",
+			"/929/rabbis/1",
+			"/929",
+		]) {
 			mockPathname = pathname;
 			const { unmount } = render(<TopNavAccessibility />);
 			expect(trigger()).toHaveClass("top-nav-accessibility--edge");

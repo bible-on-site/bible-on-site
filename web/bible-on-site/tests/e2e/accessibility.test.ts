@@ -149,23 +149,32 @@ test.describe("Accessibility statement page", () => {
 	}) => {
 		// /929/authors suppresses the search button like the rest of the
 		// reader section, but mounts no preferences gear — docking at the
-		// gear offset there left a stranded gap (#2396 follow-up).
-		await page.goto("/929/authors");
-		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
-		await expect(trigger).toBeVisible();
-		await expect(
-			page.getByRole("button", { name: "הגדרות קריאה", exact: true }),
-		).toHaveCount(0);
-		await expect(page.getByRole("link", { name: "חיפוש" })).toHaveCount(0);
+		// gear offset there left a stranded gap. /929/rabbis is a transparent
+		// rewrite alias for the same gearless layout (#2396 follow-up).
+		for (const path of ["/929/authors", "/929/rabbis"]) {
+			await page.goto(path);
+			const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+			await expect(trigger).toBeVisible();
+			await expect(
+				page.getByRole("button", {
+					name: "הגדרות קריאה",
+					exact: true,
+				}),
+			).toHaveCount(0);
+			await expect(
+				page.getByRole("link", { name: "חיפוש" }),
+			).toHaveCount(0);
 
-		const box = await trigger.boundingBox();
-		expect(box).not.toBeNull();
-		expect(box?.x ?? 999).toBeLessThanOrEqual(24);
+			const box = await trigger.boundingBox();
+			expect(box).not.toBeNull();
+			expect(box?.x ?? 999).toBeLessThanOrEqual(24);
 
-		await trigger.click();
-		await expect(
-			page.getByRole("dialog", { name: "התאמות נגישות" }),
-		).toBeVisible();
+			await trigger.click();
+			const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
+			await expect(menu).toBeVisible();
+			await page.keyboard.press("Escape");
+			await expect(menu).toHaveCount(0);
+		}
 	});
 
 	test("the side nav no longer carries a standalone statement entry", async ({
