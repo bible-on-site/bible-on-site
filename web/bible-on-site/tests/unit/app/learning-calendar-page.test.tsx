@@ -376,4 +376,49 @@ describe("LearningCalendar", () => {
 			expect(mockPush).toHaveBeenCalledWith("/929/1");
 		});
 	});
+
+	describe("PDF download action (#2621)", () => {
+		beforeEach(() => {
+			global.fetch = jest.fn();
+			URL.createObjectURL = jest.fn(() => "blob:mock");
+			URL.revokeObjectURL = jest.fn();
+		});
+
+		it("names the selected month on the download action", () => {
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				screen.getByRole("button", {
+					name: /הורדת PDF: אלול ה'תשפ/,
+				}),
+			).toBeInTheDocument();
+		});
+
+		it("names the selected year in yearly view", () => {
+			setSearchParam("578512", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				screen.getByRole("button", { name: /הורדת PDF: שנת ה'תשפ/ }),
+			).toBeInTheDocument();
+		});
+
+		it("names the selected cycle in full-cycle view", () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				screen.getByRole("button", { name: /הורדת PDF: מחזור 4/ }),
+			).toBeInTheDocument();
+		});
+
+		it("fetches nothing while the calendar is browsed", () => {
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+
+			expect(global.fetch).not.toHaveBeenCalled();
+		});
+	});
 });
