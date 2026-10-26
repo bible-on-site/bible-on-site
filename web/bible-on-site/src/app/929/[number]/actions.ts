@@ -14,15 +14,19 @@ import {
 	getPerushNotes,
 	getPerushNotesBatch,
 } from "@/lib/perushim";
+import { decorateArticleContent } from "@/lib/tanahpedia/article-mention-refs";
 
 /**
  * Fetch a single article by ID for in-book display (e.g. flipbook blank page).
- * Returns null if not found.
+ * Returns null if not found. Content arrives mention-decorated (#2516) so
+ * in-book rendering matches the standalone article route.
  */
 export async function getArticleForBook(
 	articleId: number,
 ): Promise<Article | null> {
-	return getArticleById(articleId);
+	const article = await getArticleById(articleId);
+	if (!article) return null;
+	return decorateArticleContent(article);
 }
 
 /**

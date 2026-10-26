@@ -37,9 +37,11 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
 - **Setup Environment Variables** (`setup_env`): resolves tool versions
   (e.g. Playwright) and module paths used by every other job.
 - **Determine Baseline Availability** (`determine_baseline_availability`):
-  checks which trusted `master` artifacts exist, downloads each via the
-  REST API and re-uploads it into the current run so consumers resolve
-  baselines through ordinary `actions/download-artifact`. Covered baselines:
+  checks which trusted `master` artifacts exist (name-filtered REST lookups)
+  and emits one availability flag per baseline; each consumer then fetches
+  the baseline directly by name through the REST API — same-run artifacts
+  still resolve through ordinary `actions/download-artifact`. Covered
+  baselines:
   per-module coverage (`{website,api,app,bulletin,admin,data}-coverage.master`),
   perushim data (`perushim-data-sql.master`,
   `perushim-sqlite-v2-indexed.master`) and per-platform app E2E coverage
@@ -120,7 +122,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
     `perushim_data` must succeed when the pipeline changed or a perushim
     baseline is missing.
 - Restores per-module coverage — from the module job's own run artifact when
-  it ran, else from the re-uploaded `*.master` baseline.
+  it ran, else the `*.master` baseline fetched by name through the REST API.
 - Merges the **app** report's three layers — unit + integration + per-platform
   mobile E2E (`merge-lcov.mts --relocate app/BibleOnSite/ --hits-only`):
   executed-hit records union in, the instrumented build's larger zero-hit
@@ -179,11 +181,11 @@ Performance builds the same Next.js app pre-merge.
 The reusable orchestrator composes one orchestration layer over reusable legs:
 
 ```
-resolve_perushim_input  →  appium_android (runner: build-and-run)
-                        →  build_ios      (runner: build)
-                        →  plan_ios       (select -> runtime plan -> ios-matrix)
-                        →  ios_shard_<N>  (runner: prebuilt-run, needs
-                                         build_ios + plan_ios)
+appium_android (runner: build-and-run)
+build_ios      (runner: build)
+plan_ios       (select -> runtime plan -> ios-matrix)
+ios_shard_<N>  (runner: prebuilt-run, needs
+                build_ios + plan_ios)
 merge_ios (always(), needs every planned shard)
 ```
 
@@ -225,15 +227,19 @@ merge_ios (always(), needs every planned shard)
   a transport failure builds a fresh WDA session. A supervisor watchdog plus
   per-test/batch deadlines bound runaway legs; cleanup captures diagnostics,
   deletes the cloned device, and reports the bounded outcome.
-- **Perushim input** (orchestrator `resolve_perushim_input`): shards and the
-  Android leg package the same `perushim-sqlite-v2-indexed` catalog/notes pair
-  `package_app` ships — this run's artifact when the pipeline regenerated it,
-  the `master` baseline otherwise.
+- **Perushim input** (`perushim_notes_sqlite_artifact`): the Android leg and
+  the shared iOS build package the same `perushim-sqlite-v2-indexed`
+  catalog/notes pair `package_app` ships — this run's artifact via
+  `actions/download-artifact` when the pipeline regenerated it, else the
+  `master` baseline fetched by name through the REST API.
 
 ## Cache and reuse strategy
 
 All caches are owned by the native runner legs (plus `actions/cache` inside
-`ci.yml` for NuGet/bun). Keys are derived on every leg by `hash-native-deps.mjs`
+`ci.yml` for NuGet). The bun store cache shared by every JS job preamble in
+`ci.yml` and the `cd-*` workflows is centralized in the
+`.github/actions/setup-js` + `.github/actions/save-bun-store` composite
+actions. Keys are derived on every leg by `hash-native-deps.mjs`
 / `nuget-cache-key.ts` (bounded `hashFiles` — the manifest file is hashed
 directly when the file enumeration budget would be exceeded, #2184). Save
 policy differs per cache: NuGet, node_modules and iOS `obj` intermediates save

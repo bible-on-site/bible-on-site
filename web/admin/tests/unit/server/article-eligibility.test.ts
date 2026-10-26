@@ -85,8 +85,10 @@ describe("article distribution eligibility", () => {
 			data: { ...article, distributable: undefined as unknown as boolean },
 		});
 		// The second create's INSERT params carry the coerced false.
+		// (`tanah_article (` — the reading-metrics upsert targets
+		// `tanah_article_metric`, which shares the prefix.)
 		const createCalls = mocks.txExecute.mock.calls.filter((c) =>
-			(c[1] as string).startsWith("INSERT INTO tanah_article"),
+			(c[1] as string).startsWith("INSERT INTO tanah_article ("),
 		);
 		expect(createCalls.at(-1)?.[2]).toContain(false);
 	});

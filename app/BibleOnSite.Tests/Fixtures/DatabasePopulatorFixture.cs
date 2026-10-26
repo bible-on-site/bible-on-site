@@ -106,7 +106,8 @@ public class DatabasePopulatorFixture : IAsyncLifetime
 
         if (!completed)
         {
-            try { process.Kill(entireProcessTree: true); } catch { /* The timed-out process may have already exited; nothing more to kill. */ }
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception ex) { Console.WriteLine($"Warning: Error stopping database drop: {ex.Message}"); }
             Console.WriteLine("[DatabasePopulatorFixture] WARNING: Database drop timed out");
             return;
         }
@@ -202,7 +203,8 @@ public class DatabasePopulatorFixture : IAsyncLifetime
 
         if (!completed)
         {
-            try { process.Kill(entireProcessTree: true); } catch { /* The timed-out process may have already exited; the timeout still throws below. */ }
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception ex) { Console.WriteLine($"Warning: Error stopping database populator: {ex.Message}"); }
             throw new TimeoutException("Database population timed out after 5 minutes");
         }
 

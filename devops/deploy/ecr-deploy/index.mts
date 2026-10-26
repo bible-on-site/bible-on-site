@@ -1,10 +1,10 @@
 import * as dotenv from "dotenv";
 import yargs from "yargs";
-import { AdminECRDeployer } from "./admin-deployer.mjs";
-import { APIECRDeployer } from "./api-deployer.mjs";
-import { createECRClient, getECRConfig } from "./ecr-client.mjs";
-import type { ECRDeployerBase } from "./ecr-deployer-base.mjs";
-import { WebsiteECRDeployer } from "./website-deployer.mjs";
+import { AdminECRDeployer } from "./admin-deployer.mts";
+import { APIECRDeployer } from "./api-deployer.mts";
+import { createECRClient, getECRConfig } from "./ecr-client.mts";
+import type { ECRDeployerBase } from "./ecr-deployer-base.mts";
+import { WebsiteECRDeployer } from "./website-deployer.mts";
 
 // Load environment variables
 dotenv.config({

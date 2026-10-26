@@ -1,0 +1,84 @@
+name: Setup JS toolchain
+description: >-
+  Shared JavaScript job preamble: installs bun and Node.js (version pinned by
+  the module's package.json), restores the shared bun download store keyed on
+  the module's bun.lock, optionally restores the playwright browser binaries,
+  and runs `bun install --frozen-lockfile` in the module directory.
+  The bun store save is not part of this action: composite steps cannot run
+  in the background, so callers publish the cache through
+  ./.github/actions/save-bun-store on a `background: true` step instead.
+
+inputs:
+  module:
+    description: >-
+      Module slug embedded in the bun store cache key:
+      `<runner os>-bun-<module>-<bun.lock hash>` (e.g. website, admin, devops).
+    required: true
+  directory:
+    description: >-
+      Module directory relative to the repository root. Holds package.json
+      (Node version source) and bun.lock (cache key input) and is the
+      `bun install` working directory.
+    required: true
+  playwright-version:
+    description: >-
+      Playwright version for the browser binaries cache key
+      (`<runner os>-playwright-<version>`). Leave empty to skip the playwright
+      cache restore.
+    required: false
+    default: ""
+
+outputs:
+  cache-hit:
+    description: >-
+      "true" when the bun store cache restored an exact primary-key match;
+      gates the caller's save-bun-store step.
+    value: ${{ steps.bun-cache.outputs.cache-hit }}
+  cache-primary-key:
+    description: >-
+      Resolved bun store cache key; pass to save-bun-store's `key` input.
+    value: ${{ steps.bun-cache.outputs.cache-primary-key }}
+  playwright-cache-hit:
+    description: >-
+      "true" when the playwright binaries cache restored an exact match
+      (empty when `playwright-version` is unset).
+    value: ${{ steps.playwright-cache.outputs.cache-hit }}
+  playwright-cache-primary-key:
+    description: >-
+      Resolved playwright binaries cache key for a later caller-side save
+      (empty when `playwright-version` is unset).
+    value: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup bun
+      uses: oven-sh/setup-bun@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: ${{ inputs.directory }}/package.json
+
+    - name: Restore bun store cache
+      id: bun-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ inputs.module }}-${{ hashFiles(format('{0}/bun.lock', inputs.directory)) }}
+        restore-keys: ${{ runner.os }}-bun-${{ inputs.module }}-
+
+    - name: Restore playwright binaries
+      id: playwright-cache
+      if: ${{ inputs.playwright-version != '' }}
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ inputs.playwright-version }}
+
+    - name: Install dependencies
+      working-directory: ${{ github.workspace }}/${{ inputs.directory }}
+      shell: bash
+      run: |
+        node --version && bun --version
+        bun install --frozen-lockfile

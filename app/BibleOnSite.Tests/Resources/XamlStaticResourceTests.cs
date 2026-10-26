@@ -54,9 +54,7 @@ public class XamlStaticResourceTests
             }
 
             var doc = XDocument.Load(file);
-            foreach (var keyAttr in doc.Descendants()
-                .Select(el => el.Attribute(xNs + "Key"))
-                .OfType<XAttribute>())
+            foreach (var keyAttr in doc.Descendants().Select(el => el.Attribute(xNs + "Key")).OfType<XAttribute>())
             {
                 keys.Add(keyAttr.Value);
             }
@@ -75,9 +73,7 @@ public class XamlStaticResourceTests
         var keys = new HashSet<string>(StringComparer.Ordinal);
         XNamespace xNs = "http://schemas.microsoft.com/winfx/2009/xaml";
         var doc = XDocument.Load(filePath);
-        foreach (var keyAttr in doc.Descendants()
-            .Select(el => el.Attribute(xNs + "Key"))
-            .OfType<XAttribute>())
+        foreach (var keyAttr in doc.Descendants().Select(el => el.Attribute(xNs + "Key")).OfType<XAttribute>())
         {
             keys.Add(keyAttr.Value);
         }
@@ -95,11 +91,12 @@ public class XamlStaticResourceTests
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
-                foreach (var key in ResourceRegex.Matches(lines[i])
-                    .Select(match => match.Groups[1].Value)
-                    .Where(key => !globalKeys.Contains(key) && !localKeys.Contains(key)))
+                foreach (var key in ResourceRegex.Matches(lines[i]).Cast<System.Text.RegularExpressions.Match>().Select(match => match.Groups[1].Value))
                 {
-                    unresolved.Add((File: Path.GetRelativePath(AppRoot, file), Line: i + 1, Key: key));
+                    if (!globalKeys.Contains(key) && !localKeys.Contains(key))
+                    {
+                        unresolved.Add((File: Path.GetRelativePath(AppRoot, file), Line: i + 1, Key: key));
+                    }
                 }
             }
         }

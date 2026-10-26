@@ -39,7 +39,7 @@ partial class Build
     /// </summary>
     void WriteApiConfigFile()
     {
-        var apiConfigPath = SourceDirectory / "Resources" / "Raw" / "api-config.txt";
+        var apiConfigPath = System.IO.Path.Join(SourceDirectory, "Resources", "Raw", "api-config.txt");
         System.IO.File.WriteAllText(apiConfigPath, IsProdApi ? ProdApiUrl : "");
         if (IsProdApi)
         {
@@ -174,13 +174,10 @@ partial class Build
                 return;
             }
 
-            foreach (var line in System.IO.File.ReadAllLines(AppEnvFile).Select(rawLine => rawLine.Trim()))
+            foreach (var line in System.IO.File.ReadAllLines(AppEnvFile)
+                .Select(rawLine => rawLine.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith('#')))
             {
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
-                {
-                    continue;
-                }
-
                 var separatorIndex = line.IndexOf('=');
                 if (separatorIndex <= 0)
                 {
@@ -612,8 +609,8 @@ partial class Build
             process?.WaitForExit();
 
             // Find emulator line (starts with "emulator-")
-            return output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => line.Trim())
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            return lines.Select(line => line.Trim())
                 .Where(trimmed => trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
                 .Select(trimmed => trimmed.Split('\t')[0].Trim())
                 .FirstOrDefault();
@@ -834,8 +831,8 @@ partial class Build
     void EnsurePerushimOnDevice()
     {
         // Notes DB: lives in asset pack dir locally, push if missing from device
-        var notesLocalPath =
-            SourceDirectory / "Platforms" / "Android" / "AssetPacks" / "perushim_notes" / NotesDbName;
+        var notesLocalPath = System.IO.Path.Join(
+            SourceDirectory, "Platforms", "Android", "AssetPacks", "perushim_notes", NotesDbName);
 
         if (System.IO.File.Exists(notesLocalPath) && !DeviceFileExists(NotesDbName))
         {

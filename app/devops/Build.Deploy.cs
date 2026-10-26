@@ -564,8 +564,7 @@ partial class Build
         var flightIdColumnParts = new System.Text.StringBuilder();
 
         // Column 0 is empty (before first │), column 1 is row number, column 2 is FlightId
-        foreach (var flightIdPart in lines
-            .Select(line => line.Split('│'))
+        foreach (var flightIdPart in lines.Select(line => line.Split('│'))
             .Where(columns => columns.Length >= 3)
             .Select(columns => columns[2].Trim())
             .Where(part => !string.IsNullOrEmpty(part) && !part.Contains("FlightId") && !part.Contains("─")))
