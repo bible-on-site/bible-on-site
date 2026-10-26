@@ -24,11 +24,13 @@ import {
 } from "../../../../lib/perushim";
 import {
 	articlePath,
+	authorPath,
 	buildArticleGraph,
 	buildPerushGraph,
 	perushPath,
 } from "../../../../lib/seo/core-jsonld";
-import { plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
@@ -157,21 +159,37 @@ export async function generateMetadata({
 			(descriptionSource ? plainText(descriptionSource, 160) : "") ||
 			`מאמר מאת ${article.authorName}`;
 		const url = articlePath(perekId, article.id);
-		return {
+		// `article:section` is optional enrichment — an out-of-range perek
+		// segment must not fail metadata (the component still 404s mismatches).
+		const seferName =
+			perekId >= 1 && perekId <= 929
+				? getPerekByPerekId(perekId)?.sefer
+				: undefined;
+		const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
+		return pageMetadata({
 			title,
 			description,
-			alternates: {
-				canonical: url,
-			},
-			openGraph: {
-				title,
-				description,
-				url,
-				siteName: SITE_NAME,
-				locale: "he_IL",
-				type: "article",
-			},
-		};
+			canonical: url,
+			type: "article",
+			// `article:author` must be a profile URL — the author's public page.
+			authors: [absUrl(authorPath(authorNameToSlug(article.authorName)))],
+			section: seferName,
+			image: illustration
+				? {
+						url: illustration.socialSrc,
+						width: illustration.socialWidth,
+						height: illustration.socialHeight,
+						alt: illustration.alt,
+					}
+				: {
+						// The author's portrait is the page's own content image;
+						// intrinsic dimensions are unknown, so they are omitted
+						// rather than guessed.
+						url: article.authorImageUrl,
+						alt: article.authorName,
+						type: "image/jpeg",
+					},
+		});
 	}
 
 	// Otherwise it's a perush name
@@ -198,22 +216,24 @@ export async function generateMetadata({
 		notesExcerpt ||
 		`פירוש ${perush.name} מאת ${perush.parshanName} על ${perekObj.source}`;
 	const url = perushPath(perekId, perush.name);
-	return {
+	const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
+	return pageMetadata({
 		title,
 		description,
-		alternates: {
-			canonical: url,
-		},
-		openGraph: {
-			title,
-			description,
-			url,
-			siteName: SITE_NAME,
-			locale: "he_IL",
-			type: "article",
-			authors: [perush.parshanName],
-		},
-	};
+		canonical: url,
+		type: "article",
+		// Classical commentators have no public profile page, and OGP requires
+		// `article:author` to be a URL — so no `authors` value is emitted here.
+		section: perekObj.sefer,
+		image: illustration
+			? {
+					url: illustration.socialSrc,
+					width: illustration.socialWidth,
+					height: illustration.socialHeight,
+					alt: illustration.alt,
+				}
+			: undefined,
+	});
 }
 
 export default async function ArticlePage({
@@ -391,7 +411,9 @@ export default async function ArticlePage({
 									className={styles.noteContent}
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
+										__html: DOMPurify.sanitize(
+											demoteHeadings(note.noteContent),
+										),
 									}}
 								/>
 							</div>
