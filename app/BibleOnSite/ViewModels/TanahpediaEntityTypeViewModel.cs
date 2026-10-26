@@ -145,7 +145,7 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
                 }
             }
 
-            IntroContent = homepage?.Content;
+            IntroContent = TanahpediaFootnotes.Normalize(homepage?.Content);
             LayoutType = homepage?.LayoutType ?? "LIST";
             Entities = new ObservableCollection<TanahpediaEntityItem>(
                 entities.Select(TanahpediaEntityItem.ForListing));

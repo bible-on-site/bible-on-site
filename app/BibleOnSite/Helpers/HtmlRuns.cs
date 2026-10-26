@@ -146,7 +146,7 @@ public static class HtmlRuns
         {
             PendingSpace = false;
             Flush();
-            if (Runs.Count > 0 && LastChar != '\n')
+            if (Runs.Count > 0 && LastChar.GetValueOrDefault() != '\n')
             {
                 Append("\n", new Style());
             }
@@ -272,11 +272,26 @@ public static class HtmlRuns
                         number++;
                     }
                 }
+                /* ol.footnotes carries each item's Hebrew marker in
+                   data-marker (TanahpediaFootnotes.Normalize) so the note's own
+                   number shows — sparse numbering is preserved (#2639). */
+                if (IsFootnotesList(parent))
+                {
+                    var marker = liNode.GetAttributeValue("data-marker", string.Empty);
+                    return $"{(marker.Length > 0 ? marker : GimatryHelper.ToLetters(number))} ";
+                }
                 return $"{number}. ";
             }
         }
         return "\u2022 ";
     }
+
+    /// <summary>Whether the element is the canonical footnotes list
+    /// (<c>ol class="footnotes"</c>) produced by TanahpediaFootnotes.Normalize.</summary>
+    private static bool IsFootnotesList(HtmlNode node) =>
+        node.GetAttributeValue("class", string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Contains("footnotes", StringComparer.OrdinalIgnoreCase);
 
     private static Style ApplyTag(HtmlNode node, string tag, Style parent)
     {
