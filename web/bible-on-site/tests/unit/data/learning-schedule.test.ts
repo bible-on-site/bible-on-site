@@ -487,8 +487,9 @@ describe("getPerekRangeLabel", () => {
 	});
 
 	it("lists separate runs without implying unstudied perakim", () => {
-		// בראשית א-ב + ד — ג was never studied.
-		expect(getPerekRangeLabel([1, 2, 4])).toBe("בראשית א-ב, בראשית ד");
+		// בראשית א-ב + ד — ג was never studied. Source format forbids
+		// commas, so later runs join with a prefixed Hebrew vav.
+		expect(getPerekRangeLabel([1, 2, 4])).toBe("בראשית א-ב ובראשית ד");
 	});
 
 	it("returns an empty label for an empty set", () => {

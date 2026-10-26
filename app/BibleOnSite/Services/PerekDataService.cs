@@ -233,7 +233,7 @@ public class PerekDataService
             }
         }
 
-        return string.Join(", ", runs.Select(run =>
+        var labels = runs.Select(run =>
         {
             var first = GetPerek(run[0]);
             var last = GetPerek(run[^1]);
@@ -250,7 +250,9 @@ public class PerekDataService
                     $"{first.PerekNumber.ToHebrewLetters()}-{last.PerekNumber.ToHebrewLetters()}";
             }
             return $"{GetPerekSource(run[0])} - {GetPerekSource(run[^1])}";
-        }).Where(label => label.Length > 0));
+        }).Where(label => label.Length > 0).ToList();
+
+        return string.Join(" ", labels.Select((label, index) => index == 0 ? label : "ו" + label));
     }
 
     /// <summary>

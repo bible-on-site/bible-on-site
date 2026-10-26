@@ -509,7 +509,8 @@ export function getPerekRangeLabel(perekIds: readonly number[]): string {
 			}
 			return `${getPerekSource(first)} - ${getPerekSource(last)}`;
 		})
-		.join(", ");
+		.map((label, i) => (i === 0 ? label : `ו${label}`))
+		.join(" ");
 }
 
 /**
