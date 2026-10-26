@@ -270,6 +270,19 @@ describe("seo/core-jsonld", () => {
 			expect(node?.wordCount).toBeUndefined();
 			expect(node?.timeRequired).toBeUndefined();
 		});
+
+		it("omits each metric field that is individually null", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					metric: { wordCount: null, estimatedSeconds: null },
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBeUndefined();
+			expect(node?.timeRequired).toBeUndefined();
+		});
 	});
 
 	describe("buildPerushGraph", () => {

@@ -106,4 +106,11 @@ describe("recomputeEntryMetrics", () => {
 		expect(mocks.txExecute.mock.calls[0][2]?.[0]).toBe("entry-uuid");
 		expect(calls[1]).toContain("DELETE FROM tanahpedia_entry_metric_block");
 	});
+
+	it("propagates real write failures", async () => {
+		mocks.txExecute.mockRejectedValueOnce(new Error("connection lost"));
+		await expect(
+			recomputeEntryMetrics(conn, "entry-uuid", "<p>x</p>"),
+		).rejects.toThrow("connection lost");
+	});
 });

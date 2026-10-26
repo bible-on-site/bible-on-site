@@ -274,7 +274,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 			}
 
 			let headId: string | null = null;
-			let targetEntryId = revision.entry_id;
+			let targetEntryId: string;
 			let previousUniqueName: string | null = null;
 
 			// Normalize once and persist the stored form: the public router
@@ -285,6 +285,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				: null;
 
 			if (revision.entry_id) {
+				targetEntryId = revision.entry_id;
 				const entry = await lockEntry(conn, revision.entry_id);
 				if (!entry) {
 					throw new Error(
@@ -338,14 +339,16 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 
 			// The approved content is now live — refresh its reading metric in
 			// the same transaction (#2607).
-			if (targetEntryId) {
-				const applied = await txQueryOne<{ content: string | null }>(
-					conn,
-					"SELECT content FROM tanahpedia_entry WHERE id = ?",
-					[targetEntryId],
-				);
-				await recomputeEntryMetrics(conn, targetEntryId, applied?.content ?? null);
-			}
+			const applied = await txQueryOne<{ content: string | null }>(
+				conn,
+				"SELECT content FROM tanahpedia_entry WHERE id = ?",
+				[targetEntryId],
+			);
+			await recomputeEntryMetrics(
+				conn,
+				targetEntryId,
+				applied?.content ?? null,
+			);
 
 			await txExecute(
 				conn,

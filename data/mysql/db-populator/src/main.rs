@@ -1304,6 +1304,23 @@ SELECT 1";
                 3
             );
 
+            // The reading-metrics upgrade is idempotent and must survive
+            // re-application on a database that already has it (#2607).
+            apply_reading_metrics_upgrade(&mut conn, base_path).await?;
+            apply_reading_metrics_upgrade(&mut conn, base_path).await?;
+            for table in [
+                "tanah_perek_metric",
+                "tanah_perek_metric_block",
+                "tanah_article_metric",
+                "tanah_article_metric_block",
+                "tanah_perush_metric",
+                "tanah_perush_metric_block",
+                "tanahpedia_entry_metric",
+                "tanahpedia_entry_metric_block",
+            ] {
+                assert_eq!(table_count(&mut conn, table).await?, 0, "{table}");
+            }
+
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())
         }
