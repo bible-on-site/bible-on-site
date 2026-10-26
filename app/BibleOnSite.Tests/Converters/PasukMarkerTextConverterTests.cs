@@ -101,6 +101,44 @@ public class PasukMarkerTextConverterTests
     }
 
     [Fact]
+    public void every_set_span_property_survives_the_clone()
+    {
+        // Covers the per-property IsSet copies in CloneSpan: kerning,
+        // decorations, line height, casing, style and the colors.
+        var style = new Style(typeof(Span));
+        var styled = new Span
+        {
+            Text = "מעוצב",
+            FontSize = 20,
+            FontFamily = "OpenSansRegular",
+            FontAttributes = FontAttributes.Italic,
+            FontAutoScalingEnabled = false,
+            CharacterSpacing = 2.5,
+            TextDecorations = TextDecorations.Underline,
+            LineHeight = 1.4,
+            TextTransform = TextTransform.Uppercase,
+            Style = style,
+            TextColor = Colors.Green,
+            BackgroundColor = Colors.Yellow
+        };
+        var text = PasukText("פסוק", styled);
+
+        var clone = ((FormattedString)Convert(text, "א", 16.0)).Spans[2];
+
+        clone.FontSize.Should().Be(20);
+        clone.FontFamily.Should().Be("OpenSansRegular");
+        clone.FontAttributes.Should().Be(FontAttributes.Italic);
+        clone.FontAutoScalingEnabled.Should().BeFalse();
+        clone.CharacterSpacing.Should().Be(2.5);
+        clone.TextDecorations.Should().Be(TextDecorations.Underline);
+        clone.LineHeight.Should().Be(1.4);
+        clone.TextTransform.Should().Be(TextTransform.Uppercase);
+        clone.Style.Should().BeSameAs(style);
+        clone.TextColor.Should().Be(Colors.Green);
+        clone.BackgroundColor.Should().Be(Colors.Yellow);
+    }
+
+    [Fact]
     public void repeated_identical_inputs_reuse_the_merged_instance()
     {
         var converter = new PasukMarkerTextConverter { MarkerColor = Colors.Red };

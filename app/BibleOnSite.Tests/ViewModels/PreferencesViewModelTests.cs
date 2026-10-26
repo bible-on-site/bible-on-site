@@ -124,6 +124,17 @@ public class PreferencesViewModelTests : IDisposable
         display.MasterFontPercent.Should().BeApproximately(80, 1e-9);
     }
 
+    [Fact]
+    public void FontPercentBounds_ExposeServiceLimits()
+    {
+        // Arrange
+        var display = new DisplayPreferencesViewModel(_service);
+
+        // Act & Assert - the pickers and sliders clamp against these bounds.
+        display.FontPercentMinimum.Should().Be(PreferencesService.MinFontPercent);
+        display.FontPercentMaximum.Should().Be(PreferencesService.MaxFontPercent);
+    }
+
     #endregion
 
     #region LastLearntPerek Tests
