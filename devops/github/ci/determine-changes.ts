@@ -28,6 +28,9 @@ interface ModuleRule {
 
 const SHARED_CI_PATHS = [
 	".github/workflows/ci.yml",
+	// Composite actions (setup-js, lcov-image) are consumed by jobs across
+	// every module — an action-only change must select their consumers.
+	".github/actions",
 	"devops/github/ci/determine-changes.ts",
 ];
 const RELEASE_CI_PATHS = [
