@@ -46,12 +46,12 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
     {
         var prefs = PreferencesService.Instance;
         UpdateFontSizeResources(prefs.ArticleFontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                UpdateFontSizeResources(prefs.ArticleFontFactor);
-                ApplyLessonsVolume();
-            });
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor);
+                page.ApplyLessonsVolume();
+            }));
     }
 
     /// <summary>

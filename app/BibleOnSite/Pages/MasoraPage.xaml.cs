@@ -194,8 +194,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     {
         var prefs = PreferencesService.Instance;
         UpdateFontSizeResources(prefs);
-        prefs.PreferencesChanged += (_, _) =>
-            MainThread.BeginInvokeOnMainThread(() => UpdateFontSizeResources(prefs));
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
+            MainThread.BeginInvokeOnMainThread(() => page.UpdateFontSizeResources(prefs)));
     }
 
     // Same reading-text categories as PerekPage (#2461).
