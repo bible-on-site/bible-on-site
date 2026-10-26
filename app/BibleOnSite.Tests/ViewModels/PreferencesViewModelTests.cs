@@ -69,6 +69,74 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region MasterFontPercent Tests
+
+    [Fact]
+    public void MasterFontPercent_Get_ReturnsFactorTimes100()
+    {
+        // Arrange
+        var display = new DisplayPreferencesViewModel(_service);
+        _service.FontFactor = 1.5;
+
+        // Act & Assert
+        display.MasterFontPercent.Should().BeApproximately(150, 1e-9);
+    }
+
+    [Fact]
+    public void MasterFontPercent_Set_UpdatesServiceFontFactor()
+    {
+        // Arrange
+        var display = new DisplayPreferencesViewModel(_service);
+
+        // Act
+        display.MasterFontPercent = 125;
+
+        // Assert
+        _service.FontFactor.Should().BeApproximately(1.25, 1e-9);
+    }
+
+    [Fact]
+    public void MasterFontPercent_Set_RaisesPropertyChangedForMasterAndFactor()
+    {
+        // Arrange
+        var display = new DisplayPreferencesViewModel(_service);
+        var changed = new List<string?>();
+        display.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        // Act
+        display.MasterFontPercent = 110;
+
+        // Assert
+        changed.Should().Contain(nameof(DisplayPreferencesViewModel.MasterFontPercent));
+        changed.Should().Contain(nameof(DisplayPreferencesViewModel.FontFactor));
+    }
+
+    [Fact]
+    public void MasterFontPercent_TracksFactorChangesFromElsewhere()
+    {
+        // Arrange
+        var display = new DisplayPreferencesViewModel(_service);
+
+        // Act - the service (e.g. another surface or the slider) moves the factor.
+        _service.FontFactor = 0.8;
+
+        // Assert
+        display.MasterFontPercent.Should().BeApproximately(80, 1e-9);
+    }
+
+    [Fact]
+    public void FontPercentBounds_ExposeServiceLimits()
+    {
+        // Arrange
+        var display = new DisplayPreferencesViewModel(_service);
+
+        // Act & Assert - the pickers and sliders clamp against these bounds.
+        display.FontPercentMinimum.Should().Be(PreferencesService.MinFontPercent);
+        display.FontPercentMaximum.Should().Be(PreferencesService.MaxFontPercent);
+    }
+
+    #endregion
+
     #region LastLearntPerek Tests
 
     [Fact]
