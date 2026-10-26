@@ -21,7 +21,7 @@ import {
 	collectStoreMetadata,
 	STORE_METADATA_SOURCES,
 	type StorePlatform,
-} from "../src/lib/store-metadata/collect";
+} from "../src/lib/store-metadata/collect.ts";
 
 const OUTPUT = fileURLToPath(
 	new URL(

@@ -30,9 +30,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
-import { DeployerBase } from "../deployer-base.mjs";
-import { buildDeployPayload } from "./deploy-payload.mjs";
-import { invokeWithRestorationRetry } from "./lambda-invocation.mjs";
+import { DeployerBase } from "../deployer-base.mts";
+import { buildDeployPayload } from "./deploy-payload.mts";
+import { invokeWithRestorationRetry } from "./lambda-invocation.mts";
 import sqlFiles from "./sql-files.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);

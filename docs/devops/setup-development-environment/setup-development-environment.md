@@ -85,7 +85,7 @@ For production-like data on demand:
 
 ```bash
 AWS_PROFILE=AdministratorAccess-250598594267 aws sso login
-AWS_PROFILE=AdministratorAccess-250598594267 bun x tsx devops/setup-dev-env.mts sync-from-prod
+AWS_PROFILE=AdministratorAccess-250598594267 node devops/setup-dev-env.mts sync-from-prod
 ```
 
 This auto-fetches prod DB credentials from SSM and temporarily opens RDS access for your IP. See [Sync from production](../../../data/README.md#sync-from-production-optional) in `data/README.md` for details.
@@ -94,7 +94,7 @@ This auto-fetches prod DB credentials from SSM and temporarily opens RDS access 
 
 `predev` skips work that already ran on this machine:
 
-- **Prod sync checkpoint** — the website's `predev` syncs `tanah-dev` from prod only when production data actually changed. Each sync records prod's per-table `UPDATE_TIME` watermark in the dev DB (`dev_sync_checkpoint`); `predev` then probes it with a single `information_schema` read via `bun x tsx devops/setup-dev-env.mts check-dev-db-freshness`. No prod writes → skip indefinitely; any write → sync immediately. `bun x tsx devops/setup-dev-env.mts sync-from-prod` always forces a full sync; `DEV_DB_SYNC_FROM_PROD=0` disables syncing entirely.
+- **Prod sync checkpoint** — the website's `predev` syncs `tanah-dev` from prod only when production data actually changed. Each sync records prod's per-table `UPDATE_TIME` watermark in the dev DB (`dev_sync_checkpoint`); `predev` then probes it with a single `information_schema` read via `node devops/setup-dev-env.mts check-dev-db-freshness`. No prod writes → skip indefinitely; any write → sync immediately. `node devops/setup-dev-env.mts sync-from-prod` always forces a full sync; `DEV_DB_SYNC_FROM_PROD=0` disables syncing entirely.
 - **S3 seed check** — the admin's `predev` runs `cargo make s3-populate-dev` only when the dev bucket is empty (the RustFS volume is shared across worktrees). `bun run s3:populate:dev` forces a reseed.
 - **Install skip** — the website's `predev` runs `bun install` only when `package.json`/`bun.lock` changed since the last install (hash stamp in `node_modules`), and refreshes the local `html-flip-book` build via `USE_LOCAL_FLIP_BOOK` copy instead of rewriting `package.json` to a `file:` dependency.
 - **Lower OS priority** — `bun run dev` (dev-all) starts servers one priority notch lower so builds and watchers can't starve the machine. `--normal-priority` restores default behavior.
