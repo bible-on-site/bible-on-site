@@ -59,9 +59,9 @@ public class PerushimPanelShadowTests
     }
 
     [Fact]
-    public void Exit_prompt_content_can_shrink_within_the_available_screen_width()
+    public void Blocking_dialog_content_can_shrink_within_the_available_screen_width()
     {
-        var popup = XDocument.Load(Path.Join(AppRoot, "Controls", "ExitConfirmationPopup.xaml"));
+        var popup = XDocument.Load(Path.Join(AppRoot, "Controls", "AppDialogPopup.xaml"));
         popup.Descendants(Maui + "VerticalStackLayout").Should().NotBeEmpty();
         popup.Descendants(Maui + "VerticalStackLayout").Attributes("WidthRequest").Should().BeEmpty(
             "a fixed content width plus popup padding and margins overflows a small screen");

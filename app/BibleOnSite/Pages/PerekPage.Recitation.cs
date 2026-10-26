@@ -310,7 +310,7 @@ public partial class PerekPage
             // still reports.
             if (track == null)
             {
-                await DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
             }
             return;
         }
@@ -320,7 +320,7 @@ public partial class PerekPage
         {
             // A "ready" track missing this pasuk's timings is corrupt pack
             // data — a real failure, reported like other playback failures.
-            await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             return;
         }
 
@@ -597,7 +597,7 @@ public partial class PerekPage
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {
-                await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             }
         }
         finally
@@ -671,7 +671,7 @@ public partial class PerekPage
         }
 
         StopRecitation(); UpdateSelectionBar();
-        await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
+        await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
     }
 
     protected override bool OnBackButtonPressed()

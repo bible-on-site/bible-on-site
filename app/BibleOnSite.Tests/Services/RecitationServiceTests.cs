@@ -482,7 +482,7 @@ public class RecitationServiceTests
         extension.BookIds[1] = 1; extension.BookIds[2] = 2; extension.Bundle();
         var service = extension.Service;
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
         var model = new RecitationPacksViewModel(service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
         await model.LoadAsync();
@@ -494,7 +494,7 @@ public class RecitationServiceTests
         await model.RemoveBookAsync(model.Books[0]);
         service.HasAudio(1).Should().BeTrue("a declined confirmation never deletes");
 
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         await model.RemoveBookAsync(model.Books[0]);
         service.HasAudio(1).Should().BeFalse();
         service.HasAudio(2).Should().BeTrue("removal is scoped to the chosen book");
@@ -527,7 +527,7 @@ public class RecitationServiceTests
         var model = new RecitationPacksViewModel(extension.Service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
         await model.RemoveAllAsync();
-        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        navigator.Verify(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -897,13 +897,13 @@ public class RecitationServiceTests
         var service = extension.Service;
         await service.DownloadAsync([1]);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
         var model = Preferences(storage, service, navigator);
 
         await model.RemoveAllAsync();
 
         service.HasAudio(1).Should().BeTrue("a declined confirmation never removes");
-        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול"), Times.Once);
+        navigator.Verify(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול"), Times.Once);
     }
 
     [Fact]
@@ -915,7 +915,7 @@ public class RecitationServiceTests
         var service = extension.Service;
         await service.DownloadAsync([1]);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         var model = Preferences(storage, service, navigator);
         service.PlaybackStopRequested += (_, _) => throw new IOException("audio device busy");
 
@@ -937,7 +937,7 @@ public class RecitationServiceTests
 
         await model.RemoveBookAsync(null);
 
-        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        navigator.Verify(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -954,7 +954,7 @@ public class RecitationServiceTests
         await model.RemoveBookAsync(model.Books[0]);
 
         model.Status.Should().Be("אין הקלטות מותקנות להסרה בספר בראשית.");
-        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        navigator.Verify(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -966,7 +966,7 @@ public class RecitationServiceTests
         var service = extension.Service;
         await service.DownloadAsync([1]);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         var model = Preferences(storage, service, navigator);
         service.PlaybackStopRequested += (_, _) => throw new IOException("audio device busy");
 
@@ -985,7 +985,7 @@ public class RecitationServiceTests
         var service = extension.Service;
         await service.DownloadAsync([1]);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         var model = Preferences(storage, service, navigator);
 
         await model.RemoveBookAsync(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
@@ -1027,7 +1027,7 @@ public class RecitationServiceTests
         await model.RemoveBookAsync(model.Books[0]);
         await model.RemoveAllAsync();
 
-        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never,
+        navigator.Verify(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never,
             "removal commands must not interleave with an in-flight download");
         release.SetResult();
         await downloading;
