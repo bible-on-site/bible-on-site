@@ -108,7 +108,7 @@ public partial class ExtensionPacksViewModel : ObservableObject
             return;
         }
 
-        var confirmed = await _navigator.DisplayChoiceAsync("הסרת חבילת הפירושים",
+        var confirmed = await _navigator.DisplayDestructiveChoiceAsync("הסרת חבילת הפירושים",
             "הפירושים יוסרו מהמכשיר. ניתן להתקין את החבילה שוב בכל עת.", "הסרה", "ביטול");
         if (!confirmed)
         {

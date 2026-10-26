@@ -11,6 +11,13 @@ public interface IAppNavigator
     /// cancel and when no window can present the dialog (never a false accept).
     /// </summary>
     Task<bool> DisplayChoiceAsync(string title, string message, string accept, string cancel);
+
+    /// <summary>
+    /// Two-choice destructive confirmation (#2630): same result mapping as
+    /// <see cref="DisplayChoiceAsync"/>, with the affirmative action rendered in
+    /// the destructive red text.
+    /// </summary>
+    Task<bool> DisplayDestructiveChoiceAsync(string title, string message, string destructive, string cancel);
 }
 
 public sealed class ShellAppNavigator : IAppNavigator
@@ -19,17 +26,16 @@ public sealed class ShellAppNavigator : IAppNavigator
 
     public Task GoToAsync(string route) => Shell.Current.GoToAsync(route);
 
-    public Task DisplayAlertAsync(string title, string message, string cancel)
-    {
-        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-        return page?.DisplayAlertAsync(title, message, cancel) ?? Task.CompletedTask;
-    }
+    // Every blocking dialog flows through the shared dialog policy/presenter
+    // (#2630) so callers cannot drift back to native defaults.
+    public Task DisplayAlertAsync(string title, string message, string cancel) =>
+        AppDialogs.AlertAsync(title, message, cancel);
 
-    public Task<bool> DisplayChoiceAsync(string title, string message, string accept, string cancel)
-    {
-        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-        return page?.DisplayAlertAsync(title, message, accept, cancel) ?? Task.FromResult(false);
-    }
+    public Task<bool> DisplayChoiceAsync(string title, string message, string accept, string cancel) =>
+        AppDialogs.ConfirmAsync(title, message, accept, cancel);
+
+    public Task<bool> DisplayDestructiveChoiceAsync(string title, string message, string destructive, string cancel) =>
+        AppDialogs.ConfirmDestructiveAsync(title, message, destructive, cancel);
 }
 
 public static class AppRoutes
