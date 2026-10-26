@@ -17,6 +17,7 @@ import {
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import { demoteHeadings } from "../../../../lib/html-headings";
+import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
@@ -264,12 +265,17 @@ export default async function ArticlePage({
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	if (isArticle) {
-		// Handle article view
-		const article = await getCachedArticle(id);
+		// Handle article view; mention decorations (#2516) resolve against
+		// live entries per render — the returned copy carries them.
+		let article = await getCachedArticle(id);
 
 		if (!article || article.perekId !== perekId) {
 			notFound();
 		}
+
+		// Mention decorations (#2516) resolve against live entries per
+		// render; unresolved targets stay plain text.
+		article = await decorateArticleContent(article);
 
 		return (
 			<>
