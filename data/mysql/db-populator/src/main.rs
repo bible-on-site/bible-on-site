@@ -329,14 +329,7 @@ async fn main() -> Result<()> {
 
         apply_tanahpedia_full_seed(&mut conn, &tanahpedia_scripts).await?;
 
-        if !cli.skip_tanah_test_data {
-            // E2e mention fixtures insert tanahpedia_entry rows; loading them
-            // any earlier would satisfy the legacy migration's empty-table
-            // gate and silently skip the seeded entries.
-            let mention_test_data_path = base_path.join(&cli.tanah_mention_test_data_script);
-            execute_optional_script(&mut conn, &mention_test_data_path, "mention-test-data")
-                .await?;
-        }
+        apply_mention_test_data(&mut conn, base_path, &cli).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -462,6 +455,21 @@ async fn apply_tanahpedia_full_seed(
     }
 
     apply_tanahpedia_family_and_place_content(conn, scripts, false).await
+}
+
+/// Loads the mention-decoration e2e fixture. Must run after the Tanahpedia
+/// seed chain — the fixture inserts `tanahpedia_entry` rows, which would
+/// satisfy the legacy migration's empty-table gate if loaded earlier.
+async fn apply_mention_test_data(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+    cli: &Cli,
+) -> Result<()> {
+    if cli.skip_tanah_test_data {
+        return Ok(());
+    }
+    let mention_test_data_path = base_path.join(&cli.tanah_mention_test_data_script);
+    execute_optional_script(conn, &mention_test_data_path, "mention-test-data").await
 }
 
 async fn apply_tanahpedia_family_and_place_content(
@@ -1247,6 +1255,35 @@ SELECT 1";
 
             assert!(tanahpedia_entry_exists(&mut conn, "יעקב").await?);
             assert!(tanahpedia_entry_exists(&mut conn, "eretz-yisrael").await?);
+
+            // Article row so the fixture's article-side decorations land;
+            // perek 1 already exists from the covering-source step above.
+            raw_sql(
+                "INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content) \
+                 VALUES (1, 1, 1, 'mention fixture article', 1, '<p>ישראל ויצחק</p>')",
+            )
+            .execute(&mut conn)
+            .await
+            .context("Failed to insert mention-fixture article")?;
+
+            apply_mention_test_data(&mut conn, base_path, &cli).await?;
+            assert!(tanahpedia_entry_exists(&mut conn, "ישראל").await?);
+            assert_eq!(
+                table_count(&mut conn, "tanahpedia_mention_decoration").await?,
+                3
+            );
+
+            // The skip flag must short-circuit before touching the database.
+            apply_mention_test_data(
+                &mut conn,
+                base_path,
+                &cli_from(&["--skip-tanah-test-data"]),
+            )
+            .await?;
+            assert_eq!(
+                table_count(&mut conn, "tanahpedia_mention_decoration").await?,
+                3
+            );
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())

@@ -19,7 +19,12 @@ function ref(
 	end: number,
 	entryUniqueName: string | null = "ישראל",
 ): ArticleMentionReference {
-	return { spanStart: start, spanEnd: end, surface: html.slice(start, end), entryUniqueName };
+	return {
+		spanStart: start,
+		spanEnd: end,
+		surface: html.slice(start, end),
+		entryUniqueName,
+	};
 }
 
 describe("decorateArticleHtml", () => {
@@ -62,7 +67,9 @@ describe("decorateArticleHtml", () => {
 			ref(html, b, b + 5, "מצרים"),
 			ref(html, a, a + 4, "אברם"),
 		]);
-		expect(out.indexOf('href="/pedia/')).toBeLessThan(out.lastIndexOf('href="/pedia/'));
+		expect(out.indexOf('href="/pedia/')).toBeLessThan(
+			out.lastIndexOf('href="/pedia/'),
+		);
 		expect(out).toContain(">אברם</a>");
 		expect(out).toContain(">מצרים</a>");
 	});
@@ -87,7 +94,12 @@ describe("decorateArticleHtml", () => {
 			ref(html, a + 4, a + 8, "יצחק"),
 		]);
 		expect(out).toBe(
-			["<p>", mentionAnchor("אברם", "אברם"), mentionAnchor("יצחק", "יצחק"), "</p>"].join(""),
+			[
+				"<p>",
+				mentionAnchor("אברם", "אברם"),
+				mentionAnchor("יצחק", "יצחק"),
+				"</p>",
+			].join(""),
 		);
 	});
 
@@ -149,10 +161,26 @@ describe("decorateArticleHtml", () => {
 		};
 		const out = decorateArticleHtml(html, [
 			inside,
-			{ ...inside, spanStart: html.indexOf("אברם", 30), spanEnd: html.indexOf("אברם", 30) + 4 },
+			{
+				...inside,
+				spanStart: html.indexOf("אברם", 30),
+				spanEnd: html.indexOf("אברם", 30) + 4,
+			},
 			ref(html, last, last + 4, "אברם"),
 		]);
 		expect((out.match(/tanahpedia-mention/g) ?? []).length).toBe(1);
+	});
+
+	it("does not treat a self-closing skip tag as an open range", () => {
+		// `<script ... />` has no body to protect, so a mention right after
+		// it must still decorate — the tag opens no blocked range.
+		const scriptTag = ["<", "script", ' src="x"', " />"].join("");
+		const html = ["<p>", scriptTag, "אברם</p>"].join("");
+		const start = html.indexOf("אברם");
+		const out = decorateArticleHtml(html, [
+			ref(html, start, start + 4, "אברם"),
+		]);
+		expect(out).toContain(">אברם</a>");
 	});
 
 	it("treats an unclosed anchor as blocking the rest of the document", () => {

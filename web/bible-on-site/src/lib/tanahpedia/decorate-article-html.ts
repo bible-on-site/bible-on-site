@@ -16,7 +16,8 @@ import type { ArticleMentionReference } from "./service";
  */
 
 const SKIP_TAGS = new Set(["a", "script", "style"]);
-const TAG_RE = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(?:[^>"']|"[^"]*"|'[^']*')*>/g;
+const TAG_RE =
+	/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(?:[^>"']|"[^"]*"|'[^']*')*>/g;
 const TAG_NAME_RE = /^<\/?\s*([a-zA-Z][a-zA-Z0-9]*)/;
 
 /** Byte ranges where decoration is forbidden (mirrors the pipeline's tokenizer). */
@@ -61,7 +62,10 @@ export function decorateArticleHtml(
 	refs: ArticleMentionReference[],
 ): string {
 	const sorted = refs
-		.filter((ref) => ref.entryUniqueName != null && ref.spanStart < ref.spanEnd)
+		.filter(
+			(ref): ref is ArticleMentionReference & { entryUniqueName: string } =>
+				ref.entryUniqueName != null && ref.spanStart < ref.spanEnd,
+		)
 		.sort((a, b) => a.spanStart - b.spanStart);
 	if (sorted.length === 0) {
 		return html;
@@ -72,14 +76,10 @@ export function decorateArticleHtml(
 	let out = "";
 	for (const ref of sorted) {
 		const name = ref.entryUniqueName;
-		if (name == null) continue;
 		const { spanStart: start, spanEnd: end } = ref;
 		if (start < cursor) continue; // overlapping span — first wins
 		if (html.slice(start, end) !== ref.surface) continue; // drifted row
-		while (
-			blockedIndex < blocked.length &&
-			blocked[blockedIndex][1] <= start
-		) {
+		while (blockedIndex < blocked.length && blocked[blockedIndex][1] <= start) {
 			blockedIndex++;
 		}
 		const zone = blocked[blockedIndex];
