@@ -134,7 +134,14 @@ public sealed class NumberPicker : ContentView
 
     private void Step(int direction)
     {
-        Value = Value + direction * Increment;
+        // Move to the next grid point in the chosen direction so an off-grid
+        // bound value steps to the nearest boundary instead of skipping one.
+        var step = Increment <= 0 ? 1 : Increment;
+        var position = (Value - Minimum) / step;
+        var index = direction > 0
+            ? Math.Floor(position + 1e-6) + 1
+            : Math.Ceiling(position - 1e-6) - 1;
+        Value = Minimum + index * step;
     }
 
     private void CommitEntry()
@@ -161,12 +168,16 @@ public sealed class NumberPicker : ContentView
 
     private void OnValueChanged(double newValue)
     {
-        var coerced = Coerce(newValue);
-        if (Math.Abs(coerced - newValue) > 1e-9)
+        // Values arriving through a binding (e.g. a slider driving the same
+        // underlying setting) keep their full precision: only out-of-range
+        // input is written back. Snapping to the increment grid happens in
+        // the Value setter, which user edits and programmatic commits go
+        // through, so a bound slider value is never rewritten to a coarser
+        // grid point.
+        var clamped = ClampToRange(newValue);
+        if (!double.IsFinite(newValue) || Math.Abs(clamped - newValue) > 1e-9)
         {
-            // Push the coerced value back through the binding so the bound
-            // property stays in sync with what the control displays.
-            SetValue(ValueProperty, coerced);
+            SetValue(ValueProperty, clamped);
             return;
         }
         RefreshEntryText();
@@ -174,13 +185,12 @@ public sealed class NumberPicker : ContentView
         ValueChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private double ClampToRange(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, Minimum, Maximum) : Minimum;
+
     private double Coerce(double value)
     {
-        if (!double.IsFinite(value))
-        {
-            return Minimum;
-        }
-        var clamped = Math.Clamp(value, Minimum, Maximum);
+        var clamped = ClampToRange(value);
         var step = Increment <= 0 ? 1 : Increment;
         var snapped = Minimum + Math.Round((clamped - Minimum) / step) * step;
         snapped = Math.Clamp(snapped, Minimum, Maximum);
