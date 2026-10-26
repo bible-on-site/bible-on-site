@@ -19,6 +19,23 @@ test.describe("Sefer left-page panel", () => {
 		const articlesTab = blank.getByRole("tab", { name: "מאמרים" });
 
 		await expect(perushimTab).toHaveAttribute("aria-selected", "true");
+		const date = tablist.locator('[role="presentation"]');
+		const geometry = await tablist.evaluate((header) => {
+			const [right, date, left] = Array.from(header.children).map((el) =>
+				el.getBoundingClientRect(),
+			);
+			return { clear: left.right <= date.left && date.right <= right.left };
+		});
+		expect(geometry.clear).toBe(true);
+		await expect(date).toBeVisible();
+		expect(
+			await perushimTab.evaluate((el) => getComputedStyle(el).clipPath),
+		).toContain("polygon");
+		expect(
+			await articlesTab.evaluate((el) => getComputedStyle(el).clipPath),
+		).toContain("polygon");
+		await expect(blank.getByText("התאמה לספר זה")).toHaveCount(0);
+
 		await expect(articlesTab).toHaveAttribute("aria-selected", "false");
 
 		// The date sits between the two tabs inside the tablist.
@@ -66,7 +83,9 @@ test.describe("Sefer left-page panel", () => {
 			name: "בחירת אבן עזרא",
 		});
 
-		await rashiToggle.click();
+		await rashiToggle.getByText('רש"י', { exact: true }).click();
+		await expect(page).toHaveURL(/\/929\/1\?book/);
+		await expect(blank.getByRole("link", { name: 'רש"י' })).toHaveCount(0);
 		await expect(rashiToggle).toHaveAttribute("aria-pressed", "true");
 		await expect(blank.locator('[data-perush-pasuk="1"]')).toBeVisible({
 			timeout: 30_000,
@@ -161,7 +180,10 @@ test.describe("Sefer left-page panel", () => {
 		await blank.getByRole("tab", { name: "מאמרים" }).click();
 		await expect(blank.locator('[class*="articlesMasonry"]')).toBeVisible();
 
-		await blank.locator("a#article-1").click();
+		await blank
+			.locator("a#article-1")
+			.locator('[class*="articleCardAbstract"]')
+			.click();
 		const fullscreenButton = blank.getByRole("button", {
 			name: "מסך מלא",
 		});
@@ -214,5 +236,36 @@ test.describe("Sefer left-page panel", () => {
 		await expect(
 			blank.getByRole("button", { name: "בחירת אבן עזרא" }),
 		).toHaveAttribute("aria-pressed", "false");
+	});
+});
+
+test.describe("Sefer temporary navigation highlights", () => {
+	test("dismisses highlighted destinations on click and fades them automatically", async ({
+		page,
+		skipOnNotWideEnough,
+	}) => {
+		void skipOnNotWideEnough;
+		const book = new SeferPage(page);
+		await book.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		await blank.getByRole("button", { name: 'בחירת רש"י' }).click();
+		const group = blank.locator('[data-perush-pasuk="1"]');
+		await expect(group).toBeVisible();
+		const verse = page.locator('[data-sefer-perek="1"] [data-sefer-pasuk="1"]');
+		await page.clock.install();
+		await verse.getByRole("button", { name: /מעבר לפירוש/ }).click();
+		await expect(group).toHaveAttribute("data-pasuk-highlight", "");
+		await group.locator('[class*="noteContent"]').first().click();
+		await expect(group).not.toHaveAttribute("data-pasuk-highlight");
+		await group.getByRole("button", { name: /מעבר לפסוק/ }).click();
+		await expect(verse).toHaveAttribute("data-pasuk-highlight", "");
+		await page.clock.fastForward(4000);
+		await expect(verse).toHaveAttribute("data-pasuk-highlight", "fading");
+		await page.clock.fastForward(600);
+		await expect(verse).not.toHaveAttribute("data-pasuk-highlight");
+		await expect(verse).not.toHaveAttribute("aria-current");
+		await verse.getByRole("button", { name: /מעבר לפירוש/ }).click();
+		await page.clock.fastForward(4600);
+		await expect(group).not.toHaveAttribute("data-pasuk-highlight");
 	});
 });

@@ -1,5 +1,5 @@
 /* Sefer blank-page panel (#2544): פרשנים/מאמרים tabs flanking the date,
-   a diagonal overlap transition between the two panels, the wrapping
+   diagonal inner tab edges, the wrapping
    perush tag list, pasuk-grouped commentary, and the articles masonry. */
 
 /* The component replaces BlankPageContent's .pageBlank section: a flex
@@ -13,65 +13,81 @@
 
 /* Header: tab - date - tab; the date stays centered and visible. */
 .panelHeader {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
 	align-items: stretch;
-	justify-content: space-between;
-	gap: 8px;
+	gap: 4px;
 	flex-shrink: 0;
 	padding-top: 6px;
 }
 
 .panelTab {
+	--tab-fill: #f0ead8;
+	--tab-border: #d4c9a8;
 	appearance: none;
 	font: inherit;
-	flex: 1 1 0;
 	min-width: 0;
-	border: 1px solid #d4c9a8;
-	border-bottom: none;
-	border-radius: 8px 8px 0 0;
-	background: #f0ead8;
+	position: relative;
+	isolation: isolate;
+	border: none;
+	background: var(--tab-border);
 	color: #5a4a2e;
 	font-size: 0.9rem;
 	font-weight: 600;
-	padding: 6px 8px;
+	padding: 8px 6px;
 	cursor: pointer;
-	transition:
-		background 0.15s,
-		color 0.15s,
-		border-color 0.15s;
+}
+
+/* Only the edge facing the date is diagonal. The date has its own column,
+   so neither tab's shape can cover it, including on a narrow book page. */
+.panelTab:first-child {
+	clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
+	padding-inline-end: 22px;
+}
+
+.panelTab:last-child {
+	clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 100%, 0 100%);
+	padding-inline-start: 22px;
+}
+
+.panelTab::before {
+	content: "";
+	position: absolute;
+	inset: 1px 1px 0;
+	z-index: -1;
+	clip-path: inherit;
+	background: var(--tab-fill);
 }
 
 .panelTab:hover {
-	background: #e8e0cc;
+	--tab-fill: #e8e0cc;
 }
 
 .panelTab:focus-visible {
-	outline: 2px solid #1a73e8;
-	outline-offset: 2px;
+	--tab-border: #1a73e8;
+	text-decoration: underline;
+	text-underline-offset: 4px;
 }
 
 .panelTab[aria-selected="true"] {
-	background: #fffdf5;
-	border-color: #8b7355;
+	--tab-fill: #fffdf5;
+	--tab-border: #8b7355;
 	color: #3d3220;
-	box-shadow: inset 0 3px 0 #8b7355;
+	font-weight: 700;
 }
 
 .panelDate {
-	flex: 0 1 auto;
 	align-self: center;
-	font-size: 0.95rem;
+	font-size: clamp(0.75rem, 1.1vw, 0.95rem);
 	color: #637598;
 	text-align: center;
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	direction: rtl;
 	padding: 0 4px;
 }
 
-/* Panels share one grid cell: both stay mounted (state and scroll positions
-   survive the switch) and the inactive one slides out diagonally. */
+/* Panels stay mounted in one cell to preserve their scroll positions.
+   The diagonal belongs to the tabs; switching content is immediate. */
 .panelStage {
 	flex: 1;
 	min-height: 0;
@@ -91,10 +107,6 @@
 	overflow: hidden;
 	background: #fffdf5;
 	position: relative;
-	transition:
-		transform 0.35s ease,
-		opacity 0.35s ease,
-		visibility 0.35s;
 }
 
 /* An opened article covers the masonry (same cell) so the grid keeps its
@@ -110,34 +122,13 @@
 }
 
 .panel[data-active="true"] {
-	transform: none;
-	opacity: 1;
 	visibility: visible;
 	z-index: 1;
 }
 
-/* פרשנים sits on the right (RTL start): it exits down-right and re-enters
-   from there; מאמרים exits up-left — the two slide through each other on
-   the diagonal in both directions. */
-.panel[data-tab="perushim"][data-active="false"] {
-	transform: translate(45%, 45%);
-	opacity: 0;
+.panel[data-active="false"] {
 	visibility: hidden;
-}
-
-.panel[data-tab="articles"][data-active="false"] {
-	transform: translate(-45%, -45%);
-	opacity: 0;
-	visibility: hidden;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.panel {
-		transition: none;
-	}
-	.panel[data-active="false"] {
-		transform: none;
-	}
+	pointer-events: none;
 }
 
 /* ─── פרשנים panel ─────────────────────────────────── */
@@ -163,14 +154,17 @@
 }
 
 .perushTag {
+	appearance: none;
+	font: inherit;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	border: 1px solid #d4c9a8;
 	border-radius: 999px;
-	border-start-start-radius: 0;
-	border-end-start-radius: 0;
 	background: #fffdf5;
 	color: #5a4a2e;
 	font-size: 0.85rem;
-	padding: 3px 12px 3px 8px;
+	padding: 3px 8px 3px 12px;
 	cursor: pointer;
 	text-decoration: none;
 	transition:
@@ -180,24 +174,10 @@
 }
 
 .perushTagCheck {
-	appearance: none;
-	font: inherit;
-	width: 1.35rem;
-	height: 1.35rem;
-	margin-inline-end: -1px;
-	border: 1px solid #d4c9a8;
-	border-radius: 999px 0 0 999px;
-	background: #fffdf5;
+	width: 0.85rem;
 	color: transparent;
 	font-size: 0.7rem;
 	line-height: 1;
-	padding: 0;
-	cursor: pointer;
-	transition:
-		background 0.15s,
-		border-color 0.15s,
-		color 0.15s;
-	z-index: 1;
 }
 
 .perushTagItem[data-selected] .perushTagCheck,
@@ -211,12 +191,7 @@
 	border-color: #8b7355;
 }
 
-.perushTagCheck:hover {
-	border-color: #8b7355;
-}
-
-.perushTag:focus-visible,
-.perushTagCheck:focus-visible {
+.perushTag:focus-visible {
 	outline: 2px solid #1a73e8;
 	outline-offset: 2px;
 }
@@ -312,6 +287,7 @@
 }
 
 .commentaryGroup {
+	--highlight-rest-border: #d4c9a8;
 	border-right: 3px solid #d4c9a8;
 	padding-right: 12px;
 	margin-bottom: 14px;
@@ -560,20 +536,19 @@
 
 @media (prefers-color-scheme: dark) {
 	.panelTab {
-		background: #2a241a;
-		border-color: #4a4030;
+		--tab-fill: #2a241a;
+		--tab-border: #4a4030;
 		color: #cbb98c;
 	}
 
 	.panelTab:hover {
-		background: #342c1e;
+		--tab-fill: #342c1e;
 	}
 
 	.panelTab[aria-selected="true"] {
-		background: #1f1a12;
-		border-color: #8b7355;
+		--tab-fill: #1f1a12;
+		--tab-border: #8b7355;
 		color: #e0d0a8;
-		box-shadow: inset 0 3px 0 #8b7355;
 	}
 
 	.panelDate {
@@ -603,7 +578,6 @@
 		border-color: #3a3226;
 	}
 
-	.perushTagCheck,
 	.perushTag {
 		background: #1f1a12;
 		border-color: #4a4030;
@@ -614,8 +588,7 @@
 		color: transparent;
 	}
 
-	.perushTag:hover,
-	.perushTagCheck:hover {
+	.perushTag:hover {
 		border-color: #8b7355;
 	}
 
@@ -657,6 +630,7 @@
 	}
 
 	.commentaryGroup {
+		--highlight-rest-border: #4a4030;
 		border-right-color: #4a4030;
 	}
 
@@ -689,5 +663,21 @@
 
 	.articleFullscreen {
 		background: #1f1a12;
+	}
+}
+
+.commentaryGroup[data-pasuk-highlight="fading"] {
+	background: transparent;
+	box-shadow: 0 0 0 2px transparent;
+	border-right-color: var(--highlight-rest-border);
+	transition:
+		background-color 0.6s ease-out,
+		box-shadow 0.6s ease-out,
+		border-color 0.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.commentaryGroup[data-pasuk-highlight="fading"] {
+		transition: none;
 	}
 }
