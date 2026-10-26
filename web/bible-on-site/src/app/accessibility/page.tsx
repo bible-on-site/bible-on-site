@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
 
 // Data, not copy — kept out of JSX so it isn't flagged for translation.
 const CONTACT_EMAIL = "tanah.site@gmail.com";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: `הצהרת נגישות | ${SITE_NAME}`,
 	description:
 		'הצהרת הנגישות של תנ"ך על הפרק: התאמות הנגישות באתר וביישומון, מגבלות ידועות ודרכי פנייה בנושאי נגישות.',
-	alternates: { canonical: "/accessibility" },
-};
+	canonical: "/accessibility",
+});
 
 export default function AccessibilityPage() {
 	return (
