@@ -17,6 +17,7 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import { recomputeArticleMetrics } from "./reading-metrics";
 import {
 	articleInvalidation,
 	articlePath,
@@ -307,6 +308,9 @@ export const createArticle = createServerFn({ method: "POST" })
 			if (!newArticle) {
 				throw new Error("Failed to retrieve created article");
 			}
+			// Same-transaction reading metrics (#2607): the stored decoration
+			// commits atomically with the content it describes.
+			await recomputeArticleMetrics(conn, newArticle.id, newArticle.content ?? null);
 			// Same-transaction enqueue: the index update request commits atomically
 			// with the article row.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [newArticle.id]);
@@ -383,6 +387,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 			if (!updated) {
 				throw new Error("Failed to retrieve updated article");
 			}
+			await recomputeArticleMetrics(conn, updated.id, updated.content ?? null);
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data.id]);
 			return {
 				...updated,

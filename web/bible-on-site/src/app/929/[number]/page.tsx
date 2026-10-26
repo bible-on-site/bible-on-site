@@ -6,6 +6,8 @@ import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
+import { getPerekMetric, metricOrFallback } from "../../../lib/reading-metrics";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
@@ -53,6 +55,21 @@ const getCachedPerushim = unstable_cache(
 	["perushim"],
 	{
 		tags: ["perushim"],
+		revalidate: false,
+	},
+);
+
+/**
+ * Perek word counts decorate fixed canonical content (#2607) — the metric can
+ * only change on a counting-policy redeploy, so the same `perushim`-style
+ * build-time cache is correct: `reading-metrics` tag lets an operator flush it
+ * explicitly without waiting for a deploy.
+ */
+const getCachedPerekMetric = unstable_cache(
+	async (perekId: number) => getPerekMetric(perekId),
+	["perek-metric"],
+	{
+		tags: ["reading-metrics"],
 		revalidate: false,
 	},
 );
@@ -105,6 +122,12 @@ export default async function Perek({
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articles = await getCachedArticleSummaries(perekId);
 	const perushim = await getCachedPerushim(perekId);
+	// The metric is optional decoration — a failed read renders the page
+	// badge-less rather than erroring, and stays uncached so the next render
+	// retries. getCachedPerekMetric itself only caches a successful read.
+	const perekMetric = await metricOrFallback(`perek ${perekId}`, null, () =>
+		getCachedPerekMetric(perekId),
+	);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
@@ -117,6 +140,7 @@ export default async function Perek({
 					perekObj,
 					imagesByPerek[perekId] ?? [],
 					recitation,
+					perekMetric,
 				)}
 			/>
 			<Suspense>
@@ -132,6 +156,10 @@ export default async function Perek({
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
+				<ReadingTime
+					estimatedSeconds={perekMetric?.estimatedSeconds}
+					className={styles.readingTime}
+				/>
 				<PerekIntro images={imagesByPerek[perekId] ?? []} />
 				<PerekText
 					perekObj={perekObj}

@@ -12,6 +12,7 @@ import {
 	RevisionConflictError,
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
 import {
 	pediaEntryPath,
 	pediaInvalidation,
@@ -229,6 +230,9 @@ export const saveEntryRevisioned = createServerOnlyFn(
 			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
 			[input.id],
 		);
+		// Same-transaction reading metrics (#2607): the stored decoration
+		// commits atomically with the entry content it describes.
+		await recomputeEntryMetrics(conn, input.id, nextContent);
 		return {
 			entry: saved as EntryRow,
 			headRevisionId: headId,
@@ -270,7 +274,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 			}
 
 			let headId: string | null = null;
-			let targetEntryId = revision.entry_id;
+			let targetEntryId: string;
 			let previousUniqueName: string | null = null;
 
 			// Normalize once and persist the stored form: the public router
@@ -281,6 +285,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				: null;
 
 			if (revision.entry_id) {
+				targetEntryId = revision.entry_id;
 				const entry = await lockEntry(conn, revision.entry_id);
 				if (!entry) {
 					throw new Error(
@@ -331,6 +336,19 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 					],
 				);
 			}
+
+			// The approved content is now live — refresh its reading metric in
+			// the same transaction (#2607).
+			const applied = await txQueryOne<{ content: string | null }>(
+				conn,
+				"SELECT content FROM tanahpedia_entry WHERE id = ?",
+				[targetEntryId],
+			);
+			await recomputeEntryMetrics(
+				conn,
+				targetEntryId,
+				applied?.content ?? null,
+			);
 
 			await txExecute(
 				conn,
@@ -433,6 +451,7 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
 				[restoredUniqueName, restoredTitle, restoredContent, revision.entry_id],
 			);
+			await recomputeEntryMetrics(conn, revision.entry_id, restoredContent);
 			const saved = await txQueryOne<EntryRow>(
 				conn,
 				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
