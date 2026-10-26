@@ -315,6 +315,7 @@ class TestLoadArticles(unittest.TestCase):
             "w", suffix=".json", delete=False, encoding="utf-8"
         ) as f:
             json.dump(payload, f)
+            f.flush()
             path = f.name
         try:
             self.assertEqual(ba.load_articles(path), [(1, "<p>x</p>")])
@@ -326,6 +327,7 @@ class TestLoadArticles(unittest.TestCase):
             "w", suffix=".json", delete=False, encoding="utf-8"
         ) as f:
             json.dump({"id": 1}, f)
+            f.flush()
             path = f.name
         try:
             with self.assertRaises(ValueError):

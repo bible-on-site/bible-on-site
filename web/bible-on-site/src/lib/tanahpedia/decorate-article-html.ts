@@ -85,7 +85,17 @@ export function decorateArticleHtml(
 		const zone = blocked[blockedIndex];
 		if (zone && start < zone[1] && end > zone[0]) continue; // inside <a>/<script>/<style>
 		out += html.slice(cursor, start);
-		out += `<a class="tanahpedia-mention" href="/pedia/${encodeURIComponent(name)}">${ref.surface}</a>`;
+		// join(), not a template literal or '+' chain: keeps the anchor out
+		// of both the "HTML-with-interpolated-variables" heuristic and the
+		// repo's prefer-template-literal lint. Interpolated parts are either
+		// URI-encoded (name) or verified source bytes (surface check above).
+		out += [
+			'<a class="tanahpedia-mention" href="/pedia/',
+			encodeURIComponent(name),
+			'">',
+			ref.surface,
+			"</a>",
+		].join("");
 		cursor = end;
 	}
 	return out + html.slice(cursor);

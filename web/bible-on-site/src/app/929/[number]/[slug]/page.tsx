@@ -245,8 +245,9 @@ export default async function ArticlePage({
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	if (isArticle) {
-		// Handle article view
-		const article = await getCachedArticle(id);
+		// Handle article view; mention decorations (#2516) resolve against
+		// live entries per render — the returned copy carries them.
+		let article = await getCachedArticle(id);
 
 		if (!article || article.perekId !== perekId) {
 			notFound();
@@ -254,7 +255,7 @@ export default async function ArticlePage({
 
 		// Mention decorations (#2516) resolve against live entries per
 		// render; unresolved targets stay plain text.
-		const decoratedArticle = await decorateArticleContent(article);
+		article = await decorateArticleContent(article);
 
 		return (
 			<>
@@ -289,14 +290,12 @@ export default async function ArticlePage({
 						<h1 className={styles.articleTitle}>{article.name}</h1>
 					</header>
 
-					{decoratedArticle.content && (
+					{article.content && (
 						<div
 							className={styles.articleBody}
 							// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 							dangerouslySetInnerHTML={{
-								__html: DOMPurify.sanitize(
-									demoteHeadings(decoratedArticle.content),
-								),
+								__html: DOMPurify.sanitize(demoteHeadings(article.content)),
 							}}
 						/>
 					)}
