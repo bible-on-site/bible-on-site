@@ -29,7 +29,16 @@ public partial class PerekPage
     private Pasuk? _recitingPasuk;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
+    private PlaybackAudioOwnership.Lease? _audioLease;
     private MediaElement? RecitationPlayer => RecitationPlayerHost.Content as MediaElement;
+
+    /// <summary>
+    /// This page's claim on exclusive device audio (#2642). Creating the
+    /// MediaElement handler already activates iOS's audio session, so the
+    /// lease only marks when playback is actually audible, releases it once
+    /// the player goes quiet, and re-claims before an explicit resume.
+    /// </summary>
+    private PlaybackAudioOwnership.Lease AudioLease => _audioLease ??= PlaybackAudioOwnership.Shared.Track(this);
 
     private MediaElement GetOrCreateRecitationPlayer() => (MediaElement)RecitationPlayerHost.GetOrCreatePlayer(() =>
     {
@@ -118,6 +127,18 @@ public partial class PerekPage
             if (player.Source != null) { player.Stop(); }
             player.Source = null;
         }
+        _audioLease?.Idle();
+    }
+
+    /// <summary>
+    /// Re-claims device audio before the platform player resumes — a pause may
+    /// already have released the session, and the toolkit only activates it at
+    /// handler creation (#2642).
+    /// </summary>
+    private void ResumeRecitationPlayback(MediaElement player)
+    {
+        AudioLease.Playing();
+        player.Play();
     }
 
     private void ClearRecitationHighlight()
@@ -202,6 +223,10 @@ public partial class PerekPage
     {
         ResetRecitationContext();
         _recitationCursor.Reset();
+        // Leaving the reader or switching perek drops the audio claim at once
+        // — a hidden player must not keep external music paused (#2642).
+        _audioLease?.Dispose();
+        _audioLease = null;
     }
 
     private void OnHeaderLongPressed(object? sender, EventArgs e)
@@ -362,7 +387,7 @@ public partial class PerekPage
             _recitationCursor.ResumesOnPasukFocus(_viewModel.PerekId, pasuk.PasukNum,
                 focusedPlayer.CurrentState == MediaElementState.Playing))
         {
-            focusedPlayer.Play();
+            ResumeRecitationPlayback(focusedPlayer);
         }
         // The full pasuk source lives in the shared toolbar title, set by
         // UpdateSelectionBar below (#2466).
@@ -490,7 +515,7 @@ public partial class PerekPage
             }
             else
             {
-                player.Play();
+                ResumeRecitationPlayback(player);
             }
 
             return;
@@ -548,11 +573,15 @@ public partial class PerekPage
             }
             else
             {
-                existing.Play();
+                ResumeRecitationPlayback(existing);
             }
 
             return;
         }
+        // Keep the claim across the deliberate gap — stopping the old clip,
+        // decoding and opening the new one run through silent player states
+        // on the way back to Playing (#2642).
+        using var audioHold = AudioLease.Hold();
         StopRecitation();
         using var request = new CancellationTokenSource();
         _recitationRequest = request;
@@ -634,10 +663,13 @@ public partial class PerekPage
             // StopRecitation ran during the seek — do not revive the old source.
             return;
         }
-        player.Play();
+        ResumeRecitationPlayback(player);
     }
     private void OnRecitationMediaEnded(object? sender, EventArgs e)
     {
+        // iOS can keep CurrentState at Playing once an item finishes, so the
+        // end event releases the audio claim itself (#2642).
+        _audioLease?.Idle();
         // A completed chapter consumes the resume bookmark; a finished preview keeps it.
         _recitationCursor.End();
         ClearRecitationHighlight();
@@ -645,6 +677,17 @@ public partial class PerekPage
     }
     private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
     {
+        // The lease follows audible states only — buffering/opening keep the
+        // claim so intentional gaps don't churn the session (#2642).
+        if (e.NewState == MediaElementState.Playing)
+        {
+            AudioLease.Playing();
+        }
+        else if (e.NewState is MediaElementState.Paused or MediaElementState.Stopped or
+            MediaElementState.None or MediaElementState.Failed)
+        {
+            _audioLease?.Idle();
+        }
         _recitationFrameTimer?.Stop();
         if (_recitationCursor.PlayingKey != null && _recitationTimeline != null && RecitationPlayer?.CurrentState == MediaElementState.Playing)
         {
