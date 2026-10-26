@@ -300,6 +300,8 @@ describe("parseCalendarPdfManifest", () => {
 		for (const text of [
 			"nope",
 			"{}",
+			"5",
+			"null",
 			JSON.stringify({ ...valid, version: 99 }),
 			JSON.stringify({ ...valid, artifacts: { k: { object: 1 } } }),
 			JSON.stringify({ ...valid, bounds: null }),

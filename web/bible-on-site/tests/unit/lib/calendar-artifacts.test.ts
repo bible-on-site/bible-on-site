@@ -142,6 +142,13 @@ describe("isInBoundsArtifactKey", () => {
 			isInBoundsArtifactKey({ view: "month", year: 5785, month: 13 }, bounds),
 		).toBe(false);
 	});
+
+	it("defaults to the live artifact bounds when none are passed", () => {
+		expect(isInBoundsArtifactKey({ view: "cycle", cycle: 1 })).toBe(true);
+		expect(
+			isInBoundsArtifactKey({ view: "cycle", cycle: bounds.maxCycle + 1 }),
+		).toBe(false);
+	});
 });
 
 describe("calendarArtifactFilename", () => {

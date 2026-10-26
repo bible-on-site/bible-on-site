@@ -325,6 +325,62 @@ describe("calendar PDF text stays searchable", () => {
 	});
 });
 
+describe("layout edge cases (#2608)", () => {
+	it("truncates an over-wide day label to the cell width", async () => {
+		// fitText keeps the longest prefix that still fits CELL_W - 6.
+		const longLabel = "בראשית א ב ג ד ה ו ז ח ט י יא יב יג יד טו טז";
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => longLabel,
+		});
+		const full = visualOrder(longLabel);
+		const texts = pages[0].map((o) => o.text);
+		expect(texts).not.toContain(full);
+		// Pure-Hebrew visual order reverses the string, so the surviving
+		// logical prefix lands as a suffix of the fully-rendered form.
+		expect(
+			texts.some(
+				(t) => t.length > 1 && t.length < full.length && full.endsWith(t),
+			),
+		).toBe(true);
+	});
+
+	it("starts a new page when the next month grid does not fit", async () => {
+		const month: CalendarPdfMonth = {
+			title: "אלול",
+			cells: Array.from({ length: 42 }, () => ({})),
+		};
+		const pages = await extractTextOps(
+			await generateCalendarPdf({
+				title: "לוח",
+				months: Array.from({ length: 6 }, () => month),
+				dayLabel: () => "",
+			}),
+		);
+		expect(pages.length).toBeGreaterThan(1);
+		// The footer pass numbers every produced page.
+		expect(pages[1].map((o) => o.text)).toContain("2");
+	});
+
+	it("dims days flagged by the dimmed predicate and skips their labels", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
+			dimmed: (day) => day.day === 2,
+			dayLabel: (day) =>
+				day.status === "review" && day.reviewPerekIds
+					? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
+					: getPerekSource(day.perekId ?? 1),
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		// The study day's perek label still renders…
+		expect(texts).toContain("א תישארב");
+		// …but the dimmed review day's range label is skipped entirely.
+		expect(texts).not.toContain("ז תישארב - ג תישארב");
+	});
+});
+
 describe("deterministic output (#2608)", () => {
 	afterEach(() => {
 		jest.useRealTimers();

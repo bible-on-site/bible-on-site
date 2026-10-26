@@ -193,6 +193,30 @@ describe("publishCalendarPdfArtifacts", () => {
 		).rejects.toThrow("is not served after upload");
 	});
 
+	it("throws when a referenced object disappears before final verification", async () => {
+		const sha = "e".repeat(64);
+		const { store } = fakeStore();
+		let headCalls = 0;
+		const flickering: ArtifactObjectStore = {
+			...store,
+			// Served during the upload check, gone by the final pass.
+			async head() {
+				headCalls += 1;
+				return headCalls === 1 ? { contentLength: 3 } : null;
+			},
+		};
+		const manifest = manifestWith({
+			"month:578512": ARTIFACT(sha, 3, "f.pdf"),
+		});
+		await expect(
+			publishCalendarPdfArtifacts({
+				store: flickering,
+				manifest,
+				readObject: async () => objectBody(3),
+			}),
+		).rejects.toThrow("missing or truncated after publish");
+	});
+
 	it("replaces the live manifest when artifacts changed under the same fingerprint", async () => {
 		const sha = "7".repeat(64);
 		const manifest = manifestWith({
