@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { assetsUrl } from "@/lib/assets-url";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { JournalismGallery } from "./JournalismGallery";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: 'על הפרק בתקשורת | תנ"ך על הפרק',
 	description: 'סיקור תקשורתי של תנ"ך על הפרק',
-};
+	canonical: "/journalism",
+});
 
 const journalismItems = [
 	{

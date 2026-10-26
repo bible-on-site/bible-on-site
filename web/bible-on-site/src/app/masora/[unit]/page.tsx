@@ -21,6 +21,7 @@ import { getPerushimForRanges } from "@/lib/perushim/service";
 import { rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { MasoraSeferComposite } from "./components/MasoraSeferComposite";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
@@ -98,16 +99,16 @@ export async function generateMetadata({
 	const equivalentPerekId = unitEquivalentPerekId(unit, masoraPasukCount);
 	const title = `${unit.heading} | ${MASORA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description = `קריאת ${unit.heading} לפי חלוקת המסורה (פתוחה/סתומה) בתנ"ך, עם פירושים ומאמרים.`;
-	return {
+	// og:url stays aligned with the canonical link even when the canonical
+	// points at the equivalent /929 perek page.
+	return pageMetadata({
 		title,
 		description,
-		alternates: {
-			canonical:
-				equivalentPerekId !== null
-					? `/929/${equivalentPerekId}`
-					: `${MASORA_DIVISION.rootPath}/${unitId}`,
-		},
-	};
+		canonical:
+			equivalentPerekId !== null
+				? `/929/${equivalentPerekId}`
+				: `${MASORA_DIVISION.rootPath}/${unitId}`,
+	});
 }
 
 export default async function MasoraUnitPage({

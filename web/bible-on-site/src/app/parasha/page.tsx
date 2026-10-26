@@ -13,6 +13,7 @@ import {
 	rangesRefSpans,
 } from "@/data/parasha/parasha-units";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
 
 const TORAH_SEFER_NAMES = ["בראשית", "שמות", "ויקרא", "במדבר", "דברים"];
@@ -21,18 +22,11 @@ export async function generateMetadata(): Promise<Metadata> {
 	const title = `${PARASHA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description =
 		"קריאת פרשיות השבוע עם ההפטרות למנהגי הספרדים, האשכנזים והתימנים - טקסט מלא, פירושים ומאמרים.";
-	return {
+	return pageMetadata({
 		title,
 		description,
-		alternates: { canonical: PARASHA_DIVISION.rootPath },
-		openGraph: {
-			title,
-			description,
-			url: PARASHA_DIVISION.rootPath,
-			siteName: SITE_NAME,
-			locale: "he_IL",
-		},
-	};
+		canonical: PARASHA_DIVISION.rootPath,
+	});
 }
 
 /**
