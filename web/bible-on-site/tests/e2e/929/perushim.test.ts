@@ -155,7 +155,7 @@ test.describe("Perushim Section", () => {
 	}) => {
 		// The reported case: מלכים ב ו — browser title must carry the same
 		// parent + additional + chapter the heading renders.
-		await page.goto("/929/315/" + encodeURIComponent('רש"י'));
+		await page.goto(`/929/315/${encodeURIComponent('רש"י')}`);
 
 		await expect(page).toHaveTitle('רש"י על מלכים ב ו | תנ"ך על הפרק');
 		await expect(

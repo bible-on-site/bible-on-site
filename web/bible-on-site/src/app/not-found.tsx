@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import "./not-found.css";
 import styles from "./not-found.module.css";
+
+// A missing page is not a shareable resource — strip the root layout's
+// homepage OG block so a 404 never advertises the site's URL as its own.
+export const metadata: Metadata = {
+	title: "העמוד לא נמצא",
+	openGraph: null,
+};
 
 export default function NotFound() {
 	return (
