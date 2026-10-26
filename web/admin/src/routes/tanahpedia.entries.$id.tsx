@@ -3,8 +3,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
+import { EntryAliasesPanel } from "~/components/tanahpedia/EntryAliasesPanel";
 import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
+import { MainAddressSection } from "~/components/tanahpedia/MainAddressSection";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
 import {
@@ -51,6 +53,8 @@ interface SaveJob {
 	notes: string | null;
 	/** Editor edit-generation when the job was submitted; see editCounterRef. */
 	editCount: number;
+	/** Rename flow: keep the previous unique_name as a live alias to this entry. */
+	keepOldNameAsAlias: boolean;
 }
 
 /** The job plus the optimistic-concurrency base, resolved at dequeue time. */
@@ -59,6 +63,11 @@ type DispatchedSaveJob = SaveJob & { baseRevisionId: string | null };
 export const Route = createFileRoute("/tanahpedia/entries/$id")({
 	component: EntryEditPage,
 });
+
+const WEBSITE_BASE =
+	typeof import.meta.env.VITE_WEBSITE_URL === "string"
+		? import.meta.env.VITE_WEBSITE_URL.replace(/\/$/, "")
+		: "http://localhost:3001";
 
 function EntryEditPage() {
 	const { id } = Route.useParams();
@@ -84,6 +93,15 @@ function EntryEditPage() {
 	// The visible non-conflict save failure; sticky until explicit retry so a
 	// persistent failure surfaces once instead of looping silently.
 	const [saveError, setSaveError] = useState<ClassifiedSaveError | null>(null);
+	// Informational outcome of a committed save (e.g. rename alias handling).
+	const [saveNotice, setSaveNotice] = useState<string | null>(null);
+	// Rename flow: whether to keep the outgoing unique_name as an alias to
+	// this entry — default on, since it preserves inbound links.
+	const [keepOldAsAlias, setKeepOldAsAlias] = useState(true);
+	// The unique_name as last committed by the server — the rename detection
+	// base. `entry` stays stale after our own save (its query is not
+	// invalidated), so the committed name is tracked explicitly.
+	const [savedUniqueName, setSavedUniqueName] = useState("");
 	// A local draft found on load — offered for explicit restore, never
 	// applied silently over the freshly-fetched server state.
 	const [pendingDraft, setPendingDraft] = useState<{
@@ -202,6 +220,7 @@ function EntryEditPage() {
 			title: entry.title,
 			content: entry.content ?? "",
 		});
+		setSavedUniqueName(entry.unique_name);
 		baseRevisionIdRef.current = entry.currentRevisionId ?? null;
 		setBaseRevisionId(entry.currentRevisionId ?? null);
 	}, [entry]);
@@ -334,6 +353,7 @@ function EntryEditPage() {
 					baseRevisionId,
 					source,
 					notes,
+					keepOldNameAsAlias: job.keepOldNameAsAlias,
 				},
 			});
 		},
@@ -345,6 +365,34 @@ function EntryEditPage() {
 			setLastSaved(new Date());
 			setConflictError(false);
 			setSaveError(null);
+			if (savedEntry?.unique_name) {
+				setSavedUniqueName(savedEntry.unique_name);
+			}
+			// A committed rename changed what the old URL points at — report the
+			// outcome and refresh the aliases panel (it may now list the old name).
+			const renamedFrom =
+				savedEntry && "renamedFrom" in savedEntry
+					? savedEntry.renamedFrom
+					: null;
+			const oldNameAliasCreated =
+				savedEntry && "oldNameAliasCreated" in savedEntry
+					? savedEntry.oldNameAliasCreated === true
+					: false;
+			if (renamedFrom) {
+				setSaveNotice(
+					job.keepOldNameAsAlias
+						? oldNameAliasCreated
+							? `הכתובת הקודמת «${renamedFrom}» נשמרה כשם חלופי שמפנה לערך זה - קישורים קיימים ממשיכים לעבוד.`
+							: `הכתובת הקודמת «${renamedFrom}» משותפת עם ערכים אחרים - היא ממשיכה להוביל אליהם; לא נוסף אליה יעד של ערך זה.`
+						: `הכתובת הקודמת «${renamedFrom}» אינה מובילה עוד לערך זה.`,
+				);
+				setKeepOldAsAlias(true);
+				void queryClient.invalidateQueries({
+					queryKey: ["tanahpedia-entry-aliases", savedEntry?.id ?? id],
+				});
+			} else {
+				setSaveNotice(null);
+			}
 			// The acknowledged head is always adoptable — the next save proposes
 			// on top of whatever snapshot this request committed. The ref update
 			// must be synchronous: onSettled flushes the queue before the render
@@ -585,6 +633,8 @@ function EntryEditPage() {
 		setPendingDraft(null);
 		setSaveError(null);
 		setConflictError(false);
+		setSaveNotice(null);
+		setKeepOldAsAlias(true);
 		setSaveSource(REVISION_SOURCE_ADMIN);
 		setPendingNotes(null);
 		setLastDraftAt(null);
@@ -655,6 +705,19 @@ function EntryEditPage() {
 				</div>
 			</div>
 
+			{saveNotice && !saveError && (
+				<div className="rounded-lg border border-blue-300 bg-blue-50 p-4 flex flex-wrap items-center justify-between gap-3">
+					<p className="text-sm text-blue-900">{saveNotice}</p>
+					<button
+						type="button"
+						onClick={() => setSaveNotice(null)}
+						className="px-3 py-1.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-800 hover:bg-blue-100"
+					>
+						הבנתי
+					</button>
+				</div>
+			)}
+
 			{saveError && (
 				<div className="rounded-lg border border-red-300 bg-red-50 p-4 flex flex-wrap items-center justify-between gap-3">
 					<div className="text-sm text-red-800">
@@ -684,6 +747,7 @@ function EntryEditPage() {
 									source: saveSource,
 									notes: pendingNotes,
 									editCount: editCounterRef.current,
+									keepOldNameAsAlias: keepOldAsAlias,
 								});
 							}}
 							className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
@@ -834,10 +898,19 @@ function EntryEditPage() {
 
 					{isNew ? (
 						<div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-950">
-							עריכת מבנה יישויות זמינה לאחר שמירת ערך חדש (נוצר מזהה בשרת).
+							ניהול כתובות נוספות ומבנה יישויות זמין לאחר שמירת הערך החדש (נוצר
+							מזהה בשרת).
 						</div>
 					) : (
-						<EntryStructuralPanel entryId={id} />
+						<>
+							<EntryAliasesPanel
+								entryId={id}
+								entryUniqueName={savedUniqueName || (entry?.unique_name ?? "")}
+								entryTitle={entry?.title ?? formData.title}
+								websiteBase={WEBSITE_BASE}
+							/>
+							<EntryStructuralPanel entryId={id} />
+						</>
 					)}
 				</>
 			)}
@@ -859,13 +932,13 @@ function EntryEditPage() {
 			<form className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 				<div className="p-8 space-y-6">
 					{tab === "metadata" && (
-						<div className="grid md:grid-cols-2 gap-6">
-							<div>
+						<div className="space-y-6">
+							<div className="max-w-xl">
 								<label
 									htmlFor="title"
 									className="block text-sm font-semibold text-gray-700 mb-2"
 								>
-									כותרת <span className="text-red-500">*</span>
+									כותרת (טקסט תצוגה) <span className="text-red-500">*</span>
 								</label>
 								<input
 									id="title"
@@ -875,25 +948,19 @@ function EntryEditPage() {
 									className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
 									placeholder="כותרת הערך"
 								/>
+								<p className="mt-1 text-xs text-gray-500">
+									הכותרת מוצגת בדף הערך ובתוצאות חיפוש - היא אינה חלק מהכתובת.
+								</p>
 							</div>
-							<div>
-								<label
-									htmlFor="unique_name"
-									className="block text-sm font-semibold text-gray-700 mb-2"
-								>
-									שם ייחודי (URL)
-								</label>
-								<input
-									id="unique_name"
-									type="text"
-									value={formData.unique_name}
-									onChange={(e) =>
-										handleFieldChange("unique_name", e.target.value)
-									}
-									className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-									placeholder="שם-ייחודי-בurl"
-								/>
-							</div>
+							<MainAddressSection
+								entryId={isNew ? null : (createdIdRef.current ?? id)}
+								savedUniqueName={savedUniqueName}
+								value={formData.unique_name}
+								onValueChange={(v) => handleFieldChange("unique_name", v)}
+								websiteBase={WEBSITE_BASE}
+								keepOldAsAlias={keepOldAsAlias}
+								onKeepOldAsAliasChange={setKeepOldAsAlias}
+							/>
 						</div>
 					)}
 
@@ -944,6 +1011,7 @@ function EntryEditPage() {
 								source: saveSource,
 								notes: pendingNotes,
 								editCount: editCounterRef.current,
+								keepOldNameAsAlias: keepOldAsAlias,
 							});
 						}}
 						disabled={saveMutation.isPending || !formData.title.trim()}
