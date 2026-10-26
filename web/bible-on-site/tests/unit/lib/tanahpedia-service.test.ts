@@ -59,6 +59,8 @@ describe("tanahpedia service", () => {
 					updatedAt: "2026-01-02",
 				},
 			])
+			// Stored reading metric (#2607) — queried between entry and entities.
+			.mockResolvedValueOnce([{ word_count: 181, estimated_seconds: 50 }])
 			.mockResolvedValueOnce([
 				{
 					id: "link-1",
@@ -71,6 +73,7 @@ describe("tanahpedia service", () => {
 
 		await expect(getEntryByUniqueName("אברהם")).resolves.toMatchObject({
 			id: "entry-abraham",
+			metric: { wordCount: 181, estimatedSeconds: 50 },
 			entities: [
 				{
 					entryId: "entry-abraham",
@@ -79,6 +82,28 @@ describe("tanahpedia service", () => {
 				},
 			],
 		});
+	});
+
+	it("keeps the entry when the optional metric read fails", async () => {
+		mockQuery
+			.mockResolvedValueOnce([
+				{
+					id: "entry-abraham",
+					uniqueName: "אברהם",
+					title: "אברהם",
+					content: "content",
+					createdAt: "2026-01-01",
+					updatedAt: "2026-01-02",
+				},
+			])
+			// Metric query rejects — the entry must still load, badge-less.
+			.mockRejectedValueOnce(new Error("metric timeout"))
+			.mockResolvedValueOnce([]);
+
+		const entry = await getEntryByUniqueName("אברהם");
+
+		expect(entry).not.toBeNull();
+		expect(entry).not.toHaveProperty("metric");
 	});
 
 	it("returns null when a unique entry name is not found", async () => {
