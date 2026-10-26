@@ -80,9 +80,7 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
 
         // Any rendered header row gives the same seven column positions: every
         // mini-month is built from the identical template on one shared width.
-        var headerRow = Driver!.FindElements(Platform.AutomationId("MiniMonthWeekday"))
-            .Where(element => element.Displayed)
-            .Select(element => (Text: element.Text.Trim(), Frame: MobilePlatformAdapter.ReadFrame(element)))
+        var headerRow = RenderedElements("MiniMonthWeekday", element => element.Text)
             .GroupBy(header => header.Frame.Location.Y)
             .OrderBy(group => group.Key)
             .Select(group => group.ToArray())
@@ -108,9 +106,8 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         // Every rendered day cell must sit centered under a weekday column, and
         // a whole month exercises all seven — a collapsed right-side strip maps
         // every cell onto one or two columns instead.
-        var cells = Driver!.FindElements(Platform.AutomationId("MiniMonthDay"))
-            .Where(element => element.Displayed)
-            .Select(element => MobilePlatformAdapter.ReadFrame(element))
+        var cells = RenderedElements("MiniMonthDay")
+            .Select(element => element.Frame)
             .ToArray();
         Assert.NotEmpty(cells);
         var usedColumns = new HashSet<int>();
@@ -129,10 +126,9 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         // a self-consistent slide - days moved one column while still filling
         // all seven - fails where the announced weekday does not match the
         // header the cell rendered under.
-        var dayLabels = Driver!.FindElements(Platform.AutomationId("MiniMonthDayText"))
-            .Where(element => element.Displayed)
-            .Select(element => (Description: Platform.SemanticDescription(element) ?? string.Empty,
-                Frame: MobilePlatformAdapter.ReadFrame(element)))
+        var dayLabels = RenderedElements("MiniMonthDayText",
+                element => Platform.SemanticDescription(element) ?? string.Empty)
+            .Select(day => (Description: day.Text, day.Frame))
             .ToArray();
         Assert.NotEmpty(dayLabels);
         foreach (var day in dayLabels)
@@ -147,6 +143,32 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
                 $"Day cell for {spoken} centered at x={center:F0}, expected under weekday column " +
                     $"x={columns[6 - weekday]:F0} ({string.Join(", ", columns.Select(x => x.ToString("F0")))}).");
         }
+    }
+
+    // Every element read is a WDA round-trip on iOS; hundreds of displayed/
+    // text/rect/label calls ran about five minutes inside this shard's
+    // 15-minute wall clock. The snapshot driver carries text, visibility and
+    // frames for every match in a single lookup response, and there a labeled
+    // cell's text is its accessibility description.
+    private IReadOnlyList<(string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
+        RenderedElements(string automationId, Func<AppiumElement, string>? text = null)
+    {
+        if (Driver is IosSnapshotDriver snapshots)
+        {
+            return snapshots.FindSnapshots(Platform.AutomationId(automationId))
+                .Where(match => match.Snapshot.Displayed)
+                .Select(match => (match.Snapshot.Text.Trim(),
+                    (new System.Drawing.Point(Convert.ToInt32(match.Snapshot.X),
+                        Convert.ToInt32(match.Snapshot.Y)),
+                     new System.Drawing.Size(Convert.ToInt32(match.Snapshot.Width),
+                        Convert.ToInt32(match.Snapshot.Height)))))
+                .ToArray();
+        }
+        return Driver!.FindElements(Platform.AutomationId(automationId))
+            .Where(element => element.Displayed)
+            .Select(element => (text?.Invoke(element).Trim() ?? string.Empty,
+                MobilePlatformAdapter.ReadFrame(element)))
+            .ToArray();
     }
 
     private static double CenterX((System.Drawing.Point Location, System.Drawing.Size Size) frame) =>
