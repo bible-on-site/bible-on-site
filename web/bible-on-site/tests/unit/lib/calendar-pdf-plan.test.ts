@@ -292,15 +292,8 @@ describe("parseCalendarPdfManifest", () => {
 	});
 
 	it("parses a manifest produced by buildCalendarPdfManifest", () => {
-		// This is wire-format input, not an object key or content fingerprint.
-		// nosemgrep
-		const serialized = JSON.stringify(valid);
-		const parsed = parseCalendarPdfManifest(serialized);
+		const parsed = parseCalendarPdfManifest(JSON.stringify(valid));
 		expect(parsed).toEqual(valid);
-		expect(parsed?.fingerprint).toBe(FP);
-		expect(parsed?.artifacts["month:578512"].object).toBe(
-			calendarPdfObjectKey("s"),
-		);
 	});
 
 	it("rejects malformed manifests", () => {
