@@ -18,7 +18,7 @@
         </BoxView>
 
         <!-- Picker container: from below the header to above satellite buttons -->
-        <Border Stroke="{StaticResource Primary}"
+        <Border Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                 StrokeThickness="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
                 Padding="0"
@@ -54,22 +54,22 @@
                     <Label Grid.Row="0" Grid.Column="0"
                            Text="קטגוריה"
                            FontSize="12"
-                           TextColor="{StaticResource Gray500}"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
                            HorizontalTextAlignment="Center"/>
                     <Label Grid.Row="0" Grid.Column="1"
                            Text="ספר"
                            FontSize="12"
-                           TextColor="{StaticResource Gray500}"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
                            HorizontalTextAlignment="Center"/>
                     <Label Grid.Row="0" Grid.Column="2"
                            Text="פרשה"
                            FontSize="12"
-                           TextColor="{StaticResource Gray500}"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
                            HorizontalTextAlignment="Center"/>
 
                     <!-- Column 1: Sefer Groups (Torah, Neviim, Ketuvim) -->
                     <Border Grid.Row="1" Grid.Column="0"
-                            BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2C2C2E}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}"
                             Padding="0">
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="8"/>
@@ -108,7 +108,7 @@
 
                     <!-- Column 2: Sefarim within group -->
                     <Border Grid.Row="1" Grid.Column="1"
-                            BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2C2C2E}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}"
                             Padding="0">
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="8"/>
@@ -147,7 +147,7 @@
 
                     <!-- Column 3: Masoretic units within sefer -->
                     <Border Grid.Row="1" Grid.Column="2"
-                            BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2C2C2E}"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}"
                             Padding="0">
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="8"/>
@@ -194,7 +194,7 @@
                     <Button Grid.Column="0"
                             Text="בטל"
                             BackgroundColor="Transparent"
-                            TextColor="{StaticResource Gray600}"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                             BorderColor="{StaticResource Gray400}"
                             BorderWidth="1"
                             CornerRadius="8"

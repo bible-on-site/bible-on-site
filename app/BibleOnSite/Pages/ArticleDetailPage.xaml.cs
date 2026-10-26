@@ -201,12 +201,12 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
         {
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
             StrokeThickness = 1,
-            Stroke = Application.Current?.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#444444")
-                : Color.FromArgb("#e0e0e0"),
             Padding = 0,
             Content = host
         };
+        container.SetAppTheme(Border.StrokeProperty,
+            new SolidColorBrush(Color.FromArgb("#e0e0e0")),
+            new SolidColorBrush(Color.FromArgb("#444444")));
         return container;
     }
 

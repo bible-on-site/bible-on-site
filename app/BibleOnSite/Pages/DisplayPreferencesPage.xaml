@@ -19,7 +19,7 @@
                 <Label Text="גודל גופן"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -50,7 +50,6 @@
                                 AutomationId="FontFactorSlider"
                                 Maximum="2.0"
                                 Value="{Binding FontFactor}"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -61,7 +60,7 @@
                 <Label Text="גודל יחסי (אחוז מהגודל הכללי)"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <!-- פסוקים -->
@@ -98,7 +97,6 @@
                                 Maximum="{Binding FontPercentMaximum}"
                                 Value="{Binding PasukFontPercent}"
                                 AutomationId="PasukFontPercentSlider"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -137,7 +135,6 @@
                                 Maximum="{Binding FontPercentMaximum}"
                                 Value="{Binding PerushFontPercent}"
                                 AutomationId="PerushFontPercentSlider"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -176,7 +173,6 @@
                                 Maximum="{Binding FontPercentMaximum}"
                                 Value="{Binding ArticleFontPercent}"
                                 AutomationId="ArticleFontPercentSlider"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -186,7 +182,7 @@
                 <Label Text="הסתרת שם השם"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -323,7 +319,7 @@
                 <Label Text="כפתור חזרה ביישומון"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"

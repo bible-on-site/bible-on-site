@@ -62,7 +62,17 @@ public partial class ReaderBottomBar : Grid
     public ReaderBottomBar()
     {
         InitializeComponent();
+        // The bar fill is resolved from the requested theme inside
+        // BottomBarDrawable.Draw — repaint it when the theme flips (#2601).
+        if (Microsoft.Maui.Controls.Application.Current is { } app)
+        {
+            app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+            Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
+        }
     }
+
+    private void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
+        BarSurface.Invalidate();
 
     private void ApplyBadgeCount(int count)
     {
@@ -84,10 +94,18 @@ public partial class ReaderBottomBar : Grid
     {
         PerushimChevronButton.IsEnabled = !isActive;
         PerushimChevronButton.Opacity = isActive ? 0.4 : 1;
-        var dark = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark;
-        ArticlesButton.TextColor = isActive
-            ? (dark ? Color.FromArgb("#BB86FC") : Color.FromArgb("#512BD4"))
-            : (dark ? Color.FromArgb("#9CA3AF") : Color.FromArgb("#6B7280"));
+        // Brand accent for the active state (replaces the old one-off purple);
+        // muted gray for inactive. SetAppThemeColor keeps this live on theme flips.
+        if (isActive)
+        {
+            ArticlesButton.SetAppThemeColor(Button.TextColorProperty,
+                Color.FromArgb("#512BD4"), Color.FromArgb("#AACBFF"));
+        }
+        else
+        {
+            ArticlesButton.SetAppThemeColor(Button.TextColorProperty,
+                Color.FromArgb("#6B7280"), Color.FromArgb("#9CA3AF"));
+        }
     }
 
     private void OnPerushimChevronClicked(object? sender, EventArgs e) =>

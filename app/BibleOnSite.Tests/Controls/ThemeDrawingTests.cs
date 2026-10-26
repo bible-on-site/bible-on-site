@@ -12,7 +12,7 @@ public class ThemeDrawingTests
 {
     [Theory]
     [InlineData(AppTheme.Light, "#FFFFFF")]
-    [InlineData(AppTheme.Dark, "#1C1C1E")]
+    [InlineData(AppTheme.Dark, "#2D2D2D")]
     public void BottomBar_UsesRequestedThemeForReadableBackground(AppTheme theme, string expected)
     {
         var previous = Application.Current;

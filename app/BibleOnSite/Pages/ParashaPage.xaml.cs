@@ -81,6 +81,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 $"עבור ל{target.ReadingTitle}", "ביטול");
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
         InitializeSearchHeader();
         NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
 #if ANDROID || IOS
@@ -448,6 +449,41 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     {
         PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
         Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    /// <summary>
+    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
+    /// each pasuk's cached FormattedString at build time — a theme flip while the
+    /// page is alive must refresh the realized rows so they don't keep the other
+    /// theme's colors (#2601).
+    /// </summary>
+    private void SubscribeThemeChange()
+    {
+        if (Microsoft.Maui.Controls.Application.Current is not { } app)
+        {
+            return;
+        }
+        app.RequestedThemeChanged += OnRequestedThemeChanged;
+        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
+    }
+
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
+    {
+        Dispatcher.Dispatch(() =>
+        {
+            foreach (var unit in _viewModel.CarouselUnits)
+            {
+                foreach (var row in unit.Rows)
+                {
+                    row.Pasuk?.RefreshForThemeChange();
+                }
+            }
+            if (_focusedPasuk != null)
+            {
+                _focusedPasuk.RefreshForThemeChange();
+                RefreshFocusedRecitation();
+            }
+        });
     }
 
     private bool _notesRefreshQueued;

@@ -42,7 +42,7 @@
                Text="0"
                FontSize="12"
                FontAttributes="Bold"
-               TextColor="{StaticResource Primary}"
+               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                HorizontalTextAlignment="Center"
                VerticalTextAlignment="Center"/>
     </Border>

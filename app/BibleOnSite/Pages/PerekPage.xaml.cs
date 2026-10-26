@@ -75,6 +75,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -91,6 +92,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
         NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
     }
 
@@ -103,6 +105,39 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
         Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    /// <summary>
+    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
+    /// each pasuk's cached FormattedString at build time, and the shell band is
+    /// applied imperatively — neither follows the requested theme on its own, so
+    /// a flip while the page is alive re-applies both (#2601).
+    /// </summary>
+    private void SubscribeThemeChange()
+    {
+        if (Microsoft.Maui.Controls.Application.Current is not { } app)
+        {
+            return;
+        }
+        app.RequestedThemeChanged += OnRequestedThemeChanged;
+        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
+    }
+
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
+    {
+        Dispatcher.Dispatch(() =>
+        {
+            foreach (var pasuk in _viewModel.CarouselPerakim
+                .SelectMany(perek => perek.Pasukim ?? Enumerable.Empty<Pasuk>()))
+            {
+                pasuk.RefreshForThemeChange();
+            }
+            if (_focusedPasuk != null)
+            {
+                _focusedPasuk.RefreshForThemeChange();
+                RefreshFocusedRecitation();
+            }
+        });
     }
 
     private bool _notesRefreshQueued;
@@ -1134,13 +1169,19 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
         Shell.SetFlyoutBehavior(this, selectionBarMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
-        var shellBackground = selectionBarMode
-            ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
-            : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#20304A")
-                : Color.FromArgb("#F2F7FE");
-        Shell.SetBackgroundColor(this, shellBackground);
-        ReaderToolbar.BackgroundColor = shellBackground;
+        // Selection mode paints the shared accent over the whole band; otherwise
+        // bind the reader band colors so a theme flip repaints both surfaces.
+        if (selectionBarMode)
+        {
+            var primary = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
+            Shell.SetBackgroundColor(this, primary);
+            ReaderToolbar.BackgroundColor = primary;
+        }
+        else
+        {
+            this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+            ReaderToolbar.SetAppThemeColor(VisualElement.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+        }
         NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
         // The header names the focused pasuk — sefer, perek and pasuk together —
         // instead of the plain perek source (#2466).
