@@ -251,16 +251,13 @@ const Sefer = (props: {
 						style={{ "--cover-color": seferColor } as React.CSSProperties}
 					>
 						<span className="sefer-bookmark-expanded-perek">
-							פרק {data.perekHeb}
+							פרק {data.compact}
 						</span>
 						{data.title && (
 							<span className="sefer-bookmark-expanded-title">
 								{data.title}
 							</span>
 						)}
-						<span className="sefer-bookmark-expanded-source">
-							{data.unitSource}
-						</span>
 					</span>
 				);
 			},

@@ -698,7 +698,7 @@ html[data-sefer-view] {
 	overflow: hidden;
 }
 
-/* Expanded tab content: פרק X, the perek title, and source context laid
+/* Expanded tab content: the chapter reference and perek title laid
    out as one horizontal strip — a perpendicular side tab reveals roughly
    220×24px. This element is portaled inside .flipbook-bookmark-preview,
    so it must style itself — it cannot rely on .he-book ancestors.
@@ -728,12 +728,6 @@ html[data-sefer-view] {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-.sefer-bookmark-expanded-source {
-	flex: none;
-	font-size: 0.85em;
-	opacity: 0.8;
 }
 
 @media (prefers-color-scheme: dark) {
