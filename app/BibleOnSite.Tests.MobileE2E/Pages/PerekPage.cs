@@ -278,27 +278,29 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
-            if (driver is IosSnapshotDriver snapshots)
+            try
             {
-                var spoken = snapshots.FindSnapshots(locator)
-                    .Where(match => match.Snapshot.Displayed
-                        && match.Snapshot.Width > 0 && match.Snapshot.Height > 0)
-                    .Select(match => match.Snapshot.Text.Trim())
+                // FindVisible applies the same center-in-viewport rule as
+                // WaitFor, and on iOS the condition element answers Text from
+                // the poll's own snapshot — no second attribute request.
+                var spoken = FindVisible(locator)
+                    .Select(match => driver is IosSnapshotDriver
+                        ? match.ConditionElement.Text.Trim()
+                        : (platform.SemanticDescription(match.Element) ?? match.Element.Text).Trim())
                     .FirstOrDefault(accept);
                 if (spoken != null)
                 {
                     return spoken;
                 }
             }
-            else
+            catch (StaleElementReferenceException)
             {
-                var spoken = FindVisible(locator)
-                    .Select(match => platform.SemanticDescription(match.Element) ?? match.Element.Text ?? string.Empty)
-                    .FirstOrDefault(accept);
-                if (spoken != null)
-                {
-                    return spoken;
-                }
+                // The carousel can replace its native views between lookup and inspection.
+            }
+            catch (WebDriverTimeoutException)
+            {
+                // A proxied command cut at the driver timeout is one failed
+                // poll, not a dead session — the next lookup retries fresh.
             }
             Thread.Sleep(200);
         }
