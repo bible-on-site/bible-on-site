@@ -142,6 +142,8 @@ import {
 	getPerushimByPerekId,
 } from "../../../src/lib/perushim";
 import { SITE_ORIGIN } from "../../../src/lib/seo/jsonld";
+import type { PerekIllustration } from "../../../src/lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../src/lib/seo/perek-images-data";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
@@ -173,6 +175,27 @@ const mockGetAllPerushPerekNamePairs =
 	getAllPerushPerekNamePairs as jest.MockedFunction<
 		typeof getAllPerushPerekNamePairs
 	>;
+const mockGetPerekImagesByChapter =
+	getPerekImagesByChapter as jest.MockedFunction<
+		typeof getPerekImagesByChapter
+	>;
+
+const sampleIllustration: PerekIllustration = {
+	id: 7,
+	src: "https://cdn.example.com/ill-display.jpg",
+	width: 800,
+	height: 600,
+	avifSrcSet: "",
+	socialSrc: "https://cdn.example.com/ill-social.jpg",
+	socialWidth: 1200,
+	socialHeight: 630,
+	alt: "איור לפרק",
+	caption: "איור",
+	captionMarkdown: null,
+	verseRanges: [],
+	description: null,
+	credit: null,
+};
 
 const sampleArticle = {
 	id: 42,
@@ -437,6 +460,86 @@ describe("[slug] page", () => {
 			});
 
 			expect(result).toEqual({ title: 'פירוש לא נמצא | תנ"ך על הפרק' });
+		});
+
+		it("prefers the perek illustration over the author portrait and emits the sefer section", async () => {
+			mockGetArticleById.mockResolvedValue(sampleArticle);
+			mockGetPerekByPerekId.mockReturnValue({
+				sefer: "בראשית",
+			} as unknown as PerekObj & Perek);
+			mockGetPerekImagesByChapter.mockResolvedValue({
+				5: [sampleIllustration],
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({
+					url: "https://cdn.example.com/ill-social.jpg",
+					width: 1200,
+					height: 630,
+					alt: "איור לפרק",
+				}),
+			]);
+			expect((result.openGraph as { section?: string } | null)?.section).toBe(
+				"בראשית",
+			);
+		});
+
+		it("omits article:section for an out-of-range perek number", async () => {
+			mockGetArticleById.mockResolvedValue(sampleArticle);
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "930", slug: "42" }),
+			});
+
+			expect(
+				(result.openGraph as { section?: string } | null)?.section,
+			).toBeUndefined();
+		});
+
+		it("falls back to the author portrait when the illustration map is unavailable", async () => {
+			mockGetArticleById.mockResolvedValue(sampleArticle);
+			mockGetPerekImagesByChapter.mockResolvedValue(null as never);
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({
+					url: "https://example.com/1.jpg",
+					alt: "הרב ישראל",
+				}),
+			]);
+		});
+
+		it("uses the perek illustration for the perush OG image when present", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerekByPerekId.mockReturnValue({
+				sefer: "בראשית",
+				source: "בראשית ה",
+			} as unknown as PerekObj & Perek);
+			mockGetPerekImagesByChapter.mockResolvedValue({
+				5: [sampleIllustration],
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({
+					url: "https://cdn.example.com/ill-social.jpg",
+					width: 1200,
+					height: 630,
+					alt: "איור לפרק",
+				}),
+			]);
 		});
 	});
 
