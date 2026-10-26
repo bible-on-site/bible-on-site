@@ -2,7 +2,7 @@
  * Imports mention-decoration rows produced by the annotation pipeline
  * (data/annotations/, issue #2516) into `tanahpedia_mention_decoration`.
  *
- *   node --import tsx devops/import-tanahpedia-mentions.mts \
+ *   node devops/import-tanahpedia-mentions.mts \
  *     --decorations <file.json> [--env-file <module/.dev.env>] [--dry-run]
  *
  * Idempotent upserts: dedupe_key = md5(source identity + model_revision) so
