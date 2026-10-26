@@ -592,7 +592,7 @@ public partial class SearchViewModel : ObservableObject
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch
+        catch //NOSONAR — surfaces the search error message, then rethrows with the stack preserved.
         {
             if (version == _searchVersion)
             {
