@@ -418,6 +418,25 @@ describe("documented alternative splits", () => {
 		}
 	});
 
+	it("stamps a curated source on every recorded alternative", () => {
+		// `source` is a required field of the data contract — the
+		// unattributed variant ids (`alt-{source}`) rely on it always
+		// being present.
+		const readings = [
+			...units.map((unit) => getStandaloneReading(unit.unitId)),
+			...units.flatMap((unit) => getJoinedReadingsForUnit(unit.unitId)),
+		];
+		for (const reading of readings) {
+			for (const boundaries of Object.values(reading.schemes)) {
+				for (const boundary of boundaries) {
+					for (const alternative of boundary.alternatives ?? []) {
+						expect(alternative.source).toMatch(/^(hebcal|opentorah)$/);
+					}
+				}
+			}
+		}
+	});
+
 	it("splits the joined מטות-מסעי אשכנז variant at the standalone boundary", () => {
 		const joined = must(getParashaReadingById("Matot-Masei"));
 		const shabbat = must(getAliyot(joined, "shabbat"));

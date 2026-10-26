@@ -131,14 +131,16 @@ export function AliyahControls({
 
 	// Buttons reflect the ACTIVE selection — the URL may lag behind it
 	// until the soft navigation commits.
-	const activeContext =
-		contexts.find((c) => c.contextId === selection.contextId) ??
-		/* istanbul ignore next -- selection only ever holds an offered context id */
-		context;
-	const activeScheme =
-		activeContext.schemes.find((s) => s.schemeId === selection.schemeId) ??
-		/* istanbul ignore next -- selection only ever holds an offered scheme id */
-		scheme;
+	const offeredContext = contexts.find(
+		(c) => c.contextId === selection.contextId,
+	);
+	/* istanbul ignore next -- selection only ever holds an offered context id */
+	const activeContext = offeredContext ?? context;
+	const offeredScheme = activeContext.schemes.find(
+		(s) => s.schemeId === selection.schemeId,
+	);
+	/* istanbul ignore next -- selection only ever holds an offered scheme id */
+	const activeScheme = offeredScheme ?? scheme;
 
 	return (
 		<fieldset className={styles.controls}>

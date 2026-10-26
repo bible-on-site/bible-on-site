@@ -173,6 +173,33 @@ describe("AliyahControls", () => {
 		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
 	});
 
+	it("falls back to the URL-resolved layer when the offered contexts narrow under the active selection", () => {
+		const utils = renderLayer();
+		fireEvent.click(pressed(utils, "שני וחמישי")); // selection: matot:weekday
+
+		// The offered contexts shrink before the soft navigation commits —
+		// the buttons degrade to the URL-resolved context's schemes instead
+		// of dereferencing a selection the new options don't carry.
+		const narrowed: UnitAliyahContextOption = {
+			contextId: "vayigash",
+			label: "פרשת ויגש",
+			kind: "standalone",
+			schemes: [{ schemeId: "shabbat", label: "שבת", variants: [] }],
+		};
+		utils.rerender(
+			<>
+				<div data-unit-text="">
+					<span data-aliyah-marker="" data-aliyah-key="vayigash:shabbat" />
+				</div>
+				<AliyahControls contexts={[narrowed]} defaultKey="vayigash:shabbat" />
+			</>,
+		);
+
+		expect(pressed(utils, "פרשת ויגש")).toBeDefined();
+		expect(pressed(utils, "שבת")).toBeDefined();
+		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
+	});
+
 	it("falls back to the new context's first scheme when it lacks both the current scheme and shabbat", () => {
 		const customOnly: UnitAliyahContextOption = {
 			contextId: "matot-special",

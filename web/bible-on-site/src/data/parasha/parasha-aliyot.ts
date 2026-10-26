@@ -42,8 +42,9 @@ export type AliyahRole = "aliyah" | "maftir";
 export interface AliyahAlternative {
 	range: ScriptureRange;
 	custom?: string;
-	/** Which curated source records this division (hebcal / opentorah). */
-	source?: string;
+	/** Which curated source records this division (hebcal / opentorah) —
+	 * the importer always stamps one (drift-checked in tests). */
+	source: string;
 }
 
 /** A single aliyah boundary resolved to canonical coordinates. */
@@ -126,7 +127,7 @@ interface SourceAliyah {
 		start: SourceVerse;
 		end: SourceVerse;
 		custom?: string;
-		source?: string;
+		source: string;
 	}[];
 }
 
@@ -183,9 +184,7 @@ function resolveReadingAliyah(
 					alternatives: aliyah.alternatives.map((alternative) => ({
 						range: resolveRange(alternative, reading, schemeId),
 						...(alternative.custom ? { custom: alternative.custom } : {}),
-						...(alternative.source
-							? { source: alternative.source }
-							: /* istanbul ignore next -- the importer always stamps a source */ {}),
+						source: alternative.source,
 					})),
 				}
 			: {}),
@@ -361,12 +360,7 @@ function deriveSchemeVariants(
 	>();
 	for (const boundary of boundaries) {
 		for (const alternative of boundary.alternatives ?? []) {
-			const id =
-				alternative.custom ??
-				`alt-${
-					alternative.source ??
-					/* istanbul ignore next -- importer always stamps a source */ "other"
-				}`;
+			const id = alternative.custom ?? `alt-${alternative.source}`;
 			let group = groups.get(id);
 			if (!group) {
 				group = {
