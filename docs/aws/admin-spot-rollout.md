@@ -1,6 +1,6 @@
 # Admin-only Fargate Spot rollout
 
-Preparation checkpoint: 2026-10-24, before live capacity changes. Deploy the
+Completed 2026-10-24; see the live verification record below. Deploy the
 atomic family-save fix first. The current live outcome and rollback evidence
 are recorded in [the implementation issue #2576](https://github.com/bible-on-site/bible-on-site/issues/2576)
 and its linked rollout updates. This reference configuration is not evidence
@@ -146,10 +146,28 @@ operator recovery action, not an automatic availability guarantee.
 
 ## Live verification record
 
-At the preparation checkpoint, the application safety release and admin-only
-capacity migration had not run. Append the actual release provenance, provider
-and image verification, HTTP results, public-service comparison and rollback
-outcome to [issue #2576](https://github.com/bible-on-site/bible-on-site/issues/2576)
-and [PR #2603](https://github.com/bible-on-site/bible-on-site/pull/2603) after
-execution. These linked live records distinguish a completed rollout from this
-reference configuration. Template validation alone is not execution evidence.
+Executed on 2026-10-24 after Dorad's explicit approval; #2603 merged through
+the normal queue. The atomic family-save prerequisite reached production
+first as admin **v0.1.137** ([CI/release](https://github.com/bible-on-site/bible-on-site/actions/runs/40125422126),
+[AWS CD](https://github.com/bible-on-site/bible-on-site/actions/runs/40127358837));
+the provider-only switch then replaced the sole on-demand task with one
+**FARGATE_SPOT** task running exactly the verified release image:
+desired/running 1, pending 0, one COMPLETED primary deployment, the old task
+STOPPED. The additive provider association preserved the existing empty
+shared cluster default strategy, and the private before/after comparison
+found no other admin or public website/API configuration, image digest,
+capacity or count change.
+
+All eight compatibility probes passed during handover and again after the old
+task stopped and discovery refreshed: website readiness/home, API health,
+both admin authentication redirects, the existing legacy book redirect and
+destination, and legacy S3 image/audio byte ranges with CORS. Estimated admin
+compute fell from ~$11.53 to ~$3.46/month (**~$8.07/month saved**) at the
+assessed rates; other AWS charges are separate. Spot interruption can still
+leave admin unavailable with **no automatic on-demand fallback**; recovery
+was not needed and remains the manual operator path above. The normal
+release image contract (mutable latest tag) is intact — nothing was left
+pinned. Full evidence, snapshots and the pinned-image recovery request stay
+private per this runbook; the public record is the
+[#2576 live verification comment](https://github.com/bible-on-site/bible-on-site/issues/2576#issuecomment-6388941527)
+and [PR #2603](https://github.com/bible-on-site/bible-on-site/pull/2603).
