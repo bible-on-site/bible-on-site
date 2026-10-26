@@ -224,6 +224,65 @@ public sealed class TanahpediaFootnotesTests
     }
 
     [Fact]
+    public void Normalize_BackrefFallsBackToCanonicalFnrefIdWhenNoteHasNoInlineRef()
+    {
+        /* A note with no inline reference still gets a stable backref target:
+           the canonical fnref:N rather than a dangling generated id. */
+        const string html = @"
+<p>טקסט בלי אזכורים</p>
+<ol style=""list-style:none""><li id=""note-3""><sup>ג</sup> הערה יתומה</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:3']")!);
+        var back = Assert.Single(item.SelectNodes(".//a[contains(@class,'footnote-backref')]")!);
+        Assert.Equal("#fnref:3", back.GetAttributeValue("href", ""));
+    }
+
+    [Fact]
+    public void Normalize_ProcessesABodyOnceWhenReachableUnderTwoNumbers()
+    {
+        /* An li carrying id="note-1" AND a "#noteref-2" backlink registers
+           under both numbers but canonicalizes once - one fn:1 item, no fn:2. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
+<ol style=""list-style:none""><li id=""note-1""><sup>א</sup> טקסט <a href=""#noteref-2"">↩</a></li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var items = Assert.Single(root.SelectNodes(".//ol[contains(@class,'footnotes')]/li")!);
+        Assert.Equal("fn:1", items.GetAttributeValue("id", ""));
+        /* SelectNodes returns null (not an empty collection) for zero matches. */
+        Assert.Empty(root.SelectNodes(".//*[@id='fn:2']") ?? Enumerable.Empty<HtmlNode>());
+        Assert.Single(items.SelectNodes(".//a[contains(@class,'footnote-backref')]")!);
+    }
+
+    [Fact]
+    public void Normalize_KeepsLeadingElementThatIsNotTheMarker()
+    {
+        /* A leading <sup> whose text is not this note's marker is real content -
+           only an exact marker match is stripped. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
+<ol style=""list-style:none""><li id=""note-1""><sup>כתוב</sup> הערה</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:1']")!);
+        var sup = Assert.Single(item.SelectNodes(".//sup")!);
+        Assert.Equal("כתוב", HtmlEntity.DeEntitize(sup.InnerText));
+    }
+
+    [Fact]
+    public void Normalize_AppendsBackrefToItemWhenBodyHasNoElementChildren()
+    {
+        /* Text-only note bodies still receive the jump-back link - it attaches
+           to the li itself when there is no inner element to host it. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
+<ol style=""list-style:none""><li id=""note-1"">טקסט בלבד בלי אלמנטים</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:1']")!);
+        var back = Assert.Single(item.SelectNodes("./a[contains(@class,'footnote-backref')]")!);
+        Assert.Equal("#fnref:1", back.GetAttributeValue("href", ""));
+        Assert.StartsWith("טקסט בלבד", HtmlEntity.DeEntitize(item.InnerText).Trim());
+    }
+
+    [Fact]
     public void FromHtml_FootnoteListGetsSingleHebrewMarkerPerNote()
     {
         var normalized = TanahpediaFootnotes.Normalize(LegacySupList)!;

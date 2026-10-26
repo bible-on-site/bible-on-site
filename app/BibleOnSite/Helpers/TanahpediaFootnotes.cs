@@ -258,7 +258,11 @@ public static class TanahpediaFootnotes
             link.SetAttributeValue("role", "doc-backlink");
             link.SetAttributeValue("aria-label", $"חזרה לאזכור {GimatryHelper.ToLetters(num)}");
             link.AppendChild(doc.CreateTextNode("↩"));
-            var target = item.ChildNodes.LastOrDefault(n => n.NodeType == HtmlNodeType.Element) ?? item;
+            /* Canonical notes wrap their text in <p> — the backref belongs at
+               the end of that paragraph, not inside a trailing inline element
+               like <sup> where it would render super-scripted. */
+            var target = item.ChildNodes.LastOrDefault(
+                n => n.NodeType == HtmlNodeType.Element && n.Name == "p") ?? item;
             target.AppendChild(link);
         }
 
