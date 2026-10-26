@@ -1,4 +1,5 @@
 import { query } from "../api-client";
+import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
 	CategoryHomepage,
 	CategoryKey,
@@ -66,6 +67,13 @@ export async function getEntryByUniqueName(
 	if (entries.length === 0) return null;
 
 	const entry = entries[0];
+	// Stored reading metric (#2607): degrades to null when the schema is not
+	// deployed yet, and a failed metric read must not take down the entry.
+	const metric = await metricOrFallback(
+		`entry ${entry.id}`,
+		null,
+		() => getEntryMetric(entry.id),
+	);
 	const entities = await query<{
 		id: string;
 		entryId: string;
@@ -81,7 +89,7 @@ export async function getEntryByUniqueName(
 		[entry.id],
 	);
 
-	return { ...entry, entities };
+	return { ...entry, ...(metric ? { metric } : {}), entities };
 }
 
 export async function getEntriesByEntityType(

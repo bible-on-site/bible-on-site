@@ -69,6 +69,15 @@
   line-height: 1.4;
 }
 
+/* Shared reading-metrics badge (#2607). */
+.readingTime {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-text, #666);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .articleBody {
   font-size: 1.1rem;
   line-height: 1.8;
