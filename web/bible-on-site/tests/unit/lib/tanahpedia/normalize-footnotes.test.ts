@@ -309,6 +309,31 @@ describe("normalizeFootnoteHtml", () => {
 		expect(normalizeFootnoteHtml("")).toBe("");
 	});
 
+	it("appends the backref after the note, never inside a trailing inline element", () => {
+		/* The body's trailing <sup>*</sup> is authored content, not the marker —
+		   so it survives; the jump-back link must sit on the item, not inside
+		   that sup where the glyph would render super-scripted. */
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ol><li id="note-1"><sup>א</sup> גוף ההערה <sup>*</sup></li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const item = doc.getElementById("fn:1");
+		expect(item?.querySelector("sup")?.textContent).toBe("*");
+		const back = item?.querySelector(":scope > a.footnote-backref");
+		expect(back).not.toBeNull();
+		expect(back?.parentElement).toBe(item);
+	});
+
+	it("appends the backref into the last paragraph block when present", () => {
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ol><li id="note-1"><p><sup>א</sup> חלק ראשון</p><p>חלק שני</p></li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const paragraphs = doc.getElementById("fn:1")?.querySelectorAll(":scope > p");
+		const back = paragraphs?.[1]?.querySelector("a.footnote-backref");
+		expect(back).not.toBeNull();
+		/* Not in the first paragraph. */
+		expect(paragraphs?.[0]?.querySelector("a.footnote-backref")).toBeNull();
+	});
+
 	it("leaves a reference to a missing note as a plain link", () => {
 		/* With no note body present there is nothing to link or display —
 		   the anchor keeps its original shape rather than pointing at a
@@ -319,5 +344,143 @@ describe("normalizeFootnoteHtml", () => {
 		expect(anchor).not.toBeNull();
 		expect(anchor?.getAttribute("role")).toBeNull();
 		expect(doc.querySelector("sup")).toBeNull();
+	});
+
+	it("replaces a <ul> note container wholesale like an <ol>", () => {
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ul><li id="note-1"><sup>א</sup> הערה</li></ul>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const lists = doc.querySelectorAll("ul, ol");
+		expect(lists).toHaveLength(1);
+		expect(lists[0].tagName).toBe("OL");
+		expect(lists[0].classList.contains("footnotes")).toBe(true);
+		expect(doc.getElementById("fn:1")?.textContent?.trim()).toBe("הערה");
+	});
+
+	it("anchors the canonical list before a note item stored outside a list", () => {
+		/* Degenerate markup: an <li> whose parent is not a list. The list is
+		   still inserted where the item sat. */
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<div><li id="note-1"><sup>א</sup> הערה</li></div>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const list = doc.querySelector("ol.footnotes");
+		expect(list?.parentElement?.tagName).toBe("DIV");
+		expect(list?.querySelector("li")?.id).toBe("fn:1");
+	});
+
+	it("replaces a list container that holds a paragraph-form note", () => {
+		/* Degenerate markup: <p> nested directly inside <ul>. The canonical
+		   list replaces the whole ul, not just the paragraph. */
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ul><p id="note-1"><strong>א.</strong> הערה</p></ul>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const lists = doc.querySelectorAll("ul, ol");
+		expect(lists).toHaveLength(1);
+		expect(lists[0].tagName).toBe("OL");
+		expect(doc.getElementById("fn:1")?.textContent?.trim()).toBe("הערה");
+	});
+
+	it("registers a bare-paragraph body through its legacy backlink", () => {
+		/* A paragraph with no id is still a note when a #noteref-N link sits
+		   inside it — closest('p') resolves the body. */
+		const html = `<p>גוף<sup><a href="#note-7" id="noteref-7">ז</a></sup></p>
+<p>ז הערה שביעית <a href="#noteref-7">↩</a></p>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const item = doc.getElementById("fn:7");
+		expect(item).not.toBeNull();
+		expect(item?.getAttribute("data-marker")).toBe("ז");
+		expect(item?.textContent?.trim()).toMatch(/^הערה שביעית/);
+	});
+
+	it("keeps a heading that does not read הערות", () => {
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<h3>מבוא אחר</h3>
+<ol style="list-style:none"><li id="note-1"><sup>א</sup> הערה</li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		expect(doc.querySelector("h3")?.textContent).toBe("מבוא אחר");
+		expect(doc.querySelector("ol.footnotes")).not.toBeNull();
+	});
+
+	it("keeps authored text directly before the notes list", () => {
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<h2>הערות</h2>
+שורת מבוא
+<ol style="list-style:none"><li id="note-1"><sup>א</sup> הערה</li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		expect(doc.body.textContent).toContain("שורת מבוא");
+		expect(doc.querySelector("h2")).not.toBeNull();
+	});
+
+	it("keeps a leading inline element that is not the marker", () => {
+		/* <sup>*</sup> is authored content — stripping must not touch it. */
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ol><li id="note-1"><sup>*</sup> תוכן ההערה</li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const item = doc.getElementById("fn:1");
+		expect(item?.querySelector("sup")?.textContent).toBe("*");
+		expect(item?.textContent).toContain("תוכן ההערה");
+	});
+
+	it("keeps a note that begins with a non-marker element", () => {
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ol><li id="note-1"><em>הדגשה</em> שאר ההערה</li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const item = doc.getElementById("fn:1");
+		expect(item?.querySelector("em")?.textContent).toBe("הדגשה");
+		expect(item?.textContent).toContain("שאר ההערה");
+	});
+
+	it("keeps a note whose first word exceeds the marker length", () => {
+		/* 'שלוםעולם' is one long word — it cannot be the marker 'א'. */
+		const html = `<p>גוף<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<ol><li id="note-1">שלוםעולם תוכן</li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		expect(doc.getElementById("fn:1")?.textContent?.trim()).toMatch(
+			/^שלוםעולם/,
+		);
+	});
+
+	it("keeps a leading letter that differs from the note's marker", () => {
+		/* Note 2 begins with the letter א — it is prose, not marker ב. */
+		const html = `<p>גוף<sup><a href="#note-2" id="noteref-2">ב</a></sup></p>
+<ol><li id="note-2">א מתחילה בהערה</li></ol>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		expect(doc.getElementById("fn:2")?.textContent?.trim()).toMatch(
+			/^א מתחילה/,
+		);
+	});
+
+	it("normalizes an orphaned canonical list without rewriting the html", () => {
+		/* An empty ol.footnotes with no bodies or refs stays in place. */
+		const html = `<p>טקסט</p><ol class="footnotes"></ol>`;
+		const out = normalizeFootnoteHtml(html);
+		expect(out).toContain('class="footnotes"');
+		expect(parse(out).querySelectorAll("ol.footnotes > li")).toHaveLength(0);
+	});
+
+	it("leaves ordinary links untouched among footnote markup", () => {
+		/* A link whose href matches no footnote pattern must keep its target
+		   and text — only real references get rewritten. */
+		const doc = parse(normalizeFootnoteHtml(LEGACY_SUP_LIST));
+		const ordinary = doc.querySelector('a[href="#x"]');
+		expect(ordinary).not.toBeNull();
+		expect(ordinary?.textContent).toBe("קישור");
+		expect(ordinary?.getAttribute("role")).toBeNull();
+		expect(ordinary?.getAttribute("data-marker")).toBeNull();
+	});
+
+	it("places the canonical list once for multiple paragraph-form notes", () => {
+		/* The second paragraph body joins the same list rather than trying
+		   to anchor a new one. */
+		const html = `<p>טקסט<sup><a href="#note-1" id="noteref-1">א</a></sup></p>
+<p id="note-1"><strong>א.</strong> הערה ראשונה</p>
+<p id="note-2"><strong>ב.</strong> הערה שנייה</p>`;
+		const doc = parse(normalizeFootnoteHtml(html));
+		const lists = doc.querySelectorAll("ol.footnotes");
+		expect(lists).toHaveLength(1);
+		const items = lists[0].querySelectorAll(":scope > li");
+		expect(items).toHaveLength(2);
+		expect(items[0].id).toBe("fn:1");
+		expect(items[1].id).toBe("fn:2");
 	});
 });

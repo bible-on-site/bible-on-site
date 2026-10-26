@@ -68,7 +68,7 @@ const BODY_CANON_ID = /^fn:(\d+)$/i;
 const ANY_MARKER = /fnref:|#note-|#noteref-|id="note-|footnotes/i;
 
 function elementNumber(el: Element, attr: string, pattern: RegExp): number {
-	const num = Number(pattern.exec(el.getAttribute(attr) ?? "")?.[1]);
+	const num = Number(pattern.exec(String(el.getAttribute(attr)))?.[1]);
 	return Number.isFinite(num) && num > 0 ? num : 0;
 }
 
@@ -90,7 +90,7 @@ function stripLiteralMarker(body: Element, marker: string): void {
 	/* Element-wrapped marker: `<sup>א</sup>` or `<strong>א.</strong>`. */
 	const first = host.firstElementChild;
 	if (first && /^(SUP|STRONG|B)$/.test(first.tagName)) {
-		const text = (first.textContent ?? "").trim().replace(/[.\s]+$/, "");
+		const text = String(first.textContent).trim().replace(/[.\s]+$/, "");
 		if (text === marker) first.remove();
 		return;
 	}
@@ -98,10 +98,10 @@ function stripLiteralMarker(body: Element, marker: string): void {
 	/* Bare text marker: `א טקסט` / `א. טקסט` / `נד טקסט`. */
 	for (const node of Array.from(host.childNodes)) {
 		if (node.nodeType !== 3 /* TEXT_NODE */) break;
-		const match = /^\s*([א-ת]{1,4})([.]?)(\s+|$)/.exec(node.textContent ?? "");
+		const match = /^\s*([א-ת]{1,4})([.]?)(\s+|$)/.exec(String(node.textContent));
 		if (!match) return;
 		if (match[1] !== marker) return;
-		node.textContent = (node.textContent ?? "").slice(match[0].length);
+		node.textContent = String(node.textContent).slice(match[0].length);
 		return;
 	}
 }
@@ -109,8 +109,8 @@ function stripLiteralMarker(body: Element, marker: string): void {
 /** The hand-made heading that introduced a legacy notes section. */
 const LEGACY_SECTION_TITLE = /^\s*הערות\s*$/;
 
-function isBlankText(text: string | null): boolean {
-	return !(text ?? "").replace(/ /g, " ").trim();
+function isBlankText(text: string): boolean {
+	return !text.replace(/ /g, " ").trim();
 }
 
 /**
@@ -123,14 +123,17 @@ function removeLegacySectionFurniture(canonicalList: Element): void {
 	let sibling = canonicalList.previousSibling;
 	while (sibling) {
 		const previous = sibling.previousSibling;
+		/* Sanitized markup only contains text and element nodes — treat
+		   anything else as an element, where the unknown case stops the
+		   walk rather than dropping real content. */
 		if (sibling.nodeType === 3 /* TEXT_NODE */) {
-			if (!isBlankText(sibling.textContent)) return;
+			if (!isBlankText(String(sibling.textContent))) return;
 			sibling.remove();
-		} else if (sibling.nodeType === 1 /* ELEMENT_NODE */) {
+		} else {
 			const el = sibling as Element;
 			if (
 				/^H[1-6]$/.test(el.tagName) &&
-				LEGACY_SECTION_TITLE.test(el.textContent ?? "")
+				LEGACY_SECTION_TITLE.test(String(el.textContent))
 			) {
 				el.remove();
 			} else {
@@ -139,8 +142,6 @@ function removeLegacySectionFurniture(canonicalList: Element): void {
 				if (el.tagName === "HR") el.remove();
 				return;
 			}
-		} else {
-			return;
 		}
 		sibling = previous;
 	}
@@ -163,8 +164,8 @@ export function normalizeFootnoteHtml(html: string): string {
 
 	/* ---- collect note bodies, keyed by note number ---- */
 	const bodies = new Map<number, Element>();
-	const register = (el: Element | null, num: number) => {
-		const body = el ? bodyElement(el) : null;
+	const register = (el: Element, num: number) => {
+		const body = bodyElement(el);
 		if (body && num > 0 && !bodies.has(num)) bodies.set(num, body);
 	};
 
@@ -174,7 +175,7 @@ export function normalizeFootnoteHtml(html: string): string {
 	}
 	for (const link of Array.from(root.querySelectorAll("a[href]"))) {
 		const num = Number(
-			BACKREF_LEGACY_HREF.exec(link.getAttribute("href") ?? "")?.[1],
+			BACKREF_LEGACY_HREF.exec(String(link.getAttribute("href")))?.[1],
 		);
 		if (num > 0) register(link, num);
 	}
@@ -187,11 +188,13 @@ export function normalizeFootnoteHtml(html: string): string {
 	}
 	const refs: Ref[] = [];
 	for (const anchor of Array.from(root.querySelectorAll("a[href]"))) {
-		const href = anchor.getAttribute("href") ?? "";
+		const href = String(anchor.getAttribute("href"));
 		const num = Number(
 			(REF_CANON_HREF.exec(href) ?? REF_LEGACY_HREF.exec(href))?.[1],
 		);
-		if (num <= 0) continue;
+		/* `num > 0` also rejects NaN — a link whose href matches neither
+		   footnote pattern (e.g. an ordinary `#section` anchor). */
+		if (!(num > 0)) continue;
 		/* A `href="#fn:N"`/`#note-N` link inside a note is a cross-reference
 		   between notes, not an inline reference — leave it as a plain link. */
 		if (
@@ -200,8 +203,8 @@ export function normalizeFootnoteHtml(html: string): string {
 		) {
 			continue;
 		}
-		const host =
-			anchor.parentElement?.tagName === "SUP" ? anchor.parentElement : anchor;
+		const parent = anchor.parentElement as Element;
+		const host = parent.tagName === "SUP" ? parent : anchor;
 		refs.push({ anchor, host, num });
 	}
 
@@ -210,8 +213,8 @@ export function normalizeFootnoteHtml(html: string): string {
 	for (const body of bodies.values()) {
 		for (const link of Array.from(body.querySelectorAll("a[href]"))) {
 			const num = Number(
-				(REF_CANON_HREF.exec(link.getAttribute("href") ?? "") ??
-					REF_LEGACY_HREF.exec(link.getAttribute("href") ?? ""))?.[1],
+				(REF_CANON_HREF.exec(String(link.getAttribute("href"))) ??
+					REF_LEGACY_HREF.exec(String(link.getAttribute("href"))))?.[1],
 			);
 			if (num > 0) link.setAttribute("href", `#fn:${num}`);
 		}
@@ -247,15 +250,12 @@ export function normalizeFootnoteHtml(html: string): string {
 		if (body.tagName === "LI") {
 			item = body;
 			if (!anchored) {
-				const container = item.parentElement;
-				if (
-					container &&
-					(container.tagName === "OL" || container.tagName === "UL")
-				) {
+				const container = item.parentElement as Element;
+				if (container.tagName === "OL" || container.tagName === "UL") {
 					/* The canonical list replaces the legacy one wholesale. */
 					container.insertAdjacentElement("beforebegin", placeholder);
 				} else {
-					container?.insertBefore(placeholder, item);
+					item.insertAdjacentElement("beforebegin", placeholder);
 				}
 				anchored = true;
 			}
@@ -263,11 +263,8 @@ export function normalizeFootnoteHtml(html: string): string {
 			/* Paragraph-form body: the item takes the paragraph's position. */
 			item = doc.createElement("li");
 			if (!anchored) {
-				const container = body.parentElement;
-				if (
-					container &&
-					(container.tagName === "OL" || container.tagName === "UL")
-				) {
+				const container = body.parentElement as Element;
+				if (container.tagName === "OL" || container.tagName === "UL") {
 					container.insertAdjacentElement("beforebegin", placeholder);
 				} else {
 					body.insertAdjacentElement("beforebegin", placeholder);
@@ -288,11 +285,7 @@ export function normalizeFootnoteHtml(html: string): string {
 	/* Replace the first legacy container (or the placeholder point for
 	   paragraph-form bodies) with the canonical list; drop emptied lists. */
 	if (canonicalList.childElementCount > 0) {
-		if (anchored) {
-			placeholder.replaceWith(canonicalList);
-		} else {
-			root.appendChild(canonicalList);
-		}
+		placeholder.replaceWith(canonicalList);
 		for (const list of Array.from(root.querySelectorAll("ol, ul"))) {
 			if (list !== canonicalList && list.childElementCount === 0) {
 				list.remove();
@@ -346,8 +339,15 @@ export function normalizeFootnoteHtml(html: string): string {
 		link.setAttribute("href", `#${target}`);
 		link.setAttribute("role", "doc-backlink");
 		link.setAttribute("aria-label", `חזרה לאזכור ${hebrewNumeral(num)}`);
-		/* The return glyph is generated by CSS — kept out of note text. */
-		(item.lastElementChild ?? item).appendChild(link);
+		/* The return glyph is generated by CSS — kept out of note text. It
+		   belongs after the note's trailing block: a direct <p> child, else the
+		   item itself. Never inside a trailing inline element (e.g. a <sup>
+		   that survived because it is not the marker), which would render the
+		   glyph super-scripted. */
+		const blocks = Array.from(item.children).filter(
+			(child) => child.tagName === "P",
+		);
+		(blocks.at(-1) ?? item).appendChild(link);
 	}
 
 	return root.innerHTML;

@@ -17,7 +17,6 @@ await page.goto(
 );
 
 /* legacy notes list */
-const legacy = page.locator("article ol").last();
 const info = await page.evaluate(() => {
 	const ols = [...document.querySelectorAll("article ol")];
 	const ol = ols.find((o) => o.querySelector('li[id^="note-"]')) ?? ols.at(-1);
