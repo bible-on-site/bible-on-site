@@ -440,6 +440,158 @@ describe("documented alternative splits", () => {
 	});
 });
 
+describe("variant layers — selectable alternative divisions", () => {
+	const schemeOption = (unitName: string, schemeId: string) => {
+		const layer = getUnitAliyahMarkers(unitByName(unitName).unitId);
+		const ctx = must(layer.contexts[0]);
+		return {
+			layer,
+			option: must(ctx.schemes.find((s) => s.schemeId === schemeId)),
+		};
+	};
+	const markersForKey = (
+		layer: ReturnType<typeof getUnitAliyahMarkers>,
+		key: string,
+	) => Object.values(layer.markers).flat().filter((m) => m.key === key);
+
+	it("substitutes the חב\"ד stretch inside ויגש's own key", () => {
+		const { layer, option } = schemeOption("ויגש", "shabbat");
+		expect(option.variants).toEqual([{ variantId: 'חב"ד', label: 'חב"ד' }]);
+
+		const key = 'Vayigash:shabbat:חב"ד';
+		const variantMarkers = markersForKey(layer, key);
+		// The variant is a complete layer: all eight boundary starts
+		// carry its key, base boundaries outside the stretch included.
+		expect(variantMarkers).toHaveLength(8);
+		const labelByCoord = Object.fromEntries(
+			Object.entries(layer.markers)
+				.map(([coord, specs]) => [
+					coord,
+					specs.find((m) => m.key === key)?.label,
+				])
+				.filter(([, label]) => label != null),
+		);
+		expect(labelByCoord).toEqual({
+			"44:18": "ראשון",
+			"44:31": "שני",
+			"45:8": "שלישי",
+			"45:28": "רביעי",
+			"46:8": "חמישי",
+			"46:28": "שישי",
+			"47:11": "שביעי",
+			"47:25": "מפטיר",
+		});
+		// The re-sliced stretch: חב"ד's רביעי starts at בראשית מה כח
+		// (the base's חמישי position) and חמישי at וי ח — the base
+		// רביעי at מה יט has no variant marker at all.
+		expect(layer.markers["45:28"]).toContainEqual(
+			expect.objectContaining({ key, label: "רביעי" }),
+		);
+		expect(layer.markers["46:8"]).toContainEqual(
+			expect.objectContaining({ key, label: "חמישי" }),
+		);
+		expect(
+			layer.markers["45:19"].filter((m) => m.key === key),
+		).toHaveLength(0);
+		// The substituted boundaries keep ordered contiguous coverage
+		// — validated at module load like the base scheme.
+		const variant = must(
+			getStandaloneReading(unitByName("ויגש").unitId).schemeVariants
+				.shabbat?.[0],
+		);
+		expect(variant.ordinals).toEqual([3, 4, 5]);
+		expect(variant.boundaries[3].range).toEqual({
+			start: { perekId: 45, pasuk: 28 },
+			end: { perekId: 46, pasuk: 7 },
+		});
+	});
+
+	it("names unattributed splits by source — בראשית's hebcal variant", () => {
+		const { layer, option } = schemeOption("בראשית", "shabbat");
+		expect(option.variants).toEqual([
+			{ variantId: "alt-hebcal", label: "חלוקה אחרת" },
+		]);
+		// The variant's שישי moves to בראשית ה א — coincident with the
+		// perek-5 boundary, which still renders its own modest label.
+		expect(layer.markers["5:1"]).toContainEqual(
+			expect.objectContaining({
+				key: "Bereshit:shabbat:alt-hebcal",
+				label: "שישי",
+			}),
+		);
+	});
+
+	it("offers weekday variants where they move a marker", () => {
+		for (const [unit, readingId] of [
+			["לך לך", "Lech-Lecha"],
+			["שמיני", "Shmini"],
+			["מסעי", "Masei"],
+		] as const) {
+			const { option } = schemeOption(unit, "weekday");
+			expect(option.variants).toEqual([
+				{ variantId: "alt-opentorah", label: "חלוקה אחרת" },
+			]);
+			const layer = getUnitAliyahMarkers(unitByName(unit).unitId);
+			expect(
+				markersForKey(layer, `${readingId}:weekday:alt-opentorah`).length,
+			).toBe(3);
+		}
+	});
+
+	it("drops variants that only shift a trailing edge — nothing renders differently", () => {
+		// נשא and דברים weekday alternatives re-place only the third
+		// aliyah's END; the flat reader shows start markers, so the
+		// substituted layer would be pixel-identical — it is not offered.
+		for (const unit of ["נשא", "דברים"] as const) {
+			const { option } = schemeOption(unit, "weekday");
+			expect(option.variants).toEqual([]);
+			const reading = getStandaloneReading(unitByName(unit).unitId);
+			expect(reading.schemeVariants.weekday).toBeUndefined();
+		}
+	});
+
+	it("carries the אשכנז variant on the joined מטות-מסעי context, clipped per unit", () => {
+		const maseiLayer = getUnitAliyahMarkers(unitByName("מסעי").unitId);
+		const joinedCtx = must(
+			maseiLayer.contexts.find((c) => c.contextId === "Matot-Masei"),
+		);
+		expect(joinedCtx.schemes[0].variants).toEqual([
+			{ variantId: "אשכנז", label: "אשכנז" },
+		]);
+		// The variant's חמישי starts inside מסעי (במדבר לג יא); רביעי
+		// starts inside מטות and is clipped out of this page's layer.
+		const key = "Matot-Masei:shabbat:אשכנז";
+		const maseiVariantMarkers = markersForKey(maseiLayer, key);
+		expect(maseiVariantMarkers.map((m) => m.label)).not.toContain("רביעי");
+		expect(maseiVariantMarkers).toContainEqual(
+			expect.objectContaining({ label: "חמישי" }),
+		);
+		for (const [coord, specs] of Object.entries(maseiLayer.markers)) {
+			if (!specs.some((m) => m.key === key)) continue;
+			const [perekId, pasuk] = coord.split(":").map(Number);
+			expect(
+				unitByName("מסעי").ranges.some((r) =>
+					rangeContainsCoordinate(r, { perekId, pasuk }),
+				),
+			).toBe(true);
+		}
+		// מטות's page conversely holds the variant's רביעי.
+		const matotLayer = getUnitAliyahMarkers(unitByName("מטות").unitId);
+		expect(
+			markersForKey(matotLayer, key).map((m) => m.label),
+		).toContain("רביעי");
+	});
+
+	it("keeps the fixed book layer on the base split — no variant keys leak", () => {
+		const markers = getUnitShabbatAliyahMarkers(unitByName("ויגש").unitId);
+		for (const specs of Object.values(markers)) {
+			for (const spec of specs) {
+				expect(spec.key).toBe("Vayigash:shabbat");
+			}
+		}
+	});
+});
+
 describe("marker layer", () => {
 	it("builds coord-keyed markers tagged by reading and scheme", () => {
 		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
@@ -451,10 +603,18 @@ describe("marker layer", () => {
 		]);
 		// שני begins בראשית ב ד under shabbat, but the weekday split
 		// starts it elsewhere — both layers coexist at their own coords.
+		// The alt-hebcal variant shares the base start for שני (it only
+		// re-slices the חמישי-שישי stretch), so its full layer carries a
+		// second marker at this coordinate under its own key.
 		const shabbat2 = layer.markers["2:4"];
-		expect(shabbat2).toHaveLength(1);
+		expect(shabbat2).toHaveLength(2);
 		expect(shabbat2[0]).toMatchObject({
 			key: "Bereshit:shabbat",
+			label: "שני",
+			role: "aliyah",
+		});
+		expect(shabbat2[1]).toMatchObject({
+			key: "Bereshit:shabbat:alt-hebcal",
 			label: "שני",
 			role: "aliyah",
 		});

@@ -66,6 +66,27 @@ export interface AliyahScheme {
 }
 
 /**
+ * A named alternative division inside one scheme — a documented
+ * minhag's re-slicing of a contiguous stretch of aliyot (e.g. חב"ד's
+ * ויגש עליות ג-ה). The variant substitutes its recorded alternative
+ * range for each covered ordinal inside an otherwise-base boundary
+ * list, re-validated for ordered contiguous coverage like the base
+ * scheme itself.
+ */
+export interface AliyahVariant {
+	/** Marker-key/URL id — the attributed custom (חב"ד, עדות המזרח,
+	 * אשכנז), or `alt-{source}` for an unattributed recorded split. */
+	id: string;
+	/** Display label — the custom's name, or "חלוקה אחרת". */
+	label: string;
+	/** Ordinals re-sliced by the variant, in scheme order. */
+	ordinals: number[];
+	/** Full boundary list — base boundaries outside the stretch,
+	 * alternative ranges inside. */
+	boundaries: AliyahBoundary[];
+}
+
+/**
  * A reading context: the stable identity a boundary set belongs to.
  * Standalone contexts hold exactly one parasha unit; joined contexts
  * hold their two constituents in reading order.
@@ -83,6 +104,11 @@ export interface ParashaAliyahReading {
 	applicability?: string;
 	/** scheme id → ordered boundaries (validated at load). */
 	schemes: Record<string, AliyahBoundary[]>;
+	/** scheme id → named alternative divisions of that scheme whose
+	 * substitution actually moves a boundary marker. Variants that only
+	 * shift a trailing edge (e.g. a weekday last-aliyah end) render
+	 * identically to the base and are not listed. */
+	schemeVariants: Record<string, AliyahVariant[]>;
 }
 
 interface SourceVerse {
@@ -157,7 +183,9 @@ function resolveReadingAliyah(
 					alternatives: aliyah.alternatives.map((alternative) => ({
 						range: resolveRange(alternative, reading, schemeId),
 						...(alternative.custom ? { custom: alternative.custom } : {}),
-						...(alternative.source ? { source: alternative.source } : {}),
+						...(alternative.source
+							? { source: alternative.source }
+							: /* istanbul ignore next -- the importer always stamps a source */ {}),
 					})),
 				}
 			: {}),
@@ -306,6 +334,88 @@ function validateScheme(
 	}
 }
 
+/** Display label for an unattributed recorded split (no named minhag). */
+const UNATTRIBUTED_VARIANT_LABEL = "חלוקה אחרת";
+
+/**
+ * Folds a scheme's documented per-aliyah `alternatives` into named
+ * variant layers. Each distinct (custom | alt-source) group forms one
+ * variant: its recorded ranges replace the covered ordinals' ranges
+ * inside an otherwise-base boundary list, then the substituted layer
+ * is re-validated for ordered contiguous coverage — a variant is a
+ * full legitimate split, never a partial overlay.
+ *
+ * Variants whose substitution moves no boundary *start* are dropped:
+ * the readers display start markers only, so an alternative that
+ * merely shifts a trailing edge (e.g. a weekday last aliyah's end)
+ * would render pixel-identically to the base.
+ */
+function deriveSchemeVariants(
+	reading: SourceReading,
+	schemeId: string,
+	boundaries: AliyahBoundary[],
+): AliyahVariant[] {
+	const groups = new Map<
+		string,
+		{ label: string; byOrdinal: Map<number, ScriptureRange> }
+	>();
+	for (const boundary of boundaries) {
+		for (const alternative of boundary.alternatives ?? []) {
+			const id =
+				alternative.custom ??
+				`alt-${
+					alternative.source ??
+					/* istanbul ignore next -- importer always stamps a source */ "other"
+				}`;
+			let group = groups.get(id);
+			if (!group) {
+				group = {
+					label: alternative.custom ?? UNATTRIBUTED_VARIANT_LABEL,
+					byOrdinal: new Map(),
+				};
+				groups.set(id, group);
+			}
+			/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+			if (group.byOrdinal.has(boundary.ordinal)) {
+				throw new Error(
+					`aliyah data: ${reading.id}/${schemeId} has two "${id}" ` +
+						`alternatives on aliyah ${boundary.ordinal}`,
+				);
+			}
+			group.byOrdinal.set(boundary.ordinal, alternative.range);
+		}
+	}
+	const variants: AliyahVariant[] = [];
+	for (const [id, group] of groups) {
+		const substituted = boundaries.map((boundary) => {
+			const range = group.byOrdinal.get(boundary.ordinal);
+			return range
+				? {
+						ordinal: boundary.ordinal,
+						role: boundary.role,
+						label: boundary.label,
+						range,
+					}
+				: boundary;
+		});
+		validateScheme(reading, `${schemeId}/${id}`, substituted);
+		const movesMarker = substituted.some(
+			(boundary, index) =>
+				boundary.range.start.perekId !==
+					boundaries[index].range.start.perekId ||
+				boundary.range.start.pasuk !== boundaries[index].range.start.pasuk,
+		);
+		if (!movesMarker) continue;
+		variants.push({
+			id,
+			label: group.label,
+			ordinals: [...group.byOrdinal.keys()],
+			boundaries: substituted,
+		});
+	}
+	return variants;
+}
+
 interface ResolvedAliyot {
 	readings: ParashaAliyahReading[];
 	byId: Map<string, ParashaAliyahReading>;
@@ -331,12 +441,15 @@ function resolved(): ResolvedAliyot {
 			unitIdForName(name, reading.id),
 		);
 		const schemes: Record<string, AliyahBoundary[]> = {};
+		const schemeVariants: Record<string, AliyahVariant[]> = {};
 		for (const [schemeId, aliyot] of Object.entries(reading.schemes)) {
 			const boundaries = aliyot.map((a) =>
 				resolveReadingAliyah(reading, schemeId, a),
 			);
 			validateScheme(reading, schemeId, boundaries);
 			schemes[schemeId] = boundaries;
+			const variants = deriveSchemeVariants(reading, schemeId, boundaries);
+			if (variants.length > 0) schemeVariants[schemeId] = variants;
 		}
 		const resolvedReading: ParashaAliyahReading = {
 			id: reading.id,
@@ -348,6 +461,7 @@ function resolved(): ResolvedAliyot {
 				? { applicability: reading.applicability }
 				: {}),
 			schemes,
+			schemeVariants,
 		};
 		readings.push(resolvedReading);
 		byId.set(resolvedReading.id, resolvedReading);
@@ -445,10 +559,21 @@ export interface AliyahMarker {
 	role: AliyahRole;
 }
 
+/** One selectable alternative division inside a scheme — a documented
+ * minhag's re-slicing, or an unattributed recorded split. */
+export interface UnitAliyahVariantOption {
+	variantId: string;
+	label: string;
+}
+
 /** One selectable scheme inside a context (שבת / חול). */
 export interface UnitAliyahSchemeOption {
 	schemeId: string;
 	label: string;
+	/** Named alternative divisions of this scheme that move a marker —
+	 * selecting one swaps to its full substituted layer
+	 * (`{reading}:{scheme}:{variant}`). Empty for most schemes. */
+	variants: UnitAliyahVariantOption[];
 }
 
 /** One selectable reading context for a unit page. */
@@ -496,10 +621,10 @@ export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
 
 	const addContext = (reading: ParashaAliyahReading, clipToUnit: boolean) => {
 		const schemes: UnitAliyahSchemeOption[] = [];
-		for (const scheme of ALIYAH_SCHEMES) {
-			const boundaries = reading.schemes[scheme.id];
-			if (!boundaries) continue;
-			schemes.push({ schemeId: scheme.id, label: scheme.label });
+		const emitLayer = (
+			layerKey: string,
+			boundaries: AliyahBoundary[],
+		): void => {
 			for (const boundary of boundaries) {
 				if (
 					clipToUnit &&
@@ -513,10 +638,28 @@ export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
 				const list = markers[coordKey] ?? [];
 				markers[coordKey] = list;
 				list.push({
-					key: `${reading.id}:${scheme.id}`,
+					key: layerKey,
 					label: boundary.label,
 					role: boundary.role,
 				});
+			}
+		};
+		for (const scheme of ALIYAH_SCHEMES) {
+			const boundaries = reading.schemes[scheme.id];
+			if (!boundaries) continue;
+			const variants = (reading.schemeVariants[scheme.id] ?? []).map(
+				(variant) => ({ variantId: variant.id, label: variant.label }),
+			);
+			schemes.push({ schemeId: scheme.id, label: scheme.label, variants });
+			emitLayer(`${reading.id}:${scheme.id}`, boundaries);
+			// Each variant is a complete substituted layer under its own
+			// three-part key — the same clip rules apply (joined contexts
+			// keep only variant boundaries starting inside this unit).
+			for (const variant of reading.schemeVariants[scheme.id] ?? []) {
+				emitLayer(
+					`${reading.id}:${scheme.id}:${variant.id}`,
+					variant.boundaries,
+				);
 			}
 		}
 		contexts.push({

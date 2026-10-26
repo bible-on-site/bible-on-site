@@ -23,6 +23,7 @@ describe("proxy", () => {
 			"/פרשה/1?haftara",
 			"/פרשה/1?reading=weekday&scheme=default",
 			"/פרשה/1?scheme=default",
+			"/פרשה/1?variant=chabad",
 			"/פרשה/1?perush=",
 			"/פרשה/בראשית/כריכה",
 			"/פרשה/דברים/גב",
