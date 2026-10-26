@@ -61,7 +61,7 @@ server must have been started with the same value.
 
 ## Local data = production copy
 
-`bun x tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores prod into `tanah-dev`.
+`node devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores prod into `tanah-dev`.
 The website `predev` now attempts this automatically and keeps existing local data when prod is
 unreachable. Never hand-repair local content to match production — re-sync instead.
 
