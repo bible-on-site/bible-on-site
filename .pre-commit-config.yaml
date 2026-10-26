@@ -124,9 +124,14 @@ repos:
         # Mutates package.json/bun.lock and stages them — runs alone
         # before the parallel read-only batch so tests see stable files.
         priority: 5
+      # --related narrows the run to tests covering the staged module files
+      # (argv after `::`, files appended); config-like files or a zero-test
+      # related run fall back to the full suite (argv before `::`). CI still
+      # gates the full suite on every PR.
       - id: web-unit-tests
         name: web/bible-on-site unit tests
-        entry: node devops/precommit-run.mjs web/bible-on-site bun run test:unit
+        # Quoted — a bare ` :` inside the entry would end the YAML scalar.
+        entry: "node devops/precommit-run.mjs --related web/bible-on-site bun run test:unit :: bun run test:unit --findRelatedTests"
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/bible-on-site/
@@ -134,7 +139,7 @@ repos:
         priority: 10
       - id: admin-unit-tests
         name: web/admin unit tests
-        entry: node devops/precommit-run.mjs web/admin bun run test:unit
+        entry: "node devops/precommit-run.mjs --related web/admin bun run test:unit :: bun run test:unit:related"
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/admin/
