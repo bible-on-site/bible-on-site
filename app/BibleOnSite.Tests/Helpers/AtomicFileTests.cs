@@ -22,7 +22,7 @@ public class AtomicFileTests
     public async Task Copy_WhenInterrupted_PreservesExistingFile_AndRemovesTemporaryFile(bool exists)
     {
         await using var storage = new TestStorage();
-        var destination = Path.Combine(storage.Root, "data.sqlite");
+        var destination = Path.Join(storage.Root, "data.sqlite");
         if (exists)
         {
             await File.WriteAllTextAsync(destination, "original", TestContext.Current.CancellationToken);
@@ -80,7 +80,7 @@ public class AtomicFileTests
             .ReturnsAsync(new MemoryStream(storage.PackageFiles[name]));
         var service = new LocalDatabaseService(storage.FileSystem.Object);
         await FluentActions.Awaiting(() => service.InitializeAsync()).Should().ThrowAsync<IOException>();
-        File.Exists(Path.Combine(storage.Root, name)).Should().BeFalse();
+        File.Exists(Path.Join(storage.Root, name)).Should().BeFalse();
         await service.InitializeAsync();
         (await (await service.GetDatabaseAsync()).ExecuteScalarAsync<string>("SELECT value FROM sample")).Should().Be("complete");
         storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(name), Times.Exactly(2));

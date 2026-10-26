@@ -17,7 +17,7 @@
  * - Removes bundled demo authors/articles unless KEEP_BUNDLED_TEST_ARTICLES=1.
  *
  * Usage:
- *   node --import tsx <repo>/devops/ensure-dev-db.mts \
+ *   node <repo>/devops/ensure-dev-db.mts \
  *     [--env-file .dev.env] [--tables tanah_sefer,tanahpedia_entry] [--sync-from-prod]
  */
 import { spawnSync } from "node:child_process";
@@ -225,8 +225,6 @@ function checkProdFreshness(): boolean {
 	const result = spawnSync(
 		process.execPath,
 		[
-			"--import",
-			"tsx",
 			resolve(devopsDir, "setup-dev-env.mts"),
 			"check-dev-db-freshness",
 		],
@@ -242,8 +240,6 @@ function runSyncFromProd(): boolean {
 	const result = spawnSync(
 		process.execPath,
 		[
-			"--import",
-			"tsx",
 			resolve(devopsDir, "setup-dev-env.mts"),
 			"sync-from-prod",
 		],

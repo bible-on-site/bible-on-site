@@ -279,7 +279,7 @@ public class StarterService : BaseGraphQLService
     #region Local cache
 
     private string CachePath =>
-        Path.Combine(_fileSystem.AppDataDirectory, CacheFileName);
+        Path.Join(_fileSystem.AppDataDirectory, CacheFileName);
 
     private async Task SaveCacheAsync(StarterResponse response)
     {

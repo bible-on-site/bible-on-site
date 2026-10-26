@@ -154,10 +154,15 @@ describe("pedia/[uniqueName] page", () => {
 				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
 			});
 
-			expect(result).toEqual({
-				title: "משה רבנו | תנכפדיה",
-				description: "תוכן הערך על משה רבנו",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: "משה רבנו | תנכפדיה",
+					description: "תוכן הערך על משה רבנו",
+					alternates: {
+						canonical: `/pedia/${encodeURIComponent("משה-רבנו")}`,
+					},
+				}),
+			);
 		});
 
 		it("returns title only when content is empty", async () => {
@@ -175,10 +180,12 @@ describe("pedia/[uniqueName] page", () => {
 				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
 			});
 
-			expect(result).toEqual({
-				title: "משה רבנו | תנכפדיה",
-				description: "משה רבנו",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: "משה רבנו | תנכפדיה",
+					description: "משה רבנו",
+				}),
+			);
 		});
 
 		it("returns not found when entry does not exist", async () => {
@@ -212,10 +219,12 @@ describe("pedia/[uniqueName] page", () => {
 
 			await expect(
 				generateMetadata({ params: Promise.resolve({ slug: "יעקב" }) }),
-			).resolves.toEqual({
-				title: "יעקב (פירושונים) | תנכפדיה",
-				description: "לשם «יעקב» יש יותר מערך אחד בתנכפדיה.",
-			});
+			).resolves.toEqual(
+				expect.objectContaining({
+					title: "יעקב (פירושונים) | תנכפדיה",
+					description: "לשם «יעקב» יש יותר מערך אחד בתנכפדיה.",
+				}),
+			);
 		});
 
 		it("resolves percent-encoded uniqueName param like the browser sends", async () => {
@@ -235,10 +244,12 @@ describe("pedia/[uniqueName] page", () => {
 			});
 
 			expect(mockGetEntryByUniqueName).toHaveBeenCalledWith("שמשון");
-			expect(result).toEqual({
-				title: "שמשון | תנכפדיה",
-				description: "נזיר",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: "שמשון | תנכפדיה",
+					description: "נזיר",
+				}),
+			);
 		});
 
 		it("propagates a database failure instead of reporting not-found", async () => {

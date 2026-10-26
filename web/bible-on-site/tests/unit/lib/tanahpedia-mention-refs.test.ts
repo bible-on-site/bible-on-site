@@ -5,6 +5,8 @@ jest.mock("../../../src/lib/api-client", () => ({
 import { query } from "../../../src/lib/api-client";
 import { buildEntityRefLookup } from "../../../src/lib/tanahpedia/entity-ref-lookup";
 import {
+	type ArticleMentionReference,
+	getMentionReferencesForArticle,
 	getMentionReferencesForPerek,
 	type PerekEntityReference,
 } from "../../../src/lib/tanahpedia/service";
@@ -92,6 +94,85 @@ describe("getMentionReferencesForPerek", () => {
 		await expect(getMentionReferencesForPerek(12)).rejects.toBe("db gone");
 		expect(consoleError).toHaveBeenCalledWith(
 			expect.stringContaining("perek 12"),
+			"db gone",
+		);
+		consoleError.mockRestore();
+	});
+});
+
+describe("getMentionReferencesForArticle", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("queries published article decorations for the current content hash only", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForArticle(42, "abc123");
+		const [sql, params] = mockQuery.mock.calls[0];
+		expect(params).toEqual(["42", "abc123"]);
+		expect(sql).toContain("tanahpedia_mention_decoration");
+		expect(sql).toContain("d.source_kind = 'article'");
+		expect(sql).toContain("d.article_id = ?");
+		// The content hash is the staleness key: edited articles resolve
+		// nothing rather than misplacing anchors.
+		expect(sql).toContain("d.content_hash = ?");
+		expect(sql).toContain("d.acceptance IN ('auto', 'manual')");
+	});
+
+	it("resolves intended names against unique names AND synonyms", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForArticle(1, "h");
+		const [sql] = mockQuery.mock.calls[0];
+		expect(sql).toContain("tanahpedia_entry e");
+		expect(sql).toContain("tanahpedia_entry_synonym");
+		expect(sql).toContain("REPLACE(names.resolvedName, '-', ' ')");
+	});
+
+	it("drops name collisions so ambiguous mentions stay plain text", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForArticle(1, "h");
+		const [sql] = mockQuery.mock.calls[0];
+		expect(sql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+	});
+
+	it("wraps non-grouped entry columns so the query is only_full_group_by safe", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForArticle(1, "h");
+		const [sql] = mockQuery.mock.calls[0];
+		expect(sql).toContain("ANY_VALUE(ent.unique_name) AS entryUniqueName");
+		expect(sql).not.toMatch(/SELECT\s+ent\./);
+	});
+
+	it("returns resolved refs in span order for the decorator", async () => {
+		const row: ArticleMentionReference = {
+			entryUniqueName: "אברהם-אבינו",
+			spanStart: 40,
+			spanEnd: 44,
+			surface: "אברם",
+		};
+		mockQuery.mockResolvedValueOnce([row]);
+		await expect(getMentionReferencesForArticle(42, "h")).resolves.toEqual([
+			row,
+		]);
+	});
+
+	it("returns [] instead of throwing when the decoration table is absent", async () => {
+		const consoleError = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mockQuery.mockRejectedValueOnce(new Error("table doesn't exist"));
+		await expect(getMentionReferencesForArticle(42, "h")).resolves.toEqual([]);
+		consoleError.mockRestore();
+	});
+
+	it("logs non-Error rejections verbatim", async () => {
+		const consoleError = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mockQuery.mockRejectedValueOnce("db gone");
+		await expect(getMentionReferencesForArticle(42, "h")).resolves.toEqual([]);
+		expect(consoleError).toHaveBeenCalledWith(
+			expect.stringContaining("article 42"),
 			"db gone",
 		);
 		consoleError.mockRestore();

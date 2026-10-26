@@ -34,9 +34,16 @@ async function entryRelations(entryId: string): Promise<EntryRelations | null> {
 			 WHERE ee.entry_id = ?`,
 			[entryId],
 		).then((rows) => rows.map((r) => r.entity_type)),
+		// Synonym names this entry renders under: direct aliases plus the
+		// disambiguation pages listing it as a target — deleting the entry
+		// cascades both link kinds, so those pages expire too.
 		query<{ name: string }>(
-			`SELECT name FROM tanahpedia_entry_synonym WHERE entry_id = ?`,
-			[entryId],
+			`SELECT name FROM tanahpedia_entry_synonym WHERE entry_id = ?
+			 UNION
+			 SELECT s2.name FROM tanahpedia_entry_synonym_disambiguation d
+			 JOIN tanahpedia_entry_synonym s2 ON s2.id = d.synonym_id
+			 WHERE d.entry_id = ?`,
+			[entryId, entryId],
 		).then((rows) => rows.map((r) => r.name)),
 		query<{ perek_id: number }>(
 			`SELECT DISTINCT ets.perek_id FROM tanahpedia_entity_tanah_source ets

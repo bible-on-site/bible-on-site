@@ -15,7 +15,8 @@ import {
 	cachedPerKey,
 	COLLECTION_TAGS,
 } from "../../../../lib/revalidate/tags";
-import { buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
+import { authorPath, buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
+import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { JsonLd } from "../../../components/JsonLd";
 import { AuthorArticlesTable } from "./AuthorArticlesTable";
 import styles from "./page.module.css";
@@ -92,12 +93,23 @@ export async function generateMetadata({
 		};
 	}
 
-	return {
+	return pageMetadata({
 		title: `${author.name} | תנ"ך באתר`,
 		description: author.details
 			? author.details.slice(0, 160)
 			: `מאמרים מאת ${author.name}`,
-	};
+		// The canonical author URL is name-slug based even when the page was
+		// reached through a legacy numeric-ID param.
+		canonical: authorPath(authorNameToSlug(author.name)),
+		type: "profile",
+		image: {
+			// Author portrait — the page's own content image. Its intrinsic
+			// dimensions are not tracked, so they are omitted, not guessed.
+			url: author.imageUrl,
+			alt: author.name,
+			type: "image/jpeg",
+		},
+	});
 }
 
 export default async function AuthorPage({

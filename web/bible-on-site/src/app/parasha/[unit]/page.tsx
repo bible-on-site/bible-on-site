@@ -36,6 +36,7 @@ import {
 	parashaPerushimTag,
 } from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { AliyahControls } from "./components/AliyahControls";
 import { HaftaraSection } from "./components/HaftaraSection";
@@ -120,11 +121,11 @@ export async function generateMetadata({
 	const unit = getParashaUnitById(unitId);
 	const title = `פרשת ${unit.heading} | ${PARASHA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description = `קריאת פרשת ${unit.heading} (${parashaRefSpan(unit)}) וההפטרה למנהגי הספרדים האשכנזים והתימנים, עם פירושים ומאמרים.`;
-	return {
+	return pageMetadata({
 		title,
 		description,
-		alternates: { canonical: `${PARASHA_DIVISION.rootPath}/${unit.slug}` },
-	};
+		canonical: `${PARASHA_DIVISION.rootPath}/${unit.slug}`,
+	});
 }
 
 export default async function ParashaUnitPage({

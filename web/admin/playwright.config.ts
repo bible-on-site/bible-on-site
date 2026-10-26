@@ -10,7 +10,7 @@ import type { CoverageReportOptions } from "monocart-reporter";
 import { shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 
 // Use launcher script that handles DB and S3 population then starts the server
-const webServerCommand = "node --import tsx ./tests/util/launch-e2e-server.mts";
+const webServerCommand = "node ./tests/util/launch-e2e-server.mts";
 
 // Deterministic e2e-impact evidence (#2085): under coverage runs the shared
 // reporter writes discovered/test-results JSON here and the test fixture
