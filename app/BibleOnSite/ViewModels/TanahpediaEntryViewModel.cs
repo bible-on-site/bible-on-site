@@ -4,6 +4,7 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SQLite;
 
 namespace BibleOnSite.ViewModels;
 
@@ -21,6 +22,14 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
     private readonly PerekDataService _perekData;
+
+    /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid link or
+    /// badge taps must not stack duplicate pushed pages (#2640).</summary>
+    private readonly NavigationGate _navigationGate = new();
+
+    /// <summary>A second Back trigger during an in-flight pop or absolute
+    /// navigation must not consume another trail entry or page (#2640).</summary>
+    private readonly NavigationGate _goBackGate = new();
 
     /// <summary>Person-to-person trail for in-place family-tree switches, so
     /// Back steps through prior people before leaving the page.</summary>
@@ -183,11 +192,13 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
             if (targets.Count > 0)
             {
+                ResetEntryBody();
                 SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>(targets);
                 IsDisambiguation = true;
             }
             else
             {
+                ResetEntryBody();
                 IsNotFound = true;
             }
             IsLoaded = true;
@@ -196,10 +207,15 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             // Superseded by a newer in-place switch - the newer load owns state.
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: entry load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — entry load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia entry load failed for {UniqueName}: {ex}");
             ErrorMessage = "התוכן אינו זמין כרגע";
+            // The error pane is exclusive - a failed in-place switch must not
+            // leave the previous entry's content rendered underneath (#2640).
+            IsLoaded = false;
         }
         finally
         {
@@ -219,8 +235,30 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private async Task SwitchToCurrentEntryAsync()
     {
         _loadCts?.Cancel();
+        _loadCts?.Dispose();
         var cts = _loadCts = new CancellationTokenSource();
         await LoadCoreAsync(cts.Token);
+    }
+
+    /// <summary>
+    /// Clears the entry-body surface for a non-entry terminal state
+    /// (disambiguation chooser, not-found): the toolbar title tracks the
+    /// requested name and no title, entities, family tree, map or occurrence
+    /// rows from a previously loaded entry may linger (#2640).
+    /// </summary>
+    private void ResetEntryBody()
+    {
+        Title = UniqueName;
+        Content = null;
+        Entities = new ObservableCollection<TanahpediaLinkedEntity>();
+        FamilyTree = null;
+        PlaceMarkers = [];
+        Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
+        SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+        OnPropertyChanged(nameof(HasContent));
+        OnPropertyChanged(nameof(HasEntities));
+        OnPropertyChanged(nameof(HasOccurrences));
+        OnPropertyChanged(nameof(ShowNoContentNotice));
     }
 
     private async Task SetEntryAsync(TanahpediaEntryDetail detail)
@@ -233,7 +271,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
 
         Title = detail.Title;
-        Content = detail.Content;
+        Content = TanahpediaFootnotes.Normalize(detail.Content);
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         IsLoaded = true;
         OnPropertyChanged(nameof(HasContent));
@@ -281,8 +319,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 FamilyTree = TanahpediaFamily.BuildTree(family);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: family-section load is best-effort
+        catch (Exception ex) //NOSONAR — family-section load is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia family load failed for {entityId}: {ex}");
         }
     }
@@ -293,8 +333,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             PlaceMarkers = await _service.GetPlaceMarkersAsync(entryId, CancellationToken.None) ?? [];
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: place-marker load is best-effort
+        catch (Exception ex) //NOSONAR — place-marker load is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia place markers load failed for {entryId}: {ex}");
         }
     }
@@ -326,7 +368,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 {
                     pasukim = await _perekData.LoadPasukimAsync(group.Key);
                 }
-                catch
+                catch (Exception ex) when (ex is SQLiteException or IOException)
                 {
                     pasukim = [];
                 }
@@ -352,8 +394,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>(items);
             OnPropertyChanged(nameof(HasOccurrences));
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: occurrences mapping failure drops the table, not the page
+        catch (Exception ex) //NOSONAR — occurrences mapping failure drops the table, not the page.
         {
+            #pragma warning restore S2221
             // Occurrences are secondary - an empty table beats a failed page.
             Console.Error.WriteLine($"Tanahpedia occurrences mapping failed: {ex}");
         }
@@ -368,7 +412,8 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
-        await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
+        await _navigationGate.RunAsync(() =>
+            _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
     }
 
     /// <summary>
@@ -405,7 +450,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
-        await _navigator.GoToAsync(route);
+        await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
     }
 
     /// <summary>
@@ -415,14 +460,17 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [RelayCommand]
     public async Task GoBackAsync()
     {
-        if (_entryHistory.Count > 0)
+        await _goBackGate.RunAsync(async () =>
         {
-            UniqueName = _entryHistory.Pop();
-            await SwitchToCurrentEntryAsync();
-            return;
-        }
+            if (_entryHistory.Count > 0)
+            {
+                UniqueName = _entryHistory.Pop();
+                await SwitchToCurrentEntryAsync();
+                return;
+            }
 
-        await _navigator.GoToAsync("..");
+            await _navigator.GoToAsync("..");
+        });
     }
 }
 

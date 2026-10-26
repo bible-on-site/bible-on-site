@@ -65,12 +65,11 @@ class ReleaseArtifactTests(unittest.TestCase):
                     with self.assertRaises(ValueError): verify_module.verify(package, path, "Android")
 
     def test_matching_outer_hash_cannot_hide_corrupt_audio_or_wrong_source(self):
-        from verify_recitation_assets import verify_book_audio
         audio, catalog = self.book(opus=True, corrupt=True)
-        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        with self.assertRaises(ValueError): verify_module.verify_book_audio(audio, catalog, catalog["books"][0])
         audio, catalog = self.book(opus=True)
         catalog["package"]["tracks"][0]["playback"]["sourceSha256"] = "b" * 64
-        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        with self.assertRaises(ValueError): verify_module.verify_book_audio(audio, catalog, catalog["books"][0])
 
     def _write_ios_fixture(self, root, audio, catalog_path, catalog, problems=()):
         catalog_path.write_text(json.dumps(catalog))
@@ -93,7 +92,8 @@ class ReleaseArtifactTests(unittest.TestCase):
         if "no-manifest" not in problems:
             manifest = {"assetPackID": "recitation-1", "downloadPolicy": {"onDemand": {}},
                         "fileSelectors": [{"file": "recitation-1.zip"}],
-                        "platforms": ["macOS"] if "missing-ios-platform" in problems else ["iOS", "macOS"]}
+                        "platforms": ["macOS"] if "missing-ios-platform" in problems
+                        else ["iOS", "macOS"] if "extra-macos-platform" in problems else ["iOS"]}
             (pack_dir / "Manifest.json").write_text(json.dumps(manifest))
             (pack_dir / "recitation-1.zip").write_bytes(
                 b"corrupt" if "stale-payload" in problems else audio)
@@ -112,7 +112,7 @@ class ReleaseArtifactTests(unittest.TestCase):
             if "nested-perushim-selector" in problems:
                 selectors.append({"file": f"nested/{index}"})
             manifest = {"assetPackID": "perushim-notes", "downloadPolicy": {"onDemand": {}},
-                        "fileSelectors": selectors, "platforms": ["iOS", "macOS"]}
+                        "fileSelectors": selectors, "platforms": ["iOS"]}
             (perushim_dir / "Manifest.json").write_text(json.dumps(manifest))
         for name, data in perushim_payloads.items():
             if "no-perushim-payload" in problems and name == index:
@@ -142,6 +142,7 @@ class ReleaseArtifactTests(unittest.TestCase):
         audio, catalog = self.book(opus=True)
         for problem in [None, "odr-manifest", "base-audio", "no-extension",
                         "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
+                        "extra-macos-platform",
                         "corrupt-archive", "no-payload", "staged-mismatch",
                         "no-perushim-manifest", "perushim-missing-index",
                         "nested-perushim-selector", "no-perushim-payload",

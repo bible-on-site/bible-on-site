@@ -8,13 +8,44 @@
 :root {color-scheme:light;font-family:system-ui,sans-serif;color:#17283c;background:#f3f5f7}
 * {box-sizing:border-box}
 body {margin:0}
-main {max-width:760px;margin:40px auto;padding:24px}
+main {max-width:980px;margin:40px auto;padding:24px}
 header {display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
 h1 {font-size:19px;margin:0}
 a {color:#315b9a;font-size:14px}
 .card {background:#fff;border:1px solid #e1e7ed;border-radius:20px;padding:32px;box-shadow:0 8px 30px #17283c06}
 #progress {font-size:14px;color:#607086}
 #queue-updates:not(:empty) {background:#fff4dc;border:1px solid #d9b460;border-radius:10px;padding:12px;line-height:1.5}
+#preparation-progress {margin-bottom:20px;padding:16px 20px;border:1px solid #dce5ef;border-radius:12px;background:#edf3f9;line-height:1.7;color:#405770}
+#preparation-progress p {margin:4px 0 0;font-size:14px}
+#preparation-inventory {margin-bottom:20px;border:1px solid #dce5ef;border-radius:12px;background:#fff;padding:16px 20px}
+#preparation-inventory summary {cursor:pointer;font-weight:600;color:#304d6e;line-height:1.6}
+.inventory-help,#inventory-counts,#inventory-result-count,#inventory-message {font-size:14px;line-height:1.7;color:#607086}
+.inventory-controls {display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#inventory-filter {font:inherit;border:1px solid #bccbdc;border-radius:8px;padding:9px;background:#fff;color:#263951}
+#inventory-list {list-style:none;padding:0;margin:14px 0 0;max-height:360px;overflow:auto;border-top:1px solid #e1e7ed}
+.inventory-item {padding:12px 0;border-bottom:1px solid #e1e7ed}
+.inventory-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.inventory-state {font-size:12px;color:#607086}
+.inventory-reason {margin:5px 0 0;font-size:13px;line-height:1.6;color:#607086}
+.inventory-item.held .inventory-state {color:#88542e}
+#action-workspace {margin-bottom:20px;padding:20px;background:#fff;border:1px solid #dce5ef;border-radius:12px}
+#action-workspace h2 {font-size:22px;margin:0 0 8px}
+#action-workspace h3 {font-size:20px;margin:18px 0 10px}
+#action-intro,#action-counts,#action-message,#action-state,#action-source-status,#workflow-summary {font-size:14px;line-height:1.7;color:#607086}
+#action-list {display:grid;gap:6px;max-height:220px;overflow:auto;margin:12px 0}
+.action-choice {text-align:right;padding:10px 12px;line-height:1.6}
+.action-choice.selected {background:#eaf2fd;border-color:#8ab5e9}
+#action-verse {font-family:"Times New Roman",serif;font-size:25px;line-height:1.8}
+#action-neighbors {font-family:"Times New Roman",serif;font-size:19px;line-height:1.8;color:#607086;white-space:pre-line}
+.action-timing {display:grid;grid-template-columns:55px minmax(100px,1fr) 110px;gap:10px;align-items:center;margin:14px 0}
+.action-timing input[type=number] {width:100%;font:inherit;padding:8px;border:1px solid #bccbdc;border-radius:8px;text-align:center}
+.action-timing input[type=range] {width:100%;accent-color:#285c9d}
+#action-filter,#action-source-decision {font:inherit;border:1px solid #bccbdc;border-radius:8px;padding:9px;background:#fff;color:#263951}
+#action-range-help,#action-range-status,#action-source-help {font-size:14px;line-height:1.7;color:#607086}
+#workflow-chapters {display:grid;gap:8px;font-size:14px;line-height:1.7;margin-bottom:16px;max-height:360px;overflow:auto}
+.workflow-chapter {padding:10px 12px;background:#f5f7fa;border-radius:8px}
+select:focus-visible,summary:focus-visible {outline:3px solid #6698e0;outline-offset:3px}
+#proposal-kind {color:#607086;font-size:14px;line-height:1.6}
 #prior {white-space:pre-line}
 h2 {font-size:28px;margin:8px 0 16px}
 .instructions {color:#607086;line-height:1.7;margin:0 0 22px}
@@ -36,22 +67,99 @@ textarea {resize:vertical;width:100%;border:1px solid #d5dde7;border-radius:10px
 .actions {display:flex;gap:8px;flex-wrap:wrap}
 #good {background:#e8f4ed;border-color:#a8cdb5;color:#245d3b}
 #problem {background:#fff2e9;border-color:#dfc2ac;color:#7e4523}
-.nav {display:flex;justify-content:space-between;gap:12px;margin-top:20px}
+.nav,.action-nav {display:flex;justify-content:space-between;gap:12px;margin-top:20px}
 #status {min-height:24px;line-height:1.6;font-size:14px;color:#365579}
 footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
+#timing-editor {margin:24px 0;border-top:1px solid #e1e7ed;padding-top:20px}
+.editor-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.editor-heading h3 {margin:0;font-size:19px}
+#editor-count,.editor-help {font-size:13px;color:#607086}
+.editor-help {line-height:1.6;margin:8px 0 16px}
+#editor-rows {display:grid;gap:12px;margin:16px 0;padding:3px}
+.cut-row {border:1px solid #dae2ec;border-radius:12px;padding:16px;background:#fafbfd}
+.cut-row.edited {border-color:#6c9acd;background:#f3f8ff}
+.cut-row.invalid {border-color:#c45c43}
+.cut-row.chapter-concern {border-color:#d7ac60;background:#fffaf0}
+#chapter-concern-note,#action-chapter-concern {padding:12px;border-radius:8px;background:#fff4dc;color:#7c552a;line-height:1.7}
+.cut-heading,.cut-foot {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cut-word {font-family:"Times New Roman",serif;font-size:26px;margin-inline-end:auto}
+.cut-heard,.cut-duration {font-size:12px;color:#607086}
+.cut-heading button,.cut-reset {padding:7px 10px;font-size:13px}
+.cut-boundary {display:grid;grid-template-columns:48px minmax(100px,1fr) 106px 70px;align-items:center;gap:12px;margin:14px 0}
+.boundary-label {font-size:14px}
+.cut-range {width:100%;accent-color:#285c9d;cursor:pointer;min-height:32px}
+.cut-number {width:100%;font:inherit;font-variant-numeric:tabular-nums;border:1px solid #bccbdc;border-radius:7px;padding:8px;background:#fff;text-align:center}
+.cut-delta {font-size:12px;font-variant-numeric:tabular-nums;color:#426487;text-align:center}
+.cut-foot {justify-content:space-between}
+.cut-error {color:#a43d29;font-size:13px;margin:8px 0 0}
+.cut-error:empty {display:none}
+#editor-status {font-size:13px;line-height:1.6;color:#365579;min-height:22px}
+input:focus-visible {outline:3px solid #6698e0;outline-offset:3px}
+@media(max-width:550px) {.cut-boundary {grid-template-columns:38px minmax(70px,1fr) 86px;gap:8px}.cut-delta {grid-column:3}.cut-row {padding:12px}}
 @media(max-width:550px) {main {margin:12px auto;padding:16px}.card {padding:22px}h2 {font-size:24px}.controls button {flex:1}.word {font-size:26px}}
 </style>
 </head>
 <body>
 <main>
 <header><h1>בדיקת הקלטות</h1><a href="/archive">ארכיון התשובות</a><a href="/api/export" download="listening-reviews.json">הורדת התשובות</a></header>
-<section class="card" aria-labelledby="reference">
+<section id="preparation-progress" role="status" hidden><strong id="preparation-state"></strong><p id="preparation-counts"></p></section>
+<section id="action-workspace" hidden aria-labelledby="action-title">
+<h2 id="action-title">כל הנושאים לטיפול</h2>
+<p id="action-intro">לכל פסוק יש צעד הבא: איתור בהקלטת המקור, בדיקת חיתוכים או טיפול בטעות במקור. איתור או דיווח אינם אישור לתזמונים.</p>
+<p id="action-counts"></p>
+<details id="workflow-details"><summary>מצב ההשלמה לפי פרק</summary><p id="workflow-summary"></p><div id="workflow-chapters"></div></details>
+<div class="inventory-controls"><label for="action-filter">הצגה</label><select id="action-filter"><option value="pending">נושאים פתוחים</option><option value="all">כל הנושאים</option><option value="locate-source-range">איתור בהקלטה</option><option value="review-cuts">בדיקת חיתוכים</option><option value="source-remediation">טיפול במקור</option></select><button id="action-refresh">עדכון הנושאים</button></div>
+<div id="action-list" aria-label="נושאים לטיפול"></div>
+<p id="action-message" role="status" aria-live="polite"></p>
+<section id="action-editor" hidden aria-labelledby="action-reference">
+<h3 id="action-reference"></h3><p id="action-state"></p><p id="action-chapter-concern" hidden></p>
+<p id="action-neighbors" hidden></p><p id="action-verse"></p>
+<div id="action-review" hidden><p>בדקו את החיתוכים הנוכחיים, כולל העריכות שלכם. תשובה קודמת נשמרת בהיסטוריה; פתיחה כאן אינה אישור.</p><div class="controls"><button id="action-open-review" class="primary">פתיחת החיתוכים לעריכה</button><button id="action-open-source">המקור המלא</button></div></div>
+<div id="action-original" hidden>
+<p>הקלטת המקור המלאה. אפשר לנגן ממיקום שבוחרים; האזנה כאן אינה מאשרת חיתוכי מילים.</p>
+<div class="action-timing"><label for="action-seek-number">מיקום</label><input id="action-seek" type="range" min="0" step="10" value="0" aria-label="מיקום בהקלטת המקור"><input id="action-seek-number" type="number" min="0" step="0.001" value="0" aria-label="מיקום בהקלטת המקור בשניות"></div>
+<div class="controls"><button id="action-play-source">▶ המקור מהמיקום</button><button id="action-stop">■ עצירה</button></div>
+<p id="action-source-status" role="status"></p>
+<div id="action-range" hidden>
+<p id="action-range-help">אתרו את הפסוק המלא שמופיע כאן וקבעו התחלה וסיום בהקלטה. הטווח אינו קביעה של חיתוכי המילים. אחרי האזנה לטווח המדויק, המחשב יכין ממנו הצעות לחיתוכים לבדיקה נפרדת.</p>
+<div class="controls"><button id="action-mark-start">תחילת הפסוק כאן</button><button id="action-mark-end">סיום הפסוק כאן</button></div>
+<div class="action-timing"><label for="action-start-number">התחלה</label><input id="action-start" type="range" step="1" hidden aria-label="דיוק תחילת הטווח"><input id="action-start-number" type="number" step="0.001" placeholder="טרם נקבעה" aria-label="תחילת הטווח בשניות"></div>
+<div class="action-timing"><label for="action-end-number">סיום</label><input id="action-end" type="range" step="1" hidden aria-label="דיוק סיום הטווח"><input id="action-end-number" type="number" step="0.001" placeholder="טרם נקבע" aria-label="סיום הטווח בשניות"></div>
+<p>הסליידרים מכוונים בדיוק של אלפית שנייה, בטווח של 0.150 שניות לכל צד. המספר ניתן לעריכה בכל תחום ההקלטה.</p>
+<div class="controls"><button id="action-play-range">▶ הטווח לאיתור</button><button id="action-save-range" class="primary" disabled>שמירת הטווח והכנת חיתוכים</button><button id="action-reset-range">איפוס הטווח</button></div>
+<p id="action-range-status" role="status"></p>
+</div>
+</div>
+<details id="action-source-report"><summary>לא מצאתי את הפסוק או שיש טעות במקור</summary>
+<p id="action-source-help">דיווח נשמר כמשימת מקור. הוא אינו מסמן פסוק כתקין או משנה את ההקלטה המקורית. הקלטה מתוקנת דורשת מהדורה נפרדת ובדיקה חדשה.</p>
+<a id="action-issue" hidden target="_blank" rel="noopener noreferrer">הדיווח הקיים על המקור</a>
+<p><label for="action-source-decision">הצעד הנדרש</label></p>
+<select id="action-source-decision"><option value="">בחרו...</option><option value="cannot_locate">לא הצלחתי לאתר את הפסוק</option><option value="source_problem">יש טעות בהקלטת המקור</option><option value="request_corrected_source">נדרשת הקלטה או מהדורה מתוקנת</option></select>
+<label for="action-source-note">פירוט</label><textarea id="action-source-note" rows="2" maxlength="2000" placeholder="מה שמעתם ומה נדרש לתקן?"></textarea>
+<button id="action-save-source">שמירת דיווח המקור</button>
+</details>
+<div class="action-nav"><button id="action-previous">→ הנושא הקודם</button><button id="action-next">הנושא הבא ←</button></div>
+</section>
+</section>
+<details id="preparation-inventory" hidden>
+<summary id="inventory-summary">כל הפסוקים שסומנו</summary>
+<p id="inventory-counts"></p>
+<p class="inventory-help">זהו המאגר המלא של הפסוקים שסומנו לעיבוד. פסוקים חסומים עדיין אינם מוכנים להאזנה; הסיבה מופיעה ליד כל פסוק. התשובות והחיתוכים שאושרו נשמרים ואינם מוצעים שוב.</p>
+<div class="inventory-controls"><label for="inventory-filter">הצגה</label>
+<select id="inventory-filter"><option value="all">כל הפסוקים</option><option value="held">חסומים להכנה</option><option value="ready">חיתוכים שהוכנו</option></select>
+<button id="inventory-refresh">עדכון המאגר</button></div>
+<p id="inventory-message" role="status" aria-live="polite"></p>
+<p id="inventory-result-count"></p>
+<ul id="inventory-list" aria-label="מאגר הפסוקים שסומנו"></ul>
+</details>
+<section class="card" id="review-card" aria-labelledby="reference">
 <div id="progress">טוען...</div>
 <p id="queue-updates" role="status" aria-live="polite"></p>
 <div class="controls"><button class="primary" id="updated-version" hidden>פתיחת החיתוכים המעודכנים</button><button id="previous-version" hidden>הגרסה הקודמת וההערה</button></div>
 <h2 id="reference">הקלטות לבדיקה</h2>
+<p id="proposal-kind" hidden></p>
 <p class="instructions">האזינו לחיתוכי המילים. אפשר גם ללחוץ על מילה בנפרד, או להשמיע את הפסוק וההקשר. אם מילה חסרה, נחתכת או כוללת מילה אחרת - סמנו בעיה.</p>
-<p id="prior" class="instructions" hidden></p>
+<details id="prior-history"><summary>הערות וגרסאות קודמות</summary><p id="prior" class="instructions" hidden></p></details>
 <div class="controls">
 <button class="primary" id="verse">▶ הפסוק</button>
 <button id="cuts">▶ חיתוכי המילים</button>
@@ -61,37 +169,296 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 </div>
 <div id="words" aria-label="מילים להאזנה"></div>
 <div id="listening" role="status"></div>
-<label for="note">הערה (רשות)</label>
-<textarea id="note" rows="2" maxlength="2000" placeholder="למשל: המילה השנייה נחתכת בתחילתה"></textarea>
+<section id="timing-editor" aria-labelledby="editor-title" hidden>
+<div class="editor-heading"><h3 id="editor-title">דיוק החיתוכים</h3><span id="editor-count"></span></div>
+<p class="editor-help">הזמנים בשניות, בדיוק של אלפית שנייה. הסליידרים קרובים לחיתוך הנוכחי; אפשר להזין מספר גם מחוץ לטווח שלהם. חיצים: אלפית שנייה. Shift וחץ: 10 אלפיות שנייה.</p>
+<div class="controls"><button id="all-cut-words" aria-pressed="false">כל המילים</button><button id="next-cut-word">המילה הבאה לטיפול</button><button id="play-cut-edits">▶ תיקונים שטרם נשמעו</button></div>
+<p id="chapter-concern-note" hidden></p><div id="editor-rows"></div>
+<p id="editor-status" role="status" aria-live="polite"></p>
+</section>
+<div id="problem-note" hidden><label for="note">מה הבעיה?</label>
+<textarea id="note" hidden rows="2" maxlength="2000" placeholder="למשל: המילה השנייה נחתכת בתחילתה"></textarea></div>
 <div class="actions">
-<button id="good" disabled>✓ החיתוכים טובים</button>
+<button id="good" disabled>✓ שמירה כתקין</button>
 <button id="problem">יש בעיה</button>
-<button id="skip">דלגו בינתיים</button>
+<button id="skip">דלג</button>
 </div>
 <div class="nav"><button id="previous">→ הקודם</button><button id="next">הבא ←</button></div>
 <p id="status" role="status" aria-live="polite"></p>
 </section>
 <p id="recovery" role="status"></p>
-<footer>התשובות נשמרות אוטומטית במחשב. אפשר לחזור ולהמשיך בכל עת.<br>תשובות שמאפשרות להשלים פרק נבדקות אוטומטית. הפרסום יתבצע באצווה הרגילה.</footer>
+<footer>העריכות נשמרות כטיוטה. לסיום הפסוק בחרו שמירה כתקין, יש בעיה או דלג.<br>תשובות שמאפשרות להשלים פרק נבדקות אוטומטית. הפרסום דורש גם את בדיקות ההשלמה והמסירה.</footer>
 </main>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
 let cases = [], decisions = {}, token, index = 0, audioContext, currentSource, generation = 0;
 const buffers = new Map(), evidence = new Map(), drafts = new Map(), pastCases = new Map();
+const typedProblemDraftKeys = new Set();
 let historicalCase = null, keepPreviousVersion = false, playbackActive = false;
 let saving = false, cancelPlayback, liveQueue = false, refreshing = false, restoredActive;
+let lastQueuePollingFailure = null;
+let inventoryCases = null, inventoryRefreshing = false;
+let unifiedActionsAvailable = false;
+let actionTasks = [], selectedActionId = null, actionsRefreshing = false, actionSaving = false, actionPlayback = null;
+const actionDrafts = new Map(), actionHearing = new Set(), actionSubmissions = new Map(), actionBuffers = new Map(), actionOpenReviews = new Map();
+const actionStorageKey = "listening-action-editor-v1";
+const actionButtons = new Map(), actionOpenConcerns = new Map();let actionShownIds = null;
 const progressStorageKey = "listening-progress-v2";
 const stateKey = item => item.id + ":" + item.candidateSha256 + ":" + item.clipSha256;
 const decisionFor = item => decisions[stateKey(item)] ?? (!liveQueue ? decisions[item.id] : undefined);
 const caseNow = () => historicalCase ?? cases[index];
 const heardNow = () => evidence.get(stateKey(caseNow()));
-const remainingWords = () => caseNow().words.filter(word => !heardNow().segments.has(word.segment));
+const remainingWords = () => caseNow().words.filter(word => !cutHeard(caseNow(), word));
+// Timing drafts are separate from immutable candidates and their listening evidence.
+const cutDrafts = new Map(), cutHearing = new Set(), cutRows = new Map(), savedCutProposals = new Map();
+const cutStorageKey = "listening-cut-editor-v1";
+let showAllCutWords = false, activeCutSegment = null, savingCuts = false, problemMode = false;
+const completedCaseKeys = new Set(), reviewSubmissions = new Map();
+const cutKey = (item, word) => stateKey(item) + ":" + word.segment + ":" + word.startMs + ":" + word.endMs;
+const cutEditsFor = item => cutDrafts.get(stateKey(item)) ?? {};
+const workingWord = (item, word) => ({...word, ...cutEditsFor(item)[word.segment]});
+const cutChanged = (item, word) => {
+  const current = workingWord(item, word);
+  return current.startMs !== word.startMs || current.endMs !== word.endMs;
+};
+const changedCuts = item => item.words.filter(word => cutChanged(item, word)).map(word => workingWord(item, word));
+const cutHeard = (item, word) => cutChanged(item, word)
+  ? cutHearing.has(cutKey(item, workingWord(item, word)))
+  : evidence.get(stateKey(item))?.segments.has(word.segment);
+const timingEdits = item => changedCuts(item).map(({segment, startMs, endMs}) => ({segment, startMs, endMs}));
+const cutSignature = item => JSON.stringify(timingEdits(item));
+function persistCutProgress() {
+  if (typeof localStorage === "undefined") return;
+  try { localStorage.setItem(cutStorageKey, JSON.stringify({drafts:[...cutDrafts], heard:[...cutHearing], completed:[...completedCaseKeys], submissions:[...reviewSubmissions]})); }
+  catch { $("editor-status").textContent = "שמירת הטיוטה בדפדפן אינה זמינה. אפשר לשמור את התיקון במחשב."; }
+}
+function restoreCutProgress() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(cutStorageKey) ?? "null");
+    for (const [key, value] of saved?.drafts ?? []) if (value && typeof value === "object") cutDrafts.set(key, value);
+    for (const key of saved?.heard ?? []) if (typeof key === "string") cutHearing.add(key);
+    for (const key of saved?.completed ?? []) if (typeof key === "string") completedCaseKeys.add(key);
+    for (const [key,value] of saved?.submissions ?? []) if (value?.id && value?.fingerprint) reviewSubmissions.set(key,value);
+  } catch { $("editor-status").textContent = "לא ניתן לשחזר את טיוטת החיתוכים. התשובות השמורות לא השתנו."; }
+}
+function cutErrors(item) {
+  const errors = new Map();
+  const rows = item.words.map(word => workingWord(item, word));
+  rows.forEach((word, i) => {
+    let message = "";
+    if (!Number.isSafeInteger(word.startMs) || !Number.isSafeInteger(word.endMs)) message = "יש להזין זמן תקין בשניות.";
+    else if (word.startMs < item.clipStartMs || word.endMs > item.clipEndMs) message = "החיתוך חייב להיות בתוך קטע המקור הזמין.";
+    else if (word.endMs - word.startMs < 40 || word.endMs - word.startMs > 3000) message = "משך המילה חייב להיות בין 0.040 ל-3.000 שניות.";
+    else if (i > 0 && word.startMs < rows[i - 1].endMs) message = "ההתחלה חופפת לסוף המילה הקודמת.";
+    else if (i + 1 < rows.length && word.endMs > rows[i + 1].startMs) message = "הסוף חופף להתחלת המילה הבאה.";
+    if (message) errors.set(word.segment, message);
+  });
+  return errors;
+}
+function makeElement(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function signedMs(value) { return (value > 0 ? "+" : "") + value + " ms"; }
+function setCutBoundary(segment, field, value) {
+  if (!caseNow() || saving || savingCuts || historicalCase) return;
+  stop();
+  const item = caseNow(), original = item.words.find(word => word.segment === segment);
+  if (!original) return;
+  const drafts = {...cutEditsFor(item)};
+  const current = workingWord(item, original);
+  const milliseconds = typeof value === "number" ? value : value.trim() === "" ? NaN : Math.round(Number(value) * 1000);
+  drafts[segment] = {startMs:current.startMs, endMs:current.endMs, [field]:milliseconds};
+  if (drafts[segment].startMs === original.startMs && drafts[segment].endMs === original.endMs) delete drafts[segment];
+  cutDrafts.set(stateKey(item), drafts);
+  activeCutSegment = segment;
+  updateCutRow(original);
+  updateEvidence();
+  persistCutProgress();
+}
+function resetCut(segment) {
+  if (!caseNow() || saving || savingCuts || historicalCase) return;
+  const item = caseNow(), original = item.words.find(word => word.segment === segment);
+  if (!original) return;
+  stop();
+  const drafts = {...cutEditsFor(item)}; delete drafts[segment];
+  cutDrafts.set(stateKey(item), drafts);
+  const refs = cutRows.get(segment);
+  if (refs) for (const field of ["startMs", "endMs"]) {
+    refs[field].range.min = String(Math.max(item.clipStartMs, original[field] - 150));
+    refs[field].range.max = String(Math.min(item.clipEndMs, original[field] + 150));
+    refs[field].range.value = String(original[field]);
+    refs[field].number.value = (original[field] / 1000).toFixed(3);
+  }
+  updateEvidence(); persistCutProgress();
+}
+function updateCutRow(original) {
+  const refs = cutRows.get(original.segment);
+  if (!refs) return;
+  const item = caseNow(), word = workingWord(item, original), errors = cutErrors(item);
+  refs.row.classList.toggle("edited", cutChanged(item, original));
+  refs.row.classList.toggle("invalid", errors.has(original.segment));
+  for (const field of ["startMs", "endMs"]) {
+    const value = word[field], ref = refs[field];
+    if (document.activeElement !== ref.number) ref.number.value = Number.isFinite(value) ? (value / 1000).toFixed(3) : "";
+    if (Number.isFinite(value)) ref.range.value = String(value);
+    ref.delta.textContent = Number.isFinite(value) ? signedMs(value - original[field]) : "";
+    ref.number.setAttribute("aria-invalid", String(errors.has(original.segment)));
+    ref.range.disabled = saving || savingCuts || !!historicalCase;
+    ref.number.disabled = saving || savingCuts || !!historicalCase;
+  }
+  refs.duration.textContent = Number.isFinite(word.endMs - word.startMs) ? "משך " + ((word.endMs - word.startMs) / 1000).toFixed(3) + " שניות" : "";
+  refs.error.textContent = errors.get(original.segment) ?? "";
+  refs.play.disabled = saving || savingCuts || errors.size !== 0;
+  refs.context.disabled = saving || savingCuts || errors.size !== 0;
+  refs.reset.disabled = saving || savingCuts || !cutChanged(item, original) || !!historicalCase;
+  refs.heard.textContent = cutHeard(item, original) ? actionOpenConcerns.get(stateKey(item))?.segments.includes(original.segment) ? "נשמע קודם - נדרשת בדיקת גבול בפרק" : "נשמע" : cutChanged(item, original) ? "להאזנה לאחר השינוי" : "להאזנה";
+}
+function renderCutEditor() {
+  const item = caseNow();
+  $("timing-editor").hidden = !item;
+  if (!item) return;
+  $("editor-title").textContent = "דיוק החיתוכים · " + item.label;
+  cutRows.clear(); $("editor-rows").replaceChildren();
+  $("all-cut-words").disabled = saving;
+  $("all-cut-words").textContent = showAllCutWords ? "רק מילים לטיפול" : "כל המילים";
+  $("all-cut-words").setAttribute("aria-pressed", String(showAllCutWords));
+  const concern=actionOpenConcerns.get(stateKey(item));
+  $("chapter-concern-note").hidden=!concern;
+  if(concern)$("chapter-concern-note").textContent=chapterConcernText(concern)+" החיתוכים שאושרו נשמרו. יש לתקן את הגבול שסומן ולהאזין לכל חיתוך ששונה.";
+  const changedTargets=changedCuts(item).filter(word=>!concern||!cutHeard(item,item.words.find(original=>original.segment===word.segment)));
+  const targetSegments = new Set([...(concern?.segments ?? item.changedSegments ?? []), ...item.words.filter(word => !cutHeard(item, word)).map(word => word.segment), ...changedTargets.map(word => word.segment)]);
+  const shown = item.words.filter(word => showAllCutWords || targetSegments.has(word.segment));
+  $("editor-count").textContent = "לטיפול: " + targetSegments.size + " מתוך " + item.words.length + " מילים";
+  for (const original of shown) {
+    const word = workingWord(item, original);
+    const row = makeElement("article", "cut-row"); row.dataset.cutSegment = String(word.segment);
+    if(concern?.segments.includes(word.segment))row.classList.add("chapter-concern");
+    const title = makeElement("div", "cut-heading");
+    const name = makeElement("strong", "cut-word", word.text);
+    const heard = makeElement("span", "cut-heard");
+    const playButton = makeElement("button", "cut-play", "▶ החיתוך בעריכה");
+    playButton.setAttribute("aria-label", "השמעת החיתוך בעריכה של " + word.text);
+    playButton.onclick = () => { activeCutSegment = word.segment; void play("word", original); };
+    const wordIndex = item.words.findIndex(row => row.segment === word.segment);
+    const contextLabel = wordIndex > 0 && wordIndex < item.words.length - 1 ? "מילה לפני ואחרי"
+      : wordIndex === 0 && item.words.length > 1 ? "גם המילה הבאה" : wordIndex > 0 ? "גם המילה הקודמת" : "המילה בלבד";
+    const context = makeElement("button", "cut-context", contextLabel);
+    context.title = "השמעה רציפה של " + item.words.slice(Math.max(0, wordIndex - 1), wordIndex + 2).map(row => row.text).join(" ");
+    context.onclick = () => { activeCutSegment = word.segment; void play("word-context", original); };
+    for (const child of [name, heard, playButton, context]) title.append(child);
+    row.append(title);
+    const refs = {row, heard, play:playButton, context};
+    for (const [field, label] of [["startMs", "התחלה"], ["endMs", "סוף"]]) {
+      const group = makeElement("div", "cut-boundary");
+      const fieldLabel = makeElement("label", "boundary-label", label);
+      const fieldId = "cut-" + word.segment + "-" + field;
+      fieldLabel.setAttribute("for", fieldId);
+      const range = makeElement("input", "cut-range"); range.type = "range";
+      range.min = String(Math.max(item.clipStartMs, word[field] - 150));
+      range.max = String(Math.min(item.clipEndMs, word[field] + 150)); range.step = "1";
+      range.value = String(word[field]); range.dir = "ltr"; range.dataset.cutControl = "true";
+      range.setAttribute("aria-label", label + " " + word.text + " באלפיות שנייה");
+      range.oninput = () => setCutBoundary(word.segment, field, Number(range.value));
+      const number = makeElement("input", "cut-number"); number.type = "number"; number.id = fieldId;
+      number.dataset.cutControl = "true"; number.step = "0.001"; number.inputMode = "decimal"; number.dir = "ltr";
+      number.setAttribute("aria-label", label + " " + word.text + " בשניות");
+      number.oninput = () => setCutBoundary(word.segment, field, number.value);
+      number.onchange = () => {
+        const value = workingWord(item, original)[field];
+        if (Number.isFinite(value)) {
+          range.min = String(Math.max(item.clipStartMs, value - 150)); range.max = String(Math.min(item.clipEndMs, value + 150)); range.value = String(value);
+        }
+      };
+      for (const control of [range, number]) control.onkeydown = event => {
+        if (event.shiftKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          const direction = ["ArrowLeft", "ArrowDown"].includes(event.key) ? -1 : 1;
+          setCutBoundary(word.segment, field, workingWord(item, original)[field] + direction * 10);
+          number.value = (workingWord(item, original)[field] / 1000).toFixed(3);
+        }
+      };
+      const delta = makeElement("span", "cut-delta"); delta.dir = "ltr";
+      for (const child of [fieldLabel, range, number, delta]) group.append(child);
+      row.append(group); refs[field] = {range, number, delta};
+    }
+    const foot = makeElement("div", "cut-foot");
+    refs.duration = makeElement("span", "cut-duration");
+    refs.reset = makeElement("button", "cut-reset", "איפוס המילה");
+    refs.reset.onclick = () => resetCut(word.segment);
+    foot.append(refs.duration); foot.append(refs.reset); row.append(foot);
+    refs.error = makeElement("p", "cut-error"); refs.error.setAttribute("role", "status"); row.append(refs.error);
+    cutRows.set(word.segment, refs); $("editor-rows").append(row); updateCutRow(original);
+  }
+  updateCutEditorStatus();
+}
+function updateCutEditorStatus() {
+  const item = caseNow(); if (!item) return;
+  const changed = changedCuts(item), errors = cutErrors(item);
+  for (const word of item.words) updateCutRow(word);
+  const unheard = changed.filter(word => !cutHearing.has(cutKey(item, word)));
+  $("play-cut-edits").disabled = saving || !unheard.length || errors.size !== 0;
+  $("next-cut-word").disabled = saving || cutRows.size === 0;
+  $("editor-status").textContent = saving ? "שומר את כל חיתוכי הפסוק..." : errors.size ? "יש לתקן את הזמנים המסומנים לפני השמעה ושמירה." : unheard.length ? "לפני שמירה כתקין יש להאזין ל-" + unheard.length + " חיתוכים ששונו." : changed.length ? "כל העריכות ייכללו בשמירה כתקין." : "סליידרים: ±0.150 שניות. המספר ניתן לעריכה גם מעבר לטווח הסליידר.";
+}
+
+function nextCutWord() {
+  const segments = [...cutRows.keys()];
+  if (!segments.length) return;
+  const next = (segments.indexOf(activeCutSegment) + 1) % segments.length;
+  activeCutSegment = segments[next];
+  const row = cutRows.get(activeCutSegment);
+  row.row.scrollIntoView?.({block:"nearest", behavior:"smooth"}); row.play.focus?.();
+}
+async function loadCutProposals() {
+  try {
+    const response = await fetch("/api/cut-edits", {cache:"no-store"}); if (!response.ok) return;
+    const result = await response.json();
+    for (const entry of result.entries ?? []) {
+      const key = entry.caseId + ":" + entry.candidateSha256 + ":" + entry.clipSha256;
+      savedCutProposals.set(key, entry);
+    }
+    for (const [key, entry] of savedCutProposals) {
+      if (!cutDrafts.has(key)) {
+        cutDrafts.set(key, Object.fromEntries(entry.timingEdits.map(word => [word.segment, {startMs:word.startMs, endMs:word.endMs}])));
+        for (const word of entry.timingEdits) if (entry.listenEvidenceReportedByBrowser?.heardEditedSegments.includes(word.segment)) cutHearing.add(key + ":" + word.segment + ":" + word.startMs + ":" + word.endMs);
+      }
+    }
+  } catch { /* Local drafts remain usable when fetching saved proposals fails. */ }
+}
+function setProblemMode(active) {
+  problemMode = active;
+  $("problem-note").hidden = !active;
+  $("note").hidden = !active;
+  $("problem").textContent = active ? "שמירת הבעיה" : "יש בעיה";
+  if (active) $("note").focus?.();
+}
+function problemDraft(item) {
+  const key = stateKey(item), local = drafts.get(key) ?? "";
+  if (typedProblemDraftKeys.has(key)) return local;
+  const old = decisionFor(item)?.note ?? "";
+  const proposal = savedCutProposals.get(stateKey(item))?.note;
+  return local === old || local === proposal ? "" : local;
+}
+function submissionFor(item, payload) {
+  const key = stateKey(item), fingerprint = JSON.stringify(payload);
+  let saved = reviewSubmissions.get(key);
+  if (!saved || saved.fingerprint !== fingerprint) {
+    saved = {fingerprint, id:crypto.randomUUID?.() ?? Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)};
+    reviewSubmissions.set(key, saved); persistCutProgress();
+  }
+  return saved.id;
+}
+
 function persistProgress() {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(progressStorageKey, JSON.stringify({active: caseNow() ? stateKey(caseNow()) : restoredActive,
-      previousVersionSelected: keepPreviousVersion, drafts: [...drafts], evidence: [...evidence].map(([key, value]) => [key,
+      previousVersionSelected: keepPreviousVersion, drafts: [...drafts], typedProblemDraftKeys:[...typedProblemDraftKeys], evidence: [...evidence].map(([key, value]) => [key,
         {verse: value.verse, segments: [...value.segments], fresh: [...value.fresh]}])}));
   } catch { $("queue-updates").textContent = "שמירת הטיוטה בדפדפן אינה זמינה. הדף הנוכחי נשאר פתוח."; }
 }
@@ -103,14 +470,14 @@ function restoreProgress() {
     restoredActive = saved.active;
     keepPreviousVersion = saved.previousVersionSelected === true;
     for (const [key, value] of saved.drafts ?? []) if (typeof value === "string") drafts.set(key, value);
+    for (const key of saved.typedProblemDraftKeys ?? []) if (typeof key === "string") typedProblemDraftKeys.add(key);
     for (const [key, value] of saved.evidence ?? []) evidence.set(key,
       {verse: value.verse === true, segments: new Set(value.segments), fresh: new Set(value.fresh)});
   } catch { $("queue-updates").textContent = "לא ניתן לשחזר טיוטה מהדפדפן. התשובות השמורות לא השתנו."; }
 }
 function rememberDraft() { if (caseNow()) { drafts.set(stateKey(caseNow()), $("note").value); persistProgress(); } }
 function updateProgress() {
-  $("progress").textContent = (historicalCase ? "גרסה קודמת · " : "") + "פסוק " + (index + 1) + " מתוך " + cases.length + " · " +
-    cases.filter(item => decisionFor(item)).length + " תשובות נשמרו";
+  $("progress").textContent = (historicalCase ? "גרסה קודמת · " : "") + "פסוק " + (index + 1) + " מתוך " + cases.length + " לטיפול";
   $("previous").disabled = saving || index === 0;
   $("next").disabled = saving || index === cases.length - 1;
   updateVersionControls();
@@ -125,7 +492,7 @@ function updateVersionControls() {
   $("previous-version").disabled = saving;
 }
 function openUpdatedVersion() {
-  if (!historicalCase || saving) return;
+  if (!historicalCase || saving || savingCuts) return;
   rememberDraft();
   historicalCase = null;
   keepPreviousVersion = false;
@@ -133,7 +500,7 @@ function openUpdatedVersion() {
   $("queue-updates").textContent = "מוצגים החיתוכים המעודכנים. הטיוטה לגרסה הקודמת נשמרה בנפרד.";
 }
 function openPreviousVersion() {
-  if (saving) return;
+  if (saving || savingCuts) return;
   const previous = previousVersion(caseNow());
   if (!previous) return;
   rememberDraft();
@@ -143,7 +510,7 @@ function openPreviousVersion() {
   $("queue-updates").textContent = "מוצגת גרסה קודמת. התשובה עליה אינה מאשרת את החיתוכים המעודכנים.";
 }
 function canOpenUpdatedVersion(item, rendered) {
-  if (saving || playbackActive || currentSource || cancelPlayback || document.activeElement === $("note")) return false;
+  if (saving || savingCuts || changedCuts(item).length || document.activeElement?.dataset?.cutControl === "true" || playbackActive || currentSource || cancelPlayback || document.activeElement === $("note")) return false;
   const saved = decisionFor(item);
   const note = rendered ? $("note").value : drafts.get(stateKey(item)) ?? saved?.note ?? "";
   if (note !== (saved?.note ?? "")) return false;
@@ -151,6 +518,13 @@ function canOpenUpdatedVersion(item, rendered) {
   return !!saved || (!heard?.verse && !heard?.fresh.size);
 }
 function stop() {
+  if(actionPlayback&&actionNow()&&actionPlayback.taskKey===actionKey(actionNow())) {
+    const cursor=actionPosition();actionDraft(actionNow()).seekMs=cursor;
+    $("action-seek").value=String(cursor);
+    if(document.activeElement!==$("action-seek-number"))$("action-seek-number").value=(cursor/1000).toFixed(3);
+    persistActions();
+  }
+  actionPlayback = null;
   generation++;
   playbackActive = false;
   if (currentSource) {
@@ -162,23 +536,32 @@ function stop() {
   document.querySelectorAll(".word.active").forEach(el => el.classList.remove("active"));
 }
 function updateEvidence() {
+  $("note").disabled = saving || savingCuts;
+  if (!caseNow()) return;
   const heard = heardNow();
-  $("listening").textContent = heard.segments.size + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
+  $("listening").textContent = caseNow().words.filter(word => cutHeard(caseNow(), word)).length + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
   if (caseNow().reusableHeardSegments?.length) $("listening").textContent += " · " + caseNow().reusableHeardSegments.length + " חיתוכים ללא שינוי מההאזנה הקודמת";
   const remaining = remainingWords();
   if (remaining.length) $("listening").textContent += " · להשלמה: " + remaining.map(word => word.text).join(", ");
   $("remaining").disabled = saving || remaining.length === 0;
   for (const word of caseNow().words) {
-    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("pending", !heard.segments.has(word.segment));
+    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("pending", !cutHeard(caseNow(), word));
+    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("heard", !!cutHeard(caseNow(), word));
   }
-  $("good").disabled = saving || remaining.length !== 0;
+  $("good").disabled = saving || savingCuts || cutErrors(caseNow()).size !== 0 || remaining.length !== 0 || !concernHasCorrection(caseNow());
+  updateCutEditorStatus();
   persistProgress();
 }
 function render() {
   stop();
   const item = caseNow();
   if (!item) {
-    $("reference").textContent = "אין עדיין פסוקים מוכנים";
+    $("proposal-kind").hidden = true;
+    $("reference").textContent = "סיימת את הפסוקים המוכנים כרגע";
+    $("progress").textContent = "כל התשובות נשמרו";
+    $("words").replaceChildren(); $("editor-rows").replaceChildren(); cutRows.clear(); $("timing-editor").hidden = true;
+    $("note").value = ""; setProblemMode(false); $("prior-history").hidden = true;
+    $("status").textContent = "כל הבדיקות בסבב הנוכחי נשמרו. פסוקים נוספים יופיעו כשיהיו מוכנים.";
     document.querySelectorAll("button").forEach(button => { button.disabled = true; });
     return;
   }
@@ -191,6 +574,9 @@ function render() {
   }
   updateProgress();
   $("reference").textContent = item.label;
+  $("proposal-kind").hidden = item.preparationKind !== "machine-suspect";
+  $("proposal-kind").textContent = item.preparationKind === "machine-suspect"
+    ? "הצעה אוטומטית שעדיין לא נבדקה בהאזנה. אפשר לתקן את החיתוכים ולשמור כתקין לאחר ההאזנה." : "";
   $("prior").hidden = !item.reviewKind;
   const reviewDescription = historicalCase ? "מוצגת גרסה קודמת. לבדיקה החדשה פתחו את החיתוכים המעודכנים."
     : item.changedSegments?.length ? "חיתוכים מעודכנים לבדיקה חוזרת."
@@ -207,10 +593,16 @@ function render() {
     button.onclick = () => void play("word", word);
     $("words").append(button);
   }
-  $("note").value = drafts.get(stateKey(item)) ?? decisionFor(item)?.note ?? "";
+  $("note").value = problemDraft(item);
+  setProblemMode(false);
+  $("prior-history").hidden = !item.priorNote && !decisionFor(item)?.note;
+  $("prior-history").open = false;
+  $("prior").hidden = $("prior-history").hidden;
+  $("prior").textContent = decisionFor(item)?.note ?? item.priorNote ?? "";
   $("previous").disabled = index === 0;
   $("next").disabled = index === cases.length - 1;
-  $("status").textContent = decisionFor(item) ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisionFor(item).verdict] : "";
+  $("status").textContent = "";
+  renderCutEditor();
   updateEvidence();
 }
 async function getBuffer(item) {
@@ -259,6 +651,9 @@ function playSlice(buffer, item, start, end, request, word) {
 async function play(mode, selected) {
   stop();
   const request = generation, item = caseNow();
+  if (["cuts","word","remaining","edits","word-context"].includes(mode) && cutErrors(item).size) {
+    $("status").textContent = "יש לתקן את הזמנים המסומנים לפני השמעה."; return;
+  }
   playbackActive = true;
   $("status").textContent = "טוען הקלטה...";
   try {
@@ -267,22 +662,32 @@ async function play(mode, selected) {
     const buffer = await getBuffer(item);
     if (request !== generation) return;
     $("status").textContent = mode === "cuts" ? "מנגנים כל מילה בנפרד..." : "מנגן...";
-    if (mode === "cuts" || mode === "word" || mode === "remaining") {
-      const words = mode === "remaining" ? remainingWords() : mode === "cuts" ? item.words : [selected];
+    if (["cuts", "word", "remaining", "edits"].includes(mode)) {
+      const originals = mode === "edits" ? item.words.filter(word => cutChanged(item, word) && !cutHeard(item, word))
+        : mode === "remaining" ? remainingWords() : mode === "cuts" ? item.words : [selected];
+      const words = originals.map(word => workingWord(item, word));
       for (const word of words) {
         if (!await playSlice(buffer,item,word.startMs,word.endMs,request,word)) return;
-        evidence.get(stateKey(item)).segments.add(word.segment);
-        evidence.get(stateKey(item)).fresh.add(word.segment);
+        const original = item.words.find(row => row.segment === word.segment);
+        if (cutChanged(item, original)) cutHearing.add(cutKey(item, word));
+        else {
+          evidence.get(stateKey(item)).segments.add(word.segment);
+          evidence.get(stateKey(item)).fresh.add(word.segment);
+        }
+        persistCutProgress();
         document.querySelector('[data-segment="' + word.segment + '"]')?.classList.add("heard");
         updateEvidence();
         if (mode !== "word") await new Promise(resolve => setTimeout(resolve,160));
         if (request !== generation) return;
       }
     } else {
-      const start = mode === "context" ? item.clipStartMs : item.words[0].startMs;
-      const end = mode === "context" ? item.clipEndMs : item.words.at(-1).endMs;
+      const selectedIndex = selected ? item.words.findIndex(word => word.segment === selected.segment) : -1;
+      const before = item.words[Math.max(0, selectedIndex - 1)];
+      const after = item.words[Math.min(item.words.length - 1, selectedIndex + 1)];
+      const start = mode === "word-context" ? workingWord(item, before).startMs : mode === "context" ? item.clipStartMs : workingWord(item, item.words[0]).startMs;
+      const end = mode === "word-context" ? workingWord(item, after).endMs : mode === "context" ? item.clipEndMs : workingWord(item, item.words.at(-1)).endMs;
       if (!await playSlice(buffer,item,start,end,request)) return;
-      if (mode === "verse") evidence.get(stateKey(item)).verse = true;
+      if (mode === "verse" && !changedCuts(item).length) evidence.get(stateKey(item)).verse = true;
       updateEvidence();
     }
     if (request === generation) $("status").textContent = "אפשר להשמיע שוב או לשמור תשובה.";
@@ -293,38 +698,55 @@ async function play(mode, selected) {
   }
 }
 async function save(verdict) {
-  if (saving || !caseNow()) return;
-  rememberDraft();
-  stop(); saving = true; updateEvidence();
-  document.querySelectorAll(".actions button,.nav button").forEach(button => { button.disabled = true; });
+  if (saving || savingCuts || !caseNow()) return;
   const item = caseNow(), heard = heardNow();
+  if (historicalCase && changedCuts(item).length) {
+    rememberDraft(); persistCutProgress();
+    $("status").textContent = "עריכות החיתוכים בגרסה הקודמת נשמרו כטיוטה. פתחו את החיתוכים המעודכנים כדי להמשיך. לא נשמרה תשובה.";
+    return;
+  }
+  if(verdict==="good"&&!concernHasCorrection(item)) {
+    $("status").textContent="בדיקת הפרק מצאה בעיית גבול לאחר האישור הקודם. יש לתקן גבול מסומן ולהאזין לחיתוך ששונה; אישור זהה של הגבולות הקודמים אינו תיקון.";return;
+  }
+  if (verdict === "good" && (remainingWords().length || cutErrors(item).size)) {
+    $("status").textContent = "יש להאזין לכל החיתוכים הנוכחיים ולתקן את הזמנים לפני שמירה כתקין."; return;
+  }
+  rememberDraft(); stop(); saving = true; updateEvidence();
+  document.querySelectorAll(".actions button,.nav button").forEach(button => { button.disabled = true; });
+  const payload = {caseId:item.id, candidateSha256:item.candidateSha256, clipSha256:item.clipSha256, verdict,
+    timingEdits:timingEdits(item), verseHeard:!changedCuts(item).length && heard.verse,
+    heardSegments:[...heard.segments].sort((a,b)=>a-b), freshHeardSegments:[...heard.fresh].sort((a,b)=>a-b),
+    heardEditedSegments:changedCuts(item).filter(word=>cutHearing.has(cutKey(item,word))).map(word=>word.segment),
+    note:verdict === "problem" ? $("note").value : ""};
+  const submissionId = submissionFor(item,payload);
   try {
-    const response = await fetch("/api/reviews", {
+    const response = await fetch(historicalCase ? "/api/reviews" : "/api/word-reviews", {
       method:"POST", headers:{"Content-Type":"application/json","X-Review-Token":token},
-      body:JSON.stringify({caseId:item.id,candidateSha256:item.candidateSha256,clipSha256:item.clipSha256,verdict,
-        verseHeard:heard.verse,heardSegments:[...heard.segments],freshHeardSegments:[...heard.fresh],note:$("note").value})
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error);
+      body:JSON.stringify({...payload,submissionId})});
+    const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "לא ניתן לשמור את הבדיקה");
     decisions[stateKey(item)] = result;
     saving = false;
     if (historicalCase) {
-      render();
-      $("status").textContent = "התשובה נשמרה לגרסה הקודמת. החיתוכים המעודכנים עדיין דורשים בדיקה.";
+      render(); $("status").textContent = "התשובה נשמרה לגרסה הקודמת. החיתוכים המעודכנים עדיין דורשים בדיקה.";
     } else {
-      if (index < cases.length - 1) index++;
-      render();
-      $("status").textContent = index === cases.length - 1 && cases.every(item => decisionFor(item))
-        ? "כל התשובות נשמרו. תודה! אפשר לחזור ולשנות תשובה." : "התשובה נשמרה.";
+      completedCaseKeys.add(stateKey(item)); actionOpenReviews.delete(stateKey(item)); actionOpenConcerns.delete(stateKey(item)); persistCutProgress();
+      drafts.delete(stateKey(item)); typedProblemDraftKeys.delete(stateKey(item));
+      cases = cases.filter(candidate => stateKey(candidate) !== stateKey(item));
+      index = Math.min(index, Math.max(0,cases.length-1));
+      historicalCase = null; keepPreviousVersion = false; render();
+      if (caseNow()) { activeCutSegment = null; nextCutWord(); $("status").textContent = "כל חיתוכי הפסוק נשמרו. עברנו לפסוק הבא."; }
     }
   } catch (error) {
-    $("status").textContent = "השמירה לא הצליחה: " + error.message;
-    saving = false; updateEvidence();
+    saving = false; $("status").textContent = "השמירה לא הצליחה: " + error.message; updateEvidence();
   } finally {
-    $("problem").disabled = false; $("skip").disabled = false;
-    $("previous").disabled = index === 0; $("next").disabled = index === cases.length - 1;
+    if (caseNow()) { $("problem").disabled = false; $("skip").disabled = false; updateProgress(); }
+    void refreshQueue();
   }
 }
+
+$("all-cut-words").onclick = () => { showAllCutWords = !showAllCutWords; renderCutEditor(); };
+$("next-cut-word").onclick = nextCutWord;
+$("play-cut-edits").onclick = () => void play("edits");
 $("updated-version").onclick = openUpdatedVersion;
 $("previous-version").onclick = openPreviousVersion;
 $("verse").onclick = () => void play("verse");
@@ -333,10 +755,10 @@ $("remaining").onclick = () => void play("remaining");
 $("context").onclick = () => void play("context");
 $("stop").onclick = stop;
 $("good").onclick = () => void save("good");
-$("problem").onclick = () => void save("problem");
+$("problem").onclick = () => { if (!saving) { if (!problemMode) setProblemMode(true); else void save("problem"); } };
 $("skip").onclick = () => void save("skip");
-$("previous").onclick = () => { if (!saving && index > 0) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index--; render(); } };
-$("next").onclick = () => { if (!saving && index < cases.length - 1) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index++; render(); } };
+$("previous").onclick = () => { if (!saving && !savingCuts && index > 0) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index--; render(); } };
+$("next").onclick = () => { if (!saving && !savingCuts && index < cases.length - 1) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index++; render(); } };
 async function updateRecovery() {
   try {
     const response = await fetch("/api/recovery");
@@ -347,26 +769,41 @@ async function updateRecovery() {
   } catch {}
 }
 async function refreshQueue(initial = false) {
-  if (refreshing) return;
+  if (refreshing || saving || savingCuts) return;
   refreshing = true;
   try {
     const response = await fetch("/api/queue", {cache:"no-store"});
     if (!response.ok) throw new Error("לא ניתן לעדכן את רשימת הבדיקה. הטיוטה הנוכחית נשארה.");
     const result = await response.json();
+    if (saving || savingCuts) return; // Never move the selected case while a save is pending.
     const rendered = caseNow();
     const active = rendered ? stateKey(rendered) : restoredActive;
     if (rendered) rememberDraft();
     liveQueue = result.persistentQueue === true;
     token = result.token;
-    decisions = {...decisions, ...result.decisions};
+    decisions = {...decisions, ...result.decisions, ...(result.wordReviewDecisions ?? {})};
     const old = new Map(cases.map(item => [stateKey(item), item]));
     for (const item of [...cases, ...(result.retiredCases ?? [])]) pastCases.set(stateKey(item), item);
-    const incoming = result.cases.map(item => old.get(stateKey(item)) ?? item);
+    const incoming = result.cases.filter(item => {
+      const answer = result.wordReviewDecisions?.[stateKey(item)];
+      if (answer && answer.caseId === item.id && answer.candidateSha256 === item.candidateSha256
+          && answer.clipSha256 === item.clipSha256 && ["good","problem","skip"].includes(answer.verdict)) completedCaseKeys.add(stateKey(item));
+      return !completedCaseKeys.has(stateKey(item));
+    }).map(item => old.get(stateKey(item)) ?? item);
+    for (const [key,opened] of actionOpenReviews) {
+      const latest = result.wordReviewDecisions?.[key] ?? result.decisions?.[key];
+      const concern=actionOpenConcerns.get(key);
+      const originalGood=concern&&sameSavedGood(latest,concern.previousDecision);
+      if (latest?.verdict === "good"&&!originalGood) { actionOpenReviews.delete(key); actionOpenConcerns.delete(key); completedCaseKeys.add(key); continue; }
+      if (incoming.some(item => item.id === opened.id && stateKey(item) !== key)) { actionOpenReviews.delete(key); actionOpenConcerns.delete(key); continue; }
+      if (!incoming.some(item => stateKey(item) === key)) incoming.push(old.get(key) ?? opened);
+    }
     const additions = incoming.filter(item => !old.has(stateKey(item)));
     const previous = rendered ?? pastCases.get(active);
     const currentIndex = incoming.findIndex(item => stateKey(item) === active);
     const replacementIndex = incoming.findIndex(item => item.id === previous?.id);
     const wasEmpty = cases.length === 0;
+    const removedActive = !!rendered && currentIndex < 0 && replacementIndex < 0;
     let changedVersion = false;
     if (currentIndex >= 0) {
       index = currentIndex;
@@ -384,7 +821,7 @@ async function refreshQueue(initial = false) {
     // Only current candidates belong to navigation and saved-answer totals.
     // Older drafts remain addressable by their exact candidate key, not as extra work.
     cases = incoming;
-    if (initial || wasEmpty || changedVersion) render();
+    if (initial || wasEmpty || changedVersion || removedActive) render();
     else updateProgress(); // Preserve active playback and the note while polling.
     if (changedVersion) $("queue-updates").textContent =
       "מוצגים החיתוכים המעודכנים. הטיוטה וההאזנה לגרסה הקודמת נשמרו בנפרד.";
@@ -394,17 +831,470 @@ async function refreshQueue(initial = false) {
       (additions.length === 1 ? "נוסף פסוק לרשימה." : "נוספו " + additions.length + " פסוקים לרשימה.") +
       " אפשר להמשיך בבדיקה הנוכחית.";
     persistProgress();
-  } catch (error) { $("queue-updates").textContent = error.message; }
+    if (lastQueuePollingFailure !== null) {
+      if ($("queue-updates").textContent === lastQueuePollingFailure) $("queue-updates").textContent = "";
+      lastQueuePollingFailure = null;
+    }
+  } catch (error) {
+    lastQueuePollingFailure = error.message;
+    $("queue-updates").textContent = lastQueuePollingFailure;
+  }
   finally { refreshing = false; }
 }
-$("note").oninput = rememberDraft;
+$("note").oninput = () => { if (caseNow()) typedProblemDraftKeys.add(stateKey(caseNow())); rememberDraft(); updateCutEditorStatus(); };
 setInterval(() => void refreshQueue(), 5000);
 setInterval(() => void updateRecovery(), 5000);
+async function updatePreparation() {
+  if (unifiedActionsAvailable) { $("preparation-progress").hidden = true; return; }
+  try {
+    const response = await fetch("/api/preparation-status", {cache:"no-store"});
+    if (!response.ok) { $("preparation-progress").hidden = true; return; }
+    const progress = await response.json();
+    const labels = {starting:"העיבוד המקומי מתחיל",preparing:"המחשב מכין פסוקים נוספים לבדיקה",
+      prepared:"הפסוקים ממוינים להמשך הבדיקה",waiting_for_review_capacity:"חיתוכים מוכנים נוספים ממתינים להוספה לרשימה",
+      completed:"המיון המקומי הסתיים",failed:"העיבוד המקומי נעצר ודורש טיפול"};
+    if (!Number.isSafeInteger(progress.targetVerses) || progress.targetVerses < 0
+        || !Number.isSafeInteger(progress.remainingToPrepare) || progress.remainingToPrepare < 0
+        || !Number.isSafeInteger(progress.machinePreparedVerses) || progress.machinePreparedVerses < 0
+        || !Number.isSafeInteger(progress.counts?.held ?? 0) || (progress.counts?.held ?? 0) < 0) return;
+    $("preparation-state").textContent = labels[progress.state] ?? "עיבוד מקומי";
+    $("preparation-counts").textContent = "במאגר העיבוד: " + progress.targetVerses + " פסוקים שסומנו. "
+      + "הוכנו אוטומטית לבדיקה: " + progress.machinePreparedVerses
+      + " · ממתינים להכנה: " + progress.remainingToPrepare
+      + " · דורשים טיפול נוסף: " + (progress.counts?.held ?? 0)
+      + ". מאגר כל הפסוקים מופיע בנפרד מרשימת ההאזנה.";
+    $("preparation-progress").hidden = unifiedActionsAvailable;
+  } catch { /* A preparation status outage must never alter the active review or draft. */ }
+}
+const actionKinds = {"locate-source-range":"איתור הפסוק בהקלטה","review-cuts":"בדיקת החיתוכים","source-remediation":"טיפול בהקלטת המקור"};
+const actionStates = {pending:"ממתין לטיפול",context_queued:"הטווח נשמר וממתין להכנת חיתוכים",preparing:"המחשב מכין חיתוכים",review:"החיתוכים מוכנים לבדיקה",needs_source:"נדרש טיפול במקור",resolved:"השלב הושלם",validated:"התזמונים אומתו",segmented:"הפרק הושלם בתזמונים"};
+const actionTaskStateLabel=task=>task.state==="preparing"&&task.cutReviewComplete===true
+  ? "החיתוכים נבדקו - ממתין להשלמת הפרק" : actionStates[task.state]||"בטיפול";
+const actionSupportsRange=task=>["locate-source-range","review-cuts"].includes(task.kind)
+  &&(task.cutReviewComplete!==true||!!task.chapterConcern);
+const actionNow = () => actionTasks.find(task => task.id === selectedActionId);
+const actionKey = task => [task.id,task.taskSha256,task.audioSha256,task.textSha256].join(":");
+function actionDraft(task) {
+  const key = actionKey(task);
+  if (!actionDrafts.has(key)) actionDrafts.set(key,{startMs:null,endMs:null,seekMs:0,note:"",decision:""});
+  return actionDrafts.get(key);
+}
+function persistActions() {
+  try { localStorage.setItem(actionStorageKey,JSON.stringify({drafts:[...actionDrafts],heard:[...actionHearing],submissions:[...actionSubmissions]})); }
+  catch { $("action-message").textContent = "הטיוטה זמינה בדף, אך השמירה בדפדפן אינה זמינה."; }
+}
+function restoreActions() {
+  try {
+    const stored=JSON.parse(localStorage.getItem(actionStorageKey)??"null");
+    for(const [key,value] of stored?.drafts??[])if(typeof key==="string"&&value&&typeof value==="object")actionDrafts.set(key,value);
+    for(const key of stored?.heard??[])if(typeof key==="string")actionHearing.add(key);
+    for(const [key,value] of stored?.submissions??[])if(typeof key==="string"&&value?.id&&value?.fingerprint)actionSubmissions.set(key,value);
+  } catch { $("action-message").textContent="לא ניתן לשחזר את טיוטת האיתור. התשובות השמורות לא השתנו."; }
+}
+function validAction(task) {
+  return task && typeof task.id==="string" && typeof task.taskSha256==="string"
+    && typeof task.audioSha256==="string" && typeof task.textSha256==="string"
+    && Number.isSafeInteger(task.perekId) && Number.isSafeInteger(task.pasuk)
+    && Object.hasOwn(actionKinds,task.kind) && typeof task.state==="string";
+}
+function renderActionList() {
+  const filter=$("action-filter").value||"pending";
+  const shown=actionTasks.filter(task=>filter==="all"||filter==="pending"?!["resolved","validated","segmented"].includes(task.state)||filter==="all":task.kind===filter);
+  $("action-counts").textContent=actionTasks.length+" נושאים במאגר · "+shown.length+" מוצגים · "+actionTasks.filter(task=>!["resolved","validated","segmented"].includes(task.state)).length+" עדיין פתוחים.";
+  const ids=shown.map(task=>task.id).join(":");
+  const orderChanged=ids!==actionShownIds;
+  if(orderChanged)$("action-list").replaceChildren();
+  for(const task of shown) {
+    let button=actionButtons.get(task.id);
+    if(!button){button=document.createElement("button");button.onclick=()=>selectAction(task.id);actionButtons.set(task.id,button);}
+    button.className="action-choice"+(task.id===selectedActionId?" selected":"");
+    button.textContent=(task.label||task.id)+" · "+actionKinds[task.kind]+" · "+actionTaskStateLabel(task);
+    if(orderChanged)$("action-list").append(button);
+  }
+  actionShownIds=ids;
+}
+function selectAction(id) {
+  if(actionSaving)return;
+  if(actionPlayback)stop();
+  selectedActionId=id;renderActionList();renderActionEditor();
+}
+function actionRangeError(task,draft) {
+  if(!Number.isSafeInteger(draft.startMs)||!Number.isSafeInteger(draft.endMs))return "קבעו תחילה וסיום של הפסוק בהקלטה.";
+  if(!Number.isSafeInteger(task.sourceDurationMs)||!Number.isSafeInteger(task.sourceFrames)||task.sourceSampleRate!==16000)return "פרטי המקור לא זמינים. אין לשמור טווח בלי מקור מאומת.";
+  if(!(0<=draft.startMs&&draft.startMs<draft.endMs&&draft.endMs<=task.sourceDurationMs))return "הטווח צריך להיות מסודר ובתוך הקלטת המקור.";
+  return "";
+}
+const actionRangeKey=(task,draft)=>actionKey(task)+":"+draft.startMs+":"+draft.endMs;
+function updateActionRange() {
+  const task=actionNow();if(!task)return;const draft=actionDraft(task),error=actionRangeError(task,draft);
+  for(const field of ["start","end"]) {
+    const value=draft[field+"Ms"],range=$( "action-"+field),number=$("action-"+field+"-number");
+    if(document.activeElement!==number)number.value=Number.isSafeInteger(value)?(value/1000).toFixed(3):"";
+    const valid=Number.isSafeInteger(value)&&value>=0&&value<=task.sourceDurationMs;
+    range.hidden=!valid;
+    if(valid){const anchor=draft[field+"AnchorMs"]??value;range.min=String(Math.max(0,anchor-150));range.max=String(Math.min(task.sourceDurationMs,anchor+150));range.value=String(value);}
+    range.disabled=actionSaving;number.disabled=actionSaving;
+  }
+  $("action-play-range").disabled=actionSaving||!!error;
+  $("action-save-range").disabled=actionSaving||!token||!!error||!actionHearing.has(actionRangeKey(task,draft));
+  $("action-range-status").textContent=error||(actionHearing.has(actionRangeKey(task,draft))?"הטווח המדויק נשמע. אפשר לשמור להכנת חיתוכים; המילים עדיין לא אושרו.":"יש להאזין לטווח המדויק לפני שמירתו.");
+  $("action-save-source").disabled=actionSaving||!token;
+  $("action-source-note").disabled=actionSaving;$("action-source-decision").disabled=actionSaving;
+}
+function renderActionEditor() {
+  const task=actionNow();$("action-editor").hidden=!task;if(!task)return;
+  const draft=actionDraft(task);
+  $("action-reference").textContent=(task.label||task.id)+" - "+actionKinds[task.kind];
+  $("action-state").textContent=actionTaskStateLabel(task);
+  $("action-chapter-concern").hidden=!task.chapterConcern;
+  if(task.chapterConcern)$("action-chapter-concern").textContent=chapterConcernText(task.chapterConcern);
+  $("action-verse").textContent=(task.canonicalWords??[]).map(word=>word.text).join(" ");
+  $("action-neighbors").textContent=(task.neighborWords??[]).map(word=>word.text).join(" ");
+  $("action-neighbors").hidden=!(task.neighborWords?.length);
+  const review=task.kind==="review-cuts"||task.state==="review";
+  $("action-review").hidden=!review;$("action-original").hidden=review&&draft.showSource!==true;
+  $("action-range").hidden=!actionSupportsRange(task);
+  $("action-source-report").open=task.kind==="source-remediation";
+  $("action-source-note").value=draft.note??"";$("action-source-decision").value=draft.decision??"";
+  const issue=typeof task.issueURL==="string"&&/^https:\/\/github\.com\/bible-on-site\/bible-on-site\/issues\/\d+$/.test(task.issueURL)?task.issueURL:null;
+  $("action-issue").hidden=!issue;if(issue)$("action-issue").href=issue;
+  $("action-seek").max=String(task.sourceDurationMs??0);$("action-seek").value=String(draft.seekMs??0);
+  $("action-seek-number").value=((draft.seekMs??0)/1000).toFixed(3);
+  $("action-source-status").textContent="המיקום בשניות מתחילת ההקלטה. הטווח לשמירה מתחיל ללא גבולות מוצעים.";
+  $("action-open-review").disabled=actionSaving||task.cutReviewComplete===true||["resolved","validated","segmented"].includes(task.state);
+  updateActionRange();
+}
+function setActionBoundary(field,value,recenter=true) {
+  const task=actionNow();if(!task||actionSaving)return;if(actionPlayback)stop();
+  const draft=actionDraft(task);draft[field+"Ms"]=value;
+  if(recenter)draft[field+"AnchorMs"]=value;
+  persistActions();updateActionRange();
+}
+function actionPosition() {
+  if(actionPlayback&&actionPlayback.taskKey===actionKey(actionNow()))return Math.min(actionPlayback.endMs,Math.round(actionPlayback.startMs+(audioContext.currentTime-actionPlayback.began)*1000));
+  return actionDraft(actionNow()).seekMs??0;
+}
+function setActionSeek(value) {
+  const task=actionNow();if(!task||actionSaving)return;if(actionPlayback)stop();
+  actionDraft(task).seekMs=value;$("action-seek").value=String(value);if(document.activeElement!==$("action-seek-number"))$("action-seek-number").value=Number.isFinite(value)?(value/1000).toFixed(3):"";
+  persistActions();
+}
+async function getActionBuffer(task) {
+  if(typeof task.playbackSha256!=="string"||!Number.isSafeInteger(task.sourceFrames)||task.sourceSampleRate!==16000)throw new Error("פרטי השמעת המקור אינם מאומתים.");
+  const bufferKey=task.playbackSha256;
+  if(!actionBuffers.has(bufferKey)) {
+    actionBuffers.clear();
+    actionBuffers.set(bufferKey,(async()=>{
+      const response=await fetch("/api/action-audio/"+encodeURIComponent(task.id),{cache:"no-store"});
+      if(!response.ok)throw new Error("לא ניתן לטעון את הקלטת המקור.");
+      const bytes=await response.arrayBuffer(),digest=await crypto.subtle.digest("SHA-256",bytes);
+      const hash=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("");
+      if(hash!==task.playbackSha256)throw new Error("קובץ ההשמעה אינו תואם למקור הקשור למשימה. הטווח לא אושר.");
+      const decoder=new OfflineAudioContext(1,task.sourceFrames,16000);
+      const decoded=await decoder.decodeAudioData(bytes);
+      if(decoded.sampleRate!==16000||decoded.numberOfChannels!==1||decoded.length!==task.sourceFrames)throw new Error("מספר דגימות המקור אינו תואם. הטווח לא אושר.");
+      return decoded;
+    })().catch(error=>{actionBuffers.delete(bufferKey);throw error;}));
+  }
+  return actionBuffers.get(bufferKey);
+}
+async function playActionRange(selectedRange=false) {
+  const task=actionNow();if(!task)return;const draft=actionDraft(task);
+  if(selectedRange&&actionRangeError(task,draft)){updateActionRange();return;}
+  const start=selectedRange?draft.startMs:draft.seekMs??0,end=selectedRange?draft.endMs:task.sourceDurationMs;
+  if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>=end||end>task.sourceDurationMs){$("action-source-status").textContent="בחרו מיקום בתוך ההקלטה.";return;}
+  stop();const request=generation,key=actionKey(task),rangeKey=actionRangeKey(task,draft);
+  $("action-source-status").textContent="טוען את המקור המאומת...";
+  try {
+    audioContext??=new AudioContext();await audioContext.resume();const buffer=await getActionBuffer(task);
+    if(request!==generation||key!==actionKey(actionNow()))return;
+    actionPlayback={taskKey:key,startMs:start,endMs:end,began:audioContext.currentTime};
+    $("action-source-status").textContent=selectedRange?"מנגן את הטווח שנבחר...":"מנגן את המקור. אפשר לקבוע התחלה או סיום במיקום הנוכחי.";
+    const complete=await playSlice(buffer,{clipStartMs:0},start,end,request);
+    if(request!==generation||key!==actionKey(actionNow()))return;
+    actionPlayback=null;
+    if(complete){actionDraft(task).seekMs=end;$("action-seek").value=String(end);$("action-seek-number").value=(end/1000).toFixed(3);}
+    if(complete&&selectedRange&&rangeKey===actionRangeKey(task,actionDraft(task))){actionHearing.add(rangeKey);persistActions();updateActionRange();}
+    $("action-source-status").textContent=complete?"ההשמעה הסתיימה. האזנה זו אינה מאשרת חיתוכי מילים.":"ההשמעה הופסקה; אין אישור שהטווח נשמע במלואו.";
+  } catch(error){if(request===generation)$("action-source-status").textContent=error.message;}
+  finally{if(request===generation)actionPlayback=null;}
+}
+function actionSubmission(task,payload) {
+  const key=actionKey(task),fingerprint=JSON.stringify(payload);
+  let saved=actionSubmissions.get(key);
+  if(!saved||saved.fingerprint!==fingerprint){saved={fingerprint,id:crypto.randomUUID()};actionSubmissions.set(key,saved);persistActions();}
+  return saved.id;
+}
+async function saveAction(kind) {
+  const task=actionNow();if(!task||actionSaving||!token)return;
+  const draft=actionDraft(task);
+  const payload={taskId:task.id,taskSha256:task.taskSha256,audioSha256:task.audioSha256,textSha256:task.textSha256,kind};
+  if(kind==="locate-source-range") {
+    if(!actionSupportsRange(task)){$("action-message").textContent="החיתוכים כבר נבדקו. איתור מחדש דורש נושא חדש עם בעיה מאומתת; אין צורך להציע שוב חיתוכים שאושרו.";return;}
+    if(actionRangeError(task,draft)||!actionHearing.has(actionRangeKey(task,draft))){updateActionRange();return;}
+    Object.assign(payload,{startMs:draft.startMs,endMs:draft.endMs,heardRange:{startMs:draft.startMs,endMs:draft.endMs,complete:true}});
+  } else {
+    if(!["source_problem","cannot_locate","request_corrected_source"].includes(draft.decision)||typeof draft.note!=="string"||!draft.note.trim()){$("action-message").textContent="בחרו את הצעד הנדרש וכתבו פירוט לפני שמירת דיווח.";return;}
+    Object.assign(payload,{decision:draft.decision,note:draft.note});
+  }
+  const submissionId=actionSubmission(task,payload);
+  actionSaving=true;updateActionRange();$("action-message").textContent="שומר את הבקשה...";
+  try {
+    const response=await fetch("/api/action-responses",{method:"POST",headers:{"Content-Type":"application/json","X-Review-Token":token},body:JSON.stringify({...payload,submissionId})});
+    const result=await response.json();if(!response.ok)throw new Error(result.error??"לא ניתן לשמור את הבקשה.");
+    $("action-message").textContent=kind==="locate-source-range"?"הטווח נשמר והועבר להכנת חיתוכים במחשב. עדיין אין אישור למילים או לפרק.":"דיווח המקור נשמר. התזמונים לא אושרו וההקלטה המקורית לא שונתה.";
+    await updateActions();await updateWorkflow();
+  } catch(error){$("action-message").textContent="השמירה לא הצליחה: "+error.message+" הטיוטה נשמרה; אפשר לנסות שוב.";}
+  finally{actionSaving=false;updateActionRange();}
+}
+function chapterConcernText(concern) {
+  return concern.reasonCode==="cross_verse_overlap"
+    ? "בדיקת הפרק מצאה חפיפה בין פסוקים לאחר האישור הקודם. זהו נושא חדש שנובע מבדיקת הפרק המלא."
+    : "בדיקת הפרק המלא מצאה בעיית גבולות לאחר האישור הקודם. זהו נושא חדש לבדיקה.";
+}
+function sameSavedGood(current,previous) {
+  if(current?.verdict!=="good"||previous?.verdict!=="good")return false;
+  if(current.submissionId&&previous.submissionId)return current.submissionId===previous.submissionId
+    &&current.savedAt===previous.savedAt&&current.reviewSha256===previous.reviewSha256;
+  return JSON.stringify(current)===JSON.stringify(previous);
+}
+function confirmedChapterConcern(task,result,item) {
+  const concern=task.chapterConcern,proof=result.chapterConcern;
+  if(!concern||!proof||!Array.isArray(concern.segments)||!concern.segments.length
+      || !["cross_verse_overlap","chapter_validation_failure"].includes(concern.reasonCode)
+      || !/^[a-f0-9]{64}$/.test(concern.validationSha256)||!/^[a-f0-9]{64}$/.test(concern.previousReviewSha256)
+      || concern.segments.some(segment=>!Number.isSafeInteger(segment)||!item.words.some(word=>word.segment===segment))
+      || new Set(concern.segments).size!==concern.segments.length)return null;
+  if(result.decisionSha256!=null&&result.decisionSha256!==concern.previousReviewSha256)return null;
+  if(result.chapterConcernConfirmed!==true&&result.decisionSha256!==concern.previousReviewSha256)return null;
+  return proof.validationSha256===concern.validationSha256&&proof.previousReviewSha256===concern.previousReviewSha256
+    &&proof.reasonCode===concern.reasonCode&&JSON.stringify(proof.segments)===JSON.stringify(concern.segments)?concern:null;
+}
+function restoreChapterConcern(item,decision,concern) {
+  const baseline=decision.candidateWords??item.words;
+  if(!Array.isArray(baseline)||baseline.length!==item.words.length
+      || baseline.some(word=>!Number.isSafeInteger(word.startMs)||!Number.isSafeInteger(word.endMs)
+        || !item.words.some(original=>original.segment===word.segment&&original.text===word.text)))throw new Error("התשובה הקודמת אינה תואמת לחיתוכים הנוכחיים.");
+  const key=stateKey(item),prior=evidence.get(key),reported=decision.listenEvidenceReportedByBrowser??{};
+  if(!cutDrafts.has(key))cutDrafts.set(key,Object.fromEntries(baseline.filter(word=>{
+    const original=item.words.find(row=>row.segment===word.segment);
+    return original.startMs!==word.startMs||original.endMs!==word.endMs;
+  }).map(word=>[word.segment,{startMs:word.startMs,endMs:word.endMs}])));
+  const savedDirect=item.listeningReuseSha256?reported.freshHeardSegments??[]:reported.heardSegments??[];
+  const directOriginal=new Set([...savedDirect,...(prior?.fresh??[])].filter(segment=>item.words.some(word=>word.segment===segment)));
+  evidence.set(key,{verse:false,segments:new Set(directOriginal),fresh:directOriginal});
+  for(const segment of reported.heardEditedSegments??[]) {
+    const word=baseline.find(row=>row.segment===segment),original=item.words.find(row=>row.segment===segment);
+    if(word&&original&&(word.startMs!==original.startMs||word.endMs!==original.endMs))cutHearing.add(cutKey(item,word));
+  }
+  actionOpenConcerns.set(key,{...concern,baselineWords:baseline,previousDecision:decision});
+  showAllCutWords=false;activeCutSegment=concern.segments[0];
+  persistCutProgress();persistProgress();
+}
+function concernHasCorrection(item) {
+  const concern=item&&actionOpenConcerns.get(stateKey(item));if(!concern)return true;
+  return concern.segments.some(segment=>{
+    const original=item.words.find(word=>word.segment===segment),baseline=concern.baselineWords.find(word=>word.segment===segment);
+    const current=original&&workingWord(item,original);
+    return current&&baseline&&(current.startMs!==baseline.startMs||current.endMs!==baseline.endMs);
+  });
+}
+async function openActionReview() {
+  const task=actionNow();if(!task||actionSaving)return;
+  try {
+    const response=await fetch("/api/action-case/"+encodeURIComponent(task.id),{cache:"no-store"});
+    const result=await response.json();if(!response.ok)throw new Error(result.error??"החיתוכים אינם זמינים לעריכה.");
+    const item=result.case;
+    const ref=task.caseRef??task;
+    if(!item||item.perekId!==task.perekId||item.pasuk!==task.pasuk||!Array.isArray(item.words)
+        || ref.caseId&&ref.caseId!==item.id || ref.candidateSha256&&ref.candidateSha256!==item.candidateSha256
+        || ref.clipSha256&&ref.clipSha256!==item.clipSha256)throw new Error("אין לפתוח שוב חיתוכים שאושרו או גרסה שאינה תואמת למשימה.");
+    const concern=result.decision?.verdict==="good"?confirmedChapterConcern(task,result,item):null;
+    if(concern&&decisionFor(item)?.verdict==="good"&&!sameSavedGood(decisionFor(item),result.decision))throw new Error("כבר נשמר אישור חדש יותר. אין לפתוח שוב את האישור שקדם לבעיה.");
+    if((result.decision?.verdict==="good"||decisionFor(item)?.verdict==="good")&&!concern)throw new Error("אין לפתוח שוב חיתוכים שאושרו ללא בעיה חדשה ומאומתת בבדיקת הפרק.");
+    rememberDraft();stop();historicalCase=null;keepPreviousVersion=false;
+    if(concern)restoreChapterConcern(item,result.decision,concern);
+    let next=cases.findIndex(row=>stateKey(row)===stateKey(item));
+    if(next<0){cases.push(item);next=cases.length-1;}
+    actionOpenReviews.set(stateKey(item),item);
+    if(result.decision)decisions[stateKey(item)]=result.decision;
+    completedCaseKeys.delete(stateKey(item));index=next;render();persistProgress();
+    $("review-card").scrollIntoView?.({block:"start",behavior:"smooth"});
+    $("action-message").textContent=concern?"נפתחה בעיה חדשה מבדיקת הפרק. הגבולות שאושרו וההאזנה הישירה בפועל שוחזרו; כל גבול שישתנה דורש האזנה חדשה.":"נפתחו החיתוכים הנוכחיים לעריכה. כל התשובות והטיוטות הקודמות נשמרו.";
+    if(concern){cutRows.get(activeCutSegment)?.row.scrollIntoView?.({block:"nearest"});cutRows.get(activeCutSegment)?.play.focus?.();}
+  } catch(error){$("action-message").textContent=error.message;}
+}
+async function updateActions() {
+  if(actionsRefreshing)return;actionsRefreshing=true;$("action-refresh").disabled=true;
+  try {
+    const response=await fetch("/api/actions",{cache:"no-store"});
+    if(!response.ok){if(response.status===404&&!actionTasks.length){$("action-workspace").hidden=true;return;}throw new Error("לא ניתן לעדכן את הנושאים כרגע.");}
+    const result=await response.json();
+    if(!Array.isArray(result.tasks)||result.tasks.some(task=>!validAction(task))||new Set(result.tasks.map(task=>task.id)).size!==result.tasks.length)throw new Error("רשימת הנושאים אינה זמינה כרגע.");
+    const previous=actionNow(),previousKey=previous? actionKey(previous):null;
+    actionTasks=result.tasks;
+    if(actionTasks.length) {
+      unifiedActionsAvailable=true;
+      $("preparation-progress").hidden=true;
+      $("preparation-inventory").hidden=true;
+    }
+    if(!actionTasks.some(task=>task.id===selectedActionId))selectedActionId=actionTasks.find(task=>!["resolved","validated","segmented"].includes(task.state))?.id??actionTasks[0]?.id??null;
+    renderActionList();$("action-workspace").hidden=false;
+    const current=actionNow();
+    if(!previousKey||!current||previousKey!==actionKey(current)){if(actionPlayback)stop();renderActionEditor();}
+    else {
+      $("action-state").textContent=actionTaskStateLabel(current);
+      $("action-chapter-concern").hidden=!current.chapterConcern;
+      if(current.chapterConcern)$("action-chapter-concern").textContent=chapterConcernText(current.chapterConcern);
+      const review=current.kind==="review-cuts"||current.state==="review";
+      $("action-review").hidden=!review;$("action-original").hidden=review&&actionDraft(current).showSource!==true;
+      $("action-range").hidden=!actionSupportsRange(current);
+      $("action-open-review").disabled=actionSaving||current.cutReviewComplete===true||["resolved","validated","segmented"].includes(current.state);
+      if(current.state==="needs_source")$("action-source-report").open=true;
+      updateActionRange();
+    }
+  } catch(error){$("action-message").textContent=error.message;if(actionTasks.length)$("action-workspace").hidden=false;}
+  finally{actionsRefreshing=false;$("action-refresh").disabled=false;}
+}
+async function updateWorkflow() {
+  try {
+    const response=await fetch("/api/workflow-status",{cache:"no-store"});if(!response.ok)return;
+    const data=await response.json();if(!Array.isArray(data.chapters))return;
+    const counted=[data.totalRecordings,data.readyRecordings,data.pendingRecordings].every(value=>Number.isSafeInteger(value)&&value>=0);
+    $("workflow-summary").textContent=(counted?"הקלטות עם תזמונים מאומתים מקומית: "+data.readyRecordings+" מתוך "+data.totalRecordings+" · להשלמה: "+data.pendingRecordings+". ":"")
+      +"השלמת פרק נקבעת רק לאחר בדיקת כל הפסוקים הנדרשים ותקינות כל הגבולות. זה אינו אישור לפרסום.";
+    const chapterStates={...actionStates,ready:"התזמונים הושלמו ואומתו מקומית",needs_actions:"ממתין להשלמת פעולות ובדיקת הפרק",
+      validating:"בדיקת הפרק מתבצעת",validating_chapters:"בדיקת הפרק מתבצעת"};
+    $("workflow-chapters").replaceChildren();
+    for(const chapter of data.chapters) {
+      if(!Number.isSafeInteger(chapter.perekId))continue;
+      const row=document.createElement("div");row.className="workflow-chapter";
+      row.textContent=(chapter.label||"פרק "+chapter.perekId)+" · "+(chapterStates[chapter.state]||"ממתין להשלמת הבדיקה")
+        +(Number.isSafeInteger(chapter.remainingActions)?" · "+chapter.remainingActions+" פעולות נותרו":"")
+        +(Number.isSafeInteger(chapter.validatedVerses)?" · "+chapter.validatedVerses+" פסוקים נבדקו":"")
+        +(Number.isSafeInteger(chapter.readyWords)?" · "+chapter.readyWords+" מילים עם תזמונים":"");
+      $("workflow-chapters").append(row);
+    }
+  } catch { /* Workflow status must never change a live review or draft. */ }
+}
+$("action-filter").onchange=renderActionList;
+$("action-refresh").onclick=()=>void updateActions();
+$("action-next").onclick=()=>{const i=actionTasks.findIndex(task=>task.id===selectedActionId);if(actionTasks.length)selectAction(actionTasks[(i+1)%actionTasks.length].id);};
+$("action-previous").onclick=()=>{const i=actionTasks.findIndex(task=>task.id===selectedActionId);if(actionTasks.length)selectAction(actionTasks[(i-1+actionTasks.length)%actionTasks.length].id);};
+$("action-seek").oninput=event=>setActionSeek(Number(event.target.value));
+$("action-seek-number").oninput=event=>setActionSeek(event.target.value===""?null:Math.round(Number(event.target.value)*1000));
+for(const field of ["start","end"]) {
+  $("action-"+field+"-number").oninput=event=>setActionBoundary(field,event.target.value===""?null:Math.round(Number(event.target.value)*1000));
+  $("action-"+field).oninput=event=>setActionBoundary(field,Number(event.target.value),false);
+}
+$("action-mark-start").onclick=()=>{const task=actionNow();if(task)setActionBoundary("start",actionPosition());};
+$("action-mark-end").onclick=()=>{const task=actionNow();if(task)setActionBoundary("end",actionPosition());};
+$("action-play-source").onclick=()=>void playActionRange(false);
+$("action-play-range").onclick=()=>void playActionRange(true);
+$("action-stop").onclick=()=>{stop();$("action-source-status").textContent="ההשמעה הופסקה. טווח שלא נשמע במלואו אינו מאושר לשמירה.";};
+$("action-reset-range").onclick=()=>{const task=actionNow();if(!task||actionSaving)return;if(actionPlayback)stop();const draft=actionDraft(task);draft.startMs=null;draft.endMs=null;persistActions();updateActionRange();};
+$("action-save-range").onclick=()=>void saveAction("locate-source-range");
+$("action-source-note").oninput=()=>{const task=actionNow();if(task){actionDraft(task).note=$("action-source-note").value;persistActions();}};
+$("action-source-decision").onchange=()=>{const task=actionNow();if(task){actionDraft(task).decision=$("action-source-decision").value;persistActions();}};
+$("action-save-source").onclick=()=>void saveAction("source-remediation");
+$("action-open-review").onclick=()=>void openActionReview();
+$("action-open-source").onclick=()=>{const task=actionNow();if(!task||actionSaving)return;actionDraft(task).showSource=true;persistActions();$("action-original").hidden=false;$("action-range").hidden=!actionSupportsRange(task);};
+setInterval(()=>{if(actionPlayback&&actionNow()&&actionPlayback.taskKey===actionKey(actionNow())){const value=actionPosition();$("action-seek").value=String(value);$("action-seek-number").value=(value/1000).toFixed(3);}},100);
+restoreActions();void updateActions();void updateWorkflow();
+setInterval(()=>void updateActions(),5000);setInterval(()=>void updateWorkflow(),5000);
+
+const inventoryStateLabels = {held:"חסום להכנה",prepared:"חיתוכים שהוכנו",queued:"נוסף לרשימת הבדיקה",excluded:"כבר הוצע או הושלם"};
+const inventoryReasonLabels = {
+  chapter_requires_supported_context:"הפרק ממתין להשלמת הקשר תומך לכל הפסוקים החשודים. עדיין אי אפשר להכין את כל חיתוכיו.",
+  source_or_full_chapter_guard:"בדיקת איכות של המקור או של גבולות החיתוכים לא עברה. נדרש טיפול לפני הכנה להאזנה.",
+  known_original_source_hold:"בעיה מוכרת בהקלטת המקור. אין עדיין חיתוכים בטוחים לבדיקה.",
+  previously_offered_chapter:"הפרק כבר הוצע לבדיקה. נשמרות הגרסאות והתשובות הקיימות, ללא הצעה כפולה.",
+  chapter_already_ready:"לפרק כבר יש תזמונים מאושרים.",
+  awaiting_queue_capacity:"החיתוכים הוכנו אוטומטית, והוספתם לרשימת ההאזנה עדיין לא הושלמה.",
+  already_in_accumulated_queue:"החיתוכים נוספו לרשימת ההאזנה. האישור תלוי בבדיקה ושמירה אמיתית.",
+  awaiting_genuine_human_review:"החיתוכים נוספו לרשימת ההאזנה. עדיין נדרשות האזנה ושמירה אמיתית.",
+  verse_exceeds_configured_review_window:"הפסוק לא הוכנס לרשימה בגלל מגבלת תצוגה. הוא עדיין אינו מאושר."
+};
+function renderInventory() {
+  if (inventoryCases === null) return;
+  const counts = {held:0,prepared:0,queued:0,excluded:0};
+  for (const item of inventoryCases) counts[item.state]++;
+  const prepared = counts.prepared + counts.queued;
+  $("inventory-summary").textContent = "כל הפסוקים שסומנו (" + inventoryCases.length + ")";
+  $("inventory-counts").textContent = "במאגר: " + inventoryCases.length + " פסוקים"
+    + " · חיתוכים שהוכנו: " + prepared
+    + " · חסומים להכנה: " + counts.held
+    + " · כבר הוצעו או הושלמו: " + counts.excluded;
+  const filter = $("inventory-filter").value || "all";
+  const shown = inventoryCases.filter(item => filter === "held" ? item.state === "held"
+    : filter === "ready" ? item.state === "prepared" || item.state === "queued" : true);
+  $("inventory-result-count").textContent = "מוצגים " + shown.length + " מתוך " + inventoryCases.length + " פסוקים במאגר.";
+  $("inventory-list").replaceChildren();
+  for (const item of shown) {
+    const row = document.createElement("li");
+    row.className = "inventory-item " + item.state;
+    const heading = document.createElement("div");
+    heading.className = "inventory-heading";
+    const label = document.createElement("strong");
+    label.textContent = item.label || item.id;
+    const state = document.createElement("span");
+    state.className = "inventory-state";
+    state.textContent = inventoryStateLabels[item.state];
+    heading.append(label);
+    heading.append(state);
+    const reason = document.createElement("p");
+    reason.className = "inventory-reason";
+    reason.textContent = inventoryReasonLabels[item.reason] ?? (item.state === "held"
+      ? "נדרש טיפול נוסף לפני הכנת חיתוכים להאזנה." : "המצב נשמר במאגר העיבוד המקומי.");
+    row.append(heading);
+    row.append(reason);
+    $("inventory-list").append(row);
+  }
+}
+async function updateInventory() {
+  if (unifiedActionsAvailable || inventoryRefreshing) return;
+  inventoryRefreshing = true;
+  $("inventory-refresh").disabled = true;
+  $("preparation-inventory").setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/preparation-inventory", {cache:"no-store"});
+    if (!response.ok) {
+      if (response.status === 404 && inventoryCases === null) { $("preparation-inventory").hidden = true; return; }
+      throw new Error("לא ניתן לטעון את המאגר המלא כרגע. אפשר לנסות לעדכן שוב.");
+    }
+    const inventory = await response.json();
+    if (!Array.isArray(inventory.cases)
+        || inventory.cases.some(item => !item || typeof item.id !== "string"
+          || !Number.isSafeInteger(item.perekId) || item.perekId <= 0
+          || !Number.isSafeInteger(item.pasuk) || item.pasuk <= 0
+          || !Object.hasOwn(inventoryStateLabels, item.state)
+          || typeof item.reason !== "string" || item.label != null && typeof item.label !== "string")
+        || new Set(inventory.cases.map(item => item.id)).size !== inventory.cases.length)
+      throw new Error("מאגר הפסוקים לא זמין כרגע. הרשימה הקיימת והתשובות לא השתנו.");
+    inventoryCases = [...inventory.cases].sort((a,b) => a.perekId-b.perekId || a.pasuk-b.pasuk);
+    renderInventory();
+    $("inventory-message").textContent = "";
+    $("preparation-inventory").hidden = unifiedActionsAvailable;
+  } catch (error) {
+    $("inventory-message").textContent = error.message;
+    $("preparation-inventory").hidden = unifiedActionsAvailable;
+  } finally {
+    inventoryRefreshing = false;
+    $("inventory-refresh").disabled = false;
+    $("preparation-inventory").setAttribute("aria-busy", "false");
+  }
+}
+$("inventory-filter").onchange = renderInventory;
+$("inventory-refresh").onclick = () => void updateInventory();
+void updateInventory();
+setInterval(() => void updatePreparation(), 5000);
+void updatePreparation();
 void updateRecovery();
 document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 window.addEventListener("pagehide", stop);
+restoreCutProgress();
 restoreProgress();
-void refreshQueue(true);
+void loadCutProposals().then(() => refreshQueue(true));
 </script>
 </body>
 </html>

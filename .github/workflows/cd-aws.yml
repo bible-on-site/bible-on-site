@@ -21,7 +21,7 @@ jobs:
 
     env:
       DEVOPS_DIRECTORY: devops
-      DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+      DEVOPS_NODE_CACHE_PATH: devops/bun.lock
       DEVOPS_NODE_VERSION_FILE: devops/package.json
       MODULE_NAME: ${{ github.event.client_payload.module_name }}
       MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
@@ -54,21 +54,19 @@ jobs:
         with:
           ref: ${{ steps.guard.outputs.ref }}
 
-      - name: Setup Node.js
+      - name: Setup devops bun, Node.js and dependencies
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        id: setup-node
-        uses: actions/setup-node@v7
+        id: devops-bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Install npm Dependencies
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
-        id: npm_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          npm ci --no-audit
+      - name: Save bun store cache
+        if: ${{ steps.guard.outputs.deploy == 'true' && github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/save-bun-store
+        with:
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       # Preflight the post-rollout verifier's imports through the same
       # NODE_PATH contract used below, before any deployment side effects
@@ -116,7 +114,7 @@ jobs:
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm run deploy:ecr -- \
+          bun run deploy:ecr -- \
             --module-name ${{ env.MODULE_NAME }} \
             --module-version "${{ env.MODULE_VERSION }}" \
             --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"

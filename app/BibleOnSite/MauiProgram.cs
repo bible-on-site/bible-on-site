@@ -123,19 +123,18 @@ public static class MauiProgram
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
 					// Info.plist keeps collection off so nothing can emit before
-					// this point; collection then enables only for a stored
-					// user opt-in (#2400), never in e2e-marked processes so
-					// automatic and custom suite events never reach the
-					// production property, and the explicit value also
-					// overrides a flag a previous non-suite install persisted
-					// on this device.
-					var analyticsCollectionEnabled =
-						AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
+					// this point; e2e-marked processes keep it off so automatic
+					// and custom suite events never reach the production
+					// property, and the explicit value also overrides a flag a
+					// previous non-suite install persisted on this device.
+					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
 					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
 					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}
-				catch (Exception ex)
+				#pragma warning disable S2221 // Deliberate failure boundary: Firebase init failure disables analytics, not the app
+				catch (Exception ex) //NOSONAR — Firebase init failure disables analytics, not the app.
 				{
+				    #pragma warning restore S2221
 					System.Diagnostics.Debug.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 					Console.Error.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 				}

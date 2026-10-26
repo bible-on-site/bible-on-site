@@ -12,9 +12,9 @@ import unittest
 from unittest.mock import patch
 import wave
 
-from alignment import Word, text_hash
-from listening_review import (candidate_digest, digest_file, digest_json, hebrew_number, make_clip, make_server,
-                              read_json, ReviewStore, validate_case, validate_decision)
+from alignment import Word, text_hash, words_for
+from listening_review import (candidate_digest, digest_file, digest_json, hebrew_number, load_queue, make_clip, make_server,
+                              read_json, ReviewStore, validate_case, validate_decision, write_json)
 from listening_accept import verify_review
 
 
@@ -55,6 +55,46 @@ class ListeningReviewTests(unittest.TestCase):
             mutate(case)
             with self.assertRaises(ValueError):
                 validate_case(case, self.words, self.manifest)
+
+    def test_long_context_is_allowed_only_for_genuine_new_source_selection_policy(self):
+        manifest = {**self.manifest, "durationMs": 72000}
+        case = {**self.case, "clipEndMs": 71000, "preparationKind": "human-selected-context-v1",
+                "manualSourceInspection": False, "requiresFreshHumanCutReview": True}
+        validate_case(case, self.words, manifest)
+        for change in ({"preparationKind": "machine-diagnostic-initial-candidate-v1"},
+                       {"manualSourceInspection": True}, {"requiresFreshHumanCutReview": False},
+                       {"clipEndMs": 72001}):
+            with self.assertRaises(ValueError):
+                validate_case({**case, **change}, self.words, manifest)
+
+    def test_queue_cache_reuses_only_immutable_canonical_words_and_checks_bound_bytes(self):
+        canonical = self.root / "canonical.json"
+        verses = [{"segments": []} for _ in range(14)] + [{"segments": [
+            {"type": "qri", "value": "ויאמר"}, {"type": "note", "value": "ignored"},
+            {"type": "qri", "value": "יהוה"}]}]
+        write_json(canonical, [{"perekFrom": 191, "perakim": [{"perekId": 191, "pesukim": verses}]}])
+        original_audio, diagnostic = self.root / "original.mp3", self.root / "diagnostic.json"
+        original_audio.write_bytes(b"immutable-original-source")
+        self.root.joinpath("clip.wav").write_bytes(b"immutable-listening-clip")
+        write_json(diagnostic, {"diagnosticOnly": True})
+        manifest = self.root / "manifest.json"
+        write_json(manifest, {**self.manifest, "audioSha256": digest_file(original_audio)})
+        case = {**self.case, "audioPath": str(original_audio), "audioSha256": digest_file(original_audio),
+                "clipSha256": digest_file(self.root / "clip.wav"), "manifestPath": str(manifest),
+                "diagnosticPath": str(diagnostic), "diagnosticSha256": digest_file(diagnostic)}
+        case["candidateSha256"] = candidate_digest(case)
+        queue = {"version": 1, "publicationStatus": "held", "canonicalPath": str(canonical),
+                 "canonicalSha256": digest_file(canonical), "cases": [case], "queueSha256": digest_json([case])}
+        path = self.root / "queue.json"
+        write_json(path, queue)
+        with patch("listening_machine.words_for", wraps=words_for) as parse:
+            self.assertEqual(load_queue(path), queue)
+            self.assertEqual(load_queue(path), queue)
+            self.assertEqual(parse.call_count, 1)
+        raw = canonical.read_bytes()
+        canonical.write_bytes(raw.replace("ויאמר".encode(), "ויאכל".encode(), 1))
+        with self.assertRaisesRegex(ValueError, "Canonical source changed"):
+            load_queue(path)
 
     def test_good_requires_every_exact_cut(self):
         for change in ({"heardSegments": [1]},

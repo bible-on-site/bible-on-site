@@ -104,8 +104,10 @@ public sealed class AppConfig
             var content = await reader.ReadToEndAsync();
             return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: packaged-config probe degrades to a null fallback
+        catch (Exception ex) //NOSONAR — packaged-config probe degrades to a null fallback.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Packaged config '{assetName}' unreadable: {ex.Message}");
             return null;
         }

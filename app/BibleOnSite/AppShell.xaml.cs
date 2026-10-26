@@ -19,6 +19,12 @@ public partial class AppShell : Shell
 		// On iOS/MacCatalyst, Shell flyout is always presented from the left. Force RTL on the native
 		// root so the flyout opens from the right and is triggered by a right-edge swipe (like Android).
 		HandlerChanged += OnShellHandlerChanged;
+
+		// The flyout's scrollable content is laid out beneath FlyoutHeader on iOS
+		// (the header height is applied as a scroll inset that can fail to apply,
+		// leaving the first menu rows permanently hidden under the opaque header).
+		// The logo is rendered inside the scrolling content instead.
+		FlyoutHeader = null;
 #endif
 
 		// Register routes for pages that are navigated to with parameters
@@ -45,8 +51,11 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 
-		// Styled exit/stay prompt — theme-blue "stay" and red "exit" text (#2460).
-		ExitConfirmation.UsePlatformPrompt(Controls.ExitConfirmationPopup.ShowAsync);
+		// One styled presenter for every blocking dialog — alerts, confirmations
+		// and the exit/stay prompt — so colors, order, radius and typography
+		// cannot drift between call sites (#2630). The exit dialog keeps its
+		// theme-blue "stay" and red "exit" text via the shared roles (#2460).
+		AppDialogs.UsePresenter(Controls.AppDialogPopup.ShowAsync);
 
 		Navigating += OnShellNavigating;
 		Navigated += OnNavigated;

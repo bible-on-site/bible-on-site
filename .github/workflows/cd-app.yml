@@ -85,7 +85,7 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          global-json-file: global.json
 
       - name: Write service account key
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -187,7 +187,7 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          global-json-file: global.json
 
       - name: Setup Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}

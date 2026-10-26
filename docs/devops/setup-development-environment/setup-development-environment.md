@@ -40,26 +40,26 @@ For App development, you'll also need:
 For website E2E/performance tests and API testing, you'll also need:
 
 - [Playwright](https://playwright.dev/)
-  - `npx playwright install`
+  - `bun x playwright install`
 
 ## Setting Up the Development Environment
 
 1. Fork the repository (if you want to send PRs)
 2. Clone the repository
-3. From the project's root, execute `npm i`
-4. From `./devops`, execute `npm i`
-5. From `./devops`, execute `npm run setup_dev_env`
+3. From the project's root, execute `bun install`
+4. From `./devops`, execute `bun install`
+5. From `./devops`, execute `bun run setup_dev_env`
 
 ### Local backend and emulator
 
-From the repository root, run `npm run backend`. It reuses a healthy API already
+From the repository root, run `bun run backend`. It reuses a healthy API already
 on port 3003, or starts Docker Desktop and builds the API and RustFS with Compose.
 The API uses the existing MySQL development database from `web/api/.dev.env`;
 MySQL must accept connections from Docker's host gateway. Set `DB_URL` to choose
 another existing database. Populate local application content with `sync-from-prod`
 as described below.
 
-If Docker Desktop cannot start, `npm run backend -- --native` runs the same API
+If Docker Desktop cannot start, `bun run backend -- --native` runs the same API
 with Cargo and the installed MySQL service. Leave that terminal running; Ctrl+C
 stops the API process tree. No database population or Docker reset occurs during
 startup. Docker services can be stopped with
@@ -79,16 +79,26 @@ cd data && cargo make mysql-populate-dev
 
 For bundled demo articles only (optional): `cargo make mysql-populate-dev-with-test-articles`.
 
-The **admin** app (`web/admin`) uses **`tanah-dev`** when `DB_URL` is unset and `NODE_ENV` is not `production` (`src/server/db-config.ts`). Use `.dev.env` from `npm run dev` so `DB_URL` points at `tanah-dev`; avoid pointing dev admin at **`tanah`** unless you intend to edit the non-dev database.
+The **admin** app (`web/admin`) uses **`tanah-dev`** when `DB_URL` is unset and `NODE_ENV` is not `production` (`src/server/db-config.ts`). Use `.dev.env` from `bun run dev` so `DB_URL` points at `tanah-dev`; avoid pointing dev admin at **`tanah`** unless you intend to edit the non-dev database.
 
 For production-like data on demand:
 
 ```bash
 AWS_PROFILE=AdministratorAccess-250598594267 aws sso login
-AWS_PROFILE=AdministratorAccess-250598594267 npx tsx devops/setup-dev-env.mts sync-from-prod
+AWS_PROFILE=AdministratorAccess-250598594267 node devops/setup-dev-env.mts sync-from-prod
 ```
 
 This auto-fetches prod DB credentials from SSM and temporarily opens RDS access for your IP. See [Sync from production](../../../data/README.md#sync-from-production-optional) in `data/README.md` for details.
+
+### Keeping `bun run dev` cheap
+
+`predev` skips work that already ran on this machine:
+
+- **Prod sync checkpoint** — the website's `predev` syncs `tanah-dev` from prod only when production data actually changed. Each sync records prod's per-table `UPDATE_TIME` watermark in the dev DB (`dev_sync_checkpoint`); `predev` then probes it with a single `information_schema` read via `node devops/setup-dev-env.mts check-dev-db-freshness`. No prod writes → skip indefinitely; any write → sync immediately. `node devops/setup-dev-env.mts sync-from-prod` always forces a full sync; `DEV_DB_SYNC_FROM_PROD=0` disables syncing entirely.
+- **S3 seed check** — the admin's `predev` runs `cargo make s3-populate-dev` only when the dev bucket is empty (the RustFS volume is shared across worktrees). `bun run s3:populate:dev` forces a reseed.
+- **Install skip** — the website's `predev` runs `bun install` only when `package.json`/`bun.lock` changed since the last install (hash stamp in `node_modules`), and refreshes the local `html-flip-book` build via `USE_LOCAL_FLIP_BOOK` copy instead of rewriting `package.json` to a `file:` dependency.
+- **Lower OS priority** — `bun run dev` (dev-all) starts servers one priority notch lower so builds and watchers can't starve the machine. `--normal-priority` restores default behavior.
+- **Shared Rust compilation cache** — installing `sccache` and setting `RUSTC_WRAPPER=sccache` reuses dependency builds across all worktrees and checkouts; otherwise every fresh worktree compiles the same crates from scratch.
 
 ### VS Code
 

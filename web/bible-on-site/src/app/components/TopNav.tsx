@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { TopNavAccessibility } from "./TopNavAccessibility";
 import { TopNavSearch } from "./TopNavSearch";
 
 /**
@@ -8,6 +9,9 @@ import { TopNavSearch } from "./TopNavSearch";
  * opposite the hamburger trigger at the right edge.
  * Server-rendered so the entry points stay crawlable; only the small
  * route-aware search link hydrates (it is absent on the על הפרק reader).
+ * The accessibility-adjustments trigger sits beside it — or beside the
+ * reader preferences gear on reader unit routes, or at the left edge where
+ * a reader-section route mounts neither control — issue #2396.
  */
 export function TopNav() {
 	return (
@@ -23,6 +27,7 @@ export function TopNav() {
 				/>
 			</Link>
 			<TopNavSearch />
+			<TopNavAccessibility />
 		</nav>
 	);
 }

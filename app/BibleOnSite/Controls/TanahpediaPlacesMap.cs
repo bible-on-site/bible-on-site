@@ -97,8 +97,10 @@ public class TanahpediaPlacesMap : ContentView
             {
                 await OpenExternalLink(new Uri(url)).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: map-link launcher failure must not break interception
+            catch (Exception ex) //NOSONAR — map-link launcher failure must not break interception.
             {
+                #pragma warning restore S2221
                 // A launcher failure must not break navigation interception.
                 Console.Error.WriteLine($"Map link open failed for {url}: {ex.Message}");
             }

@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
 
 // Data, not copy — kept out of JSX so it isn't flagged for translation.
 const CONTACT_EMAIL = "tanah.site@gmail.com";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: `הצהרת נגישות | ${SITE_NAME}`,
 	description:
 		'הצהרת הנגישות של תנ"ך על הפרק: התאמות הנגישות באתר וביישומון, מגבלות ידועות ודרכי פנייה בנושאי נגישות.',
-	alternates: { canonical: "/accessibility" },
-};
+	canonical: "/accessibility",
+});
 
 export default function AccessibilityPage() {
 	return (
@@ -28,9 +29,10 @@ export default function AccessibilityPage() {
 						חשיבות רבה במתן שירות שווה לכל המשתמשים, ובפרט לאנשים עם מוגבלות,
 						ופועלים להנגשת השירות בהתאם לתקנות שוויון זכויות לאנשים עם מוגבלות
 						(התאמות נגישות לשירות), תשע&quot;ג-2013. אנו שואפים לעמוד בדרישות
-						התקן הישראלי ת&quot;י 5568, המבוסס על הנחיות WCAG ברמה AA,
-						ומבצעים בדיקה עצמית שוטפת. ההצהרה מתייחסת הן לאתר והן ליישומון;
-						להלן הפרטים לכל פלטפורמה שכן ההתאמות והמגבלות שונות ביניהן.
+						התקן הישראלי ת&quot;י 5568 חלק 1 (מהדורת ספטמבר 2023), המבוסס על
+						הנחיות WCAG 2.0 ברמה AA עם שינויים לאומיים, ומבצעים בדיקה עצמית
+						שוטפת. ההצהרה מתייחסת הן לאתר והן ליישומון; להלן הפרטים לכל פלטפורמה
+						שכן ההתאמות והמגבלות שונות ביניהן.
 					</p>
 				</section>
 
@@ -42,7 +44,14 @@ export default function AccessibilityPage() {
 					</p>
 					<ul>
 						<li>
-							ניווט מלא במקלדת, כולל פתיחה וסגירה של תפריט הניווט במקש Escape.
+							תפריט התאמות נגישות בסרגל העליון (סמל אישון נגישות לצד החיפוש):
+							שליטה על גודל גופן הקריאה, ריווח שורות, ריווח מילים ובחירת גופן
+							הפסוקים, כפתור איפוס התאמות וקישור להצהרה זו. ההתאמות נשמרות
+							ומשותפות עם הגדרות הקריאה בעמודי הפרקים.
+						</li>
+						<li>
+							ניווט מלא במקלדת, כולל פתיחה וסגירה של תפריט הניווט ותפריט הנגישות
+							במקש Escape.
 						</li>
 						<li>
 							שמות נגישים לקישורים ולכפתורים, וטקסט חלופי לתמונות בעלות משמעות.
@@ -158,7 +167,7 @@ export default function AccessibilityPage() {
 				</section>
 
 				<p className={styles.lastUpdated}>
-					ההצהרה נבדקה ועודכנה לאחרונה ב-19 באוקטובר 2026 (ח&apos; בחשוון
+					ההצהרה נבדקה ועודכנה לאחרונה ב-23 באוקטובר 2026 (י&quot;א בחשוון
 					ה&apos;תשפ&quot;ז).
 				</p>
 			</article>

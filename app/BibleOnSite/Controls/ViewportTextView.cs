@@ -138,8 +138,10 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
                     });
                 }
             }
-            catch (Exception error)
+            #pragma warning disable S2221 // Deliberate failure boundary: commentary accessibility section exposure is best-effort diagnostics
+            catch (Exception error) //NOSONAR — commentary accessibility section exposure is best-effort diagnostics.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Commentary accessibility sections failed: {error}");
             }
         });
@@ -230,8 +232,10 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
                     });
                 }
             }
-            catch (Exception error)
+            #pragma warning disable S2221 // Deliberate failure boundary: commentary accessibility measurement is best-effort diagnostics
+            catch (Exception error) //NOSONAR — commentary accessibility measurement is best-effort diagnostics.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Commentary accessibility measurement failed: {error}");
             }
         });

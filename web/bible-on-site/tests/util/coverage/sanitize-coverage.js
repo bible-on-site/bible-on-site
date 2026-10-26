@@ -43,7 +43,10 @@ import { covIgnoreList } from "../../../.covignore.mjs";
 const DEBUG_SANITIZE_PATH = process.env.DEBUG_SANITIZE_PATH;
 
 export function sanitizeCoverage(coverage) {
-	const SRC_DIR = path.resolve(__dirname, "../../../", "src");
+	// This module is loaded as true ESM by jest's dynamic import() (no tsx)
+	// and as CJS by playwright's bundler — neither __dirname nor import.meta
+	// parses in both contexts. Every caller runs from the package root.
+	const SRC_DIR = path.resolve(process.cwd(), "src");
 	for (const file of Object.keys(coverage)) {
 		const entry = coverage[file];
 		if (!entry || !hasValidStructure(entry) || !isTracked(entry, SRC_DIR)) {
@@ -503,7 +506,8 @@ function getCanonicalBranchLine(value) {
 		return locLine;
 	}
 	const directLine = typeof value?.line === "number" ? value.line : 0;
-	return directLine > 0 ? directLine : 0;
+	// Malformed NaN source lines must fall back to zero, just like missing lines.
+	return Math.max(directLine || 0, 0);
 }
 
 function getBranchDeclaredLine(value) {

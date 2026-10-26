@@ -7,6 +7,16 @@
 engines:
   metric:
     enabled: false
+  # Prospector enforces D213 (summary on line two) while the repo's ruff
+  # config enforces the contradictory D212 (summary on line one). The repo
+  # gate wins; prospector is excluded on these files only — Bandit and the
+  # rest of the Python suite still scan them.
+  prospector:
+    exclude_paths:
+      - "data/annotations/extract_morphhb.py"
+      - "data/annotations/baseline.py"
+      - "data/annotations/baseline_articles.py"
+      - "data/annotations/test_baseline_articles.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
@@ -16,6 +26,7 @@ exclude_paths:
   - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
+  - "data/mysql/tanah_reading_metrics_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
@@ -42,6 +53,8 @@ exclude_paths:
   - "data/mysql/tanahpedia_legacy_migration.sql"
   - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
   - "data/mysql/tanahpedia_structure.sql"
+  - "data/mysql/tanahpedia_alter_mention_decoration.sql"
+  - "data/mysql/tanah_mention_test_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.
@@ -52,3 +65,15 @@ exclude_paths:
   - "devops/github/ci/android-sdk-manifest.test.mjs"
   # pip requirement pins are not Python source; Codacy lints them anyway.
   - "web/qa-service/scripts/requirements.txt"
+  # Local-dev/test helpers whose fs paths are legitimately dynamic — a
+  # developer-chosen recordings dir, fixed node_modules/sibling-repo roots,
+  # or fixture-owned temp dirs. non-literal-fs-filename is a systemic false
+  # positive here; these are still linted by the repo's own biome/precommit.
+  - "web/bible-on-site/scripts/copy-local-flip-book.mjs"
+  - "devops/local-recitation.mjs"
+  - "devops/local-recitation.test.mjs"
+  - "app/mobile-e2e/silent-failures.mjs"
+  # Same class as the Android manifest fixtures: e2e test files embedding
+  # JUnit/uiautomator XML stubs that markup rules flag as interpolated HTML.
+  - "app/mobile-e2e/release-smoke.test.mjs"
+  - "app/mobile-e2e/merge-runner-shards.test.mjs"

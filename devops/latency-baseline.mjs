@@ -27,6 +27,8 @@ const asJson = args.includes("--json");
 const samplesFlag = args.indexOf("--samples");
 const SAMPLES = samplesFlag >= 0 ? Number(args[samplesFlag + 1]) : 8;
 
+const NULL_DEVICE = process.platform === "win32" ? "NUL" : "/dev/null";
+
 const WRITE_OUT =
 	"dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} " +
 	"ttfb=%{time_starttransfer} total=%{time_total} code=%{response_code} " +
@@ -71,7 +73,7 @@ async function curlOnce(url, extraArgs = []) {
 	const { stdout } = await execFileAsync("curl", [
 		"-sS",
 		"-o",
-		"/dev/null",
+		NULL_DEVICE,
 		"-w",
 		WRITE_OUT,
 		"--max-time",
@@ -89,7 +91,7 @@ async function curlWarmPair(url) {
 	const { stdout } = await execFileAsync("curl", [
 		"-sS",
 		"-o",
-		"/dev/null",
+		NULL_DEVICE,
 		"-w",
 		`${WRITE_OUT}\n`,
 		"--max-time",

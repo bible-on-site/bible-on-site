@@ -12,22 +12,23 @@
 *,
 ::before,
 ::after {
-  box-sizing: border-box;
-  border-width: 0;
-  border-style: solid;
+	box-sizing: border-box;
+	border-width: 0;
+	border-style: solid;
 }
 
 html {
-  line-height: 1.5;
-  -webkit-text-size-adjust: 100%;
-  tab-size: 4;
-  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-    "Noto Color Emoji";
+	line-height: 1.5;
+	-webkit-text-size-adjust: 100%;
+	tab-size: 4;
+	font-family:
+		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol", "Noto Color Emoji";
 }
 
 body {
-  margin: 0;
-  line-height: inherit;
+	margin: 0;
+	line-height: inherit;
 }
 
 img,
@@ -38,109 +39,164 @@ audio,
 iframe,
 embed,
 object {
-  display: block;
+	display: block;
 }
 
 img,
 video {
-  max-width: 100%;
-  height: auto;
+	max-width: 100%;
+	height: auto;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --surface-elevated: #ffffff;
-  --surface-muted: #f8fafc;
-  --border-subtle: #e2e8f0;
-  --link-accent: #1552ac;
-  --pasuk-num-color: #1c2c5d;
-  --muted-text: #666666;
+	--background: #ffffff;
+	--foreground: #171717;
+	--surface-elevated: #ffffff;
+	--surface-muted: #f8fafc;
+	--border-subtle: #e2e8f0;
+	--link-accent: #1552ac;
+	--pasuk-num-color: #1c2c5d;
+	--muted-text: #666666;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f1219;
-    --foreground: #e8eaed;
-    --surface-elevated: #1a1f2e;
-    --surface-muted: #12151c;
-    --border-subtle: #2d3548;
-    --link-accent: #7eb0ff;
-    --pasuk-num-color: #a8b9ff;
-    --muted-text: #9aa0a6;
-  }
+	:root {
+		--background: #0f1219;
+		--foreground: #e8eaed;
+		--surface-elevated: #1a1f2e;
+		--surface-muted: #12151c;
+		--border-subtle: #2d3548;
+		--link-accent: #7eb0ff;
+		--pasuk-num-color: #a8b9ff;
+		--muted-text: #9aa0a6;
+	}
 }
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
-  direction: rtl;
+	max-width: 100vw;
+	overflow-x: hidden;
+	direction: rtl;
 }
 
 html {
-  scroll-behavior: smooth;
+	scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+	color: var(--foreground);
+	background: var(--background);
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+	color: inherit;
+	text-decoration: none;
 }
 
 @media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+	html {
+		color-scheme: dark;
+	}
 }
 .icon-white {
-  filter: invert(100%) sepia(0%) saturate(0%) hue-rotate(180deg) brightness(100%) contrast(100%);
+	filter: invert(100%) sepia(0%) saturate(0%) hue-rotate(180deg)
+		brightness(100%) contrast(100%);
 }
 .top-nav {
-  height: 72px;
-  background-color: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  width: 100%;
-  position: absolute;
-  z-index: 3;
+	height: 72px;
+	background-color: transparent;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 1.25rem;
+	width: 100%;
+	position: absolute;
+	z-index: 3;
 }
 
 /* Icon-only search button pinned to the physical left edge of the nav
    bar with the same edge padding as the hamburger at the opposite/right
    end (issue #2154). Absolute inside the bar keeps the logo centered. */
 .top-nav-search {
-  position: absolute;
-  left: 1.25rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  border-radius: 999px;
-  color: #fff;
+	position: absolute;
+	left: 1.25rem;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.65);
+	border-radius: 999px;
+	color: #fff;
 }
 
 .top-nav-search img {
-  filter: invert(1);
+	filter: invert(1);
 }
 
 .top-nav-search:hover {
-  background-color: rgba(255, 255, 255, 0.16);
-  border-color: #fff;
+	background-color: rgba(255, 255, 255, 0.16);
+	border-color: #fff;
 }
 
 .top-nav-search:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
+/* Accessibility-adjustments trigger, same circular style as the search
+   button and pinned immediately to its physical right (issue #2396). */
+.top-nav-accessibility {
+	position: absolute;
+	left: 4.625rem;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.65);
+	border-radius: 999px;
+	color: #fff;
+	background: transparent;
+	cursor: pointer;
+}
+
+/* On reader routes the search button is omitted and the reader-settings
+   gear occupies the top-left corner instead (fixed at left:12px, 140px on
+   desktop) — the trigger docks next to that control instead. */
+.top-nav-accessibility--after-prefs {
+	left: 3.75rem;
+}
+
+@media (min-width: 768px) {
+	.top-nav-accessibility--after-prefs {
+		left: 11.75rem;
+	}
+}
+
+/* Reader-section routes that suppress the search button but mount no
+   preferences gear (e.g. /929/authors): the trigger takes the left-edge
+   slot the search button occupies elsewhere. */
+.top-nav-accessibility--edge {
+	left: 1.25rem;
+}
+
+.top-nav-accessibility img {
+	filter: invert(1);
+}
+
+.top-nav-accessibility:hover {
+	background-color: rgba(255, 255, 255, 0.16);
+	border-color: #fff;
+}
+
+.top-nav-accessibility:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
 }

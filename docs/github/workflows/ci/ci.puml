@@ -17,8 +17,8 @@ fork
 fork again
   :Determine Baseline Availability;
   note right
-    Download trusted master artifacts,
-    re-upload into this run:
+    Check trusted master artifacts
+    exist (REST name lookup):
     module coverage, perushim data,
     app E2E coverage (android/ios)
   end note
@@ -106,7 +106,7 @@ end note
 :Restore Coverage Reports;
 note right
   From module CI (run artifact)
-  OR re-uploaded master baseline.
+  OR master baseline via REST.
   App = unit+integration+E2E(android+ios)
   merged hits-only.
 end note

@@ -8,6 +8,8 @@ import {
 	slicePerekIds,
 	slicesForRanges,
 } from "../reading/queries";
+import { getArticleMetrics, metricOrFallback } from "../reading-metrics";
+import type { ReadingMetric } from "../reading-metrics";
 import type { Article, ArticleSummary } from "./types";
 
 interface ArticleWithAuthorRow {
@@ -32,6 +34,26 @@ interface ArticleSummaryRow {
 }
 
 /**
+ * Attach stored reading metrics (#2607). `metric` is set only when a metric
+ * row exists — unknown (no row / schema not deployed) stays absent, distinct
+ * from a verified-empty metric's zeros. The read is optional decoration: a
+ * failed metric query must not hide the loaded articles.
+ */
+async function withArticleMetrics<T extends { id: number }>(
+	items: T[],
+): Promise<(T & { metric?: ReadingMetric })[]> {
+	const metrics = await metricOrFallback(
+		`articles (${items.length} ids)`,
+		new Map<number, ReadingMetric>(),
+		() => getArticleMetrics(items.map((i) => i.id)),
+	);
+	return items.map((item) => {
+		const metric = metrics.get(item.id);
+		return metric ? { ...item, metric } : item;
+	});
+}
+
+/**
  * Fetch articles for a specific perek with author information.
  * JOINs with tanah_author to get author name.
  * Returns an empty array when no articles are found; rejects database failures.
@@ -51,17 +73,19 @@ export async function getArticlesByPerekId(
 			[perekId],
 		);
 
-		return rows.map((row) => ({
-			id: row.id,
-			perekId: row.perek_id,
-			authorId: row.author_id,
-			abstract: row.abstract,
-			content: row.content,
-			name: row.name,
-			priority: row.priority,
-			authorName: row.author_name,
-			authorImageUrl: getAuthorImageUrl(row.author_id),
-		}));
+		return withArticleMetrics(
+			rows.map((row) => ({
+				id: row.id,
+				perekId: row.perek_id,
+				authorId: row.author_id,
+				abstract: row.abstract,
+				content: row.content,
+				name: row.name,
+				priority: row.priority,
+				authorName: row.author_name,
+				authorImageUrl: getAuthorImageUrl(row.author_id),
+			})),
+		);
 	} catch (error) {
 		console.warn(
 			`Failed to fetch articles for perek ${perekId}:`,
@@ -90,16 +114,18 @@ export async function getArticleSummariesByPerekId(
 			[perekId],
 		);
 
-		return rows.map((row) => ({
-			id: row.id,
-			perekId: row.perek_id,
-			authorId: row.author_id,
-			abstract: row.abstract,
-			name: row.name,
-			priority: row.priority,
-			authorName: row.author_name,
-			authorImageUrl: getAuthorImageUrl(row.author_id),
-		}));
+		return withArticleMetrics(
+			rows.map((row) => ({
+				id: row.id,
+				perekId: row.perek_id,
+				authorId: row.author_id,
+				abstract: row.abstract,
+				name: row.name,
+				priority: row.priority,
+				authorName: row.author_name,
+				authorImageUrl: getAuthorImageUrl(row.author_id),
+			})),
+		);
 	} catch (error) {
 		console.warn(
 			"Failed to fetch article summaries for perek %d:",
@@ -214,16 +240,18 @@ export async function getArticleSummariesForRanges(
 			]);
 		});
 
-		return rows.map((row) => ({
-			id: row.id,
-			perekId: row.perek_id,
-			authorId: row.author_id,
-			abstract: row.abstract,
-			name: row.name,
-			priority: row.priority,
-			authorName: row.author_name,
-			authorImageUrl: getAuthorImageUrl(row.author_id),
-		}));
+		return withArticleMetrics(
+			rows.map((row) => ({
+				id: row.id,
+				perekId: row.perek_id,
+				authorId: row.author_id,
+				abstract: row.abstract,
+				name: row.name,
+				priority: row.priority,
+				authorName: row.author_name,
+				authorImageUrl: getAuthorImageUrl(row.author_id),
+			})),
+		);
 	} catch (error) {
 		console.warn(
 			"Failed to fetch article summaries for ranges:",
@@ -315,20 +343,24 @@ export async function getArticleById(
 		}
 
 		const row = rows[0];
-		return {
-			id: row.id,
-			perekId: row.perek_id,
-			authorId: row.author_id,
-			abstract: row.abstract,
-			content: row.content,
-			name: row.name,
-			priority: row.priority,
-			authorName: row.author_name,
-			authorImageUrl: getAuthorImageUrl(row.author_id),
-		};
+		const [enriched] = await withArticleMetrics([
+			{
+				id: row.id,
+				perekId: row.perek_id,
+				authorId: row.author_id,
+				abstract: row.abstract,
+				content: row.content,
+				name: row.name,
+				priority: row.priority,
+				authorName: row.author_name,
+				authorImageUrl: getAuthorImageUrl(row.author_id),
+			},
+		]);
+		return enriched;
 	} catch (error) {
 		console.warn(
-			`Failed to fetch article ${articleId}:`,
+			"Failed to fetch article %s:",
+			articleId,
 			error instanceof Error ? error.message : error,
 		);
 		throw error;

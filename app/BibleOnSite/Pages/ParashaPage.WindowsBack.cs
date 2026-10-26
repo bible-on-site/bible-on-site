@@ -36,7 +36,7 @@ public partial class ParashaPage
         {
             if (Shell.Current.CurrentPage == this && !ChapterSearch.IsSearchOpen)
             {
-                ReaderNavigationButton.Focus();
+                NormalNavigationBar.NavigationButton.Focus();
             }
         });
     }
@@ -92,8 +92,10 @@ public partial class ParashaPage
         {
             await Shell.Current.GoToAsync("..", false);
         }
-        catch (Exception exception)
+        #pragma warning disable S2221 // Deliberate failure boundary: reader Back navigation failure is log-only
+        catch (Exception exception) //NOSONAR — reader Back navigation failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Reader Back navigation failed: {exception}");
         }
     }

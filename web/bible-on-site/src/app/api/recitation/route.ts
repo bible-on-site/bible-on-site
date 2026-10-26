@@ -10,6 +10,7 @@ let serializedPackage:
 
 function packageResponse() {
 	const configuration = JSON.stringify([
+		process.env.ASSETS_BASE_URL,
 		process.env.S3_ENDPOINT,
 		process.env.S3_BUCKET,
 		process.env.S3_REGION,

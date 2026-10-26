@@ -1,12 +1,22 @@
 /**
  * @jest-environment node
  */
-import {
-	getStoreMetadata,
-	parseItunesLookup,
-	parsePlayStoreHtml,
-	parseWindowsCatalog,
-} from "@/lib/store-metadata";
+// Module-level state (last-good observations, refresh backoff) is per module
+// instance; reset it per test so cases stay deterministic. The pure parsers
+// come from the same fresh instance so coverage counts each test's hits.
+let getStoreMetadata: typeof import("@/lib/store-metadata").getStoreMetadata;
+let parseItunesLookup: typeof import("@/lib/store-metadata").parseItunesLookup;
+let parsePlayStoreHtml: typeof import("@/lib/store-metadata").parsePlayStoreHtml;
+let parseWindowsCatalog: typeof import("@/lib/store-metadata").parseWindowsCatalog;
+beforeEach(async () => {
+	jest.resetModules();
+	({
+		getStoreMetadata,
+		parseItunesLookup,
+		parsePlayStoreHtml,
+		parseWindowsCatalog,
+	} = await import("@/lib/store-metadata"));
+});
 
 const PLAY_SNIPPET =
 	'prefix "141":[[["5.0.139"]],[[[36]],[[[23,"6.0"]]]]] suffix';
@@ -21,11 +31,11 @@ describe("parsePlayStoreHtml", () => {
 	});
 	it("extracts a rating only when one is published", () => {
 		expect(
-			parsePlayStoreHtml(PLAY_SNIPPET + 'aria-label="Rated 4.7 stars"').rating,
+			parsePlayStoreHtml(`${PLAY_SNIPPET}aria-label="Rated 4.7 stars"`).rating,
 		).toBe(4.7);
 		expect(
 			parsePlayStoreHtml(
-				PLAY_SNIPPET + 'aria-label="Rated 4.9 stars out of five stars"',
+				`${PLAY_SNIPPET}aria-label="Rated 4.9 stars out of five stars"`,
 			).rating,
 		).toBe(4.9);
 		expect(parsePlayStoreHtml(PLAY_SNIPPET).rating).toBeNull();
@@ -105,6 +115,27 @@ describe("parseWindowsCatalog", () => {
 		});
 		expect(parsed.version).toBeNull();
 	});
+	it("keeps the highest packed version when malformed entries are mixed in", () => {
+		const parsed = parseWindowsCatalog({
+			Product: {
+				DisplaySkuAvailabilities: [
+					{
+						Sku: {
+							Properties: {
+								Packages: [
+									{ Version: "abc" },
+									{ Version: "1407374885781504" },
+									{ Version: 7 },
+									{ Version: "1407374885781574" },
+								],
+							},
+						},
+					},
+				],
+			},
+		});
+		expect(parsed.version).toBe("5.0.34.70");
+	});
 });
 
 describe("parseItunesLookup", () => {
@@ -127,6 +158,19 @@ describe("parseItunesLookup", () => {
 			rating: null,
 			ratingCount: null,
 		});
+	});
+	it("keeps nulls for fields that are present but mistyped", () => {
+		expect(
+			parseItunesLookup({
+				results: [
+					{
+						version: "5.0.180",
+						averageUserRating: "4.8",
+						userRatingCount: "123",
+					},
+				],
+			}),
+		).toEqual({ version: "5.0.180", rating: null, ratingCount: null });
 	});
 });
 
@@ -183,7 +227,8 @@ describe("getStoreMetadata", () => {
 			.mockResolvedValue(new Response(PLAY_SNIPPET));
 		await getStoreMetadata("android");
 		jest.spyOn(globalThis, "fetch").mockRejectedValue(new Error("down"));
-		jest.useFakeTimers().setSystemTime(Date.now() + 25 * 60 * 60 * 1000);
+		// Past the 1 h fresh window but inside the 24 h last-good retention.
+		jest.useFakeTimers().setSystemTime(Date.now() + 13 * 60 * 60 * 1000);
 		const meta = await getStoreMetadata("android");
 		jest.useRealTimers();
 		expect(meta.version).toBe("5.0.139");
@@ -250,15 +295,16 @@ describe("store-metadata route and remaining platforms", () => {
 		expect(meta.stale).toBe(false);
 	});
 
-	it("windows without a product timestamp stamps the fetch time", async () => {
-		// Bypass the module cache populated by the previous windows test.
-		jest.useFakeTimers().setSystemTime(Date.now() + 25 * 60 * 60 * 1000);
+	it("windows answer carrying no usable fields records an attempt, not an observation", async () => {
 		jest
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response(JSON.stringify({ Product: {} })));
 		const meta = await getStoreMetadata("windows");
-		jest.useRealTimers();
-		expect(meta.fetchedAt).toBeTruthy();
+		// The attempt is recorded, but no field was observed, so fetchedAt
+		// stays null rather than stamping a fresh-looking fetch time (#2395).
+		expect(meta.attemptedAt).toBeTruthy();
+		expect(meta.fetchedAt).toBeNull();
 		expect(meta.sourceUpdatedAt).toBeNull();
+		expect(meta.stale).toBe(true);
 	});
 });

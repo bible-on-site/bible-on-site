@@ -282,36 +282,40 @@
                 <DataTemplate x:DataType="viewmodels:MiniMonthViewModel">
                     <VerticalStackLayout Margin="0,6" Spacing="2">
                         <Label Text="{Binding Title}"
+                               AutomationId="MiniMonthTitle"
                                FontSize="14"
                                FontAttributes="Bold"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                         <Grid ColumnDefinitions="*,*,*,*,*,*,*">
-                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                         </Grid>
                         <!-- Week rows of plain layout cells: a nested CollectionView per
                              mini-month spun up a whole adapter/recycler per section and
                              was the dominant grouped-view realization cost (#2455).
-                             HorizontalStackLayout honors the RTL flow direction like the
-                             CollectionView did, and FillAndExpand keeps 7 equal columns. -->
+                             A 7-star Grid keeps the columns equal; HorizontalStackLayout
+                             ignores FillAndExpand in MAUI and shrank the rows to content
+                             width on iOS. -->
                         <VerticalStackLayout Spacing="0"
                                              BindableLayout.ItemsSource="{Binding Weeks}">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="viewmodels:MiniMonthWeekViewModel">
-                                    <HorizontalStackLayout Spacing="0"
-                                                          BindableLayout.ItemsSource="{Binding Cells}">
+                                    <Grid ColumnDefinitions="*,*,*,*,*,*,*"
+                                          AutomationId="MiniMonthWeek"
+                                          BindableLayout.ItemsSource="{Binding Cells}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
                                             <Border Margin="1"
                                                     Padding="0"
                                                     HeightRequest="24"
-                                                    HorizontalOptions="FillAndExpand"
+                                                    Grid.Column="{Binding Column}"
+                                                    AutomationId="MiniMonthDay"
                                                     StrokeShape="RoundRectangle 4"
                                                     Stroke="Transparent"
                                                     StrokeThickness="1"
@@ -354,12 +358,13 @@
                                                        IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                                        HorizontalTextAlignment="Center"
                                                        VerticalTextAlignment="Center"
+                                                       AutomationId="MiniMonthDayText"
                                                        SemanticProperties.Description="{Binding AccessibilityText}"
                                                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                                             </Border>
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
-                                    </HorizontalStackLayout>
+                                    </Grid>
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>

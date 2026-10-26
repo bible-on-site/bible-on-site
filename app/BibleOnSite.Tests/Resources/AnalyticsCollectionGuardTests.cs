@@ -24,6 +24,18 @@ public class AnalyticsCollectionGuardTests
         Assert.Equal("false", entry!.Attribute(android + "value")?.Value);
     }
 
+    [Theory]
+    [InlineData("google_analytics_adid_collection_enabled")]
+    [InlineData("google_analytics_default_allow_ad_personalization_signals")]
+    public void AndroidManifest_DisablesAdvertisingFeatures(string key)
+    {
+        var manifest = XDocument.Load(Path.Join(AppRoot, "Platforms", "Android", "AndroidManifest.xml"));
+        XNamespace android = "http://schemas.android.com/apk/res/android";
+        var entry = Assert.Single(manifest.Descendants("meta-data")
+            .Where(e => e.Attribute(android + "name")?.Value == key));
+        Assert.Equal("false", entry.Attribute(android + "value")?.Value);
+    }
+
     [Fact]
     public void AndroidManifest_DeactivatesCollectionForDisableAnalyticsBuilds()
     {
@@ -71,6 +83,37 @@ public class AnalyticsCollectionGuardTests
         Assert.Equal("false", elements[index + 1].Name.LocalName);
     }
 
+    [Theory]
+    [InlineData("GOOGLE_ANALYTICS_IDFA_COLLECTION_ENABLED")]
+    [InlineData("GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS")]
+    public void IosInfoPlist_DisablesAdvertisingFeatures(string key)
+    {
+        var plist = XDocument.Load(Path.Join(AppRoot, "Platforms", "iOS", "Info.plist"));
+        var elements = plist.Root!.Element("dict")!.Elements().ToList();
+        var index = elements.FindIndex(e => e.Name == "key" && e.Value == key);
+        Assert.True(index >= 0, $"{key} missing from Info.plist");
+        Assert.Equal("false", elements[index + 1].Name.LocalName);
+    }
+
+    [Fact]
+    public void Reader_HasNoAnalyticsPromptOrInlineNotice_AndPrivacyRemainsInTerms()
+    {
+        var loadingPage = File.ReadAllText(Path.Join(AppRoot, "Pages", "LoadingPage.xaml.cs"));
+        Assert.DoesNotContain("DisplayAlert", loadingPage);
+
+        var reader = XDocument.Load(Path.Join(AppRoot, "Pages", "PerekPage.xaml"));
+        Assert.DoesNotContain(reader.Descendants(), e =>
+            e.Attribute("AutomationId")?.Value == "AnalyticsNotice");
+        var preferences = XDocument.Load(Path.Join(AppRoot, "Pages", "PreferencesPage.xaml"));
+        Assert.DoesNotContain(preferences.Descendants(), e =>
+            e.Attribute("AutomationId")?.Value is "AnalyticsConsentSwitch" or "SettingsAnalyticsRow");
+
+        var policy = XDocument.Load(Path.Join(AppRoot, "Pages", "TosPage.xaml"));
+        var policyLink = Assert.Single(policy.Descendants()
+            .Where(e => e.Attribute("AutomationId")?.Value == "PrivacyPolicyLink"));
+        Assert.Contains(policyLink.Descendants(), e => e.Attribute("Tapped")?.Value == "OnPrivacyPolicyTapped");
+    }
+
     [Fact]
     public void IosInfoPlist_DisablesAutomaticScreenReporting()
     {
@@ -110,19 +153,20 @@ public class AnalyticsCollectionGuardTests
     }
 
     [Fact]
-    public void Startup_GatesCollectionOnStoredConsentAndE2eMarker()
+    public void Startup_EnablesOrdinaryCollectionAndKeepsE2eTrafficIsolated()
     {
-        // #2400: both launch paths must resolve collection through the consent
-        // gate (a stored opt-in plus the e2e marker) so neither platform can
-        // re-enable tracking unconditionally and no Release build can emit
-        // before the user answers. The gate itself must keep consulting the
-        // e2e marker so suite launches stay silent even on a granted device.
-        var consent = File.ReadAllText(Path.Join(AppRoot, "Services", "AnalyticsConsent.cs"));
-        Assert.Contains("IsE2eMarkedProcess()", consent);
+        // A persisted SDK flag must never let test traffic reach production.
+        // Ordinary launches collect without consulting user-preference state.
         var activity = File.ReadAllText(Path.Join(AppRoot, "Platforms", "Android", "MainActivity.cs"));
-        Assert.Contains("AnalyticsConsent.IsCollectionEnabled(", activity);
+        Assert.Contains("var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();", activity);
         var mauiProgram = File.ReadAllText(Path.Join(AppRoot, "MauiProgram.cs"));
-        Assert.Contains("AnalyticsConsent.IsCollectionEnabled(", mauiProgram);
+        Assert.Contains("var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();", mauiProgram);
+        var service = File.ReadAllText(Path.Join(AppRoot, "Services", "AnalyticsService.cs"));
+        Assert.Contains("MauiProgram.IsFirebaseInitialized && !SearchIndexService.IsE2eMarkedProcess()", service);
+        Assert.Contains("#elif ANDROID\n\t\t!SearchIndexService.IsE2eMarkedProcess();", service.Replace("\r\n", "\n"));
+        Assert.Contains("#if DISABLE_ANALYTICS", service);
+        Assert.DoesNotContain("PreferencesStorage", service);
+        Assert.False(File.Exists(Path.Join(AppRoot, "Services", "AnalyticsConsent.cs")));
     }
 
     [Fact]

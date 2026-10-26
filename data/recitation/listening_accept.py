@@ -12,16 +12,37 @@ import tempfile
 
 from alignment import load_chapters, reconcile, validate_timings, words_for
 from listening_audio import duration
+from listening_context import CONTEXT_METHOD
+from listening_decisions import merge_typed_reviews, review_instant
+from listening_edits import verify_word_review
 from listening_review import (ReviewStore, digest_file, digest_json,
                               read_json, validate_case, validate_decision)
 from listening_round import load_review_evidence
-from listening_tail import INITIAL_SOURCE_METHOD, verify_corrections
+from listening_tail import INITIAL_SOURCE_METHOD, MACHINE_METHOD, verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 from recite import cached_transcript, export_database, write_json
 from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score, verify_source, verify_warnings
 
 POLICY = "targeted-human-listening-v1"
 RESOLVABLE = {"insufficient ASR agreement", "verse boundary words lack reliable ASR anchors", SOFT_WARNING}
+
+
+def current_review_decisions(queue, reviews_path):
+    """Keep original file selection intact and share pure typed-coordinate semantics."""
+    decisions = ReviewStore(reviews_path, queue).snapshot()
+    saved = read_json(reviews_path) if reviews_path.exists() else {}
+    return merge_typed_reviews(queue["cases"], decisions, saved.get("wordReviews", []))
+
+
+def verify_manual_review(case, decision, queue_hash):
+    """A typed GOOD approves explicit human timings, never modified model evidence."""
+    allowed = queue_hash.get(case["id"], []) if isinstance(queue_hash, dict) else [queue_hash]
+    if decision.get("queueSha256") not in allowed:
+        raise ValueError("Manual word review is not bound to this queue")
+    verify_word_review(case, decision, decision["queueSha256"])
+    review_instant(decision)
+    if decision["verdict"] != "good":
+        raise ValueError(f"Human decision remains {decision['verdict']} for {case['id']}")
 
 
 def verify_review(case, decision, queue_hash):
@@ -57,12 +78,18 @@ def verify_diagnostic(case):
                 and round(diagnostic["contextStartSec"] * 1000) == case["clipStartMs"]
                 and round(diagnostic["contextEndSec"] * 1000) == case["clipEndMs"]
                 and rows == case["words"]):
-            if diagnostic.get("boundaryMethod") == INITIAL_SOURCE_METHOD:
+            if (diagnostic.get("boundaryMethod") in (MACHINE_METHOD, CONTEXT_METHOD)
+                    and (study.get("device") != "cuda" or study.get("threads") != 2)):
+                raise ValueError("Machine proposal cannot relabel actual CUDA inference")
+            if diagnostic.get("boundaryMethod") in (INITIAL_SOURCE_METHOD, MACHINE_METHOD, CONTEXT_METHOD):
                 if (case.get("reviewKind") != "missing" or case.get("listeningReusePath")
-                        or case.get("reusableHeardSegments")
+                        or case.get("reusableHeardSegments") or case.get("listeningReuseSha256")
                         or diagnostic.get("canonicalTextSha256") != case["textSha256"]):
                     raise ValueError("Initial source candidate requires fresh full-verse cut hearing")
-            if diagnostic.get("boundaryMethod"):
+            if diagnostic.get("boundaryMethod") == CONTEXT_METHOD:
+                from listening_context import verify_context_proposals
+                verify_context_proposals(diagnostic)
+            elif diagnostic.get("boundaryMethod"):
                 verify_corrections(diagnostic)
             return
     raise ValueError("Listening candidate differs from actual acoustic result")
@@ -91,10 +118,18 @@ def reviewed_replacements(manifest, report, words, cases, decisions, queue_hash)
         if decision is None:
             continue
         # A problem answer must never be ignored in favor of an earlier good answer.
-        verify_review(case, decision, queue_hash)
         validate_case(case, words, manifest)
+        # Acoustic evidence always validates the immutable original proposal.
+        # Human coordinates are separately typed evidence, not rewritten model rows.
         verify_diagnostic(case)
-        replacements[case["pasuk"]] = deepcopy(case["words"])
+        if decision.get("kind") == "manual-word-review":
+            verify_manual_review(case, decision, queue_hash)
+            reviewed = {**case, "words": deepcopy(decision["candidateWords"])}
+            validate_case(reviewed, words, manifest)
+            replacements[case["pasuk"]] = reviewed["words"]
+        else:
+            verify_review(case, decision, queue_hash)
+            replacements[case["pasuk"]] = deepcopy(case["words"])
         reviews.append(deepcopy(decision))
     if not replacements:
         raise ValueError("No current human approval for this chapter")
@@ -181,7 +216,7 @@ def overlay_reviews(staged, database, withdrawn):
 def stage_reviews(queue_path, reviews_path, text, output, database):
     """Overlay complete recoveries only, preserving already accepted tracks."""
     queue, bindings = load_review_evidence(queue_path)
-    decisions = ReviewStore(reviews_path, queue).snapshot()
+    decisions = current_review_decisions(queue, reviews_path)
     chapters = load_chapters(text)
     cases_by_chapter = defaultdict(list)
     for case in queue["cases"]:

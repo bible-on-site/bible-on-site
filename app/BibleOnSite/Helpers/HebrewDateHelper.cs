@@ -190,7 +190,7 @@ public static class HebrewDateHelper
                     calendar.GetDayOfMonth(gregDate)
                 );
             }
-            catch
+            catch (ArgumentException)
             {
                 // If conversion fails, return original
                 return hebrewDate;
@@ -315,7 +315,7 @@ public static class HebrewDateHelper
             var newDay = calendar.GetDayOfMonth(gregDate);
             return HebrewDateToNumber((newYear, newMonth, newDay));
         }
-        catch
+        catch (ArgumentException)
         {
             return dateNum + days;
         }
@@ -418,6 +418,22 @@ public static class HebrewDateHelper
     {
         return (int)ToGregorianDate(year, legacyMonth, day).DayOfWeek;
     }
+
+    /// <summary>
+    /// Spoken Hebrew weekday name ("יום ראשון" ... "יום שישי", "שבת") for a
+    /// day-of-week index (0=Sunday ... 6=Saturday).
+    /// </summary>
+    public static string GetHebrewWeekdayName(int dayOfWeek) => dayOfWeek switch
+    {
+        0 => "יום ראשון",
+        1 => "יום שני",
+        2 => "יום שלישי",
+        3 => "יום רביעי",
+        4 => "יום חמישי",
+        5 => "יום שישי",
+        6 => "שבת",
+        _ => string.Empty
+    };
 
     /// <summary>
     /// Adds days to a numeric Hebrew date using real calendar arithmetic.

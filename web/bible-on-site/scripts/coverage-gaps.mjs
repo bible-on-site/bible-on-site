@@ -1,8 +1,8 @@
 /**
  * Prints per-file uncovered line/branch numbers from an lcov report.
  *
- * Usage: npm run coverage:gaps [-- <path-substring> ...]
- * Reads .coverage/unit/lcov.info (run `npm run coverage:unit` first).
+ * Usage: bun run coverage:gaps [-- <path-substring> ...]
+ * Reads .coverage/unit/lcov.info (run `bun run coverage:unit` first).
  * With no arguments, lists every file that has uncovered lines.
  */
 import fs from "node:fs";
@@ -10,7 +10,9 @@ import fs from "node:fs";
 const LCOV_PATH = ".coverage/unit/lcov.info";
 
 if (!fs.existsSync(LCOV_PATH)) {
-	console.error(`${LCOV_PATH} not found — run \`npm run coverage:unit\` first.`);
+	console.error(
+		`${LCOV_PATH} not found — run \`bun run coverage:unit\` first.`,
+	);
 	process.exit(1);
 }
 

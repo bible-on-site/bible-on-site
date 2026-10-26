@@ -203,7 +203,11 @@ public class LearningCalendarViewModelTests
         cycleStart.IsReview.Should().BeFalse();
         cycleStart.IsNone.Should().BeFalse();
         cycleStart.IsTappable.Should().BeTrue();
-        cycleStart.AccessibilityText.Should().Contain("כסלו").And.Contain("בראשית א");
+        // כט כסלו ה'תשעה was a Sunday - the accessibility text opens with the
+        // spoken weekday so screen readers and layout tests can anchor each
+        // cell to its real weekday.
+        cycleStart.AccessibilityText.Should().StartWith("יום ראשון,")
+            .And.Contain("כסלו").And.Contain("בראשית א");
 
         // In-cycle days without their own assignment are review days.
         var review = vm.Cells.Single(c => c.DateNumber == 57750330);
@@ -432,6 +436,30 @@ public class LearningCalendarViewModelTests
         vm.MonthGroups.Should().HaveCount(HebrewDateHelper.GetMonthOrder(year).Length);
         vm.MonthGroups.SelectMany(g => g.Cells)
             .Should().Contain(c => c.PerekId != null);
+    }
+
+    [Fact]
+    public async Task GroupedView_WeeksAssignRealWeekdayColumns()
+    {
+        // The grouped-view week rows bind Grid.Column to the cell's Column: a
+        // wrong index collapses or misaligns every mini-month on the page.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        foreach (var group in vm.MonthGroups)
+        {
+            foreach (var week in group.Weeks)
+            {
+                week.Cells.Select(cell => cell.Column)
+                    .Should().Equal(Enumerable.Range(0, week.Cells.Count));
+            }
+            var firstDay = group.Cells.First(cell => !cell.IsBlank);
+            var (year, month, day) = HebrewDateHelper.NumberToHebrewDate(firstDay.DateNumber);
+            firstDay.Column.Should().Be(HebrewDateHelper.GetDayOfWeek(year, month, day));
+        }
     }
 
     [Fact]

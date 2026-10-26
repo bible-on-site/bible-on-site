@@ -38,6 +38,7 @@ beforeEach(() => {
 	GET = jest.requireActual("@/app/api/recitation/route").GET;
 	getPerekByPerekId = jest.requireMock("@/data/perek-dto").getPerekByPerekId;
 	process.env = { ...environment };
+	delete process.env.ASSETS_BASE_URL;
 	delete process.env.S3_ENDPOINT;
 	delete process.env.S3_BUCKET;
 	delete process.env.S3_REGION;
@@ -116,6 +117,7 @@ test("repeated requests and ETag checks reuse the fully validated immutable body
 });
 
 test.each([
+	["ASSETS_BASE_URL", "https://assets.xn--febl3a.co.il", "https://assets.xn--febl3a.co.il/recordings/1_record.mp3"],
 	["S3_ENDPOINT", "http://localhost:4566", "http://localhost:4566/bible-on-site-assets/recordings/1_record.mp3"],
 	["S3_BUCKET", "changed-assets", "https://changed-assets.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"],
 	["S3_REGION", "us-east-1", "https://bible-on-site-assets.s3.us-east-1.amazonaws.com/recordings/1_record.mp3"],

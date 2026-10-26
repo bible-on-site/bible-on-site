@@ -1,6 +1,6 @@
 "use client";
-import { toLetters } from "gematry";
 import type {
+	BookmarkProvider,
 	CoverConfig,
 	FlipBookHandle,
 	HistoryMapper,
@@ -31,6 +31,7 @@ import React, {
 	useMemo,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import {
 	downloadPageRanges,
@@ -48,11 +49,16 @@ import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
 import type { ArticleSummary } from "@/lib/articles";
 import { getDivineNameMaskingSettings } from "@/lib/divine-name-settings";
 import type { PerushSummary } from "@/lib/perushim";
+import {
+	getSeferBookmarkServerSnapshot,
+	getSeferBookmarkSnapshot,
+	seferBookmarkProviderOrder,
+	subscribeSeferBookmarks,
+} from "@/lib/sefer-bookmark-settings";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
-import { BlankPageContent } from "./BlankPageContent";
 import { DownloadMaskingHint } from "./DownloadMaskingHint";
 import { ImageCaption } from "./ImageCaption";
 import { Ptuah } from "./Ptuha";
@@ -60,13 +66,21 @@ import { renderPasukWithEntityRefs } from "./pasuk-renderer";
 import RecitationPlayer, {
 	RecitationHeader,
 	RecitationLink,
-	RecitationPasukControl,
 	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
 } from "./RecitationPlayer";
+import { SeferPanel } from "./SeferPanel";
+import { SeferPasukNumber } from "./SeferPasukNumber";
+import { SeferPasukSelectionBar } from "./SeferPasukSelectionBar";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
+import {
+	buildSeferChapterBookmarks,
+	compareSeferBookmarkTitles,
+	filterUpcomingBookmarks,
+	type SeferBookmarkData,
+} from "./sefer-bookmarks";
 import {
 	articleDocumentTitle,
 	buildSeferDocumentTitleResolver,
@@ -86,10 +100,6 @@ import {
 	runDownload,
 	toHebrewChapterNumber,
 } from "./sefer-page-utils";
-import {
-	scrollToPerushPasuk,
-	useSeferOpenPerush,
-} from "./sefer-pasuk-navigation";
 import { TanahpediaLink } from "./TanahpediaLink";
 import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
@@ -122,34 +132,16 @@ type FlipBookProps = {
 	tocPageIndex?: number;
 	/** Remember the flipbook's mouse interaction mode. */
 	mouseModeStorageKey?: string;
+	/** Enable the native chapter-tab bookmark layer (requires bookmarkProvider). */
+	enableBookmarks?: boolean;
+	/** Supplies the chapter tabs: getBookmarks context, compact/expanded renderers. */
+	bookmarkProvider?: BookmarkProvider;
 };
 
 /**
- * Pasuk number in a book content page. While a perush is open on the facing
- * blank page and annotates this pasuk, activating the number jumps to that
- * pasuk's commentary group; otherwise it keeps its recitation behaviour.
+ * Pasuk number in a book content page — see ./SeferPasukNumber (recitation,
+ * perush navigation, or a pasuk-selection toggle during selection mode).
  */
-function SeferPasukNumber({
-	perekId,
-	pasuk,
-}: {
-	perekId: number;
-	pasuk: number;
-}) {
-	const openPerush = useSeferOpenPerush(perekId);
-	return (
-		<RecitationPasukControl
-			pasuk={pasuk}
-			onNavigate={
-				openPerush?.pesukim.has(pasuk)
-					? () => scrollToPerushPasuk(perekId, pasuk)
-					: undefined
-			}
-		>
-			<span className={styles.pasukNum}>{toLetters(pasuk)}</span>
-		</RecitationPasukControl>
-	);
-}
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
 const FlipBook = dynamic<
@@ -267,6 +259,64 @@ const Sefer = (props: {
 	const historyMapper: HistoryMapper | undefined = useMemo(
 		() => buildHistoryMapper(perekIds, hePageSemantics, perekObj.sefer),
 		[perekIds, hePageSemantics, perekObj.sefer],
+	);
+
+	// Chapter tabs (issue #2543): one native bookmark per canonical perek.
+	// Settings come through the external store so תצוגה -> סימניות changes
+	// apply live without reloading the reader or losing position.
+	const bookmarkSettings = useSyncExternalStore(
+		subscribeSeferBookmarks,
+		getSeferBookmarkSnapshot,
+		getSeferBookmarkServerSnapshot,
+	);
+	const chapterBookmarks = useMemo(
+		() => buildSeferChapterBookmarks(sefer, perekIds),
+		[sefer, perekIds],
+	);
+	const bookmarkProvider = useMemo<BookmarkProvider>(
+		() => ({
+			getBookmarks: (context) =>
+				filterUpcomingBookmarks(
+					chapterBookmarks,
+					context,
+					bookmarkSettings.upcomingOnly,
+				),
+			renderBookmark: (bookmark) => (
+				<span className="sefer-bookmark-label">
+					{(bookmark.data as SeferBookmarkData).compact}
+				</span>
+			),
+			renderExpandedBookmark: (bookmark) => {
+				const data = bookmark.data as SeferBookmarkData;
+				return (
+					<span
+						className="sefer-bookmark-expanded"
+						style={{ "--cover-color": seferColor } as React.CSSProperties}
+					>
+						<span className="sefer-bookmark-expanded-perek">
+							פרק {data.perekHeb}
+						</span>
+						{data.title && (
+							<span className="sefer-bookmark-expanded-title">
+								{data.title}
+							</span>
+						)}
+						<span className="sefer-bookmark-expanded-source">
+							{data.unitSource}
+						</span>
+					</span>
+				);
+			},
+			orientation: bookmarkSettings.orientation,
+			attachment: bookmarkSettings.attachment,
+			placement: bookmarkSettings.placement,
+			order: seferBookmarkProviderOrder(
+				bookmarkSettings,
+				compareSeferBookmarkTitles,
+			),
+			className: "sefer-bookmarks",
+		}),
+		[chapterBookmarks, bookmarkSettings, seferColor],
 	);
 
 	// Document-title sync (issue #2176): the library's onPageFlipped marks when
@@ -551,11 +601,12 @@ const Sefer = (props: {
 								})}
 							</article>
 						</div>
+						<SeferPasukSelectionBar perekId={pagePerekId ?? 0} />
 					</section>
 				</RecitationPlayer>
 			</React.Fragment>,
 			<React.Fragment key={blankKey}>
-				<BlankPageContent
+				<SeferPanel
 					articles={
 						perekIdx === currentPerekIdx
 							? articles
@@ -567,6 +618,7 @@ const Sefer = (props: {
 							: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim
 					}
 					perekId={perekIds?.[perekIdx] ?? 0}
+					seferName={perekObj.sefer}
 					hebrewDateStr={hebrewDateStr}
 					initialSlug={
 						contentNavigation.content &&
@@ -639,7 +691,12 @@ const Sefer = (props: {
 
 	return (
 		<>
-			<div className={styles.bookWrapper} dir="rtl" ref={bookWrapperRef}>
+			<div
+				className={styles.bookWrapper}
+				dir="rtl"
+				ref={bookWrapperRef}
+				style={{ "--cover-color": seferColor } as React.CSSProperties}
+			>
 				<div className={styles.bookArea}>
 					<FlipBook
 						handlers={{
@@ -663,6 +720,8 @@ const Sefer = (props: {
 						pageShadow
 						historyMapper={historyMapper}
 						initialTurnedLeaves={initialTurnedLeaves}
+						enableBookmarks={bookmarkSettings.enabled}
+						bookmarkProvider={bookmarkProvider}
 						downloadConfig={{
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,

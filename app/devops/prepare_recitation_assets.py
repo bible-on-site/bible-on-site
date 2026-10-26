@@ -215,8 +215,10 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         shutil.copyfile(path, directory / path.name)
         if platform == "iOS":
             # xcrun ba-package turns each folder + manifest into an Apple-hosted .aar.
+            # App Store Connect supports iOS only — declaring macOS trips
+            # ITMS-91139 (invalid manifest) at delivery (#2578).
             manifest = {"assetPackID": pack, "downloadPolicy": {"onDemand": {}},
-                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS", "macOS"]}
+                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS"]}
             (directory / "Manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     raw = app / "Resources/Raw"
     raw.mkdir(parents=True, exist_ok=True)

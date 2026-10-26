@@ -116,14 +116,9 @@ public partial class FloatingSearchBar
         }
         else if (e.StatusType is GestureStatus.Completed or GestureStatus.Canceled)
         {
-            if (FilterSheet.TranslationY > 70)
-            {
-                _ = CloseFilterSheetAsync();
-            }
-            else
-            {
-                _ = FilterSheet.TranslateToAsync(0, 0, 150, Easing.CubicOut);
-            }
+            _ = FilterSheet.TranslationY > 70
+                ? CloseFilterSheetAsync()
+                : FilterSheet.TranslateToAsync(0, 0, 150, Easing.CubicOut);
         }
     }
 
@@ -147,8 +142,10 @@ public partial class FloatingSearchBar
         {
             await PerushimNotesService.Instance.InitializeAsync();
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        #pragma warning disable S2221 // Deliberate failure boundary: commentary-pack probe: any failure counts as unavailable
+        catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR — commentary-pack probe: any failure counts as unavailable.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Commentary-pack check failed: {ex}");
         }
         RefreshKindAvailability();
@@ -163,23 +160,17 @@ public partial class FloatingSearchBar
             // on (the scope's kinds while scoped), remote kinds off — enabling
             // a network-backed kind stays an explicit user choice.
             _viewModel.ResetFiltersToDefaults();
-            foreach (var filter in _viewModel.KindOptions)
+            foreach (var filter in _viewModel.KindOptions.Where(filter => _filterChecks.ContainsKey($"SearchKind{filter}")))
             {
-                if (_filterChecks.TryGetValue($"SearchKind{filter}", out var kindCheck))
-                {
-                    kindCheck.IsChecked = _viewModel.IsFilterEnabled(filter);
-                }
+                _filterChecks[$"SearchKind{filter}"].IsChecked = _viewModel.IsFilterEnabled(filter);
             }
             foreach (var group in Enumerable.Range(0, 3))
             {
                 _viewModel.SetSeferGroupFilterEnabled(group, true);
             }
-            foreach (var pair in _filterChecks)
+            foreach (var pair in _filterChecks.Where(pair => !pair.Key.StartsWith("SearchKind", StringComparison.Ordinal)))
             {
-                if (!pair.Key.StartsWith("SearchKind", StringComparison.Ordinal))
-                {
-                    pair.Value.IsChecked = true;
-                }
+                pair.Value.IsChecked = true;
             }
             _viewModel.ResultsLimit = 10;
             LimitPicker.Value = 10;

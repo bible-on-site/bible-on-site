@@ -29,7 +29,16 @@ public partial class PerekPage
     private Pasuk? _recitingPasuk;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
+    private PlaybackAudioOwnership.Lease? _audioLease;
     private MediaElement? RecitationPlayer => RecitationPlayerHost.Content as MediaElement;
+
+    /// <summary>
+    /// This page's claim on exclusive device audio (#2642). Creating the
+    /// MediaElement handler already activates iOS's audio session, so the
+    /// lease only marks when playback is actually audible, releases it once
+    /// the player goes quiet, and re-claims before an explicit resume.
+    /// </summary>
+    private PlaybackAudioOwnership.Lease AudioLease => _audioLease ??= PlaybackAudioOwnership.Shared.Track(this);
 
     private MediaElement GetOrCreateRecitationPlayer() => (MediaElement)RecitationPlayerHost.GetOrCreatePlayer(() =>
     {
@@ -63,7 +72,9 @@ public partial class PerekPage
     private async Task InitializeRecitationAsync()
     {
         try { await RecitationService.Instance.InitializeAsync(); _viewModel.RefreshRecitationAvailability(); UpdateSelectionBar(); _ = RecitationService.Instance.RefreshIfStaleAsync(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: recitation-pack init is best-effort; availability simply stays off
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); } //NOSONAR — recitation-pack init is best-effort; availability simply stays off.
+        #pragma warning restore S2221
     }
 
     private void OnRecitationPreferencesChanged(object? sender, EventArgs e)
@@ -116,6 +127,18 @@ public partial class PerekPage
             if (player.Source != null) { player.Stop(); }
             player.Source = null;
         }
+        _audioLease?.Idle();
+    }
+
+    /// <summary>
+    /// Re-claims device audio before the platform player resumes — a pause may
+    /// already have released the session, and the toolkit only activates it at
+    /// handler creation (#2642).
+    /// </summary>
+    private void ResumeRecitationPlayback(MediaElement player)
+    {
+        AudioLease.Playing();
+        player.Play();
     }
 
     private void ClearRecitationHighlight()
@@ -183,7 +206,7 @@ public partial class PerekPage
         _focusedPasuk = null;
         _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
-        FocusedPerushim.ItemsSource = null;
+        FocusedPasukOverlay.PerushimSource = null;
         PerekCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, false);
         if (_audioDecoder != null)
@@ -200,6 +223,10 @@ public partial class PerekPage
     {
         ResetRecitationContext();
         _recitationCursor.Reset();
+        // Leaving the reader or switching perek drops the audio claim at once
+        // — a hidden player must not keep external music paused (#2642).
+        _audioLease?.Dispose();
+        _audioLease = null;
     }
 
     private void OnHeaderLongPressed(object? sender, EventArgs e)
@@ -302,19 +329,23 @@ public partial class PerekPage
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         if (track?.AlignmentStatus != "ready")
         {
-            // The reader asked for one pasuk — say why it cannot play instead of
-            // ignoring the tap: either nothing was recorded or word timings are
-            // still being validated (the full recording stays on the header).
-            await DisplayAlertAsync("הקראה", track == null
-                ? "אין הקלטה לפרק זה"
-                : "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרק.", "אישור");
+            // Without aligned word timings a pasuk has no playback boundary —
+            // the controls already show word/verse recitation unavailable, so
+            // the tap does nothing. A missing track is real missing audio and
+            // still reports.
+            if (track == null)
+            {
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
+            }
             return;
         }
 
         var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
-            await DisplayAlertAsync("הקראה", "הקראת מילים ופסוקים לפרק זה עדיין בהכנה.", "אישור");
+            // A "ready" track missing this pasuk's timings is corrupt pack
+            // data — a real failure, reported like other playback failures.
+            await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             return;
         }
 
@@ -356,7 +387,7 @@ public partial class PerekPage
             _recitationCursor.ResumesOnPasukFocus(_viewModel.PerekId, pasuk.PasukNum,
                 focusedPlayer.CurrentState == MediaElementState.Playing))
         {
-            focusedPlayer.Play();
+            ResumeRecitationPlayback(focusedPlayer);
         }
         // The full pasuk source lives in the shared toolbar title, set by
         // UpdateSelectionBar below (#2466).
@@ -369,12 +400,12 @@ public partial class PerekPage
         {
             _ = PlayPasukRecitationAsync(pasuk);
         }
-        FocusedSourceLabel.Text = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
+        FocusedPasukOverlay.SourceText = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;
         PerekCarousel.InputTransparent = true;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, true);
         RefreshFocusedRecitation();
-        FocusedPerushim.ItemsSource = _viewModel.GetPerushimForPasuk(pasuk.PasukNum);
+        FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForPasuk(pasuk.PasukNum);
         UpdateSelectionBar();
         try
         {
@@ -382,10 +413,12 @@ public partial class PerekPage
             await _viewModel.LoadPerushimAsync(perekId);
             if (_focusedPasuk == pasuk && _viewModel.PerekId == perekId)
             {
-                FocusedPerushim.ItemsSource = _viewModel.GetPerushimForPasuk(pasuk.PasukNum);
+                FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForPasuk(pasuk.PasukNum);
             }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: focused-commentary refresh is best-effort
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); } //NOSONAR — focused-commentary refresh is best-effort.
+        #pragma warning restore S2221
     }
 
     /// <summary>
@@ -411,21 +444,17 @@ public partial class PerekPage
         _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Perek is not { } perek)
         {
-            FocusedPlayButton.IsVisible = false;
+            FocusedPasukOverlay.PlayButtonVisible = false;
             return;
         }
 
-        FocusedPlayButton.IsVisible = RecitationAvailable;
-        FocusedPlayButton.IsEnabled = CanPlayWholePasuk(pasuk);
-        FocusedPlayButton.Opacity = FocusedPlayButton.IsEnabled ? 1 : 0.4;
+        FocusedPasukOverlay.PlayButtonVisible = RecitationAvailable;
+        FocusedPasukOverlay.PlayButtonEnabled = CanPlayWholePasuk(pasuk);
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
-        FocusedRecitationHint.Text = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
-            RecitationAvailable && track != null && track.AlignmentStatus != "ready"
-                ? "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרק." : "";
-        FocusedRecitationHint.IsVisible = FocusedRecitationHint.Text.Length > 0;
-        if (!canPlayWords) { FocusedPasukText.FormattedText = pasuk.FormattedText; return; }
+        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
+        if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
         {
@@ -469,7 +498,7 @@ public partial class PerekPage
                 formatted.Spans.Add(new Span { Text = " " });
             }
         }
-        FocusedPasukText.FormattedText = formatted;
+        FocusedPasukOverlay.PasukText.FormattedText = formatted;
     }
 
     private async void OnSelectionRecitationClicked(object? sender, EventArgs e)
@@ -486,7 +515,7 @@ public partial class PerekPage
             }
             else
             {
-                player.Play();
+                ResumeRecitationPlayback(player);
             }
 
             return;
@@ -544,11 +573,15 @@ public partial class PerekPage
             }
             else
             {
-                existing.Play();
+                ResumeRecitationPlayback(existing);
             }
 
             return;
         }
+        // Keep the claim across the deliberate gap — stopping the old clip,
+        // decoding and opening the new one run through silent player states
+        // on the way back to Playing (#2642).
+        using var audioHold = AudioLease.Hold();
         StopRecitation();
         using var request = new CancellationTokenSource();
         _recitationRequest = request;
@@ -579,6 +612,10 @@ public partial class PerekPage
                 ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null), pauseMs) : null;
             // The timeline maps the tapped-word resume point into this clip's position.
             _pendingSeekMs = _recitationCursor.PendingSeekFor(perek.PerekId, continuous, _recitationTimeline);
+            // Claim before the handler attaches: creating it already activates
+            // the session, so a source that fails to open must still release it
+            // — MediaFailed can fire without the player ever reaching Playing.
+            AudioLease.Playing();
             var player = GetOrCreateRecitationPlayer();
             player.Speed = preferences.RecitationSpeed;
             player.Volume = preferences.RecitationVolume;
@@ -586,12 +623,15 @@ public partial class PerekPage
             player.Source = MediaSource.FromFile(path);
         }
         catch (OperationCanceledException) { /* Navigation or another selection cancels the old request. */ }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: playback failure shows the user alert unless the request was canceled
+        catch (Exception ex) //NOSONAR — playback failure shows the user alert unless the request was canceled.
         {
+            #pragma warning restore S2221
+            _audioLease?.Idle();
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {
-                await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             }
         }
         finally
@@ -628,10 +668,13 @@ public partial class PerekPage
             // StopRecitation ran during the seek — do not revive the old source.
             return;
         }
-        player.Play();
+        ResumeRecitationPlayback(player);
     }
     private void OnRecitationMediaEnded(object? sender, EventArgs e)
     {
+        // iOS can keep CurrentState at Playing once an item finishes, so the
+        // end event releases the audio claim itself (#2642).
+        _audioLease?.Idle();
         // A completed chapter consumes the resume bookmark; a finished preview keeps it.
         _recitationCursor.End();
         ClearRecitationHighlight();
@@ -639,6 +682,17 @@ public partial class PerekPage
     }
     private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
     {
+        // The lease follows audible states only — buffering/opening keep the
+        // claim so intentional gaps don't churn the session (#2642).
+        if (e.NewState == MediaElementState.Playing)
+        {
+            AudioLease.Playing();
+        }
+        else if (e.NewState is MediaElementState.Paused or MediaElementState.Stopped or
+            MediaElementState.None or MediaElementState.Failed)
+        {
+            _audioLease?.Idle();
+        }
         _recitationFrameTimer?.Stop();
         if (_recitationCursor.PlayingKey != null && _recitationTimeline != null && RecitationPlayer?.CurrentState == MediaElementState.Playing)
         {
@@ -665,7 +719,7 @@ public partial class PerekPage
         }
 
         StopRecitation(); UpdateSelectionBar();
-        await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
+        await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
     }
 
     protected override bool OnBackButtonPressed()
@@ -677,8 +731,8 @@ public partial class PerekPage
     {
         if (ExitFullScreenButton.IsVisible)
         { ExitFullScreen(); return true; }
-        if (ReaderMenuOverlay.IsVisible)
-        { ReaderMenuOverlay.IsVisible = false; return true; }
+        if (ReaderMenuOverlay.IsOpen)
+        { ReaderMenuOverlay.Close(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

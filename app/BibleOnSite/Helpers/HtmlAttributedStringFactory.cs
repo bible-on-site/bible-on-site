@@ -73,8 +73,10 @@ internal static class HtmlAttributedStringFactory
             }
             return attributed;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: attributed-string parse failure falls back to plain text
+        catch (Exception ex) //NOSONAR — attributed-string parse failure falls back to plain text.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"HtmlAttributedStringFactory parse error: {ex.Message}");
             return null;
         }

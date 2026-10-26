@@ -1,3 +1,5 @@
+using BibleOnSite.Services;
+
 namespace BibleOnSite.Helpers;
 
 /// <summary>
@@ -63,8 +65,10 @@ public sealed class ExitConfirmation
 				_exit();
 			}
 		}
-		catch (Exception ex)
+		#pragma warning disable S2221 // Deliberate failure boundary: the prompt is an injected delegate + platform dialog — no narrower type enumerates its failures; a failed prompt keeps the app open (the press was already consumed) and finally re-arms for the next press
+		catch (Exception ex) //NOSONAR — a failed exit prompt keeps the app open and re-arms; the press was already consumed.
 		{
+		    #pragma warning restore S2221
 			Console.Error.WriteLine($"[Exit] confirmation prompt failed: {ex}");
 		}
 		finally
@@ -76,20 +80,36 @@ public sealed class ExitConfirmation
 	private static Func<Task<bool>>? _platformPrompt;
 
 	/// <summary>
-	/// Installs the app's styled prompt (ExitConfirmationPopup) — called by the
-	/// shell at startup. Kept out of <see cref="CreateDefault"/> because the
-	/// unit-test host compiles this helper without the popup type.
+	/// Overrides the prompt delegate — kept for tests that drive the exit
+	/// decision directly. Production uses <see cref="SharedPrompt"/>, which runs
+	/// through the shared dialog presenter (#2630).
 	/// </summary>
 	public static void UsePlatformPrompt(Func<Task<bool>>? prompt) => _platformPrompt = prompt;
 
 	private static ExitConfirmation CreateDefault()
 	{
 		return new ExitConfirmation(
-			prompt: () => _platformPrompt?.Invoke()
-				?? Shell.Current?.DisplayAlertAsync(Title, Message, ExitLabel, StayLabel)
-				?? Task.FromResult(false),
+			prompt: () => _platformPrompt?.Invoke() ?? SharedPrompt(),
 			exit: ExitApp);
 	}
+
+	/// <summary>
+	/// The exit prompt as a shared dialog request (#2630): המשך ללמוד stays the
+	/// safe dismissal in theme blue, צא מהישומון is the destructive affirmative
+	/// in red (#2460). The AutomationIds stay stable for the Android e2e suite.
+	/// </summary>
+	internal static Task<bool> SharedPrompt() =>
+		AppDialogs.ConfirmAsync(new AppDialogRequest
+		{
+			Title = Title,
+			Message = Message,
+			AutomationIdPrefix = "ExitConfirmation",
+			Actions =
+			[
+				new AppDialogAction(StayLabel, AppDialogActionRole.Cancel) { AutomationId = "ExitConfirmationStay" },
+				new AppDialogAction(ExitLabel, AppDialogActionRole.Destructive) { AutomationId = "ExitConfirmationExit" },
+			],
+		});
 
 	[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
 		Justification = "Platform exit path — each branch is #if-gated to its OS, so the unit-test host compiles to a no-op.")]

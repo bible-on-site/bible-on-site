@@ -1,39 +1,11 @@
-"use client";
-
 import Script from "next/script";
-import { useEffect, useSyncExternalStore } from "react";
-import {
-	getAnalyticsConsent,
-	getAnalyticsConsentServerSnapshot,
-	subscribeAnalyticsConsent,
-} from "@/lib/analytics-consent";
 import { isProduction } from "@/util/environment";
 
 const GA_MEASUREMENT_ID = "G-2CHER7MM85";
 
-/**
- * Consent-gated GA4 (#2400, Amendment 13): the gtag loader itself stays out of
- * the page until the user explicitly opts in via the consent banner, so no
- * pre-consent pings at all; simpler and stronger than Consent Mode.
- * Granting mid-session mounts the scripts without a reload.
- */
+/** Ordinary service statistics. Advertising features remain disabled. */
 export function GoogleAnalytics() {
-	const consent = useSyncExternalStore(
-		subscribeAnalyticsConsent,
-		getAnalyticsConsent,
-		getAnalyticsConsentServerSnapshot,
-	);
-	// A deny after a grant cannot unmount the loaded gtag script; the
-	// documented ga-disable-<id> flag suppresses its hits for the rest of
-	// the session, and clears again if the user re-grants.
-	useEffect(() => {
-		(window as unknown as Record<string, boolean>)[
-			`ga-disable-${GA_MEASUREMENT_ID}`
-		] = consent === "denied";
-	}, [consent]);
-	if (!isProduction() || consent !== "granted") {
-		return null;
-	}
+	if (!isProduction()) return null;
 
 	return (
 		<>
@@ -52,10 +24,11 @@ export function GoogleAnalytics() {
 							window.dataLayer = window.dataLayer || [];
 							function gtag(){dataLayer.push(arguments);}
 							gtag('js', new Date());
-							gtag('config', '${GA_MEASUREMENT_ID}');
+							gtag('consent', 'default', {ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'});
+							gtag('config', '${GA_MEASUREMENT_ID}', {allow_google_signals: false, allow_ad_personalization_signals: false});
 						}
 						import('https://openfpcdn.io/botd/v2').then(function(Botd) {
-							return Botd.load();
+							return Botd.load({ monitoring: false });
 						}).then(function(botd) {
 							return botd.detect();
 						}).then(function(result) {

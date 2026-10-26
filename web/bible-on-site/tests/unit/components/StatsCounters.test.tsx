@@ -13,6 +13,11 @@ const STATS = [
 	{ label: "ערכים על הפרק בתנכפדיה", value: 1250 },
 ];
 
+const LINKED = [
+	{ label: "רבנים כותבים על הפרק", text: "עשרות", href: "/929/authors" },
+	{ label: "ערכים על הפרק בתנכפדיה", value: 1250, href: "/pedia" },
+];
+
 const FINALS = ["עשרות", "4", "1,250"];
 
 type IOCallback = (entries: { isIntersecting: boolean }[]) => void;
@@ -65,7 +70,10 @@ const animatedValues = () =>
 
 const wordElement = () =>
 	// biome-ignore lint/style/noNonNullAssertion: the label is rendered
-	screen.getByText("רבנים כותבים על הפרק").closest("div")!.querySelector("dd [aria-hidden]")!;
+	screen
+		.getByText("רבנים כותבים על הפרק")
+		.closest("div")!
+		.querySelector("dd [aria-hidden]")!;
 
 beforeEach(() => {
 	now = 0;
@@ -175,6 +183,59 @@ describe("StatsCounters", () => {
 			expect(window.cancelAnimationFrame).toHaveBeenCalled();
 			expect(disconnectCalls).toBeGreaterThan(0);
 			step(STATS_ANIMATION_DURATION_SECONDS * 10_000);
+		});
+	});
+
+	describe("linked counters", () => {
+		it("names each tile link after its label plus the displayed value", () => {
+			render(<StatsCounters stats={LINKED} />);
+
+			const rabbis = screen.getByRole("link", {
+				name: "רבנים כותבים על הפרק: עשרות",
+			});
+			expect(rabbis).toHaveAttribute("href", "/929/authors");
+			const pedia = screen.getByRole("link", {
+				name: "ערכים על הפרק בתנכפדיה: 1,250",
+			});
+			expect(pedia).toHaveAttribute("href", "/pedia");
+		});
+
+		it("keeps each link's accessible name in sync with the count-up", () => {
+			installIntersectionObserver();
+			render(<StatsCounters stats={LINKED} />);
+
+			// Pre-trigger the tile shows 0 and the name announces 0 — axe's
+			// label-content-name rule requires the visible digit inside the name.
+			const pedia = () =>
+				screen.getByRole("link", { name: /ערכים על הפרק בתנכפדיה/ });
+			expect(pedia()).toHaveAccessibleName("ערכים על הפרק בתנכפדיה: 0");
+			triggerIntersection();
+			step(STATS_ANIMATION_DURATION_SECONDS * 10_000);
+			expect(pedia()).toHaveAccessibleName("ערכים על הפרק בתנכפדיה: 1,250");
+		});
+
+		it("applies the hidden-word entrance on linked text counters too", () => {
+			installIntersectionObserver();
+			render(<StatsCounters stats={LINKED} />);
+
+			const rabbis = screen.getByRole("link", { name: /רבנים/ });
+			const word = rabbis.querySelector("[aria-hidden]");
+			expect(word?.className).toMatch(/wordHidden/);
+			triggerIntersection();
+			expect(word?.className).not.toMatch(/wordHidden/);
+		});
+
+		it("covers a linked stat added before the totals reset", () => {
+			installIntersectionObserver();
+			const { rerender } = render(<StatsCounters stats={LINKED} />);
+			rerender(
+				<StatsCounters
+					stats={[...LINKED, { label: "חדש", value: 7, href: "/x" }]}
+				/>,
+			);
+			// The effect resets the new tile to 0 — between render and reset the
+			// displayed fallback (?? stat.value) keeps the link name valid.
+			expect(screen.getByRole("link", { name: "חדש: 0" })).toBeInTheDocument();
 		});
 	});
 

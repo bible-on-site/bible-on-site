@@ -65,11 +65,16 @@ repos:
   # imports), D2 = docstring structure (D205/D212/D213 layout findings). The
   # select is explicit so the gate doesn't drift with ruff version defaults;
   # broader docstring coverage (D1xx undocumented-*) stays out of scope.
+  # #2114 second wave adds the findings github-code-quality accepted on Python
+  # files: BLE001 (blind except — covers "Empty except" and "Except block
+  # handles 'BaseException'"), E722 (bare except:), S110 (try-except-pass with
+  # no explanatory comment), RET502 (implicit-None returns mixed with returns —
+  # the "Explicit returns mixed with implicit returns" finding).
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
     rev: v0.17.1
     hooks:
       - id: ruff-check
-        args: [--select, "F,D2"]
+        args: [--select, "F,D2,BLE001,E722,S110,RET502"]
         priority: 10
   # Local gate for the staged-file secret/PII review required by
   # git-practices — catches keys/tokens before they reach the commit.
@@ -116,12 +121,17 @@ repos:
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/bible-on-site/
         pass_filenames: false
-        # Mutates package.json/package-lock and stages them — runs alone
+        # Mutates package.json/bun.lock and stages them — runs alone
         # before the parallel read-only batch so tests see stable files.
         priority: 5
+      # --related narrows the run to tests covering the staged module files
+      # (argv after `::`, files appended); config-like files or a zero-test
+      # related run fall back to the full suite (argv before `::`). CI still
+      # gates the full suite on every PR.
       - id: web-unit-tests
         name: web/bible-on-site unit tests
-        entry: node devops/precommit-run.mjs web/bible-on-site npm run test:unit
+        # Quoted — a bare ` :` inside the entry would end the YAML scalar.
+        entry: "node devops/precommit-run.mjs --related web/bible-on-site bun run test:unit :: bun run test:unit --findRelatedTests"
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/bible-on-site/
@@ -129,11 +139,41 @@ repos:
         priority: 10
       - id: admin-unit-tests
         name: web/admin unit tests
-        entry: node devops/precommit-run.mjs web/admin npm run test:unit
+        entry: "node devops/precommit-run.mjs --related web/admin bun run test:unit :: bun run test:unit:related"
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/admin/
         pass_filenames: false
+        priority: 10
+      # C# analyzer gate (#2114): builds each touched app/ project so the
+      # SonarAnalyzer.CSharp severities in .editorconfig fail locally instead
+      # of first surfacing as post-push Codacy/Qodana annotations. Skips
+      # projects without a prior restore (fresh clones, pre-commit.ci).
+      - id: dotnet-analyzers
+        name: dotnet analyzers (per-project build)
+        entry: node devops/precommit-dotnet.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(app/.*\.(cs|csproj)|\.editorconfig|global\.json|app/Directory\.Build\.props)$
+        pass_filenames: false
+        priority: 10
+      # Generic-catch justification gate (#2114 second wave): S2221 does not
+      # fire inside async-void methods, on catch-rethrow sites, or in test
+      # code, so an unannotated generic catch there compiles cleanly and is
+      # only flagged post-push by github-code-quality (#2596, again on
+      # #2644). scan-catch.cjs closes the hole deterministically: every
+      # `catch (Exception)`/bare `catch` without a type-narrowing `when`
+      # filter must carry `//NOSONAR — <reason>` on the catch line or the
+      # contiguous comment/#pragma run above it. The script itself skips
+      # `*.Tests*` assemblies (the audited no-annotation surface); runs even
+      # when the project was never restored.
+      - id: catch-boundary
+        name: generic-catch justification (S2221-exempt sites)
+        entry: node devops/review-audit/scan-catch.cjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^app/.*\.cs$
+        pass_filenames: true
         priority: 10
       # One hook covers all Rust modules: precommit-rust.mjs buckets staged
       # changes per module and runs that module's cargo-make lint tasks.
@@ -157,6 +197,28 @@ repos:
         additional_dependencies: ["@types/node@26.6.5"]
         files: \.(rs|[cm]?[jt]sx?)$
         pass_filenames: true
+        priority: 10
+      # setup-node rejects cache values outside npm|yarn|pnpm at runtime, and
+      # the affected jobs are master/release-only so CI lint never executes
+      # them — gate the enum at commit time instead (#2643).
+      - id: setup-node-cache
+        name: setup-node cache input enum
+        entry: node devops/github/ci/setup-node-cache.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^\.github/(workflows|actions)/
+        pass_filenames: true
+        priority: 10
+      # The curated aliyah JSON is generated by the importer from the
+      # vendored hebcal source — --check fails the commit when the JSON,
+      # importer, or vendored source drift apart.
+      - id: parasha-aliyot-drift
+        name: parasha-aliyot.json drift check
+        entry: node devops/import-parasha-aliyot.mjs --check
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(devops/import-parasha-aliyot\.mjs|devops/data-sources/(hebcal-leyning-aliyot|opentorah-tanach-aliyot)|web/bible-on-site/src/data/parasha/parasha-aliyot\.json)$
+        pass_filenames: false
         priority: 10
       - id: flip-book-local-restore
         name: restore local html-flip-book-react
