@@ -255,13 +255,11 @@ pub async fn lambda_handler(
         "/health" => Ok(LambdaResponse::builder()
             .status(200)
             .header("content-type", "application/json")
-            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))
-            .unwrap()),
+            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))?),
         _ => Ok(LambdaResponse::builder()
             .status(404)
             .header("content-type", "application/json")
-            .body(Body::Text(r#"{"error":"not_found"}"#.into()))
-            .unwrap()),
+            .body(Body::Text(r#"{"error":"not_found"}"#.into()))?),
     }
 }
 
@@ -301,20 +299,16 @@ async fn lambda_generate_pdf(
         Body::Empty | _ => {
             return Ok(LambdaResponse::builder()
                 .status(400)
-                .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))
-                .unwrap());
+                .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))?);
         }
     };
 
     let req: GeneratePdfRequest = match serde_json::from_str(&body_str) {
         Ok(r) => r,
         Err(e) => {
-            return Ok(LambdaResponse::builder()
-                .status(400)
-                .body(Body::Text(
-                    serde_json::json!({"error": e.to_string()}).to_string(),
-                ))
-                .unwrap());
+            return Ok(LambdaResponse::builder().status(400).body(Body::Text(
+                serde_json::json!({"error": e.to_string()}).to_string(),
+            ))?);
         }
     };
 
@@ -326,12 +320,10 @@ async fn lambda_generate_pdf(
                 "content-disposition",
                 format!("attachment; filename=\"{}\"", filename),
             )
-            .body(Body::Binary(buf))
-            .unwrap()),
+            .body(Body::Binary(buf))?),
         Err(e) => Ok(LambdaResponse::builder()
             .status(500)
-            .body(Body::Text(serde_json::json!({"error": e}).to_string()))
-            .unwrap()),
+            .body(Body::Text(serde_json::json!({"error": e}).to_string()))?),
     }
 }
 
