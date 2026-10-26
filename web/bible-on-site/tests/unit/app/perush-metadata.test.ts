@@ -37,6 +37,7 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../src/lib/perushim";
+import { getPerekImagesByChapter } from "../../../src/lib/seo/perek-images-data";
 
 const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 	typeof getPerushimByPerekId
@@ -44,6 +45,10 @@ const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 const mockGetPerushDetail = getPerushDetail as jest.MockedFunction<
 	typeof getPerushDetail
 >;
+const mockGetPerekImagesByChapter =
+	getPerekImagesByChapter as jest.MockedFunction<
+		typeof getPerekImagesByChapter
+	>;
 
 const RASHI_SLUG = encodeURIComponent('רש"י');
 
@@ -60,6 +65,7 @@ beforeEach(() => {
 	// fallback description (the other string carrying the source) is exercised.
 	mockGetPerushimByPerekId.mockResolvedValue([rashiPerush]);
 	mockGetPerushDetail.mockResolvedValue({ notes: [] } as never);
+	mockGetPerekImagesByChapter.mockResolvedValue({});
 });
 
 const metadataFor = (perekId: number) =>
@@ -111,5 +117,42 @@ describe("commentary metadata source (#2512)", () => {
 		expect(
 			(metadata.openGraph as { authors?: string[] } | null)?.authors,
 		).toBeUndefined();
+	});
+
+	it("prefers the perek illustration as the social image when one exists", async () => {
+		mockGetPerekImagesByChapter.mockResolvedValue({
+			315: [
+				{
+					socialSrc: "/images/perek/315-social.jpg",
+					socialWidth: 1200,
+					socialHeight: 630,
+					alt: "איור מלכים ב ו",
+				},
+			] as never,
+		});
+
+		const metadata = await metadataFor(315);
+
+		expect(metadata.openGraph?.images).toEqual([
+			expect.objectContaining({
+				url: `${SITE_ORIGIN}/images/perek/315-social.jpg`,
+				width: 1200,
+				height: 630,
+				alt: "איור מלכים ב ו",
+			}),
+		]);
+	});
+
+	it("survives an unavailable illustration map and uses the branded fallback", async () => {
+		mockGetPerekImagesByChapter.mockResolvedValue(null as never);
+
+		const metadata = await metadataFor(315);
+
+		expect(metadata.title).toBe(expectedTitle("מלכים ב ו"));
+		expect(metadata.openGraph?.images).toEqual([
+			expect.objectContaining({
+				url: `${SITE_ORIGIN}/images/og/default.jpg`,
+			}),
+		]);
 	});
 });

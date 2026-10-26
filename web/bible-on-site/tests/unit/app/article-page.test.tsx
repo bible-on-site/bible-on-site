@@ -228,6 +228,7 @@ const recordingTimeFrame: Timeframe = {
 describe("[slug] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockGetPerekImagesByChapter.mockResolvedValue({});
 	});
 
 	describe("generateStaticParams", () => {
