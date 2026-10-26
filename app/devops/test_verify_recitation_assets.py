@@ -65,12 +65,11 @@ class ReleaseArtifactTests(unittest.TestCase):
                     with self.assertRaises(ValueError): verify_module.verify(package, path, "Android")
 
     def test_matching_outer_hash_cannot_hide_corrupt_audio_or_wrong_source(self):
-        from verify_recitation_assets import verify_book_audio
         audio, catalog = self.book(opus=True, corrupt=True)
-        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        with self.assertRaises(ValueError): verify_module.verify_book_audio(audio, catalog, catalog["books"][0])
         audio, catalog = self.book(opus=True)
         catalog["package"]["tracks"][0]["playback"]["sourceSha256"] = "b" * 64
-        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        with self.assertRaises(ValueError): verify_module.verify_book_audio(audio, catalog, catalog["books"][0])
 
     def _write_ios_fixture(self, root, audio, catalog_path, catalog, problems=()):
         catalog_path.write_text(json.dumps(catalog))
