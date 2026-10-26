@@ -287,8 +287,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     {
         var prefs = PreferencesService.Instance;
         UpdateFontSizeResources(prefs);
-        prefs.PreferencesChanged += (_, _) =>
-            MainThread.BeginInvokeOnMainThread(() => UpdateFontSizeResources(prefs));
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
+            MainThread.BeginInvokeOnMainThread(() => page.UpdateFontSizeResources(prefs)));
     }
 
     private void UpdateFontSizeResources(PreferencesService prefs)
