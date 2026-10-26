@@ -13,6 +13,12 @@ beforeEach(() => {
 	saveDivineNameMaskingSettings(DEFAULT_DIVINE_NAME_MASKING);
 });
 
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; the subscriber only reads `event.key`, so a plain Event
+// carrying the property is enough.
+const storageEvent = (key: string | null) =>
+	Object.assign(new Event("storage"), { key });
+
 describe("DivineNameText", () => {
 	it("masks names out of the box for a fresh install (#2404)", () => {
 		render(<DivineNameText value="יְהוָ֑ה אֵ֑ל" />);
@@ -71,9 +77,7 @@ describe("DivineNameText", () => {
 				DIVINE_NAME_MASKING_KEY,
 				JSON.stringify({ enabled: false }),
 			);
-			window.dispatchEvent(
-				new StorageEvent("storage", { key: DIVINE_NAME_MASKING_KEY }),
-			);
+			window.dispatchEvent(storageEvent(DIVINE_NAME_MASKING_KEY));
 		});
 		expect(screen.getByText("אֵ֑ל")).toBeTruthy();
 	});
@@ -84,7 +88,7 @@ describe("DivineNameText", () => {
 				DIVINE_NAME_MASKING_KEY,
 				JSON.stringify({ enabled: false }),
 			);
-			window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+			window.dispatchEvent(storageEvent("otherPref"));
 		});
 		// The stored opt-out was not re-read, so the masked default stays.
 		expect(screen.getByText("א-ל")).toBeTruthy();

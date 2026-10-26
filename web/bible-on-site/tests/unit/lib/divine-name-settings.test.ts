@@ -13,6 +13,12 @@ import {
 	subscribeDivineNameMasking,
 } from "@/lib/divine-name-settings";
 
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; the subscriber only reads `event.key`, so a plain Event
+// carrying the property is enough.
+const storageEvent = (key: string | null) =>
+	Object.assign(new Event("storage"), { key });
+
 beforeEach(() => {
 	localStorage.clear();
 	// The settings module keeps a snapshot cache for useSyncExternalStore;
@@ -145,11 +151,9 @@ describe("persistence and change notifications", () => {
 			JSON.stringify({ enabled: true, yhwh: "dalet" }),
 		);
 		// Events for other keys are ignored; only our key re-reads.
-		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		window.dispatchEvent(storageEvent("otherPref"));
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("heh");
-		window.dispatchEvent(
-			new StorageEvent("storage", { key: DIVINE_NAME_MASKING_KEY }),
-		);
+		window.dispatchEvent(storageEvent(DIVINE_NAME_MASKING_KEY));
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
 	});
 	it("keeps the snapshot object stable between changes", () => {
