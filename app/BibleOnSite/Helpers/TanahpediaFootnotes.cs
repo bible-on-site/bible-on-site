@@ -86,9 +86,12 @@ public static class TanahpediaFootnotes
                 continue;
             }
             /* A "#fn:N"/"#note-N" link inside a note is a cross-reference
-               between notes, not an inline reference — leave it alone. */
+               between notes, not an inline reference — keep it, but retarget
+               the legacy "#note-N" form to the canonical fn:N id its target
+               body gets below. */
             if (bodies.Count == 0 || InsideAny(anchor, bodySet))
             {
+                anchor.SetAttributeValue("href", $"#fn:{num}");
                 continue;
             }
             var host = anchor.ParentNode?.Name == "sup" ? anchor.ParentNode : anchor;

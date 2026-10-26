@@ -177,10 +177,12 @@ public sealed class TanahpediaFootnotesTests
     }
 
     [Fact]
-    public void Normalize_KeepsCrossNoteReferencesIntact()
+    public void Normalize_RetargetsCrossNoteReferencesToCanonicalIds()
     {
         /* A #note-N link inside a note body is a note-to-note cross-reference,
-           not an inline reference - it must not become a sup/fnref. */
+           not an inline reference - it must not become a sup/fnref, but its
+           legacy target id is renamed to fn:N like every other id so the
+           link keeps resolving. */
         const string html = @"
 <p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
 <ol style=""list-style:none"">
@@ -188,9 +190,10 @@ public sealed class TanahpediaFootnotesTests
 <li id=""note-2""><sup>ב</sup> חזקוני</li>
 </ol>";
         var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        Assert.NotNull(root.SelectSingleNode(".//*[@id='fn:2']"));
         var note1 = Assert.Single(root.SelectNodes(".//*[@id='fn:1']")!);
         var cross = Assert.Single(note1.SelectNodes(".//a")!
-            .Where(a => a.GetAttributeValue("href", "") == "#note-2"));
+            .Where(a => a.GetAttributeValue("href", "") == "#fn:2"));
         Assert.DoesNotContain("footnote-ref", cross.GetAttributeValue("class", ""));
         Assert.Equal("li", cross.ParentNode!.Name);
     }
