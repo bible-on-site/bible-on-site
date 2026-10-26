@@ -62,6 +62,22 @@ jest.mock(
 			</button>
 		),
 		BookshelfIcon: () => <span>shelf</span>,
+		BookmarkToggleButton: ({
+			enabled,
+			onChange,
+			ariaLabel,
+		}: {
+			enabled: boolean;
+			onChange: (enabled: boolean) => void;
+			ariaLabel?: string;
+		}) => (
+			<button
+				type="button"
+				onClick={() => onChange(!enabled)}
+				aria-label={ariaLabel}
+				aria-pressed={enabled}
+			/>
+		),
 		DownloadDropdown: () => <div />,
 		FirstPageButton: () => <div />,
 		FullscreenButton: () => <div />,
@@ -186,6 +202,7 @@ import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import {
 	DEFAULT_SEFER_BOOKMARK_SETTINGS,
+	getSeferBookmarkSettings,
 	saveSeferBookmarkSettings,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
@@ -590,6 +607,58 @@ describe("Sefer component", () => {
 					perekIds={[1]}
 				/>,
 			);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+		});
+
+		it("toggles the tabs from the toolbar through the shared persisted state", () => {
+			saveSeferBookmarkSettings({ placement: "top", upcomingOnly: true });
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			const hide = screen.getByRole("button", { name: "הסתרת סימניות" });
+			expect(hide).toHaveAttribute("aria-pressed", "true");
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+
+			fireEvent.click(hide);
+			// One persisted state drives the preference, the toolbar control and
+			// the library flag — and the display options survive the toggle.
+			expect(getSeferBookmarkSettings()).toMatchObject({
+				enabled: false,
+				placement: "top",
+				upcomingOnly: true,
+			});
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+
+			// The control stays reachable while tabs are hidden so they can be
+			// shown again, now announcing the show action.
+			const show = screen.getByRole("button", { name: "הצגת סימניות" });
+			expect(show).toHaveAttribute("aria-pressed", "false");
+			fireEvent.click(show);
+			expect(getSeferBookmarkSettings().enabled).toBe(true);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+		});
+
+		it("mirrors an external סימניות preference change in the toolbar control", () => {
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			expect(
+				screen.getByRole("button", { name: "הסתרת סימניות" }),
+			).toBeInTheDocument();
+			act(() => saveSeferBookmarkSettings({ enabled: false }));
+			expect(
+				screen.getByRole("button", { name: "הצגת סימניות" }),
+			).toHaveAttribute("aria-pressed", "false");
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 		});
 
