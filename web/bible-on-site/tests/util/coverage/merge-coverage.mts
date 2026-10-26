@@ -43,8 +43,13 @@ function mergeCoverage(): void {
 	// Inconsistent branch data (e.g. single-branch blocks from SWC ternary instrumentation) is fixed
 	// during normalization — see fixInconsistentBranches() in normalize-coverage.mts.
 	// merge-lcov.mts is the repo's pure-Node merger; --require keeps lcov -a's
-	// fail-on-missing-input behavior. execFile keeps the computed COVERAGE_DIR
-	// out of shell interpolation; cwd pins tsx resolution to this package.
+	// fail-on-missing-input behavior for the unit input. The e2e app is a
+	// separately instrumented compilation, so it merges --hits-only: its
+	// nondeterministic arm universe must not extend the canonical one (it
+	// made codecov/project/website flake around the 99% target — #2670),
+	// while its hits on canonical lines, functions, and matching BRDA
+	// tuples still count. execFile keeps the computed COVERAGE_DIR out of
+	// shell interpolation; cwd pins tsx resolution to this package.
 	const out = runCommand([
 		process.execPath,
 		"--import",
@@ -54,7 +59,7 @@ function mergeCoverage(): void {
 		`${COVERAGE_DIR}/merged/lcov.info`,
 		"--require",
 		NORMALIZED_UNIT_LCOV,
-		"--require",
+		"--hits-only",
 		NORMALIZED_E2E_LCOV,
 	]);
 	if (out) console.log(formatOutput(out));

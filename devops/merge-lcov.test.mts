@@ -109,10 +109,11 @@ describe("mergeLcovTexts", () => {
 		assert.ok(out.includes("DA:1,5\nDA:2,5\nDA:3,2\n"), out);
 		assert.ok(!out.includes("DA:9"), out);
 		assert.ok(out.includes("LF:3\nLH:3\n"), out);
-		// BRDA tuples are per-instrumenter coordinates: even an identical key
-		// cannot be trusted to name the same arm, so no e2e arm merges.
-		assert.ok(out.includes("BRDA:5,0,0,2\nBRDA:5,0,1,0\n"), out);
-		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
+		// A BRDA tuple the canonical layer also enumerates is plausibly the
+		// same arm (same instrumenter, same source), so the e2e hit confirms
+		// it — while e2e arms canonical never enumerated stay dropped.
+		assert.ok(out.includes("BRDA:5,0,0,2\nBRDA:5,0,1,4\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:2\n"), out);
 		assert.ok(out.includes("FNDA:3,handler"), out);
 	});
 
@@ -143,19 +144,20 @@ describe("mergeLcovTexts", () => {
 		assert.deepEqual(out.match(/^SF:.+$/gm), ["SF:app/BibleOnSite/Services/Hot.cs"]);
 	});
 
-	it("never merges untrusted branch arms — equal tuples can name different arms", () => {
-		// BRDA block/branch indices are per-instrumenter coordinates. The
-		// e2e tuple 20,0,0 may be a different arm than the canonical 20,0,0,
-		// so even a matching key must not credit the canonical arm.
+	it("confirms untrusted branch arms only on tuples canonical enumerates", () => {
+		// BRDA block/branch indices are per-instrumenter coordinates, so a
+		// foreign arm is trusted only when the canonical layer enumerated
+		// the exact same tuple — 20,0,0 confirms (1), foreign-only 30,0,0
+		// and its unhit siblings stay dropped.
 		const canonical =
 			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nBRDA:20,0,0,0\nBRDA:20,0,1,0\nLF:1\nLH:1\nBRF:2\nBRH:0\nend_of_record\n";
 		const e2e =
 			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nDA:21,0\nBRDA:20,0,0,1\nBRDA:20,0,1,0\nBRDA:30,0,0,9\nLF:2\nLH:1\nBRF:3\nBRH:2\nend_of_record\n";
 		const out = mergeLcovTexts([canonical, e2e], undefined, ["app/BibleOnSite/"], new Set([1]));
-		assert.ok(out.includes("BRDA:20,0,0,0\nBRDA:20,0,1,0\n"), out);
+		assert.ok(out.includes("BRDA:20,0,0,1\nBRDA:20,0,1,0\n"), out);
 		assert.ok(!out.includes("BRDA:30"), out);
 		assert.ok(!out.includes("DA:21"), out);
-		assert.ok(out.includes("BRF:2\nBRH:0\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
 	});
 
 	it("confirms function hits only when the untrusted def matches canonical line and name", () => {
