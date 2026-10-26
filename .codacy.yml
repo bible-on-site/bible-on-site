@@ -15,6 +15,8 @@ engines:
     exclude_paths:
       - "data/annotations/extract_morphhb.py"
       - "data/annotations/baseline.py"
+      - "data/annotations/baseline_articles.py"
+      - "data/annotations/test_baseline_articles.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
@@ -51,6 +53,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
   - "data/mysql/tanahpedia_structure.sql"
   - "data/mysql/tanahpedia_alter_mention_decoration.sql"
+  - "data/mysql/tanah_mention_test_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.

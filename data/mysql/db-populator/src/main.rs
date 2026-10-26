@@ -99,6 +99,12 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_family_edge_lab_data.sql")]
     tanahpedia_edge_lab_script: String,
 
+    /// Path to mention-decoration e2e fixture SQL file. Must run after the
+    /// Tanahpedia seed chain — it inserts tanahpedia_entry rows, which would
+    /// satisfy the legacy-migration "empty table" gate if loaded earlier.
+    #[arg(long, default_value = "../tanah_mention_test_data.sql")]
+    tanah_mention_test_data_script: String,
+
     /// Skip structure script execution
     #[arg(long, default_value = "false")]
     skip_structure: bool,
@@ -327,6 +333,8 @@ async fn main() -> Result<()> {
 
         apply_tanahpedia_full_seed(&mut conn, &tanahpedia_scripts).await?;
 
+        apply_mention_test_data(&mut conn, base_path, &cli).await?;
+
         // Re-applied here so `mysql-populate-data-only` still creates the
         // reading-metrics tables on databases populated before this schema.
         apply_reading_metrics_upgrade(&mut conn, base_path).await?;
@@ -455,6 +463,21 @@ async fn apply_tanahpedia_full_seed(
     }
 
     apply_tanahpedia_family_and_place_content(conn, scripts, false).await
+}
+
+/// Loads the mention-decoration e2e fixture. Must run after the Tanahpedia
+/// seed chain — the fixture inserts `tanahpedia_entry` rows, which would
+/// satisfy the legacy migration's empty-table gate if loaded earlier.
+async fn apply_mention_test_data(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+    cli: &Cli,
+) -> Result<()> {
+    if cli.skip_tanah_test_data {
+        return Ok(());
+    }
+    let mention_test_data_path = base_path.join(&cli.tanah_mention_test_data_script);
+    execute_optional_script(conn, &mention_test_data_path, "mention-test-data").await
 }
 
 async fn apply_tanahpedia_family_and_place_content(
@@ -1251,6 +1274,35 @@ SELECT 1";
 
             assert!(tanahpedia_entry_exists(&mut conn, "יעקב").await?);
             assert!(tanahpedia_entry_exists(&mut conn, "eretz-yisrael").await?);
+
+            // Article row so the fixture's article-side decorations land;
+            // perek 1 already exists from the covering-source step above.
+            raw_sql(
+                "INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content) \
+                 VALUES (1, 1, 1, 'mention fixture article', 1, '<p>ישראל ויצחק</p>')",
+            )
+            .execute(&mut conn)
+            .await
+            .context("Failed to insert mention-fixture article")?;
+
+            apply_mention_test_data(&mut conn, base_path, &cli).await?;
+            assert!(tanahpedia_entry_exists(&mut conn, "ישראל").await?);
+            assert_eq!(
+                table_count(&mut conn, "tanahpedia_mention_decoration").await?,
+                3
+            );
+
+            // The skip flag must short-circuit before touching the database.
+            apply_mention_test_data(
+                &mut conn,
+                base_path,
+                &cli_from(&["--skip-tanah-test-data"]),
+            )
+            .await?;
+            assert_eq!(
+                table_count(&mut conn, "tanahpedia_mention_decoration").await?,
+                3
+            );
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())

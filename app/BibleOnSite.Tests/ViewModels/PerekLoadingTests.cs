@@ -367,7 +367,7 @@ public class PerekLoadingTests
         await fixture.Initialize();
         await fixture.Model.LoadByPerekIdAsync(1);
         // Chapter 20 is outside the initial preload buffer.
-        var notes = new SQLite.SQLiteAsyncConnection(Path.Combine(fixture.Storage.Root, "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"));
+        var notes = new SQLite.SQLiteAsyncConnection(Path.Join(fixture.Storage.Root, "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"));
         await notes.ExecuteAsync("DROP TABLE note_blob");
         await fixture.Model.PreloadAdjacentPasukimAsync(20);
         fixture.Model.PerekId.Should().Be(1);

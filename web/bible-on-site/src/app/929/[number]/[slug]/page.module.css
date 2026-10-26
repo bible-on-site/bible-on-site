@@ -121,6 +121,21 @@
   margin: 0.35em 0;
 }
 
+/* Tanahpedia mention anchors injected by the annotation pipeline (#2516) —
+   same dashed affordance as the pasuk renderer's .tanahpediaLink. The class
+   is a raw string inside stored HTML, so it must stay unhashed (:global). */
+.articleBody a:global(.tanahpedia-mention) {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed #1a73e8;
+  transition: border-color 0.2s ease;
+}
+
+.articleBody a:global(.tanahpedia-mention):hover {
+  border-bottom-style: solid;
+  border-bottom-color: var(--link-accent, #1552ac);
+}
+
 @counter-style article-hebrew-alpha {
   system: fixed;
   symbols: "\5D0" "\5D1" "\5D2" "\5D3" "\5D4" "\5D5" "\5D6" "\5D7" "\5D8" "\5D9" "\5DB" "\5DC" "\5DD" "\5DE" "\5DF"
@@ -350,6 +365,11 @@ button.backLink {
   .authorLink:hover .authorName,
   .articleBody a {
     color: #7eb0ff;
+  }
+
+  .articleBody a:global(.tanahpedia-mention) {
+    color: inherit;
+    border-bottom-color: var(--link-accent, #7eb0ff);
   }
 
   .articleBody,

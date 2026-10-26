@@ -5,8 +5,9 @@
  * Hebrew month headings, weekday labels, day numbers and perek references —
  * reusing the Frank Ruhl fonts + RTL helpers from tanach-pdf.
  *
- * pdf-lib draws LTR only: every Hebrew string is grapheme-reversed and each
- * grid column is laid out right-to-left (column 0 = rightmost).
+ * pdf-lib draws LTR only, so each string is split into bidi visual runs and
+ * drawn left-to-right (see bidi-text.ts); grid columns are laid out
+ * right-to-left (column 0 = rightmost).
  */
 
 import type { PDFFont, PDFPage } from "pdf-lib";
@@ -18,10 +19,13 @@ import * as _fontkit from "@pdf-lib/fontkit";
 import { toLetters } from "gematry";
 import type { MonthCell } from "@/data/learning-schedule";
 import {
-	getBoldFontBytes,
-	getRegularFontBytes,
-	reverseGraphemes,
-} from "./tanach-pdf";
+	bidiRunsWidth,
+	bidiTextWidth,
+	drawBidiRuns,
+	memoizeGlyphEncoding,
+	visualTextRuns,
+} from "./bidi-text";
+import { getBoldFontBytes, getRegularFontBytes } from "./tanach-pdf";
 
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
@@ -66,26 +70,32 @@ function drawRtlCentered(
 	y: number,
 	color: typeof INK,
 ): void {
-	const visual = reverseGraphemes(text);
-	const width = font.widthOfTextAtSize(visual, size);
-	page.drawText(visual, {
-		x: centerX - width / 2,
-		y,
-		size,
-		font,
-		color,
-	});
+	// One UAX #9 pass per label — reused for both width and draw.
+	const runs = visualTextRuns(text);
+	const width = bidiRunsWidth(font, runs, size);
+	drawBidiRuns(page, runs, font, size, centerX - width / 2, y, color);
 }
 
 function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
-	let out = text;
-	while (
-		out.length > 1 &&
-		font.widthOfTextAtSize(reverseGraphemes(out), size) > maxWidth
-	) {
-		out = out.slice(0, -1);
+	if (bidiTextWidth(font, text, size) <= maxWidth) {
+		return text;
 	}
-	return out;
+	// Longest prefix that still fits — binary search keeps this O(log n)
+	// shaping passes instead of one per truncated character.
+	let lo = 1;
+	let hi = text.length - 1;
+	let best = 1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		const candidate = text.slice(0, mid);
+		if (bidiTextWidth(font, candidate, size) <= maxWidth) {
+			best = mid;
+			lo = mid + 1;
+		} else {
+			hi = mid - 1;
+		}
+	}
+	return text.slice(0, best);
 }
 
 /**
@@ -97,8 +107,8 @@ export async function generateCalendarPdf(
 ): Promise<Uint8Array> {
 	const doc = await PDFDocument.create();
 	doc.registerFontkit(fontkit);
-	const font = await doc.embedFont(getRegularFontBytes());
-	const bold = await doc.embedFont(getBoldFontBytes());
+	const font = memoizeGlyphEncoding(await doc.embedFont(getRegularFontBytes()));
+	const bold = memoizeGlyphEncoding(await doc.embedFont(getBoldFontBytes()));
 
 	let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 	let y = PAGE_HEIGHT - MARGIN;

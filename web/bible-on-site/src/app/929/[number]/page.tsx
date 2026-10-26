@@ -9,7 +9,7 @@ import { getPerushimByPerekId } from "../../../lib/perushim";
 import { getPerekMetric, metricOrFallback } from "../../../lib/reading-metrics";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
-import { absUrl } from "../../../lib/seo/jsonld";
+import { pageMetadata } from "../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
@@ -87,31 +87,23 @@ export async function generateMetadata({
 		illustration?.description ??
 		`קריאת ${perekObj.source} בתנ"ך, עם פירושים ומאמרים על הפרק.`;
 	return {
-		title,
-		description,
-		alternates: { canonical: `/929/${perekId}` },
+		...pageMetadata({
+			title,
+			description,
+			canonical: `/929/${perekId}`,
+			image: illustration
+				? {
+						url: illustration.socialSrc,
+						width: illustration.socialWidth,
+						height: illustration.socialHeight,
+						alt: illustration.alt,
+					}
+				: undefined,
+		}),
 		...(illustration
 			? {
 					robots: {
 						googleBot: { "max-image-preview": "large" as const },
-					},
-					openGraph: {
-						title,
-						description,
-						url: `/929/${perekId}`,
-						locale: "he_IL",
-						images: [
-							{
-								url: absUrl(illustration.socialSrc),
-								width: illustration.socialWidth,
-								height: illustration.socialHeight,
-								alt: illustration.alt,
-							},
-						],
-					},
-					twitter: {
-						card: "summary_large_image" as const,
-						images: [absUrl(illustration.socialSrc)],
 					},
 				}
 			: {}),

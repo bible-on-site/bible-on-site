@@ -20,6 +20,10 @@ import {
 	pediaInvalidation,
 	revalidateWebsite,
 } from "../website-revalidate";
+import {
+	dropSelfShadowedAliasInTx,
+	keepOldNameAsAliasInTx,
+} from "./alias-ops.server";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { pediaInvalidationForEntryIds } from "./paths";
 import {
@@ -321,6 +325,8 @@ export const updateEntry = createServerFn({ method: "POST" })
 			baseRevisionId?: string | null;
 			source?: string;
 			notes?: string | null;
+			/** Rename flow: keep the previous unique_name as a live alias to this entry. */
+			keepOldNameAsAlias?: boolean;
 		}) => data,
 	)
 	.handler(async ({ data }) => {
@@ -328,7 +334,36 @@ export const updateEntry = createServerFn({ method: "POST" })
 		const updated = await transaction(async (conn) => {
 			const { entry, headRevisionId, unchanged, previousUniqueName } =
 				await saveEntryRevisioned(conn, data);
-			return { ...entry, headRevisionId, unchanged, previousUniqueName };
+			let oldNameAliasCreated = false;
+			if (
+				!unchanged &&
+				previousUniqueName &&
+				previousUniqueName !== entry.unique_name
+			) {
+				// The new canonical name shadows a self-referencing alias row — drop it.
+				await dropSelfShadowedAliasInTx(conn, data.id, entry.unique_name);
+				if (data.keepOldNameAsAlias) {
+					// Same commit as the rename — no window where the old URL 404s.
+					oldNameAliasCreated = await keepOldNameAsAliasInTx(
+						conn,
+						data.id,
+						previousUniqueName,
+					);
+				}
+			}
+			return {
+				...entry,
+				headRevisionId,
+				unchanged,
+				previousUniqueName,
+				oldNameAliasCreated,
+				// Surfaced to the editor so it can report what happened to the
+				// old URL after a committed rename.
+				renamedFrom:
+					!unchanged && previousUniqueName !== entry.unique_name
+						? previousUniqueName
+						: null,
+			};
 		});
 		// A no-op save changes no public content, so nothing expires.
 		if (!updated.unchanged) {
@@ -353,12 +388,24 @@ export const deleteEntry = createServerFn({ method: "POST" })
 			"SELECT unique_name FROM tanahpedia_entry WHERE id = ?",
 			[id],
 		);
-		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
-		await revalidateWebsite(
-			pediaInvalidation(
-				...(previous ? [pediaEntryPath(previous.unique_name)] : []),
-			),
+		// Alias/disambiguation names this entry is a target of — their public
+		// pages lose a target (FK cascade), so they expire too.
+		const aliasNames = await query<{ name: string }>(
+			`SELECT DISTINCT name FROM (
+			   SELECT s.name AS name FROM tanahpedia_entry_synonym s WHERE s.entry_id = ?
+			   UNION
+			   SELECT s2.name AS name
+			     FROM tanahpedia_entry_synonym_disambiguation d
+			     JOIN tanahpedia_entry_synonym s2 ON s2.id = d.synonym_id
+			    WHERE d.entry_id = ?
+			 ) names`,
+			[id, id],
 		);
+		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
+		const urls = new Set<string>();
+		if (previous) urls.add(pediaEntryPath(previous.unique_name));
+		for (const { name } of aliasNames) urls.add(pediaEntryPath(name));
+		await revalidateWebsite(pediaInvalidation(...urls));
 		return { success: true };
 	});
 

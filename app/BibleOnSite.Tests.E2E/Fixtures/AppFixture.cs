@@ -60,7 +60,7 @@ public class AppFixture : IAsyncLifetime
             var baseDir = Path.GetDirectoryName(typeof(AppFixture).Assembly.Location)
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
             // Go up 6 levels (win-x64 -> net10.0... -> Debug -> bin -> BibleOnSite.Tests.E2E -> app) then into web/api
-            return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
+            return Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
         }
     }
 
@@ -77,8 +77,8 @@ public class AppFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
 
             // Navigate from test output to app output (go up to app/, then into BibleOnSite/bin/...)
-            var appDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
-            var exePath = Path.Combine(appDir, "BibleOnSite.exe");
+            var appDir = Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
+            var exePath = Path.Join(appDir, "BibleOnSite.exe");
 
             if (!File.Exists(exePath))
             {
@@ -207,7 +207,7 @@ public class AppFixture : IAsyncLifetime
         await Task.Delay(1000); // Give time for processes to fully terminate
 
         // Start the application using dotnet run (which handles Windows App SDK properly)
-        var projectDir = Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
+        var projectDir = Path.GetFullPath(Path.Join(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
         var startInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
@@ -369,7 +369,7 @@ public class AppFixture : IAsyncLifetime
             // Cargo can detach its API child before the launcher exits.
             if (_weStartedApi)
             {
-                var executable = Path.Combine(ApiDirectory, "target", "debug", "api.exe");
+                var executable = Path.Join(ApiDirectory, "target", "debug", "api.exe");
                 foreach (var process in Process.GetProcessesByName("api"))
                 {
                     using (process)

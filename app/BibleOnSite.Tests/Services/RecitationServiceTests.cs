@@ -75,9 +75,9 @@ public class RecitationServiceTests
                 books.Add(book);
                 if (store)
                 {
-                    var directory = Path.Combine(storage.Root, "store", book.PackName);
+                    var directory = Path.Join(storage.Root, "store", book.PackName);
                     Directory.CreateDirectory(directory);
-                    File.WriteAllBytes(Path.Combine(directory, book.FileName), bytes);
+                    File.WriteAllBytes(Path.Join(directory, book.FileName), bytes);
                     var fetched = false;
                     Delivery.Setup(d => d.TryGetAssetPathAsync(book.PackName, It.IsAny<CancellationToken>()))
                         .Returns(() => Task.FromResult(fetched ? directory : null));
@@ -309,7 +309,7 @@ public class RecitationServiceTests
         var replacement = "replacement"u8.ToArray(); extension.Package = new(1, [Track(1, replacement)]);
         extension.Audio["/recordings/1_record.mp3"] = fault == "audio" ? "corrupt"u8.ToArray() : replacement;
         extension.Bundle(); var pack = extension.Catalog!.Books[0];
-        var path = Path.Combine(storage.Root, "store", pack.PackName, pack.FileName);
+        var path = Path.Join(storage.Root, "store", pack.PackName, pack.FileName);
         if (fault == "archive")
         {
             await File.AppendAllTextAsync(path, "damage", TestContext.Current.CancellationToken);
