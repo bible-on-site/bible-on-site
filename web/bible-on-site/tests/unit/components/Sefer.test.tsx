@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { BookmarkProvider } from "html-flip-book-react";
 import { sampleImage } from "./perek-image-fixture";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
@@ -475,23 +476,7 @@ describe("Sefer component", () => {
 
 	describe("chapter tabs (#2543)", () => {
 		const provider = () =>
-			capturedFlipBookProps.bookmarkProvider as {
-				getBookmarks: (context: {
-					currentPageIndex: number;
-					currentLeafIndex: number;
-					direction: "ltr" | "rtl";
-				}) => readonly {
-					id: string;
-					pageIndex: number;
-					label: string;
-					data?: unknown;
-				}[];
-				placement?: string;
-				orientation?: string;
-				attachment?: string;
-				order?: unknown;
-				className?: string;
-			};
+			capturedFlipBookProps.bookmarkProvider as BookmarkProvider;
 
 		beforeEach(() => {
 			localStorage.clear();
@@ -528,6 +513,72 @@ describe("Sefer component", () => {
 				}),
 			]);
 		});
+
+		it.each([
+			{ name: "בראשית", additional: undefined, chapter: "יב" },
+			{ name: "מלכים", additional: "א", chapter: "א יב" },
+			{ name: "מלכים", additional: "ב", chapter: "ב יב" },
+		])(
+			"keeps the expanded chapter reference scoped to $name $chapter",
+			({ name, additional, chapter }) => {
+				const perakim = Array.from({ length: 12 }, () => ({
+					header: "כותרת הפרק",
+					date: [],
+					star_rise: [],
+					pesukim: [],
+				}));
+				const metadata = {
+					name,
+					helek: name === "בראשית" ? "תורה" : "נביאים",
+					tanachUsName: name,
+					pesukimCount: 0,
+					perekFrom: 1,
+					perekTo: perakim.length,
+				};
+				const sefer: ComponentProps<typeof SeferContents>["sefer"] = additional
+					? {
+							...metadata,
+							perekTo: perakim.length * 2,
+							additionals: [
+								{ ...metadata, letter: "א", perakim },
+								{
+									...metadata,
+									letter: "ב",
+									perakim,
+									perekFrom: perakim.length + 1,
+									perekTo: perakim.length * 2,
+								},
+							],
+						}
+					: { ...metadata, perakim };
+				render(
+					<SeferContents
+						perekObj={{ ...minimalPerek, sefer: name }}
+						sefer={sefer}
+						articles={[]}
+						perushim={[]}
+					/>,
+				);
+				const p = provider();
+				const bookmark = p.getBookmarks({
+					currentPageIndex: 0,
+					currentLeafIndex: 0,
+					direction: "rtl",
+				})[additional === "ב" ? 23 : 11];
+				const { container } = render(p.renderExpandedBookmark?.(bookmark));
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-perek"),
+				).toHaveTextContent(`פרק ${chapter}`);
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-title"),
+				).toHaveTextContent("כותרת הפרק");
+				expect(container).not.toHaveTextContent(name);
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-source"),
+				).toBeNull();
+				expect(bookmark.label).toBe(`${name} ${chapter} - כותרת הפרק`);
+			},
+		);
 
 		it("hides the tabs when סימניות is disabled", () => {
 			saveSeferBookmarkSettings({ enabled: false });

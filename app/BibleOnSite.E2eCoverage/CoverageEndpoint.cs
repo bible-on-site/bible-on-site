@@ -90,12 +90,10 @@ namespace AltCover.Recorder
 			finally
 			{
 				// Modern runtimes implement IDisposable, but the recorder's
-				// netstandard2.0 reference contract does not expose it.
-				if (listener is IDisposable disposable)
-				{
-					disposable.Dispose();
-				}
-				else if (listener != null)
+				// netstandard2.0 reference contract does not expose it — the
+				// `as` cast reaches it dynamically and `using var` accepts null.
+				using var disposable = listener as IDisposable;
+				if (disposable == null && listener != null)
 				{
 					listener.Stop();
 					// Stop creates a replacement socket even when the bind failed.

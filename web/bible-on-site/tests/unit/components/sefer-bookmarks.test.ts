@@ -82,8 +82,6 @@ describe("buildSeferChapterBookmarks", () => {
 		expect(second.label).toBe("בראשית ב");
 		expect(first.data).toEqual<SeferBookmarkData>({
 			compact: "א",
-			perekHeb: "א",
-			unitSource: "בראשית",
 			source: "בראשית א",
 			title: "אחרי הדברים",
 		});
@@ -97,10 +95,10 @@ describe("buildSeferChapterBookmarks", () => {
 
 		expect(bookmarks).toHaveLength(3);
 		expect(bookmarks.map((b) => b.data.compact)).toEqual(["א א", "א ב", "ב א"]);
-		expect(bookmarks.map((b) => b.data.unitSource)).toEqual([
-			"שמואל א",
-			"שמואל א",
-			"שמואל ב",
+		expect(bookmarks.map((b) => b.data.source)).toEqual([
+			"שמואל א א",
+			"שמואל א ב",
+			"שמואל ב א",
 		]);
 		expect(bookmarks[2].data.source).toBe("שמואל ב א");
 		// pageIndex flows through the flattened perakim order, so שמואל ב פרק א
