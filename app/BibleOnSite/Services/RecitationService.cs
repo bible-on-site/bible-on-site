@@ -66,8 +66,8 @@ public sealed class RecitationService
             return installed == AvailableCount ? RecitationInstallState.Installed : RecitationInstallState.Partial;
         }
     }
-    private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
-    private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.PlaybackFileName);
+    private string DirectoryPath => Path.Join(_files.AppDataDirectory, "extensions", "recitation");
+    private string AudioPath(RecitationTrack track) => Path.Join(DirectoryPath, track.PlaybackFileName);
 
     public RecitationService(IFileSystem files, IPadDeliveryService delivery)
         : this(files, delivery, null)
@@ -265,7 +265,7 @@ public sealed class RecitationService
                     {
                         // Only obsolete app downloads, after verified replacement.
                         // The archival/pipeline recordings are outside this directory.
-                        try { File.Delete(Path.Combine(DirectoryPath, oldName)); } catch (IOException) { /* A player can still be releasing the old download. */ }
+                        try { File.Delete(Path.Join(DirectoryPath, oldName)); } catch (IOException) { /* A player can still be releasing the old download. */ }
                     }
                 }
                 completed += book.SizeBytes;
@@ -287,9 +287,9 @@ public sealed class RecitationService
         {
             directory = await _delivery.TryGetAssetPathAsync(book.PackName, cancellationToken);
         }
-        var path = directory == null ? null : new[] { Path.Combine(directory, book.FileName),
-            Path.Combine(directory, "assets", book.FileName) }.FirstOrDefault(File.Exists);
-        var bundledCopy = Path.Combine(DirectoryPath, book.FileName + ".download");
+        var path = directory == null ? null : new[] { Path.Join(directory, book.FileName),
+            Path.Join(directory, "assets", book.FileName) }.FirstOrDefault(File.Exists);
+        var bundledCopy = Path.Join(DirectoryPath, book.FileName + ".download");
         try
         {
             if (path == null)
@@ -396,9 +396,9 @@ public sealed class RecitationService
                 throw new InvalidDataException("Download this book's recordings again in preferences.");
             }
 
-            var cache = Path.Combine(_files.CacheDirectory, "recitation");
+            var cache = Path.Join(_files.CacheDirectory, "recitation");
             Directory.CreateDirectory(cache);
-            var chapter = Path.Combine(cache, "chapter-" + track.PlaybackSha256 + ".wav");
+            var chapter = Path.Join(cache, "chapter-" + track.PlaybackSha256 + ".wav");
             // A decoded chapter survives for instant replay; native players may
             // still finish releasing a previous file asynchronously.
             foreach (var old in Directory.EnumerateFiles(cache, "*.wav").Where(old => old != chapter))
@@ -442,7 +442,7 @@ public sealed class RecitationService
                 return chapter;
             }
 
-            var clip = Path.Combine(cache, "clip-" + Guid.NewGuid().ToString("N") + ".wav");
+            var clip = Path.Join(cache, "clip-" + Guid.NewGuid().ToString("N") + ".wav");
             if (decoder == null)
             {
                 throw new InvalidOperationException("A precise audio decoder is required.");
