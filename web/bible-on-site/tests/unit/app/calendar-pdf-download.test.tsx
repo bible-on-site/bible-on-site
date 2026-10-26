@@ -215,4 +215,52 @@ describe("CalendarPdfDownload", () => {
 			expect(screen.getByRole("status")).toHaveTextContent("נכשלה"),
 		);
 	});
+
+	it("ignores a response that resolves after unmount", async () => {
+		const gate = deferred(pdfResponse(true));
+		(global.fetch as jest.Mock).mockReturnValue(gate.promise);
+		const { unmount } = render(
+			<CalendarPdfDownload url={PDF_URL} scopeLabel={SCOPE} />,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+		unmount();
+		gate.resolve();
+
+		await waitFor(() => expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled());
+	});
+
+	it("ignores a blob that resolves after unmount", async () => {
+		const blobGate = deferred(new Blob(["%PDF"], { type: "application/pdf" }));
+		(global.fetch as jest.Mock).mockResolvedValue({
+			...pdfResponse(true),
+			blob: () => blobGate.promise,
+		});
+		const { unmount } = render(
+			<CalendarPdfDownload url={PDF_URL} scopeLabel={SCOPE} />,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+		await waitFor(() =>
+			expect(screen.getByRole("status")).toHaveTextContent("מוריד"),
+		);
+		unmount();
+		blobGate.resolve();
+
+		await waitFor(() => expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled());
+	});
+
+	it("ignores a rejection that arrives after unmount", async () => {
+		const gate = deferred(pdfResponse(false));
+		(global.fetch as jest.Mock).mockReturnValue(gate.promise);
+		const { unmount } = render(
+			<CalendarPdfDownload url={PDF_URL} scopeLabel={SCOPE} />,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+		unmount();
+		gate.resolve();
+
+		await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+	});
 });
