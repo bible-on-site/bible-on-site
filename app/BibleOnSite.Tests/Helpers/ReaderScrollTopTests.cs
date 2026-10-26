@@ -159,4 +159,93 @@ public class ReaderScrollTopTests
             ReaderScrollTop.AnimateScroll = restore;
         }
     }
+
+    [Fact]
+    public async Task ConfirmScrollLandedAsync_AtRest_ReturnsWithoutReissuing()
+    {
+        var tikkunView = Realize(new ScrollView { BindingContext = CurrentUnit, IsVisible = true });
+        var requests = 0;
+        tikkunView.ScrollToRequested += (_, _) => requests++;
+
+        await ReaderScrollTop.ConfirmScrollLandedAsync(tikkunView, CurrentUnit, animate: true);
+
+        requests.Should().Be(0, "a surface already at its start needs no retry");
+    }
+
+    [Fact]
+    public async Task ConfirmScrollLandedAsync_UnrealizedSurface_ReturnsImmediately()
+    {
+        var restore = ReaderScrollTop.IsAtStart;
+        ReaderScrollTop.IsAtStart = _ => false;
+        try
+        {
+            // No handler and no layout: the confirm loop treats the view as
+            // gone and stops rather than reissuing onto a recycled surface.
+            var tikkunView = new ScrollView { BindingContext = CurrentUnit, IsVisible = true };
+
+            await ReaderScrollTop.ConfirmScrollLandedAsync(tikkunView, CurrentUnit, animate: true);
+        }
+        finally
+        {
+            ReaderScrollTop.IsAtStart = restore;
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmScrollLandedAsync_StillScrolled_ReissuesUntilTheWindowEnds()
+    {
+        var restoreStart = ReaderScrollTop.IsAtStart;
+        var restoreDispatch = ReaderScrollTop.DispatchReissue;
+        ReaderScrollTop.IsAtStart = _ => false;
+        ReaderScrollTop.DispatchReissue = (_, action) => action();
+        try
+        {
+            var tikkunView = Realize(new ScrollView { BindingContext = CurrentUnit, IsVisible = true });
+            var requests = 0;
+            tikkunView.ScrollToRequested += (_, _) => requests++;
+
+            await ReaderScrollTop.ConfirmScrollLandedAsync(tikkunView, CurrentUnit, animate: true);
+
+            requests.Should().BeGreaterThan(0,
+                "a platform scroller that reclaims the position gets the jump reissued");
+        }
+        finally
+        {
+            ReaderScrollTop.IsAtStart = restoreStart;
+            ReaderScrollTop.DispatchReissue = restoreDispatch;
+        }
+    }
+
+    [Fact]
+    public void ReissueIfOwned_ReboundSurface_DoesNotScroll()
+    {
+        var tikkunView = Realize(new ScrollView { BindingContext = NeighborUnit, IsVisible = true });
+        var requests = 0;
+        tikkunView.ScrollToRequested += (_, _) => requests++;
+
+        ReaderScrollTop.ReissueIfOwned(tikkunView, CurrentUnit, animate: true);
+
+        requests.Should().Be(0, "a view recycled onto a neighbour unit must not be scrolled");
+    }
+
+#if DEBUG
+    [Fact]
+    public void NoteScrollOffset_ProbeMirrorsTheOffsetIntoTheDescription()
+    {
+        var element = new Label();
+
+        ReaderScrollTop.NoteScrollOffset(element, 1038.4);
+        SemanticProperties.GetDescription(element).Should().Be("tsy:1038");
+
+        ReaderScrollTop.NoteScrollOffset(element, new ScrolledEventArgs(0, 0.4));
+        SemanticProperties.GetDescription(element).Should().Be("tsy:0");
+    }
+
+    [Fact]
+    public void NoteScrollOffset_NonElementSender_IsHarmless()
+    {
+        var act = () => ReaderScrollTop.NoteScrollOffset(new object(), 1.0);
+        act.Should().NotThrow();
+    }
+#endif
 }

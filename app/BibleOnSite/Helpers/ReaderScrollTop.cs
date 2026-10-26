@@ -58,25 +58,29 @@ public static class ReaderScrollTop
     /// the request is verified against <see cref="ScrollView.ScrollY"/>
     /// instead of assumed to have landed.
     /// </summary>
-    private static async Task ConfirmScrollLandedAsync(ScrollView scrollView, object unit, bool animate)
+    internal static async Task ConfirmScrollLandedAsync(ScrollView scrollView, object unit, bool animate)
     {
         const int maxAttempts = 10;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             await Task.Delay(120);
-            if (scrollView.Handler is null || scrollView.ScrollY <= 0.5)
+            if (scrollView.Handler is null || IsAtStart(scrollView))
             {
                 return;
             }
-            // A recycled view may have been rebound to a neighbour unit by
-            // now — reissue only while the surface still belongs to it.
-            scrollView.Dispatcher?.Dispatch(() =>
-            {
-                if (ReferenceEquals(scrollView.BindingContext, unit))
-                {
-                    _ = scrollView.ScrollToAsync(0, 0, animate);
-                }
-            });
+            DispatchReissue(scrollView, () => ReissueIfOwned(scrollView, unit, animate));
+        }
+    }
+
+    /// <summary>
+    /// A recycled view may have been rebound to a neighbour unit by now —
+    /// reissue only while the surface still belongs to it.
+    /// </summary>
+    internal static void ReissueIfOwned(ScrollView scrollView, object unit, bool animate)
+    {
+        if (ReferenceEquals(scrollView.BindingContext, unit))
+        {
+            _ = scrollView.ScrollToAsync(0, 0, animate);
         }
     }
 
@@ -108,6 +112,16 @@ public static class ReaderScrollTop
     // Seam so tests can assert the preference reaches the scroll request; the
     // platform implementations keep the reduced-motion/system-animation flags.
     internal static Func<bool> AnimateScroll { get; set; } = PlatformPrefersAnimatedScroll;
+
+    // Seam like AnimateScroll: ScrollY is platform-reported, so unit tests
+    // cannot drive the confirm loop's retry branch through a real view.
+    internal static Func<ScrollView, bool> IsAtStart { get; set; } =
+        scrollView => scrollView.ScrollY <= 0.5;
+
+    // Seam like AnimateScroll: Dispatcher.GetForCurrentThread is thread-local,
+    // so a test awaiting the confirm loop cannot observe a real dispatch.
+    internal static Action<ScrollView, Action> DispatchReissue { get; set; } =
+        (scrollView, action) => scrollView.Dispatcher.Dispatch(action);
 
     private static bool PlatformPrefersAnimatedScroll()
     {
