@@ -60,13 +60,11 @@ function renderSection(over: Partial<SectionProps> = {}) {
 
 describe("MainAddressSection", () => {
 	beforeEach(() => {
-		checkPediaNameMock
-			.mockReset()
-			.mockResolvedValue({
-				kind: "self-main",
-				name: "משה-רבנו",
-				aliasTargets: [],
-			});
+		checkPediaNameMock.mockReset().mockResolvedValue({
+			kind: "self-main",
+			name: "משה-רבנו",
+			aliasTargets: [],
+		});
 	});
 
 	it("shows the full public URL with copy and open actions", () => {
@@ -100,6 +98,61 @@ describe("MainAddressSection", () => {
 		fireEvent.blur(input);
 
 		expect(props.onValueChange).toHaveBeenLastCalledWith("משה");
+	});
+
+	it("leaves a canonical name untouched on blur", () => {
+		const props = renderSection();
+
+		fireEvent.blur(screen.getByLabelText(/שם ייחודי/));
+
+		expect(props.onValueChange).not.toHaveBeenCalled();
+	});
+
+	it("copies the preview URL and reverts the acknowledgement", async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			configurable: true,
+		});
+		renderSection();
+
+		fireEvent.click(screen.getByRole("button", { name: "העתק קישור" }));
+
+		expect(writeText).toHaveBeenCalledWith(
+			`${BASE}/pedia/${encodeURIComponent("משה-רבנו")}`,
+		);
+		expect(await screen.findByText("הועתק!")).toBeInTheDocument();
+		expect(
+			await screen.findByText("העתק קישור", {}, { timeout: 3000 }),
+		).toBeInTheDocument();
+	});
+
+	it("keeps the copy label when the clipboard write fails", async () => {
+		const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			configurable: true,
+		});
+		renderSection();
+
+		fireEvent.click(screen.getByRole("button", { name: "העתק קישור" }));
+
+		expect(writeText).toHaveBeenCalled();
+		expect(await screen.findByText("העתק קישור")).toBeInTheDocument();
+		expect(screen.queryByText("הועתק!")).not.toBeInTheDocument();
+	});
+
+	it("reports an invalid name back to the user", async () => {
+		checkPediaNameMock.mockResolvedValue({
+			kind: "invalid",
+			name: "א/ב",
+			reason: "שם הכתובת אינו יכול להכיל '/'",
+		});
+		renderSection({ value: "א/ב" });
+
+		expect(
+			await screen.findByText("שם הכתובת אינו יכול להכיל '/'"),
+		).toBeInTheDocument();
 	});
 
 	it("warns when the name is already another entry's alias", async () => {
@@ -176,6 +229,32 @@ describe("MainAddressSection", () => {
 		fireEvent.click(await screen.findByRole("checkbox"));
 
 		expect(props.onKeepOldAsAliasChange).toHaveBeenCalledWith(false);
+	});
+
+	it("notes when the old name is already a registered alias of this entry", async () => {
+		checkPediaNameMock.mockImplementation(
+			async ({ data }: { data: { name: string } }) =>
+				data.name === "משה-רבנו"
+					? {
+							kind: "self-main",
+							name: "משה-רבנו",
+							aliasTargets: [
+								{
+									entryId: "entry-1",
+									uniqueName: "משה-רבנו",
+									title: "משה רבנו",
+									label: "נביא",
+								},
+							],
+						}
+					: { kind: "free", name: data.name },
+		);
+		renderSection({ value: "משה-הנביא" });
+
+		expect(
+			await screen.findByText(/כבר רשומה כשם חלופי של ערך זה/),
+		).toBeInTheDocument();
+		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 
 	it("explains a shared old name instead of offering the checkbox", async () => {

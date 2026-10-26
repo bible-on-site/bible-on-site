@@ -198,6 +198,24 @@ describe("getEntryAliases", () => {
 		const a = view.targets.find((t) => t.entryId === "e-a");
 		expect(a?.label).toBe("הנביא");
 	});
+
+	it("keeps the first labelled row when a duplicate brings no label", async () => {
+		mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+			const s = String(sql);
+			if (s.includes("SELECT DISTINCT name FROM")) return [{ name: "משה" }];
+			if (isTargetsSql(s) && params?.[0] === "משה")
+				return [
+					{ ...ENTRY_A, label: "הנביא" },
+					{ ...ENTRY_A, label: null },
+				];
+			return [];
+		});
+		mocks.queryOne.mockResolvedValue(null);
+
+		const [view] = await getEntryAliases({ data: "e-a" });
+		expect(view.targets).toHaveLength(1);
+		expect(view.targets[0]?.label).toBe("הנביא");
+	});
 });
 
 describe("checkPediaName", () => {
@@ -214,6 +232,18 @@ describe("checkPediaName", () => {
 
 	it("reports a name containing a path separator as invalid", async () => {
 		expect(await checkPediaName({ data: { name: "א/ב" } })).toEqual(
+			expect.objectContaining({ kind: "invalid" }),
+		);
+	});
+
+	it("reports an over-long name as invalid", async () => {
+		expect(await checkPediaName({ data: { name: "א".repeat(256) } })).toEqual(
+			expect.objectContaining({ kind: "invalid" }),
+		);
+	});
+
+	it("reports a missing name as invalid", async () => {
+		expect(await checkPediaName({ data: {} as { name: string } })).toEqual(
 			expect.objectContaining({ kind: "invalid" }),
 		);
 	});
@@ -300,6 +330,15 @@ describe("saveEntryAlias", () => {
 	it("rejects an invalid spec before opening a transaction", async () => {
 		await expect(
 			saveEntryAlias({ data: { name: "", targets: [{ entryId: "e-a" }] } }),
+		).rejects.toThrow("VALIDATION");
+		expect(mocks.transaction).not.toHaveBeenCalled();
+	});
+
+	it("rejects a missing name and target list", async () => {
+		await expect(
+			saveEntryAlias({
+				data: {} as { name: string; targets: { entryId: string }[] },
+			}),
 		).rejects.toThrow("VALIDATION");
 		expect(mocks.transaction).not.toHaveBeenCalled();
 	});
@@ -471,6 +510,15 @@ describe("removeEntryFromAlias", () => {
 		mocks.txQuery.mockResolvedValue([]);
 	});
 
+	it("rejects a missing name before opening a transaction", async () => {
+		await expect(
+			removeEntryFromAlias({
+				data: { name: undefined as unknown as string, entryId: "e-a" },
+			}),
+		).rejects.toThrow("VALIDATION");
+		expect(mocks.transaction).not.toHaveBeenCalled();
+	});
+
 	it("deletes only this entry's association", async () => {
 		mocks.txQuery.mockImplementation(async (_c: unknown, sql: string) => {
 			if (isTargetsSql(String(sql))) return [{ ...ENTRY_B, label: "החוטם" }];
@@ -542,6 +590,13 @@ describe("deleteAliasName", () => {
 	beforeEach(() => {
 		resetMocks();
 		mocks.transaction.mockImplementation(async (fn) => fn(CONN));
+	});
+
+	it("rejects a missing name before opening a transaction", async () => {
+		await expect(
+			deleteAliasName({ data: { name: undefined as unknown as string } }),
+		).rejects.toThrow("VALIDATION");
+		expect(mocks.transaction).not.toHaveBeenCalled();
 	});
 
 	it("deletes every association of the name and reports the count", async () => {

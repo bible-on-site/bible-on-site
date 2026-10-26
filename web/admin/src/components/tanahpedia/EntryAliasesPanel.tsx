@@ -250,9 +250,9 @@ export function EntryAliasesPanel({
 				</p>
 			)}
 
-			{(aliases?.length ?? 0) > 0 && (
+			{aliases && aliases.length > 0 && (
 				<ul className="space-y-3">
-					{(aliases ?? []).map((alias) => (
+					{aliases.map((alias) => (
 						<AliasRow
 							key={alias.name}
 							alias={alias}
@@ -436,6 +436,7 @@ function AliasEditor({
 	useEffect(() => {
 		if (isEditingExisting || nameStatus?.kind !== "alias") return;
 		setEditor((prev) => {
+			/* v8 ignore next -- queued close/edit can make prev stale; defensive */
 			if (!prev || prev.editingName !== null) return prev;
 			if (prev.mergedFrom === mergedForName) return prev;
 			if (pediaNameFromInput(prev.nameInput) !== mergedForName) return prev;
@@ -480,48 +481,45 @@ function AliasEditor({
 
 	const canSave = spec.ok && !nameBlockReason && !saving;
 
+	// Functional updates can be processed after the editor was already closed,
+	// so a null guard is kept in this one spot instead of at every call site.
+	const updateEditor = (fn: (prev: EditorState) => EditorState) =>
+		setEditor((prev) => {
+			/* v8 ignore next -- reachable only by an update queued before close */
+			if (!prev) return prev;
+			return fn(prev);
+		});
+
 	const updateTargetLabel = (entryId: string, label: string) =>
-		setEditor((prev) =>
-			prev
-				? {
-						...prev,
-						targets: prev.targets.map((t) =>
-							t.entryId === entryId ? { ...t, label } : t,
-						),
-					}
-				: prev,
-		);
+		updateEditor((prev) => ({
+			...prev,
+			targets: prev.targets.map((t) =>
+				t.entryId === entryId ? { ...t, label } : t,
+			),
+		}));
 
 	const removeTarget = (entryId: string) =>
-		setEditor((prev) =>
-			prev
-				? {
-						...prev,
-						targets: prev.targets.filter((t) => t.entryId !== entryId),
-					}
-				: prev,
-		);
+		updateEditor((prev) => ({
+			...prev,
+			targets: prev.targets.filter((t) => t.entryId !== entryId),
+		}));
 
 	const addTarget = (option: EntryLinkOption) =>
-		setEditor((prev) =>
-			prev
-				? {
-						...prev,
-						pickingTarget: false,
-						targets: prev.targets.some((t) => t.entryId === option.id)
-							? prev.targets
-							: [
-									...prev.targets,
-									{
-										entryId: option.id,
-										uniqueName: option.uniqueName,
-										title: option.title,
-										label: "",
-									},
-								],
-					}
-				: prev,
-		);
+		updateEditor((prev) => ({
+			...prev,
+			pickingTarget: false,
+			targets: prev.targets.some((t) => t.entryId === option.id)
+				? prev.targets
+				: [
+						...prev.targets,
+						{
+							entryId: option.id,
+							uniqueName: option.uniqueName,
+							title: option.title,
+							label: "",
+						},
+					],
+		}));
 
 	return (
 		<div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-4">
@@ -544,19 +542,13 @@ function AliasEditor({
 						type="text"
 						value={editor.nameInput}
 						onChange={(e) =>
-							setEditor((prev) =>
-								prev ? { ...prev, nameInput: e.target.value } : prev,
-							)
+							updateEditor((prev) => ({ ...prev, nameInput: e.target.value }))
 						}
 						onBlur={() =>
-							setEditor((prev) =>
-								prev
-									? {
-											...prev,
-											nameInput: pediaNameFromInput(prev.nameInput),
-										}
-									: prev,
-							)
+							updateEditor((prev) => ({
+								...prev,
+								nameInput: pediaNameFromInput(prev.nameInput),
+							}))
 						}
 						placeholder="למשל: משה"
 						dir="auto"
@@ -630,9 +622,7 @@ function AliasEditor({
 					<button
 						type="button"
 						onClick={() =>
-							setEditor((prev) =>
-								prev ? { ...prev, pickingTarget: true } : prev,
-							)
+							updateEditor((prev) => ({ ...prev, pickingTarget: true }))
 						}
 						className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
 					>

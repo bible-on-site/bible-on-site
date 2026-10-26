@@ -38,6 +38,7 @@ vi.mock("~/server/db", () => ({
 
 import {
 	approveEntryRevision,
+	assertEntryFieldsValid,
 	listEntryRevisions,
 	rejectEntryRevision,
 	restoreEntryRevision,
@@ -659,5 +660,34 @@ describe("website cache invalidation", () => {
 		await rejectEntryRevision({ data: { id: "r1" } });
 
 		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe("assertEntryFieldsValid", () => {
+	it("rejects a unique_name containing a path separator", () => {
+		expect(() =>
+			assertEntryFieldsValid({ unique_name: "א/ב", title: "יעקב" }),
+		).toThrow("VALIDATION");
+	});
+
+	it("rejects an over-long unique_name", () => {
+		expect(() =>
+			assertEntryFieldsValid({
+				unique_name: "א".repeat(256),
+				title: "יעקב",
+			}),
+		).toThrow("VALIDATION");
+	});
+
+	it("rejects a unique_name colliding with a reserved category route", () => {
+		expect(() =>
+			assertEntryFieldsValid({ unique_name: "אישים", title: "יעקב" }),
+		).toThrow("VALIDATION");
+	});
+
+	it("rejects a missing unique_name as an empty name", () => {
+		expect(() => assertEntryFieldsValid({ title: "יעקב" })).toThrow(
+			"VALIDATION",
+		);
 	});
 });

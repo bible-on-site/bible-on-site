@@ -557,6 +557,144 @@ describe("EntryEditPage", () => {
 		});
 	});
 
+	describe("main-address rename (#2613)", () => {
+		it("announces the old URL was kept as an alias and lets it be dismissed", async () => {
+			updateEntryMock.mockResolvedValue({
+				id: "entry-1",
+				headRevisionId: "rev-2",
+				unique_name: "משה-הנביא",
+				renamedFrom: "משה-רבנו",
+				oldNameAliasCreated: true,
+			});
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole("button", { name: "הבנתי" }));
+			expect(
+				screen.queryByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).not.toBeInTheDocument();
+		});
+
+		it("explains when the old URL keeps leading to the other entries", async () => {
+			updateEntryMock.mockResolvedValue({
+				headRevisionId: "rev-2",
+				unique_name: "משה-הנביא",
+				renamedFrom: "משה-רבנו",
+				oldNameAliasCreated: false,
+			});
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByText(/«משה-רבנו» משותפת עם ערכים אחרים/),
+			).toBeInTheDocument();
+		});
+
+		it("reports the dropped old URL when the admin opted out of the alias", async () => {
+			updateEntryMock.mockResolvedValue({
+				id: "entry-1",
+				headRevisionId: "rev-2",
+				unique_name: "משה-הנביא",
+				renamedFrom: "משה-רבנו",
+				oldNameAliasCreated: false,
+			});
+			renderPage();
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			await waitFor(() =>
+				expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("משה-רבנו"),
+			);
+			fireEvent.change(screen.getByLabelText(/שם ייחודי/), {
+				target: { value: "משה-הנביא" },
+			});
+			fireEvent.click(await screen.findByRole("checkbox"));
+
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			await waitFor(() =>
+				expect(updateEntryMock).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						keepOldNameAsAlias: false,
+					}),
+				}),
+			);
+			expect(
+				await screen.findByText(/«משה-רבנו» אינה מובילה עוד לערך זה/),
+			).toBeInTheDocument();
+		});
+
+		it("hides the rename notice once a later save fails", async () => {
+			updateEntryMock
+				.mockResolvedValueOnce({
+					id: "entry-1",
+					headRevisionId: "rev-2",
+					unique_name: "משה-הנביא",
+					renamedFrom: "משה-רבנו",
+					oldNameAliasCreated: true,
+				})
+				.mockRejectedValueOnce(new Error("db down"));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			expect(
+				await screen.findByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).toBeInTheDocument();
+
+			fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByText(/אפשר לנסות שוב עכשיו/),
+			).toBeInTheDocument();
+			expect(
+				screen.queryByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).not.toBeInTheDocument();
+		});
+
+		it("renders the aliases section when the entry itself is missing", async () => {
+			getEntryMock.mockResolvedValue(null);
+			renderPage();
+
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+
+			expect(
+				await screen.findByText("אין כתובות נוספות לערך זה עדיין."),
+			).toBeInTheDocument();
+		});
+	});
+
 	// Issue #2611 regression: a persistent non-conflict save failure used to
 	// be swallowed silently while autosave retried every ~2s forever, with no
 	// UI indication and no recovery path.

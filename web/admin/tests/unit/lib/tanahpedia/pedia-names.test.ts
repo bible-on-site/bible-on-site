@@ -58,6 +58,10 @@ describe("pediaNameFromInput", () => {
 	it("returns an empty string for empty input", () => {
 		expect(pediaNameFromInput("   ")).toBe("");
 	});
+
+	it("returns an empty string for a URL with no trailing name segment", () => {
+		expect(pediaNameFromInput("http://x.test/pedia/")).toBe("");
+	});
 });
 
 describe("reservedCategoryLabelFor", () => {
