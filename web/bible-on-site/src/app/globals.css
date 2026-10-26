@@ -180,6 +180,13 @@ a {
 	}
 }
 
+/* Reader-section routes that suppress the search button but mount no
+   preferences gear (e.g. /929/authors): the trigger takes the left-edge
+   slot the search button occupies elsewhere. */
+.top-nav-accessibility--edge {
+	left: 1.25rem;
+}
+
 .top-nav-accessibility img {
 	filter: invert(1);
 }
