@@ -301,11 +301,14 @@ export function LearningCalendar({
 	};
 
 	/** One accessible name covering both dates of a merged review block. */
-	const mergedAriaLabel = (friday: CalendarDay, shabbat: CalendarDay): string =>
-		`${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(
-			friday.reviewPerekIds ??
-				/* istanbul ignore next -- the merge gate requires defined ids */ [],
-		)}`;
+	const mergedAriaLabel = (
+		friday: CalendarDay,
+		shabbat: CalendarDay,
+	): string => {
+		/* istanbul ignore next -- the merge gate requires defined ids */
+		const ids = friday.reviewPerekIds ?? [];
+		return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
+	};
 
 	/** Saturday dates swallowed by Friday's merged block in `cells`. */
 	const mergedSaturdays = useMemo(() => {
