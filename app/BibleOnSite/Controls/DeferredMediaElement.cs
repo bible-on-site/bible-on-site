@@ -64,9 +64,6 @@ public sealed class DeferredMediaElement : ContentView
     /// <summary>The real player once playback was requested; null while idle.</summary>
     public MediaElement? Player { get; private set; }
 
-    /// <summary>Raised once when the deferred player is constructed and about to play.</summary>
-    public event EventHandler? PlayerCreated;
-
     /// <summary>
     /// Playback volume for the wrapped player. Updating it before the player
     /// exists keeps the value for its eventual creation.
@@ -108,28 +105,42 @@ public sealed class DeferredMediaElement : ContentView
             return;
         }
 
-        _audioLease = PlaybackAudioOwnership.Shared.Track(this);
-        var player = new MediaElement
+        _audioLease ??= PlaybackAudioOwnership.Shared.Track(this);
+        // Claim before the handler exists: creating it already activates the
+        // audio session, so a source that fails to open must still release it
+        // — MediaFailed can fire without the player ever reaching Playing.
+        _audioLease.Playing();
+        try
         {
-            Source = MediaSource.FromUri(_mediaUrl),
-            ShouldAutoPlay = true,
-            ShouldShowPlaybackControls = true,
-            Volume = _volume,
-        };
-        if (_isVideo)
-        {
-            player.Aspect = Aspect.AspectFit;
-            player.BackgroundColor = Colors.Black;
-        }
+            var player = new MediaElement
+            {
+                Source = MediaSource.FromUri(_mediaUrl),
+                ShouldAutoPlay = true,
+                ShouldShowPlaybackControls = true,
+                Volume = _volume,
+            };
+            if (_isVideo)
+            {
+                player.Aspect = Aspect.AspectFit;
+                player.BackgroundColor = Colors.Black;
+            }
 
-        player.StateChanged += OnPlayerStateChanged;
-        // iOS can leave CurrentState at Playing once an item finishes, so the
-        // end/failure events mark the lease idle explicitly.
-        player.MediaEnded += (_, _) => _audioLease?.Idle();
-        player.MediaFailed += (_, _) => _audioLease?.Idle();
-        Player = player;
-        Content = player;
-        PlayerCreated?.Invoke(this, EventArgs.Empty);
+            player.StateChanged += OnPlayerStateChanged;
+            // iOS can leave CurrentState at Playing once an item finishes, so the
+            // end/failure events mark the lease idle explicitly.
+            player.MediaEnded += (_, _) => _audioLease?.Idle();
+            player.MediaFailed += (_, _) => _audioLease?.Idle();
+            Player = player;
+            Content = player;
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: a player that cannot be constructed releases the claim and leaves the play affordance usable
+        catch (Exception ex) //NOSONAR — a player that cannot be constructed releases the claim and leaves the play affordance usable.
+        {
+            #pragma warning restore S2221
+            Player = null;
+            _audioLease?.Idle();
+            System.Diagnostics.Debug.WriteLine($"Article media player: {ex.Message}");
+        }
     }
 
     private void OnPlayerStateChanged(object? sender, MediaStateChangedEventArgs e)

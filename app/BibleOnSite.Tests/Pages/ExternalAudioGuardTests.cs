@@ -55,7 +55,7 @@ public class ExternalAudioGuardTests
     [Fact]
     public void AudioOwnership_ReleasesByNotifyingOtherSessions()
     {
-        // Releasing quietly would leave Spotify paused after recitation ends;
+        // Releasing quietly would leave Spotify paused after recitation ends, so
         // the Apple bridge must deactivate with NotifyOthersOnDeactivation so
         // interrupted players may resume — the behavior the toolkit's own
         // dispose path lacks.

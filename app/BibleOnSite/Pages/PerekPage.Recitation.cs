@@ -612,6 +612,10 @@ public partial class PerekPage
                 ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null), pauseMs) : null;
             // The timeline maps the tapped-word resume point into this clip's position.
             _pendingSeekMs = _recitationCursor.PendingSeekFor(perek.PerekId, continuous, _recitationTimeline);
+            // Claim before the handler attaches: creating it already activates
+            // the session, so a source that fails to open must still release it
+            // — MediaFailed can fire without the player ever reaching Playing.
+            AudioLease.Playing();
             var player = GetOrCreateRecitationPlayer();
             player.Speed = preferences.RecitationSpeed;
             player.Volume = preferences.RecitationVolume;
@@ -623,6 +627,7 @@ public partial class PerekPage
         catch (Exception ex) //NOSONAR — playback failure shows the user alert unless the request was canceled.
         {
             #pragma warning restore S2221
+            _audioLease?.Idle();
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {

@@ -97,11 +97,16 @@ public sealed class PlaybackAudioOwnership
         /// Marks this owner as producing audio: cancels a pending release and
         /// activates the session when the first owner becomes audible. Safe to
         /// call right before an explicit Play so a released session is back
-        /// before the platform player emits.
+        /// before the platform player emits — and right before handing a valid
+        /// source to a player, since the toolkit's handler creation already
+        /// activates the session and a source that fails to open must still
+        /// release it (#2642).
         /// </summary>
         public void Playing()
         {
-            var activate = false;
+            // The platform call stays inside the gate: a release timer that
+            // deactivated between the claim change and the call would mute a
+            // session its new owner still claims.
             lock (_ownership._gate)
             {
                 if (_disposed)
@@ -115,12 +120,8 @@ public sealed class PlaybackAudioOwnership
                 if (!_ownership._active)
                 {
                     _ownership._active = true;
-                    activate = true;
+                    _ownership.TryActivate();
                 }
-            }
-            if (activate)
-            {
-                _ownership.TryActivate();
             }
         }
 
@@ -193,7 +194,6 @@ public sealed class PlaybackAudioOwnership
         /// </summary>
         public void Dispose()
         {
-            var deactivate = false;
             lock (_ownership._gate)
             {
                 if (_disposed)
@@ -212,13 +212,9 @@ public sealed class PlaybackAudioOwnership
                     if (_ownership._active)
                     {
                         _ownership._active = false;
-                        deactivate = true;
+                        _ownership.TryDeactivate();
                     }
                 }
-            }
-            if (deactivate)
-            {
-                _ownership.TryDeactivate();
             }
         }
 
@@ -234,7 +230,7 @@ public sealed class PlaybackAudioOwnership
         private sealed class EmptyHold : IDisposable
         {
             public static readonly EmptyHold Instance = new();
-            public void Dispose() { }
+            public void Dispose() { /* A disposed lease hands out inert tokens — nothing to release. */ }
         }
     }
 
@@ -248,23 +244,22 @@ public sealed class PlaybackAudioOwnership
 
     private async Task ReleaseWhenQuietAsync(CancellationTokenSource cts)
     {
-        var deactivate = false;
         try
         {
             await _delay(_releaseDelay, cts.Token).ConfigureAwait(false);
             lock (_gate)
             {
-                deactivate = !cts.IsCancellationRequested && _claimed.Count == 0 && _active;
-                if (deactivate)
+                if (!cts.IsCancellationRequested && _claimed.Count == 0 && _active)
                 {
                     _active = false;
+                    TryDeactivate();
                 }
             }
         }
         catch (OperationCanceledException) { /* A new claim canceled this release before the quiet window ran out. */ }
         finally
         {
-            // A newer claim may already have replaced the pending release;
+            // A newer claim may already have replaced the pending release, so
             // detach before disposing so a racing Cancel cannot land on a
             // disposed source.
             lock (_gate)
@@ -275,10 +270,6 @@ public sealed class PlaybackAudioOwnership
                 }
             }
             cts.Dispose();
-        }
-        if (deactivate)
-        {
-            TryDeactivate();
         }
     }
 
@@ -349,7 +340,7 @@ public sealed class PlaybackAudioOwnership
     private sealed class NullPlatform : IPlatform
     {
         public static readonly NullPlatform Instance = new();
-        public void Activate() { }
-        public void Deactivate() { }
+        public void Activate() { /* Non-Apple players scope audio focus to real playback themselves. */ }
+        public void Deactivate() { /* Non-Apple players scope audio focus to real playback themselves. */ }
     }
 }
