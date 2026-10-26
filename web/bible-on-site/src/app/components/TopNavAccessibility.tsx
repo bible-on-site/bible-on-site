@@ -17,7 +17,7 @@ import {
 	type ReaderSettings,
 	setStoredReaderSettings,
 } from "@/lib/reader-settings";
-import { isReaderPathname } from "./TopNavSearch";
+import { hasReaderSettingsGear, isReaderPathname } from "./TopNavSearch";
 import styles from "./top-nav-accessibility.module.css";
 
 const PANEL_ID = "top-nav-accessibility-panel";
@@ -30,10 +30,13 @@ const sameSettings = (a: ReaderSettings, b: ReaderSettings) =>
 
 /**
  * Accessibility adjustments menu in the shared top bar, next to the search
- * button (or next to the reader preferences gear on reader routes, where the
- * search button is intentionally absent). The controls reuse the perek reader
- * display settings so they stay in sync with the הגדרות קריאה dialog instead
- * of competing with it. The reset restores only those display adjustments —
+ * button — or next to the reader preferences gear on reader unit routes,
+ * where the search button is intentionally absent. On reader-section routes
+ * that suppress the search button but mount no gear (e.g. /929/authors) the
+ * trigger takes the left-edge slot instead of docking beside a missing gear.
+ * The controls reuse the perek reader display settings so they stay in sync
+ * with the הגדרות קריאה dialog instead of competing with it. The reset
+ * restores only those display adjustments —
  * unrelated preferences, recitation settings and user data are untouched.
  * The last item is the maintained הצהרת נגישות link (issue #2396).
  */
@@ -126,14 +129,24 @@ export function TopNavAccessibility() {
 		);
 	};
 
-	const nextToPrefs = isReaderPathname(pathname);
+	// Docking priority: next to the reader preferences gear where that gear
+	// exists (reader unit pages); at the left-edge slot where neither it nor
+	// the suppressed search button exists (e.g. /929/authors); otherwise
+	// next to the search button.
+	const nextToPrefs = hasReaderSettingsGear(pathname);
+	const edgeDocked = !nextToPrefs && isReaderPathname(pathname);
+	const dockClass = nextToPrefs
+		? " top-nav-accessibility--after-prefs"
+		: edgeDocked
+			? " top-nav-accessibility--edge"
+			: "";
 
 	return (
 		<>
 			<button
 				ref={triggerRef}
 				type="button"
-				className={`top-nav-accessibility${nextToPrefs ? " top-nav-accessibility--after-prefs" : ""}`}
+				className={`top-nav-accessibility${dockClass}`}
 				aria-label="התאמות נגישות"
 				aria-haspopup="dialog"
 				aria-expanded={open}

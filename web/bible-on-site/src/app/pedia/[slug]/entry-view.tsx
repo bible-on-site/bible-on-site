@@ -1,11 +1,12 @@
+import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
-import DOMPurify from "isomorphic-dompurify";
 import { demoteHeadings } from "@/lib/html-headings";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
 	getEntries,
@@ -53,8 +54,10 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 		// instead of caching a false negative.
 		return { title: "לא נמצא" };
 	}
+	/* Stored footnote markers are decorative — normalized HTML keeps them
+	   out of the extracted description (#2615). */
 	const fromContent = entry.content
-		? metaDescriptionFromContent(entry.content, 200)
+		? metaDescriptionFromContent(normalizeFootnoteHtml(entry.content), 200)
 		: "";
 	return {
 		title: `${entry.title} | תנכפדיה`,
@@ -161,7 +164,9 @@ export async function EntryView({ slug }: { slug: string }) {
 				<article
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
-						__html: DOMPurify.sanitize(demoteHeadings(entry.content)),
+						__html: DOMPurify.sanitize(
+							normalizeFootnoteHtml(demoteHeadings(entry.content)),
+						),
 					}}
 					className={styles.entryContent}
 				/>

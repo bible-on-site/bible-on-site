@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.560",
+	"version": "0.2.563",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -17,9 +17,9 @@
 		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/predev-deps.mjs",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
-		"prebuild": "node scripts/generate-client-catalog.mjs && node --test scripts/verify-public-content.test.mjs",
+		"prebuild": "node scripts/generate-client-catalog.mjs && node --import tsx scripts/collect-store-metadata.mts && node --test scripts/verify-public-content.test.mjs",
 		"build": "next build",
-		"postinstall": "node scripts/generate-client-catalog.mjs && node scripts/copy-local-flip-book.mjs",
+		"postinstall": "node scripts/generate-client-catalog.mjs && node --import tsx scripts/collect-store-metadata.mts --ensure && node scripts/copy-local-flip-book.mjs",
 		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && bun install",
 		"flip-book:npm": "node scripts/toggle-flip-book-dep.mjs npm && bun install",
 		"flip-book:check": "node scripts/toggle-flip-book-dep.mjs check",
@@ -53,6 +53,7 @@
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.49",
 		"isomorphic-dompurify": "4.6.0",
+		"jsdom": "26.1.0",
 		"leaflet": "1.9.4",
 		"mapbox-gl": "3.33.0",
 		"moment-timezone": "0.6.5",

@@ -56,5 +56,8 @@ tests/unit/components/err.txt
 # Derived navigation metadata; regenerate from the canonical corpus.
 /src/data/db/client-catalog.generated.json
 
+# Build-time store snapshot; regenerate via scripts/collect-store-metadata.mts.
+/src/data/db/store-metadata-snapshot.generated.json
+
 # Generated, content-addressed reader books
 /public/generated/sefarim/
