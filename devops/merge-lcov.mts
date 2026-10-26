@@ -20,7 +20,10 @@
  *             on unknown coordinates are dropped — a foreign hit without
  *             its unhit siblings would fake a fully covered file — and
  *             foreign BRDA arms never merge, since the same tuple can name
- *             a different branch in another build.
+ *             a different branch in another build. File blocks the input
+ *             enumerates that no canonical layer knows are dropped whole
+ *             and listed in the summary so instrumentation drift stays
+ *             visible instead of silently shrinking coverage.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
@@ -58,12 +61,17 @@ interface FileRecord {
  * can raise DA/FNDA hit counts, never extend the universe. Canonical
  * inputs merge first regardless of CLI order, so the universe is always
  * complete before untrusted hits apply.
+ *
+ * When `droppedForeignFiles` is given it is filled with the normalized SF
+ * paths of whole file blocks an untrusted input enumerated that no
+ * canonical layer declares — dropped hits included.
  */
 export function mergeLcovTexts(
 	contents: string[],
 	prefix?: string,
 	relocates: string[] = [],
 	hitsOnly: ReadonlySet<number> = new Set(),
+	droppedForeignFiles?: Set<string>,
 ): string {
 	const files = new Map<string, FileRecord>();
 	const newRecord = (): FileRecord => ({
@@ -133,7 +141,9 @@ export function mergeLcovTexts(
 				// An untrusted file is foreign code: the whole block drops,
 				// hits included — reporting them without their unhit siblings
 				// would fake a fully covered file.
-				rec = coveredOnly ? (files.get(p) ?? null) : recordFor(p);
+				const canonicalRec = coveredOnly ? (files.get(p) ?? null) : null;
+				if (coveredOnly && !canonicalRec) droppedForeignFiles?.add(p);
+				rec = coveredOnly ? canonicalRec : recordFor(p);
 				foreign = coveredOnly && rec ? newRecord() : null;
 				continue;
 			}
@@ -240,10 +250,28 @@ function main(): void {
 		console.log(`✓ Added coverage from ${inputPath}`);
 	}
 
-	const merged = mergeLcovTexts(contents, prefix, relocates, hitsOnly);
+	const droppedForeignFiles = new Set<string>();
+	const merged = mergeLcovTexts(
+		contents,
+		prefix,
+		relocates,
+		hitsOnly,
+		droppedForeignFiles,
+	);
 	const outPath = resolve(out);
 	mkdirSync(dirname(outPath), { recursive: true });
 	writeFileSync(outPath, merged);
+
+	if (droppedForeignFiles.size > 0) {
+		const shown = [...droppedForeignFiles].slice(0, 15);
+		const rest = droppedForeignFiles.size - shown.length;
+		console.log(
+			`⚠ Untrusted input file(s) outside the canonical universe — ` +
+				`dropped hits included (${droppedForeignFiles.size}):\n  ` +
+				shown.join("\n  ") +
+				(rest > 0 ? `\n  …and ${rest} more` : ""),
+		);
+	}
 
 	if (rmInputDirs) {
 		for (const dir of consumedDirs) {
