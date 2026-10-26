@@ -112,7 +112,7 @@ def transcribe(audio, args):
             print(f"Peak CUDA allocation: {torch.cuda.max_memory_allocated()/1024**3:.2f} GiB", flush=True)
         return recognized
     finally:
-        model = None
+        del model
         gc.collect()
         if args.device == "cuda":
             torch.cuda.empty_cache()

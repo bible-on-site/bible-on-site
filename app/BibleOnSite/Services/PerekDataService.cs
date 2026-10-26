@@ -21,7 +21,8 @@ public class PerekDataService
 
     private Dictionary<int, Perek>? _perakim;
     private Dictionary<int, Sefer>? _sefarim;
-    private bool _isLoaded;
+    /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
+    private volatile bool _isLoaded;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
     private readonly LocalDatabaseService _databaseService;
