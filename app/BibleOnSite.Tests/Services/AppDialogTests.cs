@@ -333,6 +333,55 @@ public class AppDialogTests
 		}
 	}
 
+	[Fact]
+	public async Task Fallback_ThreeActionRequest_DropsNoChoiceAndResolvesAsDismissal()
+	{
+		var previous = Application.Current;
+		try
+		{
+			var page = new ContentPage();
+			var application = new TestApplication(page);
+			Application.Current = application;
+			var window = ((IApplication)application).CreateWindow(null!);
+			var nativeCalls = 0;
+			using var services = new ServiceCollection()
+				.AddKeyedSingleton<Func<Page, AlertArguments, Task<bool>>>("Microsoft.Maui.Controls.DisplayAlert", (_, _) =>
+					(_, _) =>
+					{
+						nativeCalls++;
+						return Task.FromResult(true);
+					})
+				.BuildServiceProvider();
+			var context = new Mock<IMauiContext>();
+			context.SetupGet(c => c.Services).Returns(services);
+			var windowHandler = new Mock<IElementHandler>();
+			windowHandler.SetupGet(h => h.MauiContext).Returns(context.Object);
+			window.Handler = windowHandler.Object;
+			var pageHandler = new Mock<IViewHandler>();
+			pageHandler.SetupGet(h => h.MauiContext).Returns(context.Object);
+			page.Handler = pageHandler.Object;
+
+			var request = new AppDialogRequest
+			{
+				Title = "t",
+				Message = "m",
+				Actions =
+				[
+					new AppDialogAction("ביטול", AppDialogActionRole.Cancel),
+					new AppDialogAction("אישור", AppDialogActionRole.Confirm),
+					new AppDialogAction("הסרה", AppDialogActionRole.Destructive),
+				],
+			};
+			(await AppDialogs.ShowAsync(request)).Should().BeNull(
+				"the two-slot native alert cannot show three actions — silently dropping one would lose a real choice");
+			nativeCalls.Should().Be(0);
+		}
+		finally
+		{
+			Application.Current = previous;
+		}
+	}
+
 	// — The exit prompt through the shared contract ————————————————————————
 
 	[Theory]

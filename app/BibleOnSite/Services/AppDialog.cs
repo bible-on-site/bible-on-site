@@ -233,7 +233,7 @@ public static class AppDialogs
 
 		var cancel = ordered.FirstOrDefault(a => a.Role == AppDialogActionRole.Cancel);
 		var affirmative = ordered.LastOrDefault(a => AppDialogPolicy.IsAffirmative(a.Role));
-		if (cancel is not null && affirmative is not null)
+		if (ordered.Count == 2 && cancel is not null && affirmative is not null)
 		{
 			var accepted = await page.DisplayAlertAsync(request.Title, request.Message, affirmative.Text, cancel.Text);
 			return accepted ? affirmative : cancel;
