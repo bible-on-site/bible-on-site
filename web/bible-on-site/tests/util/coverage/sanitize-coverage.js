@@ -43,7 +43,7 @@ import { covIgnoreList } from "../../../.covignore.mjs";
 const DEBUG_SANITIZE_PATH = process.env.DEBUG_SANITIZE_PATH;
 
 export function sanitizeCoverage(coverage) {
-	const SRC_DIR = path.resolve(__dirname, "../../../", "src");
+	const SRC_DIR = path.resolve(import.meta.dirname, "../../../", "src");
 	for (const file of Object.keys(coverage)) {
 		const entry = coverage[file];
 		if (!entry || !hasValidStructure(entry) || !isTracked(entry, SRC_DIR)) {
