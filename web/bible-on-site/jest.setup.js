@@ -3,8 +3,21 @@ process.env.IS_TEST_ENV = 1;
 /* jest-environment-jsdom strips the Node globals that server-side deps
    (jsdom via whatwg-url) need at module load — restore them globally. */
 const { TextDecoder, TextEncoder } = require("node:util");
+const {
+	ReadableStream,
+	TransformStream,
+	WritableStream,
+} = require("node:stream/web");
+const { MessagePort } = require("node:worker_threads");
 globalThis.TextEncoder ??= TextEncoder;
 globalThis.TextDecoder ??= TextDecoder;
+// undici (jsdom 30 dep) touches stream/message globals at module load.
+// MessageChannel is deliberately not exposed: react-scheduler adopts it for
+// its task loop and the ref'd channel keeps the Jest worker alive.
+globalThis.ReadableStream ??= ReadableStream;
+globalThis.WritableStream ??= WritableStream;
+globalThis.TransformStream ??= TransformStream;
+globalThis.MessagePort ??= MessagePort;
 
 // Mock isomorphic-dompurify so we don't need to transform its ESM deps (jsdom, @exodus/bytes, etc.)
 jest.mock("isomorphic-dompurify", () => ({
