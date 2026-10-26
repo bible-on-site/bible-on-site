@@ -146,7 +146,7 @@ public static class HtmlRuns
         {
             PendingSpace = false;
             Flush();
-            if (Runs.Count > 0 && LastChar != '\n')
+            if (Runs.Count > 0 && LastChar.GetValueOrDefault() != '\n')
             {
                 Append("\n", new Style());
             }

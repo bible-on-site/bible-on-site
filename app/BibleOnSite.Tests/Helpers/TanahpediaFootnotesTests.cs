@@ -283,6 +283,157 @@ public sealed class TanahpediaFootnotesTests
     }
 
     [Fact]
+    public void Normalize_LeavesNonNumericNoteMarkupUnchanged()
+    {
+        /* AnyMarker can hit ids/hrefs that carry no number (id="note-x") —
+           with no numeric body, ref, or canonical list there is nothing to
+           normalize and the markup passes through. */
+        const string html = @"<p id=""note-x"">כותרת</p><p><a href=""#note-x"">קישור</a> <a href=""#noteref-x"">↩</a></p>";
+        Assert.Equal(html, TanahpediaFootnotes.Normalize(html));
+    }
+
+    [Fact]
+    public void Normalize_AnchorsCanonicalListWhereALooseItemLived()
+    {
+        /* A stored li note outside any ol/ul still gets a canonical list —
+           anchored at the item's position inside its container. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
+<div class=""notes""><li id=""note-1""><sup>א</sup> הערה מחוץ לרשימה</li></div>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//div[@class='notes']/ol[contains(@class,'footnotes')]/li")!);
+        Assert.Equal("fn:1", item.GetAttributeValue("id", ""));
+        Assert.StartsWith("הערה מחוץ", HtmlEntity.DeEntitize(item.InnerText).Trim());
+    }
+
+    [Fact]
+    public void Normalize_ReplacesWrappingListForParagraphBody()
+    {
+        /* A paragraph note nested directly in a list: the canonical list takes
+           the wrapper's place instead of leaving an emptied shell. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
+<ol><p id=""note-1""><strong>א.</strong> הערה בפסקה</p></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//ol[contains(@class,'footnotes')]/li")!);
+        Assert.Equal("fn:1", item.GetAttributeValue("id", ""));
+        Assert.Null(item.SelectSingleNode(".//strong"));
+        Assert.StartsWith("הערה בפסקה", HtmlEntity.DeEntitize(item.InnerText).Trim());
+        Assert.Empty(root.SelectNodes(".//ol[not(contains(@class,'footnotes'))]") ?? Enumerable.Empty<HtmlNode>());
+    }
+
+    [Fact]
+    public void Normalize_IgnoresNoteIdsAndRefsWithoutUsableNumberOrBody()
+    {
+        /* Loose elements: a note-id on an element outside any li/p has no
+           body to canonicalize; note-0 and overflowing numbers are not
+           footnotes at all. The real note still normalizes. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup> <a href=""#note-0"">אפס</a> <a href=""#note-999999999999"">גלישה</a></p>
+<a id=""note-9"">עוגן יתום</a><span id=""note-0"">אפס</span><p id=""note-999999999999"">גלישה</p>
+<ol style=""list-style:none""><li id=""note-1""><sup>א</sup> הערה</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//ol[contains(@class,'footnotes')]/li")!);
+        Assert.Equal("fn:1", item.GetAttributeValue("id", ""));
+        Assert.NotNull(root.SelectSingleNode(".//a[@id='note-9']"));
+        Assert.Equal("#note-0", root.SelectSingleNode(".//a[text()='אפס']")?.GetAttributeValue("href", ""));
+    }
+
+    [Fact]
+    public void Normalize_KeepsBodyOpeningWithANonMarkerElement()
+    {
+        /* A body that opens with a non-marker element (<em>) is prose — the
+           marker stripper stops at it instead of eating real content. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup></p>
+<ol style=""list-style:none""><li id=""note-1""><em>אמר</em> המדרש כך</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:1']")!);
+        var em = Assert.Single(item.SelectNodes(".//em")!);
+        Assert.Equal("אמר", HtmlEntity.DeEntitize(em.InnerText));
+    }
+
+    [Fact]
+    public void Normalize_StripsOnlyTheNotesOwnLiteralMarker()
+    {
+        /* <b> is a marker wrapper like <strong>/<sup>; a bare-text marker with
+           a trailing dot strips too. Wrong-letter or non-Hebrew openings are
+           prose and stay. */
+        const string html = @"
+<p>טקסט<sup><a href=""#note-1"" id=""noteref-1"">א</a></sup><sup><a href=""#note-2"" id=""noteref-2"">ב</a></sup><sup><a href=""#note-3"" id=""noteref-3"">ג</a></sup><sup><a href=""#note-4"" id=""noteref-4"">ד</a></sup></p>
+<ol style=""list-style:none"">
+<li id=""note-1""><b>א.</b> ראשונה</li>
+<li id=""note-2"">ב. שנייה</li>
+<li id=""note-3"">ז שלישית באות אחרת</li>
+<li id=""note-4"">Source: cited</li>
+</ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var items = root.SelectNodes(".//ol[contains(@class,'footnotes')]/li")!;
+        Assert.Equal(4, items.Count);
+        Assert.StartsWith("ראשונה", HtmlEntity.DeEntitize(items[0].InnerText).Trim());
+        Assert.StartsWith("שנייה", HtmlEntity.DeEntitize(items[1].InnerText).Trim());
+        Assert.StartsWith("ז שלישית", HtmlEntity.DeEntitize(items[2].InnerText).Trim());
+        Assert.StartsWith("Source", HtmlEntity.DeEntitize(items[3].InnerText).Trim());
+        Assert.Empty(items.SelectMany(i => i.SelectNodes(".//b") ?? Enumerable.Empty<HtmlNode>()));
+    }
+
+    [Fact]
+    public void Normalize_RetargetsNoteLinkWhenFootnoteListHasNoMatchingBody()
+    {
+        /* A #note-N anchor next to an id-less ol.footnotes is a dangling ref —
+           it is still canonicalized to #fn:N rather than becoming a ref. */
+        const string html = @"
+<ol class=""footnotes""><li>בלי מזהה</li></ol>
+<p><a href=""#note-7"">ז</a></p>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        Assert.Equal("#fn:7", root.SelectSingleNode(".//p/a")?.GetAttributeValue("href", ""));
+        var item = Assert.Single(root.SelectNodes(".//ol[contains(@class,'footnotes')]/li")!);
+        Assert.Equal("", item.GetAttributeValue("id", ""));
+    }
+
+    [Fact]
+    public void Normalize_KeepsFirstBodyWhenANoteIdRepeats()
+    {
+        /* The first element bearing a note id owns the number — a duplicate id
+           does not displace it. */
+        const string html = @"
+<p>טקסט<a href=""#note-1"">א</a></p>
+<p id=""note-1"">גוף ראשון</p>
+<li id=""note-1"">גוף שני</li>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//ol[contains(@class,'footnotes')]/li")!);
+        Assert.Contains("גוף ראשון", HtmlEntity.DeEntitize(item.InnerText));
+    }
+
+    [Fact]
+    public void Normalize_ResolvesBodyThroughParagraphAncestor()
+    {
+        /* A bare #noteref link inside a paragraph resolves the paragraph as
+           the note body — same precedence as the website's closest("p"). */
+        const string html = @"
+<p>טקסט<a href=""#note-1"">א</a></p>
+<p><a href=""#noteref-1"">↩</a> גוף ההערה</p>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:1']")!);
+        Assert.Equal("li", item.Name);
+        Assert.Contains("גוף ההערה", HtmlEntity.DeEntitize(item.InnerText));
+        var back = Assert.Single(item.SelectNodes(".//a[contains(@class,'footnote-backref')]")!);
+        Assert.Equal("#fnref:1", back.GetAttributeValue("href", ""));
+    }
+
+    [Fact]
+    public void FromHtml_FallsBackToPositionMarkerWhenDataMarkerIsMissing()
+    {
+        /* Canonical lists authored without data-marker still get one marker
+           per note — the gematria of the item's position. */
+        var runs = HtmlRuns.FromHtml("<ol class=\"footnotes\"><li>הערה אחת</li><li>הערה שתיים</li></ol>");
+        var text = string.Concat(runs.Select(r => r.Text));
+        Assert.Contains("א הערה אחת", text);
+        Assert.Contains("ב הערה שתיים", text);
+        Assert.DoesNotContain("1. ", text);
+    }
+
+    [Fact]
     public void FromHtml_FootnoteListGetsSingleHebrewMarkerPerNote()
     {
         var normalized = TanahpediaFootnotes.Normalize(LegacySupList)!;
@@ -310,5 +461,152 @@ public sealed class TanahpediaFootnotesTests
             @"\s+", " ");
         Assert.Contains("נד מדרש הגדול", text);
         Assert.DoesNotContain("1. נד", text);
+    }
+
+    [Fact]
+    public void Normalize_LeavesMarkerLikeTextWithoutStructureUnchanged()
+    {
+        /* The AnyMarker pre-pass matches on text alone ("#note-", id="note-").
+           Malformed ids, non-positive/overflowing numbers, and ids on elements
+           that cannot hold a body (no li/p ancestor) must not trigger a
+           rewrite — the input returns byte-identical. */
+        const string html = @"<p>ראה <a href=""#note-x"">אזכור</a> <a href=""#note-0"">אפס</a> <a href=""#note-7"">ז</a> <a href=""#note-99999999999"">עודף</a> <a href=""#noteref-99999999999"">עודף</a></p>
+<div id=""note-"">x</div><span id=""note-abc"">y</span><li id=""note-0"">אפס</li><li id=""note-99999999999"">עודף</li>";
+        Assert.Equal(html, TanahpediaFootnotes.Normalize(html));
+    }
+
+    [Fact]
+    public void Normalize_AnchorsTheCanonicalListWhereAnUnorderedListStood()
+    {
+        /* A legacy <ul> anchors the same way as <ol>: the canonical list is
+           inserted at the container's position, then the emptied wrapper drops. */
+        const string html = @"<p>טקסט<sup><a href=""#note-2"" id=""noteref-2"">ב</a></sup></p>
+<ul><li id=""note-2""><sup>ב</sup> הערה</li></ul>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var list = Assert.Single(root.SelectNodes(".//ol | .//ul")!);
+        Assert.Equal("footnotes", list.GetAttributeValue("class", ""));
+        Assert.Equal("fn:2", Assert.Single(list.SelectNodes("./li")!).GetAttributeValue("id", ""));
+    }
+
+    [Fact]
+    public void Normalize_AnchorsAtTheListWhenAParagraphBodySitsInsideOne()
+    {
+        /* A <p> body nested directly in a list container: the canonical list
+           replaces the container wholesale (same rule as li bodies), not at
+           the paragraph's inner position. */
+        const string html = @"<p>טקסט<sup><a href=""#note-3"" id=""noteref-3"">ג</a></sup></p>
+<ul><p id=""note-3""><strong>ג.</strong> גוף ההערה</p></ul>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var list = Assert.Single(root.SelectNodes(".//ol | .//ul")!);
+        Assert.Equal("footnotes", list.GetAttributeValue("class", ""));
+        var item = Assert.Single(list.SelectNodes("./li")!);
+        Assert.Equal("fn:3", item.GetAttributeValue("id", ""));
+        Assert.StartsWith("גוף", HtmlEntity.DeEntitize(item.InnerText).Trim());
+    }
+
+    [Fact]
+    public void Normalize_StripsABoldElementMarker()
+    {
+        /* <b> wraps the marker in some generations — it strips like
+           <sup>/<strong>. */
+        const string html = @"<p>טקסט<sup><a href=""#note-5"" id=""noteref-5"">ה</a></sup></p>
+<ol style=""list-style:none""><li id=""note-5""><b>ה.</b> גוף הערה</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:5']")!);
+        Assert.Null(item.SelectSingleNode(".//b"));
+        Assert.StartsWith("גוף", HtmlEntity.DeEntitize(item.InnerText).Trim());
+    }
+
+    [Fact]
+    public void Normalize_StopsTheMarkerScanAtANonMarkerElement()
+    {
+        /* A leading <em> is not a marker wrapper — the bare-text scan yields
+           to it and the note keeps its content. */
+        const string html = @"<p>טקסט<sup><a href=""#note-4"" id=""noteref-4"">ד</a></sup></p>
+<ol style=""list-style:none""><li id=""note-4""><em>הערה:</em> גוף ההערה</li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:4']")!);
+        Assert.NotNull(item.SelectSingleNode(".//em"));
+        Assert.StartsWith("הערה:", HtmlEntity.DeEntitize(item.InnerText).Trim());
+    }
+
+    [Fact]
+    public void Normalize_KeepsOnlyTheFirstBodyWhenTwoElementsClaimOneNumber()
+    {
+        /* Second registration under an already-taken number is dropped — the
+           first body wins and no duplicate item is emitted. */
+        const string html = @"<p>טקסט<sup><a href=""#note-8"" id=""noteref-8"">ח</a></sup></p>
+<ol style=""list-style:none""><li id=""note-8""><sup>ח</sup> הערה ראשונה</li></ol>
+<p id=""note-8""><strong>ח.</strong> כפילות</p>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:8']")!);
+        Assert.StartsWith("הערה ראשונה", HtmlEntity.DeEntitize(item.InnerText).Trim());
+        /* The losing paragraph stays in place as ordinary prose. */
+        Assert.NotNull(root.SelectSingleNode(".//p[@id='note-8']"));
+    }
+
+    [Fact]
+    public void Normalize_HandlesAnEmptyNoteBody()
+    {
+        /* An empty <li> body still canonicalizes — the marker scan finds no
+           children and the backref attaches to the item itself. */
+        const string html = @"<p>טקסט<sup><a href=""#note-6"" id=""noteref-6"">ו</a></sup></p>
+<ol style=""list-style:none""><li id=""note-6""></li></ol>";
+        var root = Parse(TanahpediaFootnotes.Normalize(html)!);
+        var item = Assert.Single(root.SelectNodes(".//*[@id='fn:6']")!);
+        Assert.Equal("ו", item.GetAttributeValue("data-marker", ""));
+        Assert.Single(item.SelectNodes("./a[contains(@class,'footnote-backref')]")!);
+    }
+
+    [Fact]
+    public void FromHtml_FootnoteListWithoutDataMarkerFallsBackToListPosition()
+    {
+        /* Canonical list items authored without data-marker still get Hebrew
+           markers — derived from the item's list position. The <p> wrapper
+           breaks the line after the marker — collapse whitespace to compare. */
+        var runs = HtmlRuns.FromHtml(
+            @"<ol class=""footnotes""><li><p>הערה אחת</p></li><li><p>הערה שתיים</p></li></ol>");
+        var text = Regex.Replace(string.Concat(runs.Select(r => r.Text)), @"\s+", " ");
+        Assert.Contains("א הערה אחת", text);
+        Assert.Contains("ב הערה שתיים", text);
+    }
+
+    [Fact]
+    public void FromHtml_CollapsesLeadingAndConsecutiveBreaks()
+    {
+        /* A block boundary before any content and back-to-back boundaries
+           around <hr> must not accrue blank lines. */
+        var runs = HtmlRuns.FromHtml(@"<hr><p>א</p><hr><p>ב</p>");
+        var text = string.Concat(runs.Select(r => r.Text));
+        Assert.DoesNotContain("\n\n", text);
+        Assert.Contains("א", text);
+        Assert.Contains("ב", text);
+    }
+
+    [Fact]
+    public void FromHtml_BulletAndInlineStyleArmsRender()
+    {
+        /* <ul> bullets, an ordinary <ol> number, a stray <li> with no list
+           parent, and the style-tag arms absent from footnote markup —
+           nested tags where the second mutation reuses the cloned style. */
+        var runs = HtmlRuns.FromHtml(
+            @"<ul><li>פריט</li></ul><ol><li>ראשון</li><li>שני</li></ol><li>יתום</li>" +
+            @"<p><b><i>כפול</i></b> <u>קו</u> <s>מחוק</s> <sub>תחתית</sub> <small>קטן</small> <big>גדול</big> <pre>  רווח  </pre> <del>דל</del> <ins>תו</ins> <strike>סט</strike> <a>בלי קישור</a> <a href=""#x"">קישור</a> <span>ספאן</span> <strong style=""font-style:italic"">מודגש</strong></p><h3>כותרת</h3>");
+        var text = string.Concat(runs.Select(r => r.Text));
+        Assert.Contains("• פריט", text);
+        Assert.Contains("1. ראשון", text);
+        Assert.Contains("• יתום", text);
+        Assert.Contains(runs, r => r.Text.Contains("כפול") && r.Bold && r.Italic);
+        Assert.Contains(runs, r => r.Text.Contains("קו") && r.Underline);
+        Assert.Contains(runs, r => r.Text.Contains("מחוק") && r.Strikethrough);
+        Assert.Contains(runs, r => r.Text.Contains("תחתית") && r.BaselineShift == -1);
+        Assert.Contains(runs, r => r.Text.Contains("קטן") && r.FontScale < 1.0);
+        Assert.Contains(runs, r => r.Text.Contains("גדול") && r.FontScale > 1.0);
+        Assert.Contains(runs, r => r.Text.Contains("דל") && r.Strikethrough);
+        Assert.Contains(runs, r => r.Text.Contains("תו") && r.Underline);
+        Assert.Contains(runs, r => r.Text.Contains("סט") && r.Strikethrough);
+        Assert.Contains(runs, r => r.Text.Contains("קישור") && r.Link == "#x");
+        Assert.Contains(runs, r => r.Text.Contains("מודגש") && r.Bold && r.Italic);
+        Assert.Contains(runs, r => r.Text.Contains("כותרת") && r.HeadingLevel == 3 && r.Bold);
     }
 }

@@ -47,9 +47,9 @@ public static class TanahpediaFootnotes
         /* ---- collect note bodies, keyed by note number ---- */
         var bodies = new SortedDictionary<int, HtmlNode>();
         var bodySet = new HashSet<HtmlNode>();
-        void Register(HtmlNode? el, int num)
+        void Register(HtmlNode el, int num)
         {
-            var body = el is null ? null : BodyElement(el);
+            var body = BodyElement(el);
             if (body is not null && num > 0 && !bodies.ContainsKey(num))
             {
                 bodies[num] = body;
@@ -94,13 +94,16 @@ public static class TanahpediaFootnotes
                 anchor.SetAttributeValue("href", $"#fn:{num}");
                 continue;
             }
-            var host = anchor.ParentNode?.Name == "sup" ? anchor.ParentNode : anchor;
+            var parent = anchor.ParentNode!;
+            var host = parent.Name == "sup" ? parent : anchor;
             refs.Add((anchor, host, num));
         }
 
         var hasFootnoteList = (root.SelectNodes(".//ol[contains(concat(' ', normalize-space(@class), ' '), ' footnotes ')]")
             ?.Count ?? 0) > 0;
-        if (bodies.Count == 0 && refs.Count == 0 && !hasFootnoteList)
+        /* refs is empty whenever bodies is — anchors above only collect while
+           notes exist to link to. */
+        if (bodies.Count == 0 && !hasFootnoteList)
         {
             return html;
         }
@@ -136,15 +139,15 @@ public static class TanahpediaFootnotes
                 item = body;
                 if (!anchored)
                 {
-                    var container = item.ParentNode;
-                    if (container is not null && (container.Name == "ol" || container.Name == "ul"))
+                    var container = item.ParentNode!;
+                    if (container.Name is "ol" or "ul")
                     {
                         /* The canonical list replaces the legacy one wholesale. */
-                        container.ParentNode?.InsertBefore(placeholder, container);
+                        container.ParentNode!.InsertBefore(placeholder, container);
                     }
                     else
                     {
-                        container?.InsertBefore(placeholder, item);
+                        container.InsertBefore(placeholder, item);
                     }
                     anchored = true;
                 }
@@ -155,14 +158,14 @@ public static class TanahpediaFootnotes
                 item = doc.CreateElement("li");
                 if (!anchored)
                 {
-                    var container = body.ParentNode;
-                    if (container is not null && (container.Name == "ol" || container.Name == "ul"))
+                    var container = body.ParentNode!;
+                    if (container.Name is "ol" or "ul")
                     {
-                        container.ParentNode?.InsertBefore(placeholder, container);
+                        container.ParentNode!.InsertBefore(placeholder, container);
                     }
                     else
                     {
-                        container?.InsertBefore(placeholder, body);
+                        container.InsertBefore(placeholder, body);
                     }
                     anchored = true;
                 }
@@ -188,16 +191,12 @@ public static class TanahpediaFootnotes
 
         if (canonicalList.ChildNodes.Count(n => n.NodeType == HtmlNodeType.Element) > 0)
         {
-            if (anchored)
-            {
-                placeholder.ParentNode?.ReplaceChild(canonicalList, placeholder);
-            }
-            else
-            {
-                root.AppendChild(canonicalList);
-            }
-            /* Drop emptied legacy list wrappers. */
-            foreach (var list in (root.SelectNodes(".//ol | .//ul") ?? Enumerable.Empty<HtmlNode>())
+            /* Processing the first body always anchors the placeholder where
+               the canonical list belongs — swap it in. */
+            placeholder.ParentNode!.ReplaceChild(canonicalList, placeholder);
+            /* Drop emptied legacy list wrappers — the canonical list just
+               attached guarantees the selection is non-null. */
+            foreach (var list in root.SelectNodes(".//ol | .//ul")!
                 .Where(list => list != canonicalList && !list.ChildNodes.Any(n => n.NodeType == HtmlNodeType.Element))
                 .ToList())
             {
@@ -243,7 +242,7 @@ public static class TanahpediaFootnotes
             {
                 var sup = doc.CreateElement("sup");
                 sup.SetAttributeValue("id", refId);
-                anchor.ParentNode?.ReplaceChild(sup, anchor);
+                anchor.ParentNode!.ReplaceChild(sup, anchor);
                 sup.AppendChild(anchor);
             }
         }
@@ -276,7 +275,7 @@ public static class TanahpediaFootnotes
     /// <c>closest("li") ?? closest("p")</c>).</summary>
     private static HtmlNode? BodyElement(HtmlNode el)
     {
-        if (el.NodeType == HtmlNodeType.Element && el.Name is "li" or "p")
+        if (el.Name is "li" or "p")
         {
             return el;
         }
@@ -350,7 +349,7 @@ public static class TanahpediaFootnotes
             {
                 return;
             }
-            node.ParentNode?.ReplaceChild(
+            node.ParentNode!.ReplaceChild(
                 node.OwnerDocument.CreateTextNode(decoded[match.Length..]), node);
             return;
         }
