@@ -56,6 +56,7 @@ public class CalendarCellViewModel
     /// <see cref="AccessibilityText"/> alone cannot describe both halves.
     /// </summary>
     public string MergedDayAccessibilityText { get; init; } = string.Empty;
+    public bool HasMergedDay => MergedDayText.Length > 0;
 }
 
 /// <summary>One 7-column week row inside a <see cref="MiniMonthViewModel"/> (#2455).</summary>

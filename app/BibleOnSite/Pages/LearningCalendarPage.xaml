@@ -257,19 +257,31 @@
                                             <VerticalStackLayout IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                                                  VerticalOptions="Center"
                                                                  Spacing="0">
-                                                <HorizontalStackLayout Spacing="0">
+                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="0">
                                                     <Label Text="{Binding DayText}"
+                                                           Grid.Column="0"
                                                            FontSize="15"
                                                            FontAttributes="Bold"
-                                                           HorizontalOptions="CenterAndExpand"
-                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                           HorizontalOptions="Fill"
+                                                           HorizontalTextAlignment="Center"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}">
+                                                        <Label.Triggers>
+                                                            <DataTrigger TargetType="Label"
+                                                                         Binding="{Binding HasMergedDay}"
+                                                                         Value="False">
+                                                                <Setter Property="Grid.ColumnSpan" Value="2"/>
+                                                            </DataTrigger>
+                                                        </Label.Triggers>
+                                                    </Label>
                                                     <Label Text="{Binding MergedDayText}"
+                                                           Grid.Column="1"
                                                            FontSize="15"
                                                            FontAttributes="Bold"
-                                                           HorizontalOptions="CenterAndExpand"
-                                                           IsVisible="{Binding MergedDayText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                           HorizontalOptions="Fill"
+                                                           HorizontalTextAlignment="Center"
+                                                           IsVisible="{Binding HasMergedDay}"
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                                </HorizontalStackLayout>
+                                                </Grid>
                                                 <Label Text="{Binding PerekSource}"
                                                        FontSize="10"
                                                        LineBreakMode="TailTruncation"
@@ -375,24 +387,36 @@
                                                         <Setter Property="Opacity" Value="0.3"/>
                                                     </DataTrigger>
                                                 </Border.Triggers>
-                                                <HorizontalStackLayout Spacing="0">
+                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="0">
                                                     <Label Text="{Binding DayText}"
+                                                           Grid.Column="0"
                                                            FontSize="11"
                                                            IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
-                                                           HorizontalOptions="CenterAndExpand"
+                                                           HorizontalOptions="Fill"
+                                                           HorizontalTextAlignment="Center"
                                                            VerticalTextAlignment="Center"
                                                            AutomationId="MiniMonthDayText"
                                                            SemanticProperties.Description="{Binding AccessibilityText}"
-                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}">
+                                                        <Label.Triggers>
+                                                            <DataTrigger TargetType="Label"
+                                                                         Binding="{Binding HasMergedDay}"
+                                                                         Value="False">
+                                                                <Setter Property="Grid.ColumnSpan" Value="2"/>
+                                                            </DataTrigger>
+                                                        </Label.Triggers>
+                                                    </Label>
                                                     <Label Text="{Binding MergedDayText}"
+                                                           Grid.Column="1"
                                                            FontSize="11"
-                                                           HorizontalOptions="CenterAndExpand"
+                                                           HorizontalOptions="Fill"
+                                                           HorizontalTextAlignment="Center"
                                                            VerticalTextAlignment="Center"
-                                                           IsVisible="{Binding MergedDayText, Converter={StaticResource StringNotEmptyConverter}}"
+                                                           IsVisible="{Binding HasMergedDay}"
                                                            AutomationId="MiniMonthDayText"
                                                            SemanticProperties.Description="{Binding MergedDayAccessibilityText}"
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                                </HorizontalStackLayout>
+                                                </Grid>
                                             </Border>
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
