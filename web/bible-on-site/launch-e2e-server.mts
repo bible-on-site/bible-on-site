@@ -5,7 +5,7 @@
  * the Next.js server for E2E tests. This approach is more reliable than using
  * Playwright's globalSetup for database operations.
  *
- * Usage: node --import tsx ./launch-e2e-server.mts [--coverage]
+ * Usage: node ./launch-e2e-server.mts [--coverage]
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";

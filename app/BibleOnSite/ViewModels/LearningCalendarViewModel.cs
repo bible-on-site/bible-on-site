@@ -454,7 +454,7 @@ public partial class LearningCalendarViewModel : ObservableObject
             IsReview = true,
             IsToday = friday.DateNumber == _todayDateNumber ||
                 shabbat.DateNumber == _todayDateNumber,
-            AccessibilityText = $"יום שישי {fridayLabel} - שבת {shabbatLabel} - חזרה: {source}",
+            AccessibilityText = $"יום שישי, {fridayLabel} - שבת, {shabbatLabel} - חזרה: {source}",
             IsDimmed = dimmed?.Invoke(friday) == true && dimmed(shabbat),
             Column = column,
             ColumnSpan = 2,
@@ -481,11 +481,16 @@ public partial class LearningCalendarViewModel : ObservableObject
                 ? _perekData.GetPerekSource(perekId) ?? string.Empty
                 : string.Empty;
         var dateLabel = HebrewDateHelper.FormatHebrewDate(day.DateNumber);
+        // The weekday is derived from the real date, not the grid column, so a
+        // screen reader - and a layout regression check - can compare the spoken
+        // weekday against where the cell actually rendered.
+        var weekdayName = HebrewDateHelper.GetHebrewWeekdayName(
+            (int)HebrewDateHelper.ToGregorianDate(day.DateNumber).DayOfWeek);
         var accessibility = day.PerekId is null
-            ? $"{dateLabel} - לא משובץ"
+            ? $"{weekdayName}, {dateLabel} - לא משובץ"
             : day.Status == PerekScheduleService.DayStatus.Review
-                ? $"{dateLabel} - חזרה: {source}"
-                : $"{dateLabel} - {source}";
+                ? $"{weekdayName}, {dateLabel} - חזרה: {source}"
+                : $"{weekdayName}, {dateLabel} - {source}";
 
         return new CalendarCellViewModel
         {

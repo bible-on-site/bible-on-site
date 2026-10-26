@@ -383,10 +383,58 @@ button.miniCell:hover {
 	font-weight: 700;
 }
 
-.downloadLink {
-	display: inline-block;
-	align-self: center;
-	font-size: 0.9rem;
+.downloadAction {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.downloadButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 2.5rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-elevated);
 	color: var(--primary-color, #1668dc);
-	text-decoration: underline;
+	font-size: 0.95rem;
+	font-weight: 600;
+	padding: 0 0.75rem;
+	cursor: pointer;
+}
+
+.downloadButton:hover:not(:disabled) {
+	border-color: var(--link-accent);
+}
+
+.downloadButton:focus-visible {
+	outline: 2px solid var(--link-accent);
+	outline-offset: 2px;
+}
+
+.downloadButton:disabled {
+	cursor: default;
+	opacity: 0.65;
+}
+
+.downloadScope {
+	font-size: 0.8rem;
+	font-weight: 400;
+	color: var(--muted-text);
+}
+
+.downloadStatus {
+	font-size: 0.85rem;
+	color: var(--muted-text);
+	min-height: 1rem;
+}
+
+.downloadStatus:empty {
+	display: none;
+}
+
+.downloadError {
+	color: var(--danger-color, #c0392b);
 }

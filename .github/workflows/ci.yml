@@ -156,7 +156,6 @@ env:
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
-  LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
   SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
   SEFARIA_MONGO_DOCKER_DIRECTORY: data/sefaria/mongodb-docker
@@ -204,41 +203,38 @@ jobs:
       is_app_e2e_android_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available }}
       is_app_e2e_ios_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available }}
     steps:
-      - name: Check and restore master baseline artifacts
+      - name: Check master baseline artifacts
         id: check_master_coverage_artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Function to check if artifact exists and download it
-          # Downloads to make it available in current workflow run via re-upload
+          # Availability lookup only — consumers download each baseline via the
+          # REST API by name where they need it.
           # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
-          check_and_download_artifact() {
+          check_artifact() {
             local artifact_name=$1
             local artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
               --jq "[.artifacts[] | select(.expired == false)] | first")
 
             if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
               local artifact_id=$(echo "$artifact_info" | jq -r '.id')
-              echo "Found artifact $artifact_name (id: $artifact_id), downloading..." >&2
-              mkdir -p "/tmp/$artifact_name"
-              gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name" >&2
+              echo "Found artifact $artifact_name (id: $artifact_id)" >&2
               echo "true"
             else
               echo "false"
             fi
           }
 
-          IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_ADMIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
-          IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
-          IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}")
-          IS_APP_E2E_IOS_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}")
+          IS_API_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_ADMIN_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
+          IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE=$(check_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}")
+          IS_APP_E2E_IOS_COVERAGE_AVAILABLE=$(check_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
@@ -262,144 +258,18 @@ jobs:
           echo "is_app_e2e_android_coverage_available=$IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
-      # Keep JS action startup sequential: the runner's shared event.json can
-      # be truncated while another parallel action reads it.
-      # https://github.com/actions/checkout/issues/2484
-      - name: Re-upload API master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload App master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload Bulletin master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload Website master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload Admin master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_admin_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-      - name: Re-upload Data master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_data_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload perushim data SQL for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload perushim notes SQLite for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload App E2E Android coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
-          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload App E2E iOS coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
-          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
-          retention-days: 90
-          overwrite: true
-
-
   determine_docker_image_availability:
     name: Determine Docker Image Availability
     permissions:
       contents: read
-      actions: read
       packages: read
     runs-on: ubuntu-latest
     outputs:
-      is_lcov_docker_available: ${{ steps.check_docker_images.outputs.is_lcov_docker_available }}
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
       sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
       # Fork PR tokens are read-only, so their rebuilt image travels as a workflow artifact instead.
       can_publish_sefaria_mongo: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
-      - name: Check and restore LCOV Docker image artifact
-        id: check_docker_images
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Check if LCOV Docker artifact exists and download it
-          # LCOV is small (~150MB) and used by 4+ jobs, so caching is worthwhile
-          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
-          artifact_name="${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}"
-          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
-            --jq "[.artifacts[] | select(.expired == false)] | first")
-
-          if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
-            artifact_id=$(echo "$artifact_info" | jq -r '.id')
-            echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
-            mkdir -p "/tmp/$artifact_name"
-            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-            unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
-            echo "is_lcov_docker_available=true" >> $GITHUB_OUTPUT
-          else
-            echo "LCOV Docker image not found in artifacts"
-            echo "is_lcov_docker_available=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Re-upload LCOV Docker image for current workflow
-        if: steps.check_docker_images.outputs.is_lcov_docker_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          retention-days: 90
-          overwrite: true
-
       - name: Check Sefaria MongoDB image availability
         id: check_sefaria_mongo
         env:
@@ -523,9 +393,9 @@ jobs:
     needs: [setup_env, determine_changes]
     if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     # The caller's permissions ceiling is validated at workflow-compile time
-    # (before `if:` evaluation): app-package.yml's resolve_perushim_artifact job
-    # declares `actions: read`, so the ceiling must cover it even though that job
-    # skips under compile_only — otherwise the whole run dies at startup_failure.
+    # (before `if:` evaluation): app-package.yml declares `actions: read` for its
+    # master-baseline artifact fetches, so the ceiling must cover it even though
+    # compile_only never runs them — otherwise the whole run dies at startup_failure.
     permissions:
       contents: read
       actions: read
@@ -674,41 +544,6 @@ jobs:
           path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           retention-days: 1
 
-  build_lcov_docker:
-    name: Build LCOV Docker Image
-    needs: [setup_env, determine_docker_image_availability]
-    if: ${{ needs.determine_docker_image_availability.outputs.is_lcov_docker_available != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver-opts: |
-            network=host
-            image=moby/buildkit:v0.22.0
-
-      - name: Build And Cache lcov Docker Image
-        uses: docker/build-push-action@v7
-        with:
-          context: devops/coverage/lcov-docker/
-          file: devops/coverage/lcov-docker/Dockerfile
-          tags: lcov-cli:0.0.2
-          outputs: type=docker,dest=/tmp/lcov-docker-image.tar
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Store Docker Image
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/lcov-docker-image.tar
-          retention-days: 90
-
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
@@ -788,7 +623,7 @@ jobs:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
-      actions: read # Required for downloading re-uploaded baseline artifacts
+      actions: read # Required to fetch master baseline artifacts through the REST API
       checks: write # Required by Bencher to create GitHub Check on push to master
       pull-requests: write # Required by Bencher to add comment on PRs
 
@@ -867,11 +702,25 @@ jobs:
           auto-start: true
 
       - name: Download perushim SQL
-        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
+
+      - name: Download perushim SQL master baseline
+        if: ${{ needs.perushim_data.result != 'success' && needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
 
       - name: Setup Rust
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -992,7 +841,6 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
-        build_lcov_docker,
         perushim_data,
       ]
     if: >-
@@ -1001,7 +849,6 @@ jobs:
         needs.determine_changes.result == 'success' &&
         needs.determine_baseline_availability.result == 'success' &&
         (needs.determine_docker_image_availability.result == 'success' || needs.determine_docker_image_availability.result == 'skipped') &&
-        (needs.build_lcov_docker.result == 'success' || needs.build_lcov_docker.result == 'skipped') &&
         (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
       }}
     defaults:
@@ -1133,11 +980,25 @@ jobs:
       # The E2E launcher populates MySQL once before starting next dev. Restore
       # its SQL input here, preferring this run's generated data over the baseline.
       - name: Download perushim SQL
-        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
+
+      - name: Download perushim SQL master baseline
+        if: ${{ needs.perushim_data.result != 'success' && needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
 
       - name: Prepare perushim SQL for E2E database population
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -1334,14 +1195,8 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Test Coverage (Unit + E2E)
         run: bun run coverage:merge
@@ -1711,7 +1566,6 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
-        build_lcov_docker,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
@@ -1949,14 +1803,8 @@ jobs:
           cat tests/.log/api_launcher.log 2>/dev/null || echo "(no api_launcher.log)"
           echo "========================="
 
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Test Coverage (Unit + E2E)
         working-directory: ${{ env.API_DIRECTORY }}
@@ -2027,7 +1875,6 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
-        build_lcov_docker,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
@@ -2209,15 +2056,7 @@ jobs:
           report_type: test_results
 
       # ============ Coverage Merge ============
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
-
+      # CoverageMerge merges LCOV via ReportGenerator — no lcov-cli image needed.
       - name: Merge Coverage Reports
         run: dotnet run --project devops -- CoverageMerge --configuration Release
 
@@ -2422,7 +2261,7 @@ jobs:
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
+        run: node --test deploy/ecr-deploy/resume-image.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2476,7 +2315,6 @@ jobs:
         determine_changes,
         determine_docker_image_availability,
         build_sefaria_mongo_docker,
-        build_lcov_docker,
         determine_baseline_availability,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false') }}
@@ -2642,14 +2480,8 @@ jobs:
           flags: data-integration
           report_type: test_results
 
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Test Coverage (Unit + Integration)
         run: cargo make coverage-merge
@@ -2904,12 +2736,15 @@ jobs:
         recitation_ci,
         deploy_verifier,
         perushim_data,
-        build_lcov_docker,
         determine_baseline_availability,
         determine_docker_image_availability,
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
+    permissions:
+      contents: read
+      # Reads the master baseline coverage artifacts through the REST API.
+      actions: read
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
@@ -3081,10 +2916,24 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: Restore Website Coverage Report
+        if: needs.website_e2e.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore Website Coverage Report (master baseline)
+        if: needs.website_e2e.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}"
 
       - name: Publish Website Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3096,10 +2945,24 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore API Coverage Report
+        if: needs.api_e2e.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore API Coverage Report (master baseline)
+        if: needs.api_e2e.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.API_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.API_MERGED_COVERAGE_DIRECTORY }}"
 
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3111,16 +2974,44 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore App Coverage Report
+        if: needs.app_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
+      - name: Restore App Coverage Report (master baseline)
+        if: needs.app_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.APP_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_MERGED_COVERAGE_DIRECTORY }}"
+
       - name: Restore Bulletin Coverage Report
+        if: needs.bulletin_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.bulletin_ci.result != 'skipped' && env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF || env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.BULLETIN_COVERAGE_DIRECTORY }}
+
+      - name: Restore Bulletin Coverage Report (master baseline)
+        if: needs.bulletin_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.BULLETIN_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.BULLETIN_COVERAGE_DIRECTORY }}"
 
       - name: Publish Bulletin Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3132,10 +3023,24 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore Admin Coverage Report
+        if: needs.admin_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.admin_ci.result != 'skipped' && env.ADMIN_COVERAGE_ARTIFACT_NAME_WF || env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
+
+      - name: Restore Admin Coverage Report (master baseline)
+        if: needs.admin_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3158,10 +3063,24 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report
+        if: needs.data_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.data_ci.result != 'skipped' && env.DATA_COVERAGE_ARTIFACT_NAME_WF || env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore Data Coverage Report (master baseline)
+        if: needs.data_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}"
 
       - name: Publish Data Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3171,15 +3090,6 @@ jobs:
           disable_search: true
           flags: data
           fail_ci_if_error: false
-
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
 
       - name: Setup devops bun, Node.js and dependencies
         id: devops-bun-cache
@@ -3210,7 +3120,7 @@ jobs:
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;
       # when the suite was not applicable this falls back to the trusted
-      # per-platform baselines re-uploaded by determine_baseline_availability.
+      # per-platform baselines fetched by name through the REST API.
       - name: Restore App E2E coverage (this run, Android)
         if: needs.app_mobile_e2e.result == 'success'
         uses: actions/download-artifact@v8
@@ -3227,17 +3137,29 @@ jobs:
 
       - name: Restore App E2E coverage (master baseline, Android)
         if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
-          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android"
 
       - name: Restore App E2E coverage (master baseline, iOS)
         if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
-          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios"
 
       # Merge unit + integration + E2E layers by covered locations, never by
       # percentage. --relocate canonicalizes absolute runner paths (Linux and
@@ -3271,7 +3193,7 @@ jobs:
           if [ "$FOUND" -eq 0 ]; then
             echo "::warning::No mobile E2E coverage layer available; merging unit + integration only."
           fi
-          node --import tsx merge-lcov.mts "${MERGE_ARGS[@]}"
+          node merge-lcov.mts "${MERGE_ARGS[@]}"
 
       # The combined report replaces the unit+integration artifact: the
       # authoritative app report and the master baseline always contain every

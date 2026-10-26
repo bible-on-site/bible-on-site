@@ -28,7 +28,7 @@ Never rediscover the write path from the UI or database schema: the canonical co
 
 ### Local seed = copy of production
 
-- The canonical local dataset is a **prod copy**: `bun x tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and applies the safe structure/baseline upgrade. Refresh by re-syncing — never hand-repair local content.
+- The canonical local dataset is a **prod copy**: `node devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and applies the safe structure/baseline upgrade. Refresh by re-syncing — never hand-repair local content.
 - The demo family SQL scripts (`tanahpedia_family_*.sql`, `cargo make mysql-apply-tanahpedia-families`) are CI/edge-lab fixtures only — never the local seed, and never re-run over a prod-synced database: their fixed-UUID delete/re-insert overwrites API-authored rows.
 
 ### Required data-change sequence

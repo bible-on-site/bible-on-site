@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.564",
+	"version": "0.2.570",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -14,12 +14,12 @@
 	"scripts": {
 		"update": "bun x npm-check-updates --peer --deep -u && bun install && bun run update:playwright",
 		"update:playwright": "bun x playwright install",
-		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/predev-deps.mjs",
+		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/predev-deps.mjs",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
-		"prebuild": "node scripts/generate-client-catalog.mjs && node --import tsx scripts/collect-store-metadata.mts && node --test scripts/verify-public-content.test.mjs",
+		"prebuild": "node scripts/generate-client-catalog.mjs && node scripts/collect-store-metadata.mts && node --test scripts/verify-public-content.test.mjs",
 		"build": "next build",
-		"postinstall": "node scripts/generate-client-catalog.mjs && node --import tsx scripts/collect-store-metadata.mts --ensure && node scripts/copy-local-flip-book.mjs",
+		"postinstall": "node scripts/generate-client-catalog.mjs && node scripts/collect-store-metadata.mts --ensure && node scripts/copy-local-flip-book.mjs",
 		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && bun install",
 		"flip-book:npm": "node scripts/toggle-flip-book-dep.mjs npm && bun install",
 		"flip-book:check": "node scripts/toggle-flip-book-dep.mjs check",
@@ -28,16 +28,16 @@
 		"lint": "biome lint",
 		"test:all": "bun run test:unit && bun run test:e2e && bun run test:perf",
 		"pretest:unit": "node scripts/generate-client-catalog.mjs",
-		"test:unit": "node --no-deprecation --trace-deprecation --import tsx ./node_modules/jest/bin/jest.js",
+		"test:unit": "node --no-deprecation --trace-deprecation ./node_modules/jest/bin/jest.js",
 		"test:e2e": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts --project=Desktop",
 		"test:e2e:all": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts",
 		"test:perf": "echo 'NOTE: Perf tests require bun run build first (uses production server)' && dotenv -e .test.env -- playwright test --config=playwright.perf.config.ts",
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"precoverage:unit": "node scripts/generate-client-catalog.mjs",
-		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation --import tsx ./node_modules/jest/bin/jest.js",
+		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation ./node_modules/jest/bin/jest.js",
 		"coverage:gaps": "node scripts/coverage-gaps.mjs",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test --config=playwright.e2e.config.ts --project=Desktop",
-		"coverage:merge": "node --import tsx ./tests/util/coverage/merge-coverage.mts",
+		"coverage:merge": "node ./tests/util/coverage/merge-coverage.mts",
 		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\"",
 		"version": "cross-env-shell echo ${npm_package_version}"
 	},
@@ -50,25 +50,26 @@
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1156.0",
 		"@pdf-lib/fontkit": "1.1.1",
+		"bidi-js": "1.1.0",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.49",
 		"isomorphic-dompurify": "4.6.0",
-		"jsdom": "26.1.0",
+		"jsdom": "30.1.3",
 		"leaflet": "1.9.4",
 		"mapbox-gl": "3.33.0",
 		"moment-timezone": "0.6.5",
-		"mpg123-decoder": "1.0.3",
 		"monocart-coverage-reports": "3.1.0",
+		"mpg123-decoder": "1.0.3",
 		"mysql2": "3.24.6",
 		"next": "16.4.3",
+		"ogg-opus-decoder": "1.7.5",
 		"pdf-lib": "1.17.1",
 		"react": "19.3.1",
 		"react-dom": "19.3.1",
 		"server-only": "0.0.1",
 		"sharp": "0.35.5",
 		"sunrise-sunset-js": "3.3.1",
-		"temporal-polyfill": "1.0.6",
-		"ogg-opus-decoder": "1.7.5"
+		"temporal-polyfill": "1.0.6"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.3",
@@ -97,7 +98,6 @@
 		"schema-dts": "2.1.0",
 		"swc-plugin-coverage-instrument": "0.0.33",
 		"ts-jest": "29.4.15",
-		"tsx": "4.23.15",
 		"typescript": "7.0.2",
 		"web-vitals": "6.2.3"
 	},
@@ -121,7 +121,6 @@
 	"trustedDependencies": [
 		"@parcel/watcher",
 		"@swc/core",
-		"esbuild",
 		"unrs-resolver"
 	]
 }

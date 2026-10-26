@@ -107,6 +107,15 @@ class LambdaParserSafetyTests(unittest.TestCase):
                 self.execute_sql(connection, sql, streaming)
                 self.assertEqual(connection.database.execute("SELECT * FROM bootstrap").fetchall(), [])
 
+    def test_reading_metrics_migration_is_lambda_safe(self):
+        path = ROOT / "data/mysql" / "tanah_reading_metrics_upgrade.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        processed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
+        statements = LAMBDA.parse_statements(processed)
+        # Two session settings plus 8 tables x SET/PREPARE/EXECUTE/DEALLOCATE.
+        self.assertEqual(len(statements), 34)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
+
     def test_mention_schema_is_in_manifest_and_remains_one_additive_statement(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         self.assertIn(MIGRATION, manifest)

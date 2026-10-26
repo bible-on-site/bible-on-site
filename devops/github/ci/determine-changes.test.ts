@@ -40,6 +40,15 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("an action-only change selects every module's checks without releasing it", () => {
+		// Composite actions under .github/actions are consumed by jobs across
+		// every module — an lcov-image-only PR must still run their consumers.
+		const changes = detectChanges([".github/actions/lcov-image/action.yml"]);
+		for (const [key, flags] of Object.entries(changes)) {
+			assert.deepEqual(flags, { module_changed: false, ci_changed: true }, key);
+		}
+	});
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });

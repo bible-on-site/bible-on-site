@@ -299,7 +299,9 @@ describe("approveEntryRevision", () => {
 				proposed_title: "יעקב אבינו",
 			})
 			.mockResolvedValueOnce(ENTRY)
-			.mockResolvedValueOnce(HEAD);
+			.mockResolvedValueOnce(HEAD)
+			// Post-apply content re-read feeding the metric recompute (#2607).
+			.mockResolvedValueOnce({ content: "<p>יעקב אבינו</p>" });
 		const result = await approveEntryRevision({ data: { id: "r1" } });
 		expect(result).toEqual({
 			revisionId: "r1",
@@ -314,6 +316,11 @@ describe("approveEntryRevision", () => {
 			(sql as string).includes("status = 'APPLIED'"),
 		);
 		expect(stamp?.[2]).toEqual(["entry-1", "rev-head", "r1"]);
+		// The entry metric was refreshed from the re-read applied content.
+		const metricUpsert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_metric"),
+		);
+		expect(metricUpsert?.[2]?.[0]).toBe("entry-1");
 	});
 
 	it("creates a new entry for an unlinked proposal", async () => {
@@ -335,16 +342,15 @@ describe("approveEntryRevision", () => {
 	});
 
 	it("stores the normalized name when a proposal carries an encoded name", async () => {
-		txQueryOneMock
-			.mockResolvedValueOnce({
-				...HEAD,
-				id: "r1",
-				entry_id: null,
-				status: "PENDING",
-				base_revision_id: null,
-				proposed_unique_name: "%D7%9E%D7%A9%D7%94",
-				proposed_title: "ערך חדש",
-			});
+		txQueryOneMock.mockResolvedValueOnce({
+			...HEAD,
+			id: "r1",
+			entry_id: null,
+			status: "PENDING",
+			base_revision_id: null,
+			proposed_unique_name: "%D7%9E%D7%A9%D7%94",
+			proposed_title: "ערך חדש",
+		});
 		const result = await approveEntryRevision({ data: { id: "r1" } });
 		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
 			(sql as string).includes("INSERT INTO tanahpedia_entry"),
