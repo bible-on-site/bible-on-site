@@ -93,7 +93,7 @@ The existing link contract is `tanahpedia_entity_tanah_source`
 | ----- | ------- |
 | `source_kind` | `pasuk` \| `article` |
 | `perek_id`, `pasuk_number`, `segment_start`, `segment_end` | canonical coordinates for scripture mentions (same semantics as the existing table) |
-| `article_id`, `content_hash`, `span_start`, `span_end` | article mentions: character offsets into `tanah_article.content` at `content_hash` — the hash is the staleness key since the article row carries no revision column |
+| `article_id`, `content_hash`, `span_start`, `span_end` | article mentions: **UTF-16 code-unit** offsets into `tanah_article.content` at `content_hash` (the unit JavaScript string indexing uses; BMP-only content makes them equal code-point offsets) — the hash is the staleness key since the article row carries no revision column |
 | `surface` | exact original mention text (no normalization of stored data) |
 | `intended_name` | the entry's intended `unique_name`/resolution key — indexed, deliberately not an FK |
 | `entity_type` | one of the 13 `entity_type` enum values in `tanahpedia_entity` |
@@ -173,14 +173,29 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   tokens, digest-pinned `--check`/`--refresh`).
 - Deterministic lexical baseline (`baseline.py`) emitting contract
   decoration rows — full-corpus numbers above.
-- Idempotent importer (`devops/src/import-mention-decorations.mts`)
+- Idempotent importer (`devops/import-tanahpedia-mentions.mts`)
   keyed on `dedupe_key` — re-runs never duplicate or clobber manual
   decisions.
 - Live resolver (`getMentionReferencesForPerek` in the Tanahpedia
   service) + merged refs + `tanahpedia-mention-refs` cache tag wired
   into entry-lifecycle invalidation; unit-tested including the
   create-entry-makes-link-appear lifecycle regression.
+- Article-domain spans: `devops/export-tanahpedia-articles.mts` emits
+  raw article HTML; `baseline_articles.py` matches the pasuk-derived
+  gazetteer inside HTML text runs (longest match, fused-prefix
+  stripping, `<a>`/`<script>`/`<style>` interiors excluded, ordinary-
+  word-dominated homographs emitted as `held`) and stamps each row with
+  the `content_hash` staleness key.
+- Article live resolution: `getMentionReferencesForArticle` joins on
+  `content_hash` so edited articles degrade to plain text;
+  `decorateArticleContent` + `decorateArticleHtml` inject resolved
+  anchors into stored HTML before DOMPurify on both render paths
+  (standalone `/929/[perek]/[slug]` and the in-book `ArticleFullView`),
+  integrity-checking `surface` against the stored bytes and refusing
+  spans inside existing anchors. Covered by unit tests plus e2e
+  fixtures (`tanah_mention_test_data.sql`, loaded after the Tanahpedia
+  seed chain) proving resolved→link and unresolved→plain.
 
 Remaining sequence: golden-set harness → encoder classifier
-comparison (BEREL license check first) → article-domain spans →
-production import of the published baseline rows.
+comparison (BEREL license check first) → production import of the
+published pasuk + article baseline rows.
