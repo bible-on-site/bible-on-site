@@ -161,7 +161,11 @@
 /* ─── פרשנים panel ─────────────────────────────────── */
 
 .tagArea {
+	display: flex;
+	flex-direction: column;
 	flex-shrink: 0;
+	min-height: 0;
+	max-height: 45%;
 	padding: 10px 12px 6px;
 	border-bottom: 1px dashed #e0d8c0;
 }
@@ -173,6 +177,10 @@
 	gap: 6px;
 	margin: 0;
 	padding: 0;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
 }
 
 .perushTagItem {
@@ -227,6 +235,7 @@
    sefer carries its own list. */
 .scopeRow {
 	display: flex;
+	flex-shrink: 0;
 	align-items: center;
 	gap: 8px;
 	margin-top: 8px;

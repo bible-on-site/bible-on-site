@@ -257,7 +257,7 @@ test.describe("Sefer left-page panel", () => {
 });
 
 test.describe("Sefer temporary navigation highlights", () => {
-	test("dismisses highlighted destinations on click and fades them automatically", async ({
+	test("keeps long-catalog commentary reachable and dismisses highlights on click or after fading", async ({
 		page,
 		skipOnNotWideEnough,
 	}) => {
@@ -268,11 +268,25 @@ test.describe("Sefer temporary navigation highlights", () => {
 		await blank.getByRole("button", { name: 'בחירת רש"י' }).click();
 		const group = blank.locator('[data-perush-pasuk="1"]');
 		await expect(group).toBeVisible();
+		// Stress the real reader layout even when the local database has only
+		// three commentaries. CI's full catalog originally covered the notes.
+		await blank.locator('[class*="tagList"]').evaluate((list) => {
+			const template = list.firstElementChild;
+			if (!template) throw new Error("No commentary tags");
+			while (list.childElementCount < 60) list.append(template.cloneNode(true));
+		});
+		const readingSpace = await blank
+			.locator('[class*="commentaryScroll"]')
+			.evaluate((el) => ({
+				height: el.clientHeight,
+				panelHeight: el.parentElement?.clientHeight ?? 0,
+			}));
+		expect(readingSpace.height).toBeGreaterThan(readingSpace.panelHeight * 0.4);
 		const verse = page.locator('[data-sefer-perek="1"] [data-sefer-pasuk="1"]');
 		await page.clock.install();
 		await verse.getByRole("button", { name: /מעבר לפירוש/ }).click();
 		await expect(group).toHaveAttribute("data-pasuk-highlight", "");
-		await group.locator('[class*="noteContent"]').first().click();
+		await group.click({ position: { x: 12, y: 12 } });
 		await expect(group).not.toHaveAttribute("data-pasuk-highlight");
 		await group.getByRole("button", { name: /מעבר לפסוק/ }).click();
 		await expect(verse).toHaveAttribute("data-pasuk-highlight", "");

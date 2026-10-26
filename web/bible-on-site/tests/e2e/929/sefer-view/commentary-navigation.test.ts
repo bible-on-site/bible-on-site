@@ -328,18 +328,35 @@ test.describe("Sefer commentary navigation", () => {
 				.getAttribute("data-perush-pasuk");
 			expect(pasuk).toBeTruthy();
 
-			// Flip to perek 2's spread: its text reuses the same pasuk numbers
-			// but has no open perush, so none of them offer navigation into
-			// perek 1's perush.
+			// Saved commentary selection follows the chapter. Full data has
+			// Rashi on chapter 2; the small fixture may have no chapter-2 notes.
+			const nextChapterHtml = await (await page.request.get("/929/2")).text();
+			const hasNextCommentary = nextChapterHtml.includes(
+				`/929/2/${encodeURIComponent('רש"י')}`,
+			);
 			await page.locator(".flipbook-toolbar-next").click();
 			await expect(page).toHaveURL(/\/929\/2\?book/);
 			const perek2Text = page.locator('.he-book .page[data-page-index="5"]');
-			await expect(
-				perek2Text.locator(`[data-sefer-pasuk="${pasuk}"]`),
-			).toBeAttached();
-			await expect(
-				perek2Text.getByRole("button", { name: /מעבר לפירוש/ }),
-			).toHaveCount(0);
+			if (hasNextCommentary) {
+				const nextPanel = page.locator('.he-book .page[data-page-index="6"]');
+				await expect(
+					nextPanel.getByRole("button", { name: 'בחירת רש"י' }),
+				).toHaveAttribute("aria-pressed", "true");
+				const nextGroup = nextPanel.locator("[data-perush-pasuk]").first();
+				await expect(nextGroup).toBeAttached();
+				const nextPasuk = await nextGroup.getAttribute("data-perush-pasuk");
+				await perek2Text
+					.locator(`[data-sefer-pasuk="${nextPasuk}"]`)
+					.getByRole("button", { name: /מעבר לפירוש/ })
+					.click();
+				await expect(nextGroup).toHaveAttribute("data-pasuk-highlight", "");
+				await expect(blank.locator("[data-pasuk-highlight]")).toHaveCount(0);
+				await expect(page).toHaveURL(/\/929\/2\?book/);
+			} else {
+				await expect(
+					perek2Text.getByRole("button", { name: /מעבר לפירוש/ }),
+				).toHaveCount(0);
+			}
 		});
 
 		test("updates the target mapping when switching perushim", async ({
