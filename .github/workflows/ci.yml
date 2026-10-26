@@ -156,7 +156,6 @@ env:
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
-  LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
   SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
   SEFARIA_MONGO_DOCKER_DIRECTORY: data/sefaria/mongodb-docker
@@ -357,49 +356,14 @@ jobs:
     name: Determine Docker Image Availability
     permissions:
       contents: read
-      actions: read
       packages: read
     runs-on: ubuntu-latest
     outputs:
-      is_lcov_docker_available: ${{ steps.check_docker_images.outputs.is_lcov_docker_available }}
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
       sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
       # Fork PR tokens are read-only, so their rebuilt image travels as a workflow artifact instead.
       can_publish_sefaria_mongo: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
-      - name: Check and restore LCOV Docker image artifact
-        id: check_docker_images
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Check if LCOV Docker artifact exists and download it
-          # LCOV is small (~150MB) and used by 4+ jobs, so caching is worthwhile
-          # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
-          artifact_name="${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}"
-          artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
-            --jq "[.artifacts[] | select(.expired == false)] | first")
-
-          if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
-            artifact_id=$(echo "$artifact_info" | jq -r '.id')
-            echo "Found artifact $artifact_name (id: $artifact_id), downloading..."
-            mkdir -p "/tmp/$artifact_name"
-            gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-            unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name"
-            echo "is_lcov_docker_available=true" >> $GITHUB_OUTPUT
-          else
-            echo "LCOV Docker image not found in artifacts"
-            echo "is_lcov_docker_available=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Re-upload LCOV Docker image for current workflow
-        if: steps.check_docker_images.outputs.is_lcov_docker_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          retention-days: 90
-          overwrite: true
-
       - name: Check Sefaria MongoDB image availability
         id: check_sefaria_mongo
         env:
@@ -673,41 +637,6 @@ jobs:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
           path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           retention-days: 1
-
-  build_lcov_docker:
-    name: Build LCOV Docker Image
-    needs: [setup_env, determine_docker_image_availability]
-    if: ${{ needs.determine_docker_image_availability.outputs.is_lcov_docker_available != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver-opts: |
-            network=host
-            image=moby/buildkit:v0.22.0
-
-      - name: Build And Cache lcov Docker Image
-        uses: docker/build-push-action@v7
-        with:
-          context: devops/coverage/lcov-docker/
-          file: devops/coverage/lcov-docker/Dockerfile
-          tags: lcov-cli:0.0.2
-          outputs: type=docker,dest=/tmp/lcov-docker-image.tar
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Store Docker Image
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp/lcov-docker-image.tar
-          retention-days: 90
 
   build_sefaria_mongo_docker:
     name: Build Sefaria MongoDB Docker Image
@@ -1015,7 +944,6 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
-        build_lcov_docker,
         perushim_data,
       ]
     if: >-
@@ -1024,7 +952,6 @@ jobs:
         needs.determine_changes.result == 'success' &&
         needs.determine_baseline_availability.result == 'success' &&
         (needs.determine_docker_image_availability.result == 'success' || needs.determine_docker_image_availability.result == 'skipped') &&
-        (needs.build_lcov_docker.result == 'success' || needs.build_lcov_docker.result == 'skipped') &&
         (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_website_master_coverage_available == 'false')
       }}
     defaults:
@@ -1379,14 +1306,8 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Test Coverage (Unit + E2E)
         run: bun run coverage:merge
@@ -1771,7 +1692,6 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
-        build_lcov_docker,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
@@ -2041,14 +1961,8 @@ jobs:
           cat tests/.log/api_launcher.log 2>/dev/null || echo "(no api_launcher.log)"
           echo "========================="
 
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Test Coverage (Unit + E2E)
         working-directory: ${{ env.API_DIRECTORY }}
@@ -2119,7 +2033,6 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
-        build_lcov_docker,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
@@ -2301,14 +2214,8 @@ jobs:
           report_type: test_results
 
       # ============ Coverage Merge ============
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Coverage Reports
         run: dotnet run --project devops -- CoverageMerge --configuration Release
@@ -2568,7 +2475,6 @@ jobs:
         determine_changes,
         determine_docker_image_availability,
         build_sefaria_mongo_docker,
-        build_lcov_docker,
         determine_baseline_availability,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_data_master_coverage_available == 'false') }}
@@ -2734,14 +2640,8 @@ jobs:
           flags: data-integration
           report_type: test_results
 
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
+      - name: Build lcov Docker image
+        uses: ./.github/actions/lcov-image
 
       - name: Merge Test Coverage (Unit + Integration)
         run: cargo make coverage-merge
@@ -2996,7 +2896,6 @@ jobs:
         recitation_ci,
         deploy_verifier,
         perushim_data,
-        build_lcov_docker,
         determine_baseline_availability,
         determine_docker_image_availability,
       ]
@@ -3263,15 +3162,6 @@ jobs:
           disable_search: true
           flags: data
           fail_ci_if_error: false
-
-      - name: Restore lcov Docker image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.LCOV_DOCKER_IMAGE_ARTIFACT_NAME }}
-          path: /tmp
-
-      - name: Load lcov Docker image
-        run: docker load --input /tmp/lcov-docker-image.tar
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
