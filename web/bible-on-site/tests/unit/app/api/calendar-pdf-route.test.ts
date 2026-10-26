@@ -30,15 +30,21 @@ describe("GET /api/calendar-pdf", () => {
 		expect(buf.length).toBeGreaterThan(10_000);
 	});
 
-	it("renders a full year across all months", async () => {
-		const res = await requestFor("?month=578501&view=year");
-		expect(res.status).toBe(200);
-		const buf = await pdfBytes(res);
-		expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
-		expect(res.headers.get("Content-Disposition")).toContain(
-			'filename="learning-calendar-year-5785.pdf"',
-		);
-	});
+	// ~13 months of cells; like the cycle view below, generation is
+	// legitimately multi-second.
+	it(
+		"renders a full year across all months",
+		async () => {
+			const res = await requestFor("?month=578501&view=year");
+			expect(res.status).toBe(200);
+			const buf = await pdfBytes(res);
+			expect(buf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+			expect(res.headers.get("Content-Disposition")).toContain(
+				'filename="learning-calendar-year-5785.pdf"',
+			);
+		},
+		30_000,
+	);
 
 	// ~45 months of cells; generation is legitimately multi-second.
 	it(
