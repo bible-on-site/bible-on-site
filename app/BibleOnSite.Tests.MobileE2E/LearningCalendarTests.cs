@@ -72,10 +72,11 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
 
         // BindableLayout fills each section asynchronously after its title
         // shows; a snapshot taken mid-realization can report a template level
-        // before its children exist. Wait for one rendered header, day cell
-        // and day label before the batch reads below.
+        // before its children exist. Wait for one rendered header and day
+        // label before the batch reads below. On iOS every lookup rescans the
+        // accessibility tree (~20s for the ~90 day labels), so the count of
+        // distinct element queries here directly costs shard wall clock.
         Page.WaitFor("MiniMonthWeekday", element => element.Displayed);
-        Page.WaitFor("MiniMonthDay", element => element.Displayed);
         Page.WaitFor("MiniMonthDayText", element => element.Displayed);
 
         // Any rendered header row gives the same seven column positions: every
@@ -105,14 +106,17 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
 
         // Every rendered day cell must sit centered under a weekday column, and
         // a whole month exercises all seven — a collapsed right-side strip maps
-        // every cell onto one or two columns instead.
-        var cells = RenderedElements("MiniMonthDay")
-            .Select(element => element.Frame)
+        // every cell onto one or two columns instead. The label is centered in
+        // its cell, so its frame marks the cell's column.
+        var dayLabels = RenderedElements("MiniMonthDayText",
+                element => Platform.SemanticDescription(element) ?? string.Empty)
+            .Select(day => (Description: day.Text, day.Frame))
             .ToArray();
-        Assert.NotEmpty(cells);
+        Assert.NotEmpty(dayLabels);
         var usedColumns = new HashSet<int>();
-        foreach (var center in cells.Select(CenterX))
+        foreach (var day in dayLabels)
         {
+            var center = CenterX(day.Frame);
             var column = Array.FindIndex(columns, x => Math.Abs(x - center) <= tolerance);
             Assert.True(column >= 0,
                 $"Day cell centered at x={center:F0} aligns with no weekday column " +
@@ -126,11 +130,6 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         // a self-consistent slide - days moved one column while still filling
         // all seven - fails where the announced weekday does not match the
         // header the cell rendered under.
-        var dayLabels = RenderedElements("MiniMonthDayText",
-                element => Platform.SemanticDescription(element) ?? string.Empty)
-            .Select(day => (Description: day.Text, day.Frame))
-            .ToArray();
-        Assert.NotEmpty(dayLabels);
         foreach (var day in dayLabels)
         {
             var spoken = day.Description.Split(',', 2)[0].Trim();
