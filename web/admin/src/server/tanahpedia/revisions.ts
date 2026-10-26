@@ -2,6 +2,10 @@ import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
 import { VALIDATION_PREFIX } from "~/lib/server-fn-errors";
 import {
+	normalizePediaName,
+	reservedCategoryLabelFor,
+} from "~/lib/tanahpedia/pedia-names";
+import {
 	type EntryRevisionRow,
 	normalizeRevisionSource,
 	REVISION_SOURCE_ADMIN,
@@ -75,14 +79,43 @@ function assertFreshBase(
 	}
 }
 
+/**
+ * Canonical-name checks: the public router only ever looks up the
+ * URL-decoded/NFC form of the final path segment, so names carrying literal
+ * escapes or `/` can never resolve, and a name colliding with a category
+ * route is silently shadowed by the category page — all rejected up front.
+ */
+export function assertEntryNameAllowed(name: string): void {
+	if (!name) {
+		throw new Error(`${VALIDATION_PREFIX}: שם ייחודי חייב להיות מלא`);
+	}
+	if (name.includes("/")) {
+		throw new Error(`${VALIDATION_PREFIX}: השם הייחודי אינו יכול להכיל '/'`);
+	}
+	if (name.length > 255) {
+		throw new Error(
+			`${VALIDATION_PREFIX}: השם הייחודי ארוך מדי (עד 255 תווים)`,
+		);
+	}
+	const reserved = reservedCategoryLabelFor(name);
+	if (reserved) {
+		throw new Error(
+			`${VALIDATION_PREFIX}: השם «${name}» שמור לנתיב הקטגוריה «${reserved}» — בחר שם אחר`,
+		);
+	}
+}
+
 /** Hebrew-facing input checks shared by the create/update save paths. */
 export function assertEntryFieldsValid(input: {
 	unique_name?: string | null;
 	title?: string | null;
 }): void {
-	if (!input.unique_name?.trim()) {
-		throw new Error(`${VALIDATION_PREFIX}: שם ייחודי חייב להיות מלא`);
+	// Normalize to the stored form first so a pasted encoded name cannot be
+	// stored (and thus double-encoded) — mirroring the public router's decode.
+	if (typeof input.unique_name === "string") {
+		input.unique_name = normalizePediaName(input.unique_name);
 	}
+	assertEntryNameAllowed(input.unique_name ?? "");
 	if (!input.title?.trim()) {
 		throw new Error(`${VALIDATION_PREFIX}: כותרת הערך חייבת להיות מלאה`);
 	}
@@ -255,6 +288,11 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 						"the revision's declared base is stale - the entry head has moved",
 					);
 				}
+				if (revision.proposed_unique_name) {
+					assertEntryNameAllowed(
+						normalizePediaName(revision.proposed_unique_name),
+					);
+				}
 				await txExecute(
 					conn,
 					`UPDATE tanahpedia_entry
@@ -275,6 +313,9 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 						"applying a new-entry revision requires proposedUniqueName and proposedTitle",
 					);
 				}
+				assertEntryNameAllowed(
+					normalizePediaName(revision.proposed_unique_name),
+				);
 				targetEntryId = crypto.randomUUID();
 				await txExecute(
 					conn,
@@ -359,6 +400,7 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 
 			const restoredUniqueName =
 				revision.proposed_unique_name ?? entry.unique_name;
+			assertEntryNameAllowed(normalizePediaName(restoredUniqueName));
 			const restoredTitle = revision.proposed_title ?? entry.title;
 			const restoredContent = revision.proposed_content ?? entry.content;
 

@@ -18,6 +18,7 @@ const {
 	getEditorIdentityMock,
 	paramsMock,
 	navigateMock,
+	aliasMocks,
 } = vi.hoisted(() => ({
 	getEntryMock: vi.fn(),
 	getLlmAssistantStatusMock: vi.fn(),
@@ -27,6 +28,13 @@ const {
 	getEditorIdentityMock: vi.fn(),
 	paramsMock: vi.fn(() => ({ id: "entry-1" })),
 	navigateMock: vi.fn(),
+	aliasMocks: {
+		getEntryAliases: vi.fn(),
+		checkPediaName: vi.fn(),
+		saveEntryAlias: vi.fn(),
+		removeEntryFromAlias: vi.fn(),
+		deleteAliasName: vi.fn(),
+	},
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -49,6 +57,14 @@ vi.mock("~/server/tanahpedia/entries", () => ({
 
 vi.mock("~/server/tanahpedia/llm-assistant", () => ({
 	getLlmAssistantStatus: getLlmAssistantStatusMock,
+}));
+
+vi.mock("~/server/tanahpedia/aliases", () => ({
+	getEntryAliases: aliasMocks.getEntryAliases,
+	checkPediaName: aliasMocks.checkPediaName,
+	saveEntryAlias: aliasMocks.saveEntryAlias,
+	removeEntryFromAlias: aliasMocks.removeEntryFromAlias,
+	deleteAliasName: aliasMocks.deleteAliasName,
 }));
 
 vi.mock("~/server/session", () => ({
@@ -165,6 +181,16 @@ describe("EntryEditPage", () => {
 		createEntryMock.mockReset();
 		updateEntryMock.mockReset();
 		deleteEntryMock.mockReset();
+		aliasMocks.getEntryAliases.mockReset().mockResolvedValue([]);
+		aliasMocks.checkPediaName
+			.mockReset()
+			.mockImplementation(async ({ data }: { data: { name: string } }) => ({
+				kind: "free",
+				name: data.name,
+			}));
+		aliasMocks.saveEntryAlias.mockReset();
+		aliasMocks.removeEntryFromAlias.mockReset();
+		aliasMocks.deleteAliasName.mockReset();
 	});
 
 	describe("tabs", () => {
@@ -179,7 +205,7 @@ describe("EntryEditPage", () => {
 			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
 
 			expect(screen.getByPlaceholderText("כותרת הערך")).toBeInTheDocument();
-			expect(screen.getByPlaceholderText("שם-ייחודי-בurl")).toBeInTheDocument();
+			expect(screen.getByPlaceholderText("למשל: משה-רבנו")).toBeInTheDocument();
 			expect(screen.queryByTestId("wysiwyg-editor")).not.toBeInTheDocument();
 		});
 
@@ -210,12 +236,12 @@ describe("EntryEditPage", () => {
 			fireEvent.change(screen.getByLabelText(/כותרת/), {
 				target: { value: "כותרת חדשה" },
 			});
-			fireEvent.change(screen.getByLabelText("שם ייחודי (URL)"), {
+			fireEvent.change(screen.getByLabelText(/שם ייחודי/), {
 				target: { value: "שם-חדש" },
 			});
 
 			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת חדשה");
-			expect(screen.getByLabelText("שם ייחודי (URL)")).toHaveValue("שם-חדש");
+			expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("שם-חדש");
 		});
 
 		it("hides the history tab for a new entry", async () => {
@@ -278,7 +304,7 @@ describe("EntryEditPage", () => {
 			fireEvent.click(await screen.findByRole("button", { name: "החל הצעה" }));
 
 			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת מוצעת");
-			expect(screen.getByLabelText("שם ייחודי (URL)")).toHaveValue("שם-מוצע");
+			expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("שם-מוצע");
 		});
 	});
 
