@@ -42,7 +42,7 @@ public partial class SupportPreferencesViewModel : ObservableObject
         {
             var report = await _perushimNotesService.GetDiagnosticsAsync();
             var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
+            var path = Path.Join(_fileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(path, report);
             await _share.RequestAsync(new ShareFileRequest
             {

@@ -116,14 +116,9 @@ public partial class FloatingSearchBar
         }
         else if (e.StatusType is GestureStatus.Completed or GestureStatus.Canceled)
         {
-            if (FilterSheet.TranslationY > 70)
-            {
-                _ = CloseFilterSheetAsync();
-            }
-            else
-            {
-                _ = FilterSheet.TranslateToAsync(0, 0, 150, Easing.CubicOut);
-            }
+            _ = FilterSheet.TranslationY > 70
+                ? CloseFilterSheetAsync()
+                : FilterSheet.TranslateToAsync(0, 0, 150, Easing.CubicOut);
         }
     }
 
@@ -165,12 +160,9 @@ public partial class FloatingSearchBar
             // on (the scope's kinds while scoped), remote kinds off — enabling
             // a network-backed kind stays an explicit user choice.
             _viewModel.ResetFiltersToDefaults();
-            foreach (var filter in _viewModel.KindOptions)
+            foreach (var filter in _viewModel.KindOptions.Where(filter => _filterChecks.ContainsKey($"SearchKind{filter}")))
             {
-                if (_filterChecks.TryGetValue($"SearchKind{filter}", out var kindCheck))
-                {
-                    kindCheck.IsChecked = _viewModel.IsFilterEnabled(filter);
-                }
+                _filterChecks[$"SearchKind{filter}"].IsChecked = _viewModel.IsFilterEnabled(filter);
             }
             foreach (var group in Enumerable.Range(0, 3))
             {

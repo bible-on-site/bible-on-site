@@ -233,9 +233,9 @@ public class DivineNameMaskingTests
         public void never_leaves_orphaned_combining_marks()
         {
             var s = Enabled();
-            foreach (var value in new[] { "יְהוָ֣ה ׀", "מֵהָאֱלֹהִים֙", "וְהָאֵ֤ל", "לְשַׁדַּ֥י" })
+            foreach (var masked in new[] { "יְהוָ֣ה ׀", "מֵהָאֱלֹהִים֙", "וְהָאֵ֤ל", "לְשַׁדַּ֥י" }
+                .Select(value => DivineNameMasking.MaskValue(value, s)))
             {
-                var masked = DivineNameMasking.MaskValue(value, s);
                 masked.Normalize(System.Text.NormalizationForm.FormD)
                     .Should().NotMatchRegex("[\\p{Mn}\\p{Mc}]");
             }

@@ -288,17 +288,15 @@ partial class Build
             process.WaitForExit();
             var output = string.Join("\n", process.Output.Select(o => o.Text));
 
-            if (TryParseFlightId(output, out var flightId))
+            // A printed FlightId means Partner Center committed the create
+            // even if the process exited non-zero afterwards; verify the
+            // anomaly and reuse the flight instead of stacking duplicates
+            // (CD run 168 created three real flights through this path).
+            if (TryParseFlightId(output, out var flightId)
+                && (process.ExitCode == 0 || ConfirmFlightExists(flightId)))
             {
-                // A printed FlightId means Partner Center committed the create
-                // even if the process exited non-zero afterwards; verify the
-                // anomaly and reuse the flight instead of stacking duplicates
-                // (CD run 168 created three real flights through this path).
-                if (process.ExitCode == 0 || ConfirmFlightExists(flightId))
-                {
-                    Serilog.Log.Information($"Created flight with ID: {flightId}");
-                    return flightId;
-                }
+                Serilog.Log.Information($"Created flight with ID: {flightId}");
+                return flightId;
             }
 
             // The flight may exist even though the command reported failure
@@ -565,18 +563,13 @@ partial class Build
         var lines = rawOutput.Split('\n');
         var flightIdColumnParts = new System.Text.StringBuilder();
 
-        foreach (var line in lines)
+        // Column 0 is empty (before first │), column 1 is row number, column 2 is FlightId
+        foreach (var flightIdPart in lines.Select(line => line.Split('│'))
+            .Where(columns => columns.Length >= 3)
+            .Select(columns => columns[2].Trim())
+            .Where(part => !string.IsNullOrEmpty(part) && !part.Contains("FlightId") && !part.Contains("─")))
         {
-            var columns = line.Split('│');
-            if (columns.Length >= 3)
-            {
-                // Column 0 is empty (before first │), column 1 is row number, column 2 is FlightId
-                var flightIdPart = columns[2].Trim();
-                if (!string.IsNullOrEmpty(flightIdPart) && !flightIdPart.Contains("FlightId") && !flightIdPart.Contains("─"))
-                {
-                    flightIdColumnParts.Append(flightIdPart);
-                }
-            }
+            flightIdColumnParts.Append(flightIdPart);
         }
 
         var flightIdColumn = AnsiPattern.Replace(flightIdColumnParts.ToString(), "");

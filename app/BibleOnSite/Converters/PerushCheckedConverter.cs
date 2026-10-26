@@ -23,19 +23,20 @@ public class PerushCheckedConverter : IMultiValueConverter
             return false;
         }
 
+        var idValue = id.Value;
         if (values[1] is IList<int> intList)
         {
-            return intList.Contains(id.Value);
+            return intList.Contains(idValue);
         }
 
         if (values[1] is IEnumerable<int> intEnum)
         {
-            return intEnum.Contains(id.Value);
+            return intEnum.Contains(idValue);
         }
 
         if (values[1] is IEnumerable en)
         {
-            return en.Cast<object>().Any(x => x is int k && k == id.Value);
+            return en.Cast<object>().Any(x => x is int k && k == idValue);
         }
 
         return false;
