@@ -87,9 +87,9 @@ test.describe("Sefer chapter tabs", () => {
 		await expect(preview.locator(".sefer-bookmark-expanded-perek")).toHaveText(
 			"פרק ל",
 		);
-		await expect(preview.locator(".sefer-bookmark-expanded-source")).toHaveText(
-			"בראשית",
-		);
+		await expect(
+			preview.locator(".sefer-bookmark-expanded-source"),
+		).toHaveCount(0);
 
 		await test.info().attach("sefer-bookmark-expanded", {
 			body: await page.screenshot({
