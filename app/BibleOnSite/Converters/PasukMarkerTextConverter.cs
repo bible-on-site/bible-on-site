@@ -96,19 +96,62 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         return merged;
     }
 
-    private static Span CloneSpan(Span span) => new()
+    private static Span CloneSpan(Span span)
     {
-        Text = span.Text,
-        TextColor = span.TextColor,
-        BackgroundColor = span.BackgroundColor,
-        FontAttributes = span.FontAttributes,
-        FontFamily = span.FontFamily,
-        FontSize = span.FontSize,
-        CharacterSpacing = span.CharacterSpacing,
-        TextDecorations = span.TextDecorations,
-        LineHeight = span.LineHeight,
-        TextTransform = span.TextTransform
-    };
+        // Reading Span.FontSize evaluates its default-value creator (NaN) and
+        // marks the property IsSet — on the clone AND on the source span. On
+        // Android GetEffectiveFont then resolves a size-less Font.IsDefault, so
+        // ToSpannableString skips the PlatformFontSpan that carries the label's
+        // size and the pasuk body renders at the platform default (14sp)
+        // instead of the configured size (#2461). Check IsSet before reading,
+        // and copy each property only when the source span really set it.
+        var clone = new Span { Text = span.Text };
+        if (span.IsSet(Span.FontSizeProperty) && !double.IsNaN(span.FontSize))
+        {
+            clone.FontSize = span.FontSize;
+        }
+        if (span.IsSet(Span.FontFamilyProperty))
+        {
+            clone.FontFamily = span.FontFamily;
+        }
+        if (span.IsSet(Span.FontAttributesProperty))
+        {
+            clone.FontAttributes = span.FontAttributes;
+        }
+        if (span.IsSet(Span.FontAutoScalingEnabledProperty))
+        {
+            clone.FontAutoScalingEnabled = span.FontAutoScalingEnabled;
+        }
+        if (span.IsSet(Span.CharacterSpacingProperty))
+        {
+            clone.CharacterSpacing = span.CharacterSpacing;
+        }
+        if (span.IsSet(Span.TextDecorationsProperty))
+        {
+            clone.TextDecorations = span.TextDecorations;
+        }
+        if (span.IsSet(Span.LineHeightProperty))
+        {
+            clone.LineHeight = span.LineHeight;
+        }
+        if (span.IsSet(Span.TextTransformProperty))
+        {
+            clone.TextTransform = span.TextTransform;
+        }
+        if (span.IsSet(Span.StyleProperty))
+        {
+            clone.Style = span.Style;
+        }
+        if (span.TextColor is not null)
+        {
+            clone.TextColor = span.TextColor;
+        }
+        if (span.BackgroundColor is not null)
+        {
+            clone.BackgroundColor = span.BackgroundColor;
+        }
+        return clone;
+    }
 
     // The font size rides the key as raw bits — exact cache-key equality
     // without tripping S1244's float == rule.

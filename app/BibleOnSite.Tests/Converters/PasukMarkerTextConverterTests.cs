@@ -51,6 +51,56 @@ public class PasukMarkerTextConverterTests
     }
 
     [Fact]
+    public void an_unstyled_span_keeps_font_size_unset_in_the_merge()
+    {
+        // Regression for #2461: copying FontSize through the setter evaluated
+        // the NaN default creator and marked the property set on the clone, so
+        // Android's span bake skipped the label-size PlatformFontSpan and the
+        // pasuk body rendered at the platform default while the configured
+        // size (and the HtmlView commentary) honored the setting.
+        var text = PasukText("פסוק");
+
+        var merged = (FormattedString)Convert(text, "א", 16.0);
+
+        merged.Spans[1].IsSet(Span.FontSizeProperty).Should().BeFalse(
+            "the label's FontSize must keep flowing through an unstyled span");
+        merged.Spans[1].IsSet(Span.FontFamilyProperty).Should().BeFalse();
+    }
+
+    [Fact]
+    public void the_source_span_is_not_touched_by_the_clone()
+    {
+        // A read through the FontSize getter would already evaluate the NaN
+        // creator, so the merge must leave the source span completely unset:
+        // direct FormattedText consumers (Masora, focused overlay) share it.
+        var text = PasukText("פסוק");
+
+        Convert(text, "א", 16.0);
+
+        text.Spans[0].IsSet(Span.FontSizeProperty).Should().BeFalse();
+    }
+
+    [Fact]
+    public void explicitly_styled_spans_keep_their_font_properties()
+    {
+        var styled = new Span
+        {
+            Text = "מודגש",
+            FontAttributes = FontAttributes.Bold,
+            FontSize = 20,
+            FontFamily = "OpenSansRegular"
+        };
+        var text = PasukText("פסוק", styled);
+
+        var merged = (FormattedString)Convert(text, "א", 16.0);
+
+        var clone = merged.Spans[2];
+        clone.FontSize.Should().Be(20);
+        clone.FontAttributes.Should().Be(FontAttributes.Bold);
+        clone.FontFamily.Should().Be("OpenSansRegular");
+    }
+
+    [Fact]
     public void repeated_identical_inputs_reuse_the_merged_instance()
     {
         var converter = new PasukMarkerTextConverter { MarkerColor = Colors.Red };
