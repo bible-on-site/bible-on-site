@@ -233,7 +233,10 @@ merge_ios (always(), needs every planned shard)
 ## Cache and reuse strategy
 
 All caches are owned by the native runner legs (plus `actions/cache` inside
-`ci.yml` for NuGet/bun). Keys are derived on every leg by `hash-native-deps.mjs`
+`ci.yml` for NuGet). The bun store cache shared by every JS job preamble in
+`ci.yml` and the `cd-*` workflows is centralized in the
+`.github/actions/setup-js` + `.github/actions/save-bun-store` composite
+actions. Keys are derived on every leg by `hash-native-deps.mjs`
 / `nuget-cache-key.ts` (bounded `hashFiles` — the manifest file is hashed
 directly when the file enumeration budget would be exceeded, #2184). Save
 policy differs per cache: NuGet, node_modules and iOS `obj` intermediates save
