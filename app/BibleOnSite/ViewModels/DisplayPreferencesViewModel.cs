@@ -77,7 +77,18 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
             }
             _preferencesService.FontFactor = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(MasterFontPercent));
         }
+    }
+
+    /// <summary>
+    /// Master size as a percentage of the base design size (50–200) — the
+    /// shared number picker's companion to the slider's raw factor (#2461).
+    /// </summary>
+    public double MasterFontPercent
+    {
+        get => _preferencesService.FontFactor * 100;
+        set => FontFactor = value / 100;
     }
 
     /// <summary>
@@ -171,6 +182,7 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
     private void OnPreferencesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(FontFactor));
+        OnPropertyChanged(nameof(MasterFontPercent));
         OnPropertyChanged(nameof(InAppBackButton));
         OnPropertyChanged(nameof(IsBackButtonPlatformDefault));
         OnPropertyChanged(nameof(IsBackButtonShow));
