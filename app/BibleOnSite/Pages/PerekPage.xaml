@@ -301,6 +301,7 @@
                                         AutomationId="TikkunScrollView"
                                         IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}}"
                                         Margin="8,0,8,0"
+                                        Loaded="OnTikkunLoaded"
                                         Scrolled="OnTikkunScrolled">
                                 <VerticalStackLayout>
                                     <!-- MAUI TapGestureRecognizer fails inside CarouselView

@@ -806,6 +806,15 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     private void OnTikkunScrolled(object? sender, ScrolledEventArgs e) =>
         ReaderScrollTop.NoteScrollOffset(sender, e);
 
+    /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>
+    private void OnTikkunLoaded(object? sender, EventArgs e)
+    {
+        if (sender is ScrollView scrollView)
+        {
+            ReaderScrollTop.NoteScrollOffset(sender, scrollView.ScrollY);
+        }
+    }
+
     #endregion
 
     #region Articles

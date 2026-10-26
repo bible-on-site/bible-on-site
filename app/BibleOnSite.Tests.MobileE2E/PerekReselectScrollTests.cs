@@ -178,12 +178,19 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
             {
                 // The driver-level scroll gesture drives the scrollable surface
                 // itself, independent of where its clipped child bounds sit.
-                Driver!.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
+                // It returns false when the accessibility scroll action cannot
+                // move this surface — MauiScrollView does not answer it — in
+                // which case the injected drag takes over immediately.
+                var scrolled = Driver!.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
                 {
                     ["elementId"] = scrollView.Id,
                     ["direction"] = "down",
                     ["percent"] = 0.9,
                 });
+                if (scrolled is not bool ok || !ok)
+                {
+                    ScrollReaderDown(scrollView);
+                }
             }
             else
             {

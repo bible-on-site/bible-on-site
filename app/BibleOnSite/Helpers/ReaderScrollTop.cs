@@ -87,12 +87,20 @@ public static class ReaderScrollTop
     /// content reports no scroll state through accessibility bounds, and pixel
     /// captures flap against scrollbar fades. A no-op in release builds.
     /// </summary>
-    internal static void NoteScrollOffset(object? sender, ScrolledEventArgs e)
+    internal static void NoteScrollOffset(object? sender, ScrolledEventArgs e) =>
+        NoteScrollOffset(sender, e.ScrollY);
+
+    /// <summary>
+    /// Reports an offset explicitly — used at load so the probe advertises
+    /// "tsy:0" before the first scroll, letting tests tell a probe-equipped
+    /// view at rest apart from a build without the probe.
+    /// </summary>
+    internal static void NoteScrollOffset(object? sender, double scrollY)
     {
 #if DEBUG
         if (sender is BindableObject element)
         {
-            SemanticProperties.SetDescription(element, $"tsy:{(int)Math.Round(e.ScrollY)}");
+            SemanticProperties.SetDescription(element, $"tsy:{(int)Math.Round(scrollY)}");
         }
 #endif
     }
