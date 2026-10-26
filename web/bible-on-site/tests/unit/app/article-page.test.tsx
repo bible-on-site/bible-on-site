@@ -141,6 +141,7 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../src/lib/perushim";
+import { SITE_ORIGIN } from "../../../src/lib/seo/jsonld";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
@@ -238,21 +239,32 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 
-			expect(result).toEqual({
-				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
-				description: "תקציר המאמר",
-				alternates: {
-					canonical: "/929/5/42",
-				},
-				openGraph: {
+			expect(result.title).toBe('מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק');
+			expect(result.description).toBe("תקציר המאמר");
+			expect(result.alternates).toEqual({
+				canonical: "/929/5/42",
+			});
+			expect(result.openGraph).toEqual(
+				expect.objectContaining({
 					title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
 					description: "תקציר המאמר",
-					url: "/929/5/42",
+					url: `${SITE_ORIGIN}/929/5/42`,
 					siteName: 'תנ"ך על הפרק',
 					locale: "he_IL",
 					type: "article",
-				},
-			});
+					// OGP requires article:author to be a profile URL.
+					authors: [
+						`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב ישראל")}`,
+					],
+					images: [
+						expect.objectContaining({
+							url: "https://example.com/1.jpg",
+							alt: "הרב ישראל",
+							type: "image/jpeg",
+						}),
+					],
+				}),
+			);
 		});
 
 		it("uses content stripped of HTML when abstract is empty", async () => {
@@ -357,7 +369,7 @@ describe("[slug] page", () => {
 				`/929/5/${encodeURIComponent('רש"י')}`,
 			);
 			expect(result.openGraph?.url).toBe(
-				`/929/5/${encodeURIComponent('רש"י')}`,
+				`${SITE_ORIGIN}/929/5/${encodeURIComponent('רש"י')}`,
 			);
 			// No perush detail mocked → templated fallback description
 			expect(result.description).toContain("פירוש");
@@ -407,10 +419,14 @@ describe("[slug] page", () => {
 
 			expect(result.description).toContain("בבקשה ורצון");
 			expect(result.description).not.toContain("<");
-			expect(result.openGraph?.type).toBe("article");
+			expect((result.openGraph as { type?: string } | null)?.type).toBe(
+				"article",
+			);
+			// Parshanim have no public profile URL — OGP requires author to be
+			// a URL, so the perush page emits no article:author at all.
 			expect(
 				(result.openGraph as { authors?: string[] } | null)?.authors,
-			).toEqual(['רש"י']);
+			).toBeUndefined();
 		});
 
 		it("returns not-found metadata when perush name not found", async () => {

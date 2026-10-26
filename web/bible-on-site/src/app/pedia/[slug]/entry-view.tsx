@@ -1,9 +1,11 @@
+import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
-import DOMPurify from "isomorphic-dompurify";
 import { demoteHeadings } from "@/lib/html-headings";
+import { plainText } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import {
@@ -31,15 +33,6 @@ import {
 	disambiguationMetadata,
 } from "./disambiguation-view";
 
-/** Plain-text snippet for meta description (entry content may be HTML). */
-function metaDescriptionFromContent(html: string, maxLen: number): string {
-	const plain = html
-		.replace(/<[^>]*>/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-	return plain.slice(0, maxLen);
-}
-
 export async function entryMetadata(slug: string): Promise<Metadata> {
 	try {
 		const name = normalizedUniqueNameFromParam(slug);
@@ -51,13 +44,12 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 			}
 			return { title: "לא נמצא" };
 		}
-		const fromContent = entry.content
-			? metaDescriptionFromContent(entry.content, 200)
-			: "";
-		return {
+		const fromContent = entry.content ? plainText(entry.content, 200) : "";
+		return pageMetadata({
 			title: `${entry.title} | תנכפדיה`,
 			description: fromContent.length > 0 ? fromContent : entry.title,
-		};
+			canonical: entryHref(entry.uniqueName),
+		});
 	} catch {
 		return { title: "לא נמצא" };
 	}

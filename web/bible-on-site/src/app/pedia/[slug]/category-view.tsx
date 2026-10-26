@@ -1,8 +1,9 @@
+import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
-import DOMPurify from "isomorphic-dompurify";
 import { demoteHeadings } from "@/lib/html-headings";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildCategoryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_HIERARCHY,
@@ -43,11 +44,11 @@ export function categoryLabel(resolved: ResolvedCategoryRoute): string {
 
 export function categoryMetadata(resolved: ResolvedCategoryRoute): Metadata {
 	const label = categoryLabel(resolved);
-	return {
+	return pageMetadata({
 		title: `${label} | תנכפדיה`,
 		description: `רשימת ${label} בתנ"ך`,
-		alternates: { canonical: resolved.canonicalPath },
-	};
+		canonical: resolved.canonicalPath,
+	});
 }
 
 function loadEntities(

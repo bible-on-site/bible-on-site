@@ -32,7 +32,11 @@ jest.mock("../../../src/lib/tanahpedia/perek-entity-refs", () => ({
 }));
 
 import { generateMetadata } from "@/app/929/[number]/[slug]/page";
-import { getPerushDetail, getPerushimByPerekId } from "../../../src/lib/perushim";
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
+import {
+	getPerushDetail,
+	getPerushimByPerekId,
+} from "../../../src/lib/perushim";
 
 const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 	typeof getPerushimByPerekId
@@ -46,7 +50,7 @@ const RASHI_SLUG = encodeURIComponent('רש"י');
 const rashiPerush = {
 	id: 1,
 	name: 'רש"י',
-	parshanName: "רש\"י",
+	parshanName: 'רש"י',
 	noteCount: 1,
 };
 
@@ -63,8 +67,7 @@ const metadataFor = (perekId: number) =>
 		params: Promise.resolve({ number: String(perekId), slug: RASHI_SLUG }),
 	});
 
-const expectedTitle = (source: string) =>
-	`רש"י על ${source} | תנ"ך על הפרק`;
+const expectedTitle = (source: string) => `רש"י על ${source} | תנ"ך על הפרק`;
 
 describe("commentary metadata source (#2512)", () => {
 	it.each([
@@ -89,9 +92,7 @@ describe("commentary metadata source (#2512)", () => {
 			expect(metadata.openGraph).toEqual(
 				expect.objectContaining({ title: expectedTitle(source) }),
 			);
-			expect(metadata.description).toBe(
-				`פירוש רש"י מאת רש"י על ${source}`,
-			);
+			expect(metadata.description).toBe(`פירוש רש"י מאת רש"י על ${source}`);
 		},
 	);
 
@@ -101,7 +102,14 @@ describe("commentary metadata source (#2512)", () => {
 		expect(metadata.alternates?.canonical).toBe(
 			`/929/315/${encodeURIComponent('רש"י')}`,
 		);
-		expect(metadata.openGraph?.url).toBe(metadata.alternates?.canonical);
+		expect(metadata.openGraph?.url).toBe(
+			`${SITE_ORIGIN}/929/315/${encodeURIComponent('רש"י')}`,
+		);
 		expect(metadata.openGraph?.siteName).toBe('תנ"ך על הפרק');
+		// Classical commentators have no profile page — OGP requires
+		// article:author to be a URL, so none is emitted for a perush.
+		expect(
+			(metadata.openGraph as { authors?: string[] } | null)?.authors,
+		).toBeUndefined();
 	});
 });
