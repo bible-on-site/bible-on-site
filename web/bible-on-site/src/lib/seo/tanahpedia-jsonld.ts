@@ -1,5 +1,6 @@
 import type { Graph, Thing } from "schema-dts";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import type {
 	EntityType,
 	EntryWithEntities,
@@ -202,7 +203,12 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		inDefinedTermSet: { "@id": TANAHPEDIA_SET_ID },
 	};
 	if (hasContent(entry.content)) {
-		definedTerm.description = plainText(entry.content as string, 300);
+		/* Normalized HTML keeps generated footnote markers (data-marker
+		   attributes, empty anchors) out of the extracted description (#2615). */
+		definedTerm.description = plainText(
+			normalizeFootnoteHtml(entry.content as string),
+			300,
+		);
 	}
 
 	const breadcrumbItems = [
