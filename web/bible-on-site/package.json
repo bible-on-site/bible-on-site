@@ -20,7 +20,7 @@
 		"prebuild": "node scripts/generate-client-catalog.mjs && node scripts/collect-store-metadata.mts && node --test scripts/verify-public-content.test.mjs",
 		"build": "next build",
 		"postinstall": "node scripts/generate-client-catalog.mjs && node scripts/collect-store-metadata.mts --ensure && node scripts/copy-local-flip-book.mjs",
-		"generate:calendar-pdf": "node --import tsx scripts/generate-calendar-pdfs.mts",
+		"generate:calendar-pdf": "node scripts/generate-client-catalog.mjs && node --import tsx scripts/generate-calendar-pdfs.mts",
 		"check:calendar-pdf": "node --import tsx scripts/generate-calendar-pdfs.mts --check",
 		"publish:calendar-pdf": "node --import tsx scripts/publish-calendar-pdfs.mts",
 		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && bun install",

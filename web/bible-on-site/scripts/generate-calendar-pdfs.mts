@@ -21,7 +21,6 @@
  *   --dir PATH        artifacts directory (default .cache/calendar-pdf)
  */
 
-import { execFileSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -207,14 +206,8 @@ async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	const started = Date.now();
 
-	// Install/CI prepares the generated catalog before verification. Check
-	// mode must not rewrite assets or even create their output directories.
-	if (!args.check) {
-		execFileSync(process.execPath, [
-			join(WEBSITE_ROOT, "scripts", "generate-client-catalog.mjs"),
-		]);
-	}
-
+	// The package command prepares the catalog before imports load schedule data.
+	// Verification uses the installed catalog and never writes to disk.
 	const fingerprint = computeCalendarPdfFingerprint();
 	const renderFingerprint = computeCalendarPdfRenderFingerprint();
 	const bounds = getCalendarArtifactBounds();
