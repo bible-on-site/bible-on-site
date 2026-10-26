@@ -17,6 +17,7 @@ import {
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import { demoteHeadings } from "../../../../lib/html-headings";
+import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
@@ -251,6 +252,10 @@ export default async function ArticlePage({
 			notFound();
 		}
 
+		// Mention decorations (#2516) resolve against live entries per
+		// render; unresolved targets stay plain text.
+		const decoratedArticle = await decorateArticleContent(article);
+
 		return (
 			<>
 				<JsonLd
@@ -284,12 +289,14 @@ export default async function ArticlePage({
 						<h1 className={styles.articleTitle}>{article.name}</h1>
 					</header>
 
-					{article.content && (
+					{decoratedArticle.content && (
 						<div
 							className={styles.articleBody}
 							// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 							dangerouslySetInnerHTML={{
-								__html: DOMPurify.sanitize(demoteHeadings(article.content)),
+								__html: DOMPurify.sanitize(
+									demoteHeadings(decoratedArticle.content),
+								),
 							}}
 						/>
 					)}
