@@ -143,7 +143,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 `package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch
 events whenever their module's `module_changed` or `ci_changed` fires. Those
 runs execute the exact release Docker build (same Dockerfile, `web` context,
-`DOCKER_BUILDKIT=0`) but skip every artifact upload, so nothing is released
+BuildKit with `type=gha` layer cache) but skip every artifact upload, so nothing is released
 or deployed; `cross_module_ci` gates them under the same triggers. Any
 Dockerfile under a module dir counts as `module_changed`; the shared
 `web/.dockerignore` context, `shared-dockerize.yml` (API) and
@@ -217,7 +217,7 @@ merge_ios (always(), needs every planned shard)
   not refresh baselines. Diagnostic/provisional per-test artifacts are still
   uploaded from PR runs, but never as baselines.
 - **Session lifecycle per leg** (#2248/#2253/#2255): resolve/simctl-create the
-  device → start async boot + shared state restore in parallel with node/npm
+  device → start async boot + shared state restore in parallel with node/bun
   restore, Appium/WDA agent prep, and (iOS) shared-build download → the pilot
   waits on every started gate before `Run ... shard`. The harness keeps one
   Appium session per xUnit device-collection and replays the identical
@@ -233,7 +233,7 @@ merge_ios (always(), needs every planned shard)
 ## Cache and reuse strategy
 
 All caches are owned by the native runner legs (plus `actions/cache` inside
-`ci.yml` for NuGet/npm). Keys are derived on every leg by `hash-native-deps.mjs`
+`ci.yml` for NuGet/bun). Keys are derived on every leg by `hash-native-deps.mjs`
 / `nuget-cache-key.ts` (bounded `hashFiles` — the manifest file is hashed
 directly when the file enumeration budget would be exceeded, #2184). Save
 policy differs per cache: NuGet, node_modules and iOS `obj` intermediates save

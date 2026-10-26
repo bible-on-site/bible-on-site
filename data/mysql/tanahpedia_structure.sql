@@ -50,7 +50,9 @@ CREATE TABLE `tanahpedia_tanah_source` (
     PRIMARY KEY (`id`),
     KEY `idx_tanah_source_group` (`source_group_id`),
     CONSTRAINT `fk_tanah_source_group` FOREIGN KEY (`source_group_id`) REFERENCES `tanahpedia_source_group` (`id`) ON DELETE CASCADE,
+    KEY `idx_tanah_source_perush` (`perush_id`),
     CONSTRAINT `fk_tanah_source_perush` FOREIGN KEY (`perush_id`) REFERENCES `perush` (`id`),
+    KEY `idx_tanah_source_perek` (`perek_id`),
     CONSTRAINT `fk_tanah_source_perek` FOREIGN KEY (`perek_id`) REFERENCES `tanah_perek` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_non_tanah_source`;
@@ -156,7 +158,9 @@ CREATE TABLE `tanahpedia_mention_decoration` (
     KEY `idx_decoration_pasuk` (`source_kind`, `perek_id`, `pasuk_number`),
     KEY `idx_decoration_article` (`source_kind`, `article_id`),
     KEY `idx_decoration_intended_name` (`intended_name`),
+    KEY `idx_decoration_perek` (`perek_id`),
     CONSTRAINT `fk_decoration_perek` FOREIGN KEY (`perek_id`) REFERENCES `tanah_perek` (`id`),
+    KEY `idx_decoration_article_id` (`article_id`),
     CONSTRAINT `fk_decoration_article` FOREIGN KEY (`article_id`) REFERENCES `tanah_article` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
@@ -232,6 +236,66 @@ CREATE TABLE `tanahpedia_entry_revision` (
     CONSTRAINT `fk_entry_revision_entry` FOREIGN KEY (`entry_id`) REFERENCES `tanahpedia_entry` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
+-- PLACE
+-- -------------------------------------------
+DROP TABLE IF EXISTS `tanahpedia_place`;
+CREATE TABLE `tanahpedia_place` (
+    `id` char(36) NOT NULL,
+    `entity_id` char(36) NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_place_entity` (`entity_id`),
+    CONSTRAINT `fk_place_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `tanahpedia_place_identification`;
+CREATE TABLE `tanahpedia_place_identification` (
+    `id` char(36) NOT NULL,
+    `place_id` char(36) NOT NULL,
+    `modern_name` varchar(255) DEFAULT NULL,
+    `latitude` decimal(10, 8) DEFAULT NULL,
+    `longitude` decimal(11, 8) DEFAULT NULL,
+    `alt_group_id` char(36) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_place_ident_place` (`place_id`),
+    CONSTRAINT `fk_place_ident_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- -------------------------------------------
+-- NATION
+-- -------------------------------------------
+DROP TABLE IF EXISTS `tanahpedia_nation`;
+CREATE TABLE `tanahpedia_nation` (
+    `id` char(36) NOT NULL,
+    `entity_id` char(36) NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_nation_entity` (`entity_id`),
+    CONSTRAINT `fk_nation_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `tanahpedia_nation_source_nation`;
+CREATE TABLE `tanahpedia_nation_source_nation` (
+    `id` char(36) NOT NULL,
+    `nation_id` char(36) NOT NULL,
+    `source_nation_id` char(36) NOT NULL,
+    `alt_group_id` char(36) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_nation_source_nation` (`nation_id`),
+    KEY `idx_nation_source_source` (`source_nation_id`),
+    CONSTRAINT `fk_nation_source_nation` FOREIGN KEY (`nation_id`) REFERENCES `tanahpedia_nation` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_nation_source_source` FOREIGN KEY (`source_nation_id`) REFERENCES `tanahpedia_nation` (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `tanahpedia_nation_territory`;
+CREATE TABLE `tanahpedia_nation_territory` (
+    `id` char(36) NOT NULL,
+    `nation_id` char(36) NOT NULL,
+    `place_id` char(36) NOT NULL,
+    `start_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
+    `end_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
+    `alt_group_id` char(36) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_nation_territory_nation` (`nation_id`),
+    KEY `idx_nation_territory_place` (`place_id`),
+    CONSTRAINT `fk_nation_territory_nation` FOREIGN KEY (`nation_id`) REFERENCES `tanahpedia_nation` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_nation_territory_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- -------------------------------------------
 -- PERSON
 -- -------------------------------------------
 DROP TABLE IF EXISTS `tanahpedia_person`;
@@ -282,6 +346,7 @@ CREATE TABLE `tanahpedia_person_name_giver_god` (
     PRIMARY KEY (`id`),
     KEY `idx_name_giver_god_name` (`person_name_id`),
     CONSTRAINT `fk_name_giver_god_name` FOREIGN KEY (`person_name_id`) REFERENCES `tanahpedia_person_name` (`id`) ON DELETE CASCADE,
+    KEY `idx_name_giver_god_god` (`god_id`),
     CONSTRAINT `fk_name_giver_god` FOREIGN KEY (`god_id`) REFERENCES `tanahpedia_god` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_person_sex`;
@@ -370,29 +435,6 @@ CREATE TABLE `tanahpedia_king_reign` (
     CONSTRAINT `fk_king_reign_nation` FOREIGN KEY (`nation_id`) REFERENCES `tanahpedia_nation` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
--- PLACE
--- -------------------------------------------
-DROP TABLE IF EXISTS `tanahpedia_place`;
-CREATE TABLE `tanahpedia_place` (
-    `id` char(36) NOT NULL,
-    `entity_id` char(36) NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_place_entity` (`entity_id`),
-    CONSTRAINT `fk_place_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-DROP TABLE IF EXISTS `tanahpedia_place_identification`;
-CREATE TABLE `tanahpedia_place_identification` (
-    `id` char(36) NOT NULL,
-    `place_id` char(36) NOT NULL,
-    `modern_name` varchar(255) DEFAULT NULL,
-    `latitude` decimal(10, 8) DEFAULT NULL,
-    `longitude` decimal(11, 8) DEFAULT NULL,
-    `alt_group_id` char(36) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    KEY `idx_place_ident_place` (`place_id`),
-    CONSTRAINT `fk_place_ident_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`) ON DELETE CASCADE
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
--- -------------------------------------------
 -- EVENT
 -- -------------------------------------------
 DROP TABLE IF EXISTS `tanahpedia_event`;
@@ -472,43 +514,6 @@ CREATE TABLE `tanahpedia_war_side_participant_nation` (
     KEY `idx_war_side_part_nation_nation` (`nation_id`),
     CONSTRAINT `fk_war_side_part_nation_side` FOREIGN KEY (`war_side_id`) REFERENCES `tanahpedia_war_side` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_war_side_part_nation_nation` FOREIGN KEY (`nation_id`) REFERENCES `tanahpedia_nation` (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
--- -------------------------------------------
--- NATION
--- -------------------------------------------
-DROP TABLE IF EXISTS `tanahpedia_nation`;
-CREATE TABLE `tanahpedia_nation` (
-    `id` char(36) NOT NULL,
-    `entity_id` char(36) NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_nation_entity` (`entity_id`),
-    CONSTRAINT `fk_nation_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-DROP TABLE IF EXISTS `tanahpedia_nation_source_nation`;
-CREATE TABLE `tanahpedia_nation_source_nation` (
-    `id` char(36) NOT NULL,
-    `nation_id` char(36) NOT NULL,
-    `source_nation_id` char(36) NOT NULL,
-    `alt_group_id` char(36) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    KEY `idx_nation_source_nation` (`nation_id`),
-    KEY `idx_nation_source_source` (`source_nation_id`),
-    CONSTRAINT `fk_nation_source_nation` FOREIGN KEY (`nation_id`) REFERENCES `tanahpedia_nation` (`id`) ON DELETE CASCADE,
-    CONSTRAINT `fk_nation_source_source` FOREIGN KEY (`source_nation_id`) REFERENCES `tanahpedia_nation` (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-DROP TABLE IF EXISTS `tanahpedia_nation_territory`;
-CREATE TABLE `tanahpedia_nation_territory` (
-    `id` char(36) NOT NULL,
-    `nation_id` char(36) NOT NULL,
-    `place_id` char(36) NOT NULL,
-    `start_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
-    `end_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
-    `alt_group_id` char(36) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    KEY `idx_nation_territory_nation` (`nation_id`),
-    KEY `idx_nation_territory_place` (`place_id`),
-    CONSTRAINT `fk_nation_territory_nation` FOREIGN KEY (`nation_id`) REFERENCES `tanahpedia_nation` (`id`) ON DELETE CASCADE,
-    CONSTRAINT `fk_nation_territory_place` FOREIGN KEY (`place_id`) REFERENCES `tanahpedia_place` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
 -- ANIMAL
@@ -746,6 +751,7 @@ CREATE TABLE `tanahpedia_saying_speaker_god` (
     PRIMARY KEY (`id`),
     KEY `idx_saying_speaker_god_saying` (`saying_id`),
     CONSTRAINT `fk_saying_speaker_god_saying` FOREIGN KEY (`saying_id`) REFERENCES `tanahpedia_saying` (`id`) ON DELETE CASCADE,
+    KEY `idx_saying_speaker_god_god` (`god_id`),
     CONSTRAINT `fk_saying_speaker_god_god` FOREIGN KEY (`god_id`) REFERENCES `tanahpedia_god` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_saying_audience_person`;
@@ -867,6 +873,7 @@ CREATE TABLE `tanahpedia_person_union` (
     CONSTRAINT `fk_person_union_person1` FOREIGN KEY (`person1_id`) REFERENCES `tanahpedia_person` (`id`),
     CONSTRAINT `fk_person_union_person2` FOREIGN KEY (`person2_id`) REFERENCES `tanahpedia_person` (`id`),
     CONSTRAINT `fk_person_union_type` FOREIGN KEY (`union_type_id`) REFERENCES `tanahpedia_lookup_union_type` (`id`),
+    KEY `idx_person_union_end_reason` (`end_reason_id`),
     CONSTRAINT `fk_person_union_end_reason` FOREIGN KEY (`end_reason_id`) REFERENCES `tanahpedia_lookup_union_end_reason` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_lookup_parent_child_type`;

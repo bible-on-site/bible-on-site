@@ -107,8 +107,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: bun
+
+      - name: Restore bun store cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-bun-website-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

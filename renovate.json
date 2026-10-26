@@ -48,11 +48,12 @@
 			"automerge": true
 		},
 		{
-			"description": "npm lockfile regeneration is the most failure-prone artifact update (optional wasm/native deps). Group it separately so one bad artifact cannot strand every other ecosystem's updates.",
-			"groupName": "all non-major npm dependencies",
-			"groupSlug": "npm-minor-patch",
+			"description": "bun lockfile regeneration is the most failure-prone artifact update (optional wasm/native deps). Group it separately so one bad artifact cannot strand every other ecosystem's updates.",
+			"groupName": "all non-major bun dependencies",
+			"groupSlug": "bun-minor-patch",
 			"matchManagers": [
-				"npm"
+				"npm",
+				"bun"
 			],
 			"matchPackageNames": [
 				"*"
@@ -64,7 +65,7 @@
 			"automerge": true
 		},
 		{
-			"description": "cargo update regenerates Cargo.lock per workspace; keep it separate from file-edit-only managers for the same blast-radius reason as npm.",
+			"description": "cargo update regenerates Cargo.lock per workspace; keep it separate from file-edit-only managers for the same blast-radius reason as bun.",
 			"groupName": "all non-major cargo dependencies",
 			"groupSlug": "cargo-minor-patch",
 			"matchManagers": [
@@ -113,9 +114,10 @@
 			"enabled": false
 		},
 		{
-			"description": "Driver tarballs bundle copies npm overrides cannot replace. iOS 12.17.3 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
+			"description": "Driver tarballs bundle copies bun overrides cannot replace. iOS 12.17.3 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
 			"matchManagers": [
-				"npm"
+				"npm",
+				"bun"
 			],
 			"matchFileNames": [
 				"app/mobile-e2e/package.json"
@@ -128,7 +130,8 @@
 		{
 			"description": "sprintf-js was removed via the scoped js-yaml@5.4.3 override under @istanbuljs/load-nyc-config (#1996). Keep that override until upstream load-nyc-config drops the js-yaml@3 chain.",
 			"matchManagers": [
-				"npm"
+				"npm",
+				"bun"
 			],
 			"matchFileNames": [
 				"web/bible-on-site/package.json"

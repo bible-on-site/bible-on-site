@@ -505,8 +505,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.WEBSITE_NODE_CACHE_PATH }}
-          cache: bun
+
+      - name: Restore bun store cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-bun-website-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -632,9 +637,19 @@ jobs:
           MODULE_VERSION=$(cargo make version | grep -v 'INFO')
           echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       - name: Build Bulletin Binary (Docker)
         run: |
-          DOCKER_BUILDKIT=0 docker build \
+          docker buildx build --load \
+            --cache-from type=gha,scope=bulletin \
+            --cache-to type=gha,mode=max,scope=bulletin \
+            --progress=plain \
             -f ${{ env.BULLETIN_DIRECTORY }}/Dockerfile \
             -t bulletin-build:latest \
             ${{ env.SHARED_ROOT_DIR }}
@@ -696,9 +711,19 @@ jobs:
           echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       - name: Dockerize Admin
         run: |
-          DOCKER_BUILDKIT=0 docker build \
+          docker buildx build --load \
+            --cache-from type=gha,scope=admin \
+            --cache-to type=gha,mode=max,scope=admin \
+            --progress=plain \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
@@ -3366,6 +3391,10 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
+          bun run test:review-audit
+          # Whole-tree generic-catch audit — the catch-boundary pre-commit
+          # hook is local-only; this keeps hook-less commits honest.
+          node review-audit/scan-catch.cjs
           node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
@@ -3719,12 +3748,25 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: bun
+
+      - name: Restore bun store cache
+        id: devops-bun-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-bun-devops-
 
       - name: Install devops dependencies
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: bun install --frozen-lockfile
+
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Publish release and collision version bumps together
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
