@@ -906,13 +906,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return;
         }
 
-        if (e.Parameter is int pasukNum)
+        // If in selection mode, tap toggles selection
+        if (e.Parameter is int pasukNum &&
+            _viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
         {
-            // If in selection mode, tap toggles selection
-            if (_viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
-            {
-                await HandlePasukTapAsync(pasuk);
-            }
+            await HandlePasukTapAsync(pasuk);
         }
 #endif
     }

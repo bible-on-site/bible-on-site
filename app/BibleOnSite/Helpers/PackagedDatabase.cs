@@ -31,7 +31,7 @@ public static class PackagedDatabase
 
     private static async Task RefreshCoreAsync(IFileSystem fileSystem, string fileName, string? sourceVersion)
     {
-        var destination = Path.Combine(fileSystem.AppDataDirectory, fileName);
+        var destination = Path.Join(fileSystem.AppDataDirectory, fileName);
         var marker = destination + MarkerSuffix;
         var gate = Locks.GetOrAdd(destination, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync();

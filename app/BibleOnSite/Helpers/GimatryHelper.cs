@@ -116,12 +116,9 @@ public static class GimatryHelper
     public static int ToNumber(string phrase)
     {
         int sum = 0;
-        foreach (char c in phrase)
+        foreach (char c in phrase.Where(LettersValues.ContainsKey))
         {
-            if (LettersValues.TryGetValue(c, out int value))
-            {
-                sum += value;
-            }
+            sum += LettersValues[c];
         }
         return sum;
     }
@@ -132,12 +129,9 @@ public static class GimatryHelper
     public static int ToNumberWithMantzpach(string phrase)
     {
         int sum = 0;
-        foreach (char c in phrase)
+        foreach (char c in phrase.Where(LettersValuesWithMantzpach.ContainsKey))
         {
-            if (LettersValuesWithMantzpach.TryGetValue(c, out int value))
-            {
-                sum += value;
-            }
+            sum += LettersValuesWithMantzpach[c];
         }
         return sum;
     }
@@ -203,10 +197,7 @@ public static class GimatryHelper
             {
                 int tafCount = rest / 400;
                 int remainder = rest % 400;
-                for (int i = 0; i < tafCount; i++)
-                {
-                    result += 'ת';
-                }
+                result += new string('ת', tafCount);
                 if (remainder > 0 && ValuesToLetters.TryGetValue(remainder, out char remainderChar))
                 {
                     result += remainderChar;
