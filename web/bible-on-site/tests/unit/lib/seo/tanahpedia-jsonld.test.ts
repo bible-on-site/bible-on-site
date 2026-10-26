@@ -179,6 +179,29 @@ describe("seo/tanahpedia-jsonld", () => {
 			expect(nodeByType(empty, "DefinedTerm")?.description).toBeUndefined();
 		});
 
+		it("emits the stored entry metric on the DefinedTerm, not the entity (#2607)", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entry: entry({
+					metric: { wordCount: 181, estimatedSeconds: 50 },
+				}),
+			});
+			const term = nodeByType(graph, "DefinedTerm");
+			expect(term?.wordCount).toBe(181);
+			expect(term?.timeRequired).toBe("PT50S");
+			// The entity node (a Person) stays metric-free — the metric describes
+			// the entry's text, not the person.
+			const entity = nodeByType(graph, "Person");
+			expect(entity?.wordCount).toBeUndefined();
+			expect(entity?.timeRequired).toBeUndefined();
+		});
+
+		it("omits reading metrics when the entry metric is unknown", () => {
+			const term = nodeByType(buildEntryGraph(baseInput()), "DefinedTerm");
+			expect(term?.wordCount).toBeUndefined();
+			expect(term?.timeRequired).toBeUndefined();
+		});
+
 		it("attaches family relations and gender to the focal person", () => {
 			const family: PersonFamilySummary = {
 				focalPersonId: "p-avraham",

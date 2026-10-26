@@ -1,10 +1,10 @@
 {
 	"name": "admin",
-	"version": "0.1.140",
+	"version": "0.1.146",
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"predev": "bun run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
+		"predev": "bun run docker:up && node ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
 		"dev": "dotenv -e .dev.env -- bun run dev:app",
 		"dev:app": "vite --port 3101 --strictPort",
 		"build": "vite build",
@@ -15,19 +15,21 @@
 		"test": "dotenv -e .test.env -- bun run test:all",
 		"test:all": "bun run test:unit && bun run test:e2e",
 		"test:unit": "vitest run",
+		"test:unit:related": "vitest related --run",
 		"test:e2e": "dotenv -e .test.env -- playwright test",
 		"test:s3": "node scripts/check-local-s3.mjs",
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test",
-		"coverage:merge": "node --import tsx ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --optional .coverage/unit/lcov.info --optional .coverage/e2e/lcov.info",
+		"coverage:merge": "node ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --optional .coverage/unit/lcov.info --optional .coverage/e2e/lcov.info",
 		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d --wait --wait-timeout 180 && docker compose -f ../../devops/docker-compose.yml run --build --rm --no-deps rustfs-init",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
 		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
 		"db:populate:dev:test-articles": "cd ../../data && cargo make mysql-populate-dev-with-test-articles",
 		"db:populate:test": "cd ../../data && cargo make mysql-populate-test",
 		"s3:populate:dev": "cd ../../data && cargo make s3-populate-dev",
-		"s3:populate:test": "cd ../../data && cargo make s3-populate-test"
+		"s3:populate:test": "cd ../../data && cargo make s3-populate-test",
+		"metrics:backfill": "bun run scripts/backfill-reading-metrics.mts"
 	},
 	"engines": {
 		"node": ">=26.10.0 <27"
@@ -85,7 +87,6 @@
 		"monocart-reporter": "2.15.1",
 		"rolldown": "1.2.15",
 		"tailwindcss": "4.3.3",
-		"tsx": "4.23.15",
 		"typescript": "7.0.2",
 		"vite": "8.3.5",
 		"vite-plugin-istanbul": "9.0.1",
@@ -104,8 +105,5 @@
 		"@istanbuljs/load-nyc-config": {
 			"js-yaml": "^5.4.3"
 		}
-	},
-	"trustedDependencies": [
-		"esbuild"
-	]
+	}
 }

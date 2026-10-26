@@ -13,21 +13,18 @@ import {
 	subscribeDivineNameMasking,
 } from "@/lib/divine-name-settings";
 
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; the subscriber only reads `event.key`, so a plain Event
+// carrying the property is enough.
+const storageEvent = (key: string | null) =>
+	Object.assign(new Event("storage"), { key });
+
 beforeEach(() => {
 	localStorage.clear();
 	// The settings module keeps a snapshot cache for useSyncExternalStore;
 	// resetting through the public save API clears it between tests.
 	saveDivineNameMaskingSettings(DEFAULT_DIVINE_NAME_MASKING);
 });
-
-/**
- * Cross-tab storage event the listener can inspect. The subscriber only
- * reads `event.key`, so a plain Event carrying the property is enough —
- * the DOM externs CodeQL checks declare a narrower StorageEvent
- * constructor than the runtime one and flag the two-argument call.
- */
-const storageEvent = (key: string) =>
-	Object.assign(new Event("storage"), { key });
 
 describe("normalizeDivineNameMasking", () => {
 	it("falls back to defaults for garbage input", () => {

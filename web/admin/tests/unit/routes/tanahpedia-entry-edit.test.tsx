@@ -18,6 +18,7 @@ const {
 	getEditorIdentityMock,
 	paramsMock,
 	navigateMock,
+	aliasMocks,
 } = vi.hoisted(() => ({
 	getEntryMock: vi.fn(),
 	getLlmAssistantStatusMock: vi.fn(),
@@ -27,6 +28,13 @@ const {
 	getEditorIdentityMock: vi.fn(),
 	paramsMock: vi.fn(() => ({ id: "entry-1" })),
 	navigateMock: vi.fn(),
+	aliasMocks: {
+		getEntryAliases: vi.fn(),
+		checkPediaName: vi.fn(),
+		saveEntryAlias: vi.fn(),
+		removeEntryFromAlias: vi.fn(),
+		deleteAliasName: vi.fn(),
+	},
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -49,6 +57,14 @@ vi.mock("~/server/tanahpedia/entries", () => ({
 
 vi.mock("~/server/tanahpedia/llm-assistant", () => ({
 	getLlmAssistantStatus: getLlmAssistantStatusMock,
+}));
+
+vi.mock("~/server/tanahpedia/aliases", () => ({
+	getEntryAliases: aliasMocks.getEntryAliases,
+	checkPediaName: aliasMocks.checkPediaName,
+	saveEntryAlias: aliasMocks.saveEntryAlias,
+	removeEntryFromAlias: aliasMocks.removeEntryFromAlias,
+	deleteAliasName: aliasMocks.deleteAliasName,
 }));
 
 vi.mock("~/server/session", () => ({
@@ -133,6 +149,11 @@ const existingEntry = {
 const ACCOUNT = "acct-1";
 const DRAFT_KEY = `tanahpedia-draft:v2:${ACCOUNT}:entry:entry-1`;
 
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; a plain Event carrying the properties is enough.
+const storageEvent = (key: string | null, newValue: string | null = null) =>
+	Object.assign(new Event("storage"), { key, newValue });
+
 const storedDraft = (
 	over: Record<string, unknown> = {},
 ): Record<string, unknown> => ({
@@ -165,6 +186,16 @@ describe("EntryEditPage", () => {
 		createEntryMock.mockReset();
 		updateEntryMock.mockReset();
 		deleteEntryMock.mockReset();
+		aliasMocks.getEntryAliases.mockReset().mockResolvedValue([]);
+		aliasMocks.checkPediaName
+			.mockReset()
+			.mockImplementation(async ({ data }: { data: { name: string } }) => ({
+				kind: "free",
+				name: data.name,
+			}));
+		aliasMocks.saveEntryAlias.mockReset();
+		aliasMocks.removeEntryFromAlias.mockReset();
+		aliasMocks.deleteAliasName.mockReset();
 	});
 
 	describe("tabs", () => {
@@ -179,7 +210,7 @@ describe("EntryEditPage", () => {
 			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
 
 			expect(screen.getByPlaceholderText("כותרת הערך")).toBeInTheDocument();
-			expect(screen.getByPlaceholderText("שם-ייחודי-בurl")).toBeInTheDocument();
+			expect(screen.getByPlaceholderText("למשל: משה-רבנו")).toBeInTheDocument();
 			expect(screen.queryByTestId("wysiwyg-editor")).not.toBeInTheDocument();
 		});
 
@@ -210,12 +241,12 @@ describe("EntryEditPage", () => {
 			fireEvent.change(screen.getByLabelText(/כותרת/), {
 				target: { value: "כותרת חדשה" },
 			});
-			fireEvent.change(screen.getByLabelText("שם ייחודי (URL)"), {
+			fireEvent.change(screen.getByLabelText(/שם ייחודי/), {
 				target: { value: "שם-חדש" },
 			});
 
 			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת חדשה");
-			expect(screen.getByLabelText("שם ייחודי (URL)")).toHaveValue("שם-חדש");
+			expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("שם-חדש");
 		});
 
 		it("hides the history tab for a new entry", async () => {
@@ -278,7 +309,7 @@ describe("EntryEditPage", () => {
 			fireEvent.click(await screen.findByRole("button", { name: "החל הצעה" }));
 
 			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת מוצעת");
-			expect(screen.getByLabelText("שם ייחודי (URL)")).toHaveValue("שם-מוצע");
+			expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("שם-מוצע");
 		});
 	});
 
@@ -528,6 +559,144 @@ describe("EntryEditPage", () => {
 			expect(
 				await screen.findByRole("button", { name: "שומר..." }),
 			).toBeDisabled();
+		});
+	});
+
+	describe("main-address rename (#2613)", () => {
+		it("announces the old URL was kept as an alias and lets it be dismissed", async () => {
+			updateEntryMock.mockResolvedValue({
+				id: "entry-1",
+				headRevisionId: "rev-2",
+				unique_name: "משה-הנביא",
+				renamedFrom: "משה-רבנו",
+				oldNameAliasCreated: true,
+			});
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole("button", { name: "הבנתי" }));
+			expect(
+				screen.queryByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).not.toBeInTheDocument();
+		});
+
+		it("explains when the old URL keeps leading to the other entries", async () => {
+			updateEntryMock.mockResolvedValue({
+				headRevisionId: "rev-2",
+				unique_name: "משה-הנביא",
+				renamedFrom: "משה-רבנו",
+				oldNameAliasCreated: false,
+			});
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByText(/«משה-רבנו» משותפת עם ערכים אחרים/),
+			).toBeInTheDocument();
+		});
+
+		it("reports the dropped old URL when the admin opted out of the alias", async () => {
+			updateEntryMock.mockResolvedValue({
+				id: "entry-1",
+				headRevisionId: "rev-2",
+				unique_name: "משה-הנביא",
+				renamedFrom: "משה-רבנו",
+				oldNameAliasCreated: false,
+			});
+			renderPage();
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			await waitFor(() =>
+				expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("משה-רבנו"),
+			);
+			fireEvent.change(screen.getByLabelText(/שם ייחודי/), {
+				target: { value: "משה-הנביא" },
+			});
+			fireEvent.click(await screen.findByRole("checkbox"));
+
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			await waitFor(() =>
+				expect(updateEntryMock).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						keepOldNameAsAlias: false,
+					}),
+				}),
+			);
+			expect(
+				await screen.findByText(/«משה-רבנו» אינה מובילה עוד לערך זה/),
+			).toBeInTheDocument();
+		});
+
+		it("hides the rename notice once a later save fails", async () => {
+			updateEntryMock
+				.mockResolvedValueOnce({
+					id: "entry-1",
+					headRevisionId: "rev-2",
+					unique_name: "משה-הנביא",
+					renamedFrom: "משה-רבנו",
+					oldNameAliasCreated: true,
+				})
+				.mockRejectedValueOnce(new Error("db down"));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			expect(
+				await screen.findByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).toBeInTheDocument();
+
+			fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByText(/אפשר לנסות שוב עכשיו/),
+			).toBeInTheDocument();
+			expect(
+				screen.queryByText(/«משה-רבנו» נשמרה כשם חלופי/),
+			).not.toBeInTheDocument();
+		});
+
+		it("renders the aliases section when the entry itself is missing", async () => {
+			getEntryMock.mockResolvedValue(null);
+			renderPage();
+
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+
+			expect(
+				await screen.findByText("אין כתובות נוספות לערך זה עדיין."),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -1194,12 +1363,12 @@ describe("EntryEditPage", () => {
 
 			act(() => {
 				window.dispatchEvent(
-					new StorageEvent("storage", {
-						key: DRAFT_KEY,
-						newValue: JSON.stringify(
+					storageEvent(
+						DRAFT_KEY,
+						JSON.stringify(
 							storedDraft({ sessionId: "a-different-tab" }),
 						),
-					}),
+					),
 				);
 			});
 

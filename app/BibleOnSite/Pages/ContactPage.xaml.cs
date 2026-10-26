@@ -1,3 +1,5 @@
+using BibleOnSite.Services;
+
 namespace BibleOnSite.Pages;
 
 public partial class ContactPage : ContentPage
@@ -18,7 +20,7 @@ public partial class ContactPage : ContentPage
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening WhatsApp: {ex.Message}");
-            await DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את וואטסאפ. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את וואטסאפ. נסו שוב", "אישור");
         }
     }
 
@@ -33,7 +35,7 @@ public partial class ContactPage : ContentPage
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening Telegram: {ex.Message}");
-            await DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את טלגרם. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את טלגרם. נסו שוב", "אישור");
         }
     }
 
@@ -49,7 +51,7 @@ public partial class ContactPage : ContentPage
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening email: {ex.Message}");
-            await DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור");
         }
     }
 }
