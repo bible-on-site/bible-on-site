@@ -158,8 +158,23 @@ def prefix_variants(word):
             yield stripped
 
 
-def decorations_for_article(article_id, content, gazetteer, held=frozenset()):
-    """Emit contract rows for one article's stored HTML content."""
+def decorations_for_article(
+    article_id,
+    content,
+    gazetteer,
+    held=frozenset(),
+    word_counts=None,
+    tagged_counts=None,
+):
+    """Emit contract rows for one article's stored HTML content.
+
+    `held` covers names dominated by ordinary-word usage at the name level.
+    Prefix-stripped matches get a second, stricter check: stripping fused
+    prefixes manufactures name candidates out of ordinary words (היה -> יה),
+    so when `word_counts`/`tagged_counts` are supplied a stripped match is
+    also held whenever its un-stripped surface word is dominated by
+    ordinary usage in the canonical corpus.
+    """
     max_words = max((name.count(" ") + 1 for name in gazetteer), default=1)
     content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
     rows = []
@@ -175,14 +190,21 @@ def decorations_for_article(article_id, content, gazetteer, held=frozenset()):
                 for first in prefix_variants(words[i][2]):
                     phrase = first if not tail else f"{first} {tail}"
                     if phrase in gazetteer:
-                        hit = (j, phrase)
+                        hit = (j, phrase, first)
                         break
                 if hit:
                     break
             if not hit:
                 i += 1
                 continue
-            end_index, phrase = hit
+            end_index, phrase, first_form = hit
+            stripped = first_form != words[i][2]
+            dominated = (
+                stripped
+                and word_counts is not None
+                and tagged_counts is not None
+                and word_counts.get(words[i][2], 0) > tagged_counts.get(phrase, 0)
+            )
             span_start, span_end = words[i][0], words[end_index - 1][1]
             rows.append(
                 {
@@ -199,7 +221,9 @@ def decorations_for_article(article_id, content, gazetteer, held=frozenset()):
                     "disambiguation": None,
                     "confidence": None,
                     # Homographs stay triageable without rendering.
-                    "acceptance": "held" if phrase in held else "auto",
+                    "acceptance": (
+                        "held" if phrase in held or dominated else "auto"
+                    ),
                     "model_revision": MODEL_REVISION,
                     "source_hash": content_hash,
                 }
@@ -220,15 +244,21 @@ def load_articles(path):
 
 
 def build_gazetteer_from_corpus(sefarim=None, lexicon=None):
-    """(gazetteer, held_names) over the full pasuk decoration set."""
+    """(gazetteer, held, word_counts, tagged_counts) over the pasuk corpus."""
     sefarim = sefarim if sefarim is not None else baseline.load_canonical()
     lexicon = lexicon if lexicon is not None else baseline.load_lexicon()
     rows = []
     for sefer_index in range(len(sefarim)):
         rows.extend(baseline.decorations_for_sefer(sefer_index, sefarim, lexicon))
+    word_counts = canonical_word_counts(sefarim)
+    tagged_counts = collections.Counter(
+        row["intended_name"] for row in rows
+    )
     return (
         build_gazetteer(rows),
-        held_names(rows, canonical_word_counts(sefarim)),
+        held_names(rows, word_counts),
+        word_counts,
+        tagged_counts,
     )
 
 
@@ -247,12 +277,19 @@ def main():
     )
     args = parser.parse_args()
 
-    gazetteer, held = build_gazetteer_from_corpus()
+    gazetteer, held, word_counts, tagged_counts = build_gazetteer_from_corpus()
     articles = load_articles(args.articles)
     rows = []
     for article_id, content in articles:
         rows.extend(
-            decorations_for_article(article_id, content, gazetteer, held)
+            decorations_for_article(
+                article_id,
+                content,
+                gazetteer,
+                held,
+                word_counts=word_counts,
+                tagged_counts=tagged_counts,
+            )
         )
     print(
         f"{len(articles)} articles -> {len(rows)} decorations "

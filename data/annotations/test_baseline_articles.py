@@ -232,6 +232,36 @@ class TestDecorationsForArticle(unittest.TestCase):
     def test_empty_content(self):
         self.assertEqual(ba.decorations_for_article(1, "", self.gazetteer), [])
 
+    def test_stripped_match_dominated_by_ordinary_usage_is_held(self):
+        # היה -> יה: fused-prefix stripping manufactures a name match out
+        # of an ordinary word; surface dominance keeps it triageable only.
+        gazetteer = {"יה": "PERSON"}
+        rows = ba.decorations_for_article(
+            1,
+            "<p>היה הדבר</p>",
+            gazetteer,
+            word_counts={"היה": 3600},
+            tagged_counts={"יה": 5},
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["intended_name"], "יה")
+        self.assertEqual(rows[0]["surface"], "היה")
+        self.assertEqual(rows[0]["acceptance"], "held")
+
+    def test_unstripped_match_ignores_surface_dominance(self):
+        # A direct name match stays auto even when the same surface word
+        # is also common — phrase-level `held` covers that case instead.
+        gazetteer = {"ישראל": "PERSON"}
+        rows = ba.decorations_for_article(
+            1,
+            "<p>ישראל שמע</p>",
+            gazetteer,
+            word_counts={"ישראל": 2500},
+            tagged_counts={"ישראל": 600},
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["acceptance"], "auto")
+
     def test_held_names_emit_held_rows(self):
         html = "<p>אמר מלך ואמר דוד</p>"
         gazetteer = {**self.gazetteer, "מלך": "PERSON", "דוד": "PERSON"}
