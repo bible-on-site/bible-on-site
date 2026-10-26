@@ -20,7 +20,8 @@ public class ParashaDataService
     private List<ParashaUnit>? _parashiot;
     private Dictionary<int, int>? _unitIndexById;
     private Dictionary<int, List<ParashaUnit>>? _unitsByPerekId;
-    private bool _isLoaded;
+    /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
+    private volatile bool _isLoaded;
     private bool _isAvailable;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
