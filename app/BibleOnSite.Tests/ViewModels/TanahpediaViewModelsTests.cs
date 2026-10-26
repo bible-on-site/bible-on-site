@@ -1033,7 +1033,7 @@ public class TanahpediaEntryViewModelTests
     [Fact]
     public async Task EntryHistoryChanges_NotifySoTheCapsuleBackRepaints()
     {
-        // The shared capsule derives its enabled state from HasEntryHistory;
+        // The shared capsule derives its enabled state from HasEntryHistory —
         // each push/pop must raise PropertyChanged so the paint tracks the
         // trail (#2467).
         SetupPersonEntries("שמשון", "דלילה");

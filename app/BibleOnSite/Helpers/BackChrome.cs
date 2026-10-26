@@ -35,7 +35,7 @@ public static class BackChrome
 			preferences.ShowBack = capsuleShow;
 		}
 
-		// Pages that hide the nav bar (every migrated page) own their chrome;
+		// Pages that hide the nav bar (every migrated page) own their chrome —
 		// a hidden bar makes the behavior moot, and PerekPage toggles it for
 		// search state on its own.
 		if (Shell.GetNavBarIsVisible(page))
