@@ -49,6 +49,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_legacy_migration.sql"
   - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
   - "data/mysql/tanahpedia_structure.sql"
+  - "data/mysql/tanahpedia_synonym_moshe_data.sql"
   - "data/mysql/tanahpedia_alter_mention_decoration.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
