@@ -345,6 +345,45 @@ export function pediaEntryPath(uniqueName: string): string {
 	return `/pedia/${uniqueName}`;
 }
 
+/**
+ * Every page that renders article data carries the `articles` tag; `urls`
+ * lists the article pages (and their old locations after a move) whose
+ * content changed.
+ */
+export function articleInvalidation(...urls: string[]): RevalidateRequest[] {
+	return [{ tag: "articles", ...(urls.length ? { urls } : {}) }];
+}
+
+/**
+ * Author names and details render on author pages and inside article
+ * pages/lists, so both tags must expire on an author change. `urls` lists
+ * the changed author pages (old slug included after a rename).
+ */
+export function authorInvalidation(...urls: string[]): RevalidateRequest[] {
+	return [
+		{ tag: "authors" },
+		{ tag: "articles", ...(urls.length ? { urls } : {}) },
+	];
+}
+
+/**
+ * Pedia entry/category/disambiguation pages are prerendered under the
+ * `/pedia/[slug]` route file, the index at `/pedia`, and per-perek entity
+ * references on `tanahpedia-entity-refs`-tagged caches, and resolved
+ * mention decorations (#2516) on `tanahpedia-mention-refs` — entry
+ * create/rename/delete must expire both so decorations appear/disappear
+ * without re-running inference. `urls` lists the entry pages whose
+ * content changed (old unique names included after a rename).
+ */
+export function pediaInvalidation(...urls: string[]): RevalidateRequest[] {
+	return [
+		{ tag: "tanahpedia-entity-refs" },
+		{ path: "/pedia/[slug]", type: "page" },
+		{ path: "/pedia", ...(urls.length ? { urls } : {}) },
+		{ tag: "tanahpedia-mention-refs" },
+	];
+}
+
 // --- typed-change builders --------------------------------------------------
 
 /**
