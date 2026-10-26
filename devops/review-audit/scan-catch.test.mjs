@@ -52,13 +52,52 @@ const FILES = {
 		"    {",
 		"        try { await Go(); }",
 		"        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }",
+		"        catch (Exception ex) /* IO only */ when (ex is IOException) { }",
 		"        catch (Exception ex) when (ex is not GraphQLException) { Log(ex); throw; }",
+		"        catch (Exception ex) when (ex is not GraphQLException and not OperationCanceledException) { throw; }",
 		"        catch (Exception ex) when (ex.GetType().Name == \"X\") { }",
 		"        catch (IOException ex) { }",
 		"    }",
 		"    // catch (Exception) inside a comment is not a site",
 		"    private string doc = \"catch (Exception ex) inside a literal is not a site\";",
 		"    private string verb = @\"catch (Exception ex) inside a verbatim literal\";",
+		"    private string interp = $\"{Format(\"catch (Exception ex) inside a hole literal\")}\";",
+		"    private string interp2 = $\"{{escaped}} {x + \"catch (Exception) in nested literal\"}\";",
+		"}",
+	],
+	// Green: && keeps the left-hand type constraint.
+	"app/BibleOnSite/Services/AndFilter.cs": [
+		"class AndFilter {",
+		"    private void Go(bool flag)",
+		"    {",
+		"        try { Run(); }",
+		"        catch (Exception ex) when (ex is IOException && flag) { }",
+		"    }",
+		"}",
+	],
+	// Red: broad patterns that still swallow every exception type.
+	"app/BibleOnSite/Pages/Broad.cs": [
+		"class Broad {",
+		"    private async void OnTapped()",
+		"    {",
+		"        try { await Go(); }",
+		"        catch (Exception ex) when (ex is object) { Log(ex); }",
+		"        catch (Exception ex) when (ex is Exception) { Log(ex); }",
+		"        catch (Exception ex) when (ex is IOException || always) { Log(ex); }",
+		"    }",
+		"}",
+	],
+	// Red: a bare //NOSONAR with no reason documents nothing.
+	"app/BibleOnSite/Pages/Reasonless.cs": [
+		"class Reasonless {",
+		"    private async void OnTapped()",
+		"    {",
+		"        try { await Go(); }",
+		"        catch (Exception ex) //NOSONAR",
+		"        {",
+		"            Log(ex);",
+		"        }",
+		"    }",
 		"}",
 	],
 	// NOSONAR-only justification (bare catch precedent: Build.Run.cs).
@@ -121,6 +160,25 @@ describe("scan-catch gate mode", () => {
 		assert.equal(r.status, 0, r.stdout + r.stderr);
 	});
 
+	it("keeps an &&-guarded type test narrow", () => {
+		const r = run(["app/BibleOnSite/Services/AndFilter.cs"]);
+		assert.equal(r.status, 0, r.stdout + r.stderr);
+	});
+
+	it("flags broad filters that still swallow every exception type", () => {
+		const r = run(["app/BibleOnSite/Pages/Broad.cs"]);
+		assert.equal(r.status, 1);
+		assert.match(r.stderr, /Broad\.cs:5:/); // when (ex is object)
+		assert.match(r.stderr, /Broad\.cs:6:/); // when (ex is Exception)
+		assert.match(r.stderr, /Broad\.cs:7:/); // when (ex is IOException || always)
+	});
+
+	it("flags a NOSONAR marker that carries no reason", () => {
+		const r = run(["app/BibleOnSite/Pages/Reasonless.cs"]);
+		assert.equal(r.status, 1);
+		assert.match(r.stderr, /Reasonless\.cs:5:/);
+	});
+
 	it("passes NOSONAR-only justification on a bare catch", () => {
 		const r = run(["app/devops/Probe.cs"]);
 		assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -137,8 +195,8 @@ describe("scan-catch audit mode", () => {
 	it("reports all unjustified sites across the in-scope tree", () => {
 		const r = run([]);
 		assert.equal(r.status, 1);
-		assert.match(r.stdout, /4 file\(s\) checked/); // Fixture.cs excluded
-		assert.match(r.stdout, /3 unjustified/);
+		assert.match(r.stdout, /7 file\(s\) checked/); // Fixture.cs excluded
+		assert.match(r.stdout, /7 unjustified/);
 		assert.match(r.stderr, /Red\.cs:5:/);
 	});
 });

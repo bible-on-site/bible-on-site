@@ -117,7 +117,9 @@ deterministic complement, wired as the `catch-boundary` hook on every staged
 an unfiltered `catch (Exception)`/`catch` without `//NOSONAR — <reason>` on
 the catch line or the contiguous comment/`#pragma` run above it fails the
 commit. It needs no restore or SDK, so it also covers the environments the
-`dotnet-analyzers` build gate skips. First-run sites it caught and this
-change annotated: `TanahpediaEntryPage.OnEntryLinkTapped`,
+`dotnet-analyzers` build gate skips; the devops CI step additionally runs it
+in audit mode on the whole tree so hook-less commits cannot bypass the
+gate. First-run sites it caught and this change annotated:
+`TanahpediaEntryPage.OnEntryLinkTapped`,
 `TanahpediaEntityTypePage.OnIntroLinkTapped` (async-void link handlers) and
 `SearchViewModel`'s bare catch-rethrow.

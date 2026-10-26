@@ -3291,6 +3291,9 @@ jobs:
         run: |
           bun run test:version
           bun run test:review-audit
+          # Whole-tree generic-catch audit — the catch-boundary pre-commit
+          # hook is local-only; this keeps hook-less commits honest.
+          node review-audit/scan-catch.cjs
           node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
