@@ -1,4 +1,4 @@
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";

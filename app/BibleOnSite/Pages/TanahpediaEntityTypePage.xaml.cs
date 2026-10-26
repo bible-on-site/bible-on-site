@@ -29,17 +29,34 @@ public partial class TanahpediaEntityTypePage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         IntroHtml.LinkTapped += OnIntroLinkTapped;
-        TanahpediaSearch.OnEntrySelected = async uniqueName =>
+        TanahpediaSearch.OnEntrySelected = uniqueName => _ = OpenEntrySafelyAsync(uniqueName);
+    }
+
+    /// <summary>
+    /// The panel's callback is a fire-and-forget Action - an async lambda
+    /// would go async-void, and a route failure there is an unobserved crash.
+    /// </summary>
+    private async Task OpenEntrySafelyAsync(string uniqueName)
+    {
+        try
+        {
             await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: entry navigation failure must not crash the page
+        catch (Exception ex) //NOSONAR — entry navigation failure must not crash the page.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Tanahpedia entry navigation failed for {uniqueName}: {ex}");
+        }
     }
 
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
         UpdateFontSizeResources(prefs.ArticleFontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.ArticleFontFactor));
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor)));
     }
 
     private void UpdateFontSizeResources(double factor)
@@ -109,8 +126,10 @@ public partial class TanahpediaEntityTypePage : ContentPage
                 await Launcher.OpenAsync(uri);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
         {
+            #pragma warning restore S2221
             // async void - an unhandled navigation/launcher exception is a crash.
             Console.Error.WriteLine($"Tanahpedia link navigation failed for {e.Url}: {ex}");
         }

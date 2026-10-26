@@ -30,9 +30,8 @@ describe("GET /api/calendar-pdf", () => {
 		expect(buf.length).toBeGreaterThan(10_000);
 	});
 
-	// ~12 months of cells with real font shaping — same "legitimately
-	// multi-second" class as the cycle test below (~2s warm, ~6s cold on a
-	// loaded dev box; the previous implementation was ~8s).
+	// ~13 months of cells; like the cycle view below, generation is
+	// legitimately multi-second.
 	it(
 		"renders a full year across all months",
 		async () => {
