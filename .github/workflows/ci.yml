@@ -2514,7 +2514,7 @@ jobs:
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
+        run: node --test deploy/ecr-deploy/resume-image.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -3380,7 +3380,7 @@ jobs:
           if [ "$FOUND" -eq 0 ]; then
             echo "::warning::No mobile E2E coverage layer available; merging unit + integration only."
           fi
-          node --import tsx merge-lcov.mts "${MERGE_ARGS[@]}"
+          node merge-lcov.mts "${MERGE_ARGS[@]}"
 
       # The combined report replaces the unit+integration artifact: the
       # authoritative app report and the master baseline always contain every

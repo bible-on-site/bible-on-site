@@ -13,7 +13,7 @@ import {
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import * as dotenv from "dotenv";
 import yargs from "yargs";
-import { DeployerBase } from "../deployer-base.mjs";
+import { DeployerBase } from "../deployer-base.mts";
 
 dotenv.config({
 	path: "./deploy/bulletin-deploy/.env",
