@@ -76,7 +76,7 @@ public class PerushimCatalogService
                 return;
             }
 
-            var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
+            var dbPath = Path.Join(_fileSystem.AppDataDirectory, CatalogDbName);
             try
             {
                 await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName, _appInfo);

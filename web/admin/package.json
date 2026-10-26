@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.141",
+	"version": "0.1.145",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -28,7 +28,8 @@
 		"db:populate:dev:test-articles": "cd ../../data && cargo make mysql-populate-dev-with-test-articles",
 		"db:populate:test": "cd ../../data && cargo make mysql-populate-test",
 		"s3:populate:dev": "cd ../../data && cargo make s3-populate-dev",
-		"s3:populate:test": "cd ../../data && cargo make s3-populate-test"
+		"s3:populate:test": "cd ../../data && cargo make s3-populate-test",
+		"metrics:backfill": "bun run scripts/backfill-reading-metrics.mts"
 	},
 	"engines": {
 		"node": ">=26.10.0 <27"

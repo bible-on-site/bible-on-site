@@ -1,4 +1,5 @@
 import { query } from "../api-client";
+import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
 	CategoryHomepage,
 	CategoryKey,
@@ -66,6 +67,13 @@ export async function getEntryByUniqueName(
 	if (entries.length === 0) return null;
 
 	const entry = entries[0];
+	// Stored reading metric (#2607): degrades to null when the schema is not
+	// deployed yet, and a failed metric read must not take down the entry.
+	const metric = await metricOrFallback(
+		`entry ${entry.id}`,
+		null,
+		() => getEntryMetric(entry.id),
+	);
 	const entities = await query<{
 		id: string;
 		entryId: string;
@@ -81,7 +89,7 @@ export async function getEntryByUniqueName(
 		[entry.id],
 	);
 
-	return { ...entry, entities };
+	return { ...entry, ...(metric ? { metric } : {}), entities };
 }
 
 export async function getEntriesByEntityType(
@@ -970,6 +978,56 @@ export async function getMentionReferencesForPerek(
 	} catch (error) {
 		console.error(
 			`Failed to fetch mention references for perek ${perekId}:`,
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
+export interface ArticleMentionReference {
+	entryUniqueName: string | null;
+	spanStart: number;
+	spanEnd: number;
+	/** Exact stored substring at [spanStart, spanEnd) — integrity-checked before decoration. */
+	surface: string;
+}
+
+/**
+ * Article mention decorations (#2516) resolved against the CURRENT entry
+ * table — the same live name join as getMentionReferencesForPerek, keyed
+ * by character offsets into `tanah_article.content`. `contentHash` is the
+ * staleness key: decorations computed for an older revision simply match
+ * nothing, so article edits degrade to plain text rather than landing
+ * anchors on the wrong offsets.
+ */
+export async function getMentionReferencesForArticle(
+	articleId: number,
+	contentHash: string,
+): Promise<ArticleMentionReference[]> {
+	try {
+		return await query<ArticleMentionReference>(
+			`SELECT
+			   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+			   d.span_start AS spanStart,
+			   d.span_end AS spanEnd,
+			   d.surface AS surface
+			 FROM tanahpedia_mention_decoration d
+			 LEFT JOIN (
+			   SELECT e.id AS entryId, e.unique_name AS resolvedName FROM tanahpedia_entry e
+			   UNION ALL
+			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
+			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId
+			 WHERE d.source_kind = 'article' AND d.article_id = ? AND d.content_hash = ?
+			   AND d.acceptance IN ('auto', 'manual')
+			 GROUP BY d.id
+			 HAVING COUNT(DISTINCT names.entryId) <= 1
+			 ORDER BY spanStart`,
+			[String(articleId), contentHash],
+		);
+	} catch (error) {
+		console.error(
+			`Failed to fetch mention references for article ${articleId}:`,
 			error instanceof Error ? error.message : error,
 		);
 		return [];

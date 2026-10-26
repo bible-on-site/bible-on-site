@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { assetsUrl } from "@/lib/assets-url";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { ImageLightbox } from "./ImageLightbox";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: 'רבנים מברכים | תנ"ך על הפרק',
 	description: 'ברכות רבנים לתנ"ך על הפרק',
-};
+	canonical: "/rabbis-blessing",
+});
 
 const blessingVideos = [
 	{

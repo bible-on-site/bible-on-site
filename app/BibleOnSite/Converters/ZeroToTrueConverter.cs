@@ -20,7 +20,7 @@ public class ZeroToTrueConverter : IValueConverter
 
         if (value is double doubleValue)
         {
-            return doubleValue == 0;
+            return doubleValue is 0;
         }
 
         return value == null;
