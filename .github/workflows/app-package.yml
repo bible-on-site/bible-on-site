@@ -77,6 +77,8 @@ on:
 
 permissions:
   contents: read
+  # The package jobs fetch the master perushim baseline through the REST API.
+  actions: read
 
 env:
   APP_DIRECTORY: app
@@ -85,40 +87,6 @@ env:
   PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
 
 jobs:
-  # When triggered via workflow_dispatch (no caller providing the artifact name),
-  # fetch the master baseline artifact from a previous run and re-upload it
-  # so that download-artifact can find it in the current run.
-  resolve_perushim_artifact:
-    name: Resolve Perushim Notes Artifact
-    if: ${{ inputs.perushim_notes_sqlite_artifact == '' && !inputs.compile_only }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Download master baseline artifact via API
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
-          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
-            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
-          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
-            echo "::error::No master baseline artifact '$ARTIFACT_NAME' found. Run perushim_data on master first."
-            exit 1
-          fi
-          mkdir -p /tmp/$ARTIFACT_NAME
-          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > /tmp/$ARTIFACT_NAME.zip
-          unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
-
-      - name: Re-upload for current workflow
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          retention-days: 1
-          overwrite: true
-
   package_windows:
     name: Package Windows (MSIX)
     if: ${{ inputs.platform == 'Windows' || inputs.platform == 'All' }}
@@ -276,7 +244,6 @@ jobs:
 
   package_android:
     name: Package Android (AAB)
-    needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'Android' || inputs.platform == 'All') }}
     runs-on: ubuntu-latest
     outputs:
@@ -328,10 +295,27 @@ jobs:
         run: dotnet workload install maui-android
 
       - name: Restore perushim notes SQLite for AAB asset pack
+        if: ${{ inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
           path: ${{ runner.temp }}/perushim-sqlite
+
+      # The master baseline lives outside this run's artifact namespace; fetch
+      # it by name through the REST API. A missing baseline is an error here —
+      # the pair is required for the AAB asset pack.
+      - name: Restore perushim notes SQLite for AAB asset pack (master baseline)
+        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ runner.temp }}/perushim-sqlite"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ runner.temp }}/perushim-sqlite"
 
       - name: Prepare matching Perushim catalog and Android notes
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform Android
@@ -440,7 +424,6 @@ jobs:
 
   package_ios:
     name: Package iOS (IPA)
-    needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'iOS' || inputs.platform == 'All') }}
     runs-on: xcode-27
     outputs:
@@ -624,10 +607,32 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
 
       - name: Restore perushim notes SQLite for the iOS asset pack
+        if: ${{ inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
           path: ${{ runner.temp }}/perushim-sqlite
+
+      # The master baseline lives outside this run's artifact namespace; fetch
+      # it by name through the REST API. The TypeScript helper needs the pinned
+      # Node (the xcode-27 image's bundled Node is not guaranteed to run .ts).
+      - name: Setup Node.js
+        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Restore perushim notes SQLite for the iOS asset pack (master baseline)
+        if: ${{ inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}" \
+            --out "${{ runner.temp }}/perushim-sqlite"
+          # baseline-download is nonfatal on a missing artifact, but this pair
+          # is required: assert the extraction produced files.
+          test -n "$(ls -A "${{ runner.temp }}/perushim-sqlite" 2>/dev/null)"
 
       - name: Prepare matching Perushim catalog and iOS notes
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform iOS
