@@ -24,6 +24,7 @@
 .panelTab {
 	--tab-fill: #f0ead8;
 	--tab-border: #d4c9a8;
+	--tab-active-fill: #fffdf5;
 	appearance: none;
 	font: inherit;
 	min-width: 0;
@@ -41,11 +42,18 @@
 /* Only the edge facing the date is diagonal. The date has its own column,
    so neither tab's shape can cover it, including on a narrow book page. */
 .panelTab:first-child {
+	--tab-closed-clip: polygon(18px 0, 18px 0, 0 100%, 0 100%);
 	clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
 	padding-inline-end: 22px;
 }
 
 .panelTab:last-child {
+	--tab-closed-clip: polygon(
+		calc(100% - 18px) 0,
+		calc(100% - 18px) 0,
+		100% 100%,
+		100% 100%
+	);
 	clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 100%, 0 100%);
 	padding-inline-start: 22px;
 }
@@ -59,6 +67,26 @@
 	background: var(--tab-fill);
 }
 
+/* Each clipped fill travels toward the other tab. The date column remains
+   outside both clips, and no reading panel participates in this motion. */
+.panelTab::after {
+	content: "";
+	position: absolute;
+	inset: 1px 1px 0;
+	z-index: -1;
+	clip-path: var(--tab-closed-clip);
+	background: var(--tab-active-fill);
+	transition: clip-path 0.24s ease;
+}
+.panelTab[aria-selected="true"]::after {
+	clip-path: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+	.panelTab::after {
+		transition: none;
+	}
+}
+
 .panelTab:hover {
 	--tab-fill: #e8e0cc;
 }
@@ -70,7 +98,6 @@
 }
 
 .panelTab[aria-selected="true"] {
-	--tab-fill: #fffdf5;
 	--tab-border: #8b7355;
 	color: #3d3220;
 	font-weight: 700;
@@ -537,6 +564,7 @@
 @media (prefers-color-scheme: dark) {
 	.panelTab {
 		--tab-fill: #2a241a;
+		--tab-active-fill: #1f1a12;
 		--tab-border: #4a4030;
 		color: #cbb98c;
 	}
@@ -546,7 +574,6 @@
 	}
 
 	.panelTab[aria-selected="true"] {
-		--tab-fill: #1f1a12;
 		--tab-border: #8b7355;
 		color: #e0d0a8;
 	}

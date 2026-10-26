@@ -35,6 +35,18 @@ test.describe("Sefer left-page panel", () => {
 			await articlesTab.evaluate((el) => getComputedStyle(el).clipPath),
 		).toContain("polygon");
 		await expect(blank.getByText("התאמה לספר זה")).toHaveCount(0);
+		const motion = await articlesTab.evaluate((el) => ({
+			property: getComputedStyle(el, "::after").transitionProperty,
+			inactive: getComputedStyle(el, "::after").clipPath,
+			panel: getComputedStyle(
+				document.getElementById(
+					el.getAttribute("aria-controls") ?? "",
+				) as HTMLElement,
+			).transform,
+		}));
+		expect(motion.property).toBe("clip-path");
+		expect(motion.inactive).toContain("polygon");
+		expect(motion.panel).toBe("none");
 
 		await expect(articlesTab).toHaveAttribute("aria-selected", "false");
 
@@ -49,6 +61,11 @@ test.describe("Sefer left-page panel", () => {
 		expect(headerOrder).toEqual(["פרשנים", "date", "מאמרים"]);
 
 		await articlesTab.click();
+		await expect
+			.poll(() =>
+				articlesTab.evaluate((el) => getComputedStyle(el, "::after").clipPath),
+			)
+			.not.toBe(motion.inactive);
 		await expect(articlesTab).toHaveAttribute("aria-selected", "true");
 		await expect(perushimTab).toHaveAttribute("aria-selected", "false");
 		await expect(blank.locator('[data-tab="articles"]')).toHaveAttribute(
