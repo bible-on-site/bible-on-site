@@ -167,6 +167,18 @@ describe("LearningCalendar", () => {
 		expect(todayCell.textContent).toContain("היום");
 	});
 
+	it("marks a merged review block when today is one of its dates", () => {
+		// 12 Elul is the Friday half of the merged 12-13 review pair (#2365).
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57851212} />,
+		);
+
+		const merged = screen.getByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged.textContent).toContain("היום");
+	});
+
 	it("returns to today's month via the היום button", () => {
 		render(<LearningCalendar {...cycleStartProps} />);
 

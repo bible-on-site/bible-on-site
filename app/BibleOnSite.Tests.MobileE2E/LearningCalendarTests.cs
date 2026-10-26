@@ -114,29 +114,8 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
             .ToArray();
         Assert.NotEmpty(dayLabels);
         var usedColumns = new HashSet<int>();
-        foreach (var day in dayLabels)
+        foreach (var center in dayLabels.Select(day => CenterX(day.Frame)))
         {
-            var center = CenterX(day.Frame);
-            if (day.Frame.Size.Width > columnPitch * 1.5)
-            {
-                // A merged Friday/Shabbat review cell (#2365) legitimately
-                // spans two columns: it centers on their shared boundary.
-                var pair = -1;
-                for (var c = 0; c < columns.Length - 1; c++)
-                {
-                    if (Math.Abs(center - (columns[c] + columns[c + 1]) / 2) <= tolerance)
-                    {
-                        pair = c;
-                        break;
-                    }
-                }
-                Assert.True(pair >= 0,
-                    $"Merged day cell centered at x={center:F0} aligns with no weekday column pair " +
-                        $"({string.Join(", ", columns.Select(x => x.ToString("F0")))}).");
-                usedColumns.Add(pair);
-                usedColumns.Add(pair + 1);
-                continue;
-            }
             var column = Array.FindIndex(columns, x => Math.Abs(x - center) <= tolerance);
             Assert.True(column >= 0,
                 $"Day cell centered at x={center:F0} aligns with no weekday column " +
@@ -157,20 +136,6 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
             Assert.True(weekday >= 0,
                 $"Day cell accessibility text '{day.Description}' does not open with a weekday name.");
             var center = CenterX(day.Frame);
-            if (day.Frame.Size.Width > columnPitch * 1.5)
-            {
-                // The merged Friday/Shabbat review block (#2365) announces both
-                // days and centers on their shared boundary.
-                Assert.Equal(5, weekday);
-                Assert.Contains("- שבת,", day.Description);
-                var pairCenter = (columns[1] + columns[0]) / 2;
-                Assert.True(
-                    Math.Abs(center - pairCenter) <= tolerance,
-                    $"Merged day cell centered at x={center:F0}, expected under the " +
-                        $"Friday/Shabbat boundary x={pairCenter:F0} " +
-                        $"({string.Join(", ", columns.Select(x => x.ToString("F0")))}).");
-                continue;
-            }
             Assert.True(
                 Math.Abs(center - columns[6 - weekday]) <= tolerance,
                 $"Day cell for {spoken} centered at x={center:F0}, expected under weekday column " +

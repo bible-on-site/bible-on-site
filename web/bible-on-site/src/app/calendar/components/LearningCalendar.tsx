@@ -312,10 +312,14 @@ export function LearningCalendar({
 	};
 
 	/** One accessible name covering both dates of a merged review block. */
-	const mergedAriaLabel = (friday: CalendarDay, shabbat: CalendarDay): string =>
-		`${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(
-			friday.reviewPerekIds ?? [],
-		)}`;
+	const mergedAriaLabel = (
+		friday: CalendarDay,
+		shabbat: CalendarDay,
+	): string => {
+		/* istanbul ignore next -- the merge gate requires defined ids */
+		const ids = friday.reviewPerekIds ?? [];
+		return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
+	};
 
 	/** Saturday dates swallowed by Friday's merged block in `cells`. */
 	const mergedSaturdays = useMemo(() => {
@@ -684,7 +688,7 @@ function MiniMonth({
 	onOpen: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
 	/** Both dates in one name for a merged review block (#2365). */
-	mergedDayAriaLabel?: (friday: CalendarDay, shabbat: CalendarDay) => string;
+	mergedDayAriaLabel: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	dimmed?: (day: CalendarDay) => boolean;
 }) {
 	return (
@@ -726,9 +730,7 @@ function MiniMonth({
 							dimmed={dimmed?.(day) === true && (!merged || dimmed(merged))}
 							onOpen={onOpen}
 							ariaLabel={
-								merged
-									? (mergedDayAriaLabel?.(day, merged) ?? dayAriaLabel(day))
-									: dayAriaLabel(day)
+								merged ? mergedDayAriaLabel(day, merged) : dayAriaLabel(day)
 							}
 						/>
 					);
