@@ -307,7 +307,7 @@ public partial class PerekPage
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Search navigation failed: {ex}");
-            await DisplayAlertAsync("חיפוש", "לא ניתן לפתוח את תוצאת החיפוש. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("חיפוש", "לא ניתן לפתוח את תוצאת החיפוש. נסו שוב", "אישור");
         }
         finally
         {

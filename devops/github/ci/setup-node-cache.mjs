@@ -1,25 +1,50 @@
 #!/usr/bin/env node
 /**
  * Validates `cache:` inputs on actions/setup-node steps across
- * .github/workflows/. The action's action.yml documents the enum
- * "Supported values: npm, yarn, pnpm" and rejects anything else at runtime —
- * `cache: bun` broke master website packaging inside a master-only job that
- * PR runs never execute, and actionlint does not know the enum (#2643).
- * Bun's install store is cached explicitly via actions/cache on
+ * .github/workflows/ and .github/actions/. The action's action.yml documents
+ * the enum "Supported values: npm, yarn, pnpm" and rejects anything else at
+ * runtime — `cache: bun` broke master website packaging inside a master-only
+ * job that PR runs never execute, and actionlint does not know the enum
+ * (#2643). Bun's install store is cached explicitly via actions/cache on
  * ~/.bun/install/cache instead.
  *
- * Runs standalone (pre-commit feeds it staged workflow files as argv; no argv
- * scans the whole workflows directory) and is imported by
+ * Runs standalone (pre-commit feeds it staged workflow/action files as argv;
+ * no argv scans both gated directories) and is imported by
  * setup-node-cache.test.mjs so the same findings gate `bun run test:version`
  * in Cross Module CI. Exits 1 when any finding is reported.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const WORKFLOWS_DIR = fileURLToPath(
 	new URL("../../../.github/workflows/", import.meta.url),
 );
+
+// setup-node also runs inside local composite actions (e.g. setup-js) — the
+// gate covers them too since #2643.
+export const ACTIONS_DIR = fileURLToPath(
+	new URL("../../../.github/actions/", import.meta.url),
+);
+
+/**
+ * Every YAML file the gate covers: flat *.yml under .github/workflows/ and
+ * one level of action manifests under .github/actions/<name>/action.yml.
+ */
+export function gatedFiles() {
+	const files = readdirSync(WORKFLOWS_DIR)
+		.filter((name) => /\.ya?ml$/.test(name))
+		.map((name) => path.join(WORKFLOWS_DIR, name));
+	if (!existsSync(ACTIONS_DIR)) return files;
+	for (const entry of readdirSync(ACTIONS_DIR, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		for (const name of readdirSync(path.join(ACTIONS_DIR, entry.name))) {
+			if (/\.ya?ml$/.test(name))
+				files.push(path.join(ACTIONS_DIR, entry.name, name));
+		}
+	}
+	return files;
+}
 
 // https://github.com/actions/setup-node/blob/v7/action.yml — "cache" input.
 export const SETUP_NODE_SUPPORTED_CACHES = new Set(["npm", "yarn", "pnpm"]);
@@ -108,11 +133,7 @@ export function setupNodeCacheFindings(text) {
 
 function main() {
 	const args = process.argv.slice(2);
-	const files = args.length
-		? args
-		: readdirSync(WORKFLOWS_DIR)
-				.filter((name) => /\.ya?ml$/.test(name))
-				.map((name) => path.join(WORKFLOWS_DIR, name));
+	const files = args.length ? args : gatedFiles();
 	let failed = false;
 	for (const file of files) {
 		let text;

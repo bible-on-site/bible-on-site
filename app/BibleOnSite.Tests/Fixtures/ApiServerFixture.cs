@@ -111,7 +111,7 @@ public class ApiServerFixture : IAsyncLifetime
             // Windows locks the development API's executable while it is running.
             // Keep this fixture's compiled API separate so tests can rebuild after
             // a version/source change without interrupting the emulator backend.
-            startInfo.Environment["CARGO_TARGET_DIR"] = Path.Combine(apiDir, "target", "app-integration");
+            startInfo.Environment["CARGO_TARGET_DIR"] = Path.Join(apiDir, "target", "app-integration");
         }
 
         // Forward DB_URL from environment (set by CI or local dev)
@@ -185,17 +185,17 @@ public class ApiServerFixture : IAsyncLifetime
         var dir = new DirectoryInfo(currentDir);
         while (dir != null)
         {
-            var apiPath = Path.Combine(dir.FullName, "web", "api");
+            var apiPath = Path.Join(dir.FullName, "web", "api");
             if (Directory.Exists(apiPath))
             {
                 return apiPath;
             }
 
             // Also check if we're in the repo root (has bible-on-site.slnx)
-            var slnPath = Path.Combine(dir.FullName, "bible-on-site.slnx");
+            var slnPath = Path.Join(dir.FullName, "bible-on-site.slnx");
             if (File.Exists(slnPath))
             {
-                apiPath = Path.Combine(dir.FullName, "web", "api");
+                apiPath = Path.Join(dir.FullName, "web", "api");
                 if (Directory.Exists(apiPath))
                 {
                     return apiPath;

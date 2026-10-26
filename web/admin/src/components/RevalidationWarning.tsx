@@ -20,7 +20,7 @@ export function RevalidationWarning() {
 	return (
 		<div className="bg-amber-50 border-b border-amber-200">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-sm text-amber-800 font-medium">
-				⚠️ עדכון האתר נכשל — ייתכן שהאתר הציבורי מציג תוכן ישן. שמירה חוזרת
+				⚠️ עדכון האתר נכשל - ייתכן שהאתר הציבורי מציג תוכן ישן. שמירה חוזרת
 				תנסה לרענן שוב.
 			</div>
 		</div>

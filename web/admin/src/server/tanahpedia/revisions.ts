@@ -2,12 +2,17 @@ import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
 import { VALIDATION_PREFIX } from "~/lib/server-fn-errors";
 import {
+	normalizePediaName,
+	reservedCategoryLabelFor,
+} from "~/lib/tanahpedia/pedia-names";
+import {
 	type EntryRevisionRow,
 	normalizeRevisionSource,
 	REVISION_SOURCE_ADMIN,
 	RevisionConflictError,
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
 import {
 	pediaEntryPath,
 	pediaInvalidation,
@@ -75,14 +80,43 @@ function assertFreshBase(
 	}
 }
 
+/**
+ * Canonical-name checks: the public router only ever looks up the
+ * URL-decoded/NFC form of the final path segment, so names carrying literal
+ * escapes or `/` can never resolve, and a name colliding with a category
+ * route is silently shadowed by the category page — all rejected up front.
+ */
+export function assertEntryNameAllowed(name: string): void {
+	if (!name) {
+		throw new Error(`${VALIDATION_PREFIX}: שם ייחודי חייב להיות מלא`);
+	}
+	if (name.includes("/")) {
+		throw new Error(`${VALIDATION_PREFIX}: השם הייחודי אינו יכול להכיל '/'`);
+	}
+	if (name.length > 255) {
+		throw new Error(
+			`${VALIDATION_PREFIX}: השם הייחודי ארוך מדי (עד 255 תווים)`,
+		);
+	}
+	const reserved = reservedCategoryLabelFor(name);
+	if (reserved) {
+		throw new Error(
+			`${VALIDATION_PREFIX}: השם «${name}» שמור לנתיב הקטגוריה «${reserved}» - בחר שם אחר`,
+		);
+	}
+}
+
 /** Hebrew-facing input checks shared by the create/update save paths. */
 export function assertEntryFieldsValid(input: {
 	unique_name?: string | null;
 	title?: string | null;
 }): void {
-	if (!input.unique_name?.trim()) {
-		throw new Error(`${VALIDATION_PREFIX}: שם ייחודי חייב להיות מלא`);
+	// Normalize to the stored form first so a pasted encoded name cannot be
+	// stored (and thus double-encoded) — mirroring the public router's decode.
+	if (typeof input.unique_name === "string") {
+		input.unique_name = normalizePediaName(input.unique_name);
 	}
+	assertEntryNameAllowed(input.unique_name ?? "");
 	if (!input.title?.trim()) {
 		throw new Error(`${VALIDATION_PREFIX}: כותרת הערך חייבת להיות מלאה`);
 	}
@@ -196,6 +230,9 @@ export const saveEntryRevisioned = createServerOnlyFn(
 			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
 			[input.id],
 		);
+		// Same-transaction reading metrics (#2607): the stored decoration
+		// commits atomically with the entry content it describes.
+		await recomputeEntryMetrics(conn, input.id, nextContent);
 		return {
 			entry: saved as EntryRow,
 			headRevisionId: headId,
@@ -237,10 +274,18 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 			}
 
 			let headId: string | null = null;
-			let targetEntryId = revision.entry_id;
+			let targetEntryId: string;
 			let previousUniqueName: string | null = null;
 
+			// Normalize once and persist the stored form: the public router
+			// decodes the URL segment before lookup, so a proposal carrying
+			// escapes would otherwise land as an unresolvable unique_name.
+			const proposedName = revision.proposed_unique_name
+				? normalizePediaName(revision.proposed_unique_name)
+				: null;
+
 			if (revision.entry_id) {
+				targetEntryId = revision.entry_id;
 				const entry = await lockEntry(conn, revision.entry_id);
 				if (!entry) {
 					throw new Error(
@@ -255,6 +300,9 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 						"the revision's declared base is stale - the entry head has moved",
 					);
 				}
+				if (proposedName !== null) {
+					assertEntryNameAllowed(proposedName);
+				}
 				await txExecute(
 					conn,
 					`UPDATE tanahpedia_entry
@@ -263,30 +311,44 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 					     content = COALESCE(?, content)
 					 WHERE id = ?`,
 					[
-						revision.proposed_unique_name,
+						proposedName,
 						revision.proposed_title,
 						revision.proposed_content,
 						revision.entry_id,
 					],
 				);
 			} else {
-				if (!revision.proposed_unique_name || !revision.proposed_title) {
+				if (!proposedName || !revision.proposed_title) {
 					throw new Error(
 						"applying a new-entry revision requires proposedUniqueName and proposedTitle",
 					);
 				}
+				assertEntryNameAllowed(proposedName);
 				targetEntryId = crypto.randomUUID();
 				await txExecute(
 					conn,
 					"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
 					[
 						targetEntryId,
-						revision.proposed_unique_name,
+						proposedName,
 						revision.proposed_title,
 						revision.proposed_content,
 					],
 				);
 			}
+
+			// The approved content is now live — refresh its reading metric in
+			// the same transaction (#2607).
+			const applied = await txQueryOne<{ content: string | null }>(
+				conn,
+				"SELECT content FROM tanahpedia_entry WHERE id = ?",
+				[targetEntryId],
+			);
+			await recomputeEntryMetrics(
+				conn,
+				targetEntryId,
+				applied?.content ?? null,
+			);
 
 			await txExecute(
 				conn,
@@ -299,7 +361,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				revisionId: revision.id,
 				entryId: targetEntryId,
 				headRevisionId: revision.id,
-				uniqueName: revision.proposed_unique_name ?? previousUniqueName,
+				uniqueName: proposedName ?? previousUniqueName,
 				previousUniqueName,
 			};
 		});
@@ -357,8 +419,12 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 			const head = await headRevision(conn, revision.entry_id);
 			assertFreshBase(head?.id ?? null, data.baseRevisionId);
 
-			const restoredUniqueName =
-				revision.proposed_unique_name ?? entry.unique_name;
+			// Normalize once so an encoded snapshot name lands in its stored
+			// (URL-decoded) form — same reasoning as in approveEntryRevision.
+			const restoredUniqueName = normalizePediaName(
+				revision.proposed_unique_name ?? entry.unique_name,
+			);
+			assertEntryNameAllowed(restoredUniqueName);
 			const restoredTitle = revision.proposed_title ?? entry.title;
 			const restoredContent = revision.proposed_content ?? entry.content;
 
@@ -385,6 +451,7 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
 				[restoredUniqueName, restoredTitle, restoredContent, revision.entry_id],
 			);
+			await recomputeEntryMetrics(conn, revision.entry_id, restoredContent);
 			const saved = await txQueryOne<EntryRow>(
 				conn,
 				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",

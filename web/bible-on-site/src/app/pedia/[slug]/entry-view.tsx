@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { demoteHeadings } from "@/lib/html-headings";
+import { plainText } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
@@ -32,15 +35,6 @@ import {
 	disambiguationMetadata,
 } from "./disambiguation-view";
 
-/** Plain-text snippet for meta description (entry content may be HTML). */
-function metaDescriptionFromContent(html: string, maxLen: number): string {
-	const plain = html
-		.replace(/<[^>]*>/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-	return plain.slice(0, maxLen);
-}
-
 export async function entryMetadata(slug: string): Promise<Metadata> {
 	try {
 		const name = normalizedUniqueNameFromParam(slug);
@@ -55,12 +49,13 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 		/* Stored footnote markers are decorative — normalized HTML keeps them
 		   out of the extracted description (#2615). */
 		const fromContent = entry.content
-			? metaDescriptionFromContent(normalizeFootnoteHtml(entry.content), 200)
+			? plainText(normalizeFootnoteHtml(entry.content), 200)
 			: "";
-		return {
+		return pageMetadata({
 			title: `${entry.title} | תנכפדיה`,
 			description: fromContent.length > 0 ? fromContent : entry.title,
-		};
+			canonical: entryHref(entry.uniqueName),
+		});
 	} catch {
 		return { title: "לא נמצא" };
 	}
@@ -169,6 +164,10 @@ export async function EntryView({ slug }: { slug: string }) {
 				siblingEntries={siblingEntries}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
+			<ReadingTime
+				estimatedSeconds={entry.metric?.estimatedSeconds}
+				className={styles.readingTime}
+			/>
 
 			{entry.entities.length > 0 && (
 				<div className={styles.entityBadges}>

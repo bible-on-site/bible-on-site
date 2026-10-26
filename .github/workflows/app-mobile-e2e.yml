@@ -36,52 +36,13 @@ on:
 
 permissions:
   contents: read
-  # Reads the master coverage-tree baseline artifacts through the REST API.
+  # The runner jobs fetch master baseline artifacts through the REST API.
   actions: read
 
-env:
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
-
 jobs:
-  # Standalone dispatch runs get no caller-provided artifact name; fetch the
-  # master baseline artifact from a previous run and re-upload it so the
-  # appium job can resolve it through actions/download-artifact exactly like
-  # the CI-provided artifact (mirrors app-package.yml).
-  resolve_perushim_artifact:
-    name: Resolve Perushim Notes Artifact
-    if: ${{ inputs.perushim_notes_sqlite_artifact == '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Download master baseline artifact via API
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
-          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
-            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
-          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
-            echo "::error::No master baseline artifact '$ARTIFACT_NAME' found. Run perushim_data on master first."
-            exit 1
-          fi
-          mkdir -p /tmp/$ARTIFACT_NAME
-          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > /tmp/$ARTIFACT_NAME.zip
-          unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
-
-      - name: Re-upload for current workflow
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          retention-days: 1
-          overwrite: true
-
   # Android owns its original build/device job and never waits for iOS.
   android:
     name: Appium Android
-    needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() }}
     uses: ./.github/workflows/app-mobile-e2e-runner.yml
     with:
@@ -101,8 +62,7 @@ jobs:
   # the Release pipeline for the emulator ABI and cold-starts it, so the same
   # class of startup regression fails the workflow before merge and — through
   # the release job's cross_module_ci need — before an AAB can be promoted.
-  # It needs no perushim/test-harness inputs, so it starts without the resolve
-  # job and runs beside the Debug leg.
+  # It needs no perushim/test-harness inputs, so it runs beside the Debug leg.
   android_release_smoke:
     name: Android Release startup smoke
     if: ${{ always() && !cancelled() && !failure() }}
@@ -118,7 +78,6 @@ jobs:
   # Build exactly once without a simulator competing for CPU and memory.
   build_ios:
     name: Build shared iOS app
-    needs: [resolve_perushim_artifact]
     if: ${{ always() && !cancelled() && !failure() }}
     uses: ./.github/workflows/app-mobile-e2e-runner.yml
     with:
