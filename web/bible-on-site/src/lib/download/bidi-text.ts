@@ -76,8 +76,15 @@ export interface VisualTextRun {
 /**
  * Memo for {@link visualTextRuns}: pure in `text`, and documents reuse the
  * same labels constantly (weekday headers ×7 per month, day numbers, perek
- * refs). Bounded in practice by the small variety of labels in one PDF.
+ * refs).
+ *
+ * The map lives for the whole module lifetime — unlike the document-scoped
+ * font caches below — so it is bounded: PDF text variety across requests is
+ * unbounded (verses, perushim, article titles), and an unbounded Map would
+ * leak memory on a long-lived server. FIFO eviction keeps the hot
+ * calendar/label strings resident while stale entries age out.
  */
+const RUNS_CACHE_MAX = 1024;
 const runsCache = new Map<string, VisualTextRun[]>();
 
 /**
@@ -108,6 +115,10 @@ export function visualTextRuns(text: string): VisualTextRun[] {
 			const logical = text.slice(lo, hi + 1);
 			runs.push({ text: rtl ? mirrorBrackets(logical) : logical, rtl });
 		}
+	}
+	if (runsCache.size >= RUNS_CACHE_MAX) {
+		// Map iterates in insertion order — the first key is the oldest.
+		runsCache.delete(runsCache.keys().next().value ?? "");
 	}
 	runsCache.set(text, runs);
 	return runs;
