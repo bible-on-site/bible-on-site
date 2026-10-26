@@ -69,7 +69,7 @@ env:
   API_E2E_JUNIT_REPORT_ARTIFACT_NAME: api-e2e-junit-report-${{ github.run_id }}
   API_MERGED_COVERAGE_DIRECTORY: web/api/.coverage/merged
   API_TESTS_DIRECTORY: web/api/tests
-  API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
+  API_TESTS_NODE_CACHE_PATH: web/api/tests/bun.lock
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   API_UNIT_JUNIT_REPORT_ARTIFACT_NAME: api-unit-junit-report-${{ github.run_id }}
   # Deterministic e2e-impact coverage-tree baselines (#2085): published only
@@ -100,7 +100,7 @@ env:
   DATA_DIRECTORY: data
   DATA_MERGED_COVERAGE_DIRECTORY: data/.coverage/merged
   DEVOPS_DIRECTORY: devops
-  DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+  DEVOPS_NODE_CACHE_PATH: devops/bun.lock
   DEVOPS_NODE_VERSION_FILE: devops/package.json
   # e2e-impact (#2085): the dispatch input or the E2E_SELECTION_MODE repo
   # variable opt the Playwright suites into running the selected subset;
@@ -116,7 +116,7 @@ env:
   WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME: website-e2e-junit-report-${{ github.run_id }}
   WEBSITE_MERGED_COVERAGE_DIRECTORY: web/bible-on-site/.coverage/merged
   WEBSITE_MERGED_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
-  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
+  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/bun.lock
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME: website-perf-junit-report-${{ github.run_id }}
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
@@ -125,7 +125,7 @@ env:
   ADMIN_DIRECTORY: web/admin
   ADMIN_DOCKER_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}
   ADMIN_DOCKER_IMAGE_NAME: bible-on-site-admin
-  ADMIN_NODE_CACHE_PATH: web/admin/package-lock.json
+  ADMIN_NODE_CACHE_PATH: web/admin/bun.lock
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
   ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
@@ -204,41 +204,38 @@ jobs:
       is_app_e2e_android_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available }}
       is_app_e2e_ios_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available }}
     steps:
-      - name: Check and restore master baseline artifacts
+      - name: Check master baseline artifacts
         id: check_master_coverage_artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Function to check if artifact exists and download it
-          # Downloads to make it available in current workflow run via re-upload
+          # Availability lookup only — consumers download each baseline via the
+          # REST API by name where they need it.
           # Use ?name= filter to avoid pagination issues (25k+ artifacts in repo)
-          check_and_download_artifact() {
+          check_artifact() {
             local artifact_name=$1
             local artifact_info=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$artifact_name" \
               --jq "[.artifacts[] | select(.expired == false)] | first")
 
             if [ "$artifact_info" != "null" ] && [ -n "$artifact_info" ]; then
               local artifact_id=$(echo "$artifact_info" | jq -r '.id')
-              echo "Found artifact $artifact_name (id: $artifact_id), downloading..." >&2
-              mkdir -p "/tmp/$artifact_name"
-              gh api repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip > "/tmp/$artifact_name.zip"
-              unzip -o "/tmp/$artifact_name.zip" -d "/tmp/$artifact_name" >&2
+              echo "Found artifact $artifact_name (id: $artifact_id)" >&2
               echo "true"
             else
               echo "false"
             fi
           }
 
-          IS_API_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_ADMIN_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
-          IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
-          IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
-          IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}")
-          IS_APP_E2E_IOS_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}")
+          IS_API_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_BULLETIN_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_ADMIN_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_WEBSITE_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
+          IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
+          IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE=$(check_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}")
+          IS_APP_E2E_IOS_COVERAGE_AVAILABLE=$(check_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
@@ -262,102 +259,10 @@ jobs:
           echo "is_app_e2e_android_coverage_available=$IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
-      # Keep JS action startup sequential: the runner's shared event.json can
-      # be truncated while another parallel action reads it.
-      # https://github.com/actions/checkout/issues/2484
-      - name: Re-upload API master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_api_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload App master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_app_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload Bulletin master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_bulletin_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload Website master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_website_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload Admin master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_admin_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
-      - name: Re-upload Data master coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_data_master_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload perushim data SQL for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload perushim notes SQLite for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload App E2E Android coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
-          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
-          retention-days: 90
-          overwrite: true
-
-      - name: Re-upload App E2E iOS coverage for current workflow
-        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
-          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
-          retention-days: 90
-          overwrite: true
-
-
   determine_docker_image_availability:
     name: Determine Docker Image Availability
     permissions:
       contents: read
-      actions: read
       packages: read
     runs-on: ubuntu-latest
     outputs:
@@ -439,6 +344,7 @@ jobs:
       bulletin_ci_changed: ${{ steps.determine.outputs.bulletin_ci_changed }}
       data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
+      data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
     steps:
@@ -513,6 +419,26 @@ jobs:
       platform: iOS
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
+  # Windows-only source (#if WINDOWS) compiled nowhere before merge: package_app
+  # is master-only and App CI builds Android/iOS only — a Windows-only compile
+  # regression shipped in #2496 undetected (#2526). A compile-only Release build
+  # gates the real Windows target without signing secrets or store upload.
+  package_windows_pr:
+    name: Validate Windows Compile
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # The caller's permissions ceiling is validated at workflow-compile time
+    # (before `if:` evaluation): app-package.yml declares `actions: read` for its
+    # master-baseline artifact fetches, so the ceiling must cover it even though
+    # compile_only never runs them — otherwise the whole run dies at startup_failure.
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/app-package.yml
+    with:
+      platform: Windows
+      compile_only: true
+
   # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
     name: Package Bulletin
@@ -545,9 +471,19 @@ jobs:
           MODULE_VERSION=$(cargo make version | grep -v 'INFO')
           echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       - name: Build Bulletin Binary (Docker)
         run: |
-          DOCKER_BUILDKIT=0 docker build \
+          docker buildx build --load \
+            --cache-from type=gha,scope=bulletin \
+            --cache-to type=gha,mode=max,scope=bulletin \
+            --progress=plain \
             -f ${{ env.BULLETIN_DIRECTORY }}/Dockerfile \
             -t bulletin-build:latest \
             ${{ env.SHARED_ROOT_DIR }}
@@ -609,9 +545,19 @@ jobs:
           echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       - name: Dockerize Admin
         run: |
-          DOCKER_BUILDKIT=0 docker build \
+          docker buildx build --load \
+            --cache-from type=gha,scope=admin \
+            --cache-to type=gha,mode=max,scope=admin \
+            --progress=plain \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
@@ -672,7 +618,7 @@ jobs:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
@@ -747,10 +693,16 @@ jobs:
       run:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
-      actions: read # Required for downloading re-uploaded baseline artifacts
+      actions: read # Required to fetch master baseline artifacts through the REST API
       checks: write # Required by Bencher to create GitHub Check on push to master
       pull-requests: write # Required by Bencher to add comment on PRs
 
+    # sccache wraps every rustc call in jobs that install it; per-object cache
+    # complements rust-cache's whole-target-dir reuse when a key misses. Set
+    # per-job: version-only jobs (package_*, shared-dockerize) run cargo on the
+    # runner without sccache on PATH, so a global wrapper breaks them.
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -764,42 +716,22 @@ jobs:
           python ../../data/recitation/publish.py
           python ../../data/recitation/audit.py
 
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
+      - name: Setup bun, Node.js and dependencies
+        id: bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+          module: website
+          directory: ${{ env.WEBSITE_DIRECTORY }}
+          playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
 
-      - name: Restore npm cache
-        id: npm-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-npm-website-
-
-      - name: Restore playwright binaries
-        uses: actions/cache/restore@v6
-        id: playwright-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
-
-      - name: Install npm Dependencies
-        id: npm_ci
-        run: |
-          npm ci --no-audit
-
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.npm
-          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # The browser install only needs node_modules; it runs in the background
       # across MySQL/Rust/populate/build and is gated before the perf test. On
@@ -808,10 +740,10 @@ jobs:
         id: playwright-install
         background: true
         run: |
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
+          if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
+            bun x playwright install-deps chromium
           else
-            npx playwright install --with-deps chromium
+            bun x playwright install --with-deps chromium
           fi
 
       - name: Restore Next.js build cache
@@ -819,10 +751,10 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/bun.lock', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
           # If source files changed but packages didn't, rebuild from a prior cache.
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/bun.lock', env.WEBSITE_DIRECTORY)) }}-
 
       # ============ MySQL + Perushim Setup for SSG ============
       # Populate MySQL with perushim data so `next build` can statically
@@ -840,11 +772,25 @@ jobs:
           auto-start: true
 
       - name: Download perushim SQL
-        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
+
+      - name: Download perushim SQL master baseline
+        if: ${{ needs.perushim_data.result != 'success' && needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
 
       - name: Setup Rust
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -863,6 +809,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Populate MySQL for build
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
@@ -873,10 +822,10 @@ jobs:
           cargo make mysql-populate
 
       - name: Build
-        id: npm-build
+        id: bun-build
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: npm run build
+        run: bun run build
 
       - name: Save Next.js build cache
         if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
@@ -895,16 +844,16 @@ jobs:
       # install produced. The upload itself backgrounds too — nothing writes
       # ~/.cache/ms-playwright afterwards.
       - name: Save playwright binaries
-        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.playwright-cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       - name: Perf Test
-        id: npm-perf-test
-        run: npm run test:perf
+        id: bun-perf-test
+        run: bun run test:perf
 
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
@@ -982,6 +931,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -994,56 +945,38 @@ jobs:
           python ../../data/recitation/publish.py
           python ../../data/recitation/audit.py
 
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
+      - name: Setup bun, Node.js and dependencies
+        id: bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+          module: website
+          directory: ${{ env.WEBSITE_DIRECTORY }}
+          playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
 
-      - name: Restore npm cache
-        id: npm-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-npm-website-
+      # Unit tests verify the shipped native decoder through its app-owned
+      # generator (scripts/check-opus-decoder.mjs), which resolves esbuild
+      # and the decoder packages from this manifest (#2391).
+      - name: Install recitation decoder dependencies
+        run: bun install --cwd ../../app/devops/recitation-decoder --frozen-lockfile
 
-      - name: Restore playwright binaries
-        uses: actions/cache/restore@v6
-        id: playwright-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
-
-      - name: Install npm Dependencies
-        id: npm_ci
-        run: |
-          node --version && npm --version
-          npm ci --no-audit
-          # Unit tests verify the shipped native decoder through its app-owned
-          # generator (scripts/check-opus-decoder.mjs), which resolves esbuild
-          # and the decoder packages from this manifest (#2391).
-          npm ci --no-audit --prefix ../../app/devops/recitation-decoder
-
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
-      # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+      # Both bun install --frozen-lockfile runs are done here, so ~/.bun/install/cache is frozen — the tar+upload
+      # can run in the background; the implicit wait-all before job cleanup completes it.
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.npm
-          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
-      - name: Verify Lockfile Sync With Packaging npm
-        id: npm_lockfile_packaging_check
-        # The Package Website Docker build runs `npm ci` inside node:26.10.0-alpine,
-        # whose bundled npm is newer/stricter than the engines-pinned npm used
-        # above. A lockfile desync the pinned npm tolerates would otherwise only
-        # explode after merge (the packaging jobs are master-only), so validate
-        # here with the exact same image on every run.
-        run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
+      - name: Verify Lockfile Sync With Packaging bun
+        id: bun_lockfile_packaging_check
+        # The Package Website Docker build runs `bun install --frozen-lockfile` with
+        # the bun binary copied from the pinned oven/bun image, which may resolve a
+        # desync the runner bun tolerates differently — so validate here with the
+        # exact same image on every run (packaging jobs are master-only).
+        # Mount read-only and copy inside so the install writes nothing to the
+        # checkout.
+        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
@@ -1052,10 +985,10 @@ jobs:
         id: playwright-install
         background: true
         run: |
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
+          if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
+            bun x playwright install-deps chromium
           else
-            npx playwright install --with-deps chromium
+            bun x playwright install --with-deps chromium
           fi
 
       - name: Setup Rust
@@ -1075,6 +1008,9 @@ jobs:
           # key because its coverage builds produce debug-profile artifacts.
           shared-key: "e2e-release-crates"
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       # Build only the seeders used by the E2E launchers, not every data
       # pipeline. Both shared-key consumers must build the same crate set:
       # rust-cache never overwrites an existing key, so whichever job saves
@@ -1088,12 +1024,12 @@ jobs:
         run: cargo build --release -p db-populator -p s3-populator
 
       - name: Lint
-        id: npm-lint
-        run: npm run lint
+        id: bun-lint
+        run: bun run lint
 
       - name: Unit Test
-        id: npm-unit-test
-        run: npm run coverage:unit
+        id: bun-unit-test
+        run: bun run coverage:unit
 
       - name: Store Website Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -1116,11 +1052,25 @@ jobs:
       # The E2E launcher populates MySQL once before starting next dev. Restore
       # its SQL input here, preferring this run's generated data over the baseline.
       - name: Download perushim SQL
-        if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        if: ${{ needs.perushim_data.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}
+          name: perushim-data-sql
           path: ${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master
+
+      - name: Download perushim SQL master baseline
+        if: ${{ needs.perushim_data.result != 'success' && needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.DATA_DIRECTORY }}/mysql/perushim-sql-master"
 
       - name: Prepare perushim SQL for E2E database population
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -1139,12 +1089,12 @@ jobs:
       # install produced. The upload itself backgrounds too — nothing writes
       # ~/.cache/ms-playwright afterwards.
       - name: Save playwright binaries
-        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.playwright-cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
       # push runs. A missing baseline is not an error — the selector falls
@@ -1194,7 +1144,7 @@ jobs:
           DISCOVERED_ARGS=()
           DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
           if [ "$DYNAMIC" != "0" ]; then
-            (cd web/bible-on-site && npm run coverage:e2e -- --list)
+            (cd web/bible-on-site && bun run coverage:e2e -- --list)
             DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/discovered.json")
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
@@ -1205,7 +1155,7 @@ jobs:
 
       # The run also drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
-        id: npm-e2e-test
+        id: bun-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
@@ -1213,12 +1163,12 @@ jobs:
             FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
             GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
             if [ -n "$GREP" ]; then
-              npm run coverage:e2e -- $FILES --grep "$GREP"
+              bun run coverage:e2e -- $FILES --grep "$GREP"
             else
-              npm run coverage:e2e -- $FILES
+              bun run coverage:e2e -- $FILES
             fi
           else
-            npm run coverage:e2e
+            bun run coverage:e2e
           fi
 
       # Evidence is collected even after a failed run — passed tests keep
@@ -1229,7 +1179,7 @@ jobs:
         id: impact-collect
         working-directory: ${{ github.workspace }}
         env:
-          E2E_OUTCOME: ${{ steps.npm-e2e-test.outcome }}
+          E2E_OUTCOME: ${{ steps.bun-e2e-test.outcome }}
         run: |
           INCOMPLETE_ARGS=()
           if [ "$E2E_OUTCOME" != "success" ]; then
@@ -1278,7 +1228,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.bun-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
@@ -1327,7 +1277,7 @@ jobs:
         run: docker load --input /tmp/lcov-docker-image.tar
 
       - name: Merge Test Coverage (Unit + E2E)
-        run: npm run coverage:merge
+        run: bun run coverage:merge
 
       - name: Store Coverage Debug Snippets
         if: always()
@@ -1370,6 +1320,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1392,49 +1344,38 @@ jobs:
           fi
           docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
 
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
+      - name: Setup bun, Node.js and dependencies
+        id: bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
+          module: admin
+          directory: ${{ env.ADMIN_DIRECTORY }}
 
-      - name: Restore npm cache
-        id: npm-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-admin-${{ hashFiles(env.ADMIN_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-npm-admin-
-
-      - name: Install npm Dependencies
-        id: npm_ci
-        run: npm ci --no-audit
-
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.npm
-          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
-      - name: Verify Lockfile Sync With Packaging npm
-        id: npm_lockfile_packaging_check
-        # The Package Admin Docker build runs `npm ci` inside node:26.10.0-alpine,
-        # whose bundled npm is newer/stricter than the engines-pinned npm used
-        # above. A lockfile desync the pinned npm tolerates would otherwise only
-        # explode after merge (the packaging jobs are master-only), so validate
-        # here with the exact same image on every run.
-        run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
+      - name: Verify Lockfile Sync With Packaging bun
+        id: bun_lockfile_packaging_check
+        # The Package Admin Docker build runs `bun install --frozen-lockfile` with
+        # the bun binary copied from the pinned oven/bun image, which may resolve a
+        # desync the runner bun tolerates differently — so validate here with the
+        # exact same image on every run (packaging jobs are master-only).
+        # Mount read-only and copy inside so the install writes nothing to the
+        # checkout.
+        run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/typecheck/unit/build and is gated before E2E.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
-        run: npx playwright install --with-deps chromium
+        run: bun x playwright install --with-deps chromium
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1452,6 +1393,9 @@ jobs:
           # Same release-profile populator cache as website_ci.
           shared-key: "e2e-release-crates"
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       # Build only the two seeders used by the E2E launcher.
       # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test.
       # The build runs in the background across the JS track; `wait` before the
@@ -1463,20 +1407,20 @@ jobs:
         run: cargo build --release -p db-populator -p s3-populator
 
       - name: Lint
-        id: npm-lint
-        run: npm run lint
+        id: bun-lint
+        run: bun run lint
 
       - name: Type Check
-        id: npm-typecheck
-        run: npx tsc --noEmit
+        id: bun-typecheck
+        run: bun x tsc --noEmit
 
       - name: Unit Test with Coverage
-        id: npm-unit-test
-        run: npm run coverage:unit
+        id: bun-unit-test
+        run: bun run coverage:unit
 
       - name: Build
-        id: npm-build
-        run: npm run build
+        id: bun-build
+        run: bun run build
 
       - name: Store Admin Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -1504,7 +1448,7 @@ jobs:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
         env:
           S3_ENDPOINT: http://localhost:4566
-        run: npm run test:s3
+        run: bun run test:s3
 
       - name: Wait for Playwright install
         wait: playwright-install
@@ -1556,7 +1500,7 @@ jobs:
           DISCOVERED_ARGS=()
           DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
           if [ "$DYNAMIC" != "0" ]; then
-            (cd web/admin && npm run coverage:e2e -- --list)
+            (cd web/admin && bun run coverage:e2e -- --list)
             DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/discovered.json")
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
@@ -1566,7 +1510,7 @@ jobs:
             --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
 
       - name: E2E Test with Coverage
-        id: npm-e2e-test
+        id: bun-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
           S3_ENDPOINT: http://localhost:4566
@@ -1580,12 +1524,12 @@ jobs:
             FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
             GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
             if [ -n "$GREP" ]; then
-              npm run coverage:e2e -- $FILES --grep "$GREP"
+              bun run coverage:e2e -- $FILES --grep "$GREP"
             else
-              npm run coverage:e2e -- $FILES
+              bun run coverage:e2e -- $FILES
             fi
           else
-            npm run coverage:e2e
+            bun run coverage:e2e
           fi
 
       # Evidence is collected even after a failed run — passed tests keep
@@ -1596,7 +1540,7 @@ jobs:
         id: impact-collect
         working-directory: ${{ github.workspace }}
         env:
-          E2E_OUTCOME: ${{ steps.npm-e2e-test.outcome }}
+          E2E_OUTCOME: ${{ steps.bun-e2e-test.outcome }}
         run: |
           INCOMPLETE_ARGS=()
           if [ "$E2E_OUTCOME" != "success" ]; then
@@ -1645,7 +1589,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.bun-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
@@ -1654,7 +1598,7 @@ jobs:
           overwrite: true
 
       - name: Merge test coverage (unit; E2E lcov when enabled)
-        run: npm run coverage:merge
+        run: bun run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
@@ -1708,6 +1652,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1732,6 +1678,9 @@ jobs:
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Lint
         id: lint
         working-directory: ${{ env.API_DIRECTORY }}
@@ -1742,32 +1691,20 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make coverage-unit
 
-      - name: Setup DevOps Node.js
-        id: setup-devops-node
-        uses: actions/setup-node@v7
+      - name: Setup devops bun, Node.js and dependencies
+        id: devops-bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Restore npm cache
-        id: devops-npm-cache
-        uses: actions/cache/restore@v6
+      # The save runs synchronously: the api-tests install below still mutates
+      # ~/.bun/install/cache, so the tar must finish before it starts.
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-npm-devops-
-
-      - name: Install devops npm Dependencies
-        id: devops_npm_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          npm ci --no-audit
-
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: ~/.npm
-          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Install and start MySQL
         id: mysql
@@ -1778,35 +1715,21 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Setup Tests Node.js
-        id: setup-tests-node
-        uses: actions/setup-node@v7
+      - name: Setup tests bun, Node.js and dependencies
+        id: tests-bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
+          module: api-tests
+          directory: ${{ env.API_TESTS_DIRECTORY }}
 
-      - name: Restore npm cache
-        id: tests-npm-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-api-tests-${{ hashFiles(env.API_TESTS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-npm-api-tests-
-
-      - name: Install Tests npm Dependencies
-        id: tests_npm_ci
-        working-directory: ${{ env.API_TESTS_DIRECTORY }}
-        run: |
-          npm ci --no-audit
-
-      # Both npm ci runs are done here, so ~/.npm is frozen — the tar+upload
+      # Both bun install --frozen-lockfile runs are done here, so ~/.bun/install/cache is frozen — the tar+upload
       # can run in the background; implicit wait-all completes it at job end.
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.tests-bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.npm
-          key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
+          key: ${{ steps.tests-bun-cache.outputs.cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
       # push runs. A missing baseline is not an error — the selector falls
@@ -1850,7 +1773,7 @@ jobs:
           DISCOVERED_ARGS=()
           DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
           if [ "$DYNAMIC" != "0" ]; then
-            (cd web/api && npm run --prefix tests coverage:e2e -- --list)
+            (cd web/api && bun run --cwd tests coverage:e2e -- --list)
             DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/discovered.json")
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
@@ -1862,7 +1785,7 @@ jobs:
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
       # The run drops e2e-impact evidence under .coverage/e2e-impact/.
-      # Enforce passes the manifest args straight to the same npm script
+      # Enforce passes the manifest args straight to the same package.json script
       # `cargo make coverage-e2e` wraps (`--prefix tests coverage:e2e`).
       - name: E2E Test
         id: api-e2e
@@ -1874,9 +1797,9 @@ jobs:
             FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
             GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
             if [ -n "$GREP" ]; then
-              npm run --prefix tests coverage:e2e -- $FILES --grep "$GREP"
+              bun run --cwd tests coverage:e2e -- $FILES --grep "$GREP"
             else
-              npm run --prefix tests coverage:e2e -- $FILES
+              bun run --cwd tests coverage:e2e -- $FILES
             fi
           else
             cargo make coverage-e2e
@@ -2046,6 +1969,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2056,7 +1981,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          global-json-file: global.json
 
       - name: Hash NuGet dependency inputs
         id: nuget-key
@@ -2097,7 +2022,6 @@ jobs:
 
       - name: Verify Android release package
         run: |
-          echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           # Compile with the checked-in notes fixture; store packages use the paired release artifact.
@@ -2107,7 +2031,6 @@ jobs:
           fi
           # Exercise D8 and release linking before merging, without store signing keys.
           dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
-          rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
@@ -2173,6 +2096,9 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Publish App Unit Report To Codecov
         if: ${{ !cancelled() }}
@@ -2270,6 +2196,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Setup Node for native audio precision checks
         uses: actions/setup-node@v7
         with:
@@ -2288,16 +2217,16 @@ jobs:
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
-          npm ci --ignore-scripts --no-audit
+          bun install --frozen-lockfile --ignore-scripts
           # The native decoder check rebuilds the shipped asset through the
           # app-owned manifest's esbuild (#2391).
-          npm ci --no-audit --prefix ../../app/devops/recitation-decoder
+          bun install --cwd ../../app/devops/recitation-decoder --frozen-lockfile
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium webkit
+            bun x playwright install-deps chromium webkit
           else
-            npx playwright install --with-deps chromium webkit
+            bun x playwright install --with-deps chromium webkit
           fi
-          npx playwright test --config playwright.recitation.config.ts
+          bun x playwright test --config playwright.recitation.config.ts
 
       - name: Save playwright binaries
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
@@ -2317,6 +2246,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2340,6 +2271,9 @@ jobs:
           workspaces: ${{ env.BULLETIN_DIRECTORY }}
           cache-on-failure: true
           shared-key: "bulletin-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Lint
         id: lint
@@ -2398,6 +2332,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
       - uses: actions/setup-node@v7
         with:
           node-version: "26.12.1"
@@ -2415,10 +2352,10 @@ jobs:
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
       - name: Install storage test dependencies
-        run: npm ci --prefix devops
+        run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
+        run: node --test deploy/ecr-deploy/resume-image.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2437,13 +2374,16 @@ jobs:
     if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true') }}
     steps:
       - uses: actions/checkout@v7
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
       - uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
       # Same install layout as the deploy job: only devops deps, no website
       # node_modules — resolution can only succeed through NODE_PATH.
       - name: Install deployment dependencies
-        run: npm ci --prefix devops --no-audit
+        run: bun install --cwd devops --frozen-lockfile
       # The nginx guard reads docs/ outside the website's Docker build context.
       - name: Verify canonical hosts and nginx configuration
         run: node --test web/bible-on-site/scripts/verify-canonical-hosts.test.mjs
@@ -2462,7 +2402,7 @@ jobs:
 
   data_ci:
     name: Data CI
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     needs:
       [
         setup_env,
@@ -2480,6 +2420,8 @@ jobs:
       contents: read
       packages: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2504,6 +2446,9 @@ jobs:
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-ci-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Overlap the image pull with lint/unit coverage; integration tests wait below.
       - name: Pull Sefaria MongoDB Docker Image
@@ -2587,6 +2532,12 @@ jobs:
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
             if [ "$count" != "0" ] && [ -n "$count" ]; then
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              # Regression check: the running server must match the version pinned
+              # in the Dockerfile, so a stale cached GHCR image cannot slip through.
+              expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
+              actual=$(docker exec sefaria-mongo mongosh --quiet --eval "db.version()")
+              echo "Image: $SEFARIA_MONGO_IMAGE | mongod: $actual | Dockerfile FROM: mongo:$expected"
+              test "$actual" = "$expected"
               exit 0
             fi
             echo "Attempt $i/60: Waiting for MongoDB (count: $count)..."
@@ -2666,7 +2617,7 @@ jobs:
   # ====================================================================================
   perushim_data:
     name: Perushim Data
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     needs:
       [
         setup_env,
@@ -2688,6 +2639,8 @@ jobs:
       contents: read
       packages: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -2725,6 +2678,9 @@ jobs:
           cache-on-failure: true
           shared-key: "perushim-data-rust"
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Wait for Sefaria MongoDB Docker Image
         wait: pull-sefaria-mongo
 
@@ -2739,6 +2695,12 @@ jobs:
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
             if [ "$count" != "0" ] && [ -n "$count" ]; then
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              # Regression check: the running server must match the version pinned
+              # in the Dockerfile, so a stale cached GHCR image cannot slip through.
+              expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
+              actual=$(docker exec sefaria-mongo mongosh --quiet --eval "db.version()")
+              echo "Image: $SEFARIA_MONGO_IMAGE | mongod: $actual | Dockerfile FROM: mongo:$expected"
+              test "$actual" = "$expected"
               exit 0
             fi
             echo "Attempt $i/60: Waiting for MongoDB (count: $count)..."
@@ -2865,6 +2827,7 @@ jobs:
         admin_ci,
         app_ios_ci,
         package_ios_pr,
+        package_windows_pr,
         package_api,
         package_bulletin,
         package_admin,
@@ -2880,6 +2843,10 @@ jobs:
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
+    permissions:
+      contents: read
+      # Reads the master baseline coverage artifacts through the REST API.
+      actions: read
     steps:
       - name: Check Prerequisites
         id: check_prerequisites
@@ -2955,6 +2922,10 @@ jobs:
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
             if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
+              exit 1
+            fi
+            if [ "${{ needs.package_windows_pr.result }}" != "success" ]; then
+              echo "Windows compile validation failed or did not run"
               exit 1
             fi
           fi
@@ -3047,10 +3018,24 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: Restore Website Coverage Report
+        if: needs.website_e2e.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.website_e2e.result != 'skipped' && env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF || env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore Website Coverage Report (master baseline)
+        if: needs.website_e2e.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.WEBSITE_MERGED_COVERAGE_DIRECTORY }}"
 
       - name: Publish Website Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3062,10 +3047,24 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore API Coverage Report
+        if: needs.api_e2e.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.api_e2e.result != 'skipped' && env.API_COVERAGE_ARTIFACT_NAME_WF || env.API_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.API_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.API_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore API Coverage Report (master baseline)
+        if: needs.api_e2e.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.API_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.API_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.API_MERGED_COVERAGE_DIRECTORY }}"
 
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3077,16 +3076,44 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore App Coverage Report
+        if: needs.app_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
+      - name: Restore App Coverage Report (master baseline)
+        if: needs.app_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.APP_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_MERGED_COVERAGE_DIRECTORY }}"
+
       - name: Restore Bulletin Coverage Report
+        if: needs.bulletin_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.bulletin_ci.result != 'skipped' && env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF || env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.BULLETIN_COVERAGE_DIRECTORY }}
+
+      - name: Restore Bulletin Coverage Report (master baseline)
+        if: needs.bulletin_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.BULLETIN_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.BULLETIN_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.BULLETIN_COVERAGE_DIRECTORY }}"
 
       - name: Publish Bulletin Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3098,10 +3125,24 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore Admin Coverage Report
+        if: needs.admin_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.admin_ci.result != 'skipped' && env.ADMIN_COVERAGE_ARTIFACT_NAME_WF || env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.ADMIN_COVERAGE_DIRECTORY }}
+
+      - name: Restore Admin Coverage Report (master baseline)
+        if: needs.admin_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3124,10 +3165,24 @@ jobs:
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report
+        if: needs.data_ci.result != 'skipped'
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.data_ci.result != 'skipped' && env.DATA_COVERAGE_ARTIFACT_NAME_WF || env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}
+          name: ${{ env.DATA_COVERAGE_ARTIFACT_NAME_WF }}
           path: ${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}
+
+      - name: Restore Data Coverage Report (master baseline)
+        if: needs.data_ci.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.DATA_MERGED_COVERAGE_DIRECTORY }}"
 
       - name: Publish Data Coverage To Codecov
         uses: codecov/codecov-action@v7
@@ -3147,46 +3202,36 @@ jobs:
       - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
 
-      - name: Setup DevOps Node.js
-        id: setup-devops-node
-        uses: actions/setup-node@v7
+      - name: Setup devops bun, Node.js and dependencies
+        id: devops-bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Restore npm cache
-        id: devops-npm-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
-          restore-keys: ${{ runner.os }}-npm-devops-
-
-      - name: Install devops npm Dependencies
-        id: devops_npm_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: |
-          npm ci --no-audit
-
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
         background: true
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/save-bun-store
         with:
-          path: ~/.npm
-          key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm run test:version
+          bun run test:version
+          bun run test:review-audit
+          # Whole-tree generic-catch audit — the catch-boundary pre-commit
+          # hook is local-only; this keeps hook-less commits honest.
+          node review-audit/scan-catch.cjs
           node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;
       # when the suite was not applicable this falls back to the trusted
-      # per-platform baselines re-uploaded by determine_baseline_availability.
+      # per-platform baselines fetched by name through the REST API.
       - name: Restore App E2E coverage (this run, Android)
         if: needs.app_mobile_e2e.result == 'success'
         uses: actions/download-artifact@v8
@@ -3203,17 +3248,29 @@ jobs:
 
       - name: Restore App E2E coverage (master baseline, Android)
         if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
-          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android"
 
       - name: Restore App E2E coverage (master baseline, iOS)
         if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
-          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios"
 
       # Merge unit + integration + E2E layers by covered locations, never by
       # percentage. --relocate canonicalizes absolute runner paths (Linux and
@@ -3247,7 +3304,7 @@ jobs:
           if [ "$FOUND" -eq 0 ]; then
             echo "::warning::No mobile E2E coverage layer available; merging unit + integration only."
           fi
-          node --import tsx merge-lcov.mts "${MERGE_ARGS[@]}"
+          node merge-lcov.mts "${MERGE_ARGS[@]}"
 
       # The combined report replaces the unit+integration artifact: the
       # authoritative app report and the master baseline always contain every
@@ -3280,7 +3337,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Merge Test Coverage (Website + API)
-        run: npm run coverage:merge
+        run: bun run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Publish Cross Module Coverage To Codacy
@@ -3466,7 +3523,9 @@ jobs:
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
     # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
     # Data CD falls back to the always-present master artifact in that case.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Schema-only changes require a separately approved, selective migration.
+    # Skip this entire job: success would supersede older queued data deployments.
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -3525,20 +3584,22 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Setup devops bun, Node.js and dependencies
+        id: devops-bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Install devops dependencies
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm ci --no-audit --no-fund
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/save-bun-store
+        with:
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       - name: Publish release and collision version bumps together
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: npm run bump:module-versions -- --mode all --publish
+        run: bun run bump:module-versions -- --mode all --publish
 

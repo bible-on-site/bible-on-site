@@ -50,8 +50,10 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
             // of the local catalog — wait for both before opening the reader.
             await Task.WhenAll(perekLoad, LoadStarterDataAsync());
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: a startup load failure proceeds offline to the reader instead of crashing the app
+        catch (Exception ex) //NOSONAR — startup load failure is logged and the app proceeds offline to the reader.
         {
+            #pragma warning restore S2221
             // The catalog load ran in parallel and may still be in flight here
             // (e.g. AppConfig threw before WhenAll was awaited). Observe its
             // fault — already faulted or faulting later — so it is never left
@@ -72,46 +74,6 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
 
         // Always open the reader — the app works without articles/authors
         await NavigateToMainPageAsync();
-        await MaybeAskAnalyticsConsentAsync();
-    }
-
-    /// <summary>
-    /// One-time analytics opt-in (#2400): Firebase collection stays off until
-    /// the user grants here or later in העדפות. Compiled out where no SDK can
-    /// emit (non-mobile targets and DISABLE_ANALYTICS builds, which include
-    /// every e2e build); the runtime e2e marker also skips the prompt so a
-    /// marked process never blocks the suite on a dialog.
-    /// </summary>
-    private static async Task MaybeAskAnalyticsConsentAsync()
-    {
-#if (ANDROID || IOS) && !DISABLE_ANALYTICS
-        try
-        {
-            var preferences = PreferencesService.Instance;
-            if (SearchIndexService.IsE2eMarkedProcess() || preferences.AnalyticsConsentAsked)
-            {
-                return;
-            }
-
-            var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-            if (page is null)
-            {
-                // No surface to present on this launch; ask again next time.
-                return;
-            }
-
-            var granted = await page.DisplayAlertAsync(
-                "סליחה על ההפרעה",
-                "נתוני שימוש עוזרים לנו לשפר את חוויית הלימוד היומי, ומועברים לשירותי הניתוח של גוגל (Firebase). לאפשר איסוף נתונים לצורכי אנליטיקה? ניתן לשנות את הבחירה בכל עת בהעדפות.",
-                "מאשר",
-                "לא תודה");
-            preferences.SetAnalyticsConsent(granted);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Analytics] consent prompt failed: {ex.Message}");
-        }
-#endif
     }
 
     private async Task LoadStarterDataAsync()

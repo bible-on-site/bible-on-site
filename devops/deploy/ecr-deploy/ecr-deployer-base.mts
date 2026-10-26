@@ -4,36 +4,45 @@ import os from "node:os";
 import path from "node:path";
 import type { ECRClient } from "@aws-sdk/client-ecr";
 import * as semver from "semver";
-import { DeployerBase } from "../deployer-base.mjs";
+import { DeployerBase } from "../deployer-base.mts";
 import {
 	type ECRConfig,
 	ensureRepositoryExists,
 	getAuthorizationToken,
 	getRemoteImageTags,
 	withRetry,
-} from "./ecr-client.mjs";
+} from "./ecr-client.mts";
 
-import { resumePublishedImage } from "./resume-image.mjs";
+import { resumePublishedImage } from "./resume-image.mts";
 
-export enum Diff {
-	LocalNewer = "LocalNewer",
-	RemoteNewer = "RemoteNewer",
-	LocalRemoteSame = "LocalRemoteSame",
-}
+export const Diff = {
+	LocalNewer: "LocalNewer",
+	RemoteNewer: "RemoteNewer",
+	LocalRemoteSame: "LocalRemoteSame",
+} as const;
+export type Diff = (typeof Diff)[keyof typeof Diff];
 
 export abstract class ECRDeployerBase extends DeployerBase {
 	protected wrappedLocalVersion?: string;
 	protected dockerImagePath?: string;
 	private alreadyPublished = false;
+	protected readonly dockerImageName: string;
+	protected readonly ecrRepositoryName: string;
+	protected readonly client: ECRClient;
+	protected readonly config: ECRConfig;
 
 	constructor(
 		moduleName: string,
-		protected readonly dockerImageName: string,
-		protected readonly ecrRepositoryName: string,
-		protected readonly client: ECRClient,
-		protected readonly config: ECRConfig,
+		dockerImageName: string,
+		ecrRepositoryName: string,
+		client: ECRClient,
+		config: ECRConfig,
 	) {
 		super(moduleName);
+		this.dockerImageName = dockerImageName;
+		this.ecrRepositoryName = ecrRepositoryName;
+		this.client = client;
+		this.config = config;
 	}
 
 	override async deploy(): Promise<void> {

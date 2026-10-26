@@ -21,7 +21,7 @@
 	],
 	"runAllOnChange": [
 		"web/bible-on-site/package.json",
-		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/bun.lock",
 		"web/bible-on-site/next.config.mjs",
 		"web/bible-on-site/tsconfig.json",
 		"web/bible-on-site/playwright*.ts",

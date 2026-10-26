@@ -4,11 +4,18 @@ jest.mock("../../../src/lib/articles", () => ({
 }));
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushNotes: jest.fn(),
+	getPerushNotesBatch: jest.fn(),
 	getPerushimByPerekId: jest.fn(),
 }));
 jest.mock("../../../src/lib/download/handlers", () => ({
 	getSeferDownloadHandler: jest.fn(),
 	getPageRangesDownloadHandler: jest.fn(),
+}));
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+jest.mock("../../../src/lib/tanahpedia/article-mention-refs", () => ({
+	decorateArticleContent: jest.fn(async (article: unknown) => article),
 }));
 
 import {
@@ -19,11 +26,13 @@ import {
 	getPerekSummariesBatch,
 	getPerushimSummariesForPerek,
 	getPerushNotesForPage,
+	getPerushNotesForPerekBatch,
 } from "../../../src/app/929/[number]/actions";
 import {
 	getArticleById,
 	getArticleSummariesByPerekId,
 } from "../../../src/lib/articles";
+import { decorateArticleContent } from "../../../src/lib/tanahpedia/article-mention-refs";
 import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
@@ -31,6 +40,7 @@ import {
 import {
 	getPerushimByPerekId,
 	getPerushNotes,
+	getPerushNotesBatch,
 } from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
@@ -41,6 +51,9 @@ const mockGetPerushNotes = getPerushNotes as jest.MockedFunction<
 >;
 const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 	typeof getPerushimByPerekId
+>;
+const mockGetPerushNotesBatch = getPerushNotesBatch as jest.MockedFunction<
+	typeof getPerushNotesBatch
 >;
 const mockGetArticleSummariesByPerekId =
 	getArticleSummariesByPerekId as jest.MockedFunction<
@@ -78,6 +91,7 @@ describe("getArticleForBook", () => {
 
 		expect(result).toEqual(article);
 		expect(mockGetArticleById).toHaveBeenCalledWith(1);
+		expect(decorateArticleContent).toHaveBeenCalledWith(article);
 	});
 
 	it("returns null when article not found", async () => {
@@ -110,6 +124,24 @@ describe("getPerushNotesForPage", () => {
 		const result = await getPerushNotesForPage(1, 999);
 
 		expect(result).toEqual([]);
+	});
+});
+
+describe("getPerushNotesForPerekBatch", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("delegates to getPerushNotesBatch with perek and perush ids", async () => {
+		const batch = {
+			1: [{ pasuk: 3, noteIdx: 0, noteContent: "<p>x</p>" }],
+		};
+		mockGetPerushNotesBatch.mockResolvedValue(batch);
+
+		const result = await getPerushNotesForPerekBatch(14, [1, 2]);
+
+		expect(mockGetPerushNotesBatch).toHaveBeenCalledWith(14, [1, 2]);
+		expect(result).toEqual(batch);
 	});
 });
 

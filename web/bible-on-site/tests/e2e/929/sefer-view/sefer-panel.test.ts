@@ -1,0 +1,218 @@
+import { expect } from "@playwright/test";
+import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
+import { test } from "../../../util/playwright/test-fixture";
+
+test.describe("Sefer left-page panel", () => {
+	test.beforeEach(({ skipOnNotWideEnough }) => {
+		void skipOnNotWideEnough;
+	});
+
+	test("shows פרשנים and מאמרים tabs flanking the date and switches panels", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		const tablist = blank.getByRole("tablist", { name: "בחירת תצוגה" });
+		const perushimTab = blank.getByRole("tab", { name: "פרשנים" });
+		const articlesTab = blank.getByRole("tab", { name: "מאמרים" });
+
+		await expect(perushimTab).toHaveAttribute("aria-selected", "true");
+		await expect(articlesTab).toHaveAttribute("aria-selected", "false");
+
+		// The date sits between the two tabs inside the tablist.
+		const headerOrder = await tablist.evaluate((el) =>
+			Array.from(el.children).map((child) =>
+				child.getAttribute("role") === "tab"
+					? child.textContent?.trim()
+					: "date",
+			),
+		);
+		expect(headerOrder).toEqual(["פרשנים", "date", "מאמרים"]);
+
+		await articlesTab.click();
+		await expect(articlesTab).toHaveAttribute("aria-selected", "true");
+		await expect(perushimTab).toHaveAttribute("aria-selected", "false");
+		await expect(blank.locator('[data-tab="articles"]')).toHaveAttribute(
+			"data-active",
+			"true",
+		);
+		await expect(blank.locator("a#article-1")).toBeVisible();
+
+		await perushimTab.click();
+		await expect(blank.locator('[data-tab="perushim"]')).toHaveAttribute(
+			"data-active",
+			"true",
+		);
+		await expect(
+			blank.getByRole("button", { name: 'בחירת רש"י' }),
+		).toBeVisible();
+		await test.info().attach("sefer-panel-perushim-tab", {
+			body: await blank.screenshot(),
+			contentType: "image/png",
+		});
+	});
+
+	test("multi-selects perushim and groups their notes by pasuk", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		const rashiToggle = blank.getByRole("button", { name: 'בחירת רש"י' });
+		const ibnEzraToggle = blank.getByRole("button", {
+			name: "בחירת אבן עזרא",
+		});
+
+		await rashiToggle.click();
+		await expect(rashiToggle).toHaveAttribute("aria-pressed", "true");
+		await expect(blank.locator('[data-perush-pasuk="1"]')).toBeVisible({
+			timeout: 30_000,
+		});
+		await expect(blank.getByText(/אמר רבי יצחק/)).toBeVisible();
+
+		await ibnEzraToggle.click();
+		await expect(ibnEzraToggle).toHaveAttribute("aria-pressed", "true");
+		// With two perushim selected each group labels the perush above its notes.
+		const groupOne = blank.locator('[data-perush-pasuk="1"]');
+		await expect(
+			groupOne.locator('[class*="commentaryPerushName"]', {
+				hasText: 'רש"י',
+			}),
+		).toBeVisible();
+		await expect(
+			groupOne.locator('[class*="commentaryPerushName"]', {
+				hasText: "אבן עזרא",
+			}),
+		).toBeVisible();
+
+		// Deselecting keeps the other perush rendered; a single perush can
+		// carry several note segments on one pasuk (אבן עזרא has five here).
+		await rashiToggle.click();
+		await expect(rashiToggle).toHaveAttribute("aria-pressed", "false");
+		await expect(
+			groupOne.locator('[class*="noteContent"]').first(),
+		).toContainText("בראשית");
+
+		// The persisted selection survives a reload as the Tanach-wide default.
+		await page.reload();
+		const blankAfter = page.locator('.he-book .page[data-page-index="4"]');
+		await expect(
+			blankAfter.getByRole("button", { name: "בחירת אבן עזרא" }),
+		).toHaveAttribute("aria-pressed", "true", { timeout: 60_000 });
+		await expect(
+			blankAfter.getByRole("button", { name: 'בחירת רש"י' }),
+		).toHaveAttribute("aria-pressed", "false");
+	});
+
+	test("filters commentary by scripture-side pasuk selection and clears it", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		const scripture = page.locator('[data-sefer-perek="1"]');
+
+		await blank.getByRole("button", { name: 'בחירת רש"י' }).click();
+		await expect(blank.locator("[data-perush-pasuk]").first()).toBeVisible({
+			timeout: 30_000,
+		});
+		const groupCount = await blank.locator("[data-perush-pasuk]").count();
+		expect(groupCount).toBeGreaterThan(1);
+
+		// Entering pasuk-selection mode makes the scripture letters toggles.
+		await blank.getByRole("button", { name: "בחירת פסוקים" }).click();
+		await expect(scripture.getByRole("status")).toContainText(
+			"סמנו פסוקים על הפרק",
+		);
+
+		await scripture
+			.locator('[data-sefer-pasuk="1"]')
+			.getByRole("button", { name: "בחירת פסוק א" })
+			.click();
+		await expect(scripture.getByRole("status")).toContainText("נבחרו 1 פסוקים");
+		await expect(blank).toContainText("מסוננים: 1 פסוקים");
+		await expect
+			.poll(async () => blank.locator("[data-perush-pasuk]").count())
+			.toBe(1);
+		await expect(blank.locator('[data-perush-pasuk="1"]')).toBeVisible();
+
+		// Clearing the filter restores the full chapter's commentary while the
+		// pasuk-marking mode stays active until it is ended explicitly.
+		await blank.getByRole("button", { name: "ניקוי בחירה" }).click();
+		await expect(blank).toContainText("סמנו פסוקים על גבי הפרק");
+		await expect
+			.poll(async () => blank.locator("[data-perush-pasuk]").count())
+			.toBe(groupCount);
+		await blank.getByRole("button", { name: "סיום בחירה" }).click();
+		await expect(blank).toContainText("כל פסוקי הפרק");
+	});
+
+	test("opens an article from the masonry grid and toggles article-only fullscreen", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		await blank.getByRole("tab", { name: "מאמרים" }).click();
+		await expect(blank.locator('[class*="articlesMasonry"]')).toBeVisible();
+
+		await blank.locator("a#article-1").click();
+		const fullscreenButton = blank.getByRole("button", {
+			name: "מסך מלא",
+		});
+		await expect(fullscreenButton).toBeVisible({ timeout: 30_000 });
+		await expect(blank.getByText("פתיחה")).toBeVisible();
+
+		// Article-only fullscreen is a dialog over the book, not book fullscreen.
+		await fullscreenButton.click();
+		const dialog = page.getByRole("dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByRole("button", { name: "צמצם" })).toBeVisible();
+		await test.info().attach("article-fullscreen-dialog", {
+			body: await page.screenshot(),
+			contentType: "image/png",
+		});
+		await dialog.getByRole("button", { name: "צמצם" }).click();
+		await expect(dialog).toBeHidden();
+
+		// Back returns to the grid on the מאמרים tab.
+		await blank.getByRole("button", { name: "חזרה למאמרים →" }).click();
+		await expect(blank.locator("a#article-1")).toBeVisible();
+		await expect(blank.getByRole("tab", { name: "מאמרים" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+	});
+
+	test("deep-linked perush view selects only that perush without touching defaults", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		await page.goto(`/929/1/${encodeURIComponent('רש"י')}?book`);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+
+		await expect(blank.getByRole("tab", { name: "פרשנים" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+			{ timeout: 60_000 },
+		);
+		await expect(
+			blank.getByRole("heading", { name: 'רש"י', exact: true }),
+		).toBeVisible({ timeout: 30_000 });
+
+		// Back to the flat panel: the deep link must not have written the
+		// persisted selection, so no tag is pressed by default.
+		await blank.getByRole("button", { name: "→ חזרה לפרשנים" }).click();
+		await expect(
+			blank.getByRole("button", { name: 'בחירת רש"י' }),
+		).toHaveAttribute("aria-pressed", "false");
+		await expect(
+			blank.getByRole("button", { name: "בחירת אבן עזרא" }),
+		).toHaveAttribute("aria-pressed", "false");
+	});
+});

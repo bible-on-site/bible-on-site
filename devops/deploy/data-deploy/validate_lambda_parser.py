@@ -74,7 +74,7 @@ def _should_execute(stmt):
 
 def preprocess_sql(sql_content):
     result = "SET FOREIGN_KEY_CHECKS = 0;\n"
-    table_pattern = r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?'
+    table_pattern = r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?'
     for match in re.finditer(table_pattern, sql_content, re.IGNORECASE):
         table_name = match.group(1)
         sql_content = sql_content.replace(
@@ -248,7 +248,7 @@ def main():
             for i, stmt in enumerate(all_stmts):
                 try:
                     cursor.execute(stmt)
-                except Exception as e:
+                except pymysql.Error as e:
                     preview = stmt[:300].encode("ascii", errors="replace").decode("ascii")
                     print(f"\n*** FAILED at statement {i}: {e}")
                     print(f"    {preview}...")
@@ -272,7 +272,7 @@ def main():
                     cur.execute(f"SELECT COUNT(*) FROM {table}")
                     count = cur.fetchone()[0]
                     print(f"  {table}: {count} rows")
-                except Exception:
+                except pymysql.err.ProgrammingError:
                     print(f"  {table}: (not found)")
     finally:
         conn2.close()

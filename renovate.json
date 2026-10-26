@@ -1,69 +1,141 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"extends": ["config:recommended", ":dependencyDashboard"],
+	"extends": [
+		"config:recommended",
+		":dependencyDashboard"
+	],
 	"packageRules": [
 		{
-			"matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-			"matchDepTypes": ["devDependencies"],
+			"matchUpdateTypes": [
+				"minor",
+				"patch",
+				"pin",
+				"digest"
+			],
+			"matchDepTypes": [
+				"devDependencies"
+			],
 			"automerge": true
 		},
 		{
-			"labels": ["linting"],
-			"matchPackageNames": ["/eslint/", "/biome/"]
+			"labels": [
+				"linting"
+			],
+			"matchPackageNames": [
+				"/eslint/",
+				"/biome/"
+			]
 		},
 		{
-			"matchDepTypes": ["optionalDependencies"],
-			"addLabels": ["optional"],
+			"matchDepTypes": [
+				"optionalDependencies"
+			],
+			"addLabels": [
+				"optional"
+			],
 			"automerge": true
 		},
 		{
 			"groupName": "all non-major dependencies",
 			"groupSlug": "all-minor-patch",
-			"matchPackageNames": ["*"],
-			"matchUpdateTypes": ["minor", "patch"],
+			"matchPackageNames": [
+				"*"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch"
+			],
 			"automerge": true
 		},
 		{
-			"description": "npm lockfile regeneration is the most failure-prone artifact update (optional wasm/native deps). Group it separately so one bad artifact cannot strand every other ecosystem's updates.",
-			"groupName": "all non-major npm dependencies",
-			"groupSlug": "npm-minor-patch",
-			"matchManagers": ["npm"],
-			"matchPackageNames": ["*"],
-			"matchUpdateTypes": ["minor", "patch"],
+			"description": "bun lockfile regeneration is the most failure-prone artifact update (optional wasm/native deps). Group it separately so one bad artifact cannot strand every other ecosystem's updates.",
+			"groupName": "all non-major bun dependencies",
+			"groupSlug": "bun-minor-patch",
+			"matchManagers": [
+				"npm",
+				"bun"
+			],
+			"matchPackageNames": [
+				"*"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch"
+			],
 			"automerge": true
 		},
 		{
-			"description": "cargo update regenerates Cargo.lock per workspace; keep it separate from file-edit-only managers for the same blast-radius reason as npm.",
+			"description": "cargo update regenerates Cargo.lock per workspace; keep it separate from file-edit-only managers for the same blast-radius reason as bun.",
 			"groupName": "all non-major cargo dependencies",
 			"groupSlug": "cargo-minor-patch",
-			"matchManagers": ["cargo"],
-			"matchPackageNames": ["*"],
-			"matchUpdateTypes": ["minor", "patch"],
+			"matchManagers": [
+				"cargo"
+			],
+			"matchPackageNames": [
+				"*"
+			],
+			"matchUpdateTypes": [
+				"minor",
+				"patch"
+			],
 			"automerge": true
 		},
 		{
 			"description": "macos-26 breaks the .NET MAUI iOS build (default Xcode 26); see https://github.com/bible-on-site/bible-on-site/issues/1627",
-			"matchManagers": ["github-actions"],
-			"matchPackageNames": ["macos"],
+			"matchManagers": [
+				"github-actions"
+			],
+			"matchPackageNames": [
+				"macos"
+			],
 			"allowedVersions": "<26"
 		},
 		{
+			"description": "10.1+ SDK bands cannot consume the iOS workload set 10.0.401.1 pinned for Xcode 27.0 (xcode-27 image lacks Xcode 27.1); see https://github.com/bible-on-site/bible-on-site/issues/2566",
+			"matchManagers": [
+				"dotnet-sdk"
+			],
+			"matchDepNames": [
+				"dotnet-sdk"
+			],
+			"allowedVersions": "<10.1"
+		},
+		{
 			"description": "requirements.txt is hashed into the preserved golden baseline (benchmark.py BASELINE_FILES); any bump fails data/recitation tests with 'The original fallback pipeline changed'. Upgrade only together with a golden re-baseline; see https://github.com/bible-on-site/bible-on-site/issues/2057",
-			"matchManagers": ["pip_requirements"],
-			"matchFileNames": ["data/recitation/requirements.txt"],
-			"matchPackageNames": ["*"],
+			"matchManagers": [
+				"pip_requirements"
+			],
+			"matchFileNames": [
+				"data/recitation/requirements.txt"
+			],
+			"matchPackageNames": [
+				"*"
+			],
 			"enabled": false
 		},
 		{
-			"description": "Driver tarballs bundle copies npm overrides cannot replace. iOS 12.17.3 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
-			"matchManagers": ["npm"],
-			"matchFileNames": ["app/mobile-e2e/package.json"],
-			"matchPackageNames": ["appium-uiautomator2-driver", "appium-xcuitest-driver"]
+			"description": "Driver tarballs bundle copies bun overrides cannot replace. iOS 12.17.3 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
+			"matchManagers": [
+				"npm",
+				"bun"
+			],
+			"matchFileNames": [
+				"app/mobile-e2e/package.json"
+			],
+			"matchPackageNames": [
+				"appium-uiautomator2-driver",
+				"appium-xcuitest-driver"
+			]
 		},
 		{
 			"description": "sprintf-js was removed via the scoped js-yaml@5.4.3 override under @istanbuljs/load-nyc-config (#1996). Keep that override until upstream load-nyc-config drops the js-yaml@3 chain.",
-			"matchManagers": ["npm"],
-			"matchFileNames": ["web/bible-on-site/package.json"],
+			"matchManagers": [
+				"npm",
+				"bun"
+			],
+			"matchFileNames": [
+				"web/bible-on-site/package.json"
+			],
 			"matchPackageNames": [
 				"jest",
 				"jest-environment-jsdom",
@@ -77,7 +149,9 @@
 	],
 	"vulnerabilityAlerts": {
 		"automerge": true,
-		"labels": ["security"],
+		"labels": [
+			"security"
+		],
 		"groupName": null,
 		"schedule": [],
 		"dependencyDashboardApproval": false,
@@ -87,5 +161,7 @@
 		"branchTopic": "{{{datasource}}}-{{{depName}}}-vulnerability",
 		"prCreation": "immediate"
 	},
-	"labels": ["dependencies"]
+	"labels": [
+		"dependencies"
+	]
 }

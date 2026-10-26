@@ -9,16 +9,24 @@ import type {
 	SemanticPageInfo,
 } from "@/lib/download/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
-import { getPerushimByPerekId, getPerushNotes } from "@/lib/perushim";
+import {
+	getPerushimByPerekId,
+	getPerushNotes,
+	getPerushNotesBatch,
+} from "@/lib/perushim";
+import { decorateArticleContent } from "@/lib/tanahpedia/article-mention-refs";
 
 /**
  * Fetch a single article by ID for in-book display (e.g. flipbook blank page).
- * Returns null if not found.
+ * Returns null if not found. Content arrives mention-decorated (#2516) so
+ * in-book rendering matches the standalone article route.
  */
 export async function getArticleForBook(
 	articleId: number,
 ): Promise<Article | null> {
-	return getArticleById(articleId);
+	const article = await getArticleById(articleId);
+	if (!article) return null;
+	return decorateArticleContent(article);
 }
 
 /**
@@ -29,6 +37,18 @@ export async function getPerushNotesForPage(
 	perekId: number,
 ): Promise<PerushNote[]> {
 	return getPerushNotes(perushId, perekId);
+}
+
+/**
+ * Fetch notes for several perushim on one perek in a single query (server
+ * action) — the Sefer commentary panel shows every selected perush at once.
+ * Keys are perush ids; a perush with no notes on the perek has no key.
+ */
+export async function getPerushNotesForPerekBatch(
+	perekId: number,
+	perushIds: number[],
+): Promise<Record<number, PerushNote[]>> {
+	return getPerushNotesBatch(perekId, perushIds);
 }
 
 /**

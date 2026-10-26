@@ -1,5 +1,7 @@
 import type { Graph, Thing } from "schema-dts";
+import { isoDurationSeconds } from "@/lib/reading-metrics";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import type {
 	EntityType,
 	EntryWithEntities,
@@ -200,9 +202,22 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		name: entry.title,
 		url: pageUrl,
 		inDefinedTermSet: { "@id": TANAHPEDIA_SET_ID },
+		// Stored complete-text baseline (#2607) — on the DefinedTerm content
+		// node, never on the entity (Person/Place) nodes.
+		...(entry.metric?.wordCount != null
+			? { wordCount: entry.metric.wordCount }
+			: {}),
+		...(entry.metric?.estimatedSeconds != null
+			? { timeRequired: isoDurationSeconds(entry.metric.estimatedSeconds) }
+			: {}),
 	};
 	if (hasContent(entry.content)) {
-		definedTerm.description = plainText(entry.content as string, 300);
+		/* Normalized HTML keeps generated footnote markers (data-marker
+		   attributes, empty anchors) out of the extracted description (#2615). */
+		definedTerm.description = plainText(
+			normalizeFootnoteHtml(entry.content as string),
+			300,
+		);
 	}
 
 	const breadcrumbItems = [

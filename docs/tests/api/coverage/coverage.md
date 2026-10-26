@@ -176,12 +176,12 @@ The E2E tests use Playwright but are orchestrated via cargo-make:
 
 ```toml
 [tasks.test-e2e]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "tests", "test:e2e"]
+command = "bun"
+args = ["run", "--cwd", "tests", "test:e2e"]
 
 [tasks.coverage-e2e]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "tests", "coverage:e2e"]
+command = "bun"
+args = ["run", "--cwd", "tests", "coverage:e2e"]
 ```
 
 This allows the Rust build system to control when tests run, ensuring the instrumented server is ready.
@@ -192,7 +192,7 @@ API coverage is merged with website coverage at the repository root:
 
 ```bash
 cd devops
-npm run coverage:merge
+bun run coverage:merge
 ```
 
 This produces a combined LCOV file at `.coverage/lcov.info` that includes both Rust and TypeScript coverage, which is then uploaded to Codacy.

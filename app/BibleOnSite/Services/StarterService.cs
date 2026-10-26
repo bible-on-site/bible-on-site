@@ -225,9 +225,11 @@ public class StarterService : BaseGraphQLService
                 return;
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: starter API failure falls back to local cache
+        catch (Exception ex) //NOSONAR — starter API failure falls back to local cache.
         {
-            Console.Error.WriteLine($"API unavailable: {ex.Message}");
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"API unavailable: {ex}");
         }
 
         // 2. Fall back to local cache
@@ -240,9 +242,11 @@ public class StarterService : BaseGraphQLService
                 return;
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: cache load failure proceeds offline without articles
+        catch (Exception ex) //NOSONAR — cache load failure proceeds offline without articles.
         {
-            Console.Error.WriteLine($"Cache load failed: {ex.Message}");
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Cache load failed: {ex}");
         }
 
         // 3. No data — proceed empty; articles/authors just won't be shown
@@ -264,16 +268,18 @@ public class StarterService : BaseGraphQLService
                 Console.WriteLine($"Refreshed {Authors.Count} authors from API");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: background refresh failure is log-only
+        catch (Exception ex) //NOSONAR — background refresh failure is log-only.
         {
-            Console.Error.WriteLine($"Refresh failed: {ex.Message}");
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Refresh failed: {ex}");
         }
     }
 
     #region Local cache
 
     private string CachePath =>
-        Path.Combine(_fileSystem.AppDataDirectory, CacheFileName);
+        Path.Join(_fileSystem.AppDataDirectory, CacheFileName);
 
     private async Task SaveCacheAsync(StarterResponse response)
     {
@@ -282,9 +288,11 @@ public class StarterService : BaseGraphQLService
             var json = JsonSerializer.Serialize(response, StarterJsonContext.Default.StarterResponse);
             await AtomicFile.WriteAllTextAsync(CachePath, json);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: cache save is best-effort
+        catch (Exception ex) //NOSONAR — cache save is best-effort.
         {
-            Console.Error.WriteLine($"Failed to save starter cache: {ex.Message}");
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Failed to save starter cache: {ex}");
         }
     }
 

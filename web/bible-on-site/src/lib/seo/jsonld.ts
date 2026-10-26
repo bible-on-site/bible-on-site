@@ -18,6 +18,10 @@ export const SITE_ORIGIN = (
 
 export const SITE_NAME = 'תנ"ך על הפרק';
 
+/** Site-level marketing description — the default for pages without their own. */
+export const SITE_DESCRIPTION =
+	'לימוד יומי על הפרק. בתנ"ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד נעים, מעמיק ומחכים';
+
 /** Official, verified external presences for the Organization `sameAs`. */
 const ORG_SAME_AS = [
 	"https://t.me/BibleOnSite",

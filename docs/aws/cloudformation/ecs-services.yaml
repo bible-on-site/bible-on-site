@@ -5,48 +5,51 @@
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: |
-  ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery
-  for Bible On Site project.
+Description: "ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery Reference documentation only; not a deployed stack."
 
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+Metadata:
+  Documentation: |
+    ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery
+    for Bible On Site project.
 
-  This template creates:
-  - ECS Cluster (Fargate)
-  - Cloud Map namespace for service discovery
-  - ECS Task Execution Role with ECR and CloudWatch permissions
-  - Task definitions and services
+    ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
-  Sensitive Information Restoration:
-  | Placeholder | Description | Restoration Command |
-  |---|---|---|
-  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
-  | `<NGINX_PUBLIC_IP>` | Nginx Public IP | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text` |
-  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
-  | `<SUBNET_IDS>` | Subnet IDs | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text` |
-  | `<ECS_SECURITY_GROUP_ID>` | ECS Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=bible-on-site-ecs-sg" --query "SecurityGroups[0].GroupId" --output text` |
+    This template creates:
+    - ECS Cluster (Fargate)
+    - Cloud Map namespace for service discovery
+    - ECS Task Execution Role with ECR and CloudWatch permissions
+    - Task definitions and services
 
-  Architecture:
-  ┌─────────────────┐      ┌─────────────────────────────────────────────┐
-  │  nginx (EC2)    │      │              ECS Fargate                    │
-  │  <NGINX_PUBLIC_IP>│──────│  ┌─────────────────────────────────────┐    │
-  │                 │      │  │  bible-on-site-website              │    │
-  │  Resolves:      │      │  │  website.bible-on-site.local:3000   │    │
-  │  website.bible- │      │  │  Image: ECR/bible-on-site:latest    │    │
-  │  on-site.local  │      │  └─────────────────────────────────────┘    │
-  │  via Cloud Map  │      │                                             │
-  └─────────────────┘      │  ┌─────────────────────────────────────┐    │
-                          │  │  bible-on-site-api (future)         │    │
-                          │  │  api.bible-on-site.local:3003       │    │
-                          │  │  Image: ECR/bible-on-site-api       │    │
-                          │  └─────────────────────────────────────┘    │
-                          │                                             │
-                          │  ┌─────────────────────────────────────┐    │
-                          │  │  bible-on-site-admin                │    │
-                          │  │  admin.bible-on-site.local:3101     │    │
-                          │  │  Image: ECR/bible-on-site-admin     │    │
-                          │  └─────────────────────────────────────┘    │
-                          └─────────────────────────────────────────────┘
+    Sensitive Information Restoration:
+    | Placeholder | Description | Restoration Command |
+    |---|---|---|
+    | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+    | `<NGINX_PUBLIC_IP>` | Nginx Public IP | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text` |
+    | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
+    | `<SUBNET_IDS>` | Subnet IDs | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text` |
+    | `<ECS_SECURITY_GROUP_ID>` | ECS Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=bible-on-site-ecs-sg" --query "SecurityGroups[0].GroupId" --output text` |
+
+    Architecture:
+    ┌─────────────────┐      ┌─────────────────────────────────────────────┐
+    │  nginx (EC2)    │      │              ECS Fargate                    │
+    │  <NGINX_PUBLIC_IP>│──────│  ┌─────────────────────────────────────┐    │
+    │                 │      │  │  bible-on-site-website              │    │
+    │  Resolves:      │      │  │  website.bible-on-site.local:3000   │    │
+    │  website.bible- │      │  │  Image: ECR/bible-on-site:latest    │    │
+    │  on-site.local  │      │  └─────────────────────────────────────┘    │
+    │  via Cloud Map  │      │                                             │
+    └─────────────────┘      │  ┌─────────────────────────────────────┐    │
+                            │  │  bible-on-site-api (future)         │    │
+                            │  │  api.bible-on-site.local:3003       │    │
+                            │  │  Image: ECR/bible-on-site-api       │    │
+                            │  └─────────────────────────────────────┘    │
+                            │                                             │
+                            │  ┌─────────────────────────────────────┐    │
+                            │  │  bible-on-site-admin                │    │
+                            │  │  admin.bible-on-site.local:3101     │    │
+                            │  │  Image: ECR/bible-on-site-admin     │    │
+                            │  └─────────────────────────────────────┘    │
+                            └─────────────────────────────────────────────┘
 
 Parameters:
   Environment:
@@ -76,6 +79,14 @@ Parameters:
     Default: bible-on-site-admin
     Description: Name of the admin ECS service
 
+  AdminCapacityProvider:
+    Type: String
+    Default: FARGATE_SPOT
+    AllowedValues:
+      - FARGATE
+      - FARGATE_SPOT
+    Description: Admin-only cost option; use FARGATE for on-demand recovery
+
   WebsiteImageUri:
     Type: String
     Default: <AWS_ACCOUNT_ID>.dkr.ecr.il-central-1.amazonaws.com/bible-on-site:latest
@@ -91,6 +102,12 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: bible-on-site-cluster
+      # Association only; do not change shared defaults to Spot. Existing
+      # launch-type website/API services remain on-demand.
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy: []
       ClusterSettings:
         - Name: containerInsights
           Value: enabled # Required for deployment/health CloudWatch alarms (see cloudwatch.yaml)
@@ -313,6 +330,9 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
+            # ASSETS_BASE_URL is intentionally unset in production. Enable
+            # only after an approved additive CDN rollout passes the legacy
+            # S3 URL, CORS, Range and freshness checks in the cost risk audit.
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
           # Each parameter must exist before the task starts — see the
@@ -502,6 +522,8 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
+            # Keep ASSETS_BASE_URL unset, matching the website. Existing S3
+            # asset URLs must remain public even after a future CDN rollout.
             # Admin reaches the website task over Cloud Map service discovery
             # (MULTIVALUE A records) to expire its content caches post-commit.
             - Name: VITE_WEBSITE_URL
@@ -567,8 +589,13 @@ Resources:
       ServiceName: bible-on-site-admin
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref AdminTaskDefinition
-      DesiredCount: 0 # Initially 0 until first deployment
-      LaunchType: FARGATE
+      DesiredCount: 1
+      # Dorad accepts admin-only outages for savings. Apply only after the
+      # atomic family-save fix is deployed and rollout/recovery checks pass.
+      # Keep the shared cluster default and website/API launch types unchanged.
+      CapacityProviderStrategy:
+        - CapacityProvider: !Ref AdminCapacityProvider
+          Weight: 1
       PlatformVersion: LATEST
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -689,6 +716,11 @@ Outputs:
 #
 # Update service (force new deployment):
 #   aws ecs update-service --cluster bible-on-site-cluster --service bible-on-site-website --force-new-deployment --region il-central-1
+#
+# Admin-only Spot: see ../admin-spot-rollout.md for prerequisites, exact
+# provider-association semantics, migration, health checks and on-demand
+# recovery. Do not run this reference template as a stack. No scheduled
+# scale-to-zero is authorized; public website/API capacity remains unchanged.
 #
 # List Cloud Map namespaces:
 #   aws servicediscovery list-namespaces --region il-central-1

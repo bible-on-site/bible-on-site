@@ -145,7 +145,9 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::bible-on-site-data-deploy/*"
 
-          # Lambda - invoke data deploy function
+          # Lambda - invoke data deploy function; the deployer delivers the
+          # DB URL inside the invoke payload (see data-deploy/data-deploy.yaml),
+          # so no lambda configuration permissions are needed here.
           - Sid: LambdaInvoke
             Effect: Allow
             Action:

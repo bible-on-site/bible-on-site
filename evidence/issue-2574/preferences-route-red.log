@@ -1,0 +1,10 @@
+failed BibleOnSite.Tests.Services.PreferencesNavigationTests.PerushimShortcut_EntersPreferencesAtPacks_AsOneHistoryEntry (89ms)
+  Xunit.MicrosoftTestingPlatform.XunitException: Moq.MockException :
+  Expected invocation on the mock once, but was 0 times: n => n.GoToAsync("PreferencesPage?section=packs")
+
+  Performed invocations:
+
+     Mock<IAppNavigator:1> (n):
+
+        IAppNavigator.GoToAsync("ExtensionPacksPage")
+

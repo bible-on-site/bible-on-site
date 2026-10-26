@@ -20,6 +20,7 @@ import {
 	PEREK_LINE_HEIGHTS,
 	PEREK_TANAKH_FONTS,
 	PEREK_WORD_SPACINGS,
+	READER_SETTINGS_EVENT,
 	READER_SETTINGS_STORAGE_KEY,
 	type ReaderSettings as ReaderState,
 	setStoredReaderSettings,
@@ -35,6 +36,14 @@ import {
 	type SettingsSection,
 	saveRecitationSettings,
 } from "@/lib/recitation-settings";
+import {
+	DEFAULT_SEFER_BOOKMARK_SETTINGS,
+	getSeferBookmarkSettings,
+	SEFER_BOOKMARKS_EVENT,
+	SEFER_BOOKMARKS_KEY,
+	type SeferBookmarkSettings,
+	saveSeferBookmarkSettings,
+} from "@/lib/sefer-bookmark-settings";
 import styles from "./reader-settings.module.css";
 import SettingsIcon from "./SettingsIcon";
 
@@ -80,6 +89,9 @@ export default function ReaderSettings() {
 	const [masking, setMasking] = useState<DivineNameMaskingSettings>(
 		DEFAULT_DIVINE_NAME_MASKING,
 	);
+	const [bookmarks, setBookmarks] = useState<SeferBookmarkSettings>(
+		DEFAULT_SEFER_BOOKMARK_SETTINGS,
+	);
 	const [section, setSection] = useState<SettingsSection>("display");
 	const [scoped, setScoped] = useState(false);
 	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -99,6 +111,13 @@ export default function ReaderSettings() {
 	const updateMaskingChoice = (patch: Partial<DivineNameMaskingSettings>) => {
 		if (masking.enabled) updateMasking(patch);
 	};
+	const updateBookmarks = (patch: Partial<SeferBookmarkSettings>) =>
+		saveSeferBookmarkSettings({ ...bookmarks, ...patch });
+	// Option edits while the layer is hidden would be invisible — the
+	// disabled fieldset mirrors masking's own guard.
+	const updateBookmarksChoice = (patch: Partial<SeferBookmarkSettings>) => {
+		if (bookmarks.enabled) updateBookmarks(patch);
+	};
 	const close = useCallback(() => {
 		dialog.current?.close();
 		setAnchor(null);
@@ -108,10 +127,17 @@ export default function ReaderSettings() {
 		setDisplay(getStoredReaderSettings());
 		setRecitation(getRecitationSettings());
 		setMasking(getDivineNameMaskingSettings());
+		setBookmarks(getSeferBookmarkSettings());
 		const updated = (event: Event) =>
 			setRecitation((event as CustomEvent<RecitationSettings>).detail);
+		// Same-tab writes from the top-nav accessibility menu dispatch through
+		// READER_SETTINGS_EVENT; the panel mirrors them so both controls agree.
+		const displayUpdated = (event: Event) =>
+			setDisplay((event as CustomEvent<ReaderState>).detail);
 		const maskingUpdated = (event: Event) =>
 			setMasking((event as CustomEvent<DivineNameMaskingSettings>).detail);
+		const bookmarksUpdated = (event: Event) =>
+			setBookmarks((event as CustomEvent<SeferBookmarkSettings>).detail);
 		// Cross-tab storage events fire for every key — only re-read the
 		// preferences this panel actually shows, so unrelated writes elsewhere
 		// in another tab don't churn its controls.
@@ -119,12 +145,14 @@ export default function ReaderSettings() {
 			READER_SETTINGS_STORAGE_KEY,
 			RECITATION_SETTINGS_KEY,
 			DIVINE_NAME_MASKING_KEY,
+			SEFER_BOOKMARKS_KEY,
 		]);
 		const stored = (event: StorageEvent) => {
 			if (!OWNED_KEYS.has(event.key ?? "")) return;
 			setDisplay(getStoredReaderSettings());
 			setRecitation(getRecitationSettings());
 			setMasking(getDivineNameMaskingSettings());
+			setBookmarks(getSeferBookmarkSettings());
 			applyReaderSettings(getStoredReaderSettings());
 		};
 		const opened = (event: Event) => {
@@ -135,12 +163,16 @@ export default function ReaderSettings() {
 		};
 		window.addEventListener(OPEN_READER_SETTINGS_EVENT, opened);
 		window.addEventListener(RECITATION_SETTINGS_EVENT, updated);
+		window.addEventListener(READER_SETTINGS_EVENT, displayUpdated);
 		window.addEventListener(DIVINE_NAME_MASKING_EVENT, maskingUpdated);
+		window.addEventListener(SEFER_BOOKMARKS_EVENT, bookmarksUpdated);
 		window.addEventListener("storage", stored);
 		return () => {
 			window.removeEventListener(OPEN_READER_SETTINGS_EVENT, opened);
 			window.removeEventListener(RECITATION_SETTINGS_EVENT, updated);
+			window.removeEventListener(READER_SETTINGS_EVENT, displayUpdated);
 			window.removeEventListener(DIVINE_NAME_MASKING_EVENT, maskingUpdated);
+			window.removeEventListener(SEFER_BOOKMARKS_EVENT, bookmarksUpdated);
 			window.removeEventListener("storage", stored);
 		};
 	}, []);
@@ -385,6 +417,106 @@ export default function ReaderSettings() {
 											</fieldset>
 										),
 									)}
+								</fieldset>
+								<fieldset
+									className={styles.maskingGroup}
+									disabled={!bookmarks.enabled}
+								>
+									<legend>
+										<label>
+											סימניות פרקים
+											<input
+												className={styles.maskingToggle}
+												type="checkbox"
+												checked={bookmarks.enabled}
+												onChange={(e) =>
+													updateBookmarks({ enabled: e.target.checked })
+												}
+											/>
+										</label>
+									</legend>
+									<small>לשוניות פרקים בשולי הספר לניווט מהיר</small>
+									<label>
+										מיקום
+										<select
+											aria-label="מיקום סימניות"
+											value={bookmarks.placement}
+											onChange={(e) =>
+												updateBookmarksChoice({
+													placement: e.target
+														.value as SeferBookmarkSettings["placement"],
+												})
+											}
+										>
+											<option value="sides">שני הצדדים</option>
+											<option value="right">ימין</option>
+											<option value="left">שמאל</option>
+											<option value="top">עליון</option>
+											<option value="bottom">תחתון</option>
+											<option value="top-bottom">עליון ותחתון</option>
+										</select>
+									</label>
+									<label>
+										כיוון
+										<select
+											aria-label="כיוון סימניות"
+											value={bookmarks.orientation}
+											onChange={(e) =>
+												updateBookmarksChoice({
+													orientation: e.target
+														.value as SeferBookmarkSettings["orientation"],
+												})
+											}
+										>
+											<option value="perpendicular">מאונך לשולי הספר</option>
+											<option value="parallel">מקביל לשולי הספר</option>
+										</select>
+									</label>
+									<label>
+										קיבוע
+										<select
+											aria-label="קיבוע סימניות"
+											value={bookmarks.attachment}
+											onChange={(e) =>
+												updateBookmarksChoice({
+													attachment: e.target
+														.value as SeferBookmarkSettings["attachment"],
+												})
+											}
+										>
+											<option value="leaf">מסתובב עם הדף</option>
+											<option value="pinned">קבוע לספר</option>
+										</select>
+									</label>
+									<label>
+										סדר
+										<select
+											aria-label="סדר סימניות"
+											value={bookmarks.order}
+											onChange={(e) =>
+												updateBookmarksChoice({
+													order: e.target
+														.value as SeferBookmarkSettings["order"],
+												})
+											}
+										>
+											<option value="page">לפי סדר הפרקים</option>
+											<option value="reverse-page">סדר הפוך</option>
+											<option value="title">לפי שם הפרק</option>
+										</select>
+									</label>
+									<label>
+										<input
+											type="checkbox"
+											checked={bookmarks.upcomingOnly}
+											onChange={(e) =>
+												updateBookmarksChoice({
+													upcomingOnly: e.target.checked,
+												})
+											}
+										/>
+										הצג רק פרקים הבאים
+									</label>
 								</fieldset>
 							</section>
 						) : (

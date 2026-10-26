@@ -37,9 +37,11 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
 - **Setup Environment Variables** (`setup_env`): resolves tool versions
   (e.g. Playwright) and module paths used by every other job.
 - **Determine Baseline Availability** (`determine_baseline_availability`):
-  checks which trusted `master` artifacts exist, downloads each via the
-  REST API and re-uploads it into the current run so consumers resolve
-  baselines through ordinary `actions/download-artifact`. Covered baselines:
+  checks which trusted `master` artifacts exist (name-filtered REST lookups)
+  and emits one availability flag per baseline; each consumer then fetches
+  the baseline directly by name through the REST API — same-run artifacts
+  still resolve through ordinary `actions/download-artifact`. Covered
+  baselines:
   per-module coverage (`{website,api,app,bulletin,admin,data}-coverage.master`),
   perushim data (`perushim-data-sql.master`,
   `perushim-sqlite-v2-indexed.master`) and per-platform app E2E coverage
@@ -120,7 +122,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
     `perushim_data` must succeed when the pipeline changed or a perushim
     baseline is missing.
 - Restores per-module coverage — from the module job's own run artifact when
-  it ran, else from the re-uploaded `*.master` baseline.
+  it ran, else the `*.master` baseline fetched by name through the REST API.
 - Merges the **app** report's three layers — unit + integration + per-platform
   mobile E2E (`merge-lcov.mts --relocate app/BibleOnSite/ --hits-only`):
   executed-hit records union in, the instrumented build's larger zero-hit
@@ -128,7 +130,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
   a successful `app_mobile_e2e` must contribute both platform reports.
   The combined report is stored as `app-coverage.<run>` and, on master,
   replaces `app-coverage.master`.
-- Runs the devops test suites (`npm run test:version`, `determine-changes`,
+- Runs the devops test suites (`bun run test:version`, `determine-changes`,
   `e2e-impact`, `e2e-coverage-trees`, `codecov-report-state`,
   `bencher-comparison` tests).
 - Publishes per-flag coverage to Codecov (`website`, `api`, `app`, `bulletin`,
@@ -143,7 +145,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 `package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch
 events whenever their module's `module_changed` or `ci_changed` fires. Those
 runs execute the exact release Docker build (same Dockerfile, `web` context,
-`DOCKER_BUILDKIT=0`) but skip every artifact upload, so nothing is released
+BuildKit with `type=gha` layer cache) but skip every artifact upload, so nothing is released
 or deployed; `cross_module_ci` gates them under the same triggers. Any
 Dockerfile under a module dir counts as `module_changed`; the shared
 `web/.dockerignore` context, `shared-dockerize.yml` (API) and
@@ -179,11 +181,11 @@ Performance builds the same Next.js app pre-merge.
 The reusable orchestrator composes one orchestration layer over reusable legs:
 
 ```
-resolve_perushim_input  →  appium_android (runner: build-and-run)
-                        →  build_ios      (runner: build)
-                        →  plan_ios       (select -> runtime plan -> ios-matrix)
-                        →  ios_shard_<N>  (runner: prebuilt-run, needs
-                                         build_ios + plan_ios)
+appium_android (runner: build-and-run)
+build_ios      (runner: build)
+plan_ios       (select -> runtime plan -> ios-matrix)
+ios_shard_<N>  (runner: prebuilt-run, needs
+                build_ios + plan_ios)
 merge_ios (always(), needs every planned shard)
 ```
 
@@ -217,7 +219,7 @@ merge_ios (always(), needs every planned shard)
   not refresh baselines. Diagnostic/provisional per-test artifacts are still
   uploaded from PR runs, but never as baselines.
 - **Session lifecycle per leg** (#2248/#2253/#2255): resolve/simctl-create the
-  device → start async boot + shared state restore in parallel with node/npm
+  device → start async boot + shared state restore in parallel with node/bun
   restore, Appium/WDA agent prep, and (iOS) shared-build download → the pilot
   waits on every started gate before `Run ... shard`. The harness keeps one
   Appium session per xUnit device-collection and replays the identical
@@ -225,15 +227,19 @@ merge_ios (always(), needs every planned shard)
   a transport failure builds a fresh WDA session. A supervisor watchdog plus
   per-test/batch deadlines bound runaway legs; cleanup captures diagnostics,
   deletes the cloned device, and reports the bounded outcome.
-- **Perushim input** (orchestrator `resolve_perushim_input`): shards and the
-  Android leg package the same `perushim-sqlite-v2-indexed` catalog/notes pair
-  `package_app` ships — this run's artifact when the pipeline regenerated it,
-  the `master` baseline otherwise.
+- **Perushim input** (`perushim_notes_sqlite_artifact`): the Android leg and
+  the shared iOS build package the same `perushim-sqlite-v2-indexed`
+  catalog/notes pair `package_app` ships — this run's artifact via
+  `actions/download-artifact` when the pipeline regenerated it, else the
+  `master` baseline fetched by name through the REST API.
 
 ## Cache and reuse strategy
 
 All caches are owned by the native runner legs (plus `actions/cache` inside
-`ci.yml` for NuGet/npm). Keys are derived on every leg by `hash-native-deps.mjs`
+`ci.yml` for NuGet). The bun store cache shared by every JS job preamble in
+`ci.yml` and the `cd-*` workflows is centralized in the
+`.github/actions/setup-js` + `.github/actions/save-bun-store` composite
+actions. Keys are derived on every leg by `hash-native-deps.mjs`
 / `nuget-cache-key.ts` (bounded `hashFiles` — the manifest file is hashed
 directly when the file enumeration budget would be exceeded, #2184). Save
 policy differs per cache: NuGet, node_modules and iOS `obj` intermediates save
@@ -246,7 +252,7 @@ save can only rewrite the state that same key already describes.
 | Cache | Key content | Notes |
 |-------|-------------|-------|
 | NuGet | `nuget-key-mac` recipe (maui package families + versions) | Restored on every leg |
-| `app/mobile-e2e/node_modules` | `node-modules-<node>-<package-lock sha>` | Exact hit skips `npm ci` |
+| `app/mobile-e2e/node_modules` | `node-modules-<node>-<bun-lock sha>` | Exact hit skips `bun install --frozen-lockfile` |
 | MAUI workloads | workload recipe + `WorkloadMauiInfo` stamp | Version probe skipped on `hit=exact` (was ~6-7min); cached `<sdk>.<band>-workloads.json` is sanity-checked against the actual installed set |
 | `BibleOnSite` obj + NuGet intermediates | `obj-<deps>-<stamp>` recipe | `app/BibleOnSite/obj` itself is excluded — stale signed intermediates break codesign |
 | iOS simulator state | toolchain id + device recipe + `tests.sqlite` signature | `Finish ... simulator setup` replays ownership/battery flags, `simctl bootstatus`, validates the clone |
@@ -339,7 +345,7 @@ the original payload and lets the normal CD guards and queued master version
 publisher finish recovery.
 
 See [GitHub's release API](https://docs.github.com/en/rest/releases/releases) and
-validate changes with `npm run test:version` in `devops`.
+validate changes with `bun run test:version` in `devops`.
 
 TestFlight delivery reads the app identity, marketing version, and build number
 from the published IPA and checks that exact iOS build through Apple's API.

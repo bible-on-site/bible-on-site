@@ -67,8 +67,10 @@ public class HtmlView : View
                 }
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: commentary-cell load failure swaps in fallback text
+        catch (Exception ex) //NOSONAR — commentary-cell load failure swaps in fallback text.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Commentary cell loading failed: {ex}");
             MainThread.BeginInvokeOnMainThread(() =>
             {

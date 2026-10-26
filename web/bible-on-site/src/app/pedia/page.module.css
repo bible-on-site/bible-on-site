@@ -17,6 +17,15 @@
   text-align: center;
 }
 
+/* Shared reading-metrics badge (#2607). */
+.readingTime {
+  display: block;
+  color: var(--muted-text, #666);
+  font-size: 0.85rem;
+  text-align: center;
+  margin: -4px 0 12px;
+}
+
 .pageSubtitle {
   font-size: 1rem;
   color: #6b7280;
@@ -341,14 +350,17 @@
 }
 
 /* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
-.homepageContent {}
+.homepageContent {
+  display: block;
+}
 .entryContent h2, .homepageContent h2 { font-size: 2em; margin-block: 0.67em; }
 .entryContent h3, .homepageContent h3 { font-size: 1.5em; margin-block: 0.83em; }
 .entryContent h4, .homepageContent h4 { font-size: 1.17em; margin-block: 1em; }
 .entryContent h5, .homepageContent h5 { font-size: 1em; margin-block: 1.33em; }
 .entryContent h6, .homepageContent h6 { font-size: 0.83em; margin-block: 1.67em; }
 
-.entryContent sup {
+.entryContent sup,
+.homepageContent sup {
   font-size: 11px;
   vertical-align: super;
   line-height: 0;
@@ -356,40 +368,88 @@
   font-weight: normal;
 }
 
-.entryContent sup a {
+.entryContent sup a,
+.homepageContent sup a {
   color: inherit;
   text-decoration: none;
   padding: 0 1px;
 }
 
-.entryContent sup a:hover {
+.entryContent sup a:hover,
+.homepageContent sup a:hover {
   text-decoration: underline;
 }
 
-/* הערות שוליים (tiptap-footnotes) — האות העברית מגיעה מה-counter המובנה */
-.entryContent ol:global(.footnotes) {
-  list-style: hebrew;
+/* הערות שוליים — כל הסימונים הדקורטיביים (אות האזכור, תווית ההערה, חץ החזרה)
+   נוצרים ב-pseudo-elements מתוך data-marker, כדי שלא ייכנסו לטקסט
+   ולחילוץ SEO (#2615) */
+.entryContent a:global(.footnote-ref)::before,
+.homepageContent a:global(.footnote-ref)::before {
+  content: attr(data-marker);
+}
+
+.entryContent ol:global(.footnotes),
+.homepageContent ol:global(.footnotes) {
+  list-style: none;
   margin-top: 2rem;
   padding-top: 1rem;
-  padding-right: 2rem;
+  padding-right: 0;
   padding-left: 0;
   border-top: 1px solid #dadce0;
   font-size: 0.95rem;
   color: #3c4043;
 }
 
-.entryContent ol:global(.footnotes) li {
+.entryContent ol:global(.footnotes) li,
+.homepageContent ol:global(.footnotes) li {
+  position: relative;
   margin: 0.35em 0;
+  padding-inline-start: 1.8em;
 }
 
-.entryContent ol:global(.footnotes) li p {
+.entryContent ol:global(.footnotes) li::before,
+.homepageContent ol:global(.footnotes) li::before {
+  content: attr(data-marker);
+  position: absolute;
+  inset-inline-start: 0;
+  color: #5f6368;
+}
+
+/* כותרת המקטע נוצרת גם היא — אחידה לכל דורות הסימון */
+.entryContent ol:global(.footnotes)::before,
+.homepageContent ol:global(.footnotes)::before {
+  content: "הערות";
+  display: block;
+  font-weight: 600;
+  font-size: 1.05em;
+  margin-bottom: 0.5em;
+}
+
+.entryContent ol:global(.footnotes) li p,
+.homepageContent ol:global(.footnotes) li p {
   margin: 0.15em 0;
 }
 
-.entryContent a:global(.footnote-backref) {
+.entryContent a:global(.footnote-backref),
+.homepageContent a:global(.footnote-backref) {
   margin-inline-start: 0.4em;
   text-decoration: none;
   color: #6b7280;
+}
+
+.entryContent a:global(.footnote-backref)::before,
+.homepageContent a:global(.footnote-backref)::before {
+  /* \FE0E forces text presentation so the glyph doesn't render as emoji */
+  content: "↩\FE0E";
+}
+
+/* הדגשת יעד הקפיצה מהאזכור/חזרה */
+.entryContent ol:global(.footnotes) li:target,
+.homepageContent ol:global(.footnotes) li:target,
+.entryContent sup:target,
+.homepageContent sup:target {
+  background-color: #fff3bf;
+  border-radius: 3px;
 }
 
 .entityBadges {
@@ -675,12 +735,26 @@
     color: #9aa0a6;
   }
 
-  .entryContent ol:global(.footnotes) {
+  .entryContent ol:global(.footnotes),
+  .homepageContent ol:global(.footnotes) {
     color: #d7dae0;
   }
 
-  .entryContent a:global(.footnote-backref) {
+  .entryContent ol:global(.footnotes) li::before,
+  .homepageContent ol:global(.footnotes) li::before {
     color: #9aa0a6;
+  }
+
+  .entryContent a:global(.footnote-backref),
+  .homepageContent a:global(.footnote-backref) {
+    color: #9aa0a6;
+  }
+
+  .entryContent ol:global(.footnotes) li:target,
+  .homepageContent ol:global(.footnotes) li:target,
+  .entryContent sup:target,
+  .homepageContent sup:target {
+    background-color: #4a3d10;
   }
 
   .entityBadge {

@@ -14,14 +14,23 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
 import {
 	pediaEntryPath,
 	pediaInvalidation,
 	revalidateWebsite,
 } from "../website-revalidate";
-import { pediaInvalidationForEntryIds } from "./paths";
+import {
+	dropSelfShadowedAliasInTx,
+	keepOldNameAsAliasInTx,
+} from "./alias-ops.server";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { saveEntryRevisioned } from "./revisions";
+import { pediaInvalidationForEntryIds } from "./paths";
+import {
+	assertEntryFieldsValid,
+	saveEntryRevisioned,
+	translateEntryWriteError,
+} from "./revisions";
 
 const ANIMAL_KIND_KEYS = ["BEHEMA", "CHAYA", "OF", "SHERETZ"] as const;
 const ANIMAL_PURITY_KEYS = ["TAHOR", "TAMEH"] as const;
@@ -232,12 +241,20 @@ export const getEntry = createServerFn({ method: "GET" })
 	.handler(async ({ data: id }) => {
 		const entry = await loadTanahpediaEntryById(id);
 		if (!entry) throw new Error("Entry not found");
+		// Head is resolved topologically — the APPLIED row no APPLIED child
+		// bases on — because second-resolution created_at plus random UUIDs
+		// cannot order two commits made within the same second.
 		const head = await queryOne<Pick<EntryRevisionRow, "id">>(
 			`SELECT id FROM tanahpedia_entry_revision
 			 WHERE entry_id = ? AND status = 'APPLIED'
+			 AND NOT EXISTS (
+				 SELECT 1 FROM tanahpedia_entry_revision c
+				 WHERE c.entry_id = ? AND c.status = 'APPLIED'
+				   AND c.base_revision_id = tanahpedia_entry_revision.id
+			 )
 			 ORDER BY created_at DESC, id DESC
 			 LIMIT 1`,
-			[id],
+			[id, id],
 		);
 		return { ...entry, currentRevisionId: head?.id ?? null };
 	});
@@ -254,35 +271,42 @@ export const createEntry = createServerFn({ method: "POST" })
 		}) => data,
 	)
 	.handler(async ({ data }) => {
+		assertEntryFieldsValid(data);
 		const created = await transaction(async (conn) => {
-			await txExecute(
-				conn,
-				"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
-				[data.id, data.unique_name, data.title, data.content || null],
-			);
 			const headId = crypto.randomUUID();
-			await txExecute(
-				conn,
-				`INSERT INTO tanahpedia_entry_revision
-				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
-				  source, notes, status, base_revision_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', NULL)`,
-				[
-					headId,
-					data.id,
-					data.unique_name,
-					data.title,
-					data.content || null,
-					data.source?.trim() || "admin",
-					data.notes?.trim() || null,
-				],
-			);
+			try {
+				await txExecute(
+					conn,
+					"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
+					[data.id, data.unique_name, data.title, data.content || null],
+				);
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_entry_revision
+					 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
+					  source, notes, status, base_revision_id)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', NULL)`,
+					[
+						headId,
+						data.id,
+						data.unique_name,
+						data.title,
+						data.content || null,
+						data.source?.trim() || "admin",
+						data.notes?.trim() || null,
+					],
+				);
+			} catch (err) {
+				throw translateEntryWriteError(err);
+			}
 			const entry = await txQueryOne<TanahpediaEntry>(
 				conn,
 				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
 				[data.id],
 			);
 			if (!entry) throw new Error("Entry not found");
+			// Same-transaction reading metrics (#2607).
+			await recomputeEntryMetrics(conn, data.id, entry.content);
 			return { ...entry, headRevisionId: headId };
 		});
 		await revalidateWebsite(
@@ -301,17 +325,45 @@ export const updateEntry = createServerFn({ method: "POST" })
 			baseRevisionId?: string | null;
 			source?: string;
 			notes?: string | null;
+			/** Rename flow: keep the previous unique_name as a live alias to this entry. */
+			keepOldNameAsAlias?: boolean;
 		}) => data,
 	)
 	.handler(async ({ data }) => {
+		assertEntryFieldsValid(data);
 		const updated = await transaction(async (conn) => {
-			const {
-				entry,
+			const { entry, headRevisionId, unchanged, previousUniqueName } =
+				await saveEntryRevisioned(conn, data);
+			let oldNameAliasCreated = false;
+			if (
+				!unchanged &&
+				previousUniqueName &&
+				previousUniqueName !== entry.unique_name
+			) {
+				// The new canonical name shadows a self-referencing alias row — drop it.
+				await dropSelfShadowedAliasInTx(conn, data.id, entry.unique_name);
+				if (data.keepOldNameAsAlias) {
+					// Same commit as the rename — no window where the old URL 404s.
+					oldNameAliasCreated = await keepOldNameAsAliasInTx(
+						conn,
+						data.id,
+						previousUniqueName,
+					);
+				}
+			}
+			return {
+				...entry,
 				headRevisionId,
 				unchanged,
 				previousUniqueName,
-			} = await saveEntryRevisioned(conn, data);
-			return { ...entry, headRevisionId, unchanged, previousUniqueName };
+				oldNameAliasCreated,
+				// Surfaced to the editor so it can report what happened to the
+				// old URL after a committed rename.
+				renamedFrom:
+					!unchanged && previousUniqueName !== entry.unique_name
+						? previousUniqueName
+						: null,
+			};
 		});
 		// A no-op save changes no public content, so nothing expires.
 		if (!updated.unchanged) {
@@ -336,12 +388,24 @@ export const deleteEntry = createServerFn({ method: "POST" })
 			"SELECT unique_name FROM tanahpedia_entry WHERE id = ?",
 			[id],
 		);
-		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
-		await revalidateWebsite(
-			pediaInvalidation(
-				...(previous ? [pediaEntryPath(previous.unique_name)] : []),
-			),
+		// Alias/disambiguation names this entry is a target of — their public
+		// pages lose a target (FK cascade), so they expire too.
+		const aliasNames = await query<{ name: string }>(
+			`SELECT DISTINCT name FROM (
+			   SELECT s.name AS name FROM tanahpedia_entry_synonym s WHERE s.entry_id = ?
+			   UNION
+			   SELECT s2.name AS name
+			     FROM tanahpedia_entry_synonym_disambiguation d
+			     JOIN tanahpedia_entry_synonym s2 ON s2.id = d.synonym_id
+			    WHERE d.entry_id = ?
+			 ) names`,
+			[id, id],
 		);
+		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
+		const urls = new Set<string>();
+		if (previous) urls.add(pediaEntryPath(previous.unique_name));
+		for (const { name } of aliasNames) urls.add(pediaEntryPath(name));
+		await revalidateWebsite(pediaInvalidation(...urls));
 		return { success: true };
 	});
 
@@ -382,9 +446,7 @@ export const removeEntity = createServerFn({ method: "POST" })
 		);
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds(
-				link ? [link.entry_id] : [],
-			),
+			await pediaInvalidationForEntryIds(link ? [link.entry_id] : []),
 		);
 		return { success: true };
 	});

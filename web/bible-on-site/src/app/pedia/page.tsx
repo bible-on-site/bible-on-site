@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildLandingGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_HIERARCHY,
@@ -17,10 +18,11 @@ import type { CategoryKey } from "@/lib/tanahpedia/types";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: 'תנכפדיה | תנ"ך על הפרק',
 	description: 'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים ועוד',
-};
+	canonical: "/pedia",
+});
 
 // Today's anniversaries and recent entries must be loaded on each request.
 export const dynamic = "force-dynamic";
@@ -79,7 +81,7 @@ export default async function TanahpediaLandingPage() {
 									cargo make mysql-populate-dev
 								</code>
 								, ואז הריצו שוב{" "}
-								<code className={styles.dbLoadWarningCode}>npm run dev</code>.
+								<code className={styles.dbLoadWarningCode}>bun run dev</code>.
 							</p>
 							<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
 						</>

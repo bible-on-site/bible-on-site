@@ -64,6 +64,7 @@ fn create_db(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
     insert_sefarim(&tx, sefarim)?;
     crate::reading_units::insert_masora_reading_units(&tx, sefarim)?;
     crate::reading_units::insert_parasha_reading_units(&tx, sefarim)?;
+    crate::reading_units::insert_parasha_aliyot(&tx, sefarim)?;
 
     // Commit transaction
     tx.commit()?;

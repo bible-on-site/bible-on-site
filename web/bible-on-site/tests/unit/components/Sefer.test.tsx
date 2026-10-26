@@ -165,8 +165,8 @@ jest.mock("@/util/hebdates-util", () => ({
 	}),
 }));
 
-jest.mock("@/app/929/[number]/components/BlankPageContent", () => ({
-	BlankPageContent: () => <div data-testid="blank-page" />,
+jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
+	SeferPanel: () => <div data-testid="blank-page" />,
 }));
 
 jest.mock("@/app/929/[number]/components/Ptuha", () => ({
@@ -183,6 +183,10 @@ import { setSeferOpenPerush } from "@/app/929/[number]/components/sefer-pasuk-na
 import type { QriSegment } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
+import {
+	DEFAULT_SEFER_BOOKMARK_SETTINGS,
+	saveSeferBookmarkSettings,
+} from "@/lib/sefer-bookmark-settings";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { CONTENT_OFFSET } from "@/app/929/[number]/components/sefer-page-utils";
 
@@ -468,6 +472,108 @@ describe("Sefer component", () => {
 		expect(capturedFlipBookProps.mouseModeStorageKey).toBe(
 			"sefer-mouse-book-mode",
 		);
+	});
+
+	describe("chapter tabs (#2543)", () => {
+		const provider = () =>
+			capturedFlipBookProps.bookmarkProvider as {
+				getBookmarks: (context: {
+					currentPageIndex: number;
+					currentLeafIndex: number;
+					direction: "ltr" | "rtl";
+				}) => readonly {
+					id: string;
+					pageIndex: number;
+					label: string;
+					data?: unknown;
+				}[];
+				placement?: string;
+				orientation?: string;
+				attachment?: string;
+				order?: unknown;
+				className?: string;
+			};
+
+		beforeEach(() => {
+			localStorage.clear();
+			saveSeferBookmarkSettings(DEFAULT_SEFER_BOOKMARK_SETTINGS);
+		});
+
+		it("enables native bookmarks with one canonical tab per perek", () => {
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+			const p = provider();
+			expect(p.placement).toBe("sides");
+			expect(p.orientation).toBe("perpendicular");
+			expect(p.attachment).toBe("leaf");
+			expect(p.order).toBe("page");
+			expect(p.className).toBe("sefer-bookmarks");
+			expect(
+				p.getBookmarks({
+					currentPageIndex: 0,
+					currentLeafIndex: 0,
+					direction: "rtl",
+				}),
+			).toEqual([
+				expect.objectContaining({
+					id: "perek-1",
+					pageIndex: 3,
+					label: "בראשית א - בראשית א",
+				}),
+			]);
+		});
+
+		it("hides the tabs when סימניות is disabled", () => {
+			saveSeferBookmarkSettings({ enabled: false });
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+		});
+
+		it("applies stored display preferences to the provider", () => {
+			saveSeferBookmarkSettings({
+				placement: "top",
+				orientation: "parallel",
+				attachment: "pinned",
+				order: "title",
+				upcomingOnly: true,
+			});
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			const p = provider();
+			expect(p.placement).toBe("top");
+			expect(p.orientation).toBe("parallel");
+			expect(p.attachment).toBe("pinned");
+			expect(typeof p.order).toBe("function");
+			// upcomingOnly filters out tabs before the current page; the perek
+			// sits at page 3 so it is still listed from the book's front cover.
+			expect(
+				p.getBookmarks({
+					currentPageIndex: 3,
+					currentLeafIndex: 1,
+					direction: "rtl",
+				}),
+			).toHaveLength(1);
+		});
 	});
 
 	it("opens and closes bookshelf modal via toolbar button", () => {

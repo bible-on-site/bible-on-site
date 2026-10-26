@@ -18,16 +18,20 @@ namespace BibleOnSite.ViewModels;
 // Codacy: S2333 false positive — partial is required by the MVVM source
 // generators ([ObservableProperty]/[RelayCommand]) and the Perushim part.
 #pragma warning disable S2333
-public partial class ParashaViewModel : ObservableObject //NOSONAR
+public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewModel //NOSONAR
 #pragma warning restore S2333
 {
     private readonly ParashaDataService _parashaService;
     private readonly PerekDataService _perekService;
     private readonly PerushimCatalogService _catalogService;
     private readonly PerushimNotesService _notesService;
+    private readonly IAppNavigator _navigator;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
     private readonly Func<int, bool>? _hasPerekAudio;
+    private readonly Func<int> _hebrewDateProvider;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -73,11 +77,17 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
     private List<int> _checkedPerushim = new();
 
     /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
     [ObservableProperty]
     private bool _perushimNotesAvailable;
+
+    /// <summary>Whether the first-launch notes pack is still materializing off the reader path (#2430).</summary>
+    [ObservableProperty]
+    private bool _perushimNotesPending;
 
     /// <summary>Whether the perushim catalog is available (bundled).</summary>
     [ObservableProperty]
@@ -103,10 +113,27 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     [ObservableProperty]
     private bool _isTikkunKorimEnabled;
 
-    /// <summary>קריינות reading mode — header play button plus single-tap pasuk playback.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
-    private bool _isQriynotEnabled;
+    /// <summary>
+    /// קריינות — mirrors the global preference (העדפות → על הפרק, default on).
+    /// Setting it writes through to <see cref="PreferencesService.QriynotEnabled"/>.
+    /// </summary>
+    public bool IsQriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            // The PreferencesChanged subscriber raises the property-changed
+            // notifications; raise them here too for the unsaved toggle path.
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        }
+    }
 
     /// <summary>Whether a recitation is downloaded for at least one perek of the displayed unit.</summary>
     [ObservableProperty]
@@ -141,12 +168,15 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         }
     }
 
-    partial void OnUnitChanged(ParashaUnit? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
+    partial void OnUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Unit always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
     }
 
     /// <summary>
@@ -173,11 +203,12 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     public string PerushimEmptyMessage =>
         Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
+        PerushimNotesPending ? "טוען פירושים..." :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרשה זו";
 
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
-    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
+    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable && !PerushimNotesPending;
 
     /// <summary>
     /// The production articles loader — reads the StarterService startup
@@ -208,13 +239,36 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
         Func<int, bool>? hasPerekAudio)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, null, null, null, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, hebrewDateProvider, null, null, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share)
     {
         _parashaService = parashaService;
         _perekService = perekService;
         _preferencesService = preferencesService;
         _catalogService = catalogService ?? PerushimCatalogService.Instance;
         _notesService = notesService ?? PerushimNotesService.Instance;
+        _navigator = navigator ?? ShellAppNavigator.Instance;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _share = share ?? Share.Default;
         _articlesLoader = articlesLoader;
+        _hebrewDateProvider = hebrewDateProvider ?? HebrewDateHelper.GetTodayDateNumber;
 #if MAUI
         _hasPerekAudio = hasPerekAudio ?? (perekId => RecitationService.Instance.HasAudio(perekId));
 #else
@@ -476,6 +530,86 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     }
 
     /// <summary>
+    /// Optional confirmation hook for the holiday case: the page wires it
+    /// to a dialog so tapping פרשת השבוע on a festival Shabbat explains the
+    /// displaced reading and offers the next regular one. Null (or a true
+    /// result) navigates directly.
+    /// </summary>
+    public Func<WeeklyParashaTarget, Task<bool>>? ConfirmHolidayReading { get; set; }
+
+    /// <summary>
+    /// Resolves the weekly parasha for the current tzeit-aware Hebrew date
+    /// (Israel schedule — the product's Jerusalem policy) into reader
+    /// targets. On a festival Shabbat the target is the next regular
+    /// reading and <see cref="WeeklyParashaTarget.HolidayName"/> names the
+    /// displacing festival.
+    /// </summary>
+    public WeeklyParashaTarget? ResolveWeeklyParasha()
+    {
+        var today = _hebrewDateProvider();
+        var reading = SedraSchedule.GetWeeklyReading(today);
+        var target = reading.HasParasha ? reading : SedraSchedule.GetNextRegularReading(today);
+        var parashiot = _parashaService.Parashiot;
+        if (parashiot is null)
+        {
+            return null;
+        }
+
+        var first = target.ParashaIndexes[0];
+        if (first >= parashiot.Count)
+        {
+            return null;
+        }
+
+        // A joined week keeps both portions: the title names the pair and
+        // the landing unit is its first constituent (the second stays one
+        // swipe away, matching the printed luach convention).
+        var headings = target.ParashaIndexes
+            .Where(index => index < parashiot.Count)
+            .Select(index => parashiot[index].Heading);
+        return new WeeklyParashaTarget(
+            parashiot[first].UnitId,
+            $"פרשת {string.Join("-", headings)}",
+            HebrewDateHelper.FormatHebrewDate(target.ShabbatDate),
+            reading.HolidayName,
+            reading.HasParasha ? null : HebrewDateHelper.FormatHebrewDate(reading.ShabbatDate));
+    }
+
+    /// <summary>Navigates to the current פרשת השבוע on the Israel schedule.</summary>
+    [RelayCommand]
+    public async Task LoadWeeklyParashaAsync()
+    {
+        try
+        {
+            if (!_parashaService.IsLoaded)
+            {
+                await _parashaService.LoadAsync();
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
+        catch (Exception ex) //NOSONAR — an unavailable catalog (missing packaged DB) leaves the reader where it is; the next tap retries because the service never marks itself loaded.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Parasha] weekly-reading load failed: {ex.Message}");
+            return;
+        }
+        var target = ResolveWeeklyParasha();
+        if (target is null)
+        {
+            return;
+        }
+        if (target.HolidayName is not null && ConfirmHolidayReading is { } confirm &&
+            !await confirm(target))
+        {
+            return;
+        }
+        if (target.UnitId != UnitId)
+        {
+            await NavigateToUnitAsync(target.UnitId);
+        }
+    }
+
+    /// <summary>
     /// Half-window size for row pre-loading around the current unit. Units can
     /// hold a whole sidra of pesukim, so the buffer stays small.
     /// </summary>
@@ -724,8 +858,12 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
             rebuild = true;
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(IsQriynotEnabled));
+        OnPropertyChanged(nameof(ShowHeaderPlayButton));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
@@ -739,3 +877,28 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         }
     }
 }
+
+/// <summary>
+/// פרשת השבוע navigation target resolved by
+/// <see cref="ParashaViewModel.ResolveWeeklyParasha"/>: the first unit of
+/// the week's reading (a joined week keeps both headings in
+/// <see cref="ReadingTitle"/>) plus the strings the page needs to explain a
+/// festival Shabbat and offer the next regular reading.
+/// </summary>
+/// <param name="UnitId">Stable reading-unit id of the first parasha.</param>
+/// <param name="ReadingTitle">Display title, e.g. "פרשת מטות-מסעי".</param>
+/// <param name="ShabbatDateText">The target reading's Shabbat in Hebrew letters.</param>
+/// <param name="HolidayName">
+/// Set when this week's Shabbat is a festival with no ordinary parasha —
+/// the target then points at the next regular reading.
+/// </param>
+/// <param name="HolidayShabbatDateText">
+/// The displaced festival Shabbat's date in Hebrew letters (only when
+/// <paramref name="HolidayName"/> is set).
+/// </param>
+public sealed record WeeklyParashaTarget(
+    int UnitId,
+    string ReadingTitle,
+    string ShabbatDateText,
+    string? HolidayName,
+    string? HolidayShabbatDateText);

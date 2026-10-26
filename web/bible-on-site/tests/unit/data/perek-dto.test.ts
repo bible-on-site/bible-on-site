@@ -4,6 +4,7 @@ jest.mock("../../../src/util/date", () => ({
 
 import {
 	countRecordedPerakim,
+	getAdjacentPereks,
 	getPerekByPerekId,
 	getPerekIdByDate,
 	getTodaysPerekId,
@@ -306,5 +307,57 @@ describe("countRecordedPerakim", () => {
 
 	it("counts the canonical data's published recordings", () => {
 		expect(countRecordedPerakim()).toBeGreaterThan(400);
+	});
+});
+
+describe("getAdjacentPereks", () => {
+	it("returns canonical neighbors for a mid-sequence perek", () => {
+		const { prev, next } = getAdjacentPereks(500);
+		expect(prev?.perekId).toBe(499);
+		expect(next?.perekId).toBe(501);
+		expect(prev?.source).toBe(getPerekByPerekId(499).source);
+		expect(next?.source).toBe(getPerekByPerekId(501).source);
+	});
+
+	it("returns null prev at the corpus start", () => {
+		const { prev, next } = getAdjacentPereks(1);
+		expect(prev).toBeNull();
+		expect(next?.perekId).toBe(2);
+	});
+
+	it("returns null next at the corpus end", () => {
+		const { prev, next } = getAdjacentPereks(929);
+		expect(next).toBeNull();
+		expect(prev?.perekId).toBe(928);
+	});
+
+	it("crosses the עזרא ע/עזרא נ additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(852);
+		expect(prev?.source).toBe("עזרא ע י");
+		expect(next?.source).toBe("עזרא נ ב");
+	});
+
+	it("crosses the בראשית/שמות sefer boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(51);
+		expect(prev?.perekId).toBe(50);
+		expect(prev?.source).toBe("בראשית נ");
+		expect(next?.perekId).toBe(52);
+		expect(next?.source).toBe("שמות ב");
+	});
+
+	it("crosses the שמואל א/שמואל ב additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(264);
+		expect(prev?.perekId).toBe(263);
+		expect(prev?.source).toBe("שמואל א לא");
+		expect(next?.perekId).toBe(265);
+		expect(next?.source).toBe("שמואל ב ב");
+	});
+
+	it("crosses the מלכים א/מלכים ב additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(309);
+		expect(prev?.perekId).toBe(308);
+		expect(prev?.source).toBe("מלכים א כא");
+		expect(next?.perekId).toBe(310);
+		expect(next?.source).toBe("מלכים ב א");
 	});
 });

@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
@@ -159,9 +160,7 @@ public class PasukFormattedTextTests
             };
             var weak = CreateFormattedWeakReference(pasuk);
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
+            GarbageCollection.CollectCycles();
 
             weak.TryGetTarget(out _).Should().BeFalse();
             GC.KeepAlive(pasuk);
