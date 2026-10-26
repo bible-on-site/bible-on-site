@@ -166,9 +166,8 @@ public class TanahpediaFamilyTreeView : ContentView
             JustifyContent = Microsoft.Maui.Layouts.FlexJustify.Center,
             AlignItems = Microsoft.Maui.Layouts.FlexAlignItems.Start,
         };
-        foreach (var stack in stacks)
+        foreach (var view in stacks.Select(StackView))
         {
-            var view = StackView(stack);
             view.Margin = new Thickness(6, 4);
             row.Add(view);
         }
@@ -300,15 +299,14 @@ public class TanahpediaFamilyTreeView : ContentView
             separator.SetAppThemeColor(BoxView.ColorProperty,
                 Res("Gray200", "#C8C8C8"), Res("Gray700", "#333333"));
             cardColumn.Add(separator);
-            foreach (var line in card.CardCitations)
+            foreach (var citation in card.CardCitations.Select(line => new Label
             {
-                var citation = new Label
-                {
-                    Text = line,
-                    FontSize = 10.5,
-                    HorizontalTextAlignment = TextAlignment.Center,
-                    LineBreakMode = LineBreakMode.WordWrap,
-                };
+                Text = line,
+                FontSize = 10.5,
+                HorizontalTextAlignment = TextAlignment.Center,
+                LineBreakMode = LineBreakMode.WordWrap,
+            }))
+            {
                 citation.SetAppThemeColor(Label.TextColorProperty,
                     Res("Gray500", "#6E6E6E"), Res("Gray400", "#919191"));
                 cardColumn.Add(citation);
