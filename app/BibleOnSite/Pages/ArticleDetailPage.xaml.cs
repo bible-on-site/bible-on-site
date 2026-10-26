@@ -2,7 +2,6 @@ using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
-using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace BibleOnSite.Pages;
@@ -15,7 +14,10 @@ namespace BibleOnSite.Pages;
 public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
 {
     private readonly ArticleDetailViewModel _viewModel;
-    private readonly List<MediaElement> _mediaElements = [];
+    // Article media stays inert until the user asks for playback: creating a
+    // MediaElement handler activates the device audio session, which would
+    // interrupt external music merely for opening the article (#2642).
+    private readonly List<DeferredMediaElement> _mediaElements = [];
 
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
@@ -169,41 +171,31 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
 
     private View CreateVideoPlayer(string url)
     {
-        var mediaElement = new MediaElement
+        var host = new DeferredMediaElement(url, isVideo: true,
+            volume: PreferencesService.Instance.LessonsVolume)
         {
-            Source = MediaSource.FromUri(url),
-            ShouldAutoPlay = false,
-            ShouldShowPlaybackControls = true,
-            Aspect = Aspect.AspectFit,
-            HeightRequest = 220,
-            HorizontalOptions = LayoutOptions.Fill,
-            BackgroundColor = Colors.Black,
-            Volume = PreferencesService.Instance.LessonsVolume
+            HorizontalOptions = LayoutOptions.Fill
         };
-        _mediaElements.Add(mediaElement);
+        _mediaElements.Add(host);
 
         var container = new Border
         {
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
             StrokeThickness = 0,
             Padding = 0,
-            Content = mediaElement
+            Content = host
         };
         return container;
     }
 
     private View CreateAudioPlayer(string url)
     {
-        var mediaElement = new MediaElement
+        var host = new DeferredMediaElement(url, isVideo: false,
+            volume: PreferencesService.Instance.LessonsVolume)
         {
-            Source = MediaSource.FromUri(url),
-            ShouldAutoPlay = false,
-            ShouldShowPlaybackControls = true,
-            HeightRequest = 80,
-            HorizontalOptions = LayoutOptions.Fill,
-            Volume = PreferencesService.Instance.LessonsVolume
+            HorizontalOptions = LayoutOptions.Fill
         };
-        _mediaElements.Add(mediaElement);
+        _mediaElements.Add(host);
 
         var container = new Border
         {
@@ -213,17 +205,16 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
                 ? Color.FromArgb("#444444")
                 : Color.FromArgb("#e0e0e0"),
             Padding = 0,
-            Content = mediaElement
+            Content = host
         };
         return container;
     }
 
     private void CleanupMediaElements()
     {
-        foreach (var me in _mediaElements)
+        foreach (var host in _mediaElements)
         {
-            me.Stop();
-            me.Handler?.DisconnectHandler();
+            host.Release();
         }
         _mediaElements.Clear();
     }
