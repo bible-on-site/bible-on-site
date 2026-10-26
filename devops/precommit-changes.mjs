@@ -5,7 +5,7 @@
  * (MERGE_HEAD) so incoming — already published — changes don't trigger module
  * checks; see test_precommit_merge.py.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 /** @returns {string[]} staged, non-deleted paths with forward slashes */
 export function getStagedChanges() {
@@ -40,4 +40,33 @@ export function runIn(dir, argv) {
 			stdio: "inherit",
 		}).status ?? 1
 	);
+}
+
+/**
+ * Run argv inside dir like runIn, but keep a copy of stdout+stderr while still
+ * streaming it live — callers inspect the output after exit.
+ * @returns {Promise<{status: number, output: string}>}
+ */
+export function runInCapturing(dir, argv) {
+	return new Promise((resolvePromise) => {
+		// same shell rationale as runIn — argv stays repo-controlled.
+		const child = spawn(argv[0], argv.slice(1), { // nosemgrep
+			cwd: dir,
+			shell: process.platform === "win32",
+			stdio: ["inherit", "pipe", "pipe"],
+		});
+		let output = "";
+		child.stdout?.on("data", (chunk) => {
+			output += chunk;
+			process.stdout.write(chunk);
+		});
+		child.stderr?.on("data", (chunk) => {
+			output += chunk;
+			process.stderr.write(chunk);
+		});
+		child.on("error", () => resolvePromise({ status: 1, output }));
+		child.on("close", (status) =>
+			resolvePromise({ status: status ?? 1, output }),
+		);
+	});
 }
