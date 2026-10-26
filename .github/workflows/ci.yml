@@ -2214,9 +2214,7 @@ jobs:
           report_type: test_results
 
       # ============ Coverage Merge ============
-      - name: Build lcov Docker image
-        uses: ./.github/actions/lcov-image
-
+      # CoverageMerge merges LCOV via ReportGenerator — no lcov-cli image needed.
       - name: Merge Coverage Reports
         run: dotnet run --project devops -- CoverageMerge --configuration Release
 
