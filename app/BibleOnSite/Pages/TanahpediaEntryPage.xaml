@@ -127,7 +127,9 @@
                                                    FontAttributes="Bold"
                                                    TextColor="{StaticResource Primary}"
                                                    TextDecorations="Underline"/>
-                                            <Label Grid.Column="1"
+                                            <!-- Verse citation — scripture glyphs get the shared
+                                                 Taamey D face via PasukTextLabel (#2623). -->
+                                            <controls:PasukTextLabel Grid.Column="1"
                                                    FormattedText="{Binding VerseFormatted}"
                                                    FontSize="13"
                                                    MaxLines="3"

@@ -139,6 +139,9 @@
 
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
+		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
+		     attribution inside the package too (#2623). -->
+		<MauiAsset Include="Resources\Fonts\TaameyD-license.txt" LogicalName="TaameyD-license.txt" />
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />

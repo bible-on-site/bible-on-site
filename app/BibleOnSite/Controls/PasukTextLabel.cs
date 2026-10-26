@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using BibleOnSite.Helpers;
 
 namespace BibleOnSite.Controls;
 
@@ -14,6 +15,19 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public class PasukTextLabel : Label
 {
+    /// <summary>
+    /// The shared scripture-font contract (#2623): every pasuk label renders in
+    /// Taamey D — the perek, parasha and masora readers, the focused-pasuk
+    /// overlay and שניים מקרא rows. Set as a local value so the implicit Label
+    /// style's OpenSansRegular can never win; spans without their own
+    /// FontFamily inherit it on every platform (qri/ktiv, reciting/selected
+    /// words, pasuk-number and {פ}/{ס} markers).
+    /// </summary>
+    public PasukTextLabel()
+    {
+        FontFamily = ScriptureFonts.Family;
+    }
+
     /// <summary>
     /// Fully justify the pasuk text to both edges like the inline commentary
     /// below it (#2402). Platform handlers apply their native justification —

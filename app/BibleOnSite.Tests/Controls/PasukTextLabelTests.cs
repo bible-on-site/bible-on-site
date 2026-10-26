@@ -1,4 +1,5 @@
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 
@@ -48,6 +49,28 @@ public class PasukTextLabelTests
         label.FontSize = 24;
 
         reRendered.Should().BeFalse();
+    }
+
+    // #2623: the shared scripture contract — every pasuk label renders Taamey
+    // D. The ctor sets it as a local value so the implicit Label style's
+    // OpenSansRegular can never win; spans without their own family inherit it.
+    [Fact]
+    public void defaults_to_the_scripture_font_family()
+    {
+        new PasukTextLabel().FontFamily.Should().Be(ScriptureFonts.Family);
+    }
+
+    [Fact]
+    public void spans_without_a_family_inherit_the_scripture_face()
+    {
+        // The whole formatted-text path (qri/ktiv, reciting words, {פ}/{ס},
+        // pasuk-number markers) leaves Span.FontFamily unset — pin that the
+        // label face is the only one they can resolve to.
+        var label = new PasukTextLabel();
+        var span = new Span { Text = "א" };
+
+        span.FontFamily.Should().BeNull();
+        label.FontFamily.Should().Be(ScriptureFonts.Family);
     }
 
     // #2402: the reader's pasuk text is fully justified like the commentary

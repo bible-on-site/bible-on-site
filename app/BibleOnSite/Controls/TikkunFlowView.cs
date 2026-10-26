@@ -1,6 +1,5 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
-using GraphicsFont = Microsoft.Maui.Graphics.Font;
 
 namespace BibleOnSite.Controls;
 
@@ -112,6 +111,7 @@ public class TikkunFlowView : GraphicsView
         // word through the native text stack. Keyed by the exact inputs.
         private readonly Dictionary<(string Text, float FontSize, bool Bold), float> _widthCache = new();
         private const string WidthProbeText = "אאא";
+        private const float FauxBoldOffset = 0.5f;
         private float _widthProbe = -1;
 
         public TikkunFlowDrawable(TikkunFlowView view) => _view = view;
@@ -145,7 +145,10 @@ public class TikkunFlowView : GraphicsView
             var lineHeight = (float)_view.TextFontSize * (float)LineHeightFactor;
             foreach (var word in _layout.Words)
             {
-                canvas.Font = word.IsBold ? GraphicsFont.DefaultBold : GraphicsFont.Default;
+                // Taamey D (#2623) — the same scripture face as the pasuk
+                // labels. The canvas resolves IFont.Name through the platform
+                // text stack, not the font registrar.
+                canvas.Font = word.IsBold ? ScriptureFonts.Bold : ScriptureFonts.Regular;
                 canvas.FontSize = word.FontSize;
                 canvas.FontColor = word.TextColor ?? defaultColor;
                 // The draw box must never be tighter than the word's drawn
@@ -161,6 +164,19 @@ public class TikkunFlowView : GraphicsView
                 canvas.DrawString(word.Text, padLeft + word.X, padTop + word.Y,
                     drawWidth, lineHeight,
                     HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
+#if !WINDOWS
+                if (word.IsBold)
+                {
+                    // MAUI's canvas drops IFont.Weight once a bundled font
+                    // resolves to a real typeface (Android asset, iOS CTFont) —
+                    // only Windows honors it via CanvasTextFormat.FontWeight.
+                    // A sub-pixel double-strike keeps the pasuk-marker emphasis
+                    // the system font used to provide (#2623).
+                    canvas.DrawString(word.Text, padLeft + word.X + FauxBoldOffset, padTop + word.Y,
+                        drawWidth, lineHeight,
+                        HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
+                }
+#endif
             }
 
             var needed = _layout.Height + padTop + (float)ContentPadding.Bottom;
@@ -189,7 +205,7 @@ public class TikkunFlowView : GraphicsView
             // shifts the probe width, so entries measured under another
             // context are flushed instead of reused or accumulated.
             var probe = canvas.GetStringSize(
-                WidthProbeText, GraphicsFont.Default, (float)_view.TextFontSize).Width;
+                WidthProbeText, ScriptureFonts.Regular, (float)_view.TextFontSize).Width;
             if (Math.Abs(probe - _widthProbe) > 0.01f)
             {
                 _widthCache.Clear();
@@ -202,7 +218,7 @@ public class TikkunFlowView : GraphicsView
                     return width;
                 }
                 width = canvas.GetStringSize(text,
-                    bold ? GraphicsFont.DefaultBold : GraphicsFont.Default, fontSize).Width;
+                    bold ? ScriptureFonts.Bold : ScriptureFonts.Regular, fontSize).Width;
                 _widthCache[(text, fontSize, bold)] = width;
                 return width;
             };
