@@ -75,6 +75,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
+        WireReaderBackChrome();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -91,7 +92,33 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
-        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
+        WireReaderBackChrome();
+    }
+
+    private void WireReaderBackChrome()
+    {
+        // The capsule Back owns return affordances now (#2467): at this root
+        // page it stays enabled while a transient surface (focused pasuk,
+        // reader menu, search, selection, fullscreen) would consume Back —
+        // the same surfaces TryHandleReaderBack serves. The hamburger keeps
+        // its single job and is never repurposed into a close control.
+        NormalNavigationBar.BackStateProvider = OwnsReaderReturnSurface;
+        // Overlay visibility flips outside UpdateSelectionBar (item taps and
+        // the scrim close the menu without it), so paint changes ride the
+        // same IsVisible notifications the Android back callback uses.
+        ReaderMenuOverlay.PropertyChanged += OnReaderSurfaceVisibilityChanged;
+        ExitFullScreenButton.PropertyChanged += OnReaderSurfaceVisibilityChanged;
+    }
+
+    private void OnReaderSurfaceVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsVisible))
+        {
+            NormalNavigationBar.RefreshBackState();
+#if ANDROID
+            UpdateReaderBack();
+#endif
+        }
     }
 
     /// <summary>
@@ -1157,15 +1184,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // leave the chapter title blank, and later swipes update it as well.
             NormalNavigationTitle.SetBinding(Button.TextProperty, nameof(PerekViewModel.Source));
         }
-        // iOS has no system Back for the overlay, so the navigation slot turns
-        // into the close control there; platforms with system Back keep the
-        // shared hamburger (#2467).
-        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
-        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
-            ? Fonts.FluentUI.arrow_right_24_regular
-            : Fonts.FluentUI.navigation_24_regular;
-        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
-            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
+        // The capsule Back covers the focused-pasuk return on every platform
+        // (#2467) — the hamburger glyph and its flyout role never change.
+        NormalNavigationBar.RefreshBackState();
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
@@ -1275,18 +1296,18 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// iOS has no system Back for the focused-pasuk overlay — the toolbar's
-    /// navigation slot acts as its close control there (#2466).
+    /// Whether a transient reader surface would consume Back — mirrors
+    /// <see cref="TryHandleReaderBack"/>'s ordering without acting on it, so
+    /// the capsule's enabled state reflects the same surfaces the shared
+    /// back pipeline serves (#2467).
     /// </summary>
-    private bool OnFocusedPasukNavigationIntercepted()
-    {
-        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
-        {
-            return false;
-        }
-        ClearAllSelections();
-        return true;
-    }
+    private bool OwnsReaderReturnSurface() =>
+        ExitFullScreenButton.IsVisible
+        || ReaderMenuOverlay.IsOpen
+        || ChapterSearch.IsSearchOpen
+        || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
+            _chapterRecitationSelection, _focusedPasuk != null,
+            _recitationCursor.PlayingKey != null);
 
     /// <summary>
     /// Opens/closes the reader options menu (הקראות, שניים מקרא, תיקון קוראים).

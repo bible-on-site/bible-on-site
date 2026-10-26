@@ -46,6 +46,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCarouselNavigation();
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
+        WireReaderBackChrome();
     }
 
     public MasoraPage(MasoraViewModel viewModel)
@@ -58,6 +59,24 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCarouselNavigation();
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
+        WireReaderBackChrome();
+    }
+
+    /// <summary>
+    /// The capsule Back owns the fullscreen return affordance (#2467): it
+    /// stays enabled while the floating exit control is up — the same
+    /// surface <see cref="TryHandleReaderBack"/> serves.
+    /// </summary>
+    private void WireReaderBackChrome()
+    {
+        NormalNavigationBar.BackStateProvider = () => ExitFullScreenButton.IsVisible;
+        ExitFullScreenButton.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IsVisible))
+            {
+                NormalNavigationBar.RefreshBackState();
+            }
+        };
     }
 
     /// <summary>
