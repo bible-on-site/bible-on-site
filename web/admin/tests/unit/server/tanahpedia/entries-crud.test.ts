@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
 		queryOne: vi.fn(),
 		query: vi.fn(),
 		txExecute: vi.fn(),
+		txQuery: vi.fn(),
 		txQueryOne: vi.fn(),
 		transaction: vi.fn(async (fn: (c: typeof conn) => unknown) => fn(conn)),
 		loadEntryMock: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("~/server/db", () => ({
 	queryOne: mocks.queryOne,
 	transaction: mocks.transaction,
 	txExecute: mocks.txExecute,
+	txQuery: mocks.txQuery,
 	txQueryOne: mocks.txQueryOne,
 }));
 
@@ -70,6 +72,7 @@ describe("tanahpedia entry server functions", () => {
 			mocks.queryOne,
 			mocks.query,
 			mocks.txExecute,
+			mocks.txQuery,
 			mocks.txQueryOne,
 			mocks.transaction,
 			mocks.loadEntryMock,
@@ -77,6 +80,7 @@ describe("tanahpedia entry server functions", () => {
 		])
 			mock.mockReset();
 		mocks.query.mockResolvedValue([]);
+		mocks.txQuery.mockResolvedValue([]);
 		mocks.transaction.mockImplementation(async (fn) => fn(mocks.conn));
 	});
 
@@ -363,12 +367,130 @@ describe("tanahpedia entry server functions", () => {
 				baseRevisionId: "rev-1",
 				source: "admin",
 			};
-			await expect(updateEntry({ data: input })).resolves.toEqual({
+			await expect(updateEntry({ data: input })).resolves.toMatchObject({
 				id: "entry-1",
 				title: "כותרת",
 				headRevisionId: "rev-2",
+				oldNameAliasCreated: false,
+				renamedFrom: null,
 			});
 			expect(mocks.saveRevisionedMock).toHaveBeenCalledWith(mocks.conn, input);
+		});
+
+		function renameResult(over: Record<string, unknown> = {}) {
+			return {
+				entry: {
+					id: "entry-1",
+					unique_name: "חדש",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+					created_at: "",
+					updated_at: "",
+				},
+				headRevisionId: "rev-2",
+				previousUniqueName: "ישן",
+				...over,
+			};
+		}
+
+		function synonymInserts() {
+			return mocks.txExecute.mock.calls.filter((c) =>
+				String(c[1]).includes("INSERT INTO tanahpedia_entry_synonym"),
+			);
+		}
+
+		it("keeps the old URL as an alias in the same commit when asked", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue(renameResult());
+			mocks.txQuery.mockResolvedValue([]); // old name is unclaimed
+
+			const result = await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "חדש",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+					keepOldNameAsAlias: true,
+				},
+			});
+
+			expect(result).toMatchObject({
+				renamedFrom: "ישן",
+				oldNameAliasCreated: true,
+			});
+			const insert = synonymInserts()[0];
+			expect(insert).toBeTruthy();
+			// (uuid, name, entry_id) — the old name now targets this entry.
+			expect(((insert?.[2] ?? []) as string[]).slice(1)).toEqual([
+				"ישן",
+				"entry-1",
+			]);
+			// The shadowed self-alias under the NEW name is dropped in the same tx.
+			const drop = mocks.txExecute.mock.calls.find((c) =>
+				String(c[1]).includes(
+					"DELETE FROM tanahpedia_entry_synonym WHERE name = ? AND entry_id = ?",
+				),
+			);
+			expect(drop?.[2]).toEqual(["חדש", "entry-1"]);
+		});
+
+		it("does not create the alias when keepOldNameAsAlias is off", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue(renameResult());
+
+			await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "חדש",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+					keepOldNameAsAlias: false,
+				},
+			});
+
+			expect(synonymInserts()).toHaveLength(0);
+		});
+
+		it("refuses to silently steal an old name that is already shared", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue(renameResult());
+			// The FOR UPDATE check finds existing synonym rows for the old name.
+			mocks.txQuery.mockResolvedValue([{ id: "syn-1" }]);
+
+			const result = await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "חדש",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+					keepOldNameAsAlias: true,
+				},
+			});
+
+			expect(result).toMatchObject({
+				renamedFrom: "ישן",
+				oldNameAliasCreated: false,
+			});
+			expect(synonymInserts()).toHaveLength(0);
+		});
+
+		it("runs the alias writes inside the entry save transaction", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue(renameResult());
+			mocks.txQuery.mockResolvedValue([]);
+
+			await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "חדש",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+					keepOldNameAsAlias: true,
+				},
+			});
+
+			// Every synonym write went through the dedicated tx connection —
+			// never the autocommit pool.
+			for (const call of mocks.txExecute.mock.calls) {
+				expect(call[0]).toBe(mocks.conn);
+			}
+			expect(mocks.execute).not.toHaveBeenCalled();
 		});
 	});
 
@@ -577,6 +699,20 @@ describe("tanahpedia entry server functions", () => {
 			await deleteEntry({ data: "entry-1" });
 
 			expect(notifiedUrls()).toEqual(["/pedia/נמחק"]);
+		});
+
+		it("also expires alias pages that lose a target on delete", async () => {
+			mocks.queryOne.mockResolvedValue({ unique_name: "נמחק" });
+			mocks.query.mockResolvedValue([{ name: "כינוי-א" }, { name: "כינוי-ב" }]);
+			mocks.execute.mockResolvedValue({ affectedRows: 1 });
+
+			await deleteEntry({ data: "entry-1" });
+
+			expect(notifiedUrls()).toEqual([
+				"/pedia/נמחק",
+				"/pedia/כינוי-א",
+				"/pedia/כינוי-ב",
+			]);
 		});
 
 		it("reports the linked entry's url when an entity link is removed", async () => {
