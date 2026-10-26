@@ -169,6 +169,24 @@ describe("seo/core-jsonld", () => {
 			expect(nodeByType(graph, "Chapter")?.image).toBeUndefined();
 			expect(nodeByType(graph, "WebPage")?.primaryImageOfPage).toBeUndefined();
 		});
+
+		it("emits stored wordCount + ISO timeRequired on the Chapter (#2607)", () => {
+			const graph = buildPerekGraph(perekObj(), [], null, {
+				wordCount: 361,
+				estimatedSeconds: 99,
+			});
+			const chapter = nodeByType(graph, "Chapter");
+			expect(chapter?.wordCount).toBe(361);
+			expect(chapter?.timeRequired).toBe("PT99S");
+			// The real audio duration stays untouched.
+		});
+
+		it("omits reading metrics when the perek metric is unknown", () => {
+			const graph = buildPerekGraph(perekObj());
+			const chapter = nodeByType(graph, "Chapter");
+			expect(chapter?.wordCount).toBeUndefined();
+			expect(chapter?.timeRequired).toBeUndefined();
+		});
 	});
 
 	describe("buildArticleGraph", () => {
@@ -227,6 +245,43 @@ describe("seo/core-jsonld", () => {
 				authorSlug: "harav-ploni",
 			});
 			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+
+		it("emits the stored full-content metric on the Article (#2607)", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					metric: { wordCount: 1084, estimatedSeconds: 296 },
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBe(1084);
+			expect(node?.timeRequired).toBe("PT296S");
+		});
+
+		it("omits reading metrics when the article metric is unknown", () => {
+			const graph = buildArticleGraph({
+				article: article(),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBeUndefined();
+			expect(node?.timeRequired).toBeUndefined();
+		});
+
+		it("omits each metric field that is individually null", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					metric: { wordCount: null, estimatedSeconds: null },
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBeUndefined();
+			expect(node?.timeRequired).toBeUndefined();
 		});
 	});
 
@@ -304,6 +359,20 @@ describe("seo/core-jsonld", () => {
 			expect(nodeByType(graph, "Person")?.sameAs).toEqual([
 				"https://www.wikidata.org/wiki/Q131338",
 			]);
+		});
+
+		it("emits the stored perush×perek metric on the commentary Article (#2607)", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				}),
+				perekObj: perekObj(),
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBe(50);
+			expect(node?.timeRequired).toBe("PT14S");
+			// Personal reading progress never appears in structured data.
+			expect(JSON.stringify(graph)).not.toContain("progress");
 		});
 	});
 

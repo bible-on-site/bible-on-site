@@ -67,7 +67,13 @@ describe("articles service", () => {
 
 			const result = await getArticlesByPerekId(42);
 
-			expect(mockQuery).toHaveBeenCalledTimes(1);
+			// Second query: stored reading metrics (#2607).
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+			expect(mockQuery).toHaveBeenNthCalledWith(
+				2,
+				expect.stringContaining("tanah_article_metric"),
+				[1, 2],
+			);
 			expect(mockQuery).toHaveBeenCalledWith(
 				expect.stringContaining(
 					"a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority",
@@ -101,6 +107,74 @@ describe("articles service", () => {
 						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
 				},
 			]);
+		});
+
+		it("attaches stored reading metrics only where a metric row exists (#2607)", async () => {
+			const mockRows = [
+				{
+					id: 1,
+					perek_id: 42,
+					author_id: 10,
+					abstract: null,
+					content: "<p>full</p>",
+					name: "First",
+					priority: 1,
+					author_name: "הרב ישראל",
+				},
+				{
+					id: 2,
+					perek_id: 42,
+					author_id: 20,
+					abstract: null,
+					content: null,
+					name: "Second",
+					priority: 2,
+					author_name: "הרב יעקב",
+				},
+			];
+			mockQuery
+				.mockResolvedValueOnce(mockRows)
+				.mockResolvedValueOnce([
+					{ article_id: 1, word_count: 300, estimated_seconds: 82 },
+				]);
+
+			const result = await getArticlesByPerekId(42);
+
+			expect(result[0].metric).toEqual({
+				wordCount: 300,
+				estimatedSeconds: 82,
+			});
+			// Unknown stays absent — not a fabricated null/zero.
+			expect(result[1]).not.toHaveProperty("metric");
+		});
+
+		it("keeps loaded articles when the optional metric read fails", async () => {
+			// The metric is decoration: a non-schema metric failure degrades
+			// to no badge — it must not hide or reject the loaded articles.
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						id: 1,
+						perek_id: 42,
+						author_id: 10,
+						abstract: null,
+						content: "<p>full</p>",
+						name: "First",
+						priority: 1,
+						author_name: "הרב ישראל",
+					},
+				])
+				.mockRejectedValueOnce(new Error("metric timeout"));
+
+			const result = await getArticlesByPerekId(42);
+
+			expect(result).toHaveLength(1);
+			expect(result[0]).not.toHaveProperty("metric");
+			expect(console.warn).toHaveBeenCalledWith(
+				expect.stringContaining("Reading metric read failed"),
+				"articles (1 ids)",
+				"metric timeout",
+			);
 		});
 
 		it("returns empty array when no articles found", async () => {
@@ -505,11 +579,13 @@ describe("articles service", () => {
 					];
 					mockQuery
 						.mockRejectedValueOnce(schemaError)
-						.mockResolvedValueOnce(fallbackRows);
+						.mockResolvedValueOnce(fallbackRows)
+						.mockResolvedValueOnce([]);
 
 					const result = await getArticleSummariesForRanges(crossPerekRanges);
 
-					expect(mockQuery).toHaveBeenCalledTimes(2);
+					// covering query, fallback query, metrics query.
+					expect(mockQuery).toHaveBeenCalledTimes(3);
 					const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
 					// The pre-upgrade query references neither the new column
 					// nor the covering-source table, but keeps first-slice rank.
@@ -534,6 +610,8 @@ describe("articles service", () => {
 
 				await getArticleSummariesForRanges(crossPerekRanges);
 
+				// Empty fallback result: the metrics query is skipped
+				// (getArticleMetrics short-circuits on an empty id list).
 				expect(mockQuery).toHaveBeenCalledTimes(2);
 				expect(mockQuery.mock.calls[1][0]).not.toContain("coverage_verified");
 			});
@@ -566,17 +644,36 @@ describe("articles service", () => {
 				mockQuery
 					.mockRejectedValueOnce(missingColumnError)
 					.mockResolvedValueOnce([])
-					.mockResolvedValueOnce([]);
+					// Second invocation: the retried covering query returns
+					// one article, then the metrics query runs for it.
+					.mockResolvedValueOnce([
+						{
+							id: 7,
+							perek_id: 1,
+							author_id: 5,
+							abstract: null,
+							name: "A",
+							priority: 1,
+							author_name: "הרב",
+						},
+					])
+					.mockResolvedValueOnce([
+						{ article_id: 7, word_count: 10, estimated_seconds: 3 },
+					]);
 
 				await getArticleSummariesForRanges(crossPerekRanges);
-				await getArticleSummariesForRanges(crossPerekRanges);
+				const second = await getArticleSummariesForRanges(crossPerekRanges);
 
 				// No sticky fallback: the next call attempts the verified
 				// coverage query again and picks up the migrated schema.
-				expect(mockQuery).toHaveBeenCalledTimes(3);
+				expect(mockQuery).toHaveBeenCalledTimes(4);
 				expect(mockQuery.mock.calls[2][0]).toContain(
 					"tanah_article_covering_source",
 				);
+				expect(second[0].metric).toEqual({
+					wordCount: 10,
+					estimatedSeconds: 3,
+				});
 			});
 		});
 	});
