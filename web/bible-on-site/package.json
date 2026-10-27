@@ -35,6 +35,8 @@
 		"test:e2e": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts --project=Desktop",
 		"test:e2e:all": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts",
 		"test:perf": "echo 'NOTE: Perf tests require bun run build first (uses production server)' && dotenv -e .test.env -- playwright test --config=playwright.perf.config.ts",
+		"perf:production": "node scripts/collect-production-performance.mjs",
+		"test:perf-reporting": "node --test scripts/performance-report.test.mjs scripts/collect-production-performance.test.mjs",
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"precoverage:unit": "node scripts/generate-client-catalog.mjs",
 		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation ./node_modules/jest/bin/jest.js",
