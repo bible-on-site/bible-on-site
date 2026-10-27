@@ -439,8 +439,11 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         var before = driver.PageSource;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var button = driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
-                .FirstOrDefault(element => element.Displayed && CanTap(element));
+            // Preferences uses a custom top bar, outside UIKit's navigation bar.
+            var button = driver.FindElements(AutomationId("PreferencesBackButton"))
+                .FirstOrDefault(element => element.Displayed && CanTap(element))
+                ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
+                    .FirstOrDefault(element => element.Displayed && CanTap(element));
             if (button != null)
             {
                 Tap(driver, button);
