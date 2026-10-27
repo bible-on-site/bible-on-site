@@ -138,7 +138,7 @@ function median(values) {
 
 const cell = (value) =>
 	String(value ?? "unavailable")
-		.replace(/\|/g, "\\|")
+		.replace(/[\\|]/g, "\\$&")
 		.replace(/[\r\n]/g, " ");
 const number = (value) =>
 	Number.isFinite(value) ? Math.round(value * 100) / 100 : "unavailable";

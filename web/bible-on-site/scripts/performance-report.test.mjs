@@ -141,6 +141,19 @@ test("summary uses medians, flags failed samples and never presents TBT as field
 	assert.match(text, /feature\.js/);
 	assert.match(performanceMarkdown(reports), /TBT is not INP/);
 	assert.match(text, /No CrUX record/);
+	const escaped = performanceMarkdown(
+		[],
+		[
+			{
+				url: "https://example.com/",
+				device: "mobile",
+				scope: "url",
+				status: "unavailable",
+				reason: "path\\name|reason",
+			},
+		],
+	);
+	assert.ok(escaped.includes("path\\\\name\\|reason"));
 });
 
 test("parallel benchmark workers do not lose entries", async () => {
