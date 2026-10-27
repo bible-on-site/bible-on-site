@@ -693,6 +693,37 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task DisposeAsync_StillDisposesGates_WhenBuildTaskFails()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+
+        // Let the constructor-launched build finish so the injected failure is
+        // the only error Task.WhenAll can observe.
+        var type = typeof(SearchIndexService);
+        var initialization = (Task)type
+            .GetField("_initialization", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(index)!;
+        await initialization;
+
+        // _buildTasks has no public fault-injection seam; a completed faulted
+        // entry makes Task.WhenAll(builds) throw synchronously inside
+        // DisposeAsync. The captured exception must still flow through the
+        // finally body and be rethrown after the gates are disposed.
+        var buildTasks = (Dictionary<string, Task>)type
+            .GetField("_buildTasks", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(index)!;
+        buildTasks["injected-failure"] =
+            Task.FromException(new InvalidOperationException("simulated build failure"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => index.DisposeAsync().AsTask());
+        // The finally still disposed the per-key gates: a second dispose now
+        // fails on the already-disposed semaphore.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => index.DisposeAsync().AsTask());
+    }
+
+    [Fact]
     public async Task DeliveredIndex_WithCorruptFile_DoesNotBuildOnDevice()
     {
         await using var storage = new TestStorage();
