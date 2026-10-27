@@ -1,4 +1,10 @@
-use async_graphql::SimpleObject;
+use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
+
+use crate::{
+    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    providers::Database,
+    services::reading_metrics_service,
+};
 
 /// Lightweight reference to a published Tanahpedia entry — the stable identity
 /// used by client routes and in-content links.
@@ -53,6 +59,7 @@ pub struct TanahpediaEntryOccurrence {
 /// An entry with its linked entities and Tanah occurrences — everything a
 /// reader page needs in a single round trip.
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct TanahpediaEntryDetail {
     pub id: String,
     pub unique_name: String,
@@ -61,6 +68,23 @@ pub struct TanahpediaEntryDetail {
     pub updated_at: String,
     pub entities: Vec<TanahpediaLinkedEntity>,
     pub occurrences: Vec<TanahpediaEntryOccurrence>,
+    /// Shared persisted reading metrics over the authored entry body
+    /// (issue #2607). `null` = unknown/not computed.
+    pub reading_metric: Option<ReadingMetric>,
+}
+
+#[ComplexObject]
+impl TanahpediaEntryDetail {
+    /// Ordered readable-block units over the entry body for word-weighted
+    /// reading-position progress (issue #2607). Resolved only when selected.
+    /// Empty when uncomputed.
+    async fn progress_units(&self, ctx: &Context<'_>) -> Result<Vec<ReadingProgressUnit>> {
+        let units =
+            reading_metrics_service::block_units_by_entry_id(ctx.data::<Database>()?, &self.id)
+                .await
+                .map_err(|e| e.extend())?;
+        Ok(units.into_iter().map(Into::into).collect())
+    }
 }
 
 /// An entity of a given type with the entries that describe it — zero, one or

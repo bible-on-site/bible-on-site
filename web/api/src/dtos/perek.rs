@@ -1,6 +1,10 @@
-use async_graphql::{ComplexObject, Context, Result, SimpleObject};
+use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
 
-use crate::{providers::Database, services::articles_service};
+use crate::{
+    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    providers::Database,
+    services::{articles_service, reading_metrics_service},
+};
 use entities::perek::Model;
 
 /// Convert a number to Hebrew letters (gematry) with gershayim.
@@ -125,6 +129,9 @@ pub struct Perek {
     /// Canonical number of pesukim in the perek; NULL means the bound is
     /// unknown (corpus counts not loaded), not that the perek is empty.
     pub pasuk_count: Option<i32>,
+    /// Shared persisted reading metrics over the complete perek text
+    /// (issue #2607). `null` = unknown/not computed.
+    pub reading_metric: Option<ReadingMetric>,
 }
 
 impl From<Model> for Perek {
@@ -155,6 +162,7 @@ impl From<Model> for Perek {
             header: value.header,
             compiled_source,
             pasuk_count: value.pasuk_count.map(|count| count as i32),
+            reading_metric: None,
         }
     }
 }
@@ -169,6 +177,20 @@ impl Perek {
         let db = ctx.data::<Database>()?;
         let count = articles_service::count_by_perek_id(db, perek_id).await?;
         Ok(count)
+    }
+
+    /// Ordered pasuk-level units for word-weighted reading-position progress
+    /// (issue #2607). Empty when uncomputed or when the perek lacks a
+    /// canonical id — resolved only when selected.
+    async fn progress_units(&self, ctx: &Context<'_>) -> Result<Vec<ReadingProgressUnit>> {
+        let Some(perek_id) = self.perek_id else {
+            return Ok(vec![]);
+        };
+        let units =
+            reading_metrics_service::pasuk_units_by_perek_id(ctx.data::<Database>()?, perek_id)
+                .await
+                .map_err(|e| e.extend())?;
+        Ok(units.into_iter().map(Into::into).collect())
     }
 }
 
