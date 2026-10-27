@@ -1,0 +1,143 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# intended AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Isolated CloudFront candidate distribution in front of the EC2 nginx router for issue #2508 validation. Reference documentation only; not a deployed stack."
+
+Metadata:
+  Documentation: |
+    Isolated CloudFront candidate distribution for edge-rollout validation
+    (issue #2508).
+
+    ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+    Compatibility-safe posture (why this shape):
+    - No Aliases and the default *.cloudfront.net viewer certificate: the
+      candidate is reachable only as https://<id>.cloudfront.net. No Route53,
+      ACM, nginx, ECS, DNS or registrar change is needed to run validation,
+      and no published/crawled URL can point at it.
+    - Origin is the canonical apex domain over HTTPS. The origin already
+      resolves to the running nginx EIP and the existing Let's Encrypt
+      certificate covers the origin name, so the edge-to-origin TLS and Host
+      contract are production-identical with zero origin changes. Before any
+      later DNS cutover the origin MUST move to a dedicated origin hostname
+      (see docs/aws/edge-rollout-validation.md) so the apex record can move
+      to the edge without creating an origin-resolution loop.
+    - Managed-CachingDisabled cache policy: every request reaches the origin,
+      X-Cache reports Miss, and no object, variant, redirect or 404 can be
+      stored. Origin ISR/tag revalidation therefore stays authoritative
+      during validation; there is no second cache to invalidate.
+    - Managed-AllViewerExceptHostHeader origin request policy forwards every
+      viewer header (except Host), cookie and query string. Host is
+      rewritten to the origin domain so nginx keeps serving the canonical
+      vhost; cookies, RSC/prefetch headers and Hebrew query parameters reach
+      the app unchanged.
+    - All seven HTTP methods are allowed so POST/GraphQL-style requests
+      reach the origin; with caching disabled nothing is stored regardless
+      of method.
+    - redirect-to-https mirrors the nginx port-80 redirect at the edge.
+    - http2 (not http3) and Compress=false keep protocol/encoding parity
+      with the current nginx responses while compatibility is diffed;
+      enabling either is a separate measured step.
+    - No access logging: with caching disabled every edge request reaches
+      the origin, so the existing nginx access log already IS the request
+      mix; CloudWatch distribution metrics cover edge-side volume, latency
+      and error rates. Legacy DistributionConfig.Logging is not used — it
+      requires an ACL-enabled bucket, and S3 ownership enforcement is the
+      required posture. If viewer-level logs are needed later, use standard
+      logging v2 (CloudWatch Logs delivery resources, configured through the
+      us-east-1 CloudWatch API for this global service) into an
+      il-central-1 bucket — a separate approved change.
+
+    Validation entry point:
+      node devops/edge-compat-check.mjs --candidate https://<DistributionDomainName>
+
+    Full plan, staged migration and rollback:
+      docs/aws/edge-rollout-validation.md
+
+    Sensitive Information Restoration:
+    | Placeholder | Description | Restoration Command |
+    |---|---|---|
+    | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+
+Parameters:
+  OriginDomain:
+    Type: String
+    Default: xn--febl3a.co.il
+    Description: >
+      Canonical apex host served by the nginx router. The edge sends this
+      value as Host and SNI to the origin. Replace with a dedicated origin
+      hostname (e.g. origin.xn--febl3a.co.il) only as part of the approved
+      pre-cutover step that creates that record and extends the nginx
+      certificate to cover it.
+
+Resources:
+  # =============================================================================
+  # Candidate distribution — disabled caching, pass-through forwarding.
+  # =============================================================================
+  EdgeCandidateDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Issue
+          Value: "2508"
+      DistributionConfig:
+        Enabled: true
+        Comment: >
+          #2508 validation candidate in front of the nginx router.
+          Caching disabled; no public DNS alias. Not a routing change.
+        # PriceClass_All keeps the Tel Aviv edge location — the audience is
+        # mostly Israeli, so latency evidence must come from the nearest PoP.
+        PriceClass: PriceClass_All
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - Id: nginx-router
+            DomainName: !Ref OriginDomain
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2, TLSv1.3]
+              # Keep CloudFront defaults (30s read / 5s keepalive): do not
+              # extend origin timeouts to mask slow upstreams (#2016 class).
+              OriginReadTimeout: 30
+              OriginKeepaliveTimeout: 5
+        DefaultCacheBehavior:
+          TargetOriginId: nginx-router
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          # Byte parity with current nginx responses while compatibility is
+          # diffed; edge compression is a later, separately measured step.
+          Compress: false
+          # Managed-CachingDisabled — nothing is stored at the edge.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # Managed-AllViewerExceptHostHeader — every viewer header/cookie/
+          # query reaches the origin; Host stays the origin domain so nginx
+          # serves the canonical vhost.
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-b8f2-59037dcd2058
+        ViewerCertificate:
+          # The default *.cloudfront.net certificate serves the candidate
+          # hostname; CloudFront pins its minimum protocol to TLSv1 for the
+          # default certificate regardless of this setting. The hardened
+          # minimum (TLSv1.2_2021) applies once a real ACM certificate covers
+          # an approved alias; origin TLS already requires TLSv1.2+.
+          CloudFrontDefaultCertificate: true
+          MinimumProtocolVersion: TLSv1
+
+Outputs:
+  DistributionId:
+    Description: >
+      Candidate distribution ID — scope for CloudWatch distribution metrics
+      and the resource to delete during teardown.
+    Value: !Ref EdgeCandidateDistribution
+
+  DistributionDomainName:
+    Description: >
+      Viewer-facing candidate hostname. Pass to
+      devops/edge-compat-check.mjs as --candidate https://<this value>.
+    Value: !GetAtt EdgeCandidateDistribution.DomainName
