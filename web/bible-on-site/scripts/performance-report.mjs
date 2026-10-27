@@ -12,7 +12,7 @@ const METRICS = {
 	TBT: "total-blocking-time",
 	CLS: "cumulative-layout-shift",
 	SI: "speed-index",
-	TTFB: "server-response-time",
+	SERVER_RESPONSE_TIME: "server-response-time",
 };
 
 // Keep nested resource URLs, source locations, selectors and savings. Insight
@@ -145,6 +145,10 @@ function median(values) {
 const cell = (value) =>
 	String(value ?? "unavailable")
 		.replace(/[\\|]/g, "\\$&")
+		.replace(
+			/[&<>]/g,
+			(character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character],
+		)
 		.replace(/[\r\n]/g, " ");
 const number = (value) =>
 	Number.isFinite(value) ? Math.round(value * 100) / 100 : "unavailable";

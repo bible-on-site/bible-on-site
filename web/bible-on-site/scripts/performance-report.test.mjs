@@ -78,6 +78,8 @@ test("nested insight evidence retains URLs, selectors, source locations and byte
 	);
 	assert.ok(audit.evidence.some((e) => e.selector === "#feature"));
 	assert.equal(report.metrics.CLS, null);
+	assert.equal(report.metrics.TTFB, undefined);
+	assert.equal(report.metrics.SERVER_RESPONSE_TIME, null);
 	assert.deepEqual(collectEvidence(null), []);
 	const cached = fixture();
 	cached.configSettings.disableStorageReset = true;
@@ -166,11 +168,12 @@ test("summary uses medians, flags failed samples and never presents TBT as field
 				device: "mobile",
 				scope: "url",
 				status: "unavailable",
-				reason: "path\\name|reason",
+				reason: "path\\name|reason <b>&",
 			},
 		],
 	);
 	assert.ok(escaped.includes("path\\\\name\\|reason"));
+	assert.ok(escaped.includes("&lt;b&gt;&amp;"));
 });
 
 test("parallel benchmark workers do not lose entries", async () => {
