@@ -10,12 +10,20 @@ import type { Article, ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
+import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import {
 	resolveSeferPerushSelection,
 	SEFER_PERUSH_SELECTION_EVENT,
 	setSeferPerushSelection,
 } from "@/lib/sefer-perush-selection";
-import { getArticleForBook, getPerushNotesForPerekBatch } from "../actions";
+import {
+	getArticleForBook,
+	getArticleProgressUnitsForBook,
+	getNoteProgressUnitsForPerekBatch,
+	getPerushNotesForPerekBatch,
+} from "../actions";
 import { ArticleFullView } from "./ArticleFullView";
 import { ShareButton } from "./ShareButton";
 import seferStyles from "./sefer.module.css";
@@ -182,10 +190,14 @@ export function SeferPanel({
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 	const [articleLoading, setArticleLoading] = useState(false);
 	const [articleFullscreen, setArticleFullscreen] = useState(false);
+	const [articleProgressUnits, setArticleProgressUnits] = useState<
+		ReadingProgressUnit[]
+	>([]);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSelectedArticle(null);
+		setArticleProgressUnits([]);
 		setArticleLoading(false);
 		setArticleFullscreen(false);
 		if (deepArticleSummary) {
@@ -207,6 +219,16 @@ export function SeferPanel({
 				})
 				.finally(() => {
 					if (!cancelled) setArticleLoading(false);
+				});
+			getArticleProgressUnitsForBook(deepArticleSummary.id)
+				.then((progressUnits) => {
+					if (!cancelled) setArticleProgressUnits(progressUnits);
+				})
+				.catch((error) => {
+					console.warn("Failed to load article reading progress", {
+						articleId: deepArticleSummary.id,
+						error,
+					});
 				});
 		}
 		return () => {
@@ -258,6 +280,9 @@ export function SeferPanel({
 
 	/* ─── Commentary notes (batched per perek) ─── */
 	const [notesByPerush, setNotesByPerush] = useState<PerushNotes>({});
+	const [noteUnitsByPerush, setNoteUnitsByPerush] = useState<
+		Record<number, ReadingProgressUnit[]>
+	>({});
 	const [failedIds, setFailedIds] = useState<ReadonlySet<number>>(new Set());
 	const requestedIds = useRef(new Set<number>());
 	const notesGeneration = useRef({ perekId });
@@ -265,6 +290,7 @@ export function SeferPanel({
 		notesGeneration.current = { perekId };
 		requestedIds.current = new Set();
 		setNotesByPerush({});
+		setNoteUnitsByPerush({});
 		setFailedIds(new Set());
 		return () => {
 			notesGeneration.current = { perekId };
@@ -311,6 +337,23 @@ export function SeferPanel({
 				setFailedIds((prev) => new Set([...prev, ...missing]));
 				for (const id of missing) requestedIds.current.delete(id);
 			});
+		getNoteProgressUnitsForPerekBatch(perekId, missing)
+			.then((batch) => {
+				if (generation !== notesGeneration.current) return;
+				setNoteUnitsByPerush((prev) => {
+					const next = { ...prev };
+					for (const id of missing) next[id] = batch[id] ?? [];
+					return next;
+				});
+			})
+			.catch((error) => {
+				if (generation !== notesGeneration.current) return;
+				console.warn("Failed to load commentary reading progress", {
+					perekId,
+					perushIds: missing,
+					error,
+				});
+			});
 	}, [wantedIds, notesByPerush, failedIds, perekId]);
 
 	const retryPerush = useCallback((perushId: number) => {
@@ -344,6 +387,28 @@ export function SeferPanel({
 		return [...byPasuk.entries()]
 			.sort(([a], [b]) => a - b)
 			.map(([pasuk, perushim]) => ({ pasuk, perushim }));
+	})();
+
+	/**
+	 * Stored note units for the commentary pane's reading progress (#2607),
+	 * keyed `perushId:pasuk:noteIdx` to match the `data-reading-unit`
+	 * attributes below. Only notes actually rendered contribute — a pasuk
+	 * selection or a still-loading perush must not inflate progress.
+	 */
+	const commentaryProgressUnits = (() => {
+		const rendered = new Set<string>();
+		for (const group of groups) {
+			for (const { perush, notes } of group.perushim) {
+				for (const note of notes) {
+					rendered.add(`${perush.id}:${note.pasuk}:${note.noteIdx}`);
+				}
+			}
+		}
+		return displayPerushim.flatMap((perush) =>
+			(noteUnitsByPerush[perush.id] ?? [])
+				.map((unit) => ({ ...unit, key: `${perush.id}:${unit.key}` }))
+				.filter((unit) => rendered.has(unit.key ?? "")),
+		);
 	})();
 
 	const loadingNotes = wantedIds
@@ -464,6 +529,10 @@ export function SeferPanel({
 								<span className={styles.deepParshan}>
 									{deepPerush.parshanName}
 								</span>
+								<ReadingTime
+									estimatedSeconds={deepPerush.metric?.estimatedSeconds}
+									className={styles.deepMetric}
+								/>
 							</div>
 							{perekId > 0 && (
 								<ShareButton
@@ -511,6 +580,14 @@ export function SeferPanel({
 												? "סמנו פסוקים על גבי הפרק"
 												: "כל פסוקי הפרק"}
 									</span>
+									{displayPerushim.length === 1 && (
+										<ReadingTime
+											estimatedSeconds={
+												displayPerushim[0].metric?.estimatedSeconds
+											}
+											className={styles.scopeMetric}
+										/>
+									)}
 									{activePesukim && (
 										<button
 											type="button"
@@ -536,6 +613,12 @@ export function SeferPanel({
 					)}
 
 					<div className={styles.commentaryScroll} data-flipbook-no-flip>
+						<ReadingProgress
+							units={commentaryProgressUnits}
+							scroller={`.${styles.commentaryScroll}`}
+							content={`.${styles.commentaryScroll}`}
+							unitSelector='[data-reading-unit="{key}"]'
+						/>
 						{eligible.length === 0 ? (
 							<p className={styles.emptyState}>אין פרשנות לפרק זה</p>
 						) : displayPerushim.length === 0 && !deepPerush ? (
@@ -580,6 +663,12 @@ export function SeferPanel({
 											{displayPerushim.length > 1 && (
 												<div className={styles.commentaryPerushName}>
 													{perush.name}
+													<ReadingTime
+														estimatedSeconds={
+															perush.metric?.estimatedSeconds
+														}
+														className={styles.commentaryPerushMetric}
+													/>
 												</div>
 											)}
 											{/* Codacy anchors the XSS finding at this map
@@ -590,6 +679,7 @@ export function SeferPanel({
 												<div
 													key={`${note.pasuk}-${note.noteIdx}`}
 													className={styles.noteContent}
+													data-reading-unit={`${perush.id}:${note.pasuk}:${note.noteIdx}`}
 													// nosemgrep -- DOMPurify-sanitized note HTML
 													// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 													dangerouslySetInnerHTML={{
@@ -693,6 +783,10 @@ export function SeferPanel({
 												}}
 											/>
 										)}
+										<ReadingTime
+											estimatedSeconds={article.metric?.estimatedSeconds}
+											className={styles.articleCardMetric}
+										/>
 									</Link>
 								))}
 							</div>
@@ -707,6 +801,7 @@ export function SeferPanel({
 								fullPage
 								fullscreen={articleFullscreen}
 								onToggleFullscreen={() => setArticleFullscreen((prev) => !prev)}
+								progressUnits={articleProgressUnits}
 							/>
 						</div>
 					)}
@@ -729,6 +824,7 @@ export function SeferPanel({
 								fullPage
 								fullscreen
 								onToggleFullscreen={() => setArticleFullscreen(false)}
+								progressUnits={articleProgressUnits}
 							/>
 						</div>
 					</div>,

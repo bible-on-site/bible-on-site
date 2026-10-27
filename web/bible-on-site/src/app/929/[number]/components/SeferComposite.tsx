@@ -17,6 +17,10 @@ import {
 	setStoredPerekViewMode,
 } from "@/lib/perek-view-preference";
 import type { PerushSummary } from "@/lib/perushim";
+import type {
+	ReadingMetric,
+	ReadingProgressUnit,
+} from "@/lib/reading-metrics/types";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
@@ -56,6 +60,10 @@ const ClientWrapper = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	imagesByPerek?: Record<number, PerekIllustration[]>;
+	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
+	perekPasukUnits?: ReadingProgressUnit[];
+	/** Stored perek metric for the current perek's page badge (#2607). */
+	perekMetric?: ReadingMetric | null;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -217,6 +225,8 @@ const ClientWrapper = (props: {
 						imagesByPerek={props.imagesByPerek}
 						initialSlug={props.initialSlug}
 						initialBookPage={initialBookPage}
+						perekPasukUnits={props.perekPasukUnits}
+						perekMetric={props.perekMetric}
 						isVisible={currentlyToggled}
 					/>
 				) : currentlyToggled ? (
