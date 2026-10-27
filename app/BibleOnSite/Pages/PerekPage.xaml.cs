@@ -1186,7 +1186,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         else
         {
             this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
-            ReaderToolbar.SetAppThemeColor(VisualElement.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+            // SharedTopBar, not VisualElement — the iOS-specific using alias
+            // shadows VisualElement on net10.0-ios.
+            ReaderToolbar.SetAppThemeColor(SharedTopBar.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
         }
         NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
         // The header names the focused pasuk — sefer, perek and pasuk together —
