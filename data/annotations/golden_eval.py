@@ -9,9 +9,11 @@ plugs in by emitting the same contract row shape.
 
 Metrics definitions (matching the issue's acceptance list):
 
-- precision: `auto` predictions exactly matching a gold mention / all
-  `auto` predictions. `held` rows never render, so they are not precision
-  errors — they are scored in the suppression bucket instead.
+- precision: rendered (`auto`/`manual`) predictions exactly matching a
+  gold mention / all rendered predictions — the resolver renders both
+  (`service.ts`: `acceptance IN ('auto','manual')`). `held`/`rejected`
+  rows never render, so they are not precision errors — they are scored
+  in the suppression bucket instead.
 - recall: `auto`-expected gold mentions exactly matched by an `auto`
   prediction / all `auto`-expected gold mentions.
 - detection_recall: adds `held` predictions that found the right span —
@@ -53,6 +55,12 @@ OPTIONAL_MENTION_FIELDS = {
     "type_alternates",
 }
 VALID_EXPECTED = {"auto", "held"}
+# Decoration contract acceptance values (tanahpedia_mention_decoration):
+# `auto` and `manual` render links; `held` is a suppressed candidate and
+# `rejected` an explicit non-mention — neither renders, and `rejected` is
+# not scored as detection either (it asserts the span is NOT a mention).
+RENDERING_ACCEPTANCE = {"auto", "manual"}
+VALID_ACCEPTANCE = RENDERING_ACCEPTANCE | {"held", "rejected"}
 ZERO_WIDTH = "\u200b\u200c\u200d\ufeff"
 
 
@@ -225,17 +233,36 @@ def score_case(predictions, golds):
         }
         for row in predictions
     ]
+    for pred in preds:
+        if pred["acceptance"] not in VALID_ACCEPTANCE:
+            raise ValueError(
+                f"unknown acceptance {pred['acceptance']!r} on "
+                f"{pred['surface']!r} — the contract allows "
+                f"{sorted(VALID_ACCEPTANCE)}"
+            )
     counts = collections.Counter()
     pairs = []
     used_preds, used_golds = set(), set()
-    # Exact-span pairs first, deterministically.
+    # Exact-span pairs first, preferring rendered predictions: when a
+    # predictor emits duplicate rows at one span (e.g. held + auto from
+    # two revisions), the rendered row decides what the page shows, so it
+    # must pair with the gold — the suppressed duplicate stays a leftover.
+    # `rejected` rows never pair: they assert the span is not a mention.
+    order = sorted(
+        range(len(preds)),
+        key=lambda i: preds[i]["acceptance"] not in RENDERING_ACCEPTANCE,
+    )
     for gi, gold in enumerate(golds):
-        for pi, pred in enumerate(preds):
-            if pi in used_preds or pred["span"] != gold["span"]:
+        for pi in order:
+            if (
+                pi in used_preds
+                or preds[pi]["acceptance"] == "rejected"
+                or preds[pi]["span"] != gold["span"]
+            ):
                 continue
             used_preds.add(pi)
             used_golds.add(gi)
-            pairs.append((pred, gold))
+            pairs.append((preds[pi], gold))
             break
     # Partial overlaps among the leftovers (diagnostics only).
     partials = []
@@ -259,15 +286,15 @@ def score_case(predictions, golds):
             )
             break
     for pred, gold in pairs:
-        auto_pred = pred["acceptance"] == "auto"
+        rendered = pred["acceptance"] in RENDERING_ACCEPTANCE
         auto_gold = gold["expected"] == "auto"
-        if auto_pred and auto_gold:
+        if rendered and auto_gold:
             counts["tp"] += 1
             counts["type_hit"] += pred["type"] in gold["types"]
             counts["type_strict_hit"] += pred["type"] == gold["type"]
             counts["name_hit"] += pred["name"] in gold["names"]
             counts["name_strict_hit"] += pred["name"] == gold["name"]
-        elif auto_pred:
+        elif rendered:
             counts["rendered_suppressed"] += 1
         elif auto_gold:
             counts["held_hit"] += 1
@@ -276,7 +303,14 @@ def score_case(predictions, golds):
     for i, pred in enumerate(preds):
         if i in used_preds:
             continue
-        counts["fp" if pred["acceptance"] == "auto" else "held_noise"] += 1
+        if pred["acceptance"] == "rejected":
+            # An explicit non-mention assertion is neither a detection
+            # nor a rendering error — tracked for diagnosis only.
+            counts["rejected"] += 1
+        elif pred["acceptance"] in RENDERING_ACCEPTANCE:
+            counts["fp"] += 1
+        else:
+            counts["held_noise"] += 1
     for gi, gold in enumerate(golds):
         if gi in used_golds:
             continue

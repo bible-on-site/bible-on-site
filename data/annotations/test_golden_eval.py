@@ -4,8 +4,10 @@ import collections
 import json
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
+
+mock = unittest.mock
 
 import golden_eval as ge
 
@@ -440,6 +442,93 @@ class TestScoreCase(unittest.TestCase):
         )
         self.assertEqual(counts["gold_auto"], 1)
         self.assertEqual(counts["gold_held"], 1)
+
+    def test_manual_prediction_renders_like_auto(self):
+        # The resolver renders acceptance IN ('auto','manual') — a manual
+        # row on auto gold is a rendered true positive, not a held hit.
+        counts, _ = ge.score_case(
+            [pred_pasuk(1, 1, acceptance="manual")], [gold((1, 2))]
+        )
+        self.assertEqual(counts["tp"], 1)
+        self.assertEqual(counts["held_hit"], 0)
+
+    def test_manual_prediction_on_held_gold_is_rendered_suppressed(self):
+        counts, _ = ge.score_case(
+            [pred_pasuk(1, 1, acceptance="manual")],
+            [gold((1, 2), expected="held")],
+        )
+        self.assertEqual(counts["rendered_suppressed"], 1)
+        self.assertEqual(counts["held_correct"], 0)
+        self.assertEqual(ge.finalize(counts)["suppression"], 0.0)
+
+    def test_unmatched_manual_prediction_is_fp(self):
+        counts, _ = ge.score_case(
+            [pred_pasuk(5, 5, acceptance="manual")], []
+        )
+        self.assertEqual(counts["fp"], 1)
+        self.assertEqual(counts["held_noise"], 0)
+
+    def test_rejected_prediction_is_not_detection(self):
+        # `rejected` asserts the span is NOT a mention: on auto gold the
+        # miss surfaces as fn, never as a suppressed detection.
+        counts, _ = ge.score_case(
+            [pred_pasuk(1, 1, acceptance="rejected")], [gold((1, 2))]
+        )
+        self.assertEqual(counts["tp"], 0)
+        self.assertEqual(counts["held_hit"], 0)
+        self.assertEqual(counts["fn"], 1)
+        self.assertEqual(counts["rejected"], 1)
+        self.assertEqual(ge.finalize(counts)["detection_recall"], 0.0)
+
+    def test_rejected_prediction_unmatched_is_diagnostic_only(self):
+        counts, _ = ge.score_case(
+            [pred_pasuk(5, 5, acceptance="rejected")], []
+        )
+        self.assertEqual(counts["rejected"], 1)
+        self.assertEqual(counts["fp"], 0)
+        self.assertEqual(counts["held_noise"], 0)
+
+    def test_rendered_duplicate_wins_pairing_on_auto_gold(self):
+        # held + auto rows at one span: the page renders the auto row,
+        # so the pair must score tp regardless of emission order.
+        for first, second in (("held", "auto"), ("auto", "held")):
+            counts, _ = ge.score_case(
+                [
+                    pred_pasuk(1, 1, acceptance=first),
+                    pred_pasuk(1, 1, acceptance=second),
+                ],
+                [gold((1, 2))],
+            )
+            self.assertEqual(counts["tp"], 1, (first, second))
+            self.assertEqual(counts["held_hit"], 0, (first, second))
+            self.assertEqual(counts["held_noise"], 1, (first, second))
+            self.assertEqual(counts["fp"], 0, (first, second))
+
+    def test_rendered_duplicate_wins_pairing_on_held_gold(self):
+        # held + auto rows at a suppressed span: the auto row renders a
+        # link the gold forbids — suppression must fail, not record
+        # held_correct while the rendered row hides as a bare fp.
+        for first, second in (("held", "auto"), ("auto", "held")):
+            counts, _ = ge.score_case(
+                [
+                    pred_pasuk(1, 1, acceptance=first),
+                    pred_pasuk(1, 1, acceptance=second),
+                ],
+                [gold((1, 2), expected="held")],
+            )
+            self.assertEqual(
+                counts["rendered_suppressed"], 1, (first, second)
+            )
+            self.assertEqual(counts["held_correct"], 0, (first, second))
+            self.assertEqual(
+                ge.finalize(counts)["suppression"], 0.0, (first, second)
+            )
+
+    def test_unknown_acceptance_raises(self):
+        with self.assertRaises(ValueError):
+            ge.score_case(
+                [pred_pasuk(1, 1, acceptance="maybe")], [gold((1, 2))]
+            )
 
 
 class TestFinalize(unittest.TestCase):

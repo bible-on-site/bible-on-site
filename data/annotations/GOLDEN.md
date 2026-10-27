@@ -43,19 +43,22 @@ python -m unittest discover -p 'test_*.py'
 
 | Metric | Definition |
 | ------ | ---------- |
-| `precision` | `auto` predictions exactly span-matching a gold mention / all `auto` predictions |
-| `recall` | exact `auto` matches / gold `auto` mentions |
-| `detection_recall` | adds `held` predictions on the right span (detected but suppressed) |
+| `precision` | rendered (`auto`/`manual`) predictions exactly span-matching a gold mention / all rendered predictions |
+| `recall` | exact rendered matches / gold `auto` mentions |
+| `detection_recall` | adds `held` predictions on the right span (detected but suppressed; `rejected` rows are explicit non-mentions and never count as detection) |
 | `type_accuracy` (+ `_strict`) | correct `entity_type` among exact matches (alternates accepted / primary only) |
 | `name_accuracy` (+ `_strict`) | correct `intended_name` among exact matches |
 | `span_exactness` | exact-boundary pairs / all overlapping pred-gold pairs |
 | `suppression` | gold `held` surfaces emitted `held` or not emitted (an `auto` render is a precision failure) |
 
 Counts underneath (`tp`, `fp`, `fn`, `held_hit`, `held_correct`,
-`held_noise`, `rendered_suppressed`, `suppressed_ok`, `partial`) are
-reported per case, per category and per domain — fragments of a missed
-compound name land in `partial` for diagnosis and still count `fn`/`fp`
-under the strict span contract.
+`held_noise`, `rendered_suppressed`, `suppressed_ok`, `rejected`,
+`partial`) are reported per case, per category and per domain —
+fragments of a missed compound name land in `partial` for diagnosis and
+still count `fn`/`fp` under the strict span contract. When a predictor
+emits duplicate rows at one span, the rendered (`auto`/`manual`) row
+pairs with the gold — it decides what the page shows — while suppressed
+duplicates stay diagnostics.
 
 ## Measured — lexical baseline `morphhb-*@3d15126f+contract1`
 
