@@ -133,14 +133,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // CI ships the generation-matched index; this must be an ordinary local query.
-        // Verse hits can arrive before the commentary wave. Wait for the
-        // matching row and stable geometry before dispatching a coordinate tap.
-        var (commentary, frame) = WaitForSettledRow(" - בראשית א א", TimeSpan.FromSeconds(45));
-        var title = commentary.Text;
+        var (title, position) = OpenCommentaryResult(" - בראשית א א", "בראשית ברא אלהים");
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
-        var position = frame.Location;
-        Platform.Tap(driver, commentary);
-        AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
         Page.ScrollBackTo("InlinePerushName", commentaryName);
