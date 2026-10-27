@@ -87,6 +87,20 @@ jobs:
         with:
           global-json-file: global.json
 
+      # #2708: last gate before upload — the restored bundle must carry the
+      # r8.json build metadata and deobfuscation map Play scores against its
+      # technical quality thresholds (>=25% from February 2027). The checkout is
+      # the release's own source ref: a rollback of a pre-#2708 build has no
+      # verifier to run, so warn-and-skip instead of blocking the rollback.
+      - name: Verify AAB DEX optimization metadata
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          if [ -f app/devops/verify_android_dex_metadata.py ]; then
+            python3 app/devops/verify_android_dex_metadata.py --package "${{ steps.find_aab.outputs.AAB_FILE }}"
+          else
+            echo "::warning::Verifier not present at ${{ steps.guard.outputs.ref }} — skipping metadata check for a pre-#2708 artifact."
+          fi
+
       - name: Write service account key
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
