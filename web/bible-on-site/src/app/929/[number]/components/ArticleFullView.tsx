@@ -3,9 +3,13 @@
 import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
+import { useId } from "react";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
 import { demoteHeadings } from "@/lib/html-headings";
+import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import articleStyles from "../[slug]/page.module.css";
 import { ShareButton } from "./ShareButton";
 import styles from "./sefer.module.css";
@@ -19,6 +23,11 @@ interface ArticleFullViewProps {
 	fullscreen?: boolean;
 	/** Toggles the article's own fullscreen overlay (#2544 item 7). */
 	onToggleFullscreen?: () => void;
+	/**
+	 * Stored readable-block units for scroll progress (#2607). Empty/omitted
+	 * → no progress bar (unknown metrics must not fabricate one).
+	 */
+	progressUnits?: ReadingProgressUnit[];
 }
 
 /**
@@ -31,6 +40,7 @@ export function ArticleFullView({
 	fullPage = false,
 	fullscreen = false,
 	onToggleFullscreen,
+	progressUnits = [],
 }: ArticleFullViewProps) {
 	const rootClass = fullPage
 		? `${articleStyles.expandedArticle} ${styles.articleFullViewInBook}`
@@ -42,9 +52,12 @@ export function ArticleFullView({
 	const compact = (bookClass: string) => (fullPage ? ` ${bookClass}` : "");
 
 	const canonicalPath = `/929/${article.perekId}/${article.id}`;
+	// Unique instance scope so a deep-linked article and the panel overlay
+	// never read each other's geometry (#2607).
+	const instanceId = useId();
 
 	return (
-		<div className={rootClass}>
+		<div className={rootClass} data-article-view={instanceId}>
 			<header
 				className={`${articleStyles.articleHeader}${compact(styles.articleHeaderInBook)}`}
 			>
@@ -65,6 +78,10 @@ export function ArticleFullView({
 					</div>
 					<span className={articleStyles.authorName}>{article.authorName}</span>
 				</Link>
+				<ReadingTime
+					estimatedSeconds={article.metric?.estimatedSeconds}
+					className={articleStyles.readingTime}
+				/>
 				<h2
 					className={`${articleStyles.articleTitle}${compact(styles.articleTitleInBook)}`}
 				>
@@ -88,6 +105,14 @@ export function ArticleFullView({
 
 			{article.content && (
 				<div className={fullPage ? styles.articleBodyWrapper : undefined}>
+					<ReadingProgress
+						units={progressUnits}
+						scroller={
+							fullPage ? `.${styles.articleBodyWrapper}` : undefined
+						}
+						scope={`[data-article-view="${instanceId}"]`}
+						content={`.${articleStyles.articleBody}`}
+					/>
 					<div
 						className={articleStyles.articleBody}
 						// nosemgrep -- DOMPurify-sanitized article HTML
