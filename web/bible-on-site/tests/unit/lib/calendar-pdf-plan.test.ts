@@ -37,10 +37,13 @@ function fakeInput(
 	overrides: Partial<Parameters<typeof serializeCalendarPdfInput>[0]> = {},
 ) {
 	return {
+		scope: "month",
 		title: "t",
 		months: [
 			{
 				title: "m",
+				year: 5785,
+				month: 12,
 				cells: [{ day: undefined, blankColumn: 2 }],
 			},
 		],
@@ -72,6 +75,8 @@ describe("serializeCalendarPdfInput", () => {
 			months: [
 				{
 					title: "m",
+					year: 5785,
+					month: 12,
 					cells: [{ blankColumn: 2 }, {}],
 				},
 			],
@@ -80,7 +85,9 @@ describe("serializeCalendarPdfInput", () => {
 		expect(JSON.parse(json)).toEqual({
 			t: "כותרת",
 			s: "משנה",
-			m: [{ t: "m", c: [{ b: 2 }, { b: 0 }] }],
+			sc: "month",
+			lb: null,
+			m: [{ t: "m", y: 5785, mo: 12, c: [{ b: 2 }, { b: 0 }] }],
 		});
 	});
 
@@ -93,15 +100,16 @@ describe("serializeCalendarPdfInput", () => {
 			perekId: 10,
 			cycle: 4,
 		} as CalendarDay;
+		const cells = [{ day }];
 		const base = fakeInput({
-			months: [{ title: "m", cells: [{ day }] }],
+			months: [{ title: "m", year: 5785, month: 12, cells }],
 		});
 		const dimmed = fakeInput({
-			months: [{ title: "m", cells: [{ day }] }],
+			months: [{ title: "m", year: 5785, month: 12, cells }],
 			dimmed: () => true,
 		});
 		const relabeled = fakeInput({
-			months: [{ title: "m", cells: [{ day }] }],
+			months: [{ title: "m", year: 5785, month: 12, cells }],
 			dayLabel: () => "שונה",
 		});
 		expect(serializeCalendarPdfInput(base)).not.toBe(
@@ -113,9 +121,36 @@ describe("serializeCalendarPdfInput", () => {
 		expect(serializeCalendarPdfInput(base)).toBe(
 			serializeCalendarPdfInput(
 				fakeInput({
-					months: [{ title: "m", cells: [{ day }] }],
+					months: [{ title: "m", year: 5785, month: 12, cells }],
 				}),
 			),
+		);
+	});
+
+	it("captures scope, link origin and month identity so layout changes invalidate (#2727)", () => {
+		const cells = [{ blankColumn: 1 }];
+		const base = fakeInput({
+			months: [{ title: "m", year: 5785, month: 12, cells }],
+		});
+		const rescoped = fakeInput({
+			scope: "year",
+			months: [{ title: "m", year: 5785, month: 12, cells }],
+		});
+		const relinked = fakeInput({
+			linkBase: "https://example.test/929",
+			months: [{ title: "m", year: 5785, month: 12, cells }],
+		});
+		const remonthed = fakeInput({
+			months: [{ title: "m", year: 5786, month: 12, cells }],
+		});
+		expect(serializeCalendarPdfInput(base)).not.toBe(
+			serializeCalendarPdfInput(rescoped),
+		);
+		expect(serializeCalendarPdfInput(base)).not.toBe(
+			serializeCalendarPdfInput(relinked),
+		);
+		expect(serializeCalendarPdfInput(base)).not.toBe(
+			serializeCalendarPdfInput(remonthed),
 		);
 	});
 
