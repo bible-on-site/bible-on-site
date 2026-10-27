@@ -89,6 +89,20 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void ReadOnlySearchGeometryNeedsNoNativeHitTestOrPropertyRequests()
+    {
+        var executor = new SnapshotExecutor([Entry("search input", x: 10, y: 20)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var match = Assert.Single(new PerekPage(driver, new IosPlatformAdapter()).RenderedElements("PerekSearchInput"));
+        Assert.Equal("search input", match.Text);
+        Assert.Equal(new Point(10, 20), match.Frame.Location);
+        Assert.Equal(1, executor.Lookups);
+        Assert.DoesNotContain(DriverCommand.GetElementAttribute, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+    }
+
+    [Fact]
     public void RejectedTextDoesNotRequestAViewportButTheAcceptedPollDoes()
     {
         var executor = new SnapshotExecutor([Entry("loading"), Entry("ready")]);
