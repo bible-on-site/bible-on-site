@@ -77,7 +77,18 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
             }
             _preferencesService.FontFactor = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(MasterFontPercent));
         }
+    }
+
+    /// <summary>
+    /// Master size as a percentage of the base design size (50-200) - the
+    /// shared number picker's companion to the slider's raw factor (#2461).
+    /// </summary>
+    public double MasterFontPercent
+    {
+        get => _preferencesService.FontFactor * 100;
+        set => FontFactor = value / 100;
     }
 
     /// <summary>
@@ -112,21 +123,21 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
     // Each category stores a percentage of the master FontFactor; the numeric
     // input and the slider both bind the same property, so they stay in sync.
 
-    /// <summary>פסוקים size as a percentage of the master font size (50–200).</summary>
+    /// <summary>פסוקים size as a percentage of the master font size (50-200).</summary>
     public double PasukFontPercent
     {
         get => _preferencesService.PasukFontPercent;
         set => SetFontPercent(value, v => _preferencesService.PasukFontPercent = v, nameof(PasukFontPercent));
     }
 
-    /// <summary>פירושים size as a percentage of the master font size (50–200).</summary>
+    /// <summary>פירושים size as a percentage of the master font size (50-200).</summary>
     public double PerushFontPercent
     {
         get => _preferencesService.PerushFontPercent;
         set => SetFontPercent(value, v => _preferencesService.PerushFontPercent = v, nameof(PerushFontPercent));
     }
 
-    /// <summary>מאמרים size as a percentage of the master font size (50–200).</summary>
+    /// <summary>מאמרים size as a percentage of the master font size (50-200).</summary>
     public double ArticleFontPercent
     {
         get => _preferencesService.ArticleFontPercent;
@@ -171,6 +182,7 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
     private void OnPreferencesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(FontFactor));
+        OnPropertyChanged(nameof(MasterFontPercent));
         OnPropertyChanged(nameof(InAppBackButton));
         OnPropertyChanged(nameof(IsBackButtonPlatformDefault));
         OnPropertyChanged(nameof(IsBackButtonShow));

@@ -62,6 +62,9 @@ export const MODULES = {
 			// cd-aws.yml owns the post-deploy verifier invocation contract
 			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
 			".github/workflows/cd-aws.yml",
+			// The calendar-PDF artifact publisher defines the generation/publish
+			// contract verified by the calendar_pdf_artifacts job (#2608).
+			".github/workflows/calendar-pdf-publish.yml",
 			// The deploy_verifier job also guards canonical nginx redirects.
 			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
 		],
@@ -103,6 +106,8 @@ export const MODULES = {
 			".github/workflows/app-mobile-e2e-runner.yml",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
+			// The cross-module job merges the app's coverage layers with it.
+			"devops/merge-lcov.mts",
 		],
 		// The native decoder inputs are app-owned (#2391): the generator and its
 		// manifest live under app/devops/recitation-decoder, inside this module,
@@ -125,6 +130,8 @@ export const MODULES = {
 			"devops/docker-compose.yml",
 			"devops/package.json",
 			"devops/bun.lock",
+			// admin's coverage:merge calls it to build the published report.
+			"devops/merge-lcov.mts",
 		],
 	},
 	bulletin: {

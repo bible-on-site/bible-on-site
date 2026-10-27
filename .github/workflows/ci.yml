@@ -324,6 +324,77 @@ jobs:
         id: determine
         run: node devops/github/ci/determine-changes.ts
 
+  # Fixed ~30-second verification of the pre-generated calendar-PDF artifact
+  # cache (#2608). Full (re)generation and S3 publication live in
+  # calendar-pdf-publish.yml — a cold or broadly invalidated render must never
+  # inflate this pipeline.
+  calendar_pdf_artifacts:
+    name: Calendar PDF Artifacts
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true')
+      }}
+    defaults:
+      run:
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      # The generated catalog is a fingerprinted input — regenerate before
+      # hashing so the fingerprint always reflects current data.
+      - name: Generate client catalog
+        run: node scripts/generate-client-catalog.mjs
+
+      - name: Compute calendar-PDF input fingerprint
+        id: fp
+        run: echo "fingerprint=$(node scripts/calendar-pdf-inputs.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore calendar-PDF artifact cache
+        id: artifacts-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.cache/calendar-pdf
+          # Content-addressed key: a relevant-input change opens a new cache
+          # lineage while the previous lineage is still restored for partial
+          # regeneration (per-artifact input shas decide what re-renders).
+          key: ${{ runner.os }}-calendar-pdf-${{ steps.fp.outputs.fingerprint }}
+          restore-keys: ${{ runner.os }}-calendar-pdf-
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+
+      - name: Restore bun store cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-bun-website-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # On an unchanged fingerprint this is an O(keys) manifest check plus a
+      # small re-rendered byte-compare sample; on drift it measures the
+      # partial-invalidation rate on a bounded sample. Never a full render.
+      # The cache is write-owned by calendar-pdf-publish.yml (serialized by
+      # its concurrency group) — this job only restores + verifies, so two
+      # overlapping CI runs can never race on a cache save.
+      - name: Verify calendar-PDF artifacts
+        run: bun run check:calendar-pdf
+
   package_website:
     name: Package Website
     needs: [setup_env, determine_changes]
@@ -1519,15 +1590,22 @@ jobs:
           retention-days: 90
           overwrite: true
 
-      - name: Merge test coverage (unit; E2E lcov when enabled)
+      # The published admin report merges both test layers: unit's V8 report
+      # is the canonical universe (every eligible source file enumerated);
+      # the istanbul-instrumented E2E layer only confirms hits on shared
+      # coordinates (--hits-only, #2270) and can never extend or dilute the
+      # denominator. Both inputs are required — a missing layer fails the
+      # job instead of publishing a partial report as complete (#2707).
+      - name: Merge test coverage (unit + E2E into one admin report)
         run: bun run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          # Unit + e2e files too: each is uploaded to Codecov under its own
-          # flag (merged is for the cross-module report).
+          # Unit + e2e files too: kept as per-layer diagnostics; the merged
+          # file is the single report Codecov's `admin` flag and the
+          # cross-module merge consume.
           path: |
             ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
             ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
@@ -1936,7 +2014,9 @@ jobs:
 
       - name: Verify Android release package
         run: |
-          dotnet workload install maui-android
+          # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
+          # release honoring AndroidR8ObfuscationMode and emitting r8.json (#2708).
+          dotnet workload install maui-android --version 10.0.402.1
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           # Compile with the checked-in notes fixture; store packages use the paired release artifact.
           NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
@@ -1945,6 +2025,10 @@ jobs:
           fi
           # Exercise D8 and release linking before merging, without store signing keys.
           dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
+          # #2708: the bundle must carry r8.json (enabled stages plus the
+          # no*Percentage stats Play scores) and proguard.map; the verifier
+          # enforces each Play score ≥25% over the 10 MB DEX threshold.
+          python3 devops/verify_android_dex_metadata.py --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
@@ -1957,6 +2041,9 @@ jobs:
 
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
+
+      - name: Test Android DEX metadata verification
+        run: python3 -m unittest discover -s devops -p test_verify_android_dex_metadata.py
 
       - name: Setup Python for signing validation tests
         uses: actions/setup-python@v7
@@ -2738,6 +2825,7 @@ jobs:
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
+        calendar_pdf_artifacts,
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
@@ -2794,6 +2882,15 @@ jobs:
             PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          # The artifacts job is only triggered by website module/CI changes —
+          # the same condition that gates it — so check it only then (#2608).
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ]; then
+            if [ "${{ needs.calendar_pdf_artifacts.result }}" != "success" ]; then
+              echo "Calendar PDF artifact verification did not pass."
               exit 1
             fi
           fi
@@ -3042,24 +3139,17 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
+      # The `admin` flag carries one merged report: unit's canonical V8
+      # universe plus the hits the E2E layer confirmed on shared coordinates
+      # (merged in the Admin CI job). Per-layer files stay in the coverage
+      # artifact as diagnostics only.
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          # The admin flag tracks unit coverage (its historical baseline);
-          # e2e goes under admin_e2e so thin e2e suites don't dilute it.
-          files: ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+          files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           disable_search: true
           flags: admin
-          fail_ci_if_error: false
-
-      - name: Publish Admin E2E Coverage To Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
-          disable_search: true
-          flags: admin_e2e
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report

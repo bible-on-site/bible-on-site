@@ -32,7 +32,8 @@ public class MasoraDataService
     /// dense pasuk map.
     /// </summary>
     private Dictionary<int, List<(MasoraUnit Unit, MasoraUnitRange Range)>>? _rangesByPerekId;
-    private bool _isLoaded;
+    /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
+    private volatile bool _isLoaded;
     private bool _isAvailable;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly LocalDatabaseService _databaseService;

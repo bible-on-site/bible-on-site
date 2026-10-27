@@ -8,7 +8,8 @@
       VerticalOptions="End"
       BackgroundColor="Transparent">
     <AbsoluteLayout BackgroundColor="Transparent">
-        <GraphicsView AbsoluteLayout.LayoutBounds="0,0,1,1"
+        <GraphicsView x:Name="BarSurface"
+                      AbsoluteLayout.LayoutBounds="0,0,1,1"
                       AbsoluteLayout.LayoutFlags="All"
                       BackgroundColor="Transparent"
                       Drawable="{StaticResource BottomBarDrawable}"/>

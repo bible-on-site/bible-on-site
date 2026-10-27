@@ -28,7 +28,7 @@ import {
 	memoizeGlyphEncoding,
 	visualTextRuns,
 } from "./bidi-text";
-import { getBoldFontBytes, getRegularFontBytes } from "./tanach-pdf";
+import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
 
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
@@ -102,13 +102,28 @@ function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
 }
 
 /**
+ * Fixed document metadata date. Calendar PDFs are pre-generated artifacts
+ * addressed by content hash (#2608), so rendering must be byte-deterministic:
+ * pdf-lib otherwise stamps CreationDate/ModDate with wall-clock time.
+ */
+const FIXED_METADATA_DATE = new Date("2020-01-01T00:00:00.000Z");
+
+/**
  * Renders the given months to a single-column flow of month grids.
  * Returns raw PDF bytes.
+ *
+ * Deterministic: `updateMetadata: false` keeps save() from restamping the
+ * info dict, and the document dates are fixed constants — identical inputs
+ * yield identical bytes on any machine.
  */
 export async function generateCalendarPdf(
 	input: CalendarPdfInput,
 ): Promise<Uint8Array> {
-	const doc = await PDFDocument.create();
+	const doc = await PDFDocument.create({ updateMetadata: false });
+	doc.setProducer("bible-on-site calendar-pdf");
+	doc.setCreator("bible-on-site");
+	doc.setCreationDate(FIXED_METADATA_DATE);
+	doc.setModificationDate(FIXED_METADATA_DATE);
 	doc.registerFontkit(fontkit);
 	const font = memoizeGlyphEncoding(await doc.embedFont(getRegularFontBytes()));
 	const bold = memoizeGlyphEncoding(await doc.embedFont(getBoldFontBytes()));

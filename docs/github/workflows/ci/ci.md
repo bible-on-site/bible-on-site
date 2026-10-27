@@ -132,7 +132,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
   `e2e-impact`, `e2e-coverage-trees`, `codecov-report-state`,
   `bencher-comparison` tests).
 - Publishes per-flag coverage to Codecov (`website`, `api`, `app`, `bulletin`,
-  `admin`, `admin_e2e`, `data`) and the cross-module merge to Codacy, then
+  `admin`, `data`) and the cross-module merge to Codacy, then
   polls Codecov's report state (`codecov-report-state.mjs`) — distinguishing
   pass, explicit fail, and unresolved/outage paths.
 - `website_publish_test_results_to_codecov` uploads the website's JUnit

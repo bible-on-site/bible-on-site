@@ -46,6 +46,7 @@ import {
 	updatePersonName,
 	updateUnionLink,
 } from "~/server/tanahpedia/family";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 describe("tanahpedia family api", () => {
 	beforeEach(() => {
@@ -1309,6 +1310,7 @@ describe("family saves invalidate the website", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -1322,20 +1324,46 @@ describe("family saves invalidate the website", () => {
 		fetchSpy.mockRestore();
 	});
 
-	function revalidateCalls() {
-		return fetchSpy.mock.calls.map((call: unknown[]) => {
-			const url = new URL(String(call[0]));
-			return {
-				tag: url.searchParams.get("tag"),
-				path: url.searchParams.get("path"),
-			};
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
 		});
 	}
 
-	it("expires pedia surfaces after a parent-child link commit", async () => {
+	/**
+	 * `pediaChangesForPersons` resolves person ids → entities → their linked
+	 * entry names in four queries: the person→entity join, then the entity
+	 * types, linked entry names and source perakim together.
+	 */
+	function mockPersonResolution(
+		entityIds: string[],
+		entryNames: Record<string, string>,
+	) {
+		queryMock
+			.mockResolvedValueOnce(entityIds.map((id) => ({ entity_id: id })))
+			.mockResolvedValueOnce(
+				entityIds.map((id) => ({ id, entity_type: "PERSON" })),
+			)
+			.mockResolvedValueOnce(
+				Object.entries(entryNames).map(([entity_id, unique_name]) => ({
+					entity_id,
+					unique_name,
+				})),
+			)
+			.mockResolvedValueOnce([]);
+	}
+
+	function entityChanges() {
+		return sentChanges().filter((c) => c.kind === "pedia-entity");
+	}
+
+	it("sends both persons' entity changes after a parent-child link commit", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: "rel-bio" })
 			.mockResolvedValueOnce({ id: "role-father" });
+		mockPersonResolution(["e1", "e2"], { e1: "אברהם", e2: "יצחק" });
 
 		await createParentChildLink({
 			data: {
@@ -1346,110 +1374,115 @@ describe("family saves invalidate the website", () => {
 			},
 		});
 
-		expect(revalidateCalls()).toEqual([
-			{ tag: "tanahpedia-entity-refs", path: null },
-			{ tag: null, path: "/pedia/[slug]" },
-			{ tag: null, path: "/pedia" },
-			{ tag: "tanahpedia-mention-refs", path: null },
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entity",
+				entityId: "e1",
+				entityType: "PERSON",
+				entryUniqueNames: ["אברהם"],
+				refPerekIds: [],
+			},
+			{
+				kind: "pedia-entity",
+				entityId: "e2",
+				entityType: "PERSON",
+				entryUniqueNames: ["יצחק"],
+				refPerekIds: [],
+			},
 		]);
 	});
 
-	it("expires pedia surfaces after a person name delete", async () => {
+	it("sends the owning person's entity change after a person name delete", async () => {
+		queryOneMock.mockResolvedValueOnce({ person_id: "p1" });
+		mockPersonResolution(["e1"], { e1: "יעקב" });
 		executeMock.mockResolvedValueOnce({ affectedRows: 1 });
 
 		await deletePersonName({ data: { id: "name-1" } });
 
 		expect(fetchSpy).toHaveBeenCalled();
-		expect(revalidateCalls()[0]?.tag).toBe("tanahpedia-entity-refs");
+		expect(entityChanges()[0]?.entityId).toBe("e1");
 	});
 
-	function notifiedUrls(): string[] {
-		// The urls ride on the third (/pedia index) invalidation call.
-		const url = new URL(String(fetchSpy.mock.calls[2][0]));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports the linked entry's url when a new person is linked to it", async () => {
+	it("carries the linked entry's change when a new person links to it", async () => {
 		queryOneMock.mockResolvedValue({ id: "type-1" });
-		queryMock.mockResolvedValue([{ unique_name: "משה" }]);
+		queryMock
+			.mockResolvedValueOnce([{ unique_name: "משה" }])
+			.mockResolvedValueOnce([{ entity_type: "PERSON" }])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([]);
 
 		await createFamilyPersonNode({
 			data: { displayName: "דוד", linkToEntryId: "entry-1" },
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/משה"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entry",
+				uniqueName: "משה",
+				entityTypes: ["PERSON"],
+				synonymNames: [],
+				refPerekIds: [],
+			},
+		]);
 	});
 
-	it("reports the linked persons' entry urls after a parent-child update", async () => {
+	it("carries the linked persons' entry names after a parent-child update", async () => {
 		executeMock.mockResolvedValue({ affectedRows: 1 });
 		queryOneMock.mockResolvedValue({
 			parent_id: "parent-1",
 			child_id: "child-1",
 		});
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }, { entity_id: "e2" }])
-			.mockResolvedValueOnce([{ unique_name: "אברהם" }]);
+		mockPersonResolution(["e1"], { e1: "אברהם" });
 
 		await updateParentChildLink({
 			data: { id: "link-1", sourceCitation: "מקור" },
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/אברהם"]);
+		expect(entityChanges()[0]?.entryUniqueNames).toEqual(["אברהם"]);
 	});
 
-	it("reports the linked persons' entry urls after a parent-child delete", async () => {
+	it("carries the linked persons' entry names after a parent-child delete", async () => {
 		executeMock.mockResolvedValue({ affectedRows: 1 });
 		queryOneMock.mockResolvedValue({
 			parent_id: "parent-1",
 			child_id: "child-1",
 		});
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }])
-			.mockResolvedValueOnce([{ unique_name: "אברהם" }]);
+		mockPersonResolution(["e1"], { e1: "אברהם" });
 
 		await deleteParentChildLink({ data: { id: "link-1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/אברהם"]);
+		expect(entityChanges()[0]?.entryUniqueNames).toEqual(["אברהם"]);
 	});
 
-	it("reports the members' entry urls after a union update", async () => {
+	it("carries the members' entry names after a union update", async () => {
 		executeMock.mockResolvedValue({ affectedRows: 1 });
 		queryOneMock.mockResolvedValue({
 			person1_id: "p1",
 			person2_id: "p2",
 		});
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }])
-			.mockResolvedValueOnce([{ unique_name: "שרה" }]);
+		mockPersonResolution(["e1"], { e1: "שרה" });
 
 		await updateUnionLink({ data: { id: "u1", unionOrder: 2 } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/שרה"]);
+		expect(entityChanges()[0]?.entryUniqueNames).toEqual(["שרה"]);
 	});
 
-	it("reports the members' entry urls after a union delete", async () => {
+	it("carries the members' entry names after a union delete", async () => {
 		executeMock.mockResolvedValue({ affectedRows: 1 });
 		queryOneMock.mockResolvedValue({
 			person1_id: "p1",
 			person2_id: "p2",
 		});
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }])
-			.mockResolvedValueOnce([{ unique_name: "שרה" }]);
+		mockPersonResolution(["e1"], { e1: "שרה" });
 
 		await deleteUnionLink({ data: { id: "u1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/שרה"]);
+		expect(entityChanges()[0]?.entryUniqueNames).toEqual(["שרה"]);
 	});
 
-	it("reports the named person's and giver's entry urls after a name create", async () => {
+	it("carries the named person's and giver's entry names after a name create", async () => {
 		queryOneMock.mockResolvedValue({ id: "type-1" });
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }, { entity_id: "e2" }])
-			.mockResolvedValueOnce([
-				{ unique_name: "יעקב" },
-				{ unique_name: "ישמעאל" },
-			]);
+		mockPersonResolution(["e1", "e2"], { e1: "יעקב", e2: "ישמעאל" });
 
 		await createPersonName({
 			data: {
@@ -1460,30 +1493,29 @@ describe("family saves invalidate the website", () => {
 			},
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/יעקב", "/pedia/ישמעאל"]);
+		expect(entityChanges().map((c) => c.entryUniqueNames)).toEqual([
+			["יעקב"],
+			["ישמעאל"],
+		]);
 	});
 
-	it("reports the owning person's entry urls after a name update", async () => {
+	it("carries the owning person's entry names after a name update", async () => {
 		executeMock.mockResolvedValue({ affectedRows: 1 });
 		queryOneMock.mockResolvedValue({ person_id: "p1" });
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }])
-			.mockResolvedValueOnce([{ unique_name: "יעקב" }]);
+		mockPersonResolution(["e1"], { e1: "יעקב" });
 
 		await updatePersonName({ data: { id: "name-1", name: "ישראל" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/יעקב"]);
+		expect(entityChanges()[0]?.entryUniqueNames).toEqual(["יעקב"]);
 	});
 
-	it("reports the owning person's entry urls after a name delete", async () => {
+	it("carries the owning person's entry names after a name delete", async () => {
 		executeMock.mockResolvedValue({ affectedRows: 1 });
 		queryOneMock.mockResolvedValue({ person_id: "p1" });
-		queryMock
-			.mockResolvedValueOnce([{ entity_id: "e1" }])
-			.mockResolvedValueOnce([{ unique_name: "יעקב" }]);
+		mockPersonResolution(["e1"], { e1: "יעקב" });
 
 		await deletePersonName({ data: { id: "name-1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/יעקב"]);
+		expect(entityChanges()[0]?.entryUniqueNames).toEqual(["יעקב"]);
 	});
 });

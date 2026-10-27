@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { BookmarkProvider } from "html-flip-book-react";
 import { sampleImage } from "./perek-image-fixture";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
@@ -61,6 +62,22 @@ jest.mock(
 			</button>
 		),
 		BookshelfIcon: () => <span>shelf</span>,
+		BookmarkToggleButton: ({
+			enabled,
+			onChange,
+			ariaLabel,
+		}: {
+			enabled: boolean;
+			onChange: (enabled: boolean) => void;
+			ariaLabel?: string;
+		}) => (
+			<button
+				type="button"
+				onClick={() => onChange(!enabled)}
+				aria-label={ariaLabel}
+				aria-pressed={enabled}
+			/>
+		),
 		DownloadDropdown: () => <div />,
 		FirstPageButton: () => <div />,
 		FullscreenButton: () => <div />,
@@ -185,6 +202,7 @@ import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import {
 	DEFAULT_SEFER_BOOKMARK_SETTINGS,
+	getSeferBookmarkSettings,
 	saveSeferBookmarkSettings,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
@@ -475,23 +493,7 @@ describe("Sefer component", () => {
 
 	describe("chapter tabs (#2543)", () => {
 		const provider = () =>
-			capturedFlipBookProps.bookmarkProvider as {
-				getBookmarks: (context: {
-					currentPageIndex: number;
-					currentLeafIndex: number;
-					direction: "ltr" | "rtl";
-				}) => readonly {
-					id: string;
-					pageIndex: number;
-					label: string;
-					data?: unknown;
-				}[];
-				placement?: string;
-				orientation?: string;
-				attachment?: string;
-				order?: unknown;
-				className?: string;
-			};
+			capturedFlipBookProps.bookmarkProvider as BookmarkProvider;
 
 		beforeEach(() => {
 			localStorage.clear();
@@ -529,6 +531,72 @@ describe("Sefer component", () => {
 			]);
 		});
 
+		it.each([
+			{ name: "בראשית", additional: undefined, chapter: "יב" },
+			{ name: "מלכים", additional: "א", chapter: "א יב" },
+			{ name: "מלכים", additional: "ב", chapter: "ב יב" },
+		])(
+			"keeps the expanded chapter reference scoped to $name $chapter",
+			({ name, additional, chapter }) => {
+				const perakim = Array.from({ length: 12 }, () => ({
+					header: "כותרת הפרק",
+					date: [],
+					star_rise: [],
+					pesukim: [],
+				}));
+				const metadata = {
+					name,
+					helek: name === "בראשית" ? "תורה" : "נביאים",
+					tanachUsName: name,
+					pesukimCount: 0,
+					perekFrom: 1,
+					perekTo: perakim.length,
+				};
+				const sefer: ComponentProps<typeof SeferContents>["sefer"] = additional
+					? {
+							...metadata,
+							perekTo: perakim.length * 2,
+							additionals: [
+								{ ...metadata, letter: "א", perakim },
+								{
+									...metadata,
+									letter: "ב",
+									perakim,
+									perekFrom: perakim.length + 1,
+									perekTo: perakim.length * 2,
+								},
+							],
+						}
+					: { ...metadata, perakim };
+				render(
+					<SeferContents
+						perekObj={{ ...minimalPerek, sefer: name }}
+						sefer={sefer}
+						articles={[]}
+						perushim={[]}
+					/>,
+				);
+				const p = provider();
+				const bookmark = p.getBookmarks({
+					currentPageIndex: 0,
+					currentLeafIndex: 0,
+					direction: "rtl",
+				})[additional === "ב" ? 23 : 11];
+				const { container } = render(p.renderExpandedBookmark?.(bookmark));
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-perek"),
+				).toHaveTextContent(`פרק ${chapter}`);
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-title"),
+				).toHaveTextContent("כותרת הפרק");
+				expect(container).not.toHaveTextContent(name);
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-source"),
+				).toBeNull();
+				expect(bookmark.label).toBe(`${name} ${chapter} - כותרת הפרק`);
+			},
+		);
+
 		it("hides the tabs when סימניות is disabled", () => {
 			saveSeferBookmarkSettings({ enabled: false });
 			render(
@@ -539,6 +607,58 @@ describe("Sefer component", () => {
 					perekIds={[1]}
 				/>,
 			);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+		});
+
+		it("toggles the tabs from the toolbar through the shared persisted state", () => {
+			saveSeferBookmarkSettings({ placement: "top", upcomingOnly: true });
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			const hide = screen.getByRole("button", { name: "הסתרת סימניות" });
+			expect(hide).toHaveAttribute("aria-pressed", "true");
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+
+			fireEvent.click(hide);
+			// One persisted state drives the preference, the toolbar control and
+			// the library flag — and the display options survive the toggle.
+			expect(getSeferBookmarkSettings()).toMatchObject({
+				enabled: false,
+				placement: "top",
+				upcomingOnly: true,
+			});
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+
+			// The control stays reachable while tabs are hidden so they can be
+			// shown again, now announcing the show action.
+			const show = screen.getByRole("button", { name: "הצגת סימניות" });
+			expect(show).toHaveAttribute("aria-pressed", "false");
+			fireEvent.click(show);
+			expect(getSeferBookmarkSettings().enabled).toBe(true);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+		});
+
+		it("mirrors an external סימניות preference change in the toolbar control", () => {
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			expect(
+				screen.getByRole("button", { name: "הסתרת סימניות" }),
+			).toBeInTheDocument();
+			act(() => saveSeferBookmarkSettings({ enabled: false }));
+			expect(
+				screen.getByRole("button", { name: "הצגת סימניות" }),
+			).toHaveAttribute("aria-pressed", "false");
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 		});
 

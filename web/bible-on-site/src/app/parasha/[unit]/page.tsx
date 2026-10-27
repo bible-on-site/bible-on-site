@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
@@ -30,6 +29,12 @@ import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getPerushimForRanges } from "@/lib/perushim/service";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
 import { unitPerekIds } from "@/lib/reading/ranges";
+import {
+	cachedPerKey,
+	COLLECTION_TAGS,
+	parashaArticlesTag,
+	parashaPerushimTag,
+} from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
@@ -49,31 +54,39 @@ export function generateStaticParams() {
 	}));
 }
 
-const getCachedRangePerushim = unstable_cache(
+const getCachedRangePerushim = cachedPerKey(
+	"parasha-range-perushim",
+	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
+	(key) => {
+		const [unitId, scope] = key.split(":");
+		return [
+			COLLECTION_TAGS.perushim,
+			parashaPerushimTag(Number(unitId), scope),
+		];
+	},
 	async (unitId: number, scope: "torah" | "haftara") => {
 		const unit = getParashaUnitById(unitId);
 		const ranges =
 			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
 		return getPerushimForRanges(ranges);
 	},
-	["parasha-range-perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
 );
 
-const getCachedRangeArticles = unstable_cache(
+const getCachedRangeArticles = cachedPerKey(
+	"parasha-range-article-summaries",
+	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
+	(key) => {
+		const [unitId, scope] = key.split(":");
+		return [
+			COLLECTION_TAGS.articles,
+			parashaArticlesTag(Number(unitId), scope),
+		];
+	},
 	async (unitId: number, scope: "torah" | "haftara") => {
 		const unit = getParashaUnitById(unitId);
 		const ranges =
 			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
 		return getArticleSummariesForRanges(ranges);
-	},
-	["parasha-range-article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
 	},
 );
 

@@ -62,7 +62,24 @@ public class TikkunFlowView : GraphicsView
         // A starting estimate — the drawable corrects it to the exact flow
         // height once it can measure words on the real canvas.
         HeightRequest = TextFontSize * LineHeightFactor * 4;
+        // Word and marker colors resolve from the requested theme at build
+        // time, so a flip must re-derive them instead of repainting with the
+        // stale palette (#2601).
+        if (Application.Current is { } app)
+        {
+            // Loaded/Unloaded so a re-presented view re-subscribes and rebuilds
+            // under the theme that is active then.
+            Loaded += (_, _) =>
+            {
+                app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+                Dispatcher.Dispatch(InvalidateContent);
+            };
+            Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
+        }
     }
+
+    internal void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
+        Dispatcher.Dispatch(InvalidateContent);
 
     public IReadOnlyList<Pasuk>? Pasukim
     {

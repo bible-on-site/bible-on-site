@@ -5,9 +5,9 @@ import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { execute, query, queryOne } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
 import {
-	pediaInvalidationForEntities,
-	pediaInvalidationForEntryIds,
-	pediaInvalidationForPersons,
+	pediaChangesForEntities,
+	pediaChangesForEntryIds,
+	pediaChangesForPersons,
 } from "./paths";
 import {
 	type EntryStructuralContext,
@@ -55,7 +55,7 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 			data.entityId,
 		]);
 		await revalidateWebsite(
-			await pediaInvalidationForEntities([data.entityId]),
+			await pediaChangesForEntities([data.entityId]),
 		);
 		return { success: true };
 	});
@@ -88,7 +88,7 @@ export const updateSayingDate = createServerFn({ method: "POST" })
 			data.sayingId,
 		]);
 		await revalidateWebsite(
-			await pediaInvalidationForEntities(
+			await pediaChangesForEntities(
 				saying?.entity_id ? [saying.entity_id] : [],
 			),
 		);
@@ -131,7 +131,7 @@ export const updatePersonMainName = createServerFn({ method: "POST" })
 		}
 
 		await revalidateWebsite(
-			await pediaInvalidationForPersons([data.personId]),
+			await pediaChangesForPersons([data.personId]),
 		);
 		return { success: true };
 	});
@@ -159,7 +159,7 @@ export const updatePersonSex = createServerFn({ method: "POST" })
 			);
 		}
 		await revalidateWebsite(
-			await pediaInvalidationForPersons([data.personId]),
+			await pediaChangesForPersons([data.personId]),
 		);
 		return { success: true };
 	});
@@ -212,7 +212,7 @@ export const replacePlaceIdentifications = createServerFn({ method: "POST" })
 			[data.placeId],
 		);
 		await revalidateWebsite(
-			await pediaInvalidationForEntities(
+			await pediaChangesForEntities(
 				place?.entity_id ? [place.entity_id] : [],
 			),
 		);
@@ -327,7 +327,7 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 		);
 
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds([data.entryId]),
+			await pediaChangesForEntryIds([data.entryId]),
 		);
 		return { entityId, linkId };
 	});
@@ -380,7 +380,7 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 			[linkId, data.entryId, data.entityId],
 		);
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds([data.entryId]),
+			await pediaChangesForEntryIds([data.entryId]),
 		);
 		return { linkId };
 	});

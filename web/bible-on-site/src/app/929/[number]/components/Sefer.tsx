@@ -1,5 +1,7 @@
 "use client";
 import type {
+	Bookmark,
+	BookmarkContext,
 	BookmarkProvider,
 	CoverConfig,
 	FlipBookHandle,
@@ -9,6 +11,7 @@ import type {
 import { TocPage } from "html-flip-book-react";
 import {
 	ActionButton,
+	BookmarkToggleButton,
 	BookshelfIcon,
 	type DownloadConfig,
 	DownloadDropdown,
@@ -52,6 +55,7 @@ import type { PerushSummary } from "@/lib/perushim";
 import {
 	getSeferBookmarkServerSnapshot,
 	getSeferBookmarkSnapshot,
+	saveSeferBookmarkSettings,
 	seferBookmarkProviderOrder,
 	subscribeSeferBookmarks,
 } from "@/lib/sefer-bookmark-settings";
@@ -230,20 +234,33 @@ const Sefer = (props: {
 		() => buildSeferChapterBookmarks(sefer, perekIds),
 		[sefer, perekIds],
 	);
+	// Toolbar show/hide (issue #2543): the toggle shares the one persisted
+	// visibility state with תצוגה -> סימניות and the flipbook's
+	// enableBookmarks flag — the save broadcasts to both. Merge over the
+	// live snapshot so placement/orientation/attachment/order choices are
+	// preserved; only the page-turn layer flips, position is untouched.
+	const toggleBookmarks = useCallback(
+		(enabled: boolean) =>
+			saveSeferBookmarkSettings({
+				...getSeferBookmarkSnapshot(),
+				enabled,
+			}),
+		[],
+	);
 	const bookmarkProvider = useMemo<BookmarkProvider>(
 		() => ({
-			getBookmarks: (context) =>
+			getBookmarks: (context: BookmarkContext) =>
 				filterUpcomingBookmarks(
 					chapterBookmarks,
 					context,
 					bookmarkSettings.upcomingOnly,
 				),
-			renderBookmark: (bookmark) => (
+			renderBookmark: (bookmark: Bookmark) => (
 				<span className="sefer-bookmark-label">
 					{(bookmark.data as SeferBookmarkData).compact}
 				</span>
 			),
-			renderExpandedBookmark: (bookmark) => {
+			renderExpandedBookmark: (bookmark: Bookmark) => {
 				const data = bookmark.data as SeferBookmarkData;
 				return (
 					<span
@@ -251,16 +268,13 @@ const Sefer = (props: {
 						style={{ "--cover-color": seferColor } as React.CSSProperties}
 					>
 						<span className="sefer-bookmark-expanded-perek">
-							פרק {data.perekHeb}
+							פרק {data.compact}
 						</span>
 						{data.title && (
 							<span className="sefer-bookmark-expanded-title">
 								{data.title}
 							</span>
 						)}
-						<span className="sefer-bookmark-expanded-source">
-							{data.unitSource}
-						</span>
 					</span>
 				);
 			},
@@ -698,6 +712,15 @@ const Sefer = (props: {
 					<div className="flipbook-toolbar-start">
 						<FullscreenButton />
 						<TocButton />
+						<BookmarkToggleButton
+							enabled={bookmarkSettings.enabled}
+							onChange={toggleBookmarks}
+							ariaLabel={
+								bookmarkSettings.enabled
+									? "הסתרת סימניות"
+									: "הצגת סימניות"
+							}
+						/>
 						<MouseModeButton />
 						<ActionButton onClick={openBookshelf} ariaLabel={'ספרי התנ"ך'}>
 							<BookshelfIcon size={18} />
