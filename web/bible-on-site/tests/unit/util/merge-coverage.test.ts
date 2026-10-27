@@ -52,43 +52,46 @@ function runMerger(expression: string): string {
 }
 
 describe("merge-coverage buildMergeArgs (#2670)", () => {
-	it("pins the unit report as the canonical universe", () => {
+	it("merges the unit report as a required layer", () => {
 		const args = JSON.parse(runMerger("null")) as string[];
 
-		// --require makes devops/merge-lcov.mts treat the unit lcov's record
-		// set as authoritative — the merged denominator stays a deterministic
-		// function of the source tree.
-		expect(args[args.indexOf("--require") + 1]).toMatch(
-			/unit[\\/]lcov\.normalized\.info$/,
-		);
+		// --require inputs must exist and contribute their full universe.
 		expect(args.indexOf("--require")).toBeGreaterThan(-1);
+		const required = args
+			.map((a, i) => (a === "--require" ? args[i + 1] : null))
+			.filter(Boolean) as string[];
+		expect(
+			required.some((p) => /unit[\\/]lcov\.normalized\.info$/.test(p)),
+		).toBe(true);
 	});
 
-	it("merges e2e as --hits-only-branches, never extending the universe", () => {
+	it("merges e2e as an equal --require peer, not a pinned subset", () => {
 		const args = JSON.parse(runMerger("null")) as string[];
 
-		// Same instrumenter on both layers: an identical line,block,branch
-		// tuple names the same arm, so e2e may confirm canonical BRDA hits —
-		// but foreign files/DA/branch tuples can never enter the merge.
-		expect(args[args.indexOf("--hits-only-branches") + 1]).toMatch(
-			/e2e[\\/]lcov\.normalized\.info$/,
-		);
+		// sanitizeCoverage projects every collected record onto the canonical
+		// instrumented map (coverage-universe.js) and drops records that name
+		// no real src file — the e2e report's coordinate space is already
+		// trusted, so the merge is a plain union. No hits-only/denominator
+		// pinning remains (#2670).
+		const required = args
+			.map((a, i) => (a === "--require" ? args[i + 1] : null))
+			.filter(Boolean) as string[];
+		expect(
+			required.some((p) => /e2e[\\/]lcov\.normalized\.info$/.test(p)),
+		).toBe(true);
 		expect(args).not.toContain("--hits-only");
+		expect(args).not.toContain("--hits-only-branches");
 	});
 
 	it("writes the merged report through the shared devops merger", () => {
 		const args = JSON.parse(runMerger("null")) as string[];
 
 		expect(args[0]).toMatch(/devops[\\/]merge-lcov\.mts$/);
-		expect(args[args.indexOf("--out") + 1]).toMatch(
-			/merged[\\/]lcov\.info$/,
-		);
+		expect(args[args.indexOf("--out") + 1]).toMatch(/merged[\\/]lcov\.info$/);
 	});
 
 	it("appends --prefix so Codecov sees monorepo-relative paths", () => {
-		const withPrefix = JSON.parse(
-			runMerger("web/bible-on-site/"),
-		) as string[];
+		const withPrefix = JSON.parse(runMerger("web/bible-on-site/")) as string[];
 		expect(withPrefix[withPrefix.indexOf("--prefix") + 1]).toBe(
 			"web/bible-on-site/",
 		);

@@ -54,18 +54,15 @@ function mergeCoverage(): void {
  * The merge invocation for `coverage:merge`, exported so tests can pin the
  * #2670 contract.
  *
- * The unit report is the canonical universe: jest enumerates every file the
- * swc plugin instrumented plus monocart's `all` sweep of src/, so its record
- * set is a deterministic function of the source tree. The e2e report
- * enumerates whatever the instrumented dev server happened to compile on
- * demand — a set that jitters run-to-run and even leaks generated webpack
- * chunks (data<hash> modules, [json].cjs wrappers) into the report. Merging
- * it as a trusted layer made the merged denominator (and the codecov
- * `website` flag) vary between identical runs (#2670). Both layers share
- * swc-plugin-coverage-instrument, so an identical "line,block,branch" tuple
- * names the same arm: the e2e layer merges --hits-only-branches — it
- * confirms DA/FNDA/BRDA hits on canonical coordinates but can never extend
- * the universe with foreign files, lines, or branch arms. execFile keeps the
+ * Both reports enumerate the same canonical universe: sanitizeCoverage
+ * (tests/util/coverage/coverage-universe.js) rewrites every collected record
+ * onto the coordinates jest's transform emits for the file and drops records
+ * that name no real instrumentable src file — the dev server's generated
+ * modules (data<hash> chunks, `[json].cjs` wrappers, font chunks) and stale
+ * .next-cache variants can never reach the report. With the untrusted
+ * coordinate space removed at collection time, the e2e layer merges as a
+ * full `--require` peer: identical tuples name identical arms on both sides,
+ * so a plain union is exact — no canonical layer needed. execFile keeps the
  * paths out of shell interpolation.
  */
 export function buildMergeArgs(prefix: string | null): string[] {
@@ -75,7 +72,7 @@ export function buildMergeArgs(prefix: string | null): string[] {
 		`${COVERAGE_DIR}/merged/lcov.info`,
 		"--require",
 		`${COVERAGE_DIR}/unit/lcov.normalized.info`,
-		"--hits-only-branches",
+		"--require",
 		`${COVERAGE_DIR}/e2e/lcov.normalized.info`,
 	];
 	// --prefix rewrites bare `SF:src/...` records to `web/bible-on-site/src/...`
