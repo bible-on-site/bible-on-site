@@ -17,6 +17,15 @@ import {
 	type ReaderSettings,
 	setStoredReaderSettings,
 } from "@/lib/reader-settings";
+import {
+	applySiteA11ySettings,
+	DEFAULT_SITE_A11Y_SETTINGS,
+	getStoredSiteA11ySettings,
+	SITE_A11Y_EVENT,
+	SITE_A11Y_STORAGE_KEY,
+	type SiteA11ySettings,
+	setStoredSiteA11ySettings,
+} from "@/lib/site-a11y-settings";
 import { hasReaderSettingsGear, isReaderPathname } from "./TopNavSearch";
 import styles from "./top-nav-accessibility.module.css";
 
@@ -28,6 +37,9 @@ const sameSettings = (a: ReaderSettings, b: ReaderSettings) =>
 	a.wordStep === b.wordStep &&
 	a.fontId === b.fontId;
 
+const sameA11y = (a: SiteA11ySettings, b: SiteA11ySettings) =>
+	a.contrast === b.contrast && a.links === b.links;
+
 /**
  * Accessibility adjustments menu in the shared top bar, next to the search
  * button — or next to the reader preferences gear on reader unit routes,
@@ -35,10 +47,13 @@ const sameSettings = (a: ReaderSettings, b: ReaderSettings) =>
  * that suppress the search button but mount no gear (e.g. /929/authors) the
  * trigger takes the left-edge slot instead of docking beside a missing gear.
  * The controls reuse the perek reader display settings so they stay in sync
- * with the הגדרות קריאה dialog instead of competing with it. The reset
- * restores only those display adjustments —
- * unrelated preferences, recitation settings and user data are untouched.
- * The last item is the maintained הצהרת נגישות link (issue #2396).
+ * with the הגדרות קריאה dialog instead of competing with it. Site-wide
+ * ניגודיות גבוהה and קו תחתון לקישורים persist in their own store
+ * (site-a11y-settings.ts) — the reader-settings schema only owns scripture
+ * display fields (#2767). The reset restores both the display adjustments
+ * and the site toggles — unrelated preferences, recitation settings and
+ * user data are untouched. The last item is the maintained הצהרת נגישות
+ * link (issue #2396).
  */
 export function TopNavAccessibility() {
 	const pathname = usePathname();
@@ -46,6 +61,7 @@ export function TopNavAccessibility() {
 	const [settings, setSettings] = useState<ReaderSettings>(
 		DEFAULT_READER_SETTINGS,
 	);
+	const [a11y, setA11y] = useState<SiteA11ySettings>(DEFAULT_SITE_A11Y_SETTINGS);
 	const [announce, setAnnounce] = useState("");
 	const [lastPathname, setLastPathname] = useState(pathname);
 	const triggerRef = useRef<HTMLButtonElement>(null);
@@ -65,16 +81,23 @@ export function TopNavAccessibility() {
 
 	useEffect(() => {
 		setSettings(getStoredReaderSettings());
+		setA11y(getStoredSiteA11ySettings());
 		const updated = (event: Event) =>
 			setSettings((event as CustomEvent<ReaderSettings>).detail);
+		const a11yUpdated = (event: Event) =>
+			setA11y((event as CustomEvent<SiteA11ySettings>).detail);
 		const stored = (event: StorageEvent) => {
 			if (event.key === null || event.key === READER_SETTINGS_STORAGE_KEY)
 				setSettings(getStoredReaderSettings());
+			if (event.key === null || event.key === SITE_A11Y_STORAGE_KEY)
+				setA11y(getStoredSiteA11ySettings());
 		};
 		window.addEventListener(READER_SETTINGS_EVENT, updated);
+		window.addEventListener(SITE_A11Y_EVENT, a11yUpdated);
 		window.addEventListener("storage", stored);
 		return () => {
 			window.removeEventListener(READER_SETTINGS_EVENT, updated);
+			window.removeEventListener(SITE_A11Y_EVENT, a11yUpdated);
 			window.removeEventListener("storage", stored);
 		};
 	}, []);
@@ -117,11 +140,23 @@ export function TopNavAccessibility() {
 		setSettings(next);
 	};
 
+	const updateA11y = (patch: Partial<SiteA11ySettings>) => {
+		const next = { ...a11y, ...patch };
+		setStoredSiteA11ySettings(next);
+		applySiteA11ySettings(next);
+		setA11y(next);
+	};
+
 	const reset = () => {
-		const atDefault = sameSettings(settings, DEFAULT_READER_SETTINGS);
+		const atDefault =
+			sameSettings(settings, DEFAULT_READER_SETTINGS) &&
+			sameA11y(a11y, DEFAULT_SITE_A11Y_SETTINGS);
 		setStoredReaderSettings(DEFAULT_READER_SETTINGS);
 		applyReaderSettings(DEFAULT_READER_SETTINGS);
 		setSettings(DEFAULT_READER_SETTINGS);
+		setStoredSiteA11ySettings(DEFAULT_SITE_A11Y_SETTINGS);
+		applySiteA11ySettings(DEFAULT_SITE_A11Y_SETTINGS);
+		setA11y(DEFAULT_SITE_A11Y_SETTINGS);
 		setAnnounce(
 			atDefault
 				? "התאמות הנגישות כבר נמצאות בברירת המחדל"
@@ -229,6 +264,24 @@ export function TopNavAccessibility() {
 									</option>
 								))}
 							</select>
+						</label>
+						<label className={styles.toggle}>
+							ניגודיות גבוהה
+							<input
+								type="checkbox"
+								checked={a11y.contrast}
+								onChange={(event) =>
+									updateA11y({ contrast: event.target.checked })
+								}
+							/>
+						</label>
+						<label className={styles.toggle}>
+							קו תחתון לקישורים
+							<input
+								type="checkbox"
+								checked={a11y.links}
+								onChange={(event) => updateA11y({ links: event.target.checked })}
+							/>
 						</label>
 					</div>
 					<button type="button" className={styles.reset} onClick={reset}>

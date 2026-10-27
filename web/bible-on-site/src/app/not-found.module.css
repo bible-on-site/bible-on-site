@@ -30,7 +30,7 @@
 
 .source {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0 0 40px 0;
 }
 
@@ -75,7 +75,7 @@
   }
 
   .source {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .backLink {
