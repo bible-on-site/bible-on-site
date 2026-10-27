@@ -15,6 +15,13 @@ public class PasukMarkerTextConverter : IMultiValueConverter
 {
     private const int MaxCachedMergesPerSource = 4;
 
+    // The pasuk-number marker is reader chrome, not scripture: it keeps the
+    // app's main face (the implicit Label style's OpenSansRegular alias) while
+    // the pasuk text it precedes renders in Taamey D (#2623). Left unset it
+    // would inherit the label's scripture face — which is exactly the
+    // wrong-glyph result the review called out.
+    internal const string MarkerFontFamily = "OpenSansRegular";
+
     // Keyed on the source FormattedString instance: Pasuk.FormattedText keeps
     // returning the same instance while its weak-ref cache lives and hands out
     // a new instance only when the content genuinely changed (recitation
@@ -87,6 +94,7 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         var markerSpan = new Span
         {
             Text = marker + " ",
+            FontFamily = MarkerFontFamily,
             FontAttributes = FontAttributes.Bold,
             TextColor = resolvedMarkerColor
         };
@@ -113,6 +121,9 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         // size and the pasuk body renders at the platform default (14sp)
         // instead of the configured size (#2461). Check IsSet before reading,
         // and copy each property only when the source span really set it.
+        // FontFamily follows the same rule — an unset family must stay unset on
+        // the clone so the pasuk text inherits the label's Taamey D instead of
+        // resolving the system face (#2623: only the uncloned marker changed).
         var clone = new Span { Text = span.Text };
         if (span.IsSet(Span.FontSizeProperty) && !double.IsNaN(span.FontSize))
         {
