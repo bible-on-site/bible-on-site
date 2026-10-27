@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "../util/playwright/test-fixture";
 import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
 
@@ -37,5 +38,155 @@ test.describe("/לוח learning calendar", () => {
 		await page.getByRole("button", { name: "חודש הבא" }).click();
 
 		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
+	});
+});
+
+test.describe("/לוח calendar PDF download (#2621)", () => {
+	/** אלול 5785 — a uniform month guaranteed to exist (non-leap year). */
+	const ELUL_5785 = "578512";
+	const PDF_URL_PATTERN = "**/api/calendar-pdf**";
+	const PDF_FILENAME = "learning-calendar-578512.pdf";
+	const PDF_BODY = "%PDF-1.4 browser-test stub";
+
+	/**
+	 * Replaces the shared `/api/calendar-pdf` contract with a stub that
+	 * records every request URL. `delayMs` holds the response open so the
+	 * pending-state behaviour is observable mid-flight; `failFirst` answers
+	 * the first request like a missing/not-yet-published artifact would.
+	 */
+	function stubCalendarPdf(
+		page: Page,
+		hits: string[],
+		options: { delayMs?: number; failFirst?: boolean } = {},
+	) {
+		return page.route(PDF_URL_PATTERN, async (route) => {
+			hits.push(route.request().url());
+			if (options.delayMs) {
+				await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+			}
+			if (options.failFirst && hits.length === 1) {
+				await route.fulfill({
+					status: 503,
+					json: { error: "calendar artifact not yet published" },
+				});
+				return;
+			}
+			await route.fulfill({
+				body: PDF_BODY,
+				contentType: "application/pdf",
+				headers: {
+					"Content-Disposition": `attachment; filename="${PDF_FILENAME}"`,
+				},
+			});
+		});
+	}
+
+	function downloadAction(page: Page) {
+		return page.getByRole("button", { name: /הורדת PDF/ });
+	}
+
+	test("downloads the selected month's PDF on keyboard activation — browsing fetches nothing", async ({
+		page,
+	}) => {
+		const hits: string[] = [];
+		await stubCalendarPdf(page, hits);
+		await page.goto(`/לוח?month=${ELUL_5785}`);
+		const action = downloadAction(page);
+		await expect(action).toBeVisible();
+
+		// Browsing the calendar must not eagerly fetch a PDF.
+		await page.getByRole("button", { name: "חודש הבא" }).click();
+		await page.getByRole("button", { name: "חודש קודם" }).click();
+		await expect(page).toHaveURL(/month=578512/);
+		expect(hits).toHaveLength(0);
+
+		await action.focus();
+		const [download] = await Promise.all([
+			page.waitForEvent("download"),
+			action.press("Enter"),
+		]);
+
+		expect(hits).toHaveLength(1);
+		const requested = new URL(hits[0]);
+		expect(requested.searchParams.get("view")).toBe("month");
+		expect(requested.searchParams.get("month")).toBe(ELUL_5785);
+		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+	});
+
+	test("requests the selected year in yearly view", async ({ page }) => {
+		const hits: string[] = [];
+		await stubCalendarPdf(page, hits);
+		await page.goto(`/לוח?month=${ELUL_5785}&view=year`);
+
+		const [download] = await Promise.all([
+			page.waitForEvent("download"),
+			downloadAction(page).click(),
+		]);
+
+		expect(hits).toHaveLength(1);
+		const requested = new URL(hits[0]);
+		expect(requested.searchParams.get("view")).toBe("year");
+		expect(requested.searchParams.get("month")).toBe(ELUL_5785);
+		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+	});
+
+	test("requests the selected cycle in full-cycle view", async ({ page }) => {
+		const hits: string[] = [];
+		await stubCalendarPdf(page, hits);
+		await page.goto(`/לוח?month=${ELUL_5785}&view=cycle&cycle=4`);
+
+		const [download] = await Promise.all([
+			page.waitForEvent("download"),
+			downloadAction(page).click(),
+		]);
+
+		expect(hits).toHaveLength(1);
+		const requested = new URL(hits[0]);
+		expect(requested.searchParams.get("view")).toBe("cycle");
+		expect(requested.searchParams.get("cycle")).toBe("4");
+		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+	});
+
+	test("blocks duplicate requests while pending and keeps the started scope when the view changes", async ({
+		page,
+	}) => {
+		const hits: string[] = [];
+		// A slow response keeps the request in flight across the assertions.
+		await stubCalendarPdf(page, hits, { delayMs: 500 });
+		await page.goto(`/לוח?month=${ELUL_5785}`);
+		const action = downloadAction(page);
+
+		await action.click();
+		await expect(action).toBeDisabled();
+		// A real pointer press on a disabled control cannot re-fire it.
+		await action.click({ force: true });
+		// The user may navigate meanwhile; the started request keeps its scope.
+		await page.getByRole("button", { name: "חודש הבא" }).click();
+
+		const download = await page.waitForEvent("download");
+		expect(hits).toHaveLength(1);
+		expect(new URL(hits[0]).searchParams.get("month")).toBe(ELUL_5785);
+		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+	});
+
+	test("reports a failure without claiming success and recovers on retry", async ({
+		page,
+	}) => {
+		const hits: string[] = [];
+		await stubCalendarPdf(page, hits, { failFirst: true });
+		await page.goto(`/לוח?month=${ELUL_5785}`);
+		const action = downloadAction(page);
+		const status = action.locator("..").getByRole("status");
+
+		await action.click();
+		await expect(status).toContainText("נכשלה");
+		await expect(action).toBeEnabled();
+
+		const [download] = await Promise.all([
+			page.waitForEvent("download"),
+			action.click(),
+		]);
+		expect(hits).toHaveLength(2);
+		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
 	});
 });
