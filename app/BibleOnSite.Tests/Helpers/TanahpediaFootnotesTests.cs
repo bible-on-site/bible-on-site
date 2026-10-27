@@ -448,14 +448,76 @@ public sealed class TanahpediaFootnotesTests
     }
 
     [Fact]
+    public void FromHtml_FootnoteMarkerSharesTheInlineReferenceStyle()
+    {
+        /* #2723: the generated note-list letter resolves to the same style the
+           inline reference sup carries — raised baseline, compact scale and
+           the accent color a link paints with — without a link target. */
+        var runs = HtmlRuns.FromHtml(TanahpediaFootnotes.Normalize(LegacySupList)!);
+        var markers = runs.Where(r => r.Accent).ToList();
+        Assert.Equal(new[] { "א ", "ב " }, markers.Select(r => r.Text).ToArray());
+        var reference = Assert.Single(runs, r => r.Link == "#fn:1");
+        foreach (var marker in markers)
+        {
+            Assert.Equal(reference.BaselineShift, marker.BaselineShift);
+            Assert.Equal(reference.FontScale, marker.FontScale);
+            Assert.True(marker.BaselineShift > 0);
+            Assert.True(marker.FontScale < 1.0);
+            /* The marker is not a link — only the color matches. */
+            Assert.Null(marker.Link);
+        }
+
+        /* Only the generated letter is styled — the note prose keeps the
+           body style. */
+        var prose = runs.Where(r => r.Text.Contains("שמות")).ToList();
+        Assert.Equal(2, prose.Count);
+        Assert.All(prose, run =>
+        {
+            Assert.False(run.Accent);
+            Assert.Equal(0, run.BaselineShift);
+            Assert.Equal(1.0, run.FontScale);
+        });
+    }
+
+    [Fact]
+    public void FromHtml_FootnoteMarkerSharesTheFirstLineWithALeadingParagraph()
+    {
+        /* #2723: canonical notes wrap their text in <p> — the marker must
+           label the note's first line (the website inlines li > p:first-child),
+           not float on a line of its own. */
+        var runs = HtmlRuns.FromHtml(
+            @"<ol class=""footnotes""><li id=""fn:1"" data-marker=""א""><p>גוף ההערה</p></li></ol>");
+        var text = string.Concat(runs.Select(r => r.Text));
+        Assert.Contains("א גוף ההערה", text);
+        /* A paragraph further down still breaks onto its own line. */
+        var multi = HtmlRuns.FromHtml(
+            @"<ol class=""footnotes""><li id=""fn:1"" data-marker=""א""><p>ראשונה</p><p>שנייה</p></li></ol>");
+        Assert.Contains("ראשונה\nשנייה", string.Concat(multi.Select(r => r.Text)));
+    }
+
+    [Fact]
+    public void FromHtml_OrdinaryOrderedListMarkersStayPlain()
+    {
+        /* Only ol.footnotes markers take the accent/sup treatment — a regular
+           <ol> keeps its decimal marker at body size and color (#2723). */
+        var runs = HtmlRuns.FromHtml("<ol><li>אחד</li><li>שניים</li></ol>");
+        var run = Assert.Single(runs, r => r.Text.Contains("1."));
+        Assert.False(run.Accent);
+        Assert.Equal(0, run.BaselineShift);
+        Assert.Equal(1.0, run.FontScale);
+        Assert.DoesNotContain(runs, r => r.Accent);
+    }
+
+    [Fact]
     public void FromHtml_MultiLetterMarkersRenderForHighNumbers()
     {
         const string html = @"
 <ol><li><p>נד מדרש הגדול <a href=""#noteref-54"">↩</a></p></li></ol>
 <p>טקסט<a href=""#note-54"">נד</a></p>";
         var normalized = TanahpediaFootnotes.Normalize(html)!;
-        /* The li keeps its canonical <p> wrapper, so the note text follows the
-           marker on its own line — collapse whitespace to compare content. */
+        /* The li keeps its canonical <p> wrapper; the leading paragraph flows
+           inline so the marker shares the note's first line — collapse
+           whitespace to compare content. */
         var text = Regex.Replace(
             string.Concat(HtmlRuns.FromHtml(normalized).Select(r => r.Text)),
             @"\s+", " ");
