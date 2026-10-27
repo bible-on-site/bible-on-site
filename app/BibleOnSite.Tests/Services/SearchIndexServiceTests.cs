@@ -260,7 +260,7 @@ public class SearchIndexServiceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await vm.SearchAsync(cancellation.Token);
-        vm.SearchResults.Should().BeEmpty();
+        vm.SearchResults.Should().ContainSingle().Which.Title.Should().Be("שמות א");
         vm.IsLoading.Should().BeFalse();
     }
 

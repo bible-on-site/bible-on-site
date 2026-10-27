@@ -481,13 +481,13 @@ describe("MasoraSefer", () => {
 		expect(mockSummariesBatch).not.toHaveBeenCalled();
 	});
 
-	it("updates the document title on page flips and open content", () => {
+	it("updates the document title on page flips and open content", async () => {
 		render(<MasoraSefer {...baseProps()} />);
 		const handlers = capturedFlipBookProps.handlers as {
 			onPageFlipped: () => void;
 		};
 		mockGetCurrentPageIndex.mockReturnValue(3);
-		act(() => handlers.onPageFlipped());
+		await act(async () => handlers.onPageFlipped());
 		// Unit 1's text page resolves to its Masoretic unit title.
 		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
 			'בראשית א א-ה | מסורה על הפרק | תנ"ך על הפרק',
