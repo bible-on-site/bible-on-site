@@ -95,7 +95,6 @@
                    ZIndex="50"
                    HeightRequest="3"
                    Margin="0"
-                   Padding="0"
                    VerticalOptions="Start"
                    Progress="{Binding ReadingProgress}"
                    ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"

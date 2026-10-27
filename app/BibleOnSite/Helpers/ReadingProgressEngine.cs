@@ -10,8 +10,8 @@ namespace BibleOnSite.Helpers;
 /// virtualized native list).
 ///
 /// Units before the reading anchor contribute their stored words; the anchor
-/// unit contributes <paramref name="insideUnitFraction"/> of its own words —
-/// call sites that know only the item index pass 0 (the anchor's words count
+/// unit contributes a partial share (<c>insideUnitFraction</c>) of its own
+/// words — call sites that know only the item index pass 0 (the anchor's words count
 /// as they are scrolled past, not before). <c>contentEndVisible</c> means the
 /// content tail sits inside the viewport → everything readable is already in
 /// view — the web engine's non-scrollable/max-scroll case where the anchor
