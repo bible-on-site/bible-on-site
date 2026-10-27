@@ -188,8 +188,9 @@ test.describe("Sefer chapter tabs", () => {
 		await expect(page).toHaveURL(/\/929\/1\?book$/);
 
 		// Book fullscreen keeps the toolbar — and the toggle — reachable.
+		// alpha.51+ localizes the fullscreen button via the toolbar's he-IL locale.
 		await page
-			.getByRole("button", { name: "Enter fullscreen" })
+			.getByRole("button", { name: "כניסה למסך מלא" })
 			.click();
 		const hideToggleFs = page.getByRole("button", {
 			name: "הסתרת סימניות",
@@ -202,7 +203,7 @@ test.describe("Sefer chapter tabs", () => {
 			.click();
 		await expect(tabs.first()).toBeVisible();
 		await page
-			.getByRole("button", { name: "Exit fullscreen" })
+			.getByRole("button", { name: "יציאה ממסך מלא" })
 			.click();
 
 		await test.info().attach("sefer-bookmarks-toolbar-toggle", {
