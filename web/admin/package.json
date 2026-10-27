@@ -21,7 +21,7 @@
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test",
-		"coverage:merge": "node ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --optional .coverage/unit/lcov.info --optional .coverage/e2e/lcov.info",
+		"coverage:merge": "node ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --require .coverage/unit/lcov.info --hits-only .coverage/e2e/lcov.info",
 		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d --wait --wait-timeout 180 && docker compose -f ../../devops/docker-compose.yml run --build --rm --no-deps rustfs-init",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
 		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
