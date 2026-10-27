@@ -3,4 +3,8 @@ pub mod article_covering_source;
 pub mod author;
 pub mod perek;
 pub mod sefer;
+pub mod tanah_article_metric;
+pub mod tanah_article_metric_block;
+pub mod tanah_perek_metric;
+pub mod tanah_perek_pasuk_metric;
 pub mod tanahpedia;
