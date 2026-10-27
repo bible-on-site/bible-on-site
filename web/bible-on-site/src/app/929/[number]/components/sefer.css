@@ -13,9 +13,15 @@
    The perek route's layout.css applies the same lock on data-book-view so
    it is already effective during the lazy-loading phase. Inner content
    panes keep their own overflow scrolling; scrollbar-gutter: stable avoids
-   a layout shift when the lock engages or releases. */
+   a layout shift when the lock engages or releases — but only on hosts that
+   scroll at the root (e.g. /dev/sefer). On perek pages the reader scrolls
+   inside .perekContainer and the root shows no scrollbar, so a lock-time
+   gutter would itself add/remove ~15px of width per toggle and become the
+   shift it was meant to prevent. */
 html[data-sefer-view] {
 	overflow: hidden;
+}
+html[data-sefer-view]:not(:has(.perek-layout)) {
 	scrollbar-gutter: stable;
 }
 
