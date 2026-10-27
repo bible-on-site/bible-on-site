@@ -17,6 +17,7 @@ public sealed class StubDedicationService : IDedicationService
     public Task<List<Dedication>> GetDedicationsAsync(DedicationContext context, CancellationToken cancellationToken)
     {
         Contexts.Add(context);
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(new List<Dedication>());
     }
 }

@@ -153,7 +153,15 @@ export function TopNavAccessibility() {
 				aria-controls={open ? PANEL_ID : undefined}
 				onClick={() => setOpen((v) => !v)}
 			>
-				<Image src="/icons/accessibility.svg" alt="" width={22} height={22} />
+				{/* Always visible at first paint — eager so the icon can never
+				    arrive after paint and feed a layout-shift candidate. */}
+				<Image
+					src="/icons/accessibility.svg"
+					alt=""
+					width={22}
+					height={22}
+					loading="eager"
+				/>
 			</button>
 			{open && (
 				<div

@@ -5,6 +5,7 @@ import {
 } from "@/data/parasha/parasha-units";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug, normalizeAuthorName } from "@/lib/authors";
+import { HELEK_SEFER_IDS, seferPerekIds } from "@/lib/dedications/service";
 import { isMissingMysqlSchema } from "@/lib/mysql-errors";
 import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { canonicalPasukCount } from "@/lib/reading/queries";
@@ -606,11 +607,23 @@ async function resolveDedication(
 	for (const seferId of change.seferIds ?? []) {
 		addTag(sink, seferDedicationsTag(seferId));
 		addBookshelfDeps(sink);
+		// Ancestor scope: every flat perek page of the sefer renders the
+		// line in its heading — those routes changed (cache expiry already
+		// flows through the ancestor tags the loaders collect; the paths
+		// feed IndexNow).
+		for (const perekId of seferPerekIds(seferId)) {
+			addPath(sink, `/929/${perekId}`);
+		}
 		scoped = true;
 	}
 	for (const helekId of change.helekIds ?? []) {
 		addTag(sink, helekDedicationsTag(helekId));
 		addBookshelfDeps(sink);
+		for (const seferId of HELEK_SEFER_IDS[helekId] ?? []) {
+			for (const perekId of seferPerekIds(seferId)) {
+				addPath(sink, `/929/${perekId}`);
+			}
+		}
 		scoped = true;
 	}
 	for (const parashaId of change.parashaIds ?? []) {

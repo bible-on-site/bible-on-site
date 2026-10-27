@@ -65,6 +65,20 @@ export function seferIdByName(name: string): number | undefined {
 	return index >= 0 ? index + 1 : undefined;
 }
 
+/** Canonical tanah_sefer id owning `perekId` (undefined outside 1..929). */
+export function seferIdByPerekId(perekId: number): number | undefined {
+	const index = SEFARIM.findIndex(
+		(s) => s.perekFrom <= perekId && s.perekTo >= perekId,
+	);
+	return index >= 0 ? index + 1 : undefined;
+}
+
+/** Canonical tanah_helek id owning `seferId` (undefined for unknown ids). */
+export function helekIdBySeferId(seferId: number): number | undefined {
+	const sefer = SEFARIM[seferId - 1];
+	return sefer ? HELEK_IDS[sefer.helek] : undefined;
+}
+
 /** Canonical helek name by tanah_helek id. */
 export const HELEK_NAME_BY_ID: Record<number, string> = Object.fromEntries(
 	Object.entries(HELEK_IDS).map(([name, id]) => [id, name]),
@@ -136,14 +150,11 @@ export async function resolveDedications(
 	// perek -> sefer -> helek ancestor expansion over the canonical tables
 	// (static corpus order = tanah_sefer.id; helek name -> tanah_helek.id).
 	for (const perekId of perekIds) {
-		const index = SEFARIM.findIndex(
-			(s) => s.perekFrom <= perekId && s.perekTo >= perekId,
-		);
-		if (index >= 0) seferIds.add(index + 1);
+		const seferId = seferIdByPerekId(perekId);
+		if (seferId !== undefined) seferIds.add(seferId);
 	}
 	for (const seferId of seferIds) {
-		const sefer = SEFARIM[seferId - 1];
-		const helekId = sefer ? HELEK_IDS[sefer.helek] : undefined;
+		const helekId = helekIdBySeferId(seferId);
 		if (helekId !== undefined) helekIds.add(helekId);
 	}
 

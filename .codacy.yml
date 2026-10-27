@@ -46,6 +46,8 @@ exclude_paths:
   # column charset and N'...' is a syntax error (1064) in COMMENT clauses.
   - "data/mysql/tanah_sefarim_and_perakim_data.sql"
   - "data/mysql/tanah_test_data.sql"
+  - "data/mysql/tanah_dedication_upgrade.sql"
+  - "data/mysql/tanah_dedication_data.sql"
   - "data/mysql/tanahpedia_entry_synonym_data.sql"
   - "data/mysql/tanahpedia_family_edge_lab_data.sql"
   - "data/mysql/tanahpedia_family_jacob_data.sql"

@@ -437,4 +437,114 @@ describe("resolveEntityChanges", () => {
 		]);
 		expect(out.paths).not.toContain("/pedia/undefined");
 	});
+
+	// --- dedication resolution (#2731) -------------------------------------
+
+	it("resolves a perek-range dedication change to its perakim", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 3, high: 4 }] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"perek:3:dedications",
+				"perek:4:dedications",
+			]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/929/3", "/929/4"]),
+		);
+	});
+
+	it("expires a sefer dedication across its whole perek range", async () => {
+		stubDb({});
+		// Sefer 1 (בראשית) spans canonical perakim 1..50 — the flat perek
+		// pages render ancestor dedications in their headings, so every
+		// one of them changed (#2731).
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, seferIds: [1] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"sefer:1:dedications",
+				"dedications:bookshelf",
+			]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/", "/bookshelf", "/929/1", "/929/50"]),
+		);
+		expect(out.paths).not.toContain("/929/51");
+		expect(out.paths.filter((p) => p.startsWith("/929/"))).toHaveLength(
+			50,
+		);
+	});
+
+	it("expires a helek dedication across every sefer it owns", async () => {
+		stubDb({});
+		// Helek 3 (כתובים) spans canonical perakim 568..929.
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, helekIds: [3] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"helek:3:dedications",
+				"dedications:bookshelf",
+			]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/929/568", "/929/686", "/929/929"]),
+		);
+		expect(out.paths).not.toContain("/929/567");
+		expect(out.paths.filter((p) => p.startsWith("/929/"))).toHaveLength(
+			929 - 568 + 1,
+		);
+	});
+
+	it("resolves parasha, article, entry and masora dedication scopes", async () => {
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_article/.test(sql)) return [{ perek_id: 5 }];
+			if (/FROM tanahpedia_entry/.test(sql))
+				return [{ unique_name: "persons#abraham" }];
+			throw new Error(`unstubbed SQL: ${sql}`);
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "dedication",
+				id: 7,
+				parashaIds: [2],
+				articleIds: [9],
+				entryIds: ["123"],
+				masora: true,
+			},
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"parasha:2:dedications",
+				"article:9:dedications",
+				"pedia-entry:123:dedications",
+				"masora:dedications",
+			]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining([
+				"/parasha/2",
+				"/929/5/9",
+				"/pedia/persons#abraham",
+			]),
+		);
+	});
+
+	it("expires every dedication surface on an unscoped delete", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7 },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"dedications",
+				"dedications:bookshelf",
+				"masora:dedications",
+			]),
+		);
+	});
 });

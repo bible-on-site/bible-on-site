@@ -15,9 +15,9 @@ import {
 import {
 	getPerekDedications,
 	getSeferDedications,
+	getSeferPerekDedicationLines,
 } from "../../../lib/dedications/loaders";
 import { seferIdByName } from "../../../lib/dedications/service";
-import type { Dedication } from "../../../lib/dedications/types";
 import {
 	DedicationLines,
 	dedicationLines,
@@ -150,25 +150,17 @@ export default async function Perek({
 	// Dedications (#2731): the flat page renders the perek's whole
 	// applicable set — direct perek scopes plus sefer/helek ancestors —
 	// while the book keeps the sefer+helek set on its cover and only
-	// perek-scoped lines on each spread header. One cached loader call
-	// per perek so `perek:{id}:dedications`/`sefer:{id}:dedications` tags
-	// map the page to exactly the scopes it renders.
+	// perek-scoped lines on each spread header. The spread map resolves
+	// the sefer's whole perek range in one cached loader call rather than
+	// a per-perek fan-out; `perek:{id}:dedications`/`sefer:{id}:dedications`
+	// tags still map the page to exactly the scopes it renders.
 	const seferId = seferIdByName(perekObj.sefer);
 	const seferDedicationLines = dedicationLines(
 		seferId === undefined ? [] : await getSeferDedications(seferId),
 	);
 	const flatPageLines = dedicationLines(await getPerekDedications(perekId));
-	const perekDedications: Record<number, string[]> = {};
-	await Promise.all(
-		perekIds.map(async (id) => {
-			const lines = dedicationLines(
-				(await getPerekDedications(id)).filter((dedication: Dedication) =>
-					dedication.scopes.some((scope) => scope.kind === "PEREK"),
-				),
-			);
-			if (lines.length > 0) perekDedications[id] = lines;
-		}),
-	);
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
 
 	return (
 		<>

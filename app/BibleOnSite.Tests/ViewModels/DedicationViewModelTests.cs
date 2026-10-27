@@ -20,6 +20,7 @@ public class DedicationViewModelTests
         public Task<List<Dedication>> GetDedicationsAsync(DedicationContext context, CancellationToken cancellationToken)
         {
             Contexts.Add(context);
+            cancellationToken.ThrowIfCancellationRequested();
             return Responder?.Invoke(context) ?? Task.FromResult(new List<Dedication>());
         }
     }

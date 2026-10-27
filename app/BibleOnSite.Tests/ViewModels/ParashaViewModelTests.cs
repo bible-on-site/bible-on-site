@@ -63,8 +63,9 @@ public class ParashaViewModelTests
                 // singleton has no host in a unit-test process.
                 hasPerekAudio ?? (_ => false),
                 hebrewDateProvider, null, null, null,
-                // No-op stub — Unit changes fire a best-effort dedication load;
-                // a real endpoint must never be hit from unit tests (#2731).
+                // No-op stub — Unit changes fire a best-effort dedication
+                // load, and a real endpoint must never be hit from unit
+                // tests (#2731).
                 StubDedicationService.Instance);
         }
 

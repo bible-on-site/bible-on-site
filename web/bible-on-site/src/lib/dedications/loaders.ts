@@ -21,16 +21,45 @@ import {
 import {
 	HELEK_NAME_BY_ID,
 	HELEK_SEFER_IDS,
+	helekIdBySeferId,
 	resolveDedications,
 	SEFER_NAME_BY_ID,
+	seferIdByPerekId,
+	seferPerekIds,
 } from "./service";
 import { formatDedication, type Dedication } from "./types";
+
+/** Every cache tag a perek resolution consumes: its own plus the sefer and
+ * helek ancestors whose scopes it inherits — an ancestor-scope change must
+ * expire the entry or the flat heading keeps serving it stale. */
+function perekContextTags(perekId: number): string[] {
+	const seferId = seferIdByPerekId(perekId);
+	const helekId =
+		seferId === undefined ? undefined : helekIdBySeferId(seferId);
+	return [
+		COLLECTION_TAGS.dedications,
+		perekDedicationsTag(perekId),
+		...(seferId === undefined ? [] : [seferDedicationsTag(seferId)]),
+		...(helekId === undefined ? [] : [helekDedicationsTag(helekId)]),
+	];
+}
+
+/** Every cache tag a sefer resolution consumes: its own plus its helek
+ * ancestor's (same stale-ancestor reasoning as `perekContextTags`). */
+function seferContextTags(seferId: number): string[] {
+	const helekId = helekIdBySeferId(seferId);
+	return [
+		COLLECTION_TAGS.dedications,
+		seferDedicationsTag(seferId),
+		...(helekId === undefined ? [] : [helekDedicationsTag(helekId)]),
+	];
+}
 
 /** Active dedications for one perek (direct range + sefer + helek ancestors). */
 export const getPerekDedications = cachedPerKey(
 	"perek-dedications",
 	(perekId: number) => String(perekId),
-	(key) => [COLLECTION_TAGS.dedications, perekDedicationsTag(Number(key))],
+	(key) => perekContextTags(Number(key)),
 	(perekId: number) => resolveDedications({ perekIds: [perekId] }),
 );
 
@@ -38,8 +67,57 @@ export const getPerekDedications = cachedPerKey(
 export const getSeferDedications = cachedPerKey(
 	"sefer-dedications",
 	(seferId: number) => String(seferId),
-	(key) => [COLLECTION_TAGS.dedications, seferDedicationsTag(Number(key))],
+	(key) => seferContextTags(Number(key)),
 	(seferId: number) => resolveDedications({ seferIds: [seferId] }),
+);
+
+/**
+ * Perek-scoped dedication lines keyed by canonical perek id — the in-book
+ * spread headers of one sefer (#2731). A single resolution over the sefer's
+ * whole perek range replaces a per-perek fan-out; each dedication's line
+ * attaches to exactly the perakim its matched PEREK scopes cover (the
+ * resolver already returns only scopes applicable to the requested range),
+ * so perek-range changes expire the entry through the same
+ * `perek:{id}:dedications` tags the flat heading consumes.
+ */
+export const getSeferPerekDedicationLines = cachedPerKey(
+	"sefer-perek-dedication-lines",
+	(seferId: number) => String(seferId),
+	(key) => [
+		COLLECTION_TAGS.dedications,
+		...seferPerekIds(Number(key)).map(perekDedicationsTag),
+	],
+	async (seferId: number): Promise<Record<number, string[]>> => {
+		const perekIds = seferPerekIds(seferId);
+		const dedications = await resolveDedications({ perekIds });
+		const lines: Record<number, string[]> = {};
+		for (const dedication of dedications) {
+			const covered = new Set<number>();
+			for (const scope of dedication.scopes) {
+				if (
+					scope.kind !== "PEREK" ||
+					scope.perekIdLow === undefined ||
+					scope.perekIdHigh === undefined
+				) {
+					continue;
+				}
+				// Clamp to this sefer: a range may span a sefer boundary, but
+				// the map belongs to the queried sefer's spreads only.
+				const low = Math.max(scope.perekIdLow, perekIds[0]);
+				const high = Math.min(scope.perekIdHigh, perekIds[perekIds.length - 1]);
+				for (let id = low; id <= high; id++) {
+					covered.add(id);
+				}
+			}
+			const line = formatDedication(dedication);
+			for (const id of covered) {
+				const bucket = lines[id] ?? [];
+				bucket.push(line);
+				lines[id] = bucket;
+			}
+		}
+		return lines;
+	},
 );
 
 /** Active dedications for one helek. */
