@@ -120,6 +120,8 @@ public partial class LearningCalendarViewModel : ObservableObject
     private readonly PerekScheduleService _schedule;
     private readonly PerekDataService _perekData;
     private readonly IAppNavigator _navigator;
+    private readonly ICalendarPdfAssetResolver _calendarPdfAssets;
+    private readonly ILauncher _launcher;
 
     private int _year;
     private int _month;
@@ -137,11 +139,15 @@ public partial class LearningCalendarViewModel : ObservableObject
     internal LearningCalendarViewModel(
         PerekScheduleService schedule,
         PerekDataService perekData,
-        IAppNavigator navigator)
+        IAppNavigator navigator,
+        ICalendarPdfAssetResolver? calendarPdfAssets = null,
+        ILauncher? launcher = null)
     {
         _schedule = schedule;
         _perekData = perekData;
         _navigator = navigator;
+        _calendarPdfAssets = calendarPdfAssets ?? CalendarPdfAssetService.Instance;
+        _launcher = launcher ?? Launcher.Default;
     }
 
     [ObservableProperty]
@@ -695,22 +701,55 @@ public partial class LearningCalendarViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Opens the website's PDF export of the currently viewed period (#2366)
-    /// in the device browser, which handles download/save/share. The export is
-    /// generated on the website API, so this requires connectivity; browsing
-    /// the calendar itself stays offline.
+    /// Hands the PDF export of the currently viewed period (#2366) to the
+    /// device browser, which owns download/save/share.
+    ///
+    /// Since #2622 the canonical artifact key is resolved against the static
+    /// manifest published in the assets bucket, so an available artifact opens
+    /// its published object URL directly — no per-download resolver/API call
+    /// and no PDF bytes through the website's request path. When the manifest
+    /// is unreachable or the artifact is not published, the legacy
+    /// /api/calendar-pdf URL is opened instead (it re-checks a fresh manifest
+    /// server-side and stays the compatibility path for older installs).
+    /// Fetching a not-yet-cached PDF needs connectivity; browsing the
+    /// calendar itself stays offline.
     /// </summary>
     [RelayCommand]
     private async Task DownloadPdfAsync()
     {
-        var view = ViewMode switch
+        // Capture the selection up-front: a navigation during the manifest
+        // fetch must not change which artifact this download delivers.
+        var mode = ViewMode;
+        var year = _year;
+        var month = _month;
+        var cycle = Math.Max(1, _cycle);
+        var view = mode switch
         {
             CalendarViewMode.Year => "year",
             CalendarViewMode.Cycle => "cycle",
             _ => "month",
         };
-        var url = $"{Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
-            $"?month={_year * 100 + _month}&view={view}&cycle={Math.Max(1, _cycle)}";
-        await Launcher.OpenAsync(new Uri(url));
+        var artifactKey = mode switch
+        {
+            CalendarViewMode.Cycle => $"cycle:{cycle}",
+            CalendarViewMode.Year => $"year:{year}",
+            _ => $"month:{year * 100 + month}",
+        };
+
+        Uri? resolved = null;
+        try
+        {
+            resolved = await _calendarPdfAssets.TryResolveAsync(artifactKey);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: resolution failure falls back to the legacy URL
+        catch (Exception ex) //NOSONAR — resolution failure falls back to the legacy URL.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Calendar PDF asset resolution failed: {ex.Message}");
+        }
+        var url = resolved?.ToString()
+            ?? $"{Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
+                $"?month={year * 100 + month}&view={view}&cycle={cycle}";
+        await _launcher.OpenAsync(new Uri(url));
     }
 }
