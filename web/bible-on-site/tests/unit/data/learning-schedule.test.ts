@@ -10,6 +10,8 @@ import {
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getCycleName,
+	getCycleNumeral,
 	getCycleStartMonth,
 	getMonthLabel,
 	getMonthName,
@@ -415,9 +417,44 @@ describe("labels", () => {
 	});
 
 	it("marks projected cycles in the cycle label", () => {
-		expect(getCycleLabel(getCycle(4))).toContain("מחזור 4:");
+		expect(getCycleLabel(getCycle(4))).toContain("מחזור ד':");
 		expect(getCycleLabel(getCycle(4))).not.toContain("משוער");
-		expect(getCycleLabel(getCycle(11))).toContain("מחזור 11 (משוער):");
+		expect(getCycleLabel(getCycle(11))).toContain("מחזור י\"א (משוער):");
+	});
+});
+
+describe("cycle display formatter (#2725)", () => {
+	// The Hebrew numeral shown wherever the UI names a cycle: a lone letter
+	// takes an ASCII geresh, longer values ASCII gershayim before the final
+	// letter, and ט"ו/ט"ז keep the usual substitution.
+	it.each([
+		[1, "א'"],
+		[2, "ב'"],
+		[4, "ד'"],
+		[10, "י'"],
+		[11, 'י"א'],
+		[15, 'ט"ו'],
+		[16, 'ט"ז'],
+		[20, "כ'"],
+		[100, "ק'"],
+		[115, 'קט"ו'],
+		[116, 'קט"ז'],
+		[929, 'תתקכ"ט'],
+		[1000, 'תת"ר'],
+		[1500, 'תתת"ש'],
+	])("formats cycle %i as %s", (cycleNumber, expected) => {
+		expect(getCycleNumeral(cycleNumber)).toBe(expected);
+	});
+
+	it("formats the short cycle name for picker and scope captions", () => {
+		expect(getCycleName(getCycle(1))).toBe("מחזור א'");
+		expect(getCycleName(getCycle(4))).toBe("מחזור ד'");
+		expect(getCycleName(getCycle(10))).toBe("מחזור י'");
+	});
+
+	it("keeps the (משוער) marker on projected cycles", () => {
+		expect(getCycleName(getCycle(11))).toBe('מחזור י"א (משוער)');
+		expect(getCycleLabel(getCycle(11))).toContain('מחזור י"א (משוער):');
 	});
 });
 

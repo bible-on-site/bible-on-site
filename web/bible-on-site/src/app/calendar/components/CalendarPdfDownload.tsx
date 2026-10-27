@@ -48,7 +48,7 @@ export function CalendarPdfDownload({
 	scopeLabel,
 }: {
 	request: CalendarPdfRequest;
-	/** Concise selected period, e.g. "אלול ה'תשפ\"ה", "שנת ה'תשפ\"ה", "מחזור 4". */
+	/** Concise selected period, e.g. "אלול ה'תשפ\"ה", "שנת ה'תשפ\"ה", "מחזור ד'". */
 	scopeLabel: string;
 }) {
 	const [phase, setPhase] = useState<
