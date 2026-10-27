@@ -61,7 +61,7 @@ public static class DedicationFormatter
 {
     /// <summary>
     /// The rendered line — mirrors the website's `formatDedication` and the
-    /// API's presentation contract: `מוקדש ל<subject> (<purposes>)`.
+    /// API's presentation contract: `מוקדש ל{subject} ({purposes})`.
     /// </summary>
     public static string Format(Dedication dedication)
     {
