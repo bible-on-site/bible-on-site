@@ -165,6 +165,14 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
     private bool _hasCurrentPerekRecitation;
 
+    /// <summary>
+    /// Word-weighted fraction (0–1) of the displayed perek already scrolled
+    /// past — the current reading position from the stored pasuk metrics
+    /// (issue #2607). 0 also means "no metric" so the indicator hides.
+    /// </summary>
+    [ObservableProperty]
+    private double _readingProgress;
+
     /// <summary>The header play button shows only while קריינות is checked and audio exists.</summary>
     public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentPerekRecitation;
 #pragma warning restore MVVMTK0045
@@ -187,6 +195,60 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
         RefreshRecitationAvailability(newValue);
+        ReadingProgress = 0;
+        _ = AttachReadingMetricsAsync(newValue);
+    }
+
+    /// <summary>
+    /// Attaches the stored reading metric + ordered pasuk units to the
+    /// displayed perek (issue #2607), read from the packaged sqlite. Best
+    /// effort: a pack predating the metric tables leaves everything null —
+    /// badge and progress hide, reading is never blocked by metrics.
+    /// </summary>
+    private async Task AttachReadingMetricsAsync(Perek? perek)
+    {
+        if (perek is null || perek.ReadingMetric is not null)
+        {
+            return;
+        }
+        try
+        {
+            perek.ReadingMetric = await _perekDataService.GetReadingMetricAsync(perek.PerekId);
+            perek.ProgressUnits = await _perekDataService.GetPasukProgressUnitsAsync(perek.PerekId);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: metric read failure degrades to no badge/progress
+        catch (Exception ex) //NOSONAR — metric read failure degrades to no badge/progress.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Reading metrics unavailable for perek {perek.PerekId}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the reading-position fraction for the displayed perek from the
+    /// pasuk currently anchored at the viewport top (issue #2607). The last
+    /// visible display item flag carries the web engine's "content tail in
+    /// view → fully read" rule so a chapter that fits the screen reads 100%.
+    /// </summary>
+    public void UpdateReadingProgress(int anchorPasukNum, bool contentEndVisible)
+    {
+        var perek = Perek;
+        var units = perek?.ProgressUnits;
+        if (perek is null || units is null || units.Count == 0 ||
+            perek.ReadingMetric?.WordCount is not > 0)
+        {
+            ReadingProgress = 0;
+            return;
+        }
+        var anchorIndex = ReadingProgressEngine.IndexOfPasuk(units, anchorPasukNum);
+        if (anchorIndex < 0)
+        {
+            ReadingProgress = 0;
+            return;
+        }
+        ReadingProgress = ReadingProgressEngine.Fraction(
+            units, perek.ReadingMetric.WordCount, anchorIndex,
+            insideUnitFraction: 0, contentEndVisible: contentEndVisible);
     }
 
     /// <summary>
@@ -670,6 +732,21 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         // sees the correct checked state when it re-renders items.
         var availableIds = new HashSet<int>(perushIds);
         CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
+        // Stored per-perush reading metrics for the sheet badges (issue #2607)
+        // — one batched read, decorated before the non-observable list is
+        // published so the badge binds once; a stale swipe skips decorating.
+        if (!IsStalePerushimLoad(perekId))
+        {
+            var metrics = await _notesService.GetPerushMetricsForPerekAsync(perekId);
+            foreach (var perush in orderedPerushim)
+            {
+                if (metrics.TryGetValue(perush.Id, out var metric))
+                {
+                    perush.ReadingMetric = metric;
+                }
+            }
+        }
+
         Perushim = orderedPerushim;
 
         FillFilteredPerushContents();

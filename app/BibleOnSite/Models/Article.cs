@@ -25,6 +25,20 @@ public class Article
     public string? PerekDisplayName { get; set; }
 
     /// <summary>
+    /// Persisted canonical reading metric for the whole article (issue #2607).
+    /// Null when the API/server has no metric row — badges render nothing.
+    /// </summary>
+    public ReadingMetric? ReadingMetric { get; set; }
+
+    /// <summary>
+    /// "זמן קריאה משוער: X" badge text measured over the whole article body —
+    /// never the abstract alone (issue #2607). Null when there is nothing to
+    /// show (unknown or verified-empty metric).
+    /// </summary>
+    public string? ReadingTimeBadge =>
+        Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);
+
+    /// <summary>
     /// Extracts plain text from the HTML abstract.
     /// </summary>
     public string ShortAbstract
