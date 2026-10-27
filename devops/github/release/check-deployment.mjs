@@ -66,6 +66,8 @@ export function checkDeployment(
 		runAttempt,
 		artifactId,
 		artifactDigest,
+		sourceRunId,
+		sourceRef,
 	},
 	request = api,
 ) {
@@ -186,7 +188,7 @@ export function checkDeployment(
 			);
 		checkQuality(root, runId, runAttempt, request);
 		const artifact = resolveSqlArtifact(
-			{ repo, runId, ref, artifactId, artifactDigest },
+			{ repo, runId, ref, artifactId, artifactDigest, sourceRunId, sourceRef },
 			request,
 		);
 		if (
@@ -262,6 +264,8 @@ if (
 		runAttempt: payload.ci_run_attempt,
 		artifactId: payload.sql_artifact_id,
 		artifactDigest: payload.sql_artifact_digest,
+		sourceRunId: payload.sql_source_run_id,
+		sourceRef: payload.sql_source_ref,
 	});
 	if (result.deploy) {
 		const state = startDeployment({
