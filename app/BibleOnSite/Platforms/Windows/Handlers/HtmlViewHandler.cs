@@ -262,8 +262,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                     /* RichTextBlock inlines carry no baseline shift and
                        Typography superscript needs a font 'sups' glyph
                        Hebrew lacks — host the run in a translated
-                       TextBlock so the raise always paints (#2723). */
-                    var sup = RaisedTextBlock();
+                       TextBlock so the raise always paints (#2723). The
+                       canonical reference is <sup><a> — a linked raised
+                       run wears the accent brush like the generated note
+                       markers do. */
+                    var sup = RaisedTextBlock(ContainsLink(child) ? AccentBrush : null);
                     ParseNode(child, sup.Inlines, inFootnotes);
                     inlines.Add(new InlineUIContainer { Child = sup });
                     break;
@@ -352,6 +355,15 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
         }
     }
 
+    /// <summary>Whether the subtree holds a live anchor — <c>&lt;sup&gt;</c>
+    /// wrapped around a reference link paints the whole raised host in the
+    /// accent brush, matching the generated note markers (#2723).</summary>
+    private static bool ContainsLink(HtmlNode node) =>
+        node.DescendantsAndSelf().Any(n =>
+            n.NodeType == HtmlNodeType.Element &&
+            n.Name.Equals("a", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrEmpty(n.GetAttributeValue("href", string.Empty)));
+
     /// <summary>Recolors raised runs nested in a hyperlink to the accent
     /// brush — hosted TextBlocks ignore the Hyperlink's own foreground.</summary>
     private static void AccentHostedText(InlineCollection inlines)
@@ -388,10 +400,30 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
         }
         /* The Hebrew letter travels in data-marker (TanahpediaFootnotes
            normalizes every markup generation), so the note's own number
-           shows even for sparse numbering. */
+           shows even for sparse numbering; lists authored without it fall
+           back to the item's position like the shared renderer. */
         var marker = li.GetAttributeValue("data-marker", string.Empty);
+        if (marker.Length == 0)
+        {
+            var number = 1;
+            if (li.ParentNode != null)
+            {
+                foreach (var sibling in li.ParentNode.ChildNodes)
+                {
+                    if (sibling == li)
+                    {
+                        break;
+                    }
+                    if (sibling.Name.Equals("li", StringComparison.OrdinalIgnoreCase))
+                    {
+                        number++;
+                    }
+                }
+            }
+            marker = Helpers.GimatryHelper.ToLetters(number);
+        }
         var host = RaisedTextBlock(AccentBrush);
-        host.Inlines.Add(new Run { Text = $"{(marker.Length > 0 ? marker : "•")} " });
+        host.Inlines.Add(new Run { Text = $"{marker} " });
         return new InlineUIContainer { Child = host };
     }
 

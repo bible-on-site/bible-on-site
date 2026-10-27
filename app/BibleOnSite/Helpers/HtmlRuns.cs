@@ -251,10 +251,6 @@ public static class HtmlRuns
                 if (first?.Name.Equals("p", StringComparison.OrdinalIgnoreCase) == true)
                 {
                     inlineLead = first;
-                    foreach (var grandchild in first.ChildNodes)
-                    {
-                        Walk(grandchild, childStyle, context);
-                    }
                 }
             }
         }
@@ -267,6 +263,14 @@ public static class HtmlRuns
         {
             if (child == inlineLead)
             {
+                /* Render the lead paragraph's content at its own position —
+                   loose text before it keeps document order — and carry the
+                   paragraph's own attributes without its block break. */
+                var leadStyle = ApplyTag(child, "p", childStyle);
+                foreach (var grandchild in child.ChildNodes)
+                {
+                    Walk(grandchild, leadStyle, context);
+                }
                 continue;
             }
             Walk(child, childStyle, context);

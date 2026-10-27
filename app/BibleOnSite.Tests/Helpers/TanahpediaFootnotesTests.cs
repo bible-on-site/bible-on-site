@@ -496,6 +496,31 @@ public sealed class TanahpediaFootnotesTests
     }
 
     [Fact]
+    public void FromHtml_LeadParagraphKeepsItsOrderAfterLooseText()
+    {
+        /* Loose text before the note's first paragraph must stay ahead of it —
+           the lead <p> flows inline at its own position, never ahead of
+           earlier siblings. */
+        var runs = HtmlRuns.FromHtml(
+            @"<ol class=""footnotes""><li id=""fn:1"" data-marker=""א"">פתיח<p>המשך</p></li></ol>");
+        var text = string.Concat(runs.Select(r => r.Text));
+        var open = text.IndexOf("פתיח", StringComparison.Ordinal);
+        var cont = text.IndexOf("המשך", StringComparison.Ordinal);
+        Assert.True(open >= 0 && cont > open, $"expected opening text before the paragraph, got: {text}");
+    }
+
+    [Fact]
+    public void FromHtml_LeadParagraphKeepsItsInlineStyle()
+    {
+        /* The leading paragraph's own attributes still reach its text — the
+           inline flow suppresses only its block break. */
+        var runs = HtmlRuns.FromHtml(
+            @"<ol class=""footnotes""><li id=""fn:1"" data-marker=""א""><p style=""font-weight:bold"">הערה מודגשת</p></li></ol>");
+        var run = Assert.Single(runs, r => r.Text.Contains("הערה מודגשת"));
+        Assert.True(run.Bold);
+    }
+
+    [Fact]
     public void FromHtml_OrdinaryOrderedListMarkersStayPlain()
     {
         /* Only ol.footnotes markers take the accent/sup treatment — a regular
