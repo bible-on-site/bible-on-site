@@ -280,10 +280,10 @@ describe("LearningCalendar", () => {
 		});
 		expect(picker).toHaveValue("11");
 		expect(
-			screen.getByRole("option", { name: "מחזור 11 (משוער)" }),
+			screen.getByRole("option", { name: 'מחזור י"א (משוער)' }),
 		).toBeInTheDocument();
 		// The projected cycle's label is shown next to the picker.
-		expect(screen.getByText(/מחזור 11 \(משוער\):/)).toBeInTheDocument();
+		expect(screen.getByText(/מחזור י"א \(משוער\):/)).toBeInTheDocument();
 	});
 
 	describe("view modes", () => {
@@ -346,8 +346,27 @@ describe("LearningCalendar", () => {
 				{ scroll: false },
 			);
 			// אלול 5785 belongs to cycle 4; the heading shows the full range.
-			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 4/);
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ד'/,
+			);
 			expect(container.querySelectorAll("h3").length).toBeGreaterThan(30);
+		});
+
+		it("shows a single selected-cycle description in full-cycle view (#2725)", () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			const { container } = render(
+				<LearningCalendar {...cycleStartProps} />,
+			);
+
+			// The h2 is the one authoritative description with the range —
+			// nothing beside the picker repeats it.
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ד':/,
+			);
+			expect(screen.getAllByText(/מחזור ד':/)).toHaveLength(1);
+			expect(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+			).toHaveValue("4");
 		});
 
 		it("navigates to the next cycle in full-cycle view", () => {
@@ -360,7 +379,9 @@ describe("LearningCalendar", () => {
 				expect.stringContaining("cycle=5"),
 				{ scroll: false },
 			);
-			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 5/);
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ה'/,
+			);
 		});
 
 		it("navigates to the next year in yearly view", () => {
@@ -388,7 +409,9 @@ describe("LearningCalendar", () => {
 				expect.stringContaining("cycle=2"),
 				{ scroll: false },
 			);
-			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 2/);
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ב'/,
+			);
 		});
 
 		it("disables previous-cycle navigation on the first cycle", () => {
@@ -468,7 +491,7 @@ describe("LearningCalendar", () => {
 			render(<LearningCalendar {...cycleStartProps} />);
 
 			expect(
-				screen.getByRole("button", { name: /הורדת PDF: מחזור 4/ }),
+				screen.getByRole("button", { name: /הורדת PDF: מחזור ד'/ }),
 			).toBeInTheDocument();
 		});
 
