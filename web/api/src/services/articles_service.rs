@@ -280,6 +280,8 @@ pub async fn search_articles(
                 score: scored.score,
                 semantic_score: scored.semantic,
                 lexical_score: scored.lexical,
+                // Filled by the resolver via one batched metric lookup (#2607).
+                reading_metric: None,
             }
         })
         .collect::<Vec<_>>();
