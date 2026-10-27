@@ -852,9 +852,33 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
+      - name: Test performance reporting
+        run: bun run test:perf-reporting
+
       - name: Perf Test
         id: bun-perf-test
         run: bun run test:perf
+
+      - name: Store Website Performance Diagnostics
+        id: perf-diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-perf-diagnostics-${{ github.run_id }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/diagnostics
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish performance diagnostics summary
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          DIAGNOSTICS_URL: ${{ steps.perf-diagnostics.outputs.artifact-url }}
+        run: |
+          if [ -f .playwright-report/perf/diagnostics/lighthouse/summary.md ]; then
+            printf '[Full Lighthouse diagnostics](%s)\n\n' "$DIAGNOSTICS_URL" >> "$GITHUB_STEP_SUMMARY"
+            sed -E 's/\[(JSON|HTML)\]\([^)]*\)/\1 in artifact/g' .playwright-report/perf/diagnostics/lighthouse/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
