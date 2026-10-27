@@ -29,4 +29,33 @@ public class ThemeDrawingTests
             Application.Current = previous;
         }
     }
+
+    [Fact]
+    public void TikkunFlowView_ThemeChangedHandler_InvalidatesContent()
+    {
+        var previous = Application.Current;
+        try
+        {
+            Application.Current = new Application { UserAppTheme = AppTheme.Light };
+            var view = new TikkunFlowView();
+            var dispatcher = new Mock<IDispatcher>();
+            dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>()))
+                .Returns((Action action) => { action(); return true; });
+            var services = new Mock<IServiceProvider>();
+            services.Setup(s => s.GetService(typeof(IDispatcher))).Returns(dispatcher.Object);
+            var context = new Mock<IMauiContext>();
+            context.SetupGet(c => c.Services).Returns(services.Object);
+            var handler = new Mock<IViewHandler>();
+            handler.SetupGet(h => h.MauiContext).Returns(context.Object);
+            view.Handler = handler.Object;
+
+            view.OnAppRequestedThemeChanged(null, new AppThemeChangedEventArgs(AppTheme.Dark));
+
+            handler.Verify(h => h.Invoke("Invalidate", null), Times.Once);
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
 }

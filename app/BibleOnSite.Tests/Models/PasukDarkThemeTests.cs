@@ -89,6 +89,40 @@ public class PasukDarkThemeTests : IDisposable
 	}
 
 	[Fact]
+	public void refresh_without_cached_formatted_text_is_a_noop()
+	{
+		var pasuk = PasukOf(new PasukSegment { Type = SegmentType.Qri, Value = "אור" });
+		var notified = false;
+		pasuk.PropertyChanged += (_, e) => notified |= e.PropertyName == nameof(Pasuk.FormattedText);
+
+		pasuk.RefreshForThemeChange();
+
+		notified.Should().BeFalse("nothing was materialized, so nothing can be stale");
+		pasuk.FormattedText.Should().NotBeNull();
+	}
+
+	[Fact]
+	public void masora_marks_use_dark_marker_color()
+	{
+		var pasuk = PasukOf(
+			new PasukSegment { Type = SegmentType.Ktiv, Value = "אור" },
+			new PasukSegment { Type = SegmentType.Ptuha });
+
+		var mark = pasuk.FormattedText.Spans.Single(s => s.Text == " {פ} ");
+		mark.TextColor.Should().Be(Color.FromArgb("#C3BBF2"));
+	}
+
+	[Fact]
+	public void reciting_background_default_tracks_the_requested_theme()
+	{
+		Pasuk.RecitingBackgroundDefault.Should().Be(Color.FromArgb("#2C4569"));
+
+		Application.Current!.UserAppTheme = AppTheme.Light;
+
+		Pasuk.RecitingBackgroundDefault.Should().Be(Color.FromArgb("#e9eff8"));
+	}
+
+	[Fact]
 	public void marker_converter_uses_dark_marker_color_and_caches_per_theme()
 	{
 		var formatted = new FormattedString();

@@ -78,7 +78,7 @@ public class TikkunFlowView : GraphicsView
         }
     }
 
-    private void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
+    internal void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
         Dispatcher.Dispatch(InvalidateContent);
 
     public IReadOnlyList<Pasuk>? Pasukim
