@@ -71,6 +71,7 @@ describe("person saves invalidate the website", () => {
 
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
+		queryMock.mockReset();
 		queryOneMock.mockReset();
 		savedEnv = {};
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
@@ -89,12 +90,32 @@ describe("person saves invalidate the website", () => {
 		fetchSpy.mockRestore();
 	});
 
-	it("expires pedia surfaces after a person delete", async () => {
+	it("sends the person's entity change after a delete", async () => {
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e-1" }])
+			.mockResolvedValueOnce([{ id: "e-1", entity_type: "PERSON" }])
+			.mockResolvedValueOnce([{ entity_id: "e-1", unique_name: "אברהם" }])
+			.mockResolvedValueOnce([]);
+
 		await deletePerson({ data: "p-1" });
 
-		const calls = fetchSpy.mock.calls.map((call: unknown[]) =>
-			new URL(String(call[0])).searchParams.get("tag"),
+		const changes = fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
+		expect(changes).toEqual([
+			{
+				kind: "pedia-entity",
+				entityId: "e-1",
+				entityType: "PERSON",
+				entryUniqueNames: ["אברהם"],
+				refPerekIds: [],
+			},
+		]);
+		// The destroyed relationships were resolved BEFORE the delete ran.
+		const deleteCall = executeMock.mock.calls.findIndex((call) =>
+			String(call[0]).startsWith("DELETE"),
 		);
-		expect(calls).toContain("tanahpedia-entity-refs");
+		expect(deleteCall).toBeGreaterThan(-1);
 	});
 });
