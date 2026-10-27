@@ -179,8 +179,8 @@ describe("TopNavAccessibility", () => {
 			"/929/11",
 			"/מסורה/1",
 			"/masora/1",
-			"/פרשה/2",
-			"/parasha/2",
+			"/פרשה/נח",
+			"/parasha/נח",
 		]) {
 			mockPathname = pathname;
 			const { unmount } = render(<TopNavAccessibility />);

@@ -60,7 +60,8 @@ pub struct AuxiliaryReading {
 pub struct ReadingUnit {
     /// Stable unit id, unique and contiguous within the division.
     pub unit_id: i32,
-    /// URL slug under the division root (today the decimal unit_id).
+    /// Canonical URL slug under the division root — the decimal
+    /// unit_id for מסורה, the Hebrew parasha name for פרשה (#2738).
     pub slug: String,
     /// Parent sefer id (1-based, matching tanah_sefer.id).
     pub sefer_id: i32,
@@ -443,6 +444,14 @@ pub struct ParashaDivisionSource {
 #[derive(Debug, serde::Deserialize)]
 pub struct ParashaSourceUnit {
     pub name: String,
+    /// Canonical public URL slug — plain unpointed Hebrew, ASCII
+    /// hyphens (issue #2738). Read verbatim: the website's
+    /// parasha-slugs.ts validates it against the name.
+    pub slug: String,
+    /// Researched lexical variants; the website resolves/redirects
+    /// them — export parity only needs the canonical slug.
+    #[serde(default)]
+    pub aliases: Vec<String>,
     pub sefer: String,
     pub start: SourceVerse,
     pub end: SourceVerse,
@@ -662,10 +671,17 @@ pub fn derive_parasha_units(
             as i32
             + 1;
 
+        if parasha.slug.is_empty() || parasha.slug.contains([' ', '־']) {
+            bail!(
+                "parasha data: unit {} slug \"{}\" is not hyphen-joined Hebrew",
+                index + 1,
+                parasha.slug
+            );
+        }
         let unit_id = index as i32 + 1;
         units.push(ReadingUnit {
             unit_id,
-            slug: unit_id.to_string(),
+            slug: parasha.slug.clone(),
             sefer_id,
             order,
             heading: parasha.name.clone(),
@@ -1485,9 +1501,67 @@ mod tests {
 
         // 54 weekly parashiot — joined pairs stay separate identities.
         assert_eq!(units.len(), 54);
+        // Canonical slugs are the shared table's Hebrew names,
+        // hyphen-joined — website/SQLite parity is by construction.
+        const EXPECTED_SLUGS: [&str; 54] = [
+            "בראשית",
+            "נח",
+            "לך-לך",
+            "וירא",
+            "חיי-שרה",
+            "תולדות",
+            "ויצא",
+            "וישלח",
+            "וישב",
+            "מקץ",
+            "ויגש",
+            "ויחי",
+            "שמות",
+            "וארא",
+            "בא",
+            "בשלח",
+            "יתרו",
+            "משפטים",
+            "תרומה",
+            "תצוה",
+            "כי-תשא",
+            "ויקהל",
+            "פקודי",
+            "ויקרא",
+            "צו",
+            "שמיני",
+            "תזריע",
+            "מצורע",
+            "אחרי-מות",
+            "קדושים",
+            "אמור",
+            "בהר",
+            "בחוקותי",
+            "במדבר",
+            "נשא",
+            "בהעלותך",
+            "שלח",
+            "קרח",
+            "חוקת",
+            "בלק",
+            "פינחס",
+            "מטות",
+            "מסעי",
+            "דברים",
+            "ואתחנן",
+            "עקב",
+            "ראה",
+            "שופטים",
+            "כי-תצא",
+            "כי-תבוא",
+            "נצבים",
+            "וילך",
+            "האזינו",
+            "וזאת-הברכה",
+        ];
         for (i, unit) in units.iter().enumerate() {
             assert_eq!(unit.unit_id, i as i32 + 1);
-            assert_eq!(unit.slug, (i as i32 + 1).to_string());
+            assert_eq!(unit.slug, EXPECTED_SLUGS[i]);
             assert_eq!(unit.closing_break, None);
             assert_eq!(unit.ranges.len(), 1);
         }
@@ -1735,6 +1809,8 @@ mod tests {
     ) -> ParashaSourceUnit {
         ParashaSourceUnit {
             name: "פלוני".to_string(),
+            slug: "פלוני".to_string(),
+            aliases: vec![],
             sefer: sefer.to_string(),
             start: source_verse(start.0, start.1),
             end: source_verse(end.0, end.1),

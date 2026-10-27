@@ -178,6 +178,7 @@ const perek = (pesukim: number): Perek => ({
 const units: ParashaBookUnit[] = [
 	{
 		unitId: 1,
+		slug: "בראשית",
 		name: "בראשית",
 		order: 1,
 		refSpan: "בראשית א א - ו ח",
@@ -199,6 +200,7 @@ const units: ParashaBookUnit[] = [
 	},
 	{
 		unitId: 2,
+		slug: "נח",
 		name: "נח",
 		order: 2,
 		refSpan: "בראשית ו ט - יא לב",
@@ -282,7 +284,7 @@ describe("ParashaSefer", () => {
 		mockSummariesBatch.mockReset().mockReturnValue(new Promise(() => {}));
 		mockSetSeferDocumentTitle.mockClear();
 		mockReleaseSeferDocumentTitle.mockClear();
-		history.replaceState(null, "", "/פרשה/1?book");
+		history.replaceState(null, "", "/פרשה/בראשית?book");
 	});
 
 	it("lays out cover, contents, and Torah + Haftarah spreads per parasha", () => {
@@ -508,17 +510,17 @@ describe("ParashaSefer", () => {
 		);
 		expect(
 			getHref({ pageIndex: 3, semanticName: "א", title: "פרשת בראשית" }),
-		).toBe("/פרשה/1?book");
+		).toBe("/פרשה/בראשית?book");
 		// The blank shares the Torah spread's route; the Haftarah spread
 		// rides on &haftara.
 		expect(getHref({ pageIndex: 4, semanticName: "", title: "" })).toBe(
-			"/פרשה/1?book",
+			"/פרשה/בראשית?book",
 		);
 		expect(
 			getHref({ pageIndex: 5, semanticName: "", title: "הפטרת בראשית" }),
-		).toBe("/פרשה/1?book&haftara");
+		).toBe("/פרשה/בראשית?book&haftara");
 		expect(getHref({ pageIndex: 7, semanticName: "ב", title: "פרשת נח" })).toBe(
-			"/פרשה/2?book",
+			"/פרשה/נח?book",
 		);
 		expect(getHref({ pageIndex: 11, semanticName: "", title: "" })).toBe(
 			"/פרשה/בראשית/גב?book",
@@ -594,6 +596,7 @@ describe("ParashaSefer", () => {
 		// still yields a stable anchor instead of crashing the book.
 		const emptyUnit: ParashaBookUnit = {
 			unitId: 3,
+			slug: "ריק",
 			name: "ריק",
 			order: 3,
 			refSpan: "",
