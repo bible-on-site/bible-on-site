@@ -124,7 +124,7 @@ public class LearningCalendarViewModelTests
         // Only cycles 1-2 are confirmed, so the current month projects a later
         // cycle and both the label and the options are marked as estimated.
         vm.SelectedCycle.Should().NotBeNull();
-        vm.CycleLabel.Should().Contain($"מחזור {vm.SelectedCycle!.Value}");
+        vm.CycleLabel.Should().Contain($"מחזור {GimatryHelper.ToDisplayLetters(vm.SelectedCycle!.Value)}");
         vm.CycleOptions.Select(o => o.Label).Should().ContainMatch("*משוער*");
 
         var dayCells = vm.Cells.Where(c => !c.IsBlank).ToList();
@@ -376,7 +376,8 @@ public class LearningCalendarViewModelTests
         vm.SelectedMonth = Option(vm.MonthOptions, 3);
 
         vm.SelectedCycle.Should().Be(Option(vm.CycleOptions, 1));
-        vm.CycleLabel.Should().Contain("מחזור 1").And.NotContain("משוער");
+        vm.CycleLabel.Should().Contain("מחזור א'").And.NotContain("משוער");
+        vm.IsCycleRangeVisible.Should().BeTrue();
     }
 
     [Fact]
@@ -524,7 +525,13 @@ public class LearningCalendarViewModelTests
         var displayed = fixture.Schedule.GetCycleForDate(HebrewDateHelper.GetTodayDateNumber());
         var expected = displayed?.Number ?? 1;
         vm.SelectedCycle!.Value.Should().Be(expected);
-        vm.MonthLabel.Should().StartWith($"מחזור {expected}");
+        vm.MonthLabel.Should().StartWith($"מחזור {GimatryHelper.ToDisplayLetters(expected)}");
+
+        // The heading is the one authoritative cycle description — the
+        // beside-picker range that repeated it stays hidden (#2725).
+        vm.IsCycleRangeVisible.Should().BeFalse();
+        vm.CycleLabel.Should().BeEmpty();
+        vm.CycleOptions.Select(o => o.Label).Should().Contain("מחזור ד'");
 
         vm.MonthGroups.Should().HaveCountGreaterThan(1);
 
@@ -546,7 +553,7 @@ public class LearningCalendarViewModelTests
 
         vm.NextMonthCommand.Execute(null);
         vm.SelectedCycle!.Value.Should().Be(before + 1);
-        vm.MonthLabel.Should().StartWith($"מחזור {before + 1}");
+        vm.MonthLabel.Should().StartWith($"מחזור {GimatryHelper.ToDisplayLetters(before + 1)}");
 
         vm.PrevMonthCommand.Execute(null);
         vm.SelectedCycle!.Value.Should().Be(before);
