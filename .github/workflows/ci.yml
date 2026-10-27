@@ -1519,15 +1519,22 @@ jobs:
           retention-days: 90
           overwrite: true
 
-      - name: Merge test coverage (unit; E2E lcov when enabled)
+      # The published admin report merges both test layers: unit's V8 report
+      # is the canonical universe (every eligible source file enumerated);
+      # the istanbul-instrumented E2E layer only confirms hits on shared
+      # coordinates (--hits-only, #2270) and can never extend or dilute the
+      # denominator. Both inputs are required — a missing layer fails the
+      # job instead of publishing a partial report as complete (#2707).
+      - name: Merge test coverage (unit + E2E into one admin report)
         run: bun run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          # Unit + e2e files too: each is uploaded to Codecov under its own
-          # flag (merged is for the cross-module report).
+          # Unit + e2e files too: kept as per-layer diagnostics; the merged
+          # file is the single report Codecov's `admin` flag and the
+          # cross-module merge consume.
           path: |
             ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
             ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
@@ -3042,24 +3049,17 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
+      # The `admin` flag carries one merged report: unit's canonical V8
+      # universe plus the hits the E2E layer confirmed on shared coordinates
+      # (merged in the Admin CI job). Per-layer files stay in the coverage
+      # artifact as diagnostics only.
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          # The admin flag tracks unit coverage (its historical baseline);
-          # e2e goes under admin_e2e so thin e2e suites don't dilute it.
-          files: ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+          files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           disable_search: true
           flags: admin
-          fail_ci_if_error: false
-
-      - name: Publish Admin E2E Coverage To Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
-          disable_search: true
-          flags: admin_e2e
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report

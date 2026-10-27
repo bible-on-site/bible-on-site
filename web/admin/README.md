@@ -62,7 +62,7 @@ bun run build
 
 - Unit: `bun run test:unit` / coverage: `bun run coverage:unit` (outputs `web/admin/.coverage/unit/lcov.info`)
 - E2E: `bun run test:e2e` / coverage: `bun run coverage:e2e` (istanbul instrumentation via monocart → `web/admin/.coverage/e2e/lcov.info`)
-- Merge unit + e2e: `bun run coverage:merge` → `web/admin/.coverage/merged/lcov.info`
+- Merge unit + e2e: `bun run coverage:merge` → `web/admin/.coverage/merged/lcov.info` (unit is the canonical universe; e2e confirms hits on shared coordinates only — both inputs are required)
 - CI publishes the merged report to Codecov with flag **`admin`** (see root `README.md`).
 
 ## Project Structure
