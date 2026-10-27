@@ -47,6 +47,14 @@
                                FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
 
+                        <!-- Reading-time badge over the entry body (issue #2607);
+                             hidden when the stored metric is unknown or empty. -->
+                        <Label Text="{Binding ReadingTimeBadge}"
+                               IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
+                               FontSize="13"
+                               AutomationId="TanahpediaReadingTimeBadge"
+                               TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+
                         <!-- Entity type badges → category pages -->
                         <FlexLayout Wrap="Wrap"
                                     BindableLayout.ItemsSource="{Binding Entities}"

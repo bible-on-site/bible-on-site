@@ -81,6 +81,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [ObservableProperty]
     private string? _content;
 
+    /// <summary>"זמן קריאה משוער: X" badge over the entry body (issue #2607); null hides it.</summary>
+    [ObservableProperty]
+    private string? _readingTimeBadge;
+
     [ObservableProperty]
     private ObservableCollection<TanahpediaLinkedEntity> _entities = new();
 
@@ -250,6 +254,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     {
         Title = UniqueName;
         Content = null;
+        ReadingTimeBadge = null;
         Entities = new ObservableCollection<TanahpediaLinkedEntity>();
         FamilyTree = null;
         PlaceMarkers = [];
@@ -272,6 +277,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
         Title = detail.Title;
         Content = TanahpediaFootnotes.Normalize(detail.Content);
+        ReadingTimeBadge = detail.ReadingTimeBadge;
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         IsLoaded = true;
         OnPropertyChanged(nameof(HasContent));

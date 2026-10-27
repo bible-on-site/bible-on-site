@@ -83,6 +83,46 @@ public class ArticleServiceTests
     }
 
     [Fact]
+    public async Task GetArticleByIdAsync_maps_the_stored_reading_metric()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "articleById": {
+                  "id": 42,
+                  "perekId": 7,
+                  "authorId": 3,
+                  "abstract": "<H1>t</H1>",
+                  "articleContent": "<p>body</p>",
+                  "name": null,
+                  "priority": 4,
+                  "readingMetric": {
+                    "wordCount": 361,
+                    "estimatedSeconds": 99,
+                    "wordsPerMinute": 220,
+                    "calcVersion": 1,
+                    "sourceHash": "abc123"
+                  }
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var article = await service.GetArticleByIdAsync(42);
+
+        article.Should().NotBeNull();
+        article!.ReadingMetric.Should().NotBeNull();
+        article.ReadingMetric!.WordCount.Should().Be(361);
+        article.ReadingMetric.EstimatedSeconds.Should().Be(99);
+        article.ReadingMetric.WordsPerMinute.Should().Be(220);
+        article.ReadingMetric.CalcVersion.Should().Be(1);
+        article.ReadingMetric.SourceHash.Should().Be("abc123");
+        article.ReadingTimeBadge.Should().Be("זמן קריאה משוער: 2 דקות");
+        server.RequestBody.Should().Contain("readingMetric");
+    }
+
+    [Fact]
     public async Task GetArticleByIdAsync_returns_null_when_api_returns_no_article()
     {
         await using var server = new GraphQLStubServer(_ => """

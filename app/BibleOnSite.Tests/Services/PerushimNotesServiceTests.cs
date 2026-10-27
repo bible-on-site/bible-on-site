@@ -1234,6 +1234,113 @@ public sealed class PerushimNotesServiceTests : IDisposable
         await conn.CloseAsync();
     }
 
+    [Fact]
+    public async Task GetPerushReadingMetricAsync_MapsTheStoredRow()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(GetPerushReadingMetricAsync_MapsTheStoredRow));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((5, 2, 3, 0, "note")),
+                .. MetricDdl,
+                "INSERT INTO tanah_perush_metric VALUES (5, 2, 120, 33, 220, 1, 'hash', '2026-01-01')"]);
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        var metric = await service.GetPerushReadingMetricAsync(5, 2);
+
+        metric.Should().NotBeNull();
+        metric!.WordCount.Should().Be(120);
+        metric.EstimatedSeconds.Should().Be(33);
+        metric.WordsPerMinute.Should().Be(220);
+        metric.SourceHash.Should().Be("hash");
+    }
+
+    [Fact]
+    public async Task GetPerushReadingMetricAsync_ReturnsNull_WhenMetricTablesAreAbsent()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(GetPerushReadingMetricAsync_ReturnsNull_WhenMetricTablesAreAbsent));
+        Directory.CreateDirectory(dataDir);
+        // A pre-#2607 pack: notes but no metric tables.
+        await CreateNotesDatabaseAsync(dataDir, (5, 2, 3, 0, "note"));
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        var metric = await service.GetPerushReadingMetricAsync(5, 2);
+
+        metric.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetPerushMetricsForPerekAsync_ReturnsEveryStoredPerush()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(GetPerushMetricsForPerekAsync_ReturnsEveryStoredPerush));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((5, 2, 3, 0, "a"), (7, 2, 4, 0, "b")),
+                .. MetricDdl,
+                "INSERT INTO tanah_perush_metric VALUES " +
+                "(5, 2, 120, 33, 220, 1, 'h5', '')," +
+                "(7, 2, NULL, NULL, 220, 1, 'h7', '')," +
+                "(9, 8, 40, 11, 220, 1, 'other', '')"]);
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        var metrics = await service.GetPerushMetricsForPerekAsync(2);
+
+        metrics.Should().HaveCount(2);
+        metrics[5].WordCount.Should().Be(120);
+        metrics[7].WordCount.Should().BeNull();
+        metrics[7].EstimatedSeconds.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetNoteProgressUnitsAsync_ReturnsOrderedCumulativeCounts()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(GetNoteProgressUnitsAsync_ReturnsOrderedCumulativeCounts));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((5, 2, 3, 0, "a"), (5, 2, 3, 1, "b")),
+                .. MetricDdl,
+                "INSERT INTO tanah_note_metric VALUES " +
+                "(5, 2, 3, 1, 25, 55, 1, 'h2')," +
+                "(5, 2, 3, 0, 30, 30, 1, 'h1')," +
+                "(7, 2, 3, 0, 10, 10, 1, 'other-perush')"]);
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        var units = await service.GetNoteProgressUnitsAsync(5, 2);
+
+        units.Should().HaveCount(2);
+        units.Select(u => u.Key).Should().Equal("3:0", "3:1");
+        units.Select(u => u.CumulativeWords).Should().Equal(30, 55);
+    }
+
+    [Fact]
+    public async Task GetNoteProgressUnitsAsync_ReturnEmpty_WhenMetricTablesAreAbsent()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(GetNoteProgressUnitsAsync_ReturnEmpty_WhenMetricTablesAreAbsent));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(dataDir, (5, 2, 3, 0, "a"));
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        var units = await service.GetNoteProgressUnitsAsync(5, 2);
+
+        units.Should().BeEmpty();
+    }
+
+    /// <summary>The notes-pack metric DDL the pipeline ships (issue #2607) —
+    /// one statement per element: sqlite-net executes a single statement per call.</summary>
+    private static readonly string[] MetricDdl =
+    [
+        "CREATE TABLE tanah_note_metric (perush_id INTEGER NOT NULL, perek_id INTEGER NOT NULL, " +
+        "pasuk INTEGER NOT NULL, note_idx INTEGER NOT NULL, word_count INTEGER NOT NULL, " +
+        "cumulative_words INTEGER NOT NULL, calc_version INTEGER NOT NULL, source_hash TEXT NOT NULL, " +
+        "PRIMARY KEY (perush_id, perek_id, pasuk, note_idx))",
+        "CREATE TABLE tanah_perush_metric (perush_id INTEGER NOT NULL, perek_id INTEGER NOT NULL, " +
+        "word_count INTEGER, estimated_seconds INTEGER, words_per_minute INTEGER NOT NULL, " +
+        "calc_version INTEGER NOT NULL, source_hash TEXT NOT NULL, computed_at TEXT NOT NULL DEFAULT '', " +
+        "PRIMARY KEY (perush_id, perek_id))"
+    ];
+
     private static async Task CreateNotesDatabaseAsync(
         string dataDirectory,
         params (int perushId, int perekId, int pasuk, int noteIdx, string? content)[] rows) =>
