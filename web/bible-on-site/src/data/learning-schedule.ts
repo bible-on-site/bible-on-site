@@ -457,6 +457,16 @@ export function getCycleLabel(cycle: StudyCycle): string {
 }
 
 /**
+ * The date-range portion of a cycle label, with the projected marker when
+ * the cycle is derived rather than stored — e.g. a PDF cover subtitle under
+ * a "מחזור N" document title (#2727).
+ */
+export function getCycleRangeLabel(cycle: StudyCycle): string {
+	const projectedSuffix = cycle.projected ? " (משוער)" : "";
+	return `${cycle.start.toTraditionalHebrewString()} - ${cycle.end.toTraditionalHebrewString()}${projectedSuffix}`;
+}
+
+/**
  * Readable sefer/perek reference such as "שמואל ב ה", built from the
  * lightweight client catalog volumes — no scripture bodies are loaded.
  */
