@@ -12,7 +12,12 @@ import {
 	perekArticlesTag,
 	perekPerushimTag,
 } from "../../../lib/revalidate/tags";
-import { getPerekMetric, metricOrFallback } from "../../../lib/reading-metrics";
+import {
+	getPerekMetric,
+	getPerekProgressUnits,
+	metricOrFallback,
+} from "../../../lib/reading-metrics";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../lib/seo/opengraph";
@@ -77,6 +82,16 @@ const getCachedPerekMetric = unstable_cache(
 		revalidate: false,
 	},
 );
+
+/** Per-pasuk progress units — the same cache contract as the metric row. */
+const getCachedPerekProgressUnits = unstable_cache(
+	async (perekId: number) => getPerekProgressUnits(perekId),
+	["perek-progress-units"],
+	{
+		tags: ["reading-metrics"],
+		revalidate: false,
+	},
+);
 export async function generateMetadata({
 	params,
 }: {
@@ -132,6 +147,11 @@ export default async function Perek({
 	const perekMetric = await metricOrFallback(`perek ${perekId}`, null, () =>
 		getCachedPerekMetric(perekId),
 	);
+	const perekProgressUnits = await metricOrFallback(
+		`perek ${perekId} progress`,
+		[],
+		() => getCachedPerekProgressUnits(perekId),
+	);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
@@ -155,9 +175,17 @@ export default async function Perek({
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 					imagesByPerek={seferImages}
+					perekPasukUnits={perekProgressUnits}
+					perekMetric={perekMetric}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
+				<ReadingProgress
+					units={perekProgressUnits}
+					scroller={`.${styles.perekContainer}`}
+					content={`.${styles.perekText}`}
+					unitSelector="#pasuk-{key}"
+				/>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
 				<ReadingTime

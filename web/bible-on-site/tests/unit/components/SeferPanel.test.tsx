@@ -38,6 +38,8 @@ jest.mock("@/lib/authors/url-utils", () => ({
 
 jest.mock("../../../src/app/929/[number]/actions", () => ({
 	getArticleForBook: jest.fn(),
+	getArticleProgressUnitsForBook: jest.fn(),
+	getNoteProgressUnitsForPerekBatch: jest.fn(),
 	getPerushNotesForPerekBatch: jest.fn(),
 }));
 
@@ -56,6 +58,8 @@ import {
 } from "@testing-library/react";
 import {
 	getArticleForBook,
+	getArticleProgressUnitsForBook,
+	getNoteProgressUnitsForPerekBatch,
 	getPerushNotesForPerekBatch,
 } from "../../../src/app/929/[number]/actions";
 import { SeferPanel } from "../../../src/app/929/[number]/components/SeferPanel";
@@ -77,6 +81,14 @@ const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
 const mockGetPerushNotesBatch =
 	getPerushNotesForPerekBatch as jest.MockedFunction<
 		typeof getPerushNotesForPerekBatch
+	>;
+const mockGetArticleProgressUnits =
+	getArticleProgressUnitsForBook as jest.MockedFunction<
+		typeof getArticleProgressUnitsForBook
+	>;
+const mockGetNoteProgressUnitsBatch =
+	getNoteProgressUnitsForPerekBatch as jest.MockedFunction<
+		typeof getNoteProgressUnitsForPerekBatch
 	>;
 
 const RASHI = { id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 };
@@ -125,6 +137,8 @@ beforeEach(() => {
 	sessionStorage.clear();
 	resetSeferPasukSelectionState();
 	mockGetPerushNotesBatch.mockResolvedValue({});
+	mockGetArticleProgressUnits.mockResolvedValue([]);
+	mockGetNoteProgressUnitsBatch.mockResolvedValue({});
 });
 
 describe("tabs and date header", () => {

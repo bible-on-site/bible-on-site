@@ -116,6 +116,15 @@
 	font-weight: 600;
 }
 
+/* Reading-metrics badge (#2607) beside the abstract — same subdued meta
+   style as the perek/article pages. */
+.abstractReadingTime {
+	display: block;
+	margin-top: 6px;
+	font-size: 0.78rem;
+	color: var(--muted-text);
+}
+
 .noResults {
 	text-align: center;
 	padding: 24px;
