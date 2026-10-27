@@ -119,7 +119,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             return;
         }
-        app.RequestedThemeChanged += OnRequestedThemeChanged;
+        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
+        // when navigation returns, and must re-check the theme then.
+        Loaded += (_, _) =>
+        {
+            app.RequestedThemeChanged += OnRequestedThemeChanged;
+            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
+        };
         Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
     }
 

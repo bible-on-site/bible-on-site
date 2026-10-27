@@ -67,7 +67,13 @@ public class TikkunFlowView : GraphicsView
         // stale palette (#2601).
         if (Application.Current is { } app)
         {
-            app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+            // Loaded/Unloaded so a re-presented view re-subscribes and rebuilds
+            // under the theme that is active then.
+            Loaded += (_, _) =>
+            {
+                app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+                Dispatcher.Dispatch(InvalidateContent);
+            };
             Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
         }
     }

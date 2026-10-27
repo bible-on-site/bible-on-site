@@ -239,7 +239,11 @@
                                                              LineHeight="1.4">
                                                         <controls:PasukTextLabel.FormattedText>
                                                             <MultiBinding Converter="{StaticResource PasukMarkerTextConverter}">
-                                                                <Binding Path="PasukFormattedText"/>
+                                                                <!-- Observe Pasuk.FormattedText directly so the
+                                                                     binding repulls on theme-change notifications
+                                                                     (PasukFormattedText is a non-observable
+                                                                     passthrough, #2601 review). -->
+                                                                <Binding Path="Pasuk.FormattedText"/>
                                                                 <Binding Path="PasukNumHeb"/>
                                                                 <Binding Path="PasukMarkerFontSize"/>
                                                             </MultiBinding>

@@ -66,7 +66,13 @@ public partial class ReaderBottomBar : Grid
         // BottomBarDrawable.Draw — repaint it when the theme flips (#2601).
         if (Microsoft.Maui.Controls.Application.Current is { } app)
         {
-            app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+            // Loaded/Unloaded so a re-presented bar re-subscribes and repaints
+            // with the theme that is active then.
+            Loaded += (_, _) =>
+            {
+                app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+                BarSurface.Invalidate();
+            };
             Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
         }
     }
