@@ -34,8 +34,10 @@ public sealed class IosBackNavigationTests
         public string? LastLocator { get; private set; }
         public IEnumerable<Dictionary<string, object>>? Actions { get; private set; }
         public int Touches { get; private set; }
-        public bool TryAddCommand(string name, CommandInfo? info) => true;
-        public void Dispose() { }
+        private readonly Dictionary<string, CommandInfo> _commands = [];
+        public bool TryAddCommand(string name, CommandInfo? info) =>
+            info != null && _commands.TryAdd(name, info);
+        public void Dispose() => _commands.Clear();
         public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
         public Task<Response> ExecuteAsync(Command command)
         {
