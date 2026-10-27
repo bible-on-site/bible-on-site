@@ -34,7 +34,7 @@
                    CornerRadius="14"
                    BorderWidth="0"
                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
@@ -86,7 +86,7 @@
                                        FontSize="22"
                                        FontAttributes="Bold"
                                        HorizontalTextAlignment="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                 <Label AutomationId="MasoraClosingBreak"
                                        Text="{Binding ClosingBreakLabel}"
                                        IsVisible="{Binding HasClosingBreak}"
@@ -147,7 +147,7 @@
                                                                                    AutomationId="InlinePerushName"
                                                                                    FontSize="{DynamicResource PerushNameFontSize}"
                                                                                    FontAttributes="Bold"
-                                                                                   TextColor="{StaticResource Primary}"/>
+                                                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                                                             <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
                                                                                               FontSize="{DynamicResource PerushContentFontSize}"
                                                                                               TextAlignment="Justify"

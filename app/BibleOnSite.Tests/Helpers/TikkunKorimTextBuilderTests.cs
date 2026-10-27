@@ -52,6 +52,9 @@ public class TikkunKorimTextBuilderTests
         }
     }
 
+    // Word colors resolve from Application.Current.RequestedTheme (#2601), so
+    // this class serializes with the theme-mutating tests.
+    [Collection("Application state")]
     public class BuildWords
     {
         private static List<Pasuk> TwoPesukim() =>

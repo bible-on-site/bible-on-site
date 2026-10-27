@@ -48,11 +48,11 @@
                        FontSize="11"
                        LineBreakMode="TailTruncation"
                        MaxLines="2"
-                       TextColor="{StaticResource Primary}"/>
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                 <Border WidthRequest="26"
                         HeightRequest="26"
                         StrokeShape="RoundRectangle 13"
-                        Stroke="{StaticResource Primary}"
+                        Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                         StrokeThickness="1"
                         HorizontalOptions="Center"
                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
@@ -61,7 +61,7 @@
                         <Label Text="{x:Static fonts:FluentUI.person_16_regular}"
                                FontFamily="FluentIcons"
                                FontSize="13"
-                               TextColor="{StaticResource Primary}"
+                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                HorizontalOptions="Center"
                                VerticalOptions="Center"/>
                         <Image Source="{Binding Article.Author.ImageUrl, Source={x:Reference ThisCard}}"
@@ -82,12 +82,12 @@
                                    Margin="0,4,0,0">
                 <Label Text="קרא עוד"
                        FontSize="11"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        VerticalOptions="Center"/>
                 <Label Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
                        FontFamily="FluentIcons"
                        FontSize="12"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        VerticalOptions="Center"/>
             </HorizontalStackLayout>
         </Grid>
