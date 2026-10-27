@@ -4,6 +4,11 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
 import { ReadingTime } from "@/app/components/ReadingTime";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
+import { getEntryDedications } from "@/lib/dedications/loaders";
 import { demoteHeadings } from "@/lib/html-headings";
 import { plainText } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
@@ -104,6 +109,11 @@ export async function EntryView({ slug }: { slug: string }) {
 
 	const primaryEntity = entry.entities[0] ?? null;
 	const occurrences = await getEntryOccurrences(entry.id);
+	// Entry-scoped dedications (#2731): targeted by the canonical entry id,
+	// never inferred from prose mentions.
+	const entryDedications = dedicationLines(
+		await getEntryDedications(entry.id),
+	);
 	const entryGraph = buildEntryGraph({
 		entry,
 		personFamily,
@@ -126,6 +136,7 @@ export async function EntryView({ slug }: { slug: string }) {
 				siblingEntries={siblingEntries}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
+			<DedicationLines lines={entryDedications} />
 			<ReadingTime
 				estimatedSeconds={entry.metric?.estimatedSeconds}
 				className={styles.readingTime}

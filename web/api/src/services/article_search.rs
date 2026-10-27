@@ -1030,7 +1030,10 @@ mod tests {
         );
 
         // The failed refresh probe degrades to the warm snapshot.
-        let page = index.search("alpha", 10, 0, None).await.expect("warm search");
+        let page = index
+            .search("alpha", 10, 0, None)
+            .await
+            .expect("warm search");
         assert_eq!(page.total, 2);
 
         let page = index.search("alpha", 1, 1, None).await.expect("paginated");

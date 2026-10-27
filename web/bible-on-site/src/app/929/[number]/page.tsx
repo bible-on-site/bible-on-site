@@ -12,6 +12,16 @@ import {
 	perekArticlesTag,
 	perekPerushimTag,
 } from "../../../lib/revalidate/tags";
+import {
+	getPerekDedications,
+	getSeferDedications,
+} from "../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../lib/dedications/service";
+import type { Dedication } from "../../../lib/dedications/types";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../components/dedications/DedicationLines";
 import { getPerekMetric, metricOrFallback } from "../../../lib/reading-metrics";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
@@ -137,6 +147,29 @@ export default async function Perek({
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 	const { prev: prevPerek, next: nextPerek } = getAdjacentPereks(perekId);
 
+	// Dedications (#2731): the flat page renders the perek's whole
+	// applicable set — direct perek scopes plus sefer/helek ancestors —
+	// while the book keeps the sefer+helek set on its cover and only
+	// perek-scoped lines on each spread header. One cached loader call
+	// per perek so `perek:{id}:dedications`/`sefer:{id}:dedications` tags
+	// map the page to exactly the scopes it renders.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const flatPageLines = dedicationLines(await getPerekDedications(perekId));
+	const perekDedications: Record<number, string[]> = {};
+	await Promise.all(
+		perekIds.map(async (id) => {
+			const lines = dedicationLines(
+				(await getPerekDedications(id)).filter((dedication: Dedication) =>
+					dedication.scopes.some((scope) => scope.kind === "PEREK"),
+				),
+			);
+			if (lines.length > 0) perekDedications[id] = lines;
+		}),
+	);
+
 	return (
 		<>
 			<JsonLd
@@ -155,11 +188,14 @@ export default async function Perek({
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 					imagesByPerek={seferImages}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
+				<DedicationLines lines={flatPageLines} />
 				<ReadingTime
 					estimatedSeconds={perekMetric?.estimatedSeconds}
 					className={styles.readingTime}

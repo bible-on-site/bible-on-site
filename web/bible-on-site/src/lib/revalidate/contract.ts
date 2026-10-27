@@ -82,6 +82,26 @@ export type EntityChange =
 			uniqueNames: string[];
 			entityTypes?: string[];
 			refPerekIds?: number[];
+	  }
+	| {
+			kind: "dedication";
+			/** tanah_dedication.id — survives edits/deletes. */
+			id: number;
+			/**
+			 * Old ∪ new assignments of the dedication (#2731). The admin
+			 * resolves them post-commit from the link tables (pre-commit on
+			 * delete), and the website maps them to the scoped cache tags
+			 * and pages that render them.
+			 */
+			perekRanges?: { low: number; high: number }[];
+			seferIds?: number[];
+			helekIds?: number[];
+			parashaIds?: number[];
+			articleIds?: number[];
+			/** Canonical tanahpedia_entry ids of entry-scoped assignments. */
+			entryIds?: string[];
+			/** True when the dedication carries the whole-masora scope. */
+			masora?: boolean;
 	  };
 
 /** Thrown when a change payload fails validation — maps to HTTP 400. */
@@ -150,6 +170,33 @@ function stringList(value: unknown, at: string): string[] {
 function optStringList(value: unknown, at: string): string[] | undefined {
 	if (value === undefined || value === null) return undefined;
 	return stringList(value, at);
+}
+
+function optPerekRanges(
+	value: unknown,
+	at: string,
+): { low: number; high: number }[] | undefined {
+	if (value === undefined || value === null) return undefined;
+	if (!Array.isArray(value) || value.length > MAX_LIST) {
+		fail(`${at}: expected an array of up to ${MAX_LIST} ranges`);
+	}
+	return (value as unknown[]).map((range, i) => {
+		const r = asRecord(range, `${at}[${i}]`);
+		const low = reqInt(r.low, `${at}[${i}].low`);
+		const high = reqInt(r.high, `${at}[${i}].high`);
+		if (high < low) {
+			fail(`${at}[${i}]: high before low`);
+		}
+		return { low, high };
+	});
+}
+
+function optBool(value: unknown, at: string): boolean | undefined {
+	if (value === undefined || value === null) return undefined;
+	if (typeof value !== "boolean") {
+		fail(`${at}: expected boolean`);
+	}
+	return value;
 }
 
 function optCoveringSpans(
@@ -231,6 +278,18 @@ function parseChange(value: unknown, at: string): EntityChange {
 					`${at}.entityTypes`,
 				),
 				refPerekIds: optIntList(rec.refPerekIds, `${at}.refPerekIds`),
+			};
+		case "dedication":
+			return {
+				kind: "dedication",
+				id: reqInt(rec.id, `${at}.id`),
+				perekRanges: optPerekRanges(rec.perekRanges, `${at}.perekRanges`),
+				seferIds: optIntList(rec.seferIds, `${at}.seferIds`),
+				helekIds: optIntList(rec.helekIds, `${at}.helekIds`),
+				parashaIds: optIntList(rec.parashaIds, `${at}.parashaIds`),
+				articleIds: optIntList(rec.articleIds, `${at}.articleIds`),
+				entryIds: optStringList(rec.entryIds, `${at}.entryIds`),
+				masora: optBool(rec.masora, `${at}.masora`),
 			};
 		default:
 			fail(`${at}.kind: unknown entity change kind`);

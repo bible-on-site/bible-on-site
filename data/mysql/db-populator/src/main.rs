@@ -297,6 +297,11 @@ async fn main() -> Result<()> {
         // Reading-metrics tables last: their FKs reference tanah_article and
         // tanahpedia_entry, which exist only after the structures above ran.
         apply_reading_metrics_upgrade(&mut conn, base_path).await?;
+
+        // Dedication expansion (#2731): upgrades the preserved dedication
+        // tables and adds the scope link tables; runs after the Tanahpedia
+        // structure so the entry link FK resolves.
+        apply_dedication_upgrade(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -338,6 +343,9 @@ async fn main() -> Result<()> {
         // Re-applied here so `mysql-populate-data-only` still creates the
         // reading-metrics tables on databases populated before this schema.
         apply_reading_metrics_upgrade(&mut conn, base_path).await?;
+
+        // Same for the dedication scope/expiry upgrade (#2731).
+        apply_dedication_upgrade(&mut conn, base_path).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -551,6 +559,19 @@ async fn apply_perek_pasuk_count_upgrade(
         conn,
         &base_path.join("../tanah_perek_pasuk_count_upgrade.sql"),
         "perek-pasuk-count-upgrade",
+    )
+    .await
+}
+
+/// Applies the dedication expansion upgrade (#2731): expiry columns on the
+/// preserved dedication tables plus the expanded-scope link tables (sefer,
+/// helek, weekly parasha, Tanahpedia entry, whole-masora feature).
+/// Idempotent and non-destructive, so it runs in both phases.
+async fn apply_dedication_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_dedication_upgrade.sql"),
+        "dedication-upgrade",
     )
     .await
 }

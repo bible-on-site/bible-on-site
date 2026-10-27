@@ -8,6 +8,7 @@ import type {
 	SeferDownloadContext,
 	SemanticPageInfo,
 } from "@/lib/download/types";
+import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
 	getPerushimByPerekId,
@@ -92,6 +93,18 @@ export async function getPerekSummariesBatch(
 		}),
 	);
 	return Object.fromEntries(entries);
+}
+
+/**
+ * The bookshelf's helek/sefer dedication lines (#2731), loaded on demand by
+ * the in-reader sefarim picker — the modal opens client-side after mount,
+ * so its dedication view arrives through the tag-cached loader.
+ */
+export async function getBookshelfDedicationLines(): Promise<BookshelfDedicationLines> {
+	const { getBookshelfDedicationLines: load } = await import(
+		"@/lib/dedications/loaders"
+	);
+	return load();
 }
 
 /** Result of a download action when a handler is implemented */

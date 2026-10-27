@@ -123,28 +123,46 @@
                               AutomationProperties.ExcludedWithChildren="{Binding IsOffscreenCarouselPage}">
                             <!-- Perek Header (Row 0) with קריינות play button -->
                             <Grid Grid.Row="0">
-                                <Label AutomationId="PerekHeader"
-                                       Text="{Binding Header}"
-                                       FontSize="22"
-                                       FontAttributes="Bold"
-                                       HorizontalTextAlignment="Center"
-                                       Padding="16,12"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
-                                    <Label.Triggers>
-                                        <!-- Keep wrapped header text clear of the floating play button -->
-                                        <DataTrigger TargetType="Label"
-                                                     Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
-                                                     Value="True">
-                                            <Setter Property="Padding" Value="56,12"/>
-                                        </DataTrigger>
-                                    </Label.Triggers>
-                                    <Label.GestureRecognizers>
-                                        <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
-                                    </Label.GestureRecognizers>
-                                    <Label.Behaviors>
-                                        <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
-                                    </Label.Behaviors>
-                                </Label>
+                                <VerticalStackLayout>
+                                    <Label AutomationId="PerekHeader"
+                                           Text="{Binding Header}"
+                                           FontSize="22"
+                                           FontAttributes="Bold"
+                                           HorizontalTextAlignment="Center"
+                                           Padding="16,12"
+                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
+                                        <Label.Triggers>
+                                            <!-- Keep wrapped header text clear of the floating play button -->
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
+                                                         Value="True">
+                                                <Setter Property="Padding" Value="56,12"/>
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                        <Label.GestureRecognizers>
+                                            <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
+                                        </Label.GestureRecognizers>
+                                        <Label.Behaviors>
+                                            <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                                        </Label.Behaviors>
+                                    </Label>
+                                    <!-- Perek/sefer/helek dedications (#2731) — bound to the page's
+                                         view model, which tracks the displayed perek -->
+                                    <VerticalStackLayout Spacing="0"
+                                                         Padding="16,0,16,8"
+                                                         BindableLayout.ItemsSource="{Binding BindingContext.DedicationLines, Source={x:Reference PerekPageRoot}}"
+                                                         IsVisible="{Binding BindingContext.HasDedications, Source={x:Reference PerekPageRoot}}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Label Text="{Binding .}"
+                                                       FontSize="13"
+                                                       FontAttributes="Italic"
+                                                       HorizontalTextAlignment="Center"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
                                 <!-- קריינות: plays the whole perek; shown when the global
                                      קריינות preference is on and this perek has audio -->
                                 <Button x:Name="HeaderPlayButton"
