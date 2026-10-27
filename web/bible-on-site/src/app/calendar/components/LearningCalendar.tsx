@@ -11,6 +11,7 @@ import {
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getCycleName,
 	getCycleStartMonth,
 	getDateLabel,
 	getMonthLabel,
@@ -269,7 +270,7 @@ export function LearningCalendar({
 	// pending download always keeps the period it was started for.
 	const pdfScopeLabel =
 		viewMode === "cycle"
-			? `מחזור ${resolvedCycle}`
+			? getCycleName(getCycle(resolvedCycle))
 			: viewMode === "year"
 				? `שנת ${getYearLabel(viewed.year)}`
 				: getMonthLabel(viewed);
@@ -497,13 +498,17 @@ export function LearningCalendar({
 						{displayedCycle === null && <option value="">-</option>}
 						{cycleOptions.map((cycle) => (
 							<option key={cycle.number} value={cycle.number}>
-								מחזור {cycle.number}
-								{cycle.projected ? " (משוער)" : ""}
+								{getCycleName(cycle)}
 							</option>
 						))}
 					</select>
 				</label>
-				{displayedCycle && (
+				{/* Month/year views keep the contextual cycle's range beside the
+				    picker; in מחזור מלא the h2 already carries the selected
+				    cycle's full label, so repeating it here would duplicate —
+				    and displayedCycle describes the viewed month, not the
+				    chosen cycle (#2725). */}
+				{displayedCycle && viewMode !== "cycle" && (
 					<span className={styles.cycleRange}>
 						{getCycleLabel(displayedCycle)}
 					</span>

@@ -183,6 +183,7 @@
                     AutomationId="CalendarCyclePicker"/>
             <Label Grid.Column="1"
                    Text="{Binding CycleLabel}"
+                   IsVisible="{Binding IsCycleRangeVisible}"
                    FontSize="12"
                    VerticalOptions="Center"
                    LineBreakMode="WordWrap"

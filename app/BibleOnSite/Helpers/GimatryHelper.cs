@@ -212,6 +212,25 @@ public static class GimatryHelper
 
         return result;
     }
+
+    /// <summary>
+    /// Display numeral with ASCII punctuation for UI counters (#2725): a lone
+    /// letter takes a trailing geresh (ד'), longer values a gershayim before
+    /// the last letter (י"א, ט"ו). Canonical source references keep the plain
+    /// <see cref="ToLetters"/> form — this is the cycle-label presentation.
+    /// </summary>
+    /// <param name="number">The number to convert.</param>
+    /// <returns>The punctuated Hebrew numeral; empty for non-positive input.</returns>
+    public static string ToDisplayLetters(int number)
+    {
+        var letters = ToLetters(number);
+        return letters.Length switch
+        {
+            0 => string.Empty,
+            1 => $"{letters}'",
+            _ => letters.Insert(letters.Length - 1, "\""),
+        };
+    }
 }
 
 /// <summary>

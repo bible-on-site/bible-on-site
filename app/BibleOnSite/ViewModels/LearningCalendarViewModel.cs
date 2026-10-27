@@ -166,12 +166,19 @@ public partial class LearningCalendarViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMonthView))]
     [NotifyPropertyChangedFor(nameof(IsGroupedView))]
+    [NotifyPropertyChangedFor(nameof(IsCycleRangeVisible))]
     private CalendarViewMode _viewMode = CalendarViewMode.Month;
 
     public bool IsMonthView => ViewMode == CalendarViewMode.Month;
 
     /// <summary>Yearly and full-cycle views both render grouped mini-months.</summary>
     public bool IsGroupedView => ViewMode != CalendarViewMode.Month;
+
+    /// <summary>
+    /// The contextual cycle range beside the picker shows only in month/year
+    /// views; the full-cycle heading already carries that label (#2725).
+    /// </summary>
+    public bool IsCycleRangeVisible => ViewMode != CalendarViewMode.Cycle;
 
     [ObservableProperty]
     private ObservableCollection<PickerOption> _monthOptions = new();
@@ -301,12 +308,9 @@ public partial class LearningCalendarViewModel : ObservableObject
                 _cycleOptionsCount = maxCycle;
                 CycleOptions = new ObservableCollection<PickerOption>(
                     Enumerable.Range(1, maxCycle).Select(number =>
-                    {
-                        var cycle = _schedule.GetCycle(number);
-                        return new PickerOption(
+                        new PickerOption(
                             number,
-                            $"מחזור {number}{(cycle.Projected ? " (משוער)" : string.Empty)}");
-                    }));
+                            CycleDisplayFormatter.Name(_schedule.GetCycle(number)))));
             }
 
             SelectedMonth = MonthOptions.FirstOrDefault(o => o.Value == _month);
@@ -319,18 +323,17 @@ public partial class LearningCalendarViewModel : ObservableObject
             {
                 CalendarViewMode.Year => $"שנת ה'{GimatryHelper.ToLetters(_year % 1000)}",
                 CalendarViewMode.Cycle when displayed is not null =>
-                    $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
-                        $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
-                        $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}",
+                    CycleDisplayFormatter.Label(displayed),
                 _ =>
                     $"{HebrewDateHelper.GetHebrewMonthName(_month, HebrewDateHelper.IsHebrewLeapYear(_year))} " +
                     $"ה'{GimatryHelper.ToLetters(_year % 1000)}",
             };
-            CycleLabel = displayed is null
+            // Beside the picker, month/year views show the contextual cycle's
+            // range once. The full-cycle view's heading already carries the
+            // selected cycle's label — repeating it here duplicated it (#2725).
+            CycleLabel = displayed is null || ViewMode == CalendarViewMode.Cycle
                 ? string.Empty
-                : $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
-                    $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
-                    $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}";
+                : CycleDisplayFormatter.Label(displayed);
         }
         finally
         {

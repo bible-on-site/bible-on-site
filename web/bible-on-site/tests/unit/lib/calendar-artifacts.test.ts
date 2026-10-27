@@ -292,7 +292,7 @@ describe("buildCalendarPdfInput", () => {
 	it("builds a cycle input with dimmed out-of-cycle days", () => {
 		const input = buildCalendarPdfInput("cycle:4");
 		expect(input).not.toBeNull();
-		expect(input?.subtitle).toContain("מחזור 4");
+		expect(input?.subtitle).toContain("מחזור ד'");
 		expect(input?.months.length).toBeGreaterThan(30);
 		const dimmed = input?.dimmed;
 		expect(typeof dimmed).toBe("function");
