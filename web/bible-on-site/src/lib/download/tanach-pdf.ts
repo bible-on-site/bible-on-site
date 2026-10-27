@@ -14,12 +14,11 @@
  * non-Latin text (Hebrew, Arabic, etc.) requires an embedded custom font.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { type PDFFont, PDFDocument, rgb } from "pdf-lib";
 // biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error fails in production build (unused directive) so we must use @ts-ignore
 // @ts-ignore — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
 import * as _fontkit from "@pdf-lib/fontkit";
+import { PDFDocument, type PDFFont, rgb } from "pdf-lib";
+
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
 const fontkit: any = (_fontkit as any).default ?? _fontkit;
@@ -38,35 +37,8 @@ import {
 	visualTextRuns,
 } from "./bidi-text";
 import { ExportError } from "./export-error";
+import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
 import type { SemanticPageInfo } from "./types";
-
-/* ──────────────────────────── Font loading ─────────────────────────── */
-
-let regularFontCache: Uint8Array | null = null;
-let boldFontCache: Uint8Array | null = null;
-
-function loadFont(filename: string): Uint8Array {
-	const fontPath = resolve(
-		process.cwd(),
-		"src",
-		"lib",
-		"download",
-		"fonts",
-		filename,
-	);
-	return readFileSync(fontPath);
-}
-
-export function getRegularFontBytes(): Uint8Array {
-	if (!regularFontCache)
-		regularFontCache = loadFont("FrankRuhlLibre-Regular.ttf");
-	return regularFontCache;
-}
-
-export function getBoldFontBytes(): Uint8Array {
-	if (!boldFontCache) boldFontCache = loadFont("FrankRuhlLibre-Bold.ttf");
-	return boldFontCache;
-}
 
 /* ──────────────────────────── Text helpers ─────────────────────────── */
 
@@ -353,13 +325,7 @@ export async function buildTanachPdfForPerekRange(
 				for (const p of perushim) {
 					ensureSpace(ctx, SMALL_LINE_HEIGHT);
 					const label = `• ${p.name} (${p.parshanName}) - ${p.noteCount} הערות`;
-					drawRtlLine(
-						ctx,
-						label,
-						font,
-						SMALL_SIZE,
-						rgb(0.2, 0.2, 0.2),
-					);
+					drawRtlLine(ctx, label, font, SMALL_SIZE, rgb(0.2, 0.2, 0.2));
 					ctx.y -= SMALL_LINE_HEIGHT;
 				}
 			}
@@ -375,35 +341,17 @@ export async function buildTanachPdfForPerekRange(
 				drawSeparator(ctx);
 
 				ensureSpace(ctx, HEADER_LINE_HEIGHT);
-				drawRtlLine(
-					ctx,
-					"מאמרים",
-					boldFont,
-					HEADER_SIZE,
-					rgb(0.15, 0.5, 0.15),
-				);
+				drawRtlLine(ctx, "מאמרים", boldFont, HEADER_SIZE, rgb(0.15, 0.5, 0.15));
 				ctx.y -= HEADER_LINE_HEIGHT;
 
 				for (const article of articles) {
 					ensureSpace(ctx, SMALL_LINE_HEIGHT * 2);
 					const titleLine = `• ${article.name}`;
-					drawRtlLine(
-						ctx,
-						titleLine,
-						boldFont,
-						SMALL_SIZE,
-						rgb(0.1, 0.1, 0.1),
-					);
+					drawRtlLine(ctx, titleLine, boldFont, SMALL_SIZE, rgb(0.1, 0.1, 0.1));
 					ctx.y -= SMALL_LINE_HEIGHT;
 
 					const byLine = `מאת: ${article.authorName}`;
-					drawRtlLine(
-						ctx,
-						byLine,
-						font,
-						SMALL_SIZE,
-						rgb(0.3, 0.3, 0.3),
-					);
+					drawRtlLine(ctx, byLine, font, SMALL_SIZE, rgb(0.3, 0.3, 0.3));
 					ctx.y -= SMALL_LINE_HEIGHT;
 
 					if (article.abstract) {

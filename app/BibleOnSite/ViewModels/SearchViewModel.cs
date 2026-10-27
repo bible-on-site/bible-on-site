@@ -440,6 +440,13 @@ public partial class SearchViewModel : ObservableObject
     /// </summary>
     public async Task SearchAsync(CancellationToken cancellationToken)
     {
+        // A debounce delay may finish before its UI continuation runs. If a
+        // newer query canceled it meanwhile, it must not cancel that query
+        // or clear its results when the old continuation is finally resumed.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
         CancelSearch();
         var version = _searchVersion;
         _searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

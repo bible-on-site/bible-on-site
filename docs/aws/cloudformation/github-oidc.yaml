@@ -145,6 +145,19 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::bible-on-site-data-deploy/*"
 
+          # S3 - publish pre-generated calendar-PDF artifacts (#2608).
+          # Object-level only, scoped to the generated/calendar-pdf/ prefix:
+          # the publisher uploads content-addressed objects, verifies them,
+          # then flips manifest.json. Objects are never deleted so an older
+          # manifest stays roll-back-able.
+          - Sid: S3CalendarPdfArtifacts
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource:
+              - !Sub "arn:aws:s3:::bible-on-site-assets/generated/calendar-pdf/*"
+
           # Lambda - invoke data deploy function; the deployer delivers the
           # DB URL inside the invoke payload (see data-deploy/data-deploy.yaml),
           # so no lambda configuration permissions are needed here.

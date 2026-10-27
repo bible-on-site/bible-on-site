@@ -10,13 +10,12 @@
  * right-to-left (column 0 = rightmost).
  */
 
-import type { PDFFont, PDFPage } from "pdf-lib";
-import { PDFDocument, rgb } from "pdf-lib";
-
 // biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error fails in production build (unused directive) so we must use @ts-ignore
 // @ts-ignore — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
 import * as _fontkit from "@pdf-lib/fontkit";
 import { toLetters } from "gematry";
+import type { PDFFont, PDFPage } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import type { MonthCell } from "@/data/learning-schedule";
 import {
 	bidiRunsWidth,
@@ -25,7 +24,7 @@ import {
 	memoizeGlyphEncoding,
 	visualTextRuns,
 } from "./bidi-text";
-import { getBoldFontBytes, getRegularFontBytes } from "./tanach-pdf";
+import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
 
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
@@ -99,13 +98,28 @@ function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
 }
 
 /**
+ * Fixed document metadata date. Calendar PDFs are pre-generated artifacts
+ * addressed by content hash (#2608), so rendering must be byte-deterministic:
+ * pdf-lib otherwise stamps CreationDate/ModDate with wall-clock time.
+ */
+const FIXED_METADATA_DATE = new Date("2020-01-01T00:00:00.000Z");
+
+/**
  * Renders the given months to a single-column flow of month grids.
  * Returns raw PDF bytes.
+ *
+ * Deterministic: `updateMetadata: false` keeps save() from restamping the
+ * info dict, and the document dates are fixed constants — identical inputs
+ * yield identical bytes on any machine.
  */
 export async function generateCalendarPdf(
 	input: CalendarPdfInput,
 ): Promise<Uint8Array> {
-	const doc = await PDFDocument.create();
+	const doc = await PDFDocument.create({ updateMetadata: false });
+	doc.setProducer("bible-on-site calendar-pdf");
+	doc.setCreator("bible-on-site");
+	doc.setCreationDate(FIXED_METADATA_DATE);
+	doc.setModificationDate(FIXED_METADATA_DATE);
 	doc.registerFontkit(fontkit);
 	const font = memoizeGlyphEncoding(await doc.embedFont(getRegularFontBytes()));
 	const bold = memoizeGlyphEncoding(await doc.embedFont(getBoldFontBytes()));
@@ -124,15 +138,7 @@ export async function generateCalendarPdf(
 	drawRtlCentered(page, input.title, bold, 18, PAGE_WIDTH / 2, y, INK);
 	if (input.subtitle) {
 		y -= 16;
-		drawRtlCentered(
-			page,
-			input.subtitle,
-			font,
-			11,
-			PAGE_WIDTH / 2,
-			y,
-			MUTED,
-		);
+		drawRtlCentered(page, input.subtitle, font, 11, PAGE_WIDTH / 2, y, MUTED);
 	}
 	y -= 18;
 

@@ -622,19 +622,19 @@ describe("ParashaSefer", () => {
 		);
 	});
 
-	it("updates the document title on page flips and open content", () => {
+	it("updates the document title on page flips and open content", async () => {
 		render(<ParashaSefer {...baseProps()} />);
 		const handlers = capturedFlipBookProps.handlers as {
 			onPageFlipped: () => void;
 		};
 		// Page 5 is unit 1's Haftarah text spread.
 		mockGetCurrentPageIndex.mockReturnValue(5);
-		act(() => handlers.onPageFlipped());
+		await act(async () => handlers.onPageFlipped());
 		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
 			'הפטרת בראשית | פרשה על הפרק | תנ"ך על הפרק',
 		);
 		mockGetCurrentPageIndex.mockReturnValue(3);
-		act(() => handlers.onPageFlipped());
+		await act(async () => handlers.onPageFlipped());
 		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
 			'פרשת בראשית | פרשה על הפרק | תנ"ך על הפרק',
 		);
