@@ -92,6 +92,9 @@ public class ReaderFanMenu : Grid
                 Opacity = 0.3f
             }
         };
+        // Name + pointer label for the icon-only FAB (#2766).
+        SemanticProperties.SetDescription(ToggleButton, "תפריט הניווט");
+        ToolTipProperties.SetText(ToggleButton, "תפריט הניווט");
         if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("Primary", out var primary) == true
             && primary is Color primaryColor)
         {

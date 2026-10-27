@@ -288,61 +288,61 @@ public partial class AppShell : Shell
 	}
 #endif
 
-	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)
+	private async void OnAlHaperekTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("PerekPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnTanahpediaTapped(object? sender, TappedEventArgs e)
+	private async void OnTanahpediaTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnLearningCalendarTapped(object? sender, TappedEventArgs e)
+	private async void OnLearningCalendarTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.LearningCalendar, CurrentState.Location.OriginalString));
 	}
 
-	private async void OnMasoraTapped(object? sender, TappedEventArgs e)
+	private async void OnMasoraTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Masora, CurrentState.Location.OriginalString));
 	}
 
-	private async void OnParashaTapped(object? sender, TappedEventArgs e)
+	private async void OnParashaTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("ParashaListPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnAuthorsTapped(object? sender, TappedEventArgs e)
+	private async void OnAuthorsTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnTermsTapped(object? sender, TappedEventArgs e)
+	private async void OnTermsTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("TosPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnPreferencesTapped(object? sender, TappedEventArgs e)
+	private async void OnPreferencesTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("PreferencesPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnContactTapped(object? sender, TappedEventArgs e)
+	private async void OnContactTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("ContactPage", CurrentState.Location.OriginalString));
 	}
 
-	private async void OnDonationsTapped(object? sender, TappedEventArgs e)
+	private async void OnDonationsTapped(object? sender, EventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("DonationsPage", CurrentState.Location.OriginalString));

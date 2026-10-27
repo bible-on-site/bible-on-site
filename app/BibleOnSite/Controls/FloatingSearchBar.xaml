@@ -3,7 +3,7 @@
  xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
  xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels" xmlns:models="clr-namespace:BibleOnSite.Models"
  xmlns:converters="clr-namespace:BibleOnSite.Converters"
- xmlns:controls="clr-namespace:BibleOnSite.Controls" xmlns:fonts="clr-namespace:Fonts"
+ xmlns:controls="clr-namespace:BibleOnSite.Controls" xmlns:helpers="clr-namespace:BibleOnSite.Helpers" xmlns:fonts="clr-namespace:Fonts"
  x:Class="BibleOnSite.Controls.FloatingSearchBar" x:DataType="viewmodels:SearchViewModel" FlowDirection="RightToLeft">
  <ContentView.Resources>
   <converters:SearchSnippetConverter x:Key="SearchSnippet"/>
@@ -47,8 +47,20 @@
      SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked"/>
    </Grid>
   </Border>
+  <!-- Windows: results center under a capped column matching the reader
+       text column instead of stretching full-bleed (#2766). -->
   <Grid Grid.Row="1" x:Name="SearchPanel" AutomationId="SearchPanel" IsVisible="False"
    RowDefinitions="Auto,Auto,Auto,*" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
+   <Grid.MaximumWidthRequest>
+    <OnPlatform x:TypeArguments="x:Double" Default="-1">
+     <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
+    </OnPlatform>
+   </Grid.MaximumWidthRequest>
+   <Grid.HorizontalOptions>
+    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+     <On Platform="Windows" Value="Center"/>
+    </OnPlatform>
+   </Grid.HorizontalOptions>
    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="SearchFilterChips">
     <HorizontalStackLayout Padding="16,8" Spacing="8">
      <Border Style="{StaticResource FilterChip}" AutomationId="SearchKindsTab">

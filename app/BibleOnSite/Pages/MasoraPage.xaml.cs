@@ -299,9 +299,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 #if ANDROID
         RegisterReaderBack();
 #endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
-#endif
 
         if (_viewModel.Unit == null && !_isLoading)
         {
@@ -383,9 +380,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     {
 #if ANDROID
         UnregisterReaderBack();
-#endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
 #endif
         base.OnDisappearing();
     }
@@ -658,8 +652,15 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the unit picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
         { ExitFullScreen(); return true; }
+        if (MasoraUnitPickerPopup.IsVisible)
+        { MasoraUnitPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
         return false;
     }
 

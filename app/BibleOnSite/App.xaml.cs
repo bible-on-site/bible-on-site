@@ -26,6 +26,10 @@ public partial class App : Application
             var window = new Window(shell);
             window.Stopped += (_, _) => Services.RecitationService.Instance.RequestPlaybackStop();
 #if WINDOWS
+            // Window minimums + persisted bounds + shared keyboard/mouse
+            // shortcuts are attached before the title bar so the window
+            // opens at its desktop size (#2766).
+            DesktopWindowChrome.Attach(window, shell);
             window.TitleBar = CreateTitleBar(window, shell);
 #endif
             Services.SearchIndexService.WarmupForE2e();
@@ -65,9 +69,12 @@ public partial class App : Application
             AutomationId = "TitleBarBackButton",
             IsEnabled = false,
         };
-        // SemanticProperties.Description is an attached property; it cannot be
-        // assigned inside an object initializer.
+        // SemanticProperties.Description and ToolTipProperties.Text are
+        // attached properties; they cannot be assigned inside an object
+        // initializer. The tooltip advertises the keyboard equivalent that
+        // DesktopWindowChrome wires on the window (#2766).
         SemanticProperties.SetDescription(back, "חזור");
+        ToolTipProperties.SetText(back, "חזור (Alt+Left)");
         shell.Navigated += (_, _) =>
             back.IsEnabled = shell.Navigation.NavigationStack.Count > 1;
         back.Clicked += (_, _) => _ = ((Microsoft.Maui.IWindow)window).BackButtonClicked();

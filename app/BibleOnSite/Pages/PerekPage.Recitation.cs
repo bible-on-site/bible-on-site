@@ -730,8 +730,15 @@ public partial class PerekPage
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the perek picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
         { ExitFullScreen(); return true; }
+        if (PerekPickerPopup.IsVisible)
+        { PerekPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
         if (ReaderMenuOverlay.IsOpen)
         { ReaderMenuOverlay.Close(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }

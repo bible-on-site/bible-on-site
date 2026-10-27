@@ -355,9 +355,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 #if ANDROID
         RegisterReaderBack();
 #endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
-#endif
         SubscribeRecitation();
 #if IOS
         // Native history must be ready before asynchronous reader positioning.
@@ -551,9 +548,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         FinishSearchIntroduction();
 #if ANDROID
         UnregisterReaderBack();
-#endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
 #endif
         if (!_preserveSearchOnDisappear)
         {

@@ -1,12 +1,26 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
       xmlns:fonts="clr-namespace:Fonts"
       x:Class="BibleOnSite.Controls.ReaderBottomBar"
       x:Name="Root"
       HeightRequest="90"
       VerticalOptions="End"
       BackgroundColor="Transparent">
+      <!-- Windows: the bar's actions sit at proportional offsets, so at full
+           width they scatter to the window edges; cap + center keeps them
+           clustered under the reading column (#2766). -->
+      <Grid.MaximumWidthRequest>
+        <OnPlatform x:TypeArguments="x:Double" Default="-1">
+          <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderBarMaxWidth}"/>
+        </OnPlatform>
+      </Grid.MaximumWidthRequest>
+      <Grid.HorizontalOptions>
+        <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+          <On Platform="Windows" Value="Center"/>
+        </OnPlatform>
+      </Grid.HorizontalOptions>
     <AbsoluteLayout BackgroundColor="Transparent">
         <GraphicsView x:Name="BarSurface"
                       AbsoluteLayout.LayoutBounds="0,0,1,1"
@@ -17,6 +31,8 @@
         <!-- Perushim Chevron Button at 8% -->
         <Button x:Name="PerushimChevronButton"
                 AutomationId="PerushimChevronButton"
+                SemanticProperties.Description="פרושים"
+                ToolTipProperties.Text="פרושים"
                 Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
                 FontFamily="FluentIcons"
                 FontSize="20"
@@ -42,6 +58,7 @@
                 Text="א&#x0a;ב&#x0a;ג"
                 FontAutoScalingEnabled="False"
                 SemanticProperties.Description="הצגת הטקסט"
+                ToolTipProperties.Text="הצגת הטקסט"
                 FontSize="10"
                 FontAttributes="Bold"
                 WidthRequest="44"
@@ -60,6 +77,8 @@
               AbsoluteLayout.LayoutBounds="0.72,0.55"
               AbsoluteLayout.LayoutFlags="PositionProportional">
             <Button x:Name="ArticlesButton" AutomationId="ArticlesButton"
+                    SemanticProperties.Description="מאמרים"
+                    ToolTipProperties.Text="מאמרים"
                     Text="{x:Static fonts:FluentUI.document_24_regular}"
                     FontFamily="FluentIcons"
                     FontSize="20"
@@ -92,6 +111,8 @@
         <!-- Full Screen Button at 92% -->
         <Button x:Name="FullScreenButton"
                 AutomationId="FullScreenButton"
+                SemanticProperties.Description="מסך מלא"
+                ToolTipProperties.Text="מסך מלא"
                 Text="{x:Static fonts:FluentUI.full_screen_maximize_24_regular}"
                 FontFamily="FluentIcons"
                 FontSize="22"

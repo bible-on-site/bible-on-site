@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:fonts="clr-namespace:Fonts"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.PreferencesPage"
              x:DataType="viewmodels:PreferencesViewModel"
              Shell.NavBarIsVisible="False"
@@ -13,11 +14,22 @@
              BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
 
     <ScrollView Padding="16,12">
+        <!-- Windows: preference rows at monitor width are unscanable (#2766) -->
         <Border Padding="0"
                 StrokeShape="RoundRectangle 12"
                 Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
                 StrokeThickness="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+            <Border.MaximumWidthRequest>
+                <OnPlatform x:TypeArguments="x:Double" Default="-1">
+                    <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                </OnPlatform>
+            </Border.MaximumWidthRequest>
+            <Border.HorizontalOptions>
+                <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                    <On Platform="Windows" Value="Center"/>
+                </OnPlatform>
+            </Border.HorizontalOptions>
             <VerticalStackLayout Spacing="0">
 
                 <!-- תצוגה -->

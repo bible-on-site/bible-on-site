@@ -4,6 +4,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.ArticleDetailPage"
              x:DataType="viewmodels:ArticleDetailViewModel"
              Title="{Binding ArticleName}"
@@ -49,6 +50,16 @@
                     Grid.Row="1"
                     Padding="16,0">
             <VerticalStackLayout Spacing="16">
+                <VerticalStackLayout.MaximumWidthRequest>
+                    <OnPlatform x:TypeArguments="x:Double" Default="-1">
+                        <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                    </OnPlatform>
+                </VerticalStackLayout.MaximumWidthRequest>
+                <VerticalStackLayout.HorizontalOptions>
+                    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                        <On Platform="Windows" Value="Center"/>
+                    </OnPlatform>
+                </VerticalStackLayout.HorizontalOptions>
                 <!-- Author section -->
                 <VerticalStackLayout HorizontalOptions="Center"
                                      Spacing="8"

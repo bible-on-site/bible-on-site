@@ -462,9 +462,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         UnregisterReaderBack();
 #endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
-#endif
         if (!_preserveSearchOnDisappear)
         {
             ChapterSearch.Close();
@@ -511,9 +508,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         base.OnAppearing();
 #if ANDROID
         RegisterReaderBack();
-#endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
 #endif
         SubscribeRecitation();
 #if IOS
