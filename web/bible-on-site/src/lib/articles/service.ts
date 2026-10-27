@@ -1,4 +1,5 @@
 import { query } from "../api-client";
+import { isMissingMysqlSchema } from "../mysql-errors";
 import { getAuthorImageUrl } from "../authors/service";
 import type { ScriptureRange } from "../reading/contract";
 import {
@@ -139,21 +140,11 @@ export async function getArticleSummariesByPerekId(
 
 /**
  * Whether a query rejection means the covering-source schema (#2189)
- * is not deployed yet. MySQL reports ER_BAD_FIELD_ERROR (1054) for the
- * missing `coverage_verified` column and ER_NO_SUCH_TABLE (1146) for
- * the missing `tanah_article_covering_source` table — the only errors
- * the reader may degrade on; anything else is a real failure.
+ * is not deployed yet — the missing `coverage_verified` column or the
+ * missing `tanah_article_covering_source` table. Anything else is a
+ * real failure.
  */
-function isCoveringSourceSchemaMissing(error: unknown): boolean {
-	if (typeof error !== "object" || error === null) return false;
-	const { code, errno } = error as { code?: unknown; errno?: unknown };
-	return (
-		code === "ER_BAD_FIELD_ERROR" ||
-		code === "ER_NO_SUCH_TABLE" ||
-		errno === 1054 ||
-		errno === 1146
-	);
-}
+const isCoveringSourceSchemaMissing = isMissingMysqlSchema;
 
 /**
  * Fetch article summaries whose scripture coverage overlaps the given

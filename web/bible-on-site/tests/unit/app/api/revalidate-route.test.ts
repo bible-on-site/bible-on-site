@@ -26,9 +26,27 @@ jest.mock("../../../../src/lib/seo/indexnow", () => ({
 	collectSubmissionPaths: jest.fn((paths: string[]) => paths),
 }));
 
+jest.mock("../../../../src/lib/revalidate/dependencies", () => ({
+	resolveEntityChanges: jest.fn(),
+}));
+
+// The real contract stays in place — the mock only exists so one test can
+// make the parser throw a non-validation error (the route's rethrow arm).
+jest.mock("../../../../src/lib/revalidate/contract", () => {
+	const actual = jest.requireActual(
+		"../../../../src/lib/revalidate/contract",
+	);
+	return {
+		...actual,
+		parseEntityChanges: jest.fn(actual.parseEntityChanges),
+	};
+});
+
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
 import { POST } from "../../../../src/app/api/revalidate/route";
+import { parseEntityChanges } from "../../../../src/lib/revalidate/contract";
+import { resolveEntityChanges } from "../../../../src/lib/revalidate/dependencies";
 import {
 	collectSubmissionPaths,
 	submitIndexNow,
@@ -46,11 +64,29 @@ const mockSubmit = submitIndexNow as jest.MockedFunction<
 const mockCollect = collectSubmissionPaths as jest.MockedFunction<
 	typeof collectSubmissionPaths
 >;
+const mockResolve = resolveEntityChanges as jest.MockedFunction<
+	typeof resolveEntityChanges
+>;
+const mockParse = parseEntityChanges as jest.MockedFunction<
+	typeof parseEntityChanges
+>;
 
 function req(url: string, headers?: Record<string, string>) {
 	return new NextRequest(new URL(url, "http://localhost:3001"), {
 		method: "POST",
 		headers,
+	});
+}
+
+function jsonReq(
+	url: string,
+	body: string,
+	headers?: Record<string, string>,
+) {
+	return new NextRequest(new URL(url, "http://localhost:3001"), {
+		method: "POST",
+		headers: { "content-type": "application/json", ...headers },
+		body,
 	});
 }
 
@@ -81,7 +117,7 @@ describe("POST /api/revalidate", () => {
 		const res = await POST(req("/api/revalidate?path=/929/5"));
 
 		expect(res.status).toBe(200);
-		expect(mockRevalidatePath).toHaveBeenCalledWith("/929/5", undefined);
+		expect(mockRevalidatePath).toHaveBeenCalledWith("/929/5");
 		expect(mockRevalidateTag).not.toHaveBeenCalled();
 	});
 
@@ -89,6 +125,13 @@ describe("POST /api/revalidate", () => {
 		const res = await POST(
 			req("/api/revalidate?path=/pedia/[slug]&type=page"),
 		);
+
+		expect(res.status).toBe(200);
+		expect(mockRevalidatePath).toHaveBeenCalledWith("/pedia/[slug]", "page");
+	});
+
+	it("defaults a dynamic route pattern to the page type", async () => {
+		const res = await POST(req("/api/revalidate?path=/pedia/[slug]"));
 
 		expect(res.status).toBe(200);
 		expect(mockRevalidatePath).toHaveBeenCalledWith("/pedia/[slug]", "page");
@@ -103,7 +146,7 @@ describe("POST /api/revalidate", () => {
 		expect(mockRevalidateTag).toHaveBeenCalledWith("articles", {
 			expire: 0,
 		});
-		expect(mockRevalidatePath).toHaveBeenCalledWith("/929/5", undefined);
+		expect(mockRevalidatePath).toHaveBeenCalledWith("/929/5");
 	});
 
 	it("rejects a request without path or tag", async () => {
@@ -293,6 +336,182 @@ describe("POST /api/revalidate", () => {
 
 			expect(res.status).toBe(500);
 			expect(mockSubmit).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("typed entity changes", () => {
+		const resolvedOut = {
+			tags: ["article:12", "perek:5:articles"],
+			paths: ["/929/5", "/929/5/12"],
+			patterns: [{ path: "/pedia/[slug]", type: "page" as const }],
+			urls: ["/929/5", "/929/5/12"],
+		};
+
+		beforeEach(() => {
+			mockResolve.mockResolvedValue(resolvedOut);
+		});
+
+		it("resolves entity changes into tags, paths and IndexNow urls", async () => {
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate",
+					JSON.stringify({
+						changes: [
+							{ kind: "article", id: 12, perekIds: [5] },
+						],
+					}),
+				),
+			);
+
+			expect(res.status).toBe(200);
+			expect(mockResolve).toHaveBeenCalledWith([
+				{ kind: "article", id: 12, perekIds: [5] },
+			]);
+			expect(mockRevalidateTag).toHaveBeenCalledWith("article:12", {
+				expire: 0,
+			});
+			expect(mockRevalidateTag).toHaveBeenCalledWith(
+				"perek:5:articles",
+				{ expire: 0 },
+			);
+			expect(mockRevalidatePath).toHaveBeenCalledWith("/929/5");
+			expect(mockRevalidatePath).toHaveBeenCalledWith(
+				"/pedia/[slug]",
+				"page",
+			);
+			const body = await res.json();
+			expect(body.resolved).toEqual({ tags: 2, paths: 2, patterns: 1 });
+			expect(mockCollect).toHaveBeenCalledWith([
+				"/929/5",
+				"/929/5/12",
+			]);
+		});
+
+		it("combines typed changes with a legacy query tag", async () => {
+			mockResolve.mockResolvedValue({
+				tags: [],
+				paths: ["/929/5"],
+				patterns: [],
+				urls: ["/929/5"],
+			});
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate?tag=perushim",
+					JSON.stringify({
+						changes: [
+							{ kind: "article", id: 12, perekIds: [5] },
+						],
+					}),
+				),
+			);
+
+			expect(res.status).toBe(200);
+			expect(mockRevalidateTag).toHaveBeenCalledWith("perushim", {
+				expire: 0,
+			});
+			expect(mockRevalidatePath).toHaveBeenCalledWith("/929/5");
+		});
+
+		it("rejects malformed JSON before any invalidation", async () => {
+			const res = await POST(jsonReq("/api/revalidate", "{oops"));
+
+			expect(res.status).toBe(400);
+			expect(mockResolve).not.toHaveBeenCalled();
+			expect(mockRevalidateTag).not.toHaveBeenCalled();
+		});
+
+		it("rejects a malformed change payload before any invalidation", async () => {
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate",
+					JSON.stringify({ changes: [{ kind: "bogus" }] }),
+				),
+			);
+
+			expect(res.status).toBe(400);
+			expect(mockResolve).not.toHaveBeenCalled();
+			expect(mockRevalidateTag).not.toHaveBeenCalled();
+		});
+
+		it("rethrows an unexpected parser error instead of masking it as a 400", async () => {
+			mockParse.mockImplementationOnce(() => {
+				throw new TypeError("unexpected validator crash");
+			});
+
+			await expect(
+				POST(
+					jsonReq(
+						"/api/revalidate",
+						JSON.stringify({ changes: [{ kind: "bogus" }] }),
+					),
+				),
+			).rejects.toThrow("unexpected validator crash");
+			expect(mockResolve).not.toHaveBeenCalled();
+			expect(mockRevalidateTag).not.toHaveBeenCalled();
+		});
+
+		it("rejects an oversized body by content-length", async () => {
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate",
+					"{}",
+					{ "content-length": String(70 * 1024) },
+				),
+			);
+
+			expect(res.status).toBe(400);
+			expect(mockResolve).not.toHaveBeenCalled();
+		});
+
+		it("bounds the decoded body when content-length is small", async () => {
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate",
+					`{"changes":${" ".repeat(70 * 1024)}`,
+					{ "content-length": "10" },
+				),
+			);
+
+			expect(res.status).toBe(400);
+			expect(mockResolve).not.toHaveBeenCalled();
+		});
+
+		it("returns 500 when dependency resolution fails", async () => {
+			mockResolve.mockRejectedValueOnce(new Error("db down"));
+			jest.spyOn(console, "error").mockImplementation(() => {});
+
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate",
+					JSON.stringify({
+						changes: [{ kind: "author", id: 3, name: "x" }],
+					}),
+				),
+			);
+
+			expect(res.status).toBe(500);
+			expect(mockRevalidateTag).not.toHaveBeenCalled();
+			expect(mockSubmit).not.toHaveBeenCalled();
+		});
+
+		it("rejects a typed request that resolves to nothing", async () => {
+			mockResolve.mockResolvedValueOnce({
+				tags: [],
+				paths: [],
+				patterns: [],
+				urls: [],
+			});
+			const res = await POST(
+				jsonReq(
+					"/api/revalidate",
+					JSON.stringify({
+						changes: [{ kind: "author", id: 3, name: "x" }],
+					}),
+				),
+			);
+
+			expect(res.status).toBe(400);
+			expect(mockRevalidateTag).not.toHaveBeenCalled();
 		});
 	});
 });

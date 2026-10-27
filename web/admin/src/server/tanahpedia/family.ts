@@ -30,9 +30,9 @@ import {
 	type UpdateUnionLinkInput,
 } from "./family-api-spec";
 import {
-	pediaInvalidationForEntities,
-	pediaInvalidationForEntryIds,
-	pediaInvalidationForPersons,
+	pediaChangesForEntities,
+	pediaChangesForEntryIds,
+	pediaChangesForPersons,
 } from "./paths";
 
 function requiredNonEmpty(v: string, field: string): string {
@@ -288,7 +288,7 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 		});
 
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds(
+			await pediaChangesForEntryIds(
 				data.linkToEntryId?.trim() ? [data.linkToEntryId.trim()] : [],
 			),
 		);
@@ -447,7 +447,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			}
 		});
 
-		await revalidateWebsite(await pediaInvalidationForEntities([entityId]));
+		await revalidateWebsite(await pediaChangesForEntities([entityId]));
 		return { entityId };
 	});
 
@@ -456,7 +456,7 @@ export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const entityId = requiredNonEmpty(data.entityId, "entityId");
 		// Resolve affected entry pages before their links are deleted.
-		const invalidation = await pediaInvalidationForEntities([entityId]);
+		const invalidation = await pediaChangesForEntities([entityId]);
 		await transaction(async (conn) => {
 			const person = await txQueryOne<{ id: string }>(
 				conn,
@@ -549,7 +549,7 @@ export const createParentChildLink = createServerFn({ method: "POST" })
 		);
 
 		await revalidateWebsite(
-			await pediaInvalidationForPersons([parentPersonId, childPersonId]),
+			await pediaChangesForPersons([parentPersonId, childPersonId]),
 		);
 		return { id };
 	});
@@ -615,7 +615,7 @@ export const updateParentChildLink = createServerFn({ method: "POST" })
 			`SELECT parent_id, child_id FROM tanahpedia_person_parent_child WHERE id = ?`,
 			[id],
 		);
-		const invalidation = await pediaInvalidationForPersons(
+		const invalidation = await pediaChangesForPersons(
 			link ? [link.parent_id, link.child_id] : [],
 		);
 		await revalidateWebsite(invalidation);
@@ -631,7 +631,7 @@ export const deleteParentChildLink = createServerFn({ method: "POST" })
 			`SELECT parent_id, child_id FROM tanahpedia_person_parent_child WHERE id = ?`,
 			[id],
 		);
-		const invalidation = await pediaInvalidationForPersons(
+		const invalidation = await pediaChangesForPersons(
 			link ? [link.parent_id, link.child_id] : [],
 		);
 		const result = await execute(
@@ -694,7 +694,7 @@ export const createUnionLink = createServerFn({ method: "POST" })
 		);
 
 		await revalidateWebsite(
-			await pediaInvalidationForPersons([person1Id, person2Id]),
+			await pediaChangesForPersons([person1Id, person2Id]),
 		);
 		return { id };
 	});
@@ -778,7 +778,7 @@ export const updateUnionLink = createServerFn({ method: "POST" })
 			`SELECT person1_id, person2_id FROM tanahpedia_person_union WHERE id = ?`,
 			[id],
 		);
-		const invalidation = await pediaInvalidationForPersons(
+		const invalidation = await pediaChangesForPersons(
 			link ? [link.person1_id, link.person2_id] : [],
 		);
 		await revalidateWebsite(invalidation);
@@ -794,7 +794,7 @@ export const deleteUnionLink = createServerFn({ method: "POST" })
 			`SELECT person1_id, person2_id FROM tanahpedia_person_union WHERE id = ?`,
 			[id],
 		);
-		const invalidation = await pediaInvalidationForPersons(
+		const invalidation = await pediaChangesForPersons(
 			link ? [link.person1_id, link.person2_id] : [],
 		);
 		const result = await execute(
@@ -858,7 +858,7 @@ export const createPersonName = createServerFn({ method: "POST" })
 
 		// Both the named person's and giver's entry pages may render the name.
 		await revalidateWebsite(
-			await pediaInvalidationForPersons(
+			await pediaChangesForPersons(
 				giverPersonId ? [personId, giverPersonId] : [personId],
 			),
 		);
@@ -991,7 +991,7 @@ export const updatePersonName = createServerFn({ method: "POST" })
 			);
 		});
 
-		const invalidation = await pediaInvalidationForPersons(
+		const invalidation = await pediaChangesForPersons(
 			name ? [name.person_id] : [],
 		);
 		await revalidateWebsite(invalidation);
@@ -1007,7 +1007,7 @@ export const deletePersonName = createServerFn({ method: "POST" })
 			`SELECT person_id FROM tanahpedia_person_name WHERE id = ?`,
 			[id],
 		);
-		const invalidation = await pediaInvalidationForPersons(
+		const invalidation = await pediaChangesForPersons(
 			name ? [name.person_id] : [],
 		);
 		const result = await execute(

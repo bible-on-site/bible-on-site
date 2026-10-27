@@ -7,16 +7,15 @@ export type SlugResolution =
 	| { kind: "disambiguation"; targets: SynonymTarget[] }
 	| { kind: "missing" };
 
-/** Where a slug that is not an entry's `unique_name` should lead. */
+/**
+ * Where a slug that is not an entry's `unique_name` should lead.
+ * A database failure rejects — never degrades to `missing`, which the
+ * route would turn into a cached 404 for an entry that may exist.
+ */
 export async function resolveSynonymSlug(
 	name: string,
 ): Promise<SlugResolution> {
-	let targets: SynonymTarget[];
-	try {
-		targets = await getEntriesBySynonym(name);
-	} catch {
-		return { kind: "missing" };
-	}
+	const targets = await getEntriesBySynonym(name);
 	if (targets.length === 0) return { kind: "missing" };
 	if (targets.length === 1) return { kind: "alias", target: targets[0] };
 	return { kind: "disambiguation", targets };

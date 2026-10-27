@@ -31,6 +31,7 @@ import {
 	updatePersonSex,
 	updateSayingDate,
 } from "~/server/tanahpedia/structural";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 function executedStatements(): string[] {
 	return executeMock.mock.calls.map(([sql]) => String(sql));
@@ -294,6 +295,7 @@ describe("structural saves invalidate the website", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -307,26 +309,46 @@ describe("structural saves invalidate the website", () => {
 		fetchSpy.mockRestore();
 	});
 
-	function revalidateCalls() {
-		return fetchSpy.mock.calls.map((call: unknown[]) => {
-			const url = new URL(String(call[0]));
-			return {
-				tag: url.searchParams.get("tag"),
-				path: url.searchParams.get("path"),
-			};
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
 		});
 	}
 
-	it("expires pedia surfaces after an entity rename", async () => {
+	/** `pediaChangesForEntities`: types, linked entries, source perakim. */
+	function mockEntityResolution(
+		entityId: string,
+		entityType: string,
+		entryNames: string[],
+	) {
+		queryMock
+			.mockResolvedValueOnce([{ id: entityId, entity_type: entityType }])
+			.mockResolvedValueOnce(
+				entryNames.map((unique_name) => ({
+					entity_id: entityId,
+					unique_name,
+				})),
+			)
+			.mockResolvedValueOnce([]);
+	}
+
+	it("sends the entity change after an entity rename", async () => {
+		mockEntityResolution("entity-1", "PERSON", ["משה"]);
+
 		await updateEntityDisplayName({
 			data: { entityId: "entity-1", name: "משה רבנו" },
 		});
 
-		expect(revalidateCalls()).toEqual([
-			{ tag: "tanahpedia-entity-refs", path: null },
-			{ tag: null, path: "/pedia/[slug]" },
-			{ tag: null, path: "/pedia" },
-			{ tag: "tanahpedia-mention-refs", path: null },
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entity",
+				entityId: "entity-1",
+				entityType: "PERSON",
+				entryUniqueNames: ["משה"],
+				refPerekIds: [],
+			},
 		]);
 	});
 
@@ -347,53 +369,64 @@ describe("structural saves invalidate the website", () => {
 		expect(fetchSpy).toHaveBeenCalled();
 	});
 
-	function notifiedUrls(): string[] {
-		// The urls ride on the third (/pedia index) invalidation call.
-		const url = new URL(String(fetchSpy.mock.calls[2][0]));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports the entry pages linked to a saying's entity after a date change", async () => {
+	it("carries the entries linked to a saying's entity after a date change", async () => {
 		queryOneMock.mockResolvedValue({ entity_id: "entity-9" });
-		queryMock.mockResolvedValue([{ unique_name: "משה" }]);
+		mockEntityResolution("entity-9", "SAYING", ["משה"]);
 
 		await updateSayingDate({
 			data: { sayingId: "s1", sayingDate: 1200 },
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/משה"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entity",
+				entityId: "entity-9",
+				entityType: "SAYING",
+				entryUniqueNames: ["משה"],
+				refPerekIds: [],
+			},
+		]);
 	});
 
-	it("expires the surfaces without urls when the saying row is gone", async () => {
+	it("sends nothing when the saying row is gone", async () => {
 		queryOneMock.mockResolvedValue(null);
 
 		await updateSayingDate({
 			data: { sayingId: "s1", sayingDate: 1200 },
 		});
 
-		expect(revalidateCalls()).toHaveLength(4);
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it("reports the entry pages linked to a place after identifications change", async () => {
+	it("carries the entries linked to a place after identifications change", async () => {
 		queryOneMock.mockResolvedValue({ entity_id: "entity-9" });
-		queryMock.mockResolvedValue([{ unique_name: "ירושלים" }]);
+		queryMock
+			// Existing identification rows come first, then the entity lookups.
+			.mockResolvedValueOnce([]);
+		mockEntityResolution("entity-9", "PLACE", ["ירושלים"]);
 
 		await replacePlaceIdentifications({
 			data: { placeId: "p1", rows: [] },
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/ירושלים"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entity",
+				entityId: "entity-9",
+				entityType: "PLACE",
+				entryUniqueNames: ["ירושלים"],
+				refPerekIds: [],
+			},
+		]);
 	});
 
-	it("expires the surfaces without urls when the place row is gone", async () => {
+	it("sends nothing when the place row is gone", async () => {
 		queryOneMock.mockResolvedValue(null);
 
 		await replacePlaceIdentifications({
 			data: { placeId: "p1", rows: [] },
 		});
 
-		expect(revalidateCalls()).toHaveLength(4);
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 });
