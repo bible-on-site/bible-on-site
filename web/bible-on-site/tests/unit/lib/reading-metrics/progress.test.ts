@@ -104,9 +104,10 @@ describe("progressFraction", () => {
 
 describe("readableDomSegments", () => {
 	const build = (html: string): Text[][] => {
-		const root = document.createElement("div");
-		root.innerHTML = html;
-		return readableDomSegments(root);
+		// DOMParser keeps the fixture markup static (no script execution and
+		// no innerHTML assignment of variable data).
+		const doc = new DOMParser().parseFromString(html, "text/html");
+		return readableDomSegments(doc.body);
 	};
 
 	const text = (segment: Text[]) =>
