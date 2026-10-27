@@ -86,6 +86,11 @@ jobs:
       # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
       # until the runner image ships it; see #2566.
       MAUI_WORKLOAD_SET: "10.0.401.1"
+      # The Android legs are not Xcode-bound: 10.0.402.1 pins Android SDK
+      # 36.1.118, the first servicing release honoring AndroidR8ObfuscationMode
+      # and emitting the r8.json metadata Play scores — the Release smoke APK is
+      # the pre-merge guard that obfuscated builds still launch (#2708, #2373).
+      MAUI_WORKLOAD_SET_ANDROID: "10.0.402.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -409,6 +414,19 @@ jobs:
           distribution: microsoft
           java-version: "21"
 
+      # iOS legs stay on the Xcode-27-compatible set; Android legs take the
+      # newer set carrying Android SDK 36.1.118 (#2708). Resolve once so the
+      # cache key and the install can never disagree.
+      - name: Resolve workload set pin
+        if: inputs.mode != 'prebuilt-run'
+        id: workload-set
+        run: |
+          if [ "${{ inputs.workload }}" = "maui-android" ]; then
+            echo "version=${{ env.MAUI_WORKLOAD_SET_ANDROID }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
+          fi
+
       # The workload set is a multi-GB silent NuGet download (~6 min cold in
       # run 38438842693); restored packs turn the install into a verify no-op.
       # Exact key only — a partial restore is worse than downloading.
@@ -422,13 +440,14 @@ jobs:
             ${{ env.DOTNET_ROOT }}/metadata
             ${{ env.DOTNET_ROOT }}/sdk-manifests
             ${{ env.DOTNET_ROOT }}/template-packs
-          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ env.MAUI_WORKLOAD_SET }}
+          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ steps.workload-set.outputs.version }}
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
         # 10.0.401.1 selects the iOS 27.0 SDK, which requires Xcode 27.0; see #1871.
-        # 10.0.402.1 would pull iOS 27.1 needing Xcode 27.1 — deferred, see #2566.
-        run: dotnet workload install ${{ inputs.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
+        # maui-android resolves to 10.0.402.1 (Android SDK 36.1.118) for #2708's
+        # obfuscation support; iOS stays pinned until #2566 ships Xcode 27.1.
+        run: dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
       # the build's critical path; the wait-all gate still bounds it.

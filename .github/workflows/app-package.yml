@@ -291,8 +291,11 @@ jobs:
             ${{ runner.os }}-nuget-maui-android-
             ${{ runner.os }}-nuget-
 
+      # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
+      # release honoring AndroidR8ObfuscationMode and emitting the r8.json build
+      # metadata Play reads for code-optimization scoring (#2708).
       - name: Install MAUI workload
-        run: dotnet workload install maui-android
+        run: dotnet workload install maui-android --version 10.0.402.1
 
       - name: Restore perushim notes SQLite for AAB asset pack
         if: ${{ inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -401,6 +404,12 @@ jobs:
 
       - name: Verify all recitation PAD modules and hashes
         run: python app/devops/verify_recitation_assets.py --platform Android --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.aab' -print -quit)"
+
+      # #2708: the uploaded bundle itself must carry the R8 build metadata and
+      # deobfuscation map Play scores (>=25% obfuscation/optimization/shrinking
+      # from February 2027 for apps over 10 MB uncompressed DEX).
+      - name: Verify AAB DEX optimization metadata
+        run: python app/devops/verify_android_dex_metadata.py --package "$(find app/.artifacts -name '*.aab' -print -quit)"
 
       - name: Set artifact name output
         id: set_artifact_name

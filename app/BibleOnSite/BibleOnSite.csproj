@@ -95,12 +95,29 @@
 		     uncompressed DEX 25.4 -> 14.0 MB, arm64 install download -3.8 MB, installed
 		     size -15 MB, with unchanged cold/warm startup and build time. The SDK's
 		     generated proguard_xamarin.cfg plus each AAR's consumer rules keep the JNI
-		     peers, so no project keep rules are needed. Obfuscation stays off (the SDK
-		     default), so Java stack traces remain readable; the SDK embeds mapping.txt as
-		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map in the AAB,
-		     which Play ingests with that exact versionCode (#1161).
-		     Rollback: delete this line to return to D8. -->
+		     peers, so no project keep rules are needed.
+
+		     AndroidR8ObfuscationMode=private-members (#2708): Google Play's technical
+		     quality requirements enforce a minimum 25% for optimization, obfuscation
+		     and shrinking on apps with over 10 MB of uncompressed DEX starting
+		     February 2027; the flagged store build (5.0.139, cut before R8 landed)
+		     reported "Low"/3% because it shipped the SDK's default -dontobfuscate
+		     config. private-members switches R8 to the proguard-android-optimize.txt
+		     baseline (real optimization passes) and obfuscates private/package-private
+		     members while preserving every class/interface name and all
+		     public/protected members — the exact surface JNI/ACW callbacks and the
+		     SDK's generated keep rules cover. Requires Microsoft.Android.Sdk
+		     36.1.118+ (workload set 10.0.402.1); older SDKs silently ignore the
+		     property, so the _RequireR8ObfuscationSdkSupport target below fails
+		     Release builds on stale workloads. The SDK embeds mapping.txt as
+		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map and
+		     r8.json as BUNDLE-METADATA/com.android.tools/r8.json in the AAB — Play
+		     ingests both with that exact versionCode (#1161) — and
+		     devops/verify_android_dex_metadata.py asserts both on every packaged
+		     bundle in CI.
+		     Rollback: delete both properties to return to D8. -->
 		<AndroidLinkTool Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">r8</AndroidLinkTool>
+		<AndroidR8ObfuscationMode Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">private-members</AndroidR8ObfuscationMode>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
 		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
 		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
@@ -119,6 +136,20 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
 	</PropertyGroup>
+
+	<!-- #2708: AndroidR8ObfuscationMode only exists in Microsoft.Android.Sdk
+	     36.1.118+ (workload set 10.0.402.1); on older packs the property is a
+	     silent no-op and the build would ship a non-obfuscated bundle that looks
+	     compliant on paper. Fail instead of silently shipping -dontobfuscate.
+	     The version suffix is stripped so preview SDKs (e.g. 37.0.0-rc.1) compare
+	     correctly; an empty version means the Android workload never loaded. -->
+	<Target Name="_RequireR8ObfuscationSdkSupport" BeforeTargets="PrepareForBuild"
+			Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(AndroidR8ObfuscationMode)' != '' AND '$(AndroidR8ObfuscationMode)' != 'disabled'">
+		<Error Condition="'$(AndroidNETSdkVersion)' == ''"
+				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires the Android workload to report its SDK version; none was found." />
+		<Error Condition="'$(AndroidNETSdkVersion)' != '' AND $([MSBuild]::VersionLessThan($(AndroidNETSdkVersion.Split('-')[0]), '36.1.118'))"
+				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires Microsoft.Android.Sdk 36.1.118+ (workload set 10.0.402.1+); found $(AndroidNETSdkVersion). Run 'dotnet workload update' or install maui-android with --version 10.0.402.1." />
+	</Target>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="BibleOnSite.Tests" />

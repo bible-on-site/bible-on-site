@@ -17,6 +17,7 @@ engines:
       - "data/annotations/baseline.py"
       - "data/annotations/baseline_articles.py"
       - "data/annotations/test_baseline_articles.py"
+      - "app/devops/verify_android_dex_metadata.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
