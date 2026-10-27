@@ -137,7 +137,7 @@ public partial class TanahpediaSearchPanel : ContentView
 
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
     {
-        var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
+        var checkBox = new CenteredCheckBox { IsChecked = enabled, AutomationId = automationId };
         SemanticProperties.SetDescription(checkBox, title);
         checkBox.CheckedChanged += (_, e) =>
         {
