@@ -16,7 +16,7 @@ const repoRoot = path.resolve(__dirname, "..", "..", "..");
 // The sibling html-flip-book repo renamed its package folders after the
 // alpha.46 layout (react/, base/) to coherent names — accept both.
 const LOCAL_REACT_DIRS = ["react", "html-flip-book-react"];
-const NPM_VERSION = "0.0.0-alpha.60"; // Update this when upgrading
+const NPM_VERSION = "0.0.0-alpha.62"; // Update this when upgrading
 
 function localReactRef() {
 	for (const dir of LOCAL_REACT_DIRS) {
