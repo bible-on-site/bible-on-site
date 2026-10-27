@@ -33,7 +33,7 @@
                    FontSize="20"
                    VerticalOptions="Center"
                    HorizontalOptions="Start"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource AccentOnDark}}"/>
         </Grid>
     </Shell.TitleView>
 
@@ -50,7 +50,7 @@
                            FontSize="17"
                            FontAttributes="Bold"
                            Padding="8,12,8,4"
-                           TextColor="{StaticResource Primary}"/>
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                 </DataTemplate>
             </CollectionView.GroupHeaderTemplate>
             <CollectionView.ItemTemplate>

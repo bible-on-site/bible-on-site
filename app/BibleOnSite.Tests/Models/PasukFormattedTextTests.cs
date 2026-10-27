@@ -12,6 +12,9 @@ public class PasukFormattedTextTests
     private static string Flatten(FormattedString formatted) =>
         string.Concat(formatted.Spans.Select(s => s.Text));
 
+    // Span colors resolve from Application.Current.RequestedTheme (#2601), so
+    // this class serializes with the theme-mutating tests.
+    [Collection("Application state")]
     public class Pasuk_FormattedText
     {
         [Theory]

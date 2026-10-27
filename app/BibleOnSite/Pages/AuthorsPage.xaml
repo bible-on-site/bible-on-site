@@ -44,7 +44,7 @@
                                     Padding="0"
                                     BorderWidth="0"
                                     BackgroundColor="Transparent"
-                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                     VerticalOptions="Center"
                                     SemanticProperties.Description="ניקוי החיפוש"
                                     AutomationId="ClearAuthorsSearchButton"
@@ -82,7 +82,7 @@
                                                          WidthRequest="82"
                                                          HeightRequest="82"
                                                          StrokeShape="RoundRectangle 41"
-                                                         Stroke="{StaticResource Primary}"
+                                                         Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                          StrokeThickness="1"
                                                          HorizontalOptions="Center">
                                                         <Image Source="{Binding ImageUrl}"
@@ -108,7 +108,7 @@
                                                         Text="{Binding ArticlesCount, StringFormat='{0} מאמרים'}"
                                                         FontSize="11"
                                                         HorizontalTextAlignment="Center"
-                                                        TextColor="{StaticResource Primary}"/>
+                                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
 
                                                  <!-- Details -->
                                                  <Label Grid.Row="3"

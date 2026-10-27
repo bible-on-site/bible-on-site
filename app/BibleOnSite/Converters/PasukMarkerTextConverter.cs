@@ -25,8 +25,15 @@ public class PasukMarkerTextConverter : IMultiValueConverter
     private readonly ConditionalWeakTable<FormattedString, List<CachedMerge>> _mergedCache = new();
     private readonly object _mergedCacheGate = new();
 
-    /// <summary>Marker color — set in XAML to {StaticResource Primary}.</summary>
+    /// <summary>Marker color in the light theme — set in XAML to {StaticResource Primary}.</summary>
     public Color MarkerColor { get; set; } = Colors.Blue;
+
+    /// <summary>Marker color in the dark theme — Primary is illegible on dark
+    /// surfaces, so pages pass AccentOnDark.</summary>
+    public Color MarkerColorDark { get; set; } = Colors.LightBlue;
+
+    private Color ResolvedMarkerColor =>
+        Application.Current?.RequestedTheme == AppTheme.Dark ? MarkerColorDark : MarkerColor;
 
     public object Convert(object[]? values, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -50,22 +57,23 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         lock (_mergedCacheGate)
         {
             var merges = _mergedCache.GetValue(text, static _ => new List<CachedMerge>(1));
+            var resolvedMarkerColor = ResolvedMarkerColor;
             foreach (var merge in merges)
             {
                 if (merge.Marker == marker &&
                     merge.MarkerFontSizeBits == markerFontSizeBits &&
-                    merge.MarkerColor.Equals(MarkerColor))
+                    merge.MarkerColor.Equals(resolvedMarkerColor))
                 {
                     return merge.Merged;
                 }
             }
 
-            var merged = Merge(text, marker, markerFontSize);
+            var merged = Merge(text, marker, markerFontSize, resolvedMarkerColor);
             if (merges.Count == MaxCachedMergesPerSource)
             {
                 merges.RemoveAt(0);
             }
-            merges.Add(new CachedMerge(marker, markerFontSizeBits, MarkerColor, merged));
+            merges.Add(new CachedMerge(marker, markerFontSizeBits, resolvedMarkerColor, merged));
             return merged;
         }
     }
@@ -73,14 +81,14 @@ public class PasukMarkerTextConverter : IMultiValueConverter
     public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 
-    private FormattedString Merge(FormattedString text, string marker, double markerFontSize)
+    private FormattedString Merge(FormattedString text, string marker, double markerFontSize, Color resolvedMarkerColor)
     {
         var merged = new FormattedString();
         var markerSpan = new Span
         {
             Text = marker + " ",
             FontAttributes = FontAttributes.Bold,
-            TextColor = MarkerColor
+            TextColor = resolvedMarkerColor
         };
         if (markerFontSize > 0)
         {

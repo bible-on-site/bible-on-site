@@ -108,15 +108,16 @@ public class TanahpediaFamilyTreeView : ContentView
         // The section surface - right accent bar like the website's
         // border-right on the RTL surface (Start in RTL = physical right).
         var body = new VerticalStackLayout { Spacing = 2 };
-        body.Add(new Label
+        var header = new Label
         {
             Text = "משפחה",
             FontSize = 17,
             FontAttributes = FontAttributes.Bold,
             HorizontalTextAlignment = TextAlignment.Center,
-            TextColor = Res("Primary", "#1552AC"),
             Margin = new Thickness(0, 0, 0, 6),
-        });
+        };
+        header.SetAppThemeColor(Label.TextColorProperty, Res("Primary", "#1552AC"), Res("AccentOnDark", "#AACBFF"));
+        body.Add(header);
         body.Add(axis);
 
         var surface = new Grid();
@@ -125,8 +126,8 @@ public class TanahpediaFamilyTreeView : ContentView
             WidthRequest = 4,
             HorizontalOptions = LayoutOptions.Start,
             VerticalOptions = LayoutOptions.Fill,
-            Color = Res("Primary", "#1552AC"),
         };
+        accent.SetAppThemeColor(BoxView.ColorProperty, Res("Primary", "#1552AC"), Res("AccentOnDark", "#AACBFF"));
         surface.Add(accent);
         surface.Add(body);
 
@@ -206,7 +207,8 @@ public class TanahpediaFamilyTreeView : ContentView
             case TanahpediaFamilyRibbonKind.Ordinal:
                 label.FontSize = 11;
                 label.FontAttributes = FontAttributes.Bold;
-                label.TextColor = Res("Primary", "#1552AC");
+                label.SetAppThemeColor(Label.TextColorProperty,
+                    Res("Primary", "#1552AC"), Res("AccentOnDark", "#AACBFF"));
                 break;
             case TanahpediaFamilyRibbonKind.Main:
                 label.FontSize = 11.5;
@@ -250,7 +252,8 @@ public class TanahpediaFamilyTreeView : ContentView
         };
         if (card.IsLink)
         {
-            name.TextColor = Res("Primary", "#1552AC");
+            name.SetAppThemeColor(Label.TextColorProperty,
+                Res("Primary", "#1552AC"), Res("AccentOnDark", "#AACBFF"));
             name.TextDecorations = TextDecorations.Underline;
         }
         else
@@ -333,7 +336,7 @@ public class TanahpediaFamilyTreeView : ContentView
             Res("Surface", "#FFFFFF"), Res("SurfaceDark", "#2D2D2D"));
         border.SetAppThemeColor(Border.StrokeProperty,
             card.IsFocal ? Res("Primary", "#1552AC") : Res("Gray200", "#C8C8C8"),
-            card.IsFocal ? Res("PrimaryLight", "#4A7FC7") : Res("Gray700", "#333333"));
+            card.IsFocal ? Res("AccentOnDark", "#AACBFF") : Res("Gray700", "#333333"));
 
         if (card.IsLink)
         {
@@ -365,8 +368,9 @@ public class TanahpediaFamilyTreeView : ContentView
             Text = text,
             FontSize = 11,
             FontAttributes = FontAttributes.Bold,
-            TextColor = Res("Primary", "#1552AC"),
         };
+        label.SetAppThemeColor(Label.TextColorProperty,
+            Res("Primary", "#1552AC"), Res("AccentOnDark", "#AACBFF"));
         var pill = new Border
         {
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
