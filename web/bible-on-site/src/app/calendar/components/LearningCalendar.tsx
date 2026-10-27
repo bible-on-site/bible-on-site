@@ -25,8 +25,12 @@ import {
 	nextMonth,
 	prevMonth,
 } from "@/data/learning-schedule";
+import { resolveCalendarArtifactRequest } from "@/lib/download/calendar-artifacts";
 import { parseNumericalDateToHebcalDate } from "@/util/hebdates-util";
-import { CalendarPdfDownload } from "./CalendarPdfDownload";
+import {
+	CalendarPdfDownload,
+	type CalendarPdfRequest,
+} from "./CalendarPdfDownload";
 import styles from "./learning-calendar.module.css";
 
 const WEEKDAY_NAMES = [
@@ -90,12 +94,18 @@ interface LearningCalendarProps {
 	initialMonth: number;
 	/** Today marker as YYYYMMDD (uniform month), Jerusalem/nightfall aware. */
 	todayDateNumber: number;
+	/**
+	 * Static calendar-PDF manifest URL in the assets bucket (#2622); absent in
+	 * tests/stories, where the action falls back to the legacy API path.
+	 */
+	pdfManifestUrl?: string;
 }
 
 export function LearningCalendar({
 	initialYear,
 	initialMonth,
 	todayDateNumber,
+	pdfManifestUrl = "",
 }: LearningCalendarProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -263,7 +273,26 @@ export function LearningCalendar({
 			: viewMode === "year"
 				? `שנת ${getYearLabel(viewed.year)}`
 				: getMonthLabel(viewed);
-	const pdfUrl = `/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`;
+	const pdfRequest = useMemo<CalendarPdfRequest>(() => {
+		const params = new URLSearchParams({
+			month: formatMonthParam(viewed),
+			view: viewMode,
+			cycle: String(resolvedCycle),
+		});
+		// The shared resolver keeps the canonical artifact key and filename
+		// identical to how the legacy route reads these params (#2622).
+		const resolved = resolveCalendarArtifactRequest(params);
+		return {
+			apiUrl: `/api/calendar-pdf?${params.toString()}`,
+			manifestUrl: pdfManifestUrl,
+			artifactKey: resolved.ok
+				? resolved.key
+				: /* istanbul ignore next -- defensive: our own params always parse */ "",
+			filename: resolved.ok
+				? resolved.filename
+				: /* istanbul ignore next -- defensive: our own params always parse */ "learning-calendar.pdf",
+		};
+	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 
 	const yearMonths = useMemo(
 		() =>
@@ -441,7 +470,7 @@ export function LearningCalendar({
 						</select>
 					</label>
 				)}
-				<CalendarPdfDownload url={pdfUrl} scopeLabel={pdfScopeLabel} />
+				<CalendarPdfDownload request={pdfRequest} scopeLabel={pdfScopeLabel} />
 			</div>
 
 			<h2 className={styles.monthTitle}>
