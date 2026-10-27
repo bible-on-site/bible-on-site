@@ -182,8 +182,7 @@ Codecov uses flags to separate coverage by module:
 - `website` - Coverage from web/bible-on-site
 - `api` - Coverage from web/api
 - `app` - Coverage from app/BibleOnSite — unit + integration + mobile E2E merged hits-only (see [App coverage](../tests/app/coverage/coverage.md))
-- `admin` - Coverage from web/admin
-- `admin_e2e` - Admin E2E layer reported separately
+- `admin` - Coverage from web/admin — unit (canonical universe) + E2E hits merged hits-only into one report
 - `bulletin` - Coverage from web/bulletin
 - `data` - Coverage from data/
 
