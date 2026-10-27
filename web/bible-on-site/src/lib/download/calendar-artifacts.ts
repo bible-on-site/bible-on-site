@@ -24,6 +24,7 @@ import {
 	compareMonths,
 	getConfirmedCycleCount,
 	getCycle,
+	getCycleNumeral,
 	getCycleRangeLabel,
 	getCycleStartMonth,
 	getMonthLabel,
@@ -339,7 +340,7 @@ export function buildCalendarPdfInput(
 		case "cycle": {
 			return {
 				scope: "cycle",
-				title: `לוח לימוד יומי - מחזור ${parsed.cycle} - ${SITE_NAME}`,
+				title: `לוח לימוד יומי - מחזור ${getCycleNumeral(parsed.cycle)} - ${SITE_NAME}`,
 				subtitle: getCycleRangeLabel(getCycle(parsed.cycle)),
 				months: monthsForCycle(parsed.cycle, cellsCache),
 				dimmed: (day) => day.cycle !== parsed.cycle,
