@@ -412,10 +412,58 @@ public class LearningCalendarViewModelTests
         var friday = vm.Cells.First(c => c.DateNumber == 57750404);
         var saturday = vm.Cells.First(c => c.DateNumber == 57750405);
         friday.IsReview.Should().BeTrue();
-        friday.PerekSource.Should().Be("בראשית א - בראשית ג");
-        friday.AccessibilityText.Should().Contain("חזרה: בראשית א - בראשית ג");
+        friday.PerekSource.Should().Be("בראשית א-ג");
+        friday.AccessibilityText.Should().Contain("חזרה: בראשית א-ג");
         saturday.IsReview.Should().BeTrue();
-        saturday.PerekSource.Should().Be("בראשית א - בראשית ג");
+        saturday.PerekSource.Should().Be("בראשית א-ג");
+    }
+
+    [Fact]
+    public async Task MonthWeeks_MergeFridayAndSaturdayReviewIntoOneBlock()
+    {
+        // The canonical Cells list keeps one cell per date (#2365 keeps the
+        // daily assignments intact); MonthWeeks is the rendered layout.
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 4); // Tevet
+
+        var week = vm.MonthWeeks.Single(w =>
+            w.Cells.Any(c => c.DateNumber == 57750404));
+        var merged = week.Cells.Single(c => c.DateNumber == 57750404);
+        merged.Column.Should().Be(5);
+        merged.ColumnSpan.Should().Be(2);
+        merged.DayText.Should().Be(4.ToHebrewLetters());
+        merged.MergedDayText.Should().Be(5.ToHebrewLetters());
+        merged.PerekSource.Should().Be("בראשית א-ג");
+        merged.AccessibilityText.Should()
+            .Contain("יום שישי").And.Contain("שבת").And.Contain("חזרה: בראשית א-ג");
+        merged.MergedDayAccessibilityText.Should()
+            .StartWith("שבת").And.Contain("חזרה: בראשית א-ג");
+        // Saturday's standalone cell is folded into the merged block.
+        week.Cells.Should().NotContain(c => c.DateNumber == 57750405);
+        week.Cells.Should().HaveCount(6);
+    }
+
+    [Fact]
+    public async Task GroupedView_MiniMonthWeeksMergeTheReviewPair()
+    {
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+
+        var week = vm.MonthGroups
+            .SelectMany(g => g.Weeks)
+            .Single(w => w.Cells.Any(c => c.DateNumber == 57750404));
+        var merged = week.Cells.Single(c => c.DateNumber == 57750404);
+        merged.ColumnSpan.Should().Be(2);
+        merged.MergedDayText.Should().Be(5.ToHebrewLetters());
+        week.Cells.Should().NotContain(c => c.DateNumber == 57750405);
     }
 
     [Fact]
