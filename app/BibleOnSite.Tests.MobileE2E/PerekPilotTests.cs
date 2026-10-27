@@ -29,25 +29,27 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         Assert.NotEmpty(Page.FirstPasuk);
         AssertRegularReader();
-        var source = Page.WaitFor("PerekSource");
-        var sourceTop = source.Location.Y;
-        var sourceBottom = sourceTop + source.Size.Height;
+        // RenderedElements returns text and frame inside one lookup response —
+        // on iOS that spares a Location+Size round-trip pair per element.
+        var source = Page.RenderedElements("PerekSource").First();
+        var sourceTop = source.Frame.Location.Y;
+        var sourceBottom = sourceTop + source.Frame.Size.Height;
         Page.Tap("PerekSource");
-        var headerInput = Page.WaitFor("PerekSearchInput");
-        Assert.InRange(headerInput.Location.Y + headerInput.Size.Height / 2, sourceTop, sourceBottom);
+        var headerInput = Page.RenderedElements("PerekSearchInput").First();
+        Assert.InRange(headerInput.Frame.Location.Y + headerInput.Frame.Size.Height / 2, sourceTop, sourceBottom);
         Page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
         Page.WaitFor("RecentSearches");
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekHeader")), element => element.Displayed);
-        var searchPage = Page.WaitFor("SearchPanel");
+        Assert.Empty(Page.RenderedElements("PerekHeader"));
+        var searchPage = Page.RenderedElements("SearchPanel").First();
         var windowWidth = DriverTelemetry.WindowSize(Driver!).Width;
-        Assert.InRange(searchPage.Size.Width, windowWidth - 8, windowWidth);
+        Assert.InRange(searchPage.Frame.Size.Width, windowWidth - 8, windowWidth);
         SaveDiagnostics("SearchPageRecentSearches", "passed");
         Page.Tap("SearchKindsTab");
         Page.WaitFor("SearchKindPerek");
         Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         AssertBookGroupColumns();
-        Platform.RevealTrailingSearchChips(Driver);
+        Platform.RevealTrailingSearchChips(Driver!);
         Page.Tap("SearchClearAll");
         Page.WaitForHidden("SearchClearAll");
         Page.WaitFor("SearchKindsSummary", element => element.Text == "מה לחפש");
@@ -56,18 +58,18 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSortGeneration");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
-        var clear = Page.WaitFor("ClearSearchButton");
-        var input = Page.WaitFor("PerekSearchInput");
-        var navigation = Page.WaitFor("SearchNavigationButton");
-        Assert.True(clear.Location.X + clear.Size.Width <= input.Location.X, "The single clear button follows the text field in RTL.");
-        Assert.True(input.Location.X + input.Size.Width <= navigation.Location.X, "Back belongs at the right edge in RTL.");
-        Platform.Tap(Driver, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
+        var clear = Page.RenderedElements("ClearSearchButton").First();
+        var input = Page.RenderedElements("PerekSearchInput").First();
+        var navigation = Page.RenderedElements("SearchNavigationButton").First();
+        Assert.True(clear.Frame.Location.X + clear.Frame.Size.Width <= input.Frame.Location.X, "The single clear button follows the text field in RTL.");
+        Assert.True(input.Frame.Location.X + input.Frame.Size.Width <= navigation.Frame.Location.X, "Back belongs at the right edge in RTL.");
+        Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         AssertRegularReader();
-        Platform.GoBack(Driver);
+        Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
         Page.Tap("ClearSearchButton");
         Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
-        Platform.Tap(Driver, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
+        Platform.Tap(Driver!, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
@@ -99,12 +101,14 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         SearchFor("ויעש אלהים את הרקיע", "בראשית א ז");
         Page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
         SaveDiagnostics("FloatingSearchVerseResults", "passed");
-        var result = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
-            .First(element => element.Displayed && element.Text == "בראשית א ז");
-        Platform.Tap(Driver, result);
+        // One snapshot read carries every result's text — the previous
+        // FindElements + per-element Displayed/Text reads cost 2N+1 WDA calls.
+        var result = Page.RenderedElements("SearchResultTitle")
+            .First(element => element.Text == "בראשית א ז");
+        Platform.Tap(Driver!, result.Element);
         AssertRegularReader();
         Page.WaitFor("PasukText", element => element.Text.StartsWith("ז "));
-        Platform.GoBack(Driver);
+        Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
         SaveDiagnostics("FloatingSearchVerseReturn", "passed");
@@ -128,11 +132,14 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // CI ships the generation-matched index; this must be an ordinary local query.
-        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal));
+        // One snapshot read carries the result's text and frame — the live
+        // Text/Location getters it replaces each cost a WDA round-trip.
+        var commentary = Page.RenderedElements("SearchResultTitle")
+            .First(element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal));
         var title = commentary.Text;
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
-        var position = commentary.Location;
-        Platform.Tap(driver, commentary);
+        var position = commentary.Frame.Location;
+        Platform.Tap(driver, commentary.Element);
         AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
