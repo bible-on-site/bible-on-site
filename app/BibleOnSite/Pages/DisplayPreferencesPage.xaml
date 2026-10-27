@@ -42,7 +42,10 @@
                         </Grid>
                         <!-- Live preview: wraps and grows freely so the text stays
                              readable at the largest supported factor. -->
-                        <Label Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
+                        <!-- The preview verse renders through the same shared
+                             pasuk label as the readers (Taamey D, #2623) so
+                             the size preview is honest. -->
+                        <controls:PasukTextLabel Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
                                FontSize="{Binding FontFactor, Converter={StaticResource FontFactorToSizeConverter}}"
                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
                                LineBreakMode="WordWrap"

@@ -34,7 +34,9 @@
                             IsVisible="False"
                             Clicked="OnPlayClicked"/>
                 </Grid>
-                <Label x:Name="PasukTextLabel" AutomationId="FocusedPasukText"
+                <!-- PasukTextLabel carries the shared scripture face (Taamey D,
+                     #2623) and the reader's justification + size re-render. -->
+                <controls:PasukTextLabel x:Name="PasukTextLabel" AutomationId="FocusedPasukText"
                        FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
                 <Label x:Name="RecitationHintLabel" AutomationId="FocusedRecitationHint"
                        FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
