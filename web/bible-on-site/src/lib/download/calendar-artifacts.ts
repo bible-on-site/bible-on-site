@@ -24,7 +24,7 @@ import {
 	compareMonths,
 	getConfirmedCycleCount,
 	getCycle,
-	getCycleLabel,
+	getCycleRangeLabel,
 	getCycleStartMonth,
 	getMonthLabel,
 	getMonthName,
@@ -36,6 +36,7 @@ import {
 	type MonthRef,
 	nextMonth,
 } from "@/data/learning-schedule";
+import { SITE_NAME, SITE_ORIGIN } from "@/lib/seo/jsonld";
 import type { CalendarPdfInput, CalendarPdfMonth } from "./calendar-pdf";
 
 /** Projected cycles generated beyond the confirmed schedule data. */
@@ -303,18 +304,26 @@ function monthsForCycle(
 	/* istanbul ignore next -- the bound is defensive; endRef always lands first */
 	for (let guard = 0; guard < 50 && compareMonths(ref, endRef) <= 0; guard++) {
 		const cells = buildCachedMonth(ref.year, ref.month, cellsCache);
-		months.push({ title: getMonthLabel(ref), cells });
+		months.push({
+			title: getMonthLabel(ref),
+			year: ref.year,
+			month: ref.month,
+			cells,
+		});
 		ref = nextMonth(ref);
 	}
 	return months;
 }
 
 /**
- * Builds the renderer input for a canonical key — the same title, subtitle,
- * month cells and cycle dimming the legacy route produced. Returns null for
- * keys that parse but cannot be generated (e.g. a uniform month that does
- * not exist in that Hebrew year). Pass a shared `cellsCache` when building
- * many artifacts so repeated months are only computed once.
+ * Builds the renderer input for a canonical key — scope, the branded
+ * document title, subtitle, month cells and cycle dimming. The document
+ * title is the canonical branded string repeated by the running header and
+ * footer (#2727); month entries carry their structured year/month so the
+ * renderer can compose per-page range headings. Returns null for keys that
+ * parse but cannot be generated (e.g. a uniform month that does not exist
+ * in that Hebrew year). Pass a shared `cellsCache` when building many
+ * artifacts so repeated months are only computed once.
  */
 export function buildCalendarPdfInput(
 	key: string,
@@ -324,37 +333,49 @@ export function buildCalendarPdfInput(
 	if (!parsed || !isGeneratableArtifactKey(parsed)) {
 		return null;
 	}
+	// Scheduled perek sources link to the canonical public chapter pages.
+	const linkBase = `${SITE_ORIGIN}/929`;
 	switch (parsed.view) {
 		case "cycle": {
 			return {
-				title: "לוח לימוד יומי",
-				subtitle: getCycleLabel(getCycle(parsed.cycle)),
+				scope: "cycle",
+				title: `לוח לימוד יומי - מחזור ${parsed.cycle} - ${SITE_NAME}`,
+				subtitle: getCycleRangeLabel(getCycle(parsed.cycle)),
 				months: monthsForCycle(parsed.cycle, cellsCache),
 				dimmed: (day) => day.cycle !== parsed.cycle,
 				dayLabel,
+				linkBase,
 			};
 		}
 		case "year": {
 			return {
-				title: `לוח לימוד יומי - שנת ${getYearLabel(parsed.year)}`,
+				scope: "year",
+				title: `לוח לימוד יומי - שנת ${getYearLabel(parsed.year)} - ${SITE_NAME}`,
 				months: getMonthOrder(parsed.year).map((month) => ({
 					title: getMonthName(parsed.year, month),
+					year: parsed.year,
+					month,
 					cells: buildCachedMonth(parsed.year, month, cellsCache),
 				})),
 				dayLabel,
+				linkBase,
 			};
 		}
 		case "month": {
 			const ref: MonthRef = { year: parsed.year, month: parsed.month };
 			return {
-				title: `לוח לימוד יומי - ${getMonthLabel(ref)}`,
+				scope: "month",
+				title: `לוח לימוד יומי - ${getMonthLabel(ref)} - ${SITE_NAME}`,
 				months: [
 					{
 						title: getMonthLabel(ref),
+						year: parsed.year,
+						month: parsed.month,
 						cells: buildCachedMonth(parsed.year, parsed.month, cellsCache),
 					},
 				],
 				dayLabel,
+				linkBase,
 			};
 		}
 	}
