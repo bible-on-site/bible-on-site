@@ -238,8 +238,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var frame = System.Drawing.Rectangle.Empty;
         while (DateTime.UtcNow < deadline)
         {
-            // A single snapshot carries every visible candidate's text/frame;
-            // querying those properties separately costs 3N native round trips.
+            // Read cached row geometry without extra requests to the device.
             var row = Page.RenderedElements("SearchResultTitle")
                 .FirstOrDefault(element => element.Text.Contains(suffix, StringComparison.Ordinal));
             if (row.Element != null)
