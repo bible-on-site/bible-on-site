@@ -47,9 +47,9 @@ vi.mock("~/server/website-revalidate", () => ({
 	revalidateWebsite: driver.invalidate,
 }));
 vi.mock("~/server/tanahpedia/paths", () => ({
-	pediaInvalidationForEntities: driver.paths,
-	pediaInvalidationForEntryIds: driver.paths,
-	pediaInvalidationForPersons: driver.paths,
+	pediaChangesForEntities: driver.paths,
+	pediaChangesForEntryIds: driver.paths,
+	pediaChangesForPersons: driver.paths,
 }));
 
 // Use the real db.transaction and tx helpers; only the MySQL driver is replaced.

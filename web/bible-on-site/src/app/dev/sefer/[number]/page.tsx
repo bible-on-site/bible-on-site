@@ -8,27 +8,34 @@
  * without a full build step.
  */
 
-import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { getSeferByName, getPerekIdsForSefer } from "@/data/sefer-dto";
 import { getArticleSummariesByPerekId } from "@/lib/articles";
 import { getPerushimByPerekId } from "@/lib/perushim";
+import {
+	cachedPerKey,
+	COLLECTION_TAGS,
+	perekArticlesTag,
+	perekPerushimTag,
+} from "@/lib/revalidate/tags";
 
 import SeferDirect from "./SeferDirect";
 
 export const dynamic = "force-dynamic";
 
-const getCachedArticleSummaries = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{ tags: ["articles"], revalidate: false },
+const getCachedArticleSummaries = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{ tags: ["perushim"], revalidate: false },
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
 export default async function DevSeferPage({

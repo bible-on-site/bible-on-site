@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
@@ -10,6 +9,12 @@ import {
 	getAuthorById,
 	getAuthorByName,
 } from "../../../../lib/authors";
+import {
+	authorArticlesTag,
+	authorTag,
+	cachedPerKey,
+	COLLECTION_TAGS,
+} from "../../../../lib/revalidate/tags";
 import { authorPath, buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { JsonLd } from "../../../components/JsonLd";
@@ -49,27 +54,29 @@ async function resolveAuthor(
 }
 
 /**
- * Cache author data with on-demand revalidation support.
+ * Author data keyed by the URL param (normalised slug or legacy numeric
+ * id) with entity-scoped tags: an author change expires exactly the
+ * `author:{param}` entries that name it, not every author's page.
  */
-const getCachedAuthor = unstable_cache(
-	async (param: string) => resolveAuthor(param),
-	["author-by-param"],
-	{
-		tags: ["authors"],
-		revalidate: false,
-	},
+const getCachedAuthor = cachedPerKey(
+	"author-by-param",
+	(param: string) => param,
+	(key) => [COLLECTION_TAGS.authors, authorTag(key)],
+	(param: string) => resolveAuthor(param),
 );
 
 /**
  * Cache author's articles with on-demand revalidation support.
  */
-const getCachedAuthorArticles = unstable_cache(
-	async (authorId: number) => getArticlesByAuthorId(authorId),
-	["author-articles"],
-	{
-		tags: ["articles", "authors"],
-		revalidate: false,
-	},
+const getCachedAuthorArticles = cachedPerKey(
+	"author-articles",
+	(authorId: number) => String(authorId),
+	(key) => [
+		COLLECTION_TAGS.articles,
+		COLLECTION_TAGS.authors,
+		authorArticlesTag(Number(key)),
+	],
+	(authorId: number) => getArticlesByAuthorId(authorId),
 );
 
 export async function generateMetadata({
