@@ -18,6 +18,7 @@ import {
 	parseCalendarArtifactKey,
 	resolveCalendarArtifactRequest,
 } from "@/lib/download/calendar-artifacts";
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 
 describe("getCalendarArtifactBounds", () => {
 	it("covers the confirmed cycles plus the projected margin", () => {
@@ -277,22 +278,34 @@ describe("buildCalendarPdfInput", () => {
 	it("builds a month input matching the legacy route shape", () => {
 		const input = buildCalendarPdfInput("month:578512");
 		expect(input).not.toBeNull();
+		expect(input?.scope).toBe("month");
 		expect(input?.title).toContain("לוח לימוד יומי");
+		expect(input?.title).toContain('תנ"ך על הפרק');
 		expect(input?.months).toHaveLength(1);
+		expect(input?.months[0].year).toBe(5785);
+		expect(input?.months[0].month).toBe(12);
 		expect(input?.months[0].cells.length).toBeGreaterThan(28);
+		expect(input?.linkBase).toBe(`${SITE_ORIGIN}/929`);
 		expect(input?.dimmed).toBeUndefined();
 	});
 
 	it("builds a year input covering every month", () => {
 		const input = buildCalendarPdfInput("year:5784");
+		expect(input?.scope).toBe("year");
+		expect(input?.title).toContain("שנת");
+		expect(input?.title).toContain('תנ"ך על הפרק');
 		expect(input?.months.length).toBe(getMonthOrder(5784).length);
+		expect(input?.months[0].year).toBe(5784);
 		expect(input?.subtitle).toBeUndefined();
 	});
 
 	it("builds a cycle input with dimmed out-of-cycle days", () => {
 		const input = buildCalendarPdfInput("cycle:4");
 		expect(input).not.toBeNull();
-		expect(input?.subtitle).toContain("מחזור ד'");
+		expect(input?.scope).toBe("cycle");
+		expect(input?.title).toContain("מחזור ד'");
+		// Subtitle is the cycle's Hebrew date range, not the "מחזור ד'" label.
+		expect(input?.subtitle).toContain("-");
 		expect(input?.months.length).toBeGreaterThan(30);
 		const dimmed = input?.dimmed;
 		expect(typeof dimmed).toBe("function");
@@ -311,6 +324,13 @@ describe("buildCalendarPdfInput", () => {
 		if (outCycle?.day) {
 			expect(dimmed(outCycle.day)).toBe(true);
 		}
+	});
+
+	it("marks a projected cycle's range subtitle as estimated (#2727)", () => {
+		const projected = getConfirmedCycleCount() + 1;
+		const input = buildCalendarPdfInput(`cycle:${projected}`);
+		expect(input).not.toBeNull();
+		expect(input?.subtitle).toContain("(משוער)");
 	});
 
 	it("returns null for non-generatable keys", () => {

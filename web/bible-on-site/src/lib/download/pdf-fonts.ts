@@ -38,3 +38,25 @@ export function getBoldFontBytes(): Uint8Array {
 	if (!boldFontCache) boldFontCache = loadFont("FrankRuhlLibre-Bold.ttf");
 	return boldFontCache;
 }
+
+let logoCache: Uint8Array | null = null;
+
+/**
+ * The project's brand logo (the app's logo_header.jpg, vendored next to the
+ * fonts). JPEG embeds directly via pdf-lib — keeping it under download/ puts
+ * its bytes in the calendar-PDF render fingerprint, so a logo change
+ * invalidates the affected cached artifacts (#2727).
+ */
+export function getLogoBytes(): Uint8Array {
+	if (!logoCache) {
+		// Copy into a Uint8Array with its own ArrayBuffer — a pooled Node
+		// Buffer's .buffer can be larger than the file bytes, and pdf-lib's
+		// embedJpg reads it from offset 0 (Buffer pooling broke this in jest).
+		logoCache = new Uint8Array(
+			readFileSync(
+				resolve(process.cwd(), "src", "lib", "download", "logo_header.jpg"),
+			),
+		);
+	}
+	return logoCache;
+}
