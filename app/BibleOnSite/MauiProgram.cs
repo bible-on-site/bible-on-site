@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using CommunityToolkit.Maui;
 using Microsoft.Maui.LifecycleEvents;
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
@@ -36,6 +37,9 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
+                // The native pasuk face (#2623) — packaged offline via MauiFont
+                // (Resources\Fonts\*.ttf glob), license beside the file.
+                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.Family);
             })
             .ConfigureMauiHandlers(handlers =>
             {
