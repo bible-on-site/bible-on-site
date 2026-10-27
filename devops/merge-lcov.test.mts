@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { mergeLcovTexts } from "./merge-lcov.mts";
 
 const UNIT = `TN:
@@ -192,5 +197,61 @@ describe("mergeLcovTexts", () => {
 		assert.ok(out.includes("FNDA:0,boot"), out);
 		assert.ok(out.includes("FNF:1\nFNH:0\n"), out);
 		assert.ok(out.includes("DA:11,2"), out);
+	});
+
+	it("reports the foreign file blocks an untrusted input enumerated", () => {
+		// Dropped blocks lose their hits silently by design — the report
+		// surfaces them so an unexpected shape (new virtual chunk, a source
+		// the canonical layers stopped measuring) stays visible (#2707).
+		const dropped = new Set<string>();
+		mergeLcovTexts(
+			[UNIT, E2E],
+			"web/admin/",
+			[],
+			new Set([1]),
+			dropped,
+		);
+		// server.tsx is canonical; other.ts exists only in the untrusted input.
+		assert.deepEqual([...dropped], ["web/admin/src/other.ts"]);
+	});
+
+	it("reports no foreign files when the untrusted input stays inside the universe", () => {
+		const dropped = new Set<string>();
+		mergeLcovTexts(
+			[UNIT, UNIT],
+			"web/admin/",
+			[],
+			new Set([1]),
+			dropped,
+		);
+		assert.equal(dropped.size, 0);
+	});
+
+	it("is deterministic — identical inputs merge to identical output", () => {
+		const first = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
+		const second = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
+		assert.equal(first, second);
+	});
+
+	it("fails the CLI when a --require input is missing", () => {
+		const script = fileURLToPath(new URL("./merge-lcov.mts", import.meta.url));
+		const out = join(mkdtempSync(join(tmpdir(), "lcov-")), "merged.info");
+		assert.throws(
+			() =>
+				execFileSync(
+					process.execPath,
+					[script, "--out", out, "--require", "does-not-exist/lcov.info"],
+					{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+				),
+			(error) => {
+				const err = error as { status?: number; stderr?: string };
+				assert.equal(err.status, 1);
+				assert.match(
+					String(err.stderr),
+					/Required coverage input\(s\) missing:[\s\S]*does-not-exist\/lcov\.info/,
+				);
+				return true;
+			},
+		);
 	});
 });

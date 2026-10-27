@@ -1,0 +1,404 @@
+/**
+ * @jest-environment node
+ *
+ * Visual bidi regression for the learning-calendar PDF (issue #2620).
+ *
+ * Generates a real PDF with the production Frank Ruhl fonts and inspects
+ * the emitted content stream: every text-show op's glyph codes are decoded
+ * back to Unicode through the embedded ToUnicode CMap. The decoded sequence
+ * is the visual order a renderer paints — it must equal the bidi-reordered
+ * (UAX #9) form of the logical string, which for pure Hebrew is a plain
+ * character reversal.
+ *
+ * Before the fix, `reverseGraphemes` pre-reversed text while fontkit also
+ * reverses RTL glyph runs during layout, so the stream held logical order —
+ * every label painted backwards.
+ */
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
+import bidiFactory from "bidi-js";
+import {
+	buildMonth,
+	getCycle,
+	getCycleLabel,
+	getMonthLabel,
+	getPerekSource,
+	type CalendarDay,
+	type MonthCell,
+} from "@/data/learning-schedule";
+import {
+	type CalendarPdfInput,
+	type CalendarPdfMonth,
+	generateCalendarPdf,
+} from "@/lib/download/calendar-pdf";
+
+const bidi = bidiFactory();
+
+/* ─────────────── PDF content-stream extraction helpers ─────────────── */
+
+interface TextOp {
+	/** Decoded via the font's embedded ToUnicode CMap — the searchable text. */
+	text: string;
+	/** Glyph ids as encoded in the content stream (subset-safe). */
+	codes: number[];
+	x: number;
+	y: number;
+	fontName: string;
+}
+
+function latin1(bytes: Uint8Array): string {
+	let out = "";
+	for (const b of bytes) out += String.fromCharCode(b);
+	return out;
+}
+
+/** Parse `beginbfchar`/`beginbfrange` blocks of a ToUnicode CMap stream. */
+function parseToUnicodeCMap(cmap: string): Map<number, string> {
+	const map = new Map<number, string>();
+	const dstString = (hex: string) => {
+		let s = "";
+		for (let i = 0; i + 4 <= hex.length; i += 4) {
+			s += String.fromCodePoint(parseInt(hex.slice(i, i + 4), 16));
+		}
+		return s;
+	};
+	for (const block of cmap.matchAll(/beginbfchar\s*([\s\S]*?)\s*endbfchar/g)) {
+		for (const m of block[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+			map.set(parseInt(m[1], 16), dstString(m[2]));
+		}
+	}
+	for (const block of cmap.matchAll(/beginbfrange\s*([\s\S]*?)\s*endbfrange/g)) {
+		for (const m of block[1].matchAll(
+			/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g,
+		)) {
+			const from = parseInt(m[1], 16);
+			const to = parseInt(m[2], 16);
+			const dst = parseInt(m[3], 16);
+			for (let c = from; c <= to; c++) {
+				map.set(c, String.fromCodePoint(dst + (c - from)));
+			}
+		}
+	}
+	return map;
+}
+
+function lookupDict(doc: PDFDocument, obj: unknown): PDFDict | undefined {
+	const resolved = doc.context.lookup(obj as never);
+	return resolved instanceof PDFDict ? resolved : undefined;
+}
+
+/**
+ * Decode every page's content stream into ordered text-show ops.
+ * Positions come from the text matrix (Tm) / text-move (Td) ops.
+ */
+async function extractTextOps(pdf: Uint8Array): Promise<TextOp[][]> {
+	const doc = await PDFDocument.load(pdf);
+	const pages: TextOp[][] = [];
+
+	for (const page of doc.getPages()) {
+		// Per-resource-name ToUnicode maps.
+		const cmaps = new Map<string, Map<number, string>>();
+		const fonts = lookupDict(
+			doc,
+			page.node.Resources()?.lookup(PDFName.of("Font")),
+		);
+		for (const [name, ref] of fonts?.entries() ?? []) {
+			const fontDict = lookupDict(doc, ref);
+			const toUnicode = fontDict?.lookup(PDFName.of("ToUnicode"));
+			const stream = doc.context.lookup(toUnicode as never);
+			if (stream instanceof PDFRawStream) {
+				cmaps.set(
+					name.asString().replace(/^\//, ""),
+					parseToUnicodeCMap(latin1(decodePDFRawStream(stream).decode())),
+				);
+			}
+		}
+
+		// Concatenate all content streams.
+		const contents = page.node.Contents();
+		const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
+		let streamText = "";
+		for (const ref of refs) {
+			const raw = doc.context.lookup(ref as never);
+			if (raw instanceof PDFRawStream) {
+				streamText += latin1(decodePDFRawStream(raw).decode());
+			}
+		}
+
+		// Token scan: font selection, text matrix/move, hex strings in Tj/TJ.
+		const ops: TextOp[] = [];
+		let fontName = "";
+		let x = 0;
+		let y = 0;
+		const opRe =
+			/\/(\S+)\s+[\d.]+\s+Tf|(-?[\d.]+)\s+(-?[\d.]+)\s+Td|-?[\d.]+\s+-?[\d.]+\s+-?[\d.]+\s+-?[\d.]+\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm|<([0-9A-Fa-f]+)>\s*Tj|\[([^\]]*)\]\s*TJ/g;
+		for (const m of streamText.matchAll(opRe)) {
+			if (m[1] !== undefined) {
+				fontName = m[1];
+			} else if (m[2] !== undefined) {
+				x += Number(m[2]);
+				y += Number(m[3]);
+			} else if (m[4] !== undefined) {
+				x = Number(m[4]);
+				y = Number(m[5]);
+			} else {
+				const hexes = m[6] ? [m[6]] : [...(m[7] ?? "").matchAll(/<([0-9A-Fa-f]+)>/g)].map((h) => h[1]);
+				const cmap = cmaps.get(fontName) ?? new Map<number, string>();
+				const codes: number[] = [];
+				let text = "";
+				for (const hex of hexes) {
+					for (let i = 0; i + 4 <= hex.length; i += 4) {
+						const code = parseInt(hex.slice(i, i + 4), 16);
+						codes.push(code);
+						text += cmap.get(code) ?? "";
+					}
+				}
+				ops.push({ text, codes, x, y, fontName });
+			}
+		}
+		pages.push(ops);
+	}
+	return pages;
+}
+
+/** Ops on one baseline, in left-to-right paint order. */
+function opsAtY(ops: TextOp[], y: number): TextOp[] {
+	return ops.filter((o) => Math.abs(o.y - y) < 0.5).sort((a, b) => a.x - b.x);
+}
+
+/** UAX #9 visual-order oracle for a logical string. */
+function visualOrder(logical: string): string {
+	return bidi.getReorderedString(logical, bidi.getEmbeddingLevels(logical, "auto"));
+}
+
+/* ───────────────────────────── fixtures ───────────────────────────── */
+
+function scheduleDay(over: Partial<CalendarDay>): CalendarDay {
+	return { day: 1, status: "study", perekId: 1, ...over } as CalendarDay;
+}
+
+function cellsForDays(days: CalendarDay[]): MonthCell[] {
+	return days.map((day) => ({ day }));
+}
+
+const STUDY = scheduleDay({ day: 1, perekId: 1 });
+const REVIEW = scheduleDay({
+	day: 2,
+	status: "review",
+	perekId: 7,
+	reviewPerekIds: [3, 4, 5, 6, 7],
+});
+const UNNUMBERED = scheduleDay({ day: 14, status: "none", perekId: undefined });
+
+async function generateAndExtract(input: CalendarPdfInput): Promise<TextOp[][]> {
+	return extractTextOps(await generateCalendarPdf(input));
+}
+
+/* ────────────────────────────── tests ─────────────────────────────── */
+
+describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
+	it("draws the document title in visual RTL glyph order", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח לימוד יומי",
+			months: [{ title: "אלול ה'תשפה", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => "",
+		});
+		const texts = pages[0].map((o) => o.text);
+		// Visual order of "לוח לימוד יומי" is "ימוי דומיל חול".
+		expect(texts).toContain("ימוי דומיל חול");
+	});
+
+	it("draws weekday labels in visual order, not logical order", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => "",
+		});
+		const texts = pages[0].map((o) => o.text);
+		expect(texts).toContain("ישילש"); // שלישי
+		expect(texts).toContain("ןושאר"); // ראשון
+		expect(texts).toContain("תבש"); // שבת
+		expect(texts).not.toContain("שלישי");
+	});
+
+	it("draws multi-letter Hebrew day numbers in visual order", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([UNNUMBERED]) }],
+			dayLabel: () => "",
+		});
+		const texts = pages[0].map((o) => o.text);
+		// Day 14 → toLetters(14, addQuotes) = 'י"ד' → visual 'ד"י'.
+		expect(texts).toContain('ד"י');
+	});
+
+	it("draws perek sources and review ranges in visual order", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
+			dayLabel: (day) =>
+				day.status === "review" && day.reviewPerekIds
+					? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
+					: getPerekSource(day.perekId ?? 1),
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		// "בראשית א" → visual "א תישארב".
+		expect(texts).toContain("א תישארב");
+		// Review range "בראשית ג - בראשית ז" → visual "ז תישארב - ג תישארב".
+		expect(texts).toContain("ז תישארב - ג תישארב");
+	});
+
+	it("keeps digits and Latin tokens un-reversed inside RTL text", async () => {
+		const subtitle = "מחזור 12: שלב א (בדיקה) end";
+		const pages = await generateAndExtract({
+			title: "לוח",
+			subtitle,
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => "",
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		expect(texts).toContain("12");
+		expect(texts).not.toContain("21");
+		expect(texts).toContain("end");
+		// Mirrored parens: "(בדיקה)" in an RTL run renders '(' at the left and
+		// ')' at the right — decoded extraction shows the mirrored glyphs.
+		expect(texts).toContain("(הקידב)");
+	});
+
+	it("positions subtitle runs in exact UAX #9 visual order", async () => {
+		const subtitle = "מחזור 4: כ״ה אדר ה'תשפ״ה - כ״ד אדר ה'תשצ״ו";
+		const pages = await generateAndExtract({
+			title: "לוח לימוד יומי",
+			subtitle,
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => "",
+		});
+		// Find the subtitle baseline: the op containing the cycle digits.
+		const digitOp = pages[0].find((o) => o.text === "4");
+		expect(digitOp).toBeDefined();
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above
+		const line = opsAtY(pages[0], digitOp!.y).map((o) => o.text).join("");
+		expect(line).toBe(visualOrder(subtitle));
+	});
+
+	it("renders a real full-cycle page with correct visual order", async () => {
+		const month = getCycleStartMonthLabel();
+		const pages = await generateAndExtract({
+			title: "לוח לימוד יומי",
+			subtitle: getCycleLabel(getCycle(4)),
+			months: [month],
+			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		expect(texts).toContain("ימוי דומיל חול");
+		expect(texts).toContain(visualOrder(month.title));
+	});
+});
+
+function getCycleStartMonthLabel(): CalendarPdfMonth {
+	const cycle = getCycle(4);
+	const ref = {
+		year: cycle.start.year,
+		month: cycle.start.getUniformMonth(),
+	};
+	return { title: getMonthLabel(ref), cells: buildMonth(ref.year, ref.month) };
+}
+
+describe("calendar PDF text stays searchable", () => {
+	it("maps every drawn glyph to Unicode via ToUnicode CMaps", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח לימוד יומי",
+			subtitle: "מחזור 4",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => "",
+		});
+		const ops = pages[0].filter((o) => o.codes.length > 0);
+		expect(ops.length).toBeGreaterThan(0);
+		for (const op of ops) {
+			// Every code resolves to a real codepoint — no notdef/tofu mapping.
+			expect(op.text.length).toBeGreaterThan(0);
+		}
+		// The title's letters are all extractable (searchable), in visual order.
+		const title = pages[0].find((o) => o.text.includes("ימוי"));
+		expect(title).toBeDefined();
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above
+		expect([...title!.text].sort()).toEqual([..."ימוי דומיל חול"].sort());
+	});
+});
+
+describe("layout edge cases (#2608)", () => {
+	it("truncates an over-wide day label to the cell width", async () => {
+		// fitText keeps the longest prefix that still fits CELL_W - 6.
+		const longLabel = "בראשית א ב ג ד ה ו ז ח ט י יא יב יג יד טו טז";
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => longLabel,
+		});
+		const full = visualOrder(longLabel);
+		const texts = pages[0].map((o) => o.text);
+		expect(texts).not.toContain(full);
+		// Pure-Hebrew visual order reverses the string, so the surviving
+		// logical prefix lands as a suffix of the fully-rendered form.
+		expect(
+			texts.some(
+				(t) => t.length > 1 && t.length < full.length && full.endsWith(t),
+			),
+		).toBe(true);
+	});
+
+	it("starts a new page when the next month grid does not fit", async () => {
+		const month: CalendarPdfMonth = {
+			title: "אלול",
+			cells: Array.from({ length: 42 }, () => ({})),
+		};
+		const pages = await extractTextOps(
+			await generateCalendarPdf({
+				title: "לוח",
+				months: Array.from({ length: 6 }, () => month),
+				dayLabel: () => "",
+			}),
+		);
+		expect(pages.length).toBeGreaterThan(1);
+		// The footer pass numbers every produced page.
+		expect(pages[1].map((o) => o.text)).toContain("2");
+	});
+
+	it("dims days flagged by the dimmed predicate and skips their labels", async () => {
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
+			dimmed: (day) => day.day === 2,
+			dayLabel: (day) =>
+				day.status === "review" && day.reviewPerekIds
+					? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
+					: getPerekSource(day.perekId ?? 1),
+		});
+		const texts = pages[0].map((o) => o.text).join("");
+		// The study day's perek label still renders…
+		expect(texts).toContain("א תישארב");
+		// …but the dimmed review day's range label is skipped entirely.
+		expect(texts).not.toContain("ז תישארב - ג תישארב");
+	});
+});
+
+describe("deterministic output (#2608)", () => {
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it("produces byte-identical PDFs regardless of wall-clock time", async () => {
+		// The artifact pipeline content-addresses objects by sha256 — the
+		// render must not embed CreationDate/ModDate or any other timestamp.
+		const input: CalendarPdfInput = {
+			title: "לוח לימוד יומי",
+			subtitle: "מחזור 4",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
+			dayLabel: () => "א",
+		};
+		jest.useFakeTimers().setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		const first = await generateCalendarPdf(input);
+		jest.setSystemTime(new Date("2031-06-15T12:34:56Z"));
+		const second = await generateCalendarPdf(input);
+		expect(Buffer.from(first).equals(Buffer.from(second))).toBe(true);
+	});
+});

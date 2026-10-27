@@ -60,7 +60,7 @@ public class AppFixture : IAsyncLifetime
             var baseDir = Path.GetDirectoryName(typeof(AppFixture).Assembly.Location)
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
             // Go up 6 levels (win-x64 -> net10.0... -> Debug -> bin -> BibleOnSite.Tests.E2E -> app) then into web/api
-            return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
+            return Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
         }
     }
 
@@ -77,8 +77,8 @@ public class AppFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
 
             // Navigate from test output to app output (go up to app/, then into BibleOnSite/bin/...)
-            var appDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
-            var exePath = Path.Combine(appDir, "BibleOnSite.exe");
+            var appDir = Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
+            var exePath = Path.Join(appDir, "BibleOnSite.exe");
 
             if (!File.Exists(exePath))
             {
@@ -185,7 +185,7 @@ public class AppFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        SetProcessDPIAware();
+        SetProcessDPIAware(); //NOSONAR — process DPI awareness has no managed API; synthetic-input coordinates must map to physical pixels.
         _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
@@ -207,7 +207,7 @@ public class AppFixture : IAsyncLifetime
         await Task.Delay(1000); // Give time for processes to fully terminate
 
         // Start the application using dotnet run (which handles Windows App SDK properly)
-        var projectDir = Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
+        var projectDir = Path.GetFullPath(Path.Join(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
         var startInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
@@ -233,41 +233,17 @@ public class AppFixture : IAsyncLifetime
             throw new InvalidOperationException("Failed to start dotnet run process");
         }
 
-        // Wait for the app to start and initialize
-        await Task.Delay(8000); // Give app more time to compile if needed and fully initialize
-
-        // Find the actual BibleOnSite.exe process that dotnet run started
+        // dotnet run evaluates the project even with --no-build, so the app
+        // process can spawn seconds after the launcher returns on a loaded
+        // host. Poll for it instead of sampling a fixed point after 8s —
+        // keeping the original combined budget: 8s spawn grace followed by
+        // the 60s window wait below now share one deadline.
+        var startupDeadline = DateTime.UtcNow.AddSeconds(8 + 60);
         Process? targetProcess = null;
-        var processes = Process.GetProcessesByName("BibleOnSite");
-
-        Console.WriteLine($"Found {processes.Length} BibleOnSite processes");
-
-        foreach (var proc in processes)
+        Process? fallback = null;
+        while (targetProcess == null && DateTime.UtcNow < startupDeadline)
         {
-            try
-            {
-                proc.Refresh();
-                if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (proc.MainWindowHandle != IntPtr.Zero)
-                {
-                    Console.WriteLine($"Process {proc.Id} has a main window");
-                    targetProcess = proc;
-                    break;
-                }
-            }
-            catch
-            {
-                // Skip processes that can't be queried
-            }
-        }
-
-        // If no process with window found, try to use the first one that hasn't exited
-        if (targetProcess == null)
-        {
+            var processes = Process.GetProcessesByName("BibleOnSite");
             foreach (var proc in processes)
             {
                 try
@@ -278,18 +254,49 @@ public class AppFixture : IAsyncLifetime
                         continue;
                     }
 
-                    if (!proc.HasExited)
+                    if (proc.MainWindowHandle != IntPtr.Zero)
                     {
-                        Console.WriteLine($"Using process {proc.Id} (no window handle but still running)");
+                        Console.WriteLine($"Process {proc.Id} has a main window");
                         targetProcess = proc;
                         break;
+                    }
+
+                    if (!proc.HasExited)
+                    {
+                        // Prefer the latest alive match — an earlier
+                        // fallback may exit while another instance stays.
+                        fallback = proc;
                     }
                 }
                 catch
                 {
-                    // Skip
+                    // Skip processes that can't be queried
                 }
             }
+
+            // Release every snapshot handle except the selected ones.
+            foreach (var proc in processes)
+            {
+                if (!ReferenceEquals(proc, targetProcess) && !ReferenceEquals(proc, fallback))
+                {
+                    proc.Dispose();
+                }
+            }
+
+            if (targetProcess == null)
+            {
+                await Task.Delay(500);
+            }
+        }
+
+        if (targetProcess == null && fallback is { HasExited: false })
+        {
+            Console.WriteLine($"Using process {fallback.Id} (no window handle but still running)");
+            targetProcess = fallback;
+        }
+        else if (!ReferenceEquals(fallback, targetProcess))
+        {
+            fallback?.Dispose();
         }
 
         if (targetProcess == null)
@@ -300,10 +307,11 @@ public class AppFixture : IAsyncLifetime
         // Attach FlaUI to the BibleOnSite process (not the dotnet process)
         _app = Application.Attach(targetProcess.Id);
 
-        // Wait for main window to be available (startup can be slow on first run)
-        var timeout = DateTime.UtcNow.AddSeconds(60);
+        // Wait for main window to be available (startup can be slow on first
+        // run). This shares the startup deadline: process discovery simply
+        // started earlier than the old fixed 8s sample allowed.
         Exception? lastException = null;
-        while (DateTime.UtcNow < timeout)
+        while (DateTime.UtcNow < startupDeadline)
         {
             try
             {
@@ -339,7 +347,7 @@ public class AppFixture : IAsyncLifetime
         }
 
         throw new InvalidOperationException(
-            "Main window not found after 60 seconds.",
+            "Main window not found within the 68-second startup window.",
             lastException);
     }
 
@@ -369,7 +377,7 @@ public class AppFixture : IAsyncLifetime
             // Cargo can detach its API child before the launcher exits.
             if (_weStartedApi)
             {
-                var executable = Path.Combine(ApiDirectory, "target", "debug", "api.exe");
+                var executable = Path.Join(ApiDirectory, "target", "debug", "api.exe");
                 foreach (var process in Process.GetProcessesByName("api"))
                 {
                     using (process)
@@ -391,9 +399,12 @@ public class AppFixture : IAsyncLifetime
         }
         finally
         {
-            _automation?.Dispose();
-            _appProcess?.Dispose();
-            _apiProcess?.Dispose();
+            // `using var` aliases keep the field lifetimes spanning
+            // Initialize/Dispose while disposing in the original order:
+            // automation, then app process, then API process.
+            using var apiProcess = _apiProcess;
+            using var appProcess = _appProcess;
+            using var automation = _automation;
         }
     }
 
@@ -450,24 +461,24 @@ public class AppFixture : IAsyncLifetime
     }
 
     [DllImport("user32.dll")]
-    private static extern bool SetProcessDPIAware();
+    private static extern bool SetProcessDPIAware(); //NOSONAR — DPI awareness has no managed equivalent.
     [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
+    private static extern IntPtr GetForegroundWindow(); //NOSONAR — no managed API reports the foreground HWND; UIA focus is not the same check.
     [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(Point point);
+    private static extern IntPtr WindowFromPoint(Point point); //NOSONAR — HWND hit-testing is Win32-only; UIA FromPoint can return a child element instead of the covering window.
     [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId); //NOSONAR — HWND→PID mapping has no managed API.
 
     private void AssertOwnedWindow(IntPtr window)
     {
-        GetWindowThreadProcessId(window, out var processId);
+        GetWindowThreadProcessId(window, out var processId); //NOSONAR — HWND→PID mapping has no managed API.
         if (processId != App.ProcessId)
         {
             throw new InvalidOperationException("Native gesture tests require an isolated desktop with BibleOnSite in the foreground. No input was sent.");
         }
     }
 
-    public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow());
+    public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow()); //NOSONAR — foreground HWND lookup has no managed equivalent.
 
     /// <summary>Fail before synthetic input if another app covers the test window.</summary>
     public void Click(AutomationElement element) => Click(element, MouseButton.Left, false);
@@ -485,7 +496,7 @@ public class AppFixture : IAsyncLifetime
             var bounds = element.BoundingRectangle;
             point = new Point((int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2));
         }
-        AssertOwnedWindow(WindowFromPoint(point));
+        AssertOwnedWindow(WindowFromPoint(point)); //NOSONAR — HWND hit-testing has no managed equivalent; the ownership guard must see the covering window, not a UIA child.
         if (doubleClick)
         {
             Mouse.DoubleClick(point);

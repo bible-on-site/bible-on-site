@@ -104,4 +104,66 @@ public class ChapterSearchTests
         hits.Single(h => h.Title == "בראשית").SubtitleHtml.Should().BeEmpty();
         hits.Single(h => h.Title == "תורה").SubtitleHtml.Should().NotBeEmpty();
     }
+
+    [Fact]
+    public async Task CanceledQueuedSearch_DoesNotClearTheCurrentResults()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,929)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL)");
+        var vm = new SearchViewModel(new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object))) { SearchPhrase = "בראשיט 1" };
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
+        var result = vm.SearchResults.Should().ContainSingle().Subject;
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+
+        await vm.SearchAsync(canceled.Token);
+
+        vm.SearchResults.Should().ContainSingle().Which.Should().BeSameAs(result);
+        vm.IsLoading.Should().BeFalse();
+        vm.ErrorMessage.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CanceledQueuedSearch_DoesNotCancelTheNewerInFlightSearch()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,929)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL)");
+        var data = new GatedPerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        var vm = new SearchViewModel(data) { SearchPhrase = "בראשיט 1" };
+        var current = vm.SearchAsync(TestContext.Current.CancellationToken);
+        vm.IsLoading.Should().BeTrue();
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        try
+        {
+            await vm.SearchAsync(canceled.Token);
+            vm.IsLoading.Should().BeTrue();
+            current.IsCompleted.Should().BeFalse();
+        }
+        finally
+        {
+            data.Ready.SetResult();
+            // LoadAsync is shared work and outlives cancellation of its waiter.
+            await data.LoadAsync();
+            await current;
+        }
+        vm.SearchResults.Should().ContainSingle().Which.Title.Should().Be("בראשית א");
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    private sealed class GatedPerekDataService(LocalDatabaseService database) : PerekDataService(database)
+    {
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async Task LoadAsync()
+        {
+            await Ready.Task;
+            await base.LoadAsync();
+        }
+    }
+
 }

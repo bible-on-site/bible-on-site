@@ -23,6 +23,7 @@ const PARASHA_VIEW_PARAMS = [
 	"haftara",
 	"reading",
 	"scheme",
+	"variant",
 ] as const;
 
 /**

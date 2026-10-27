@@ -11,7 +11,9 @@ RUN bun install --frozen-lockfile --prefer-offline --ignore-scripts
 FROM base AS builder
 WORKDIR /app/admin
 COPY --from=deps /app/node_modules ./node_modules
+# Copy the main app and shared dependencies (maintaining ../shared import structure)
 COPY admin/ ./
+COPY shared/ ../shared/
 
 ENV NODE_ENV=production
 RUN bun run build

@@ -5,23 +5,26 @@
  * Hebrew month headings, weekday labels, day numbers and perek references —
  * reusing the Frank Ruhl fonts + RTL helpers from tanach-pdf.
  *
- * pdf-lib draws LTR only: every Hebrew string is grapheme-reversed and each
- * grid column is laid out right-to-left (column 0 = rightmost).
+ * pdf-lib draws LTR only, so each string is split into bidi visual runs and
+ * drawn left-to-right (see bidi-text.ts); grid columns are laid out
+ * right-to-left (column 0 = rightmost).
  */
-
-import type { PDFFont, PDFPage } from "pdf-lib";
-import { PDFDocument, rgb } from "pdf-lib";
 
 // biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error fails in production build (unused directive) so we must use @ts-ignore
 // @ts-ignore — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
 import * as _fontkit from "@pdf-lib/fontkit";
 import { toLetters } from "gematry";
+import type { PDFFont, PDFPage } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import type { MonthCell } from "@/data/learning-schedule";
 import {
-	getBoldFontBytes,
-	getRegularFontBytes,
-	reverseGraphemes,
-} from "./tanach-pdf";
+	bidiRunsWidth,
+	bidiTextWidth,
+	drawBidiRuns,
+	memoizeGlyphEncoding,
+	visualTextRuns,
+} from "./bidi-text";
+import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
 
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
@@ -66,39 +69,60 @@ function drawRtlCentered(
 	y: number,
 	color: typeof INK,
 ): void {
-	const visual = reverseGraphemes(text);
-	const width = font.widthOfTextAtSize(visual, size);
-	page.drawText(visual, {
-		x: centerX - width / 2,
-		y,
-		size,
-		font,
-		color,
-	});
+	// One UAX #9 pass per label — reused for both width and draw.
+	const runs = visualTextRuns(text);
+	const width = bidiRunsWidth(font, runs, size);
+	drawBidiRuns(page, runs, font, size, centerX - width / 2, y, color);
 }
 
 function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
-	let out = text;
-	while (
-		out.length > 1 &&
-		font.widthOfTextAtSize(reverseGraphemes(out), size) > maxWidth
-	) {
-		out = out.slice(0, -1);
+	if (bidiTextWidth(font, text, size) <= maxWidth) {
+		return text;
 	}
-	return out;
+	// Longest prefix that still fits — binary search keeps this O(log n)
+	// shaping passes instead of one per truncated character.
+	let lo = 1;
+	let hi = text.length - 1;
+	let best = 1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		const candidate = text.slice(0, mid);
+		if (bidiTextWidth(font, candidate, size) <= maxWidth) {
+			best = mid;
+			lo = mid + 1;
+		} else {
+			hi = mid - 1;
+		}
+	}
+	return text.slice(0, best);
 }
+
+/**
+ * Fixed document metadata date. Calendar PDFs are pre-generated artifacts
+ * addressed by content hash (#2608), so rendering must be byte-deterministic:
+ * pdf-lib otherwise stamps CreationDate/ModDate with wall-clock time.
+ */
+const FIXED_METADATA_DATE = new Date("2020-01-01T00:00:00.000Z");
 
 /**
  * Renders the given months to a single-column flow of month grids.
  * Returns raw PDF bytes.
+ *
+ * Deterministic: `updateMetadata: false` keeps save() from restamping the
+ * info dict, and the document dates are fixed constants — identical inputs
+ * yield identical bytes on any machine.
  */
 export async function generateCalendarPdf(
 	input: CalendarPdfInput,
 ): Promise<Uint8Array> {
-	const doc = await PDFDocument.create();
+	const doc = await PDFDocument.create({ updateMetadata: false });
+	doc.setProducer("bible-on-site calendar-pdf");
+	doc.setCreator("bible-on-site");
+	doc.setCreationDate(FIXED_METADATA_DATE);
+	doc.setModificationDate(FIXED_METADATA_DATE);
 	doc.registerFontkit(fontkit);
-	const font = await doc.embedFont(getRegularFontBytes());
-	const bold = await doc.embedFont(getBoldFontBytes());
+	const font = memoizeGlyphEncoding(await doc.embedFont(getRegularFontBytes()));
+	const bold = memoizeGlyphEncoding(await doc.embedFont(getBoldFontBytes()));
 
 	let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 	let y = PAGE_HEIGHT - MARGIN;
@@ -114,15 +138,7 @@ export async function generateCalendarPdf(
 	drawRtlCentered(page, input.title, bold, 18, PAGE_WIDTH / 2, y, INK);
 	if (input.subtitle) {
 		y -= 16;
-		drawRtlCentered(
-			page,
-			input.subtitle,
-			font,
-			11,
-			PAGE_WIDTH / 2,
-			y,
-			MUTED,
-		);
+		drawRtlCentered(page, input.subtitle, font, 11, PAGE_WIDTH / 2, y, MUTED);
 	}
 	y -= 18;
 

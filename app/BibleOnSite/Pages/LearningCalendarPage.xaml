@@ -35,7 +35,7 @@
                    FontSize="20"
                    VerticalOptions="Center"
                    HorizontalOptions="Start"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource AccentOnDark}}"/>
         </Grid>
     </Shell.TitleView>
 
@@ -53,6 +53,15 @@
             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
             <Setter Property="HeightRequest" Value="44"/>
         </Style>
+        <!-- Unselected view-toggle state: quiet surface so the active segment's
+             Primary fill reads as the selected option in both themes. -->
+        <Style x:Key="CalendarToggleButton" TargetType="Button">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HeightRequest" Value="38"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
+        </Style>
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="8">
@@ -61,9 +70,7 @@
         <Grid Grid.Row="0" ColumnDefinitions="*,*,*" ColumnSpacing="4" Margin="0,0,0,4">
             <Button Grid.Column="0"
                     Text="חודשי"
-                    FontSize="14"
-                    HeightRequest="38"
-                    Padding="8,0"
+                    Style="{StaticResource CalendarToggleButton}"
                     AutomationId="CalendarViewMonth"
                     SemanticProperties.Description="תצוגה חודשית"
                     Command="{Binding SetViewModeCommand}"
@@ -79,9 +86,7 @@
             </Button>
             <Button Grid.Column="1"
                     Text="שנתי"
-                    FontSize="14"
-                    HeightRequest="38"
-                    Padding="8,0"
+                    Style="{StaticResource CalendarToggleButton}"
                     AutomationId="CalendarViewYear"
                     SemanticProperties.Description="תצוגה שנתית"
                     Command="{Binding SetViewModeCommand}"
@@ -97,9 +102,7 @@
             </Button>
             <Button Grid.Column="2"
                     Text="מחזור מלא"
-                    FontSize="14"
-                    HeightRequest="38"
-                    Padding="8,0"
+                    Style="{StaticResource CalendarToggleButton}"
                     AutomationId="CalendarViewCycle"
                     SemanticProperties.Description="תצוגת מחזור מלא"
                     Command="{Binding SetViewModeCommand}"
@@ -222,7 +225,7 @@
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsToday}"
                                          Value="True">
-                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                 <Setter Property="StrokeThickness" Value="2"/>
                             </DataTrigger>
                             <DataTrigger TargetType="Border"
@@ -258,7 +261,7 @@
                                        LineBreakMode="TailTruncation"
                                        MaxLines="2"
                                        HorizontalTextAlignment="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                 <Label Text="חזרה"
                                        FontSize="9"
                                        FontAttributes="Bold"
@@ -288,13 +291,13 @@
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                         <Grid ColumnDefinitions="*,*,*,*,*,*,*">
-                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" AutomationId="MiniMonthWeekday" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                         </Grid>
                         <!-- Week rows of plain layout cells: a nested CollectionView per
                              mini-month spun up a whole adapter/recycler per section and
@@ -315,6 +318,7 @@
                                                     Padding="0"
                                                     HeightRequest="24"
                                                     Grid.Column="{Binding Column}"
+                                                    AutomationId="MiniMonthDay"
                                                     StrokeShape="RoundRectangle 4"
                                                     Stroke="Transparent"
                                                     StrokeThickness="1"
@@ -327,7 +331,7 @@
                                                     <DataTrigger TargetType="Border"
                                                                  Binding="{Binding IsToday}"
                                                                  Value="True">
-                                                        <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                                        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                                         <Setter Property="StrokeThickness" Value="2"/>
                                                     </DataTrigger>
                                                     <DataTrigger TargetType="Border"
@@ -357,6 +361,7 @@
                                                        IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
                                                        HorizontalTextAlignment="Center"
                                                        VerticalTextAlignment="Center"
+                                                       AutomationId="MiniMonthDayText"
                                                        SemanticProperties.Description="{Binding AccessibilityText}"
                                                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
                                             </Border>
@@ -377,7 +382,8 @@
                                Spacing="14"
                                Margin="0,6,0,0">
             <HorizontalStackLayout Spacing="4">
-                <BoxView WidthRequest="12" HeightRequest="12" CornerRadius="3" Color="#F8FAFC"/>
+                <!-- Legend swatch mirrors the day-cell surface in both themes -->
+                <BoxView WidthRequest="12" HeightRequest="12" CornerRadius="3" Color="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}"/>
                 <Label Text="יום לימוד" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             </HorizontalStackLayout>
             <HorizontalStackLayout Spacing="4">
@@ -395,13 +401,12 @@
               IsVisible="{Binding IsLoading}">
             <ActivityIndicator IsRunning="True"
                                VerticalOptions="Center"
-                               HorizontalOptions="Center"
-                               Color="{StaticResource Primary}"/>
+                               HorizontalOptions="Center"/>
         </Grid>
         <Label Grid.RowSpan="7"
                Text="{Binding ErrorMessage}"
                IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
-               TextColor="Red"
+               TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
                FontSize="14"
                HorizontalTextAlignment="Center"
                VerticalOptions="Center"

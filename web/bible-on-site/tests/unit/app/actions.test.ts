@@ -11,6 +11,12 @@ jest.mock("../../../src/lib/download/handlers", () => ({
 	getSeferDownloadHandler: jest.fn(),
 	getPageRangesDownloadHandler: jest.fn(),
 }));
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+jest.mock("../../../src/lib/tanahpedia/article-mention-refs", () => ({
+	decorateArticleContent: jest.fn(async (article: unknown) => article),
+}));
 
 import {
 	downloadPageRanges,
@@ -26,6 +32,7 @@ import {
 	getArticleById,
 	getArticleSummariesByPerekId,
 } from "../../../src/lib/articles";
+import { decorateArticleContent } from "../../../src/lib/tanahpedia/article-mention-refs";
 import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
@@ -84,6 +91,7 @@ describe("getArticleForBook", () => {
 
 		expect(result).toEqual(article);
 		expect(mockGetArticleById).toHaveBeenCalledWith(1);
+		expect(decorateArticleContent).toHaveBeenCalledWith(article);
 	});
 
 	it("returns null when article not found", async () => {

@@ -15,6 +15,9 @@ engines:
     exclude_paths:
       - "data/annotations/extract_morphhb.py"
       - "data/annotations/baseline.py"
+      - "data/annotations/baseline_articles.py"
+      - "data/annotations/test_baseline_articles.py"
+      - "app/devops/verify_android_dex_metadata.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
@@ -24,6 +27,7 @@ exclude_paths:
   - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
+  - "data/mysql/tanah_reading_metrics_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
@@ -50,6 +54,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
   - "data/mysql/tanahpedia_structure.sql"
   - "data/mysql/tanahpedia_alter_mention_decoration.sql"
+  - "data/mysql/tanah_mention_test_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.
@@ -70,3 +75,9 @@ exclude_paths:
   # JUnit/uiautomator XML stubs that markup rules flag as interpolated HTML.
   - "app/mobile-e2e/release-smoke.test.mjs"
   - "app/mobile-e2e/merge-runner-shards.test.mjs"
+  # Differential-check CLI whose entire job is fetching operator-supplied
+  # --base/--candidate origins (scheme/host-validated by parseOrigin, parsed
+  # again via new URL() before fetch). The user-controlled-URL-to-HTTP-client
+  # taint pattern is a systemic false positive for a URL-diffing tool — the
+  # repo's own codacy-gate/precommit still lint this file.
+  - "devops/edge-compat-check.mjs"

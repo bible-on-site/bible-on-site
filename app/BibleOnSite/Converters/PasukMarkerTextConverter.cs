@@ -32,8 +32,15 @@ public class PasukMarkerTextConverter : IMultiValueConverter
     private readonly ConditionalWeakTable<FormattedString, List<CachedMerge>> _mergedCache = new();
     private readonly object _mergedCacheGate = new();
 
-    /// <summary>Marker color — set in XAML to {StaticResource Primary}.</summary>
+    /// <summary>Marker color in the light theme — set in XAML to {StaticResource Primary}.</summary>
     public Color MarkerColor { get; set; } = Colors.Blue;
+
+    /// <summary>Marker color in the dark theme — Primary is illegible on dark
+    /// surfaces, so pages pass AccentOnDark.</summary>
+    public Color MarkerColorDark { get; set; } = Colors.LightBlue;
+
+    private Color ResolvedMarkerColor =>
+        Application.Current?.RequestedTheme == AppTheme.Dark ? MarkerColorDark : MarkerColor;
 
     public object Convert(object[]? values, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -57,22 +64,23 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         lock (_mergedCacheGate)
         {
             var merges = _mergedCache.GetValue(text, static _ => new List<CachedMerge>(1));
+            var resolvedMarkerColor = ResolvedMarkerColor;
             foreach (var merge in merges)
             {
                 if (merge.Marker == marker &&
                     merge.MarkerFontSizeBits == markerFontSizeBits &&
-                    merge.MarkerColor.Equals(MarkerColor))
+                    merge.MarkerColor.Equals(resolvedMarkerColor))
                 {
                     return merge.Merged;
                 }
             }
 
-            var merged = Merge(text, marker, markerFontSize);
+            var merged = Merge(text, marker, markerFontSize, resolvedMarkerColor);
             if (merges.Count == MaxCachedMergesPerSource)
             {
                 merges.RemoveAt(0);
             }
-            merges.Add(new CachedMerge(marker, markerFontSizeBits, MarkerColor, merged));
+            merges.Add(new CachedMerge(marker, markerFontSizeBits, resolvedMarkerColor, merged));
             return merged;
         }
     }
@@ -80,7 +88,7 @@ public class PasukMarkerTextConverter : IMultiValueConverter
     public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 
-    private FormattedString Merge(FormattedString text, string marker, double markerFontSize)
+    private FormattedString Merge(FormattedString text, string marker, double markerFontSize, Color resolvedMarkerColor)
     {
         var merged = new FormattedString();
         var markerSpan = new Span
@@ -88,7 +96,7 @@ public class PasukMarkerTextConverter : IMultiValueConverter
             Text = marker + " ",
             FontFamily = MarkerFontFamily,
             FontAttributes = FontAttributes.Bold,
-            TextColor = MarkerColor
+            TextColor = resolvedMarkerColor
         };
         if (markerFontSize > 0)
         {
@@ -104,31 +112,26 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         return merged;
     }
 
-    // Font properties copy only when the source span actually set them:
-    // SetValue marks the clone's property as locally set, and the platform
-    // span-builder resolves every set font property into its own font span —
-    // so copying an unset (null) FontFamily would pin the system face onto the
-    // pasuk text instead of letting it inherit the label's Taamey D (#2623:
-    // the cloned text kept the old face while the uncloned marker changed).
-    // FontAutoScalingEnabled, CharacterSpacing and TextDecorations resolve the
-    // same IsSet-or-inherit way, so they follow the same rule.
     private static Span CloneSpan(Span span)
     {
-        var clone = new Span
+        // Reading Span.FontSize evaluates its default-value creator (NaN) and
+        // marks the property IsSet — on the clone AND on the source span. On
+        // Android GetEffectiveFont then resolves a size-less Font.IsDefault, so
+        // ToSpannableString skips the PlatformFontSpan that carries the label's
+        // size and the pasuk body renders at the platform default (14sp)
+        // instead of the configured size (#2461). Check IsSet before reading,
+        // and copy each property only when the source span really set it.
+        // FontFamily follows the same rule — an unset family must stay unset on
+        // the clone so the pasuk text inherits the label's Taamey D instead of
+        // resolving the system face (#2623: only the uncloned marker changed).
+        var clone = new Span { Text = span.Text };
+        if (span.IsSet(Span.FontSizeProperty) && !double.IsNaN(span.FontSize))
         {
-            Text = span.Text,
-            TextColor = span.TextColor,
-            BackgroundColor = span.BackgroundColor,
-            LineHeight = span.LineHeight,
-            TextTransform = span.TextTransform
-        };
+            clone.FontSize = span.FontSize;
+        }
         if (span.IsSet(Span.FontFamilyProperty))
         {
             clone.FontFamily = span.FontFamily;
-        }
-        if (span.IsSet(Span.FontSizeProperty))
-        {
-            clone.FontSize = span.FontSize;
         }
         if (span.IsSet(Span.FontAttributesProperty))
         {
@@ -145,6 +148,26 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         if (span.IsSet(Span.TextDecorationsProperty))
         {
             clone.TextDecorations = span.TextDecorations;
+        }
+        if (span.IsSet(Span.LineHeightProperty))
+        {
+            clone.LineHeight = span.LineHeight;
+        }
+        if (span.IsSet(Span.TextTransformProperty))
+        {
+            clone.TextTransform = span.TextTransform;
+        }
+        if (span.IsSet(Span.StyleProperty))
+        {
+            clone.Style = span.Style;
+        }
+        if (span.TextColor is not null)
+        {
+            clone.TextColor = span.TextColor;
+        }
+        if (span.BackgroundColor is not null)
+        {
+            clone.BackgroundColor = span.BackgroundColor;
         }
         return clone;
     }

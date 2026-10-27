@@ -80,12 +80,17 @@ jobs:
       # the toolchain cache id and the workload install read from here, and the
       # Verify step asserts the resolved SDK matches. SDK installation itself
       # is pinned by the root global.json, which must stay identical to this.
-      DOTNET_SDK_VERSION: "10.0.402"
+      DOTNET_SDK_VERSION: "10.0.403"
       # Workload sets are band-scoped (10.0.4xx), not SDK-locked: 10.0.401.1 is
       # the last set selecting iOS 27.0, which the xcode-27 image's Xcode 27.0
       # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
       # until the runner image ships it; see #2566.
       MAUI_WORKLOAD_SET: "10.0.401.1"
+      # The Android legs are not Xcode-bound: 10.0.402.1 pins Android SDK
+      # 36.1.118, the first servicing release honoring AndroidR8ObfuscationMode
+      # and emitting the r8.json metadata Play scores — the Release smoke APK is
+      # the pre-merge guard that obfuscated builds still launch (#2708, #2373).
+      MAUI_WORKLOAD_SET_ANDROID: "10.0.402.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -409,6 +414,19 @@ jobs:
           distribution: microsoft
           java-version: "21"
 
+      # iOS legs stay on the Xcode-27-compatible set; Android legs take the
+      # newer set carrying Android SDK 36.1.118 (#2708). Resolve once so the
+      # cache key and the install can never disagree.
+      - name: Resolve workload set pin
+        if: inputs.mode != 'prebuilt-run'
+        id: workload-set
+        run: |
+          if [ "${{ inputs.workload }}" = "maui-android" ]; then
+            echo "version=${{ env.MAUI_WORKLOAD_SET_ANDROID }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
+          fi
+
       # The workload set is a multi-GB silent NuGet download (~6 min cold in
       # run 38438842693); restored packs turn the install into a verify no-op.
       # Exact key only — a partial restore is worse than downloading.
@@ -422,13 +440,14 @@ jobs:
             ${{ env.DOTNET_ROOT }}/metadata
             ${{ env.DOTNET_ROOT }}/sdk-manifests
             ${{ env.DOTNET_ROOT }}/template-packs
-          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ env.MAUI_WORKLOAD_SET }}
+          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ steps.workload-set.outputs.version }}
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
         # 10.0.401.1 selects the iOS 27.0 SDK, which requires Xcode 27.0; see #1871.
-        # 10.0.402.1 would pull iOS 27.1 needing Xcode 27.1 — deferred, see #2566.
-        run: dotnet workload install ${{ inputs.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
+        # maui-android resolves to 10.0.402.1 (Android SDK 36.1.118) for #2708's
+        # obfuscation support; iOS stays pinned until #2566 ships Xcode 27.1.
+        run: dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
       # the build's critical path; the wait-all gate still bounds it.
@@ -452,11 +471,25 @@ jobs:
       # Shared commentary-search pilot builds the notes FTS index, so a missing
       # or mismatched pair must fail here — before the build, not mid-suite.
       - name: Download perushim SQLite pair
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
           path: ${{ runner.temp }}/perushim-sqlite
+
+      # Master baseline lives outside this run's artifact namespace: fetch it
+      # through the REST API (no gh binary dependency on the xcode-27 legs).
+      - name: Download perushim SQLite pair (master baseline)
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}" \
+            --out "${{ runner.temp }}/perushim-sqlite"
+          # baseline-download is nonfatal on a missing artifact, but this pair
+          # is required: assert the extraction produced files.
+          test -n "$(ls -A "${{ runner.temp }}/perushim-sqlite" 2>/dev/null)"
 
       - name: Install matching perushim catalog and notes
         if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'

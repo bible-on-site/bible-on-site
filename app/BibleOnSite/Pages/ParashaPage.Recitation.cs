@@ -188,7 +188,7 @@ public partial class ParashaPage
             _focusedWordSpans.TryGetValue(_recitingWord.Segment, out var previous))
         {
             previous.BackgroundColor = null;
-            previous.TextColor = Color.FromArgb("#637598");
+            previous.TextColor = Pasuk.QriTextColor;
         }
 
         _recitingWord = word;
@@ -200,8 +200,8 @@ public partial class ParashaPage
         if (word != null && _focusedPasuk?.PasukNum == word.Pasuk && _focusedPerekId == _recitationTimelinePerekId &&
             _focusedWordSpans.TryGetValue(word.Segment, out var current))
         {
-            current.BackgroundColor = Color.FromArgb("#e9eff8");
-            current.TextColor = Color.FromArgb("#1c427b");
+            current.BackgroundColor = Pasuk.RecitingBackgroundDefault;
+            current.TextColor = Pasuk.RecitingText;
         }
     }
 
@@ -360,7 +360,7 @@ public partial class ParashaPage
             // still reports.
             if (track == null)
             {
-                await DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
             }
             return;
         }
@@ -370,7 +370,7 @@ public partial class ParashaPage
         {
             // A "ready" track missing this pasuk's timings is corrupt pack
             // data — a real failure, reported like other playback failures.
-            await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             return;
         }
 
@@ -480,7 +480,7 @@ public partial class ParashaPage
             var segment = pasuk.Segments[i];
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Pasuk.QriTextColor });
             }
 
             var span = new Span
@@ -499,8 +499,9 @@ public partial class ParashaPage
             if (word != null)
             {
                 _focusedWordSpans[word.Segment] = span;
-                span.TextColor = Color.FromArgb(_recitingWord == word ? "#1c427b" : "#637598");
-                span.BackgroundColor = _recitingWord == word ? Color.FromArgb("#e9eff8") : null;
+                var reciting = _recitingWord == word;
+                span.TextColor = reciting ? Pasuk.RecitingText : Pasuk.QriTextColor;
+                span.BackgroundColor = reciting ? Pasuk.RecitingBackgroundDefault : null;
                 var tap = new TapGestureRecognizer();
                 var perekId = _focusedPerekId;
                 tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perekId}:{word.Pasuk}:{word.Segment}",
@@ -511,7 +512,7 @@ public partial class ParashaPage
             formatted.Spans.Add(span);
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = ")", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = ")", TextColor = Pasuk.QriTextColor });
             }
 
             if (i < pasuk.Segments.Count - 1 && segment.Type is not (SegmentType.Ptuha or SegmentType.Stuma) && !segment.EndsWithMaqaf)
@@ -798,7 +799,7 @@ public partial class ParashaPage
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {
-                await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             }
         }
         finally
@@ -895,7 +896,7 @@ public partial class ParashaPage
         }
 
         StopRecitation(); UpdateSelectionBar();
-        await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
+        await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
     }
 
     protected override bool OnBackButtonPressed()

@@ -7,124 +7,143 @@ vi.mock("~/server/db", () => ({
 }));
 
 import {
-	pediaInvalidationForEntities,
-	pediaInvalidationForEntryIds,
-	pediaInvalidationForPersons,
-	pediaPathsForEntities,
-	pediaPathsForEntryIds,
-	pediaPathsForPersons,
+	pediaChangesForEntities,
+	pediaChangesForEntryIds,
+	pediaChangesForPersons,
 } from "~/server/tanahpedia/paths";
 
 /**
- * Entity/person/family mutations resolve the public entry pages they touch
- * so the revalidation call can name the exact changed URLs for IndexNow.
- * The queries must run before deletes: once the link rows are gone the
- * affected pages can no longer be enumerated.
+ * Entity/person/family mutations resolve typed entity changes carrying the
+ * relationships a delete can no longer resolve afterwards — entry names,
+ * entity types, synonyms and the perakim sourcing the entity. The website
+ * unions them with what it can still resolve.
  */
-describe("pedia path resolution", () => {
+describe("pedia change resolution", () => {
 	beforeEach(() => {
 		queryMock.mockReset().mockResolvedValue([]);
 	});
 
-	describe("pediaPathsForEntryIds", () => {
-		it("maps entry ids to their public paths", async () => {
-			queryMock.mockResolvedValue([
-				{ unique_name: "משה" },
-				{ unique_name: "אהרן" },
-			]);
+	describe("pediaChangesForEntryIds", () => {
+		it("emits one pedia-entry change per resolvable entry", async () => {
+			queryMock
+				// entry 1: unique_name + 3 relation queries
+				.mockResolvedValueOnce([{ unique_name: "משה" }])
+				.mockResolvedValueOnce([{ entity_type: "PERSON" }])
+				.mockResolvedValueOnce([{ name: "משה רבנו" }])
+				.mockResolvedValueOnce([{ perek_id: 12 }])
+				// entry 2: unique_name + 3 relation queries
+				.mockResolvedValueOnce([{ unique_name: "אהרן" }])
+				.mockResolvedValueOnce([])
+				.mockResolvedValueOnce([])
+				.mockResolvedValueOnce([]);
 
-			await expect(pediaPathsForEntryIds(["e1", "e2"])).resolves.toEqual([
-				"/pedia/משה",
-				"/pedia/אהרן",
+			const requests = await pediaChangesForEntryIds(["e1", "e2"]);
+
+			expect(requests).toEqual([
+				{
+					changes: [
+						{
+							kind: "pedia-entry",
+							uniqueName: "משה",
+							entityTypes: ["PERSON"],
+							synonymNames: ["משה רבנו"],
+							refPerekIds: [12],
+						},
+						{
+							kind: "pedia-entry",
+							uniqueName: "אהרן",
+							entityTypes: [],
+							synonymNames: [],
+							refPerekIds: [],
+						},
+					],
+				},
 			]);
-			expect(queryMock).toHaveBeenCalledWith(
-				expect.stringContaining("FROM tanahpedia_entry"),
-				["e1", "e2"],
-			);
+		});
+
+		it("skips entries that no longer exist", async () => {
+			queryMock.mockResolvedValueOnce([]);
+
+			await expect(pediaChangesForEntryIds(["gone"])).resolves.toEqual([]);
 		});
 
 		it("skips the lookup for an empty id list", async () => {
-			await expect(pediaPathsForEntryIds([])).resolves.toEqual([]);
+			await expect(pediaChangesForEntryIds([])).resolves.toEqual([]);
 			expect(queryMock).not.toHaveBeenCalled();
 		});
 	});
 
-	describe("pediaPathsForEntities", () => {
-		it("joins through the entry_entity links", async () => {
-			queryMock.mockResolvedValue([{ unique_name: "משה" }]);
+	describe("pediaChangesForEntities", () => {
+		it("carries type, linked entry names and source perakim", async () => {
+			queryMock
+				.mockResolvedValueOnce([{ id: "ent-1", entity_type: "PERSON" }])
+				.mockResolvedValueOnce([
+					{ entity_id: "ent-1", unique_name: "משה" },
+					{ entity_id: "ent-1", unique_name: "משה" },
+				])
+				.mockResolvedValueOnce([
+					{ entity_id: "ent-1", perek_id: 5 },
+					{ entity_id: "ent-1", perek_id: 7 },
+					{ entity_id: "ent-1", perek_id: 7 },
+				]);
 
-			await expect(pediaPathsForEntities(["ent-1"])).resolves.toEqual([
-				"/pedia/משה",
+			const requests = await pediaChangesForEntities(["ent-1"]);
+
+			expect(requests).toEqual([
+				{
+					changes: [
+						{
+							kind: "pedia-entity",
+							entityId: "ent-1",
+							entityType: "PERSON",
+							entryUniqueNames: ["משה"],
+							refPerekIds: [5, 7],
+						},
+					],
+				},
 			]);
-			const [sql, params] = queryMock.mock.calls[0] ?? [];
-			expect(String(sql)).toContain("JOIN tanahpedia_entry_entity");
-			expect(params).toEqual(["ent-1"]);
 		});
 
 		it("skips the lookup for an empty id list", async () => {
-			await expect(pediaPathsForEntities([])).resolves.toEqual([]);
+			await expect(pediaChangesForEntities([])).resolves.toEqual([]);
 			expect(queryMock).not.toHaveBeenCalled();
 		});
 	});
 
-	describe("pediaPathsForPersons", () => {
-		it("resolves persons to entities, then to linked entries", async () => {
+	describe("pediaChangesForPersons", () => {
+		it("resolves persons to entities, then emits entity changes", async () => {
 			queryMock
 				.mockResolvedValueOnce([{ entity_id: "ent-1" }])
-				.mockResolvedValueOnce([{ unique_name: "משה" }]);
+				.mockResolvedValueOnce([{ id: "ent-1", entity_type: "PERSON" }])
+				.mockResolvedValueOnce([{ entity_id: "ent-1", unique_name: "יעקב" }])
+				.mockResolvedValueOnce([]);
 
-			await expect(pediaPathsForPersons(["p-1"])).resolves.toEqual([
-				"/pedia/משה",
-			]);
-			expect(queryMock).toHaveBeenCalledTimes(2);
+			const requests = await pediaChangesForPersons(["p-1"]);
+
 			expect(String(queryMock.mock.calls[0]?.[0])).toContain(
 				"FROM tanahpedia_person",
 			);
+			expect(requests).toEqual([
+				{
+					changes: [
+						{
+							kind: "pedia-entity",
+							entityId: "ent-1",
+							entityType: "PERSON",
+							entryUniqueNames: ["יעקב"],
+							refPerekIds: [],
+						},
+					],
+				},
+			]);
 		});
 
-		it("returns no paths when the persons own no entities", async () => {
+		it("returns no changes when the persons own no entities", async () => {
 			queryMock.mockResolvedValueOnce([]);
 
-			await expect(pediaPathsForPersons(["p-1"])).resolves.toEqual([]);
-			// The entity lookup short-circuits — no entry query is issued.
+			await expect(pediaChangesForPersons(["p-1"])).resolves.toEqual([]);
+			// The entity lookup short-circuits — no further queries issued.
 			expect(queryMock).toHaveBeenCalledTimes(1);
-		});
-	});
-
-	describe("invalidation batches", () => {
-		it("carries the resolved urls on the pedia index request", async () => {
-			queryMock.mockResolvedValue([{ unique_name: "משה" }]);
-
-			const requests = await pediaInvalidationForEntities(["ent-1"]);
-
-			expect(requests).toEqual([
-				{ tag: "tanahpedia-entity-refs" },
-				{ path: "/pedia/[slug]", type: "page" },
-				{ path: "/pedia", urls: ["/pedia/משה"] },
-				{ tag: "tanahpedia-mention-refs" },
-			]);
-		});
-
-		it("keeps the base shape when nothing resolves", async () => {
-			const requests = await pediaInvalidationForPersons(["p-1"]);
-
-			expect(requests).toEqual([
-				{ tag: "tanahpedia-entity-refs" },
-				{ path: "/pedia/[slug]", type: "page" },
-				{ path: "/pedia" },
-				{ tag: "tanahpedia-mention-refs" },
-			]);
-		});
-
-		it("resolves entry ids for link mutations", async () => {
-			queryMock.mockResolvedValue([{ unique_name: "אהרן" }]);
-
-			const requests = await pediaInvalidationForEntryIds(["e-9"]);
-
-			expect(requests[2]).toEqual({
-				path: "/pedia",
-				urls: ["/pedia/אהרן"],
-			});
 		});
 	});
 });

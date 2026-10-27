@@ -14,13 +14,17 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
 import {
-	pediaEntryPath,
-	pediaInvalidation,
+	pediaEntryChange,
 	revalidateWebsite,
 } from "../website-revalidate";
+import {
+	dropSelfShadowedAliasInTx,
+	keepOldNameAsAliasInTx,
+} from "./alias-ops.server";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { pediaInvalidationForEntryIds } from "./paths";
+import { pediaChangesForEntryIds } from "./paths";
 import {
 	assertEntryFieldsValid,
 	saveEntryRevisioned,
@@ -300,11 +304,13 @@ export const createEntry = createServerFn({ method: "POST" })
 				[data.id],
 			);
 			if (!entry) throw new Error("Entry not found");
+			// Same-transaction reading metrics (#2607).
+			await recomputeEntryMetrics(conn, data.id, entry.content);
 			return { ...entry, headRevisionId: headId };
 		});
-		await revalidateWebsite(
-			pediaInvalidation(pediaEntryPath(created.unique_name)),
-		);
+		await revalidateWebsite([
+			pediaEntryChange({ uniqueName: created.unique_name }),
+		]);
 		return created;
 	});
 
@@ -318,6 +324,8 @@ export const updateEntry = createServerFn({ method: "POST" })
 			baseRevisionId?: string | null;
 			source?: string;
 			notes?: string | null;
+			/** Rename flow: keep the previous unique_name as a live alias to this entry. */
+			keepOldNameAsAlias?: boolean;
 		}) => data,
 	)
 	.handler(async ({ data }) => {
@@ -325,16 +333,48 @@ export const updateEntry = createServerFn({ method: "POST" })
 		const updated = await transaction(async (conn) => {
 			const { entry, headRevisionId, unchanged, previousUniqueName } =
 				await saveEntryRevisioned(conn, data);
-			return { ...entry, headRevisionId, unchanged, previousUniqueName };
+			let oldNameAliasCreated = false;
+			if (
+				!unchanged &&
+				previousUniqueName &&
+				previousUniqueName !== entry.unique_name
+			) {
+				// The new canonical name shadows a self-referencing alias row — drop it.
+				await dropSelfShadowedAliasInTx(conn, data.id, entry.unique_name);
+				if (data.keepOldNameAsAlias) {
+					// Same commit as the rename — no window where the old URL 404s.
+					oldNameAliasCreated = await keepOldNameAsAliasInTx(
+						conn,
+						data.id,
+						previousUniqueName,
+					);
+				}
+			}
+			return {
+				...entry,
+				headRevisionId,
+				unchanged,
+				previousUniqueName,
+				oldNameAliasCreated,
+				// Surfaced to the editor so it can report what happened to the
+				// old URL after a committed rename.
+				renamedFrom:
+					!unchanged && previousUniqueName !== entry.unique_name
+						? previousUniqueName
+						: null,
+			};
 		});
 		// A no-op save changes no public content, so nothing expires.
 		if (!updated.unchanged) {
-			// A rename leaves the old URL stale — notify both.
-			const urls = new Set([pediaEntryPath(updated.unique_name)]);
-			if (updated.previousUniqueName) {
-				urls.add(pediaEntryPath(updated.previousUniqueName));
-			}
-			await revalidateWebsite(pediaInvalidation(...urls));
+			// A rename leaves the old URL stale — the change carries both names.
+			await revalidateWebsite([
+				pediaEntryChange({
+					uniqueName: updated.unique_name,
+					...(updated.previousUniqueName
+						? { oldUniqueName: updated.previousUniqueName }
+						: {}),
+				}),
+			]);
 		}
 		// previousUniqueName is notification bookkeeping, not part of the
 		// handler's public result.
@@ -345,17 +385,11 @@ export const updateEntry = createServerFn({ method: "POST" })
 export const deleteEntry = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
-		// Resolve the public URL before the delete — the row is gone after.
-		const previous = await queryOne<{ unique_name: string }>(
-			"SELECT unique_name FROM tanahpedia_entry WHERE id = ?",
-			[id],
-		);
+		// Resolve the change's dependencies before the delete — afterwards the
+		// row and its entity/synonym/source links are unresolvable.
+		const changes = await pediaChangesForEntryIds([id]);
 		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
-		await revalidateWebsite(
-			pediaInvalidation(
-				...(previous ? [pediaEntryPath(previous.unique_name)] : []),
-			),
-		);
+		await revalidateWebsite(changes);
 		return { success: true };
 	});
 
@@ -380,9 +414,7 @@ export const assignEntity = createServerFn({ method: "POST" })
 			"INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
 			[data.id, data.entry_id, data.entity_id],
 		);
-		await revalidateWebsite(
-			await pediaInvalidationForEntryIds([data.entry_id]),
-		);
+		await revalidateWebsite(await pediaChangesForEntryIds([data.entry_id]));
 		return { success: true };
 	});
 
@@ -396,7 +428,7 @@ export const removeEntity = createServerFn({ method: "POST" })
 		);
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds(link ? [link.entry_id] : []),
+			await pediaChangesForEntryIds(link ? [link.entry_id] : []),
 		);
 		return { success: true };
 	});

@@ -702,4 +702,25 @@ public class HebrewDateHelperTests
 
         tzeit.Should().Be(new TimeSpan(19, 30, 0));
     }
+
+    [Theory]
+    [InlineData(0, "יום ראשון")]
+    [InlineData(1, "יום שני")]
+    [InlineData(2, "יום שלישי")]
+    [InlineData(3, "יום רביעי")]
+    [InlineData(4, "יום חמישי")]
+    [InlineData(5, "יום שישי")]
+    [InlineData(6, "שבת")]
+    public void GetHebrewWeekdayName_ValidIndex_ShouldReturnSpokenName(int dayOfWeek, string expected)
+    {
+        HebrewDateHelper.GetHebrewWeekdayName(dayOfWeek).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(7)]
+    public void GetHebrewWeekdayName_IndexOutsideWeek_ShouldReturnEmpty(int dayOfWeek)
+    {
+        HebrewDateHelper.GetHebrewWeekdayName(dayOfWeek).Should().BeEmpty();
+    }
 }

@@ -4,6 +4,9 @@ using FluentAssertions;
 
 namespace BibleOnSite.Tests.Converters;
 
+// The resolved marker color depends on Application.Current.RequestedTheme
+// (#2601), so these tests serialize with the theme-mutating tests.
+[Collection("Application state")]
 public class PasukMarkerTextConverterTests
 {
     private static FormattedString PasukText(string text, params Span[] extraSpans)
@@ -81,6 +84,108 @@ public class PasukMarkerTextConverterTests
         // An explicitly set font property still carries over.
         merged.Spans[2].IsSet(Span.FontSizeProperty).Should().BeTrue();
         merged.Spans[2].FontSize.Should().Be(14);
+    }
+
+    [Fact]
+    public void an_unstyled_span_keeps_font_size_unset_in_the_merge()
+    {
+        // Regression for #2461: copying FontSize through the setter evaluated
+        // the NaN default creator and marked the property set on the clone, so
+        // Android's span bake skipped the label-size PlatformFontSpan and the
+        // pasuk body rendered at the platform default while the configured
+        // size (and the HtmlView commentary) honored the setting.
+        var text = PasukText("פסוק");
+
+        var merged = (FormattedString)Convert(text, "א", 16.0);
+
+        merged.Spans[1].IsSet(Span.FontSizeProperty).Should().BeFalse(
+            "the label's FontSize must keep flowing through an unstyled span");
+        merged.Spans[1].IsSet(Span.FontFamilyProperty).Should().BeFalse();
+    }
+
+    [Fact]
+    public void an_explicitly_nan_font_size_is_not_cloned()
+    {
+        // FontSize can be marked IsSet while holding the NaN default — the
+        // clone must treat that like unset so the label's size still flows.
+        var nan = new Span { Text = "תוהו" };
+        nan.SetValue(Span.FontSizeProperty, double.NaN);
+        var text = PasukText("פסוק", nan);
+
+        var clone = ((FormattedString)Convert(text, "א", 16.0)).Spans[2];
+
+        clone.IsSet(Span.FontSizeProperty).Should().BeFalse();
+    }
+
+    [Fact]
+    public void the_source_span_is_not_touched_by_the_clone()
+    {
+        // A read through the FontSize getter would already evaluate the NaN
+        // creator, so the merge must leave the source span completely unset:
+        // direct FormattedText consumers (Masora, focused overlay) share it.
+        var text = PasukText("פסוק");
+
+        Convert(text, "א", 16.0);
+
+        text.Spans[0].IsSet(Span.FontSizeProperty).Should().BeFalse();
+    }
+
+    [Fact]
+    public void explicitly_styled_spans_keep_their_font_properties()
+    {
+        var styled = new Span
+        {
+            Text = "מודגש",
+            FontAttributes = FontAttributes.Bold,
+            FontSize = 20,
+            FontFamily = "OpenSansRegular"
+        };
+        var text = PasukText("פסוק", styled);
+
+        var merged = (FormattedString)Convert(text, "א", 16.0);
+
+        var clone = merged.Spans[2];
+        clone.FontSize.Should().Be(20);
+        clone.FontAttributes.Should().Be(FontAttributes.Bold);
+        clone.FontFamily.Should().Be("OpenSansRegular");
+    }
+
+    [Fact]
+    public void every_set_span_property_survives_the_clone()
+    {
+        // Covers the per-property IsSet copies in CloneSpan: kerning,
+        // decorations, line height, casing, style and the colors.
+        var style = new Style(typeof(Span));
+        var styled = new Span
+        {
+            Text = "מעוצב",
+            FontSize = 20,
+            FontFamily = "OpenSansRegular",
+            FontAttributes = FontAttributes.Italic,
+            FontAutoScalingEnabled = false,
+            CharacterSpacing = 2.5,
+            TextDecorations = TextDecorations.Underline,
+            LineHeight = 1.4,
+            TextTransform = TextTransform.Uppercase,
+            Style = style,
+            TextColor = Colors.Green,
+            BackgroundColor = Colors.Yellow
+        };
+        var text = PasukText("פסוק", styled);
+
+        var clone = ((FormattedString)Convert(text, "א", 16.0)).Spans[2];
+
+        clone.FontSize.Should().Be(20);
+        clone.FontFamily.Should().Be("OpenSansRegular");
+        clone.FontAttributes.Should().Be(FontAttributes.Italic);
+        clone.FontAutoScalingEnabled.Should().BeFalse();
+        clone.CharacterSpacing.Should().Be(2.5);
+        clone.TextDecorations.Should().Be(TextDecorations.Underline);
+        clone.LineHeight.Should().Be(1.4);
+        clone.TextTransform.Should().Be(TextTransform.Uppercase);
+        clone.Style.Should().BeSameAs(style);
+        clone.TextColor.Should().Be(Colors.Green);
+        clone.BackgroundColor.Should().Be(Colors.Yellow);
     }
 
     [Fact]

@@ -221,6 +221,22 @@ Lambda function for deploying SQL data to RDS MySQL.
 
 **Flow:** GitHub Actions → S3 (upload SQL) → Lambda invoke → RDS MySQL
 
+### 14. `cloudfront-edge-candidate.yaml`
+Isolated CloudFront distribution in front of the nginx router for edge-rollout
+validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/2508)).
+
+**Components:**
+- CloudFront distribution on the default `*.cloudfront.net` certificate — no
+  aliases, so no DNS/ACM change is needed to validate
+- `Managed-CachingDisabled` cache policy + `Managed-AllViewerExceptHostHeader`
+  origin request policy (pass-through to the canonical nginx vhost)
+- Dedicated standard-access-log S3 bucket (parameter-gated) for request-mix
+  evidence
+
+> **Note**: Validation-only candidate. See
+> [edge-rollout-validation.md](../edge-rollout-validation.md) for the full
+> plan, staged migration and rollback. No production routing is changed.
+
 ## Data Flow: ECR → ECS → nginx → Internet
 
 1. **GitHub Actions** pushes Docker images to **ECR** (via OIDC role)
@@ -275,3 +291,4 @@ aws sso login --profile bible-on-site-deployer
 ## Related Documentation
 
 - [nginx Configuration](./ec2-nginx/router/router.conf)
+- [Edge rollout validation plan](../edge-rollout-validation.md)

@@ -40,6 +40,15 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("an action-only change selects every module's checks without releasing it", () => {
+		// Composite actions under .github/actions are consumed by jobs across
+		// every module — an lcov-image-only PR must still run their consumers.
+		const changes = detectChanges([".github/actions/lcov-image/action.yml"]);
+		for (const [key, flags] of Object.entries(changes)) {
+			assert.deepEqual(flags, { module_changed: false, ci_changed: true }, key);
+		}
+	});
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
@@ -57,6 +66,18 @@ describe("detectChanges", () => {
 	test("deployment workflow changes require website checks without a release", () => {
 		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
 		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("calendar-PDF publish workflow changes require website checks without a release", () => {
+		// The publisher defines the generation/publish contract verified by the
+		// calendar_pdf_artifacts job (#2608) — CI-only, never a website release.
+		const changes = detectChanges([
+			".github/workflows/calendar-pdf-publish.yml",
+		]);
 		assert.deepEqual(changes.website, {
 			module_changed: false,
 			ci_changed: true,

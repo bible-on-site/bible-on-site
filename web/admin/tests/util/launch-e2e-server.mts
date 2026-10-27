@@ -13,7 +13,7 @@
  * collected via the test fixture and /api/dev/coverage — no launcher plumbing
  * needed beyond env propagation.
  *
- * Usage: node --import tsx ./tests/util/launch-e2e-server.mts
+ * Usage: node ./tests/util/launch-e2e-server.mts
  */
 
 import { execSync, spawn } from "node:child_process";

@@ -7,7 +7,7 @@
       x:Class="BibleOnSite.Controls.FocusedPasukOverlay"
       AutomationId="FocusedPasukOverlay"
       IsVisible="False"
-      BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+      BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
     <!-- Scrollbar gutter: keep the indicator near the edge (margin 6)
          while the text keeps its 20 inset via content padding (#2474) -->
     <CollectionView x:Name="PerushimList" SelectionMode="None" Margin="6,16"
@@ -16,7 +16,7 @@
             <VerticalStackLayout Spacing="16" Padding="14,0">
                 <Grid ColumnDefinitions="*,Auto">
                     <Label x:Name="SourceLabel" FontSize="18" FontAttributes="Bold"
-                           TextColor="{StaticResource Primary}" VerticalOptions="Center"/>
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" VerticalOptions="Center"/>
                     <!-- קריינות: plays the whole focused pasuk (#2472) -->
                     <Button Grid.Column="1"
                             x:Name="PlayButton"
@@ -28,7 +28,7 @@
                             HeightRequest="40"
                             Padding="0"
                             BackgroundColor="Transparent"
-                            TextColor="{StaticResource Primary}"
+                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                             SemanticProperties.Description="השמעת הפסוק"
                             ToolTipProperties.Text="השמעת הפסוק"
                             IsVisible="False"
@@ -39,7 +39,7 @@
                 <controls:PasukTextLabel x:Name="PasukTextLabel" AutomationId="FocusedPasukText"
                        FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
                 <Label x:Name="RecitationHintLabel" AutomationId="FocusedRecitationHint"
-                       FontSize="14" TextColor="{StaticResource Gray500}"/>
+                       FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
             </VerticalStackLayout>
         </CollectionView.Header>
         <CollectionView.ItemTemplate>
@@ -53,7 +53,7 @@
                     <VerticalStackLayout Spacing="4"
                                          IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}}">
                         <Label Text="{Binding PerushName}" FontSize="{DynamicResource PerushNameFontSize}"
-                               FontAttributes="Bold" TextColor="{StaticResource Primary}" AutomationId="FocusedPerushName"/>
+                               FontAttributes="Bold" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" AutomationId="FocusedPerushName"/>
                         <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
                                            FontSize="{DynamicResource PerushContentFontSize}"
                                            TextAlignment="Justify" TextDirection="Rtl" LineHeight="1.4"/>
