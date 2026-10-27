@@ -11,6 +11,18 @@ import {
 } from "../../../src/app/components/ReadingProgress";
 import type { ReadingProgressUnit } from "../../../src/lib/reading-metrics/types";
 
+/** Fixture copy — referenced via expressions so JSX holds no literal text. */
+const T = {
+	unitA: "מילים יחידה א",
+	unitB: "מילים יחידה ב",
+	first: "קטע ראשון",
+	second: "קטע שני",
+	third: "קטע שלישי",
+	scoped: "מילים בטווח",
+	other: "מילים אחרות",
+	words: "מילים",
+} as const;
+
 const rect = (top: number, height: number): DOMRect =>
 	({
 		top,
@@ -98,8 +110,8 @@ const renderInScroller = (ui: React.ReactElement) =>
 		<div className="scroll">
 			{ui}
 			<div className="content">
-				<div data-u="a">unit a words</div>
-				<div data-u="b">unit b words</div>
+				<div data-u="a">{T.unitA}</div>
+				<div data-u="b">{T.unitB}</div>
 			</div>
 		</div>,
 	);
@@ -278,8 +290,8 @@ describe("ReadingProgress", () => {
 					content=".content"
 				/>
 				<div className="content">
-					<p>first block</p>
-					<p>second block</p>
+					<p>{T.first}</p>
+					<p>{T.second}</p>
 				</div>
 			</div>,
 		);
@@ -310,9 +322,9 @@ describe("ReadingProgress", () => {
 					content=".content"
 				/>
 				<div className="content">
-					<p>first block</p>
-					<p>second block</p>
-					<p>third block</p>
+					<p>{T.first}</p>
+					<p>{T.second}</p>
+					<p>{T.third}</p>
 				</div>
 			</div>,
 		);
@@ -340,12 +352,12 @@ describe("ReadingProgress", () => {
 						content=".content"
 					/>
 					<div className="content">
-						<p>scoped words</p>
+						<p>{T.scoped}</p>
 					</div>
 				</div>
 				<div className="pane" data-view="two">
 					<div className="content">
-						<p>other words</p>
+						<p>{T.other}</p>
 					</div>
 				</div>
 			</div>,
@@ -377,7 +389,7 @@ describe("ReadingProgress", () => {
 						scope=".content"
 						content=".content"
 					/>
-					<p>words</p>
+					<p>{T.words}</p>
 				</div>
 			</div>,
 		);
@@ -402,7 +414,7 @@ describe("ReadingProgress", () => {
 					content="html"
 					unitSelector='[data-u="{key}"]'
 				/>
-				<div data-u="a">unit a words</div>
+				<div data-u="a">{T.unitA}</div>
 			</div>,
 		);
 		const root = document.documentElement;
@@ -426,7 +438,7 @@ describe("ReadingProgress", () => {
 		render(
 			<div className="content">
 				<ReadingProgress units={[unit(null, 10)]} content=".content" />
-				<p>words</p>
+				<p>{T.words}</p>
 			</div>,
 		);
 		const bar = document.querySelector('[role="progressbar"]');
@@ -600,7 +612,7 @@ describe("ReadingProgress", () => {
 					content="html"
 					unitSelector='[data-u="{key}"]'
 				/>
-				<div data-u="a">unit a words</div>
+				<div data-u="a">{T.unitA}</div>
 			</div>,
 		);
 		const root = document.documentElement;
@@ -661,7 +673,7 @@ describe("ReadingProgress", () => {
 					unitSelector='[data-u="{key}"]'
 				/>
 				<div className="content">
-					<div data-u="a">unit a words</div>
+					<div data-u="a">{T.unitA}</div>
 				</div>
 			</div>
 		);
