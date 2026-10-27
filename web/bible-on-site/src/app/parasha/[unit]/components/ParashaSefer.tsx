@@ -226,7 +226,7 @@ const ParashaSefer = (props: {
 		return [
 			<React.Fragment key={`parasha-${unit.unitId}`}>
 				<section
-					className={seferStyles.pageContentPage}
+					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 					data-sefer-unit-text={torahKey}
 				>
 					<div className={seferStyles.pageHeaderRight}>
@@ -302,7 +302,7 @@ const ParashaSefer = (props: {
 			</React.Fragment>,
 			<React.Fragment key={`haftara-${unit.unitId}`}>
 				<section
-					className={seferStyles.pageContentPage}
+					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 					data-sefer-unit-text={haftaraKey}
 				>
 					<div className={seferStyles.pageHeaderRight}>
