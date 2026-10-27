@@ -27,15 +27,15 @@ const STANDALONE: UnitAliyahContextOption = {
 	label: "פרשת מטות",
 	kind: "standalone",
 	schemes: [
-		{ schemeId: "shabbat", label: "שבת" },
-		{ schemeId: "weekday", label: "שני וחמישי" },
+		{ schemeId: "shabbat", label: "שבת", variants: [] },
+		{ schemeId: "weekday", label: "שני וחמישי", variants: [] },
 	],
 };
 const JOINED: UnitAliyahContextOption = {
 	contextId: "matot-masei",
 	label: "מטות-מסעי",
 	kind: "joined",
-	schemes: [{ schemeId: "shabbat", label: "שבת" }],
+	schemes: [{ schemeId: "shabbat", label: "שבת", variants: [] }],
 };
 const CONTEXTS = [STANDALONE, JOINED];
 const DEFAULT_KEY = "matot:shabbat";
@@ -173,12 +173,39 @@ describe("AliyahControls", () => {
 		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
 	});
 
+	it("falls back to the URL-resolved layer when the offered contexts narrow under the active selection", () => {
+		const utils = renderLayer();
+		fireEvent.click(pressed(utils, "שני וחמישי")); // selection: matot:weekday
+
+		// The offered contexts shrink before the soft navigation commits —
+		// the buttons degrade to the URL-resolved context's schemes instead
+		// of dereferencing a selection the new options don't carry.
+		const narrowed: UnitAliyahContextOption = {
+			contextId: "vayigash",
+			label: "פרשת ויגש",
+			kind: "standalone",
+			schemes: [{ schemeId: "shabbat", label: "שבת", variants: [] }],
+		};
+		utils.rerender(
+			<>
+				<div data-unit-text="">
+					<span data-aliyah-marker="" data-aliyah-key="vayigash:shabbat" />
+				</div>
+				<AliyahControls contexts={[narrowed]} defaultKey="vayigash:shabbat" />
+			</>,
+		);
+
+		expect(pressed(utils, "פרשת ויגש")).toBeDefined();
+		expect(pressed(utils, "שבת")).toBeDefined();
+		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
+	});
+
 	it("falls back to the new context's first scheme when it lacks both the current scheme and shabbat", () => {
 		const customOnly: UnitAliyahContextOption = {
 			contextId: "matot-special",
 			label: "מטות מיוחד",
 			kind: "joined",
-			schemes: [{ schemeId: "mincha", label: "מנחה" }],
+			schemes: [{ schemeId: "mincha", label: "מנחה", variants: [] }],
 		};
 		currentParams = new URLSearchParams("reading=matot&scheme=weekday");
 		const utils = render(
@@ -192,6 +219,128 @@ describe("AliyahControls", () => {
 
 		expect(mockReplace).toHaveBeenCalledWith(
 			"/פרשה/42?reading=matot-special&scheme=mincha",
+			{ scroll: false },
+		);
+	});
+});
+
+describe("AliyahControls — minhag variants", () => {
+	beforeEach(() => {
+		mockReplace.mockClear();
+		currentParams = new URLSearchParams();
+	});
+
+	/** A context whose shabbat scheme carries one variant division —
+	 * the ויגש חב"ד shape: base split plus a documented alternative. */
+	const WITH_VARIANT: UnitAliyahContextOption = {
+		contextId: "vayigash",
+		label: "פרשת ויגש",
+		kind: "standalone",
+		schemes: [
+			{
+				schemeId: "shabbat",
+				label: "שבת",
+				variants: [{ variantId: 'חב"ד', label: 'חב"ד' }],
+			},
+			{ schemeId: "weekday", label: "חול", variants: [] },
+		],
+	};
+
+	const makeVariantJsx = () => (
+		<>
+			<div data-unit-text="">
+				<span data-aliyah-marker="" data-aliyah-key="vayigash:shabbat" />
+				<span data-aliyah-marker="" data-aliyah-key="vayigash:weekday" />
+				<span
+					data-aliyah-marker=""
+					data-aliyah-key={'vayigash:shabbat:חב"ד'}
+				/>
+			</div>
+			<AliyahControls
+				contexts={[WITH_VARIANT]}
+				defaultKey="vayigash:shabbat"
+			/>
+		</>
+	);
+
+	function renderVariantLayer(params = "") {
+		currentParams = new URLSearchParams(params);
+		const utils = render(makeVariantJsx());
+		return {
+			...utils,
+			applyNavigation() {
+				const url = String(mockReplace.mock.calls.at(-1)?.[0] ?? "");
+				currentParams = new URLSearchParams(url.split("?")[1] ?? "");
+				utils.rerender(makeVariantJsx());
+			},
+		};
+	}
+
+	it("offers the מנהג group only when the selected scheme has variants", () => {
+		const utils = renderVariantLayer();
+
+		expect(pressed(utils, "נפוץ")).toBeDefined();
+		expect(pressed(utils, 'חב"ד')).toBeDefined();
+
+		fireEvent.click(pressed(utils, "חול"));
+		utils.applyNavigation();
+		// The weekday scheme carries no variant — the group disappears.
+		expect(utils.container.textContent).not.toContain("נפוץ");
+	});
+
+	it("marks the base split pressed by default and shows base markers", () => {
+		const utils = renderVariantLayer();
+
+		expect(pressed(utils, "נפוץ").getAttribute("aria-pressed")).toBe("true");
+		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("false");
+		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
+	});
+
+	it("swaps to the variant layer and mirrors ?variant= into the URL", () => {
+		const utils = renderVariantLayer();
+
+		fireEvent.click(pressed(utils, 'חב"ד'));
+
+		expect(mockReplace).toHaveBeenCalledWith(
+			`/פרשה/42?variant=${encodeURIComponent('חב"ד')}`,
+			{ scroll: false },
+		);
+		utils.applyNavigation();
+		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("honors a ?variant= param from the URL", () => {
+		renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
+
+		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+	});
+
+	it("ignores a ?variant= the selected scheme never offered", () => {
+		renderVariantLayer("scheme=weekday&variant=bogus");
+
+		expect(visibleKeys()).toEqual(["vayigash:weekday"]);
+	});
+
+	it("drops the variant when the base split is re-selected", () => {
+		const utils = renderVariantLayer(
+			`variant=${encodeURIComponent('חב"ד')}`,
+		);
+
+		fireEvent.click(pressed(utils, "נפוץ"));
+
+		expect(mockReplace).toHaveBeenCalledWith("/פרשה/42", { scroll: false });
+	});
+
+	it("drops the variant on scheme switch — variants never carry", () => {
+		const utils = renderVariantLayer(
+			`variant=${encodeURIComponent('חב"ד')}`,
+		);
+
+		fireEvent.click(pressed(utils, "חול"));
+
+		expect(mockReplace).toHaveBeenCalledWith(
+			"/פרשה/42?reading=vayigash&scheme=weekday",
 			{ scroll: false },
 		);
 	});
