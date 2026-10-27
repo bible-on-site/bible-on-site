@@ -215,6 +215,12 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         {
             perek.ReadingMetric = await _perekDataService.GetReadingMetricAsync(perek.PerekId);
             perek.ProgressUnits = await _perekDataService.GetPasukProgressUnitsAsync(perek.PerekId);
+            // Scrolls that arrived while the read was pending computed a zero
+            // anchor — replay the last known anchor now that units exist.
+            if (perek == Perek && _lastAnchorPerekId == perek.PerekId)
+            {
+                UpdateReadingProgress(_lastAnchorPasukNum, _lastContentEndVisible);
+            }
         }
         #pragma warning disable S2221 // Deliberate failure boundary: metric read failure degrades to no badge/progress
         catch (Exception ex) //NOSONAR — metric read failure degrades to no badge/progress.
@@ -223,6 +229,11 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             Console.Error.WriteLine($"Reading metrics unavailable for perek {perek.PerekId}: {ex.Message}");
         }
     }
+
+    /// <summary>Anchor captured for replay once async metric reads land.</summary>
+    private int? _lastAnchorPerekId;
+    private int _lastAnchorPasukNum;
+    private bool _lastContentEndVisible;
 
     /// <summary>
     /// Updates the reading-position fraction for the displayed perek from the
@@ -233,6 +244,9 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     public void UpdateReadingProgress(int anchorPasukNum, bool contentEndVisible)
     {
         var perek = Perek;
+        _lastAnchorPerekId = perek?.PerekId;
+        _lastAnchorPasukNum = anchorPasukNum;
+        _lastContentEndVisible = contentEndVisible;
         var units = perek?.ProgressUnits;
         if (perek is null || units is null || units.Count == 0 ||
             perek.ReadingMetric?.WordCount is not > 0)
@@ -738,6 +752,12 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         if (!IsStalePerushimLoad(perekId))
         {
             var metrics = await _notesService.GetPerushMetricsForPerekAsync(perekId);
+            // The metric await added a second suspension — a swipe during it
+            // must still discard this load's results before publication.
+            if (IsStalePerushimLoad(perekId))
+            {
+                return;
+            }
             foreach (var perush in orderedPerushim)
             {
                 if (metrics.TryGetValue(perush.Id, out var metric))

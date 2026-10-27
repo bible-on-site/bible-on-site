@@ -237,10 +237,19 @@ export function ReadingProgress({
 			// header growth) invalidates the cached axis silently.
 			const top = geo.toContentY(contentEl.getBoundingClientRect().top);
 			if (Math.abs(top - measuredTop) > 0.5) measure();
+			// The anchor sweeps the *counted content* extent — nav/perushim
+			// sections below the text can not hold the bar short of 100%, and
+			// reaching the last counted unit completes it even when more
+			// scrollable page remains.
+			const contentTop = positioned[0]?.top ?? measuredTop;
+			const contentBottom =
+				positioned[positioned.length - 1]?.bottom ?? measuredTop;
 			const anchor = readingAnchor(
 				geo.scrollTop,
 				geo.scrollHeight,
 				geo.clientHeight,
+				contentTop,
+				contentBottom,
 			);
 			const fraction = progressFraction(anchor, positioned, totalWords);
 			const percent = Math.round(fraction * 1000) / 10;

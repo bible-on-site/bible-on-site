@@ -209,9 +209,10 @@ describe("ReadingProgress", () => {
 		expect(bar?.getAttribute("aria-valuemin")).toBe("0");
 		expect(bar?.getAttribute("aria-valuemax")).toBe("100");
 
-		// scrollTop 80 of range 800 → anchor 100: unit a (40 words) fully
-		// read, unit b's first line at its top edge → 40/100 words.
-		await scroll(scroller, 80);
+		// scrollTop 400 of range 800 → half the content extent → anchor 100:
+		// unit a (40 words) fully read, unit b's first line at its top edge
+		// → 40/100 words.
+		await scroll(scroller, 400);
 		expect(fill.style.width).toBe("40%");
 		expect(bar?.getAttribute("aria-valuenow")).toBe("40");
 
@@ -261,7 +262,7 @@ describe("ReadingProgress", () => {
 				/>
 				<div className="content">
 					<div data-pasuk="3" data-note="1">
-						note words
+						{T.words}
 					</div>
 				</div>
 			</div>,
@@ -306,7 +307,7 @@ describe("ReadingProgress", () => {
 		setScroller(scroller);
 		await remeasure();
 		// Anchor 50 → half of the first (10-word) block → 25%.
-		await scroll(scroller, 40);
+		await scroll(scroller, 200);
 		const fill = container.querySelector(
 			'[role="progressbar"] > div',
 		) as HTMLElement;
@@ -334,7 +335,7 @@ describe("ReadingProgress", () => {
 		rangeLines.set(content, [{ top: 0, height: 100 }, { top: 100, height: 100 }]);
 		setScroller(scroller);
 		await remeasure();
-		await scroll(scroller, 40);
+		await scroll(scroller, 200);
 		const fill = container.querySelector(
 			'[role="progressbar"] > div',
 		) as HTMLElement;

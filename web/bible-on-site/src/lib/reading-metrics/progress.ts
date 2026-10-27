@@ -44,20 +44,26 @@ export interface PositionedUnit {
 
 /**
  * The reading anchor in scroll-content coordinates for a scroller state.
- * `scrollTop / (scrollHeight - clientHeight)` is the familiar ratio, scaled
- * back onto the content axis: 0 at rest, `scrollHeight` fully scrolled.
- * Non-scrollable content returns `scrollHeight` — everything is already in
- * the viewport, i.e. fully "read".
+ * The scroll ratio `scrollTop / (scrollHeight - clientHeight)` is scaled
+ * onto the *measured content extent*: `contentTop` at rest, `contentBottom`
+ * fully scrolled — so chrome and sibling sections outside the counted text
+ * never decide when the bar completes. Non-scrollable content returns
+ * `contentBottom` — everything is already in the viewport, i.e. fully
+ * "read". The extent defaults to the whole scroller, preserving the
+ * original document-scroller mapping.
  */
 export function readingAnchor(
 	scrollTop: number,
 	scrollHeight: number,
 	clientHeight: number,
+	contentTop = 0,
+	contentBottom = scrollHeight,
 ): number {
 	const range = scrollHeight - clientHeight;
-	if (range <= 0) return scrollHeight;
+	if (range <= 0) return contentBottom;
 	const clamped = Math.min(Math.max(scrollTop, 0), range);
-	return (clamped * scrollHeight) / range;
+	const ratio = clamped / range;
+	return contentTop + ratio * (contentBottom - contentTop);
 }
 
 /**

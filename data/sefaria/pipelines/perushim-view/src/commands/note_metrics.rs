@@ -90,8 +90,10 @@ pub fn apply(input: &Path) -> Result<()> {
     }
 
     let notes = read_all_notes(&conn)?;
-    conn.execute_batch(METRICS_DDL)?;
+    // DDL + inserts share one transaction: a failed refresh rolls the drops
+    // back too, leaving an already-decorated pack's previous metrics intact.
     let tx = conn.transaction()?;
+    tx.execute_batch(METRICS_DDL)?;
     sqlite::insert_note_metrics(&tx, &notes)?;
     tx.commit()?;
     conn.execute_batch("VACUUM")?;

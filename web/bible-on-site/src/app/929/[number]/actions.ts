@@ -19,6 +19,7 @@ import {
 	getPerekMetrics,
 	getPerekProgressUnitsBatch,
 	getPerushProgressUnitsBatch,
+	metricOrFallback,
 	type ReadingMetric,
 } from "@/lib/reading-metrics";
 import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
@@ -118,9 +119,17 @@ export interface PerekSummaries {
 export async function getPerekSummariesBatch(
 	perekIds: number[],
 ): Promise<Record<string, PerekSummaries>> {
+	// Metric reads only decorate summaries — a flaky metric query must not
+	// reject the whole batch and hide the articles/perushim beneath it.
 	const [pasukUnits, perekMetrics] = await Promise.all([
-		getPerekProgressUnitsBatch(perekIds),
-		getPerekMetrics(perekIds),
+		metricOrFallback(
+			"perek progress units",
+			new Map<number, ReadingProgressUnit[]>(),
+			() => getPerekProgressUnitsBatch(perekIds),
+		),
+		metricOrFallback("perek metrics", new Map<number, ReadingMetric>(), () =>
+			getPerekMetrics(perekIds),
+		),
 	]);
 	const entries = await Promise.all(
 		perekIds.map(async (id) => {

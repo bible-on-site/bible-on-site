@@ -12,6 +12,17 @@ jest.mock("../../../src/lib/reading-metrics", () => ({
 	getPerekMetrics: jest.fn(),
 	getPerekProgressUnitsBatch: jest.fn(),
 	getPerushProgressUnitsBatch: jest.fn(),
+	// Faithful passthrough: resolves the read, falls back on rejection —
+	// the contract under test is that metric failures degrade, not reject.
+	metricOrFallback: jest.fn(
+		async (_label: string, fallback: unknown, read: () => Promise<unknown>) => {
+			try {
+				return await read();
+			} catch {
+				return fallback;
+			}
+		},
+	),
 }));
 jest.mock("../../../src/lib/download/handlers", () => ({
 	getSeferDownloadHandler: jest.fn(),

@@ -32,6 +32,19 @@ describe("readingAnchor", () => {
 	it("reports fully read when the content does not scroll", () => {
 		expect(readingAnchor(0, 100, 200)).toBe(100);
 	});
+
+	it("sweeps the measured content extent, not the whole scroller", () => {
+		// A 2000px scroller whose counted text occupies [300, 800]: the rest
+		// (nav, commentary sections) must not hold the anchor short of the
+		// text end nor delay it past the text start.
+		expect(readingAnchor(0, 2000, 200, 300, 800)).toBe(300);
+		expect(readingAnchor(1800, 2000, 200, 300, 800)).toBe(800);
+		expect(readingAnchor(900, 2000, 200, 300, 800)).toBe(550);
+	});
+
+	it("returns the content bottom for a non-scrollable extent", () => {
+		expect(readingAnchor(0, 100, 200, 10, 80)).toBe(80);
+	});
 });
 
 describe("positionUnits", () => {
