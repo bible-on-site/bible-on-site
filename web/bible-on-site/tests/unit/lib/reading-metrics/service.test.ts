@@ -9,10 +9,17 @@ jest.mock("../../../../src/lib/api-client", () => ({
 import { query } from "../../../../src/lib/api-client";
 import {
 	getArticleMetrics,
+	getArticleProgressUnits,
 	getEntryMetric,
+	getEntryProgressUnits,
 	getPerekMetric,
+	getPerekMetrics,
+	getPerekProgressUnits,
+	getPerekProgressUnitsBatch,
 	getPerushMetric,
 	getPerushMetricsByPerekId,
+	getPerushProgressUnits,
+	getPerushProgressUnitsBatch,
 	isReadingMetricsSchemaMissing,
 	metricOrFallback,
 } from "../../../../src/lib/reading-metrics";
@@ -158,6 +165,190 @@ describe("getEntryMetric", () => {
 	it("propagates real failures", async () => {
 		mockQuery.mockRejectedValueOnce(new Error("down") as never);
 		await expect(getEntryMetric("uuid-1")).rejects.toThrow("down");
+	});
+});
+
+describe("getPerekMetrics", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("keys stored rows by perek id", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ perek_id: 5, word_count: 100, estimated_seconds: 28 },
+		] as never);
+		const map = await getPerekMetrics([5, 6]);
+		expect(map.get(5)).toEqual({ wordCount: 100, estimatedSeconds: 28 });
+		expect(map.has(6)).toBe(false);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("tanah_perek_metric"),
+			[5, 6],
+		);
+	});
+
+	it("returns an empty map for no ids or missing schema", async () => {
+		expect((await getPerekMetrics([])).size).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect((await getPerekMetrics([1])).size).toBe(0);
+	});
+});
+
+describe("getPerekProgressUnits", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("maps pasuk rows to keyed units in order", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ pasuk: 1, word_count: 10, cumulative_words: 10 },
+			{ pasuk: 2, word_count: 20, cumulative_words: 30 },
+		] as never);
+		expect(await getPerekProgressUnits(1)).toEqual([
+			{ key: "1", wordCount: 10, cumulativeWords: 10 },
+			{ key: "2", wordCount: 20, cumulativeWords: 30 },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("tanah_perek_pasuk_metric"),
+			[1],
+		);
+	});
+
+	it("degrades to an empty list on missing schema", async () => {
+		mockQuery.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" } as never);
+		expect(await getPerekProgressUnits(1)).toEqual([]);
+	});
+});
+
+describe("getPerekProgressUnitsBatch", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("groups stored rows by perek id", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ perek_id: 5, pasuk: 1, word_count: 10, cumulative_words: 10 },
+			{ perek_id: 5, pasuk: 2, word_count: 20, cumulative_words: 30 },
+			{ perek_id: 6, pasuk: 1, word_count: 5, cumulative_words: 5 },
+		] as never);
+		const map = await getPerekProgressUnitsBatch([5, 6]);
+		expect(map.get(5)).toEqual([
+			{ key: "1", wordCount: 10, cumulativeWords: 10 },
+			{ key: "2", wordCount: 20, cumulativeWords: 30 },
+		]);
+		expect(map.get(6)).toEqual([
+			{ key: "1", wordCount: 5, cumulativeWords: 5 },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [5, 6]);
+	});
+
+	it("returns an empty map for no ids or missing schema", async () => {
+		expect((await getPerekProgressUnitsBatch([])).size).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect((await getPerekProgressUnitsBatch([1])).size).toBe(0);
+	});
+});
+
+describe("getArticleProgressUnits", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("maps block rows to positionally-keyed units", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ block_idx: 0, word_count: 12, cumulative_words: 12 },
+			{ block_idx: 1, word_count: 8, cumulative_words: 20 },
+		] as never);
+		expect(await getArticleProgressUnits(7)).toEqual([
+			{ key: null, wordCount: 12, cumulativeWords: 12 },
+			{ key: null, wordCount: 8, cumulativeWords: 20 },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("tanah_article_metric_block"),
+			[7],
+		);
+	});
+
+	it("degrades to an empty list on missing schema", async () => {
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect(await getArticleProgressUnits(7)).toEqual([]);
+	});
+});
+
+describe("getEntryProgressUnits", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("binds the entry id and maps block rows", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ block_idx: 0, word_count: 6, cumulative_words: 6 },
+		] as never);
+		expect(await getEntryProgressUnits("uuid-1")).toEqual([
+			{ key: null, wordCount: 6, cumulativeWords: 6 },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("tanahpedia_entry_metric_block"),
+			["uuid-1"],
+		);
+	});
+
+	it("degrades to an empty list on missing schema", async () => {
+		mockQuery.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" } as never);
+		expect(await getEntryProgressUnits("uuid-1")).toEqual([]);
+	});
+});
+
+describe("getPerushProgressUnits", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("maps note rows to pasuk:noteIdx keys", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ pasuk: 3, note_idx: 1, word_count: 7, cumulative_words: 7 },
+			{ pasuk: 3, note_idx: 2, word_count: 9, cumulative_words: 16 },
+		] as never);
+		expect(await getPerushProgressUnits(10, 5)).toEqual([
+			{ key: "3:1", wordCount: 7, cumulativeWords: 7 },
+			{ key: "3:2", wordCount: 9, cumulativeWords: 16 },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("tanah_note_metric"),
+			[10, 5],
+		);
+	});
+
+	it("degrades to an empty list on missing schema", async () => {
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect(await getPerushProgressUnits(10, 5)).toEqual([]);
+	});
+});
+
+describe("getPerushProgressUnitsBatch", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("groups note rows by perush id", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{
+				perush_id: 10,
+				pasuk: 1,
+				note_idx: 1,
+				word_count: 7,
+				cumulative_words: 7,
+			},
+			{
+				perush_id: 11,
+				pasuk: 1,
+				note_idx: 1,
+				word_count: 4,
+				cumulative_words: 4,
+			},
+		] as never);
+		const map = await getPerushProgressUnitsBatch(5, [10, 11]);
+		expect(map.get(10)).toEqual([
+			{ key: "1:1", wordCount: 7, cumulativeWords: 7 },
+		]);
+		expect(map.get(11)).toEqual([
+			{ key: "1:1", wordCount: 4, cumulativeWords: 4 },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [5, 10, 11]);
+	});
+
+	it("returns an empty map for no ids or missing schema", async () => {
+		expect((await getPerushProgressUnitsBatch(5, [])).size).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect((await getPerushProgressUnitsBatch(5, [10])).size).toBe(0);
 	});
 });
 
