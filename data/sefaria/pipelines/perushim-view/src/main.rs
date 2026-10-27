@@ -58,6 +58,9 @@ enum OutputFormat {
     /// Build the delivered FTS5 search index from a v2 notes SQLite + tanah_view
     /// (no MongoDB needed)
     SearchIndex,
+    /// Add/refresh the shared reading-metrics tables inside an existing v2
+    /// notes SQLite (no MongoDB needed) — issue #2607
+    NoteMetrics,
 }
 
 #[tokio::main]
@@ -93,6 +96,14 @@ async fn run(cli: Cli) -> Result<()> {
             .output
             .context("--output <hebrew_search.sqlite> is required for search-index")?;
         return commands::search_index::build_search_index(&input, &cli.tanah_view, &output);
+    }
+
+    // note-metrics decorates an existing v2 notes DB in place — no MongoDB
+    if matches!(cli.format, Some(OutputFormat::NoteMetrics)) {
+        let input = cli
+            .input
+            .context("--input <v2 notes.sqlite> is required for note-metrics")?;
+        return commands::note_metrics::apply(&input);
     }
 
     let format = cli
@@ -134,7 +145,10 @@ fn generate_output(
                 &cli.tanah_view,
             )?;
         }
-        OutputFormat::CompassStages | OutputFormat::ConvertNotes | OutputFormat::SearchIndex => {
+        OutputFormat::CompassStages
+        | OutputFormat::ConvertNotes
+        | OutputFormat::SearchIndex
+        | OutputFormat::NoteMetrics => {
             unreachable!("Handled above")
         }
     }

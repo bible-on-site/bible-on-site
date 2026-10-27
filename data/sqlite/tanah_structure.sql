@@ -278,3 +278,35 @@ CREATE TABLE tanah_parasha_aliyah_source (
   upstream_commit TEXT NOT NULL,
   retrieved TEXT NOT NULL
 );
+--
+-- Shared reading-metrics contract (issue #2607): the same persisted
+-- decoration MySQL holds — computed here from the same canonical corpus by
+-- data/reading-metrics, the Rust port of web/shared/reading-metrics, so the
+-- app's offline pack shows identical estimates and progress mappings.
+-- word_count NULL = unknown/not computed; 0 = verified empty.
+-- estimated_seconds = ceil(word_count*60/words_per_minute); NULL when
+-- word_count is. source_hash = sha256 hex of the counted text stream for
+-- staleness detection against the online/API copy.
+--
+
+DROP TABLE IF EXISTS tanah_perek_metric;
+CREATE TABLE tanah_perek_metric (
+  perek_id INTEGER NOT NULL,
+  word_count INTEGER,
+  estimated_seconds INTEGER,
+  words_per_minute INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (perek_id)
+);
+
+DROP TABLE IF EXISTS tanah_perek_pasuk_metric;
+CREATE TABLE tanah_perek_pasuk_metric (
+  perek_id INTEGER NOT NULL,
+  pasuk INTEGER NOT NULL,          -- 1-based pasuk index within the perek
+  word_count INTEGER NOT NULL,
+  cumulative_words INTEGER NOT NULL, -- words up to and including this pasuk
+  calc_version INTEGER NOT NULL,
+  PRIMARY KEY (perek_id, pasuk)
+);
