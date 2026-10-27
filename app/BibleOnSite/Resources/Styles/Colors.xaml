@@ -11,7 +11,10 @@
     <Color x:Key="PrimaryDark">#4a7fc7</Color>
     <Color x:Key="PrimaryDarkText">#242424</Color>
     <Color x:Key="Secondary">#e8f0fa</Color>
-    <Color x:Key="SecondaryDarkText">#1552ac</Color>
+    <!-- Accent ink on dark surfaces. Primary (#1552ac) only reaches ~2.5:1 on
+         SurfaceDark/OffBlack and is illegible as text/icons in dark mode, so dark
+         surfaces use this lighter member of the same brand blue (~8:1). -->
+    <Color x:Key="AccentOnDark">#AACBFF</Color>
     <Color x:Key="Tertiary">#0d3d7a</Color>
 
     <Color x:Key="White">White</Color>

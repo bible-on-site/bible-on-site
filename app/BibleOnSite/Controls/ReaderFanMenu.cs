@@ -217,9 +217,11 @@ public class ReaderFanMenu : Grid
 
         _scrim.IsVisible = true;
 
-        // Change FAB icon to X
+        // Change FAB icon to X — the close state keeps red semantics in dark
+        // mode too, but shifts to a deeper red that stays legible on OffBlack.
         ToggleButton.Text = Fonts.FluentUI.dismiss_24_regular;
-        ToggleButton.BackgroundColor = Colors.Red;
+        ToggleButton.SetAppThemeColor(VisualElement.BackgroundColorProperty,
+            Colors.Red, Color.FromArgb("#B71C1C"));
 
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>

@@ -265,13 +265,19 @@ public partial class ParashaPage
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
         Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
-        var shellBackground = isSelectionMode
-            ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
-            : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#20304A")
-                : Color.FromArgb("#F2F7FE");
-        Shell.SetBackgroundColor(this, shellBackground);
-        ReaderToolbar.BackgroundColor = shellBackground;
+        // Selection mode paints the shared accent over the whole band; otherwise
+        // bind the reader band colors so a theme flip repaints both surfaces.
+        if (isSelectionMode)
+        {
+            var primary = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
+            Shell.SetBackgroundColor(this, primary);
+            ReaderToolbar.BackgroundColor = primary;
+        }
+        else
+        {
+            this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+            ReaderToolbar.SetAppThemeColor(VisualElement.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+        }
         NormalNavigationBar.BarVisible = !isSelectionMode && !searching;
         // The header names the focused pasuk — its perek source and pasuk
         // together — instead of the plain unit title (#2466).

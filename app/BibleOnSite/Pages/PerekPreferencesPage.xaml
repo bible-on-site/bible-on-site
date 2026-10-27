@@ -20,7 +20,7 @@
                 <Label Text="הפרק שיוצג בעת הפעלת היישומון"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <!-- Full-width stacked selection rows: each option is readable and
@@ -38,7 +38,7 @@
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsPerekToLoadTodays}"
                                          Value="True">
-                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                 <Setter Property="BackgroundColor"
                                         Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Tertiary}}"/>
                             </DataTrigger>
@@ -50,7 +50,7 @@
                             <Label Text="{x:Static fonts:FluentUI.checkmark_circle_24_regular}"
                                    FontFamily="FluentIcons"
                                    FontSize="22"
-                                   TextColor="{StaticResource Primary}"
+                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                    IsVisible="{Binding IsPerekToLoadTodays}"
                                    VerticalOptions="Center"
                                    Margin="0,0,10,0"/>
@@ -85,7 +85,7 @@
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsPerekToLoadLastLearnt}"
                                          Value="True">
-                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                 <Setter Property="BackgroundColor"
                                         Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Tertiary}}"/>
                             </DataTrigger>
@@ -97,7 +97,7 @@
                             <Label Text="{x:Static fonts:FluentUI.checkmark_circle_24_regular}"
                                    FontFamily="FluentIcons"
                                    FontSize="22"
-                                   TextColor="{StaticResource Primary}"
+                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                    IsVisible="{Binding IsPerekToLoadLastLearnt}"
                                    VerticalOptions="Center"
                                    Margin="0,0,10,0"/>
@@ -128,7 +128,7 @@
                 <Label Text="קריינות"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -159,7 +159,7 @@
                 <Label Text="מסורה על הפרק"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -183,7 +183,7 @@
                 <Label Text="פירושים על הפרק"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
                 <Border Padding="16"
                         StrokeShape="RoundRectangle 12"

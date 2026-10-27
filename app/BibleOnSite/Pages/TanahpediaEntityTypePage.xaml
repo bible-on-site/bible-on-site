@@ -43,7 +43,7 @@
                     CornerRadius="14"
                     BorderWidth="0"
                     BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                     VerticalOptions="Center"
                     HorizontalOptions="Start"
                     SemanticProperties.Hint="הקישו לפתיחת החיפוש"
@@ -119,7 +119,7 @@
                                                         <Border Padding="8,3"
                                                                 Margin="0,0,6,6"
                                                                 StrokeShape="RoundRectangle 8"
-                                                                Stroke="{StaticResource Primary}"
+                                                                Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                                 StrokeThickness="1"
                                                                 BackgroundColor="Transparent">
                                                             <Border.GestureRecognizers>
@@ -128,7 +128,7 @@
                                                             </Border.GestureRecognizers>
                                                             <Label Text="{Binding Title}"
                                                                    FontSize="13"
-                                                                   TextColor="{StaticResource Primary}"/>
+                                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                                         </Border>
                                                     </DataTemplate>
                                                 </BindableLayout.ItemTemplate>

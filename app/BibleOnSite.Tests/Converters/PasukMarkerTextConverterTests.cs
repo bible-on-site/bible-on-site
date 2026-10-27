@@ -4,6 +4,9 @@ using FluentAssertions;
 
 namespace BibleOnSite.Tests.Converters;
 
+// The resolved marker color depends on Application.Current.RequestedTheme
+// (#2601), so these tests serialize with the theme-mutating tests.
+[Collection("Application state")]
 public class PasukMarkerTextConverterTests
 {
     private static FormattedString PasukText(string text, params Span[] extraSpans)
