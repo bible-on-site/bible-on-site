@@ -2445,6 +2445,7 @@ dependencies = [
  "dotenvy",
  "flate2",
  "mongodb",
+ "reading-metrics",
  "rusqlite",
  "serde_json",
  "tempfile",
@@ -2663,6 +2664,15 @@ name = "rand_core"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+
+[[package]]
+name = "reading-metrics"
+version = "0.1.3"
+dependencies = [
+ "sha2",
+ "unicode-normalization",
+ "unicode_categories",
+]
 
 [[package]]
 name = "redox_syscall"
@@ -3373,6 +3383,7 @@ dependencies = [
  "icu_calendar",
  "mongodb",
  "once_cell",
+ "reading-metrics",
  "regex",
  "rusqlite",
  "serde",

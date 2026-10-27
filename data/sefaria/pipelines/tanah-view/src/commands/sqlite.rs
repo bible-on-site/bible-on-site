@@ -165,6 +165,7 @@ fn insert_sefarim(tx: &rusqlite::Transaction, sefarim: &[Sefer]) -> Result<()> {
         // Insert perakim directly under sefer
         if let Some(perakim) = &sefer.perakim {
             insert_perakim(tx, sefer_id, perakim)?;
+            insert_perek_metrics(tx, perakim)?;
         }
 
         // Insert additionals
@@ -183,6 +184,7 @@ fn insert_sefarim(tx: &rusqlite::Transaction, sefarim: &[Sefer]) -> Result<()> {
                 )?;
 
                 insert_perakim(tx, sefer_id, &additional.perakim)?;
+                insert_perek_metrics(tx, &additional.perakim)?;
             }
         }
     }
@@ -270,6 +272,60 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
         }
     }
 
+    Ok(())
+}
+
+/// Write the shared reading-metrics rows (#2607) for one perakim list —
+/// the identical contract the MySQL backfill produces from the same corpus:
+/// per-pasuk counted text, sha256 over the "\n"-joined stream, pasuk rows
+/// with cumulative_words in canonical order, and the whole-perek metric row.
+fn insert_perek_metrics(tx: &rusqlite::Transaction, perakim: &[Perek]) -> Result<()> {
+    let mut metric_stmt = tx.prepare(
+        "INSERT INTO tanah_perek_metric
+         (perek_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )?;
+    let mut pasuk_stmt = tx.prepare(
+        "INSERT INTO tanah_perek_pasuk_metric
+         (perek_id, pasuk, word_count, cumulative_words, calc_version)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+    for perek in perakim {
+        let texts: Vec<String> = perek
+            .pesukim
+            .iter()
+            .map(|pasuk| {
+                reading_metrics::pasuk_counted_text(pasuk.segments.iter().map(|segment| {
+                    reading_metrics::CorpusSegment {
+                        segment_type: &segment.segment_type,
+                        value: segment.value.as_deref(),
+                        qri_offset: segment.qri_offset,
+                    }
+                }))
+            })
+            .collect();
+        let hash = reading_metrics::metric_source_hash(&texts.join("\n"));
+        let mut cumulative: i64 = 0;
+        for (pasuk_idx, text) in texts.iter().enumerate() {
+            let word_count = reading_metrics::count_text_words(text);
+            cumulative += word_count;
+            pasuk_stmt.execute(rusqlite::params![
+                perek.perek_id,
+                (pasuk_idx + 1) as i64,
+                word_count,
+                cumulative,
+                reading_metrics::READING_METRICS_CALC_VERSION,
+            ])?;
+        }
+        metric_stmt.execute(rusqlite::params![
+            perek.perek_id,
+            cumulative,
+            reading_metrics::estimate_reading_seconds(cumulative),
+            reading_metrics::READING_WORDS_PER_MINUTE,
+            reading_metrics::READING_METRICS_CALC_VERSION,
+            hash,
+        ])?;
+    }
     Ok(())
 }
 
@@ -531,6 +587,49 @@ mod tests {
             })
             .unwrap();
         assert_eq!(reading_range_count, 4);
+
+        // Shared reading-metrics rows (#2607): each fixture perek holds one
+        // pasuk whose counted text is "read tail" (the paired ktiv is read by
+        // its qri) → 2 words, ceil(120/220) = 1 estimated second.
+        let metric_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_perek_metric", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(metric_count, 2);
+
+        let (word_count, estimated_seconds, wpm, calc_version, hash): (i64, i64, i64, i64, String) =
+            conn.query_row(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash
+                 FROM tanah_perek_metric WHERE perek_id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(word_count, 2);
+        assert_eq!(estimated_seconds, 1);
+        assert_eq!(wpm, reading_metrics::READING_WORDS_PER_MINUTE);
+        assert_eq!(calc_version, reading_metrics::READING_METRICS_CALC_VERSION);
+        assert_eq!(hash, reading_metrics::metric_source_hash("read tail"));
+
+        // Pasuk rows carry the word-weighted progress mapping.
+        let pasuk_row: (i64, i64, i64) = conn
+            .query_row(
+                "SELECT pasuk, word_count, cumulative_words
+                 FROM tanah_perek_pasuk_metric WHERE perek_id = 2",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(pasuk_row, (1, 2, 2));
 
         fs::remove_dir_all(&dir).ok();
     }
