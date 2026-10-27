@@ -424,6 +424,66 @@ public class PerekDataService
         return formatted == dateNum.ToString() ? hebDate : formatted;
     }
 
+    /// <summary>
+    /// Reading metric for a perek from the packaged tanah_view sqlite
+    /// (issue #2607). Older packs without the table degrade to null.
+    /// </summary>
+    public virtual async Task<ReadingMetric?> GetReadingMetricAsync(int perekId)
+    {
+        var db = await _databaseService.GetDatabaseAsync();
+        try
+        {
+            var rows = await db.QueryAsync<PerekMetricRow>(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perek_metric WHERE perek_id = ?",
+                perekId);
+            var row = rows.FirstOrDefault();
+            return row == null
+                ? null
+                : new ReadingMetric
+                {
+                    WordCount = row.WordCount,
+                    EstimatedSeconds = row.EstimatedSeconds,
+                    WordsPerMinute = row.WordsPerMinute,
+                    CalcVersion = row.CalcVersion,
+                    SourceHash = row.SourceHash ?? string.Empty
+                };
+        }
+        catch (SQLiteException)
+        {
+            // Metric tables absent in packs predating #2607 — degrade like any other optional table.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Ordered pasuk progress units for word-weighted reading position
+    /// (issue #2607). Empty when the metric table is absent or has no rows.
+    /// </summary>
+    public virtual async Task<IReadOnlyList<ReadingProgressUnit>> GetPasukProgressUnitsAsync(int perekId)
+    {
+        var db = await _databaseService.GetDatabaseAsync();
+        try
+        {
+            var rows = await db.QueryAsync<PasukMetricRow>(
+                "SELECT pasuk, word_count, cumulative_words " +
+                "FROM tanah_perek_pasuk_metric WHERE perek_id = ? ORDER BY pasuk",
+                perekId);
+            return rows
+                .Select(r => new ReadingProgressUnit
+                {
+                    Key = r.Pasuk.ToString(CultureInfo.InvariantCulture),
+                    WordCount = r.WordCount,
+                    CumulativeWords = r.CumulativeWords
+                })
+                .ToList();
+        }
+        catch (SQLiteException)
+        {
+            return Array.Empty<ReadingProgressUnit>();
+        }
+    }
+
     #region Database Row Classes
 
     private class SeferRow
@@ -493,6 +553,36 @@ public class PerekDataService
 
         [Column("qri_ktiv_offset")]
         public int? QriKtivOffset { get; set; }
+    }
+
+    private class PerekMetricRow
+    {
+        [Column("word_count")]
+        public int? WordCount { get; set; }
+
+        [Column("estimated_seconds")]
+        public int? EstimatedSeconds { get; set; }
+
+        [Column("words_per_minute")]
+        public int WordsPerMinute { get; set; }
+
+        [Column("calc_version")]
+        public int CalcVersion { get; set; }
+
+        [Column("source_hash")]
+        public string? SourceHash { get; set; }
+    }
+
+    private class PasukMetricRow
+    {
+        [Column("pasuk")]
+        public int Pasuk { get; set; }
+
+        [Column("word_count")]
+        public int WordCount { get; set; }
+
+        [Column("cumulative_words")]
+        public int CumulativeWords { get; set; }
     }
 
     #endregion
