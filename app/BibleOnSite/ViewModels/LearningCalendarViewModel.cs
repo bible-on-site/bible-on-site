@@ -37,6 +37,26 @@ public class CalendarCellViewModel
 
     /// <summary>Weekday column (0-6, Sunday first) inside a grouped-view week row.</summary>
     public int Column { get; init; }
+
+    /// <summary>
+    /// Grid columns the cell covers: 2 for a merged Friday+Shabbat review
+    /// block (#2365), 1 otherwise.
+    /// </summary>
+    public int ColumnSpan { get; init; } = 1;
+
+    /// <summary>
+    /// On a merged Friday cell (#2365), the Shabbat date it shares the block
+    /// with — e.g. "כט" when the cell's <see cref="DayText"/> is "כח".
+    /// </summary>
+    public string MergedDayText { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Spoken label for the Shabbat half of a merged block (#2365): each
+    /// rendered day numeral is its own element under its weekday column, so
+    /// <see cref="AccessibilityText"/> alone cannot describe both halves.
+    /// </summary>
+    public string MergedDayAccessibilityText { get; init; } = string.Empty;
+    public bool HasMergedDay => MergedDayText.Length > 0;
 }
 
 /// <summary>One 7-column week row inside a <see cref="MiniMonthViewModel"/> (#2455).</summary>
@@ -45,17 +65,39 @@ public class MiniMonthWeekViewModel
     public required IReadOnlyList<CalendarCellViewModel> Cells { get; init; }
 }
 
+/// <summary>Cell and week-row content of one <see cref="MiniMonthViewModel"/>.</summary>
+public sealed record MiniMonthContent(
+    ObservableCollection<CalendarCellViewModel> Cells,
+    IReadOnlyList<MiniMonthWeekViewModel> Weeks);
+
 /// <summary>A named month section inside the yearly / full-cycle views (#2364).</summary>
 public class MiniMonthViewModel
 {
-    public required string Title { get; init; }
-    public required ObservableCollection<CalendarCellViewModel> Cells { get; init; }
+    private readonly Lazy<MiniMonthContent> _content;
+
+    /// <summary>
+    /// A grouped-view month section whose cells and week rows materialize on
+    /// first access. The full-cycle view lists ~31 months: building every
+    /// section's cells eagerly at view-switch time blocked the UI thread long
+    /// enough to ANR on device, so only the shells are built up front.
+    /// </summary>
+    public MiniMonthViewModel(string title, Func<MiniMonthContent> content)
+    {
+        Title = title;
+        _content = new Lazy<MiniMonthContent>(content);
+    }
+
+    /// <summary>Month title shown above the mini calendar.</summary>
+    public string Title { get; }
+
+    /// <summary>One cell per date — the canonical daily assignments.</summary>
+    public ObservableCollection<CalendarCellViewModel> Cells => _content.Value.Cells;
 
     /// <summary>
     /// Cells chunked into 7-column weeks; the grouped XAML renders each week
     /// as a plain Grid row instead of a nested CollectionView (#2455).
     /// </summary>
-    public required IReadOnlyList<MiniMonthWeekViewModel> Weeks { get; init; }
+    public IReadOnlyList<MiniMonthWeekViewModel> Weeks => _content.Value.Weeks;
 }
 
 /// <summary>Which period the learning calendar renders (#2364).</summary>
@@ -78,6 +120,8 @@ public partial class LearningCalendarViewModel : ObservableObject
     private readonly PerekScheduleService _schedule;
     private readonly PerekDataService _perekData;
     private readonly IAppNavigator _navigator;
+    private readonly ICalendarPdfAssetResolver _calendarPdfAssets;
+    private readonly ILauncher _launcher;
 
     private int _year;
     private int _month;
@@ -95,15 +139,26 @@ public partial class LearningCalendarViewModel : ObservableObject
     internal LearningCalendarViewModel(
         PerekScheduleService schedule,
         PerekDataService perekData,
-        IAppNavigator navigator)
+        IAppNavigator navigator,
+        ICalendarPdfAssetResolver? calendarPdfAssets = null,
+        ILauncher? launcher = null)
     {
         _schedule = schedule;
         _perekData = perekData;
         _navigator = navigator;
+        _calendarPdfAssets = calendarPdfAssets ?? CalendarPdfAssetService.Instance;
+        _launcher = launcher ?? Launcher.Default;
     }
 
     [ObservableProperty]
     private ObservableCollection<CalendarCellViewModel> _cells = new();
+
+    /// <summary>
+    /// Month view's cells chunked into week rows, with Friday+Shabbat review
+    /// pairs merged into a single two-column block (#2365).
+    /// </summary>
+    [ObservableProperty]
+    private IReadOnlyList<MiniMonthWeekViewModel> _monthWeeks = [];
 
     [ObservableProperty]
     private ObservableCollection<MiniMonthViewModel> _monthGroups = new();
@@ -111,12 +166,19 @@ public partial class LearningCalendarViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMonthView))]
     [NotifyPropertyChangedFor(nameof(IsGroupedView))]
+    [NotifyPropertyChangedFor(nameof(IsCycleRangeVisible))]
     private CalendarViewMode _viewMode = CalendarViewMode.Month;
 
     public bool IsMonthView => ViewMode == CalendarViewMode.Month;
 
     /// <summary>Yearly and full-cycle views both render grouped mini-months.</summary>
     public bool IsGroupedView => ViewMode != CalendarViewMode.Month;
+
+    /// <summary>
+    /// The contextual cycle range beside the picker shows only in month/year
+    /// views; the full-cycle heading already carries that label (#2725).
+    /// </summary>
+    public bool IsCycleRangeVisible => ViewMode != CalendarViewMode.Cycle;
 
     [ObservableProperty]
     private ObservableCollection<PickerOption> _monthOptions = new();
@@ -246,12 +308,9 @@ public partial class LearningCalendarViewModel : ObservableObject
                 _cycleOptionsCount = maxCycle;
                 CycleOptions = new ObservableCollection<PickerOption>(
                     Enumerable.Range(1, maxCycle).Select(number =>
-                    {
-                        var cycle = _schedule.GetCycle(number);
-                        return new PickerOption(
+                        new PickerOption(
                             number,
-                            $"מחזור {number}{(cycle.Projected ? " (משוער)" : string.Empty)}");
-                    }));
+                            CycleDisplayFormatter.Name(_schedule.GetCycle(number)))));
             }
 
             SelectedMonth = MonthOptions.FirstOrDefault(o => o.Value == _month);
@@ -264,18 +323,17 @@ public partial class LearningCalendarViewModel : ObservableObject
             {
                 CalendarViewMode.Year => $"שנת ה'{GimatryHelper.ToLetters(_year % 1000)}",
                 CalendarViewMode.Cycle when displayed is not null =>
-                    $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
-                        $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
-                        $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}",
+                    CycleDisplayFormatter.Label(displayed),
                 _ =>
                     $"{HebrewDateHelper.GetHebrewMonthName(_month, HebrewDateHelper.IsHebrewLeapYear(_year))} " +
                     $"ה'{GimatryHelper.ToLetters(_year % 1000)}",
             };
-            CycleLabel = displayed is null
+            // Beside the picker, month/year views show the contextual cycle's
+            // range once. The full-cycle view's heading already carries the
+            // selected cycle's label — repeating it here duplicated it (#2725).
+            CycleLabel = displayed is null || ViewMode == CalendarViewMode.Cycle
                 ? string.Empty
-                : $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
-                    $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
-                    $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}";
+                : CycleDisplayFormatter.Label(displayed);
         }
         finally
         {
@@ -285,9 +343,14 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     private void RebuildCells()
     {
-        var cells = _schedule.BuildMonth(_year, _month);
-        Cells = new ObservableCollection<CalendarCellViewModel>(
-            cells.Select((cell, index) => ToCellViewModel(cell, column: index % 7)));
+        var days = _schedule.BuildMonth(_year, _month);
+        // Cells keeps one entry per date — the canonical daily assignments.
+        // MonthWeeks is the merged layout the month grid renders (#2365); it
+        // reuses the same cell instances instead of building a second model.
+        var cells = days.Select((cell, index) =>
+            ToCellViewModel(cell, column: index % 7)).ToList();
+        Cells = new ObservableCollection<CalendarCellViewModel>(cells);
+        MonthWeeks = BuildWeekRows(cells, days, dimmed: null);
     }
 
     private void RebuildGroups()
@@ -298,13 +361,18 @@ public partial class LearningCalendarViewModel : ObservableObject
             return;
         }
 
-        IEnumerable<(string Title, IReadOnlyList<PerekScheduleService.MonthCell> Cells)> groups;
+        // Each group's day cells resolve lazily with the rest of its content,
+        // so switching to the ~31-month cycle view only pays for the visible
+        // sections instead of blocking on ~2500 view models up front.
+        IEnumerable<(string Title, Func<IReadOnlyList<PerekScheduleService.MonthCell>> Days)> groups;
         Func<PerekScheduleService.CalendarDay, bool>? dimmed = null;
         if (ViewMode == CalendarViewMode.Year)
         {
-            groups = HebrewDateHelper.GetMonthOrder(_year).Select(month =>
-                ($"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(_year))}",
-                    (IReadOnlyList<PerekScheduleService.MonthCell>)_schedule.BuildMonth(_year, month)));
+            var year = _year;
+            groups = HebrewDateHelper.GetMonthOrder(year).Select(month =>
+                ($"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))}",
+                    (Func<IReadOnlyList<PerekScheduleService.MonthCell>>)(
+                        () => _schedule.BuildMonth(year, month))));
         }
         else
         {
@@ -314,7 +382,7 @@ public partial class LearningCalendarViewModel : ObservableObject
             // Legacy month numbering is not chronological (Adar I/II are 13/14),
             // so compare positions inside the year's month order.
             var endMonthIndex = HebrewDateHelper.GetMonthOrder(endYear).IndexOf(endMonth);
-            var months = new List<(string, IReadOnlyList<PerekScheduleService.MonthCell>)>();
+            var months = new List<(string, Func<IReadOnlyList<PerekScheduleService.MonthCell>>)>();
             var (year, month) = (startYear, startMonth);
             for (var guard = 0; guard < 50; guard++)
             {
@@ -324,10 +392,12 @@ public partial class LearningCalendarViewModel : ObservableObject
                 {
                     break;
                 }
+                var monthYear = year;
+                var monthNumber = month;
                 months.Add((
                     $"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))} " +
                         $"ה'{GimatryHelper.ToLetters(year % 1000)}",
-                    _schedule.BuildMonth(year, month)));
+                    () => _schedule.BuildMonth(monthYear, monthNumber)));
                 (year, month) = HebrewDateHelper.NextMonth(year, month);
             }
             groups = months;
@@ -336,20 +406,110 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
 
         MonthGroups = new ObservableCollection<MiniMonthViewModel>(groups.Select(group =>
-        {
-            var cells = group.Cells
-                .Select((cell, index) => ToCellViewModel(cell, dimmed, index % 7))
-                .ToList();
-            return new MiniMonthViewModel
+            new MiniMonthViewModel(group.Title, () =>
             {
-                Title = group.Title,
-                Cells = new ObservableCollection<CalendarCellViewModel>(cells),
-                Weeks = cells
-                    .Chunk(7)
-                    .Select(row => new MiniMonthWeekViewModel { Cells = row })
-                    .ToList(),
-            };
-        }));
+                var days = group.Days();
+                var cells = days
+                    .Select((cell, index) => ToCellViewModel(cell, dimmed, index % 7))
+                    .ToList();
+                return new MiniMonthContent(
+                    new ObservableCollection<CalendarCellViewModel>(cells),
+                    BuildWeekRows(cells, days, dimmed));
+            })));
+    }
+
+    /// <summary>
+    /// Chunks a BuildMonth cell list into 7-column week rows, merging an
+    /// adjacent Friday/Shabbat pair into one two-column cell when both are
+    /// review days of the same cycle covering the identical studied set
+    /// (#2365). `cells` reuses the already-built per-date view models so the
+    /// merged layout never formats a day twice; `days` supplies the raw
+    /// schedule entry each cell came from for the merge check.
+    /// </summary>
+    private List<MiniMonthWeekViewModel> BuildWeekRows(
+        IReadOnlyList<CalendarCellViewModel> cells,
+        IReadOnlyList<PerekScheduleService.MonthCell> days,
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed)
+    {
+        var weeks = new List<MiniMonthWeekViewModel>();
+        var i = 0;
+        while (i < cells.Count)
+        {
+            var row = new List<CalendarCellViewModel>(7);
+            var weekEnd = Math.Min(i + 7, cells.Count);
+            while (i < weekEnd)
+            {
+                var day = days[i].Day;
+                var next = i + 1 < weekEnd ? days[i + 1].Day : null;
+                if (IsMergedReviewPair(day, next))
+                {
+                    row.Add(ToMergedCellViewModel(day!, next!, dimmed, row.Count));
+                    i += 2; // Saturday is part of Friday's merged block.
+                }
+                else
+                {
+                    row.Add(cells[i]);
+                    i++;
+                }
+            }
+            weeks.Add(new MiniMonthWeekViewModel { Cells = row });
+        }
+        return weeks;
+    }
+
+    /// <summary>
+    /// True when `friday` and `shabbat` are the adjacent review cells of one
+    /// merged block (#2365): both review days of the same cycle covering the
+    /// identical studied set, at week columns 5 and 6.
+    /// </summary>
+    private static bool IsMergedReviewPair(
+        PerekScheduleService.CalendarDay? friday,
+        PerekScheduleService.CalendarDay? shabbat)
+    {
+        if (friday is not { Status: PerekScheduleService.DayStatus.Review, DayOfWeek: 5 } ||
+            shabbat is not { Status: PerekScheduleService.DayStatus.Review, DayOfWeek: 6 } ||
+            friday.Cycle is null ||
+            friday.Cycle != shabbat.Cycle)
+        {
+            return false;
+        }
+        return friday.ReviewPerekIds is { } a &&
+            shabbat.ReviewPerekIds is { } b &&
+            a.SequenceEqual(b);
+    }
+
+    /// <summary>
+    /// The Friday cell of a merged review block (#2365): spans the Friday and
+    /// Shabbat columns, carries both dates, one חזרה range and both dates'
+    /// accessibility text.
+    /// </summary>
+    private CalendarCellViewModel ToMergedCellViewModel(
+        PerekScheduleService.CalendarDay friday,
+        PerekScheduleService.CalendarDay shabbat,
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed,
+        int column)
+    {
+        var source = friday.ReviewPerekIds is { Count: > 0 } ids
+            ? _perekData.GetPerekRangeSource(ids)
+            : string.Empty;
+        var fridayLabel = HebrewDateHelper.FormatHebrewDate(friday.DateNumber);
+        var shabbatLabel = HebrewDateHelper.FormatHebrewDate(shabbat.DateNumber);
+        return new CalendarCellViewModel
+        {
+            DateNumber = friday.DateNumber,
+            DayText = friday.DayOfMonth.ToHebrewLetters(),
+            MergedDayText = shabbat.DayOfMonth.ToHebrewLetters(),
+            PerekSource = source,
+            PerekId = friday.PerekId,
+            IsReview = true,
+            IsToday = friday.DateNumber == _todayDateNumber ||
+                shabbat.DateNumber == _todayDateNumber,
+            AccessibilityText = $"יום שישי, {fridayLabel} - שבת {shabbatLabel} - חזרה: {source}",
+            MergedDayAccessibilityText = $"שבת, {shabbatLabel} - חזרה: {source}",
+            IsDimmed = dimmed?.Invoke(friday) == true && dimmed(shabbat),
+            Column = column,
+            ColumnSpan = 2,
+        };
     }
 
     private CalendarCellViewModel ToCellViewModel(
@@ -366,8 +526,8 @@ public partial class LearningCalendarViewModel : ObservableObject
         var reviewIds = day.Status == PerekScheduleService.DayStatus.Review
             ? day.ReviewPerekIds
             : null;
-        var source = reviewIds is { Count: > 1 }
-            ? $"{_perekData.GetPerekSource(reviewIds[0])} - {_perekData.GetPerekSource(reviewIds[^1])}"
+        var source = reviewIds is { Count: > 0 } ids
+            ? _perekData.GetPerekRangeSource(ids)
             : day.PerekId is int perekId
                 ? _perekData.GetPerekSource(perekId) ?? string.Empty
                 : string.Empty;
@@ -544,22 +704,55 @@ public partial class LearningCalendarViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Opens the website's PDF export of the currently viewed period (#2366)
-    /// in the device browser, which handles download/save/share. The export is
-    /// generated on the website API, so this requires connectivity; browsing
-    /// the calendar itself stays offline.
+    /// Hands the PDF export of the currently viewed period (#2366) to the
+    /// device browser, which owns download/save/share.
+    ///
+    /// Since #2622 the canonical artifact key is resolved against the static
+    /// manifest published in the assets bucket, so an available artifact opens
+    /// its published object URL directly — no per-download resolver/API call
+    /// and no PDF bytes through the website's request path. When the manifest
+    /// is unreachable or the artifact is not published, the legacy
+    /// /api/calendar-pdf URL is opened instead (it re-checks a fresh manifest
+    /// server-side and stays the compatibility path for older installs).
+    /// Fetching a not-yet-cached PDF needs connectivity; browsing the
+    /// calendar itself stays offline.
     /// </summary>
     [RelayCommand]
     private async Task DownloadPdfAsync()
     {
-        var view = ViewMode switch
+        // Capture the selection up-front: a navigation during the manifest
+        // fetch must not change which artifact this download delivers.
+        var mode = ViewMode;
+        var year = _year;
+        var month = _month;
+        var cycle = Math.Max(1, _cycle);
+        var view = mode switch
         {
             CalendarViewMode.Year => "year",
             CalendarViewMode.Cycle => "cycle",
             _ => "month",
         };
-        var url = $"{Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
-            $"?month={_year * 100 + _month}&view={view}&cycle={Math.Max(1, _cycle)}";
-        await Launcher.OpenAsync(new Uri(url));
+        var artifactKey = mode switch
+        {
+            CalendarViewMode.Cycle => $"cycle:{cycle}",
+            CalendarViewMode.Year => $"year:{year}",
+            _ => $"month:{year * 100 + month}",
+        };
+
+        Uri? resolved = null;
+        try
+        {
+            resolved = await _calendarPdfAssets.TryResolveAsync(artifactKey);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: resolution failure falls back to the legacy URL
+        catch (Exception ex) //NOSONAR — resolution failure falls back to the legacy URL.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Calendar PDF asset resolution failed: {ex.Message}");
+        }
+        var url = resolved?.ToString()
+            ?? $"{Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
+                $"?month={year * 100 + month}&view={view}&cycle={cycle}";
+        await _launcher.OpenAsync(new Uri(url));
     }
 }

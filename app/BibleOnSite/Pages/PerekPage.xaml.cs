@@ -75,6 +75,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -91,6 +92,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
         NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
     }
 
@@ -103,6 +105,45 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
         Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    /// <summary>
+    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
+    /// each pasuk's cached FormattedString at build time, and the shell band is
+    /// applied imperatively — neither follows the requested theme on its own, so
+    /// a flip while the page is alive re-applies both (#2601).
+    /// </summary>
+    private void SubscribeThemeChange()
+    {
+        if (Microsoft.Maui.Controls.Application.Current is not { } app)
+        {
+            return;
+        }
+        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
+        // when navigation returns, and must re-check the theme then.
+        Loaded += (_, _) =>
+        {
+            app.RequestedThemeChanged += OnRequestedThemeChanged;
+            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
+        };
+        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
+    }
+
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
+    {
+        Dispatcher.Dispatch(() =>
+        {
+            foreach (var pasuk in _viewModel.CarouselPerakim
+                .SelectMany(perek => perek.Pasukim ?? Enumerable.Empty<Pasuk>()))
+            {
+                pasuk.RefreshForThemeChange();
+            }
+            if (_focusedPasuk != null)
+            {
+                _focusedPasuk.RefreshForThemeChange();
+                RefreshFocusedRecitation();
+            }
+        });
     }
 
     private bool _notesRefreshQueued;
@@ -1134,13 +1175,21 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
         Shell.SetFlyoutBehavior(this, selectionBarMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
-        var shellBackground = selectionBarMode
-            ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
-            : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#20304A")
-                : Color.FromArgb("#F2F7FE");
-        Shell.SetBackgroundColor(this, shellBackground);
-        ReaderToolbar.BackgroundColor = shellBackground;
+        // Selection mode paints the shared accent over the whole band; otherwise
+        // bind the reader band colors so a theme flip repaints both surfaces.
+        if (selectionBarMode)
+        {
+            var primary = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
+            Shell.SetBackgroundColor(this, primary);
+            ReaderToolbar.BackgroundColor = primary;
+        }
+        else
+        {
+            this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+            // SharedTopBar, not VisualElement — the iOS-specific using alias
+            // shadows VisualElement on net10.0-ios.
+            ReaderToolbar.SetAppThemeColor(SharedTopBar.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+        }
         NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
         // The header names the focused pasuk — sefer, perek and pasuk together —
         // instead of the plain perek source (#2466).
@@ -1351,6 +1400,19 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
     }
 
+    /// <summary>Feeds the Debug-only תיקון scroll-offset E2E probe (#2624).</summary>
+    private void OnTikkunScrolled(object? sender, ScrolledEventArgs e) =>
+        ReaderScrollTop.NoteScrollOffset(sender, e);
+
+    /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>
+    private void OnTikkunLoaded(object? sender, EventArgs e)
+    {
+        if (sender is Microsoft.Maui.Controls.ScrollView scrollView)
+        {
+            ReaderScrollTop.NoteScrollOffset(sender, scrollView.ScrollY);
+        }
+    }
+
     /// <summary>
     /// Shows the perek picker popup.
     /// </summary>
@@ -1378,7 +1440,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     /// <summary>
     /// Handles text button click - returns to perek view if showing articles,
-    /// otherwise scrolls to header/top of perek.
+    /// otherwise animates the visible perek's vertical content back to its
+    /// first pasuk (#2624). The shared helper resolves the realized scroll
+    /// surface of the current carousel item (regular list or תיקון קוראים),
+    /// so a stale or off-screen item can never be scrolled.
     /// </summary>
     private void OnTextButtonClicked(object? sender, EventArgs e)
     {
@@ -1389,8 +1454,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         else
         {
-            // Scroll the pasukim CollectionView to top within the current carousel item
-            PerekCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
+            ReaderScrollTop.ScrollCurrentUnitToStart(PerekCarousel, _viewModel.Perek);
         }
     }
 

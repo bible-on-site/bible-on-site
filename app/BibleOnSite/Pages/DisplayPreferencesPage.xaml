@@ -19,7 +19,7 @@
                 <Label Text="גודל גופן"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -33,15 +33,19 @@
                                    FontSize="16"
                                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                                    VerticalOptions="Center"/>
-                            <Label Grid.Column="1"
-                                   Text="{Binding FontFactor, StringFormat='{0:P0}'}"
-                                   FontSize="15"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
-                                   VerticalOptions="Center"/>
+                            <controls:NumberPicker Grid.Column="1"
+                                                   Minimum="{Binding FontPercentMinimum}"
+                                                   Maximum="{Binding FontPercentMaximum}"
+                                                   Increment="5"
+                                                   Value="{Binding MasterFontPercent}"
+                                                   AutomationId="MasterFontPercentPicker"/>
                         </Grid>
                         <!-- Live preview: wraps and grows freely so the text stays
                              readable at the largest supported factor. -->
-                        <Label Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
+                        <!-- The preview verse renders through the same shared
+                             pasuk label as the readers (Taamey D, #2623) so
+                             the size preview is honest. -->
+                        <controls:PasukTextLabel Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
                                FontSize="{Binding FontFactor, Converter={StaticResource FontFactorToSizeConverter}}"
                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
                                LineBreakMode="WordWrap"
@@ -50,7 +54,6 @@
                                 AutomationId="FontFactorSlider"
                                 Maximum="2.0"
                                 Value="{Binding FontFactor}"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -61,7 +64,7 @@
                 <Label Text="גודל יחסי (אחוז מהגודל הכללי)"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <!-- פסוקים -->
@@ -76,13 +79,12 @@
                                    FontSize="16"
                                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                                    VerticalOptions="Center"/>
-                            <Entry Grid.Column="1"
-                                   Text="{Binding PasukFontPercent}"
-                                   Keyboard="Numeric"
-                                   WidthRequest="72"
-                                   FontSize="15"
-                                   HorizontalTextAlignment="Center"
-                                   AutomationId="PasukFontPercentEntry"/>
+                            <controls:NumberPicker Grid.Column="1"
+                                                   Minimum="{Binding FontPercentMinimum}"
+                                                   Maximum="{Binding FontPercentMaximum}"
+                                                   Increment="1"
+                                                   Value="{Binding PasukFontPercent}"
+                                                   AutomationId="PasukFontPercentEntry"/>
                             <Button Grid.Column="2"
                                     Text="איפוס"
                                     FontSize="13"
@@ -98,7 +100,6 @@
                                 Maximum="{Binding FontPercentMaximum}"
                                 Value="{Binding PasukFontPercent}"
                                 AutomationId="PasukFontPercentSlider"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -115,13 +116,12 @@
                                    FontSize="16"
                                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                                    VerticalOptions="Center"/>
-                            <Entry Grid.Column="1"
-                                   Text="{Binding PerushFontPercent}"
-                                   Keyboard="Numeric"
-                                   WidthRequest="72"
-                                   FontSize="15"
-                                   HorizontalTextAlignment="Center"
-                                   AutomationId="PerushFontPercentEntry"/>
+                            <controls:NumberPicker Grid.Column="1"
+                                                   Minimum="{Binding FontPercentMinimum}"
+                                                   Maximum="{Binding FontPercentMaximum}"
+                                                   Increment="1"
+                                                   Value="{Binding PerushFontPercent}"
+                                                   AutomationId="PerushFontPercentEntry"/>
                             <Button Grid.Column="2"
                                     Text="איפוס"
                                     FontSize="13"
@@ -137,7 +137,6 @@
                                 Maximum="{Binding FontPercentMaximum}"
                                 Value="{Binding PerushFontPercent}"
                                 AutomationId="PerushFontPercentSlider"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -154,13 +153,12 @@
                                    FontSize="16"
                                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                                    VerticalOptions="Center"/>
-                            <Entry Grid.Column="1"
-                                   Text="{Binding ArticleFontPercent}"
-                                   Keyboard="Numeric"
-                                   WidthRequest="72"
-                                   FontSize="15"
-                                   HorizontalTextAlignment="Center"
-                                   AutomationId="ArticleFontPercentEntry"/>
+                            <controls:NumberPicker Grid.Column="1"
+                                                   Minimum="{Binding FontPercentMinimum}"
+                                                   Maximum="{Binding FontPercentMaximum}"
+                                                   Increment="1"
+                                                   Value="{Binding ArticleFontPercent}"
+                                                   AutomationId="ArticleFontPercentEntry"/>
                             <Button Grid.Column="2"
                                     Text="איפוס"
                                     FontSize="13"
@@ -176,7 +174,6 @@
                                 Maximum="{Binding FontPercentMaximum}"
                                 Value="{Binding ArticleFontPercent}"
                                 AutomationId="ArticleFontPercentSlider"
-                                MinimumTrackColor="{StaticResource Primary}"
                                 MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     </VerticalStackLayout>
                 </Border>
@@ -186,7 +183,7 @@
                 <Label Text="הסתרת שם השם"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -323,7 +320,7 @@
                 <Label Text="כפתור חזרה ביישומון"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"

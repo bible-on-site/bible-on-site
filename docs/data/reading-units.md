@@ -147,9 +147,14 @@ live in `docs/data/aliyah-sources.md`. Consumers:
 - **Website** — `src/data/parasha/parasha-aliyot.ts` resolves every
   boundary to canonical `perekId`/`pasuk` at module load (impossible
   endpoints fail the build) and validates ordered non-overlapping
-  coverage, allowing the intentional maftir tail-repeat. The flat
-  parasha page embeds all context/scheme marker layers and swaps them
-  client-side (`?reading=`/`?scheme=`); the sefer book renders each
+  coverage, allowing the intentional maftir tail-repeat. Named
+  **variant layers** are derived from the per-aliyah `alternatives`:
+  each (custom | alt-source) group substitutes its recorded ranges for
+  the covered ordinals inside a full boundary list, re-validated for
+  contiguous coverage; variants that move no boundary *start* are
+  dropped as renderer-identical. The flat parasha page embeds all
+  context/scheme/variant marker layers and swaps them client-side
+  (`?reading=`/`?scheme=`/`?variant=`); the sefer book renders each
   unit's standalone Shabbat layer. Aliyah markers take the prominent
   separator treatment; perek labels demote to pasuk-number styling.
 - **SQLite export** — `reading_units.rs::insert_parasha_aliyot` resolves
@@ -163,9 +168,15 @@ live in `docs/data/aliyah-sources.md`. Consumers:
     (division_id, unit_id)`: joined contexts keep their two constituent
     unit identities in reading order — never merged.
   - `tanah_parasha_aliyah` — `(reading_id, scheme_id, ordinal) →
-    { role, label, start/end perek/pasuk, note }`: inclusive canonical
-    bounds; `role='maftir'` marks the intentional repeated-tail reading;
-    `note` carries the source's documented alternative splits verbatim.
+    { role, label, start/end perek/pasuk }`: inclusive canonical
+    bounds; `role='maftir'` marks the intentional repeated-tail reading.
+  - `tanah_parasha_aliyah_alternative` — `(reading_id, scheme_id,
+    ordinal, alternative) → { start/end perek/pasuk, custom, source }`:
+    the documented variant range for each aliyah that carries one —
+    `custom` names the minhag (NULL = unattributed recorded split),
+    `source` the upstream that records it. Consumers derive named
+    variant layers by substituting each (custom | source) group's
+    ranges for its ordinals, the same derivation the website runs.
   - `tanah_parasha_aliyah_source` — the single provenance row (name,
     repository, license, upstream commit, retrieval date).
 - **Native app** — the tables are the versioned contract for app-side

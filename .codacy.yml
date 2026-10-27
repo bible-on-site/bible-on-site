@@ -17,6 +17,7 @@ engines:
       - "data/annotations/baseline.py"
       - "data/annotations/baseline_articles.py"
       - "data/annotations/test_baseline_articles.py"
+      - "app/devops/verify_android_dex_metadata.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
@@ -74,3 +75,9 @@ exclude_paths:
   # JUnit/uiautomator XML stubs that markup rules flag as interpolated HTML.
   - "app/mobile-e2e/release-smoke.test.mjs"
   - "app/mobile-e2e/merge-runner-shards.test.mjs"
+  # Differential-check CLI whose entire job is fetching operator-supplied
+  # --base/--candidate origins (scheme/host-validated by parseOrigin, parsed
+  # again via new URL() before fetch). The user-controlled-URL-to-HTTP-client
+  # taint pattern is a systemic false positive for a URL-diffing tool — the
+  # repo's own codacy-gate/precommit still lint this file.
+  - "devops/edge-compat-check.mjs"

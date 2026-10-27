@@ -13,6 +13,7 @@ import { describe, test } from "node:test";
 import {
 	baseRevision,
 	detectChanges,
+	isDataDeployChange,
 	isSchemaOnlyDataChange,
 	MODULES,
 	type ModuleKey,
@@ -40,6 +41,15 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("an action-only change selects every module's checks without releasing it", () => {
+		// Composite actions under .github/actions are consumed by jobs across
+		// every module — an lcov-image-only PR must still run their consumers.
+		const changes = detectChanges([".github/actions/lcov-image/action.yml"]);
+		for (const [key, flags] of Object.entries(changes)) {
+			assert.deepEqual(flags, { module_changed: false, ci_changed: true }, key);
+		}
+	});
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
@@ -57,6 +67,18 @@ describe("detectChanges", () => {
 	test("deployment workflow changes require website checks without a release", () => {
 		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
 		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("calendar-PDF publish workflow changes require website checks without a release", () => {
+		// The publisher defines the generation/publish contract verified by the
+		// calendar_pdf_artifacts job (#2608) — CI-only, never a website release.
+		const changes = detectChanges([
+			".github/workflows/calendar-pdf-publish.yml",
+		]);
 		assert.deepEqual(changes.website, {
 			module_changed: false,
 			ci_changed: true,
@@ -502,6 +524,26 @@ describe("isSchemaOnlyDataChange", () => {
 	});
 });
 
+describe("isDataDeployChange", () => {
+	test("data-deploy tooling changes signal delivery intent", () => {
+		assert.equal(isDataDeployChange(["devops/deploy/data-deploy/index.mts"]), true);
+		assert.equal(isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]), true);
+	});
+
+	test("shared CI plumbing and data content are not delivery intent", () => {
+		// #2730: a shared-CI-only push (ci.yml, composite actions, the detector
+		// itself) skips the perushim producer and must not enter Release Data.
+		for (const files of [
+			SHARED_FILES,
+			["data/mysql/tanah_static_structure.sql"],
+			["devops/deploy/deployer-base.mts"],
+			["devops/deploy/data-deploy-old.mts"],
+			[],
+		])
+			assert.equal(isDataDeployChange(files), false, JSON.stringify(files));
+	});
+});
+
 describe("baseRevision", () => {
 	test("uses the tested PR merge parent even when the event base is stale", () => {
 		assert.deepEqual(
@@ -633,7 +675,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 1,
+				Object.keys(MODULES).length * 2 + 2,
 			);
 			return { changes, output };
 		} finally {

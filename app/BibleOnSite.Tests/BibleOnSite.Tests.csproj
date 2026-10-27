@@ -54,6 +54,8 @@
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\CalendarPdfAssetService.cs" Link="Services\CalendarPdfAssetService.cs" />
+    <Compile Include="..\BibleOnSite\Services\CycleDisplayFormatter.cs" Link="Services\CycleDisplayFormatter.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesNavigation.cs" Link="Services\PreferencesNavigation.cs" />
     <Compile Include="..\BibleOnSite\Services\IAppNavigator.cs" Link="Services\IAppNavigator.cs" />
     <Compile Include="..\BibleOnSite\Services\AppDialog.cs" Link="Services\AppDialog.cs" />

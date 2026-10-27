@@ -66,12 +66,10 @@ describe("resolveSynonymSlug", () => {
 	});
 
 	describe("when the lookup fails", () => {
-		it("resolves to missing instead of throwing", async () => {
+		it("rethrows so a transient failure cannot become a cached 404", async () => {
 			getEntriesBySynonym.mockRejectedValue(new Error("db down"));
 
-			await expect(resolveSynonymSlug("משה")).resolves.toEqual({
-				kind: "missing",
-			});
+			await expect(resolveSynonymSlug("משה")).rejects.toThrow("db down");
 		});
 	});
 });

@@ -7,6 +7,7 @@ namespace BibleOnSite.Tests.Support;
 public sealed class TestStorage : IAsyncDisposable
 {
     private readonly List<SQLiteAsyncConnection> _connections = [];
+    private readonly List<MemoryStream> _packageStreams = [];
     public string Root { get; } = Path.Join(Path.GetTempPath(), "BibleOnSite", Guid.NewGuid().ToString("N"));
     public Mock<IFileSystem> FileSystem { get; } = new();
     public Dictionary<string, byte[]> PackageFiles { get; } = [];
@@ -18,8 +19,16 @@ public sealed class TestStorage : IAsyncDisposable
         FileSystem.SetupGet(f => f.CacheDirectory).Returns(Root);
         FileSystem.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>()))
             .Returns((string name) => PackageFiles.TryGetValue(name, out var bytes)
-                ? Task.FromResult<Stream>(new MemoryStream(bytes))
+                ? Task.FromResult<Stream>(PackageStream(bytes))
                 : Task.FromException<Stream>(new FileNotFoundException(name)));
+    }
+
+    /// <summary>Hands a packaged file's bytes to the service under test; disposed with the storage.</summary>
+    private MemoryStream PackageStream(byte[] bytes)
+    {
+        var stream = new MemoryStream(bytes);
+        _packageStreams.Add(stream);
+        return stream;
     }
 
     public async Task<SQLiteAsyncConnection> CreateDatabaseAsync(string name, params string[] statements)
@@ -68,6 +77,10 @@ public sealed class TestStorage : IAsyncDisposable
         foreach (var connection in _connections)
         {
             await connection.CloseAsync();
+        }
+        foreach (var stream in _packageStreams)
+        {
+            stream.Dispose();
         }
         Directory.Delete(Root, true);
     }

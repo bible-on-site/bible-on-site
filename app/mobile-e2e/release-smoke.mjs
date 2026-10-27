@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { startNativeLog } from "./native-logs.mjs";
 
 export const APP_PACKAGE = "com.tanah.daily929";
 // Matches the mobile suite's standard first-screen wait (PerekPage.WaitForStartup).
@@ -90,6 +91,17 @@ export function analyticsStatus(logcat, _pkg) {
   const match = logcat.match(ANALYTICS_LINE);
   if (!match) return { state: "absent" };
   return { state: match[1].toLowerCase() === "false" ? "isolated" : "live" };
+}
+
+// Start before launch: noisy emulator services can overwrite the startup
+// marker in Android's circular buffer before the first UI dump completes.
+export function startReleaseLog(command, args, destination) {
+  const stream = startNativeLog(command, args, destination);
+  let stopping;
+  return {
+    read: () => readFileSync(destination, "utf8"),
+    stop: () => stopping ??= stream.stop(),
+  };
 }
 
 // MAUI maps AutomationId to resource-id under the app package namespace.
@@ -230,6 +242,7 @@ async function main() {
   let failures = 0;
   const runPhase = async ({ name, e2eMarker, install }) => {
     const phase = { name, e2eMarker, install, ok: false, startedUtc: new Date().toISOString() };
+    let liveLog;
     const fail = (detail) => {
       phase.error = detail;
       summary.phases.push(phase);
@@ -249,6 +262,8 @@ async function main() {
         await waitForProcessTeardown(processAlive, delay);
       }
       await device("logcat", "-c");
+      liveLog = startReleaseLog(adb, ["-s", udid, "logcat", "-v", "threadtime"],
+        resolve(smokeArtifacts, `logcat-live-${name}.txt`));
       const component = launcherComponent(
         await shell("cmd", "package", "resolve-activity", "--brief", APP_PACKAGE));
       const startArgs = ["am", "start", "-n", component];
@@ -269,10 +284,10 @@ async function main() {
         // Missing pidof is only a death once the process was observed —
         // the first polls can precede the zygote fork.
         if (seenProcess && !pid) {
-          lastLogcat = await device("logcat", "-d");
+          lastLogcat = liveLog.read();
           return fail(`process ${APP_PACKAGE} died before the reader became usable\n${lastLogcat.slice(-4000)}`);
         }
-        lastLogcat = await device("logcat", "-d");
+        lastLogcat = liveLog.read();
         const crashes = crashSignatures(lastLogcat, APP_PACKAGE);
         if (crashes.length > 0) return fail(`crash signature in logcat: ${crashes.join("; ")}`);
         const focused = appComponentFocused(await shell("dumpsys", "window").catch(() => ""), APP_PACKAGE);
@@ -288,12 +303,16 @@ async function main() {
       while (Date.now() < holdUntil) {
         const pid = (await shell("pidof", APP_PACKAGE).catch(() => "")).trim();
         if (!pid) return fail(`process ${APP_PACKAGE} died after the reader became usable`);
-        lastLogcat = await device("logcat", "-d");
+        lastLogcat = liveLog.read();
         const crashes = crashSignatures(lastLogcat, APP_PACKAGE);
         if (crashes.length > 0) return fail(`post-ready crash signature: ${crashes.join("; ")}`);
         await delay(POLL_MS);
       }
-      lastLogcat = await dumpLogcat(name);
+      await liveLog.stop();
+      lastLogcat = liveLog.read();
+      liveLog = null;
+      const finalCrashes = crashSignatures(lastLogcat, APP_PACKAGE);
+      if (finalCrashes.length > 0) return fail(`post-ready crash signature: ${finalCrashes.join("; ")}`);
       const status = analyticsStatus(lastLogcat, APP_PACKAGE);
       if (status.state !== "isolated") {
         return fail(`analytics isolation/exercise check reported '${status.state}' — expected the Release branch to run with collection disabled`);
@@ -306,6 +325,13 @@ async function main() {
     } catch (error) {
       return fail(String(error?.message ?? error));
     } finally {
+      if (liveLog) {
+        try { await liveLog.stop(); }
+        catch (error) {
+          phase.logError = String(error?.message ?? error);
+          log(`${name}: log stream cleanup failed: ${phase.logError}`);
+        }
+      }
       await dumpLogcat(name).catch(() => {});
     }
   };

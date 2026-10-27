@@ -20,7 +20,8 @@ const REPO_ROOT = resolve(__dirname, "..");
 /** Known module coverage reports; keys are the module directory names. */
 const MODULE_REPORTS = {
 	data: { lcov: "data/.coverage/unit/lcov.info", root: "data" },
-	admin: { lcov: "web/admin/.coverage/unit/lcov.info", root: "web/admin" },
+	// The merged unit+E2E report is admin's authoritative coverage (#2707).
+	admin: { lcov: "web/admin/.coverage/merged/lcov.info", root: "web/admin" },
 	website: {
 		lcov: "web/bible-on-site/.coverage/unit/lcov.info",
 		root: "web/bible-on-site",

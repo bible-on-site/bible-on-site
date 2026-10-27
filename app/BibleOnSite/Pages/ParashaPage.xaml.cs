@@ -81,6 +81,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 $"עבור ל{target.ReadingTitle}", "ביטול");
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
         InitializeSearchHeader();
         NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
 #if ANDROID || IOS
@@ -450,6 +451,47 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
     }
 
+    /// <summary>
+    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
+    /// each pasuk's cached FormattedString at build time — a theme flip while the
+    /// page is alive must refresh the realized rows so they don't keep the other
+    /// theme's colors (#2601).
+    /// </summary>
+    private void SubscribeThemeChange()
+    {
+        if (Microsoft.Maui.Controls.Application.Current is not { } app)
+        {
+            return;
+        }
+        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
+        // when navigation returns, and must re-check the theme then.
+        Loaded += (_, _) =>
+        {
+            app.RequestedThemeChanged += OnRequestedThemeChanged;
+            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
+        };
+        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
+    }
+
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
+    {
+        Dispatcher.Dispatch(() =>
+        {
+            foreach (var unit in _viewModel.CarouselUnits)
+            {
+                foreach (var row in unit.Rows)
+                {
+                    row.Pasuk?.RefreshForThemeChange();
+                }
+            }
+            if (_focusedPasuk != null)
+            {
+                _focusedPasuk.RefreshForThemeChange();
+                RefreshFocusedRecitation();
+            }
+        });
+    }
+
     private bool _notesRefreshQueued;
 
     private void OnNotesOperationCompleted()
@@ -802,6 +844,19 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
     }
 
+    /// <summary>Feeds the Debug-only תיקון scroll-offset E2E probe (#2624).</summary>
+    private void OnTikkunScrolled(object? sender, ScrolledEventArgs e) =>
+        ReaderScrollTop.NoteScrollOffset(sender, e);
+
+    /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>
+    private void OnTikkunLoaded(object? sender, EventArgs e)
+    {
+        if (sender is Microsoft.Maui.Controls.ScrollView scrollView)
+        {
+            ReaderScrollTop.NoteScrollOffset(sender, scrollView.ScrollY);
+        }
+    }
+
     #endregion
 
     #region Articles
@@ -899,7 +954,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     #region Full Screen
 
-    /// <summary>Text button — returns to the unit view from articles, else scrolls to top.</summary>
+    /// <summary>Text button — returns to the unit view from articles, else
+    /// animates the visible unit's vertical content back to its start (#2624).</summary>
     private void OnTextButtonClicked(object? sender, EventArgs e)
     {
         if (_isShowingArticles)
@@ -908,7 +964,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
         else
         {
-            ParashaCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
+            ReaderScrollTop.ScrollCurrentUnitToStart(ParashaCarousel, _viewModel.Unit);
         }
     }
 

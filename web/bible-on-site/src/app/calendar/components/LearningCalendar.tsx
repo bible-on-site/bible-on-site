@@ -11,20 +11,27 @@ import {
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getCycleName,
 	getCycleStartMonth,
 	getDateLabel,
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
+	getPerekRangeLabel,
 	getPerekSource,
 	getYearLabel,
+	isMergedReviewPair,
 	type MonthCell,
 	type MonthRef,
 	nextMonth,
 	prevMonth,
 } from "@/data/learning-schedule";
+import { resolveCalendarArtifactRequest } from "@/lib/download/calendar-artifacts";
 import { parseNumericalDateToHebcalDate } from "@/util/hebdates-util";
-import { CalendarPdfDownload } from "./CalendarPdfDownload";
+import {
+	CalendarPdfDownload,
+	type CalendarPdfRequest,
+} from "./CalendarPdfDownload";
 import styles from "./learning-calendar.module.css";
 
 const WEEKDAY_NAMES = [
@@ -88,12 +95,18 @@ interface LearningCalendarProps {
 	initialMonth: number;
 	/** Today marker as YYYYMMDD (uniform month), Jerusalem/nightfall aware. */
 	todayDateNumber: number;
+	/**
+	 * Static calendar-PDF manifest URL in the assets bucket (#2622); absent in
+	 * tests/stories, where the action falls back to the legacy API path.
+	 */
+	pdfManifestUrl?: string;
 }
 
 export function LearningCalendar({
 	initialYear,
 	initialMonth,
 	todayDateNumber,
+	pdfManifestUrl = "",
 }: LearningCalendarProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -257,11 +270,30 @@ export function LearningCalendar({
 	// pending download always keeps the period it was started for.
 	const pdfScopeLabel =
 		viewMode === "cycle"
-			? `מחזור ${resolvedCycle}`
+			? getCycleName(getCycle(resolvedCycle))
 			: viewMode === "year"
 				? `שנת ${getYearLabel(viewed.year)}`
 				: getMonthLabel(viewed);
-	const pdfUrl = `/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`;
+	const pdfRequest = useMemo<CalendarPdfRequest>(() => {
+		const params = new URLSearchParams({
+			month: formatMonthParam(viewed),
+			view: viewMode,
+			cycle: String(resolvedCycle),
+		});
+		// The shared resolver keeps the canonical artifact key and filename
+		// identical to how the legacy route reads these params (#2622).
+		const resolved = resolveCalendarArtifactRequest(params);
+		return {
+			apiUrl: `/api/calendar-pdf?${params.toString()}`,
+			manifestUrl: pdfManifestUrl,
+			artifactKey: resolved.ok
+				? resolved.key
+				: /* istanbul ignore next -- defensive: our own params always parse */ "",
+			filename: resolved.ok
+				? resolved.filename
+				: /* istanbul ignore next -- defensive: our own params always parse */ "learning-calendar.pdf",
+		};
+	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 
 	const yearMonths = useMemo(
 		() =>
@@ -300,16 +332,36 @@ export function LearningCalendar({
 		if (day.perekId === undefined) {
 			return `${dateLabel} - לא משובץ`;
 		}
-		const perekLabel = getPerekSource(day.perekId);
-		const first = day.reviewPerekIds?.[0];
-		const reviewLabel =
-			day.status === "review" && first !== undefined && first !== day.perekId
-				? `${getPerekSource(first)} - ${perekLabel}`
-				: perekLabel;
+		const perekLabel =
+			day.status === "review" && day.reviewPerekIds?.length
+				? getPerekRangeLabel(day.reviewPerekIds)
+				: getPerekSource(day.perekId);
 		return day.status === "review"
-			? `${dateLabel} - חזרה: ${reviewLabel}`
+			? `${dateLabel} - חזרה: ${perekLabel}`
 			: `${dateLabel} - ${perekLabel}`;
 	};
+
+	/** One accessible name covering both dates of a merged review block. */
+	const mergedAriaLabel = (
+		friday: CalendarDay,
+		shabbat: CalendarDay,
+	): string => {
+		/* istanbul ignore next -- the merge gate requires defined ids */
+		const ids = friday.reviewPerekIds ?? [];
+		return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
+	};
+
+	/** Saturday dates swallowed by Friday's merged block in `cells`. */
+	const mergedSaturdays = useMemo(() => {
+		const merged = new Set<number>();
+		for (let i = 0; i + 1 < cells.length; i++) {
+			const shabbat = cells[i + 1].day;
+			if (isMergedReviewPair(cells[i].day, shabbat)) {
+				merged.add(shabbat.dateNumber);
+			}
+		}
+		return merged;
+	}, [cells]);
 
 	return (
 		<main className={styles.page}>
@@ -419,7 +471,7 @@ export function LearningCalendar({
 						</select>
 					</label>
 				)}
-				<CalendarPdfDownload url={pdfUrl} scopeLabel={pdfScopeLabel} />
+				<CalendarPdfDownload request={pdfRequest} scopeLabel={pdfScopeLabel} />
 			</div>
 
 			<h2 className={styles.monthTitle}>
@@ -446,13 +498,17 @@ export function LearningCalendar({
 						{displayedCycle === null && <option value="">-</option>}
 						{cycleOptions.map((cycle) => (
 							<option key={cycle.number} value={cycle.number}>
-								מחזור {cycle.number}
-								{cycle.projected ? " (משוער)" : ""}
+								{getCycleName(cycle)}
 							</option>
 						))}
 					</select>
 				</label>
-				{displayedCycle && (
+				{/* Month/year views keep the contextual cycle's range beside the
+				    picker; in מחזור מלא the h2 already carries the selected
+				    cycle's full label, so repeating it here would duplicate —
+				    and displayedCycle describes the viewed month, not the
+				    chosen cycle (#2725). */}
+				{displayedCycle && viewMode !== "cycle" && (
 					<span className={styles.cycleRange}>
 						{getCycleLabel(displayedCycle)}
 					</span>
@@ -469,6 +525,7 @@ export function LearningCalendar({
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 						/>
 					))}
 				</div>
@@ -487,6 +544,7 @@ export function LearningCalendar({
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 							dimmed={(day) => day.cycle !== resolvedCycle}
 						/>
 					))}
@@ -505,23 +563,40 @@ export function LearningCalendar({
 					</div>
 
 					<div className={styles.grid}>
-						{cells.map((cell) =>
-							cell.day === undefined ? (
-								<div
-									key={`blank-${cell.blankColumn}`}
-									className={styles.blankCell}
-									aria-hidden="true"
-								/>
-							) : (
+						{cells.map((cell, index) => {
+							if (cell.day === undefined) {
+								return (
+									<div
+										key={`blank-${cell.blankColumn}`}
+										className={styles.blankCell}
+										aria-hidden="true"
+									/>
+								);
+							}
+							const day = cell.day;
+							if (mergedSaturdays.has(day.dateNumber)) {
+								return null;
+							}
+							const shabbat = cells[index + 1]?.day;
+							const merged = isMergedReviewPair(day, shabbat)
+								? shabbat
+								: undefined;
+							return (
 								<CalendarCell
-									key={cell.day.dateNumber}
-									day={cell.day}
-									isToday={cell.day.dateNumber === todayDateNumber}
+									key={day.dateNumber}
+									day={day}
+									mergedWith={merged}
+									isToday={
+										day.dateNumber === todayDateNumber ||
+										merged?.dateNumber === todayDateNumber
+									}
 									onOpen={openPerek}
-									ariaLabel={dayAriaLabel(cell.day)}
+									ariaLabel={
+										merged ? mergedAriaLabel(day, merged) : dayAriaLabel(day)
+									}
 								/>
-							),
-						)}
+							);
+						})}
 					</div>
 				</>
 			)}
@@ -555,11 +630,14 @@ export function LearningCalendar({
 
 function CalendarCell({
 	day,
+	mergedWith,
 	isToday,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	/** Called only for tappable cells, so the perek id is always present. */
 	onOpen: (perekId: number) => void;
@@ -568,13 +646,26 @@ function CalendarCell({
 	const classNames = [
 		styles.cell,
 		day.status === "review" ? styles.reviewCell : "",
+		mergedWith ? styles.mergedReviewCell : "",
 		day.status === "none" ? styles.noneCell : "",
 		isToday ? styles.todayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
 
-	const dayNumber = (
+	// Merged block: each date sits centered over its own weekday column —
+	// the column headers already mark ו/ש, so no day letters inside (#2365).
+	const dayNumber = mergedWith ? (
+		<span className={styles.dayNumber}>
+			<span className={styles.mergedDate}>
+				{toLetters(day.day, { addQuotes: true })}
+			</span>
+			<span className={styles.mergedDate}>
+				{toLetters(mergedWith.day, { addQuotes: true })}
+			</span>
+			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
+		</span>
+	) : (
 		<span className={styles.dayNumber}>
 			{toLetters(day.day, { addQuotes: true })}
 			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
@@ -591,6 +682,10 @@ function CalendarCell({
 	}
 
 	const perekId = day.perekId;
+	const perekLabel =
+		day.status === "review" && day.reviewPerekIds?.length
+			? getPerekRangeLabel(day.reviewPerekIds)
+			: getPerekSource(perekId);
 	return (
 		<button
 			type="button"
@@ -599,7 +694,7 @@ function CalendarCell({
 			onClick={() => onOpen(perekId)}
 		>
 			{dayNumber}
-			<span className={styles.perekRef}>{getPerekSource(perekId)}</span>
+			<span className={styles.perekRef}>{perekLabel}</span>
 			{day.status === "review" && (
 				<span className={styles.reviewBadge}>חזרה</span>
 			)}
@@ -620,6 +715,7 @@ function MiniMonth({
 	todayDateNumber,
 	onOpen,
 	dayAriaLabel,
+	mergedDayAriaLabel,
 	dimmed,
 }: {
 	title: string;
@@ -627,6 +723,8 @@ function MiniMonth({
 	todayDateNumber: number;
 	onOpen: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
+	/** Both dates in one name for a merged review block (#2365). */
+	mergedDayAriaLabel: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	dimmed?: (day: CalendarDay) => boolean;
 }) {
 	return (
@@ -640,24 +738,39 @@ function MiniMonth({
 				))}
 			</div>
 			<div className={styles.miniGrid}>
-				{cells.map((cell) =>
-					cell.day === undefined ? (
-						<span
-							key={`blank-${cell.blankColumn}`}
-							className={styles.miniCell}
-							aria-hidden="true"
-						/>
-					) : (
+				{cells.map((cell, index) => {
+					if (cell.day === undefined) {
+						return (
+							<span
+								key={`blank-${cell.blankColumn}`}
+								className={styles.miniCell}
+								aria-hidden="true"
+							/>
+						);
+					}
+					const day = cell.day;
+					if (index > 0 && isMergedReviewPair(cells[index - 1].day, day)) {
+						return null;
+					}
+					const shabbat = cells[index + 1]?.day;
+					const merged = isMergedReviewPair(day, shabbat) ? shabbat : undefined;
+					return (
 						<MiniCell
-							key={cell.day.dateNumber}
-							day={cell.day}
-							isToday={cell.day.dateNumber === todayDateNumber}
-							dimmed={dimmed?.(cell.day) === true}
+							key={day.dateNumber}
+							day={day}
+							mergedWith={merged}
+							isToday={
+								day.dateNumber === todayDateNumber ||
+								merged?.dateNumber === todayDateNumber
+							}
+							dimmed={dimmed?.(day) === true && (!merged || dimmed(merged))}
 							onOpen={onOpen}
-							ariaLabel={dayAriaLabel(cell.day)}
+							ariaLabel={
+								merged ? mergedDayAriaLabel(day, merged) : dayAriaLabel(day)
+							}
 						/>
-					),
-				)}
+					);
+				})}
 			</div>
 		</section>
 	);
@@ -665,12 +778,15 @@ function MiniMonth({
 
 function MiniCell({
 	day,
+	mergedWith,
 	isToday,
 	dimmed,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	dimmed: boolean;
 	onOpen: (perekId: number) => void;
@@ -679,13 +795,16 @@ function MiniCell({
 	const classNames = [
 		styles.miniCell,
 		day.status === "review" ? styles.miniReviewCell : "",
+		mergedWith ? styles.miniMergedCell : "",
 		day.status === "none" ? styles.miniNoneCell : "",
 		dimmed ? styles.miniDimmed : "",
 		isToday ? styles.miniTodayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
-	const content = toLetters(day.day, { addQuotes: true });
+	const content = mergedWith
+		? `${toLetters(day.day, { addQuotes: true })} - ${toLetters(mergedWith.day, { addQuotes: true })}`
+		: toLetters(day.day, { addQuotes: true });
 
 	if (day.perekId === undefined || dimmed) {
 		return (

@@ -75,21 +75,23 @@ describe("getMentionReferencesForPerek", () => {
 		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([row]);
 	});
 
-	it("returns [] instead of throwing when the decoration table is absent", async () => {
+	it("rethrows when the decoration query fails — the cached wrapper decides degradation", async () => {
 		const consoleError = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 		mockQuery.mockRejectedValueOnce(new Error("table doesn't exist"));
-		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		await expect(getMentionReferencesForPerek(12)).rejects.toThrow(
+			"table doesn't exist",
+		);
 		consoleError.mockRestore();
 	});
 
-	it("logs non-Error rejections verbatim", async () => {
+	it("logs non-Error rejections verbatim then rethrows", async () => {
 		const consoleError = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 		mockQuery.mockRejectedValueOnce("db gone");
-		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		await expect(getMentionReferencesForPerek(12)).rejects.toBe("db gone");
 		expect(consoleError).toHaveBeenCalledWith(
 			expect.stringContaining("perek 12"),
 			"db gone",

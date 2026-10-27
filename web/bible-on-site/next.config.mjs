@@ -122,6 +122,10 @@ const nextConfig = {
 		],
 	},
 	experimental: {
+		// Dependency-graph CSS chunking: routes download close to only the CSS
+		// they import instead of one large shared chunk (~94% unused CSS on
+		// perek pages before; #2735). Turbopack-only; webpack ignores it.
+		cssChunking: "graph",
 		esmExternals: true,
 		externalDir: true,
 		turbopackFileSystemCacheForDev: true,

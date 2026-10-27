@@ -47,10 +47,10 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
   `perushim-sqlite-v2-indexed.master`) and per-platform app E2E coverage
   (`app-e2e-coverage.master.{android,ios}`).
 - **Determine Docker Image Availability**
-  (`determine_docker_image_availability`): checks the cached LCOV Docker
-  artifact and the GHCR Sefaria MongoDB image (tagged by the git tree hash of
-  `data/sefaria/mongodb-docker`); computes `can_publish_sefaria_mongo` (fork
-  PRs get a read-only token and cannot push to GHCR).
+  (`determine_docker_image_availability`): checks the GHCR Sefaria MongoDB
+  image (tagged by the git tree hash of `data/sefaria/mongodb-docker`) and
+  computes `can_publish_sefaria_mongo` (fork PRs get a read-only token and
+  cannot push to GHCR).
 - **Determine Changes** (`determine_changes`): one job running
   [`determine-changes.ts`](../../../../devops/github/ci/determine-changes.ts),
   which diffs the event's base revision (merge parent for PRs,
@@ -62,8 +62,6 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
-- **Build LCOV Docker Image** (`build_lcov_docker`): rebuilds the coverage
-  image only when the cached artifact is missing.
 - **Build Sefaria MongoDB Docker Image** (`build_sefaria_mongo_docker`):
   publishes the Data integration-test MongoDB image to GHCR, tagged by the git
   tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing.
@@ -134,7 +132,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
   `e2e-impact`, `e2e-coverage-trees`, `codecov-report-state`,
   `bencher-comparison` tests).
 - Publishes per-flag coverage to Codecov (`website`, `api`, `app`, `bulletin`,
-  `admin`, `admin_e2e`, `data`) and the cross-module merge to Codacy, then
+  `admin`, `data`) and the cross-module merge to Codacy, then
   polls Codecov's report state (`codecov-report-state.mjs`) — distinguishing
   pass, explicit fail, and unresolved/outage paths.
 - `website_publish_test_results_to_codecov` uploads the website's JUnit
@@ -259,7 +257,7 @@ save can only rewrite the state that same key already describes.
 | Android AVD state | config recipe + emulator/SDK package stamps | One snapshot: booted state, system certs, resolved marker |
 | Android SDK | license fingerprint + `SDK-PACKAGE` recipe | Save trusted pushes only |
 | Playwright browsers | `playwright-<version>` (+ webkit variant for `app_ios_ci`) | Version pinned by `setup_env` |
-| Docker LCOV image | action-cache artifact `github-workflow-lcov` | Rebuilt only on miss |
+| Docker LCOV image | BuildKit layer cache `lcov-cli` (type=gha) | Built per leg by `.github/actions/lcov-image`; ~seconds on cache hit |
 
 Toolchain identity is stamped into every key via
 `compute-ios-toolchain-id.mjs` / `hash-native-deps.mjs`, so Xcode/macOS/Node

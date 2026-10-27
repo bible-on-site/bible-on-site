@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
@@ -17,17 +16,6 @@ import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
 import { TopNav } from "./components/TopNav";
-
-/* istanbul ignore next */
-const geistSans = localFont({
-	src: "./fonts/GeistVF.woff",
-	variable: "--font-geist-sans",
-});
-/* istanbul ignore next */
-const geistMono = localFont({
-	src: "./fonts/GeistMonoVF.woff",
-	variable: "--font-geist-mono",
-});
 
 export const metadata: Metadata = {
 	metadataBase: new URL(SITE_ORIGIN),
@@ -67,7 +55,7 @@ export default function RootLayout({
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />
 			</head>
-			<body className={`${geistSans.variable} ${geistMono.variable}`}>
+			<body>
 				<TopNav />
 
 				<NavBar />

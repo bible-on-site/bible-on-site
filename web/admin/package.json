@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.146",
+	"version": "0.1.149",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -21,7 +21,7 @@
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test",
-		"coverage:merge": "node ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --optional .coverage/unit/lcov.info --optional .coverage/e2e/lcov.info",
+		"coverage:merge": "node ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --require .coverage/unit/lcov.info --hits-only .coverage/e2e/lcov.info",
 		"docker:up": "docker compose -f ../../devops/docker-compose.yml up -d --wait --wait-timeout 180 && docker compose -f ../../devops/docker-compose.yml run --build --rm --no-deps rustfs-init",
 		"docker:down": "docker compose -f ../../devops/docker-compose.yml down",
 		"db:populate:dev": "cd ../../data && cargo make mysql-populate-dev",
@@ -38,7 +38,7 @@
 		"@aws-sdk/client-lambda": "3.1156.0",
 		"@aws-sdk/client-s3": "3.1156.0",
 		"@aws-sdk/s3-request-presigner": "3.1156.0",
-		"@tanstack/react-query": "5.104.5",
+		"@tanstack/react-query": "5.105.0",
 		"@tanstack/react-router": "1.170.46",
 		"@tanstack/react-router-devtools": "1.167.2",
 		"@tanstack/react-start": "1.169.4",

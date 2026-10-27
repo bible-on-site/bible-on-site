@@ -1,9 +1,8 @@
 /* ===================================================================
- * Base flipbook styles — replicated from html-flip-book-vanilla pages.scss
- * & flipbook.scss (v0.0.0-alpha.49) because the vanilla CSS is not
- * importable from this Next.js project (transitive dep; the package's
- * "./style.css" export points at a file the tarball does not ship).
- * IMPORTANT: keep in sync with the library version.
+ * Sefer host styles. The library's complete base stylesheet comes from
+ * html-flip-book-react/styles.css (imported in Sefer.tsx): pages, folds,
+ * covers, scrollports, bookmarks, TOC and toolbar all ship in the package
+ * since alpha.75 — only host-specific rules live here.
  * =================================================================== */
 
 /* While a Sefer reader is mounted, lock the outer document so the page
@@ -13,9 +12,15 @@
    The perek route's layout.css applies the same lock on data-book-view so
    it is already effective during the lazy-loading phase. Inner content
    panes keep their own overflow scrolling; scrollbar-gutter: stable avoids
-   a layout shift when the lock engages or releases. */
+   a layout shift when the lock engages or releases — but only on hosts that
+   scroll at the root (e.g. /dev/sefer). On perek pages the reader scrolls
+   inside .perekContainer and the root shows no scrollbar, so a lock-time
+   gutter would itself add/remove ~15px of width per toggle and become the
+   shift it was meant to prevent. */
 html[data-sefer-view] {
 	overflow: hidden;
+}
+html[data-sefer-view]:not(:has(.perek-layout)) {
 	scrollbar-gutter: stable;
 }
 
@@ -29,199 +34,9 @@ html[data-sefer-view] {
 	position: relative;
 }
 
-/* Page base — position:absolute WITHOUT inset:0 (inset:0 overrides the
-   library's inline right/left positioning and breaks the RTL spread). */
-.he-book .page {
-	position: absolute;
-	backface-visibility: hidden;
-	transform-style: preserve-3d;
-	/* Every page is opaque by default (like paper). Without this, blank pages
-     (e.g. cover interiors) would be transparent and the other side of the
-     leaf would bleed through mirrored via the 3D transform. */
-	background: #fff;
-	/* Performance: isolate each page so the browser can skip re-layout/repaint
-     of page internals during 3D flip transforms. */
-	contain: layout style paint;
-	--inner-shadow-shadow: 0;
-	--inner-shadow-highlight: 0;
-	--inner-shadow-edge: right;
-}
-
-/* Inner shadow / highlight pseudo-elements (from library pages.scss). */
-.he-book .page::before,
-.he-book .page::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-	backface-visibility: hidden;
-	transition: opacity 120ms ease;
-	will-change: opacity;
-	/* Host-only: every Sefer page child is a positioned, opaque sheet
-     (sefer.module.css .page/.pageContentPage/.pageBlank), which paints over
-     un-indexed overlays and hid all page/fold shading (issue #2331). Keep the
-     overlays above page content layers (carousel, recitation player). */
-	z-index: 10;
-}
-
-/* Inner shadow: simulates shadow cast by lifted page onto the page below.
-   (Upstream dropped the translateZ lift — `contain: layout style paint` on
-   .page flattens preserve-3d, making translateZ a no-op.) */
-.he-book .page::before {
-	background: linear-gradient(
-		to var(--inner-shadow-edge),
-		rgba(0, 0, 0, calc(0.35 * var(--inner-shadow-shadow))) 0%,
-		rgba(0, 0, 0, 0) 40%
-	);
-	opacity: var(--inner-shadow-shadow);
-	mix-blend-mode: multiply;
-}
-
-/* Edge highlight: simulates light catching the lifted page edge. */
-.he-book .page::after {
-	background: linear-gradient(
-		to var(--inner-shadow-edge),
-		rgba(255, 255, 255, calc(0.4 * var(--inner-shadow-highlight))) 0%,
-		rgba(255, 255, 255, 0) 45%
-	);
-	opacity: var(--inner-shadow-highlight);
-}
-
-/* Upstream's shadow opt-out: pageShadow={false} adds .flipbook--no-page-shadow
-   to the book element (the flicker workaround for upstream issue #167). We
-   render with shadows on, so the class never appears — the rule stays for
-   parity with pages.scss and as a ready kill-switch if the flicker returns.
-   Upstream needs !important to beat .page--folded's opacity:1; the extra
-   .he-book class gives this rule higher specificity without it. It suppresses
-   every pseudo-overlay, including the alpha.46 fold crease shading (the
-   library also skips writing --fold-shading then). */
-.he-book.flipbook--no-page-shadow .page::before,
-.he-book.flipbook--no-page-shadow .page::after {
-	opacity: 0;
-}
-
-/* alpha.46 paper folds: both faces of the lifted leaf carry .page--folded.
-   The crease shading rides ::before in page coordinates so it follows the
-   clipped fold without moving or cloning page content; the flat-face
-   shadow/highlight gradients are muted while the fold geometry applies. */
-.he-book .page--folded::before {
-	background: var(--fold-shading, none);
-	opacity: 1;
-	transition: none;
-	mix-blend-mode: normal;
-}
-.he-book .page--folded::after {
-	opacity: 0;
-	transition: none;
-}
-
-/* Applied during flip animation while snapshotDuringFlip is enabled. The
-   browser freezes the page rendering as a GPU texture; scrollbar chrome
-   and text selection are hidden so the snapshot looks clean. overflow is
-   NOT changed — scroll position is fully preserved. scrollbar-color keeps
-   the gutter allocated so content doesn't reflow; the webkit rule is only
-   needed for engines where overlay scrollbars occupy no space. */
-.he-book .page--flipping {
-	contain: strict;
-	user-select: none;
-	scrollbar-color: transparent transparent;
-}
-.he-book .page--flipping::-webkit-scrollbar {
-	display: none;
-}
-/* Descendant rules stay effective without upstream's !important — the
-   .he-book scope outranks the page content's own scrollbar styling. */
-.he-book .page--flipping * {
-	scrollbar-color: transparent transparent;
-}
-.he-book .page--flipping *::-webkit-scrollbar {
-	display: none;
-}
-
-/* Enforce page children fill page */
-.he-book .page > * {
-	max-width: 100%;
-	max-height: 100%;
-	height: 100%;
-	width: 100%;
-	box-sizing: border-box;
-}
-
-/* alpha.49 inward page scrollbars: the React adapter now wraps every page
-   child in .flipbook-page-scrollport > .flipbook-page-content so the
-   scrollport can own page scrolling with the scrollbar beside the spine.
-   data-scrollbar-side keeps scrollbar direction independent of reading
-   direction (nothing writes these attributes in alpha.49 — the rules
-   replicate pages.scss for parity). */
-.he-book .page[data-scrollbar-side="left"] {
-	--flipbook-page-scroll-direction: rtl;
-}
-.he-book .page[data-scrollbar-side="right"] {
-	--flipbook-page-scroll-direction: ltr;
-}
-.he-book .page[data-reading-direction="ltr"] {
-	--flipbook-page-content-direction: ltr;
-}
-.he-book .page[data-reading-direction="rtl"] {
-	--flipbook-page-content-direction: rtl;
-}
-
-.he-book .flipbook-page-scrollport {
-	width: 100%;
-	height: 100%;
-	overflow: auto;
-	overscroll-behavior: contain;
-	direction: var(--flipbook-page-scroll-direction, ltr);
-}
-
-.he-book .flipbook-page-content {
-	width: 100%;
-	height: 100%;
-	min-height: 100%;
-	overflow: visible;
-}
-
-.he-book .flipbook-page-content:not([dir]) {
-	direction: var(--flipbook-page-content-direction, ltr);
-}
-
-/* Divergence from upstream pages.scss, which gives content roots
-   height:auto so the shared scrollport scrolls the whole page: Sefer
-   pages are app-like panels — fixed headers and footers with inner scroll
-   panes (perekTextScrollWrapper, blankPageArticles, perushNotesInBook) —
-   so their roots stay bounded to the page and the scrollport never
-   engages. Same height semantics as the pre-alpha.49 .page > * rule. */
-.he-book .flipbook-page-content > * {
-	width: 100%;
-	min-height: 100%;
-	height: 100%;
-	max-width: 100%;
-	max-height: 100%;
-	box-sizing: border-box;
-	overflow: visible;
-}
-
-/* coverConfig.noShadow: the React wrapper tags cover pages with
-   .page--no-shadow but ships no rule for it, and the library writes the
-   inner-shadow vars inline (beating any stylesheet value), so hide the
-   overlays themselves to keep hard covers flat. */
-.he-book .page--no-shadow::before,
-.he-book .page--no-shadow::after {
-	opacity: 0;
-}
-
-/* Interior cover from library flipbook.scss */
-.page--cover-interior {
-	overflow: hidden;
-}
-.page--cover-interior-inset {
-	padding-top: var(--cover-inset, 5%);
-	padding-bottom: var(--cover-inset, 5%);
-	padding-left: var(--cover-inset-left, var(--cover-inset, 5%));
-	padding-right: var(--cover-inset-right, var(--cover-inset, 5%));
-	background: #fffef8;
-	background-clip: content-box;
-}
+/* Sefer pages are app-like panels — fixed headers/footers with inner
+   scroll panes — so every page root carries the library's
+   flipbook-page-bounded class (#279) and the scrollport never engages. */
 
 /* Toolbar: base styles now come from html-flip-book-react/styles.css.
    Only site-specific overrides below. */
@@ -257,394 +72,13 @@ html[data-sefer-view] {
 }
 
 /* ===================================================================
- * Bookmark layer — replicated from html-flip-book-vanilla bookmarks.scss
- * (v0.0.0-alpha.49); keep in sync with the library version. The rules are
- * intentionally unscoped: .flipbook-bookmark-preview and the tab element
- * it hosts are portaled to document.body on expand, so an .he-book scope
- * would stop matching exactly when the tab is expanded.
+ * Bookmark layer base styles ship inside html-flip-book-react/styles.css
+ * (alpha.75+ — the export is now complete). The Sefer-specific theming
+ * below stays intentionally unscoped: .flipbook-bookmark-preview and the
+ * tab element it hosts are portaled to document.body on expand, so an
+ * .he-book scope would stop matching exactly when the tab is expanded.
  * =================================================================== */
 
-.flipbook-bookmarks {
-	--bookmark-default-depth: 52px;
-	--bookmark-default-length: 24px;
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-}
-
-.flipbook-bookmarks[data-orientation="parallel"] {
-	--bookmark-default-depth: 28px;
-	--bookmark-default-length: 72px;
-}
-
-.flipbook-bookmarks[hidden],
-.flipbook-bookmarks__rail[hidden],
-.flipbook-bookmark[hidden] {
-	display: none;
-}
-
-.flipbook-bookmarks__measure {
-	position: absolute;
-	width: var(--flipbook-bookmark-depth, var(--bookmark-default-depth));
-	height: var(--flipbook-bookmark-length, var(--bookmark-default-length));
-	margin-top: var(
-		--flipbook-bookmark-stack-step,
-		calc(var(--flipbook-bookmark-depth, var(--bookmark-default-depth)) * 0.3)
-	);
-	visibility: hidden;
-}
-
-.flipbook-bookmarks__rail {
-	position: absolute;
-	display: flex;
-	gap: var(--flipbook-bookmark-gap, 4px);
-	box-sizing: border-box;
-	min-width: 0;
-	min-height: 0;
-	direction: ltr;
-	overflow: auto;
-	overscroll-behavior: contain;
-	scrollbar-width: none;
-	pointer-events: auto;
-	touch-action: pan-x pan-y;
-}
-
-.flipbook-bookmarks__rail::-webkit-scrollbar {
-	display: none;
-}
-
-.flipbook-bookmarks__rail--left,
-.flipbook-bookmarks__rail--right {
-	display: block;
-	overflow: hidden;
-	z-index: 0;
-}
-
-/* Slot base precedes every rail/leaf child selector below: biome's
-   noDescendingSpecificity requires a subject's lower-specificity rules to
-   come before its higher-specificity ones. */
-.flipbook-bookmark-slot {
-	--bookmark-exposed-depth: var(
-		--flipbook-bookmark-depth,
-		var(--bookmark-default-depth, 52px)
-	);
-	--bookmark-exposed-length: var(
-		--flipbook-bookmark-length,
-		var(--bookmark-default-length, 24px)
-	);
-	--bookmark-exposed-major: var(--bookmark-exposed-depth);
-	--bookmark-full-horizontal: max(
-		var(--bookmark-exposed-major),
-		min(var(--flipbook-bookmark-full-length, 220px), calc(100vw - 16px))
-	);
-	--bookmark-full-vertical: max(
-		var(--bookmark-exposed-major),
-		min(var(--flipbook-bookmark-full-length, 220px), calc(100vh - 16px))
-	);
-	position: relative;
-	flex: 0 0 var(--bookmark-exposed-length);
-	width: 100%;
-	height: 100%;
-	min-width: 0;
-	min-height: 0;
-	overflow: hidden;
-	pointer-events: auto;
-}
-
-.flipbook-bookmark-slot[data-orientation="parallel"] {
-	--bookmark-exposed-major: var(--bookmark-exposed-length);
-}
-
-.flipbook-bookmarks__rail--left > .flipbook-bookmark-slot,
-.flipbook-bookmarks__rail--right > .flipbook-bookmark-slot {
-	position: absolute;
-}
-
-.flipbook-bookmarks__rail--left > .flipbook-bookmark-slot {
-	right: 0;
-}
-
-.flipbook-bookmarks__rail--right > .flipbook-bookmark-slot {
-	left: 0;
-}
-
-.flipbook-bookmarks__rail--top,
-.flipbook-bookmarks__rail--bottom {
-	flex-direction: row;
-	overflow-y: hidden;
-}
-
-.flipbook-bookmarks[data-attachment="leaf"] .flipbook-bookmarks__rail--top,
-.flipbook-bookmarks[data-attachment="leaf"] .flipbook-bookmarks__rail--bottom {
-	gap: 0;
-	overflow: hidden;
-}
-
-.flipbook-bookmarks__leaf-rail {
-	display: grid;
-	flex: 0 0 50%;
-	box-sizing: border-box;
-	min-width: 0;
-	height: 100%;
-	gap: var(--flipbook-bookmark-gap, 4px);
-	grid-template-columns: repeat(
-			var(--bookmark-count),
-			var(--flipbook-bookmark-length, var(--bookmark-default-length))
-		);
-	grid-template-rows: 100%;
-	overflow: auto;
-	scrollbar-width: none;
-	overscroll-behavior: contain;
-	touch-action: pan-x pan-y;
-}
-
-.flipbook-bookmarks__leaf-rail[data-leaf-side="left"] {
-	direction: rtl;
-	order: 0;
-}
-
-.flipbook-bookmarks__leaf-rail[data-leaf-side="right"] {
-	direction: ltr;
-	order: 1;
-}
-
-.flipbook-bookmarks__leaf-rail > .flipbook-bookmark-slot {
-	grid-column: var(--bookmark-slot);
-	grid-row: 1;
-}
-
-.flipbook-bookmark {
-	position: relative;
-	flex: 0 0 var(--flipbook-bookmark-length, var(--bookmark-default-length));
-	display: grid;
-	place-items: center;
-	min-width: 0;
-	min-height: 0;
-	margin: 0;
-	padding: 3px;
-	box-sizing: border-box;
-	overflow: hidden;
-	border: 1px solid #71869c;
-	border-radius: 2px;
-	background: #dce8f4;
-	color: #20364b;
-	font: inherit;
-	font-size: 12px;
-	line-height: 1.2;
-	cursor: pointer;
-	-webkit-user-select: none;
-	user-select: none;
-}
-
-.flipbook-bookmark-slot > .flipbook-bookmark {
-	position: absolute;
-	inset: 0 auto auto 0;
-	width: var(--bookmark-full-horizontal);
-	height: 100%;
-	flex: none;
-}
-
-.flipbook--select-text .flipbook-bookmark-slot,
-.flipbook--select-text .flipbook-bookmark {
-	touch-action: auto;
-}
-
-.flipbook:not(.flipbook--select-text) .flipbook-bookmark-slot,
-.flipbook:not(.flipbook--select-text) .flipbook-bookmark {
-	touch-action: pan-y;
-}
-
-.flipbook-bookmark-slot[data-orientation="parallel"][data-edge="left"]
-	> .flipbook-bookmark,
-.flipbook-bookmark-slot[data-orientation="parallel"][data-edge="right"]
-	> .flipbook-bookmark,
-.flipbook-bookmark-slot[data-orientation="perpendicular"][data-edge="top"]
-	> .flipbook-bookmark,
-.flipbook-bookmark-slot[data-orientation="perpendicular"][data-edge="bottom"]
-	> .flipbook-bookmark {
-	width: 100%;
-	height: var(--bookmark-full-vertical);
-}
-
-.flipbook-bookmark-slot[data-orientation="perpendicular"][data-edge="right"]
-	> .flipbook-bookmark,
-.flipbook-bookmark-slot[data-orientation="parallel"][data-edge="bottom"]
-	> .flipbook-bookmark {
-	left: auto;
-	right: 0;
-}
-
-.flipbook-bookmark-slot[data-orientation="parallel"][data-edge="right"]
-	> .flipbook-bookmark,
-.flipbook-bookmark-slot[data-orientation="perpendicular"][data-edge="bottom"]
-	> .flipbook-bookmark {
-	top: auto;
-	bottom: 0;
-}
-
-.flipbook-bookmark:hover,
-.flipbook-bookmark[aria-current="page"] {
-	background: #bfd5e9;
-}
-
-.flipbook-bookmark:focus-visible {
-	outline: 2px solid #204f7b;
-	outline-offset: -3px;
-}
-
-.flipbook-bookmark__content {
-	position: absolute;
-	top: 0;
-	left: 0;
-	display: grid;
-	place-items: center;
-	width: var(--bookmark-exposed-major, 52px);
-	height: 100%;
-	box-sizing: border-box;
-	padding: 3px;
-	max-width: 100%;
-	max-height: 100%;
-	min-width: 0;
-	min-height: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	pointer-events: none;
-	contain: layout paint;
-	transition: opacity 0.18s ease;
-}
-
-.flipbook-bookmark__content[hidden] {
-	display: none;
-}
-
-/* Base expanded-content rule precedes the select-mode qualified rule below
-   (noDescendingSpecificity); it is kept next to the other content bases. */
-.flipbook-bookmark__expanded-content {
-	position: absolute;
-	inset: 3px;
-	display: flex;
-	align-items: center;
-	min-width: 0;
-	min-height: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	writing-mode: inherit;
-	opacity: 0;
-	transition: opacity 0.18s ease;
-}
-
-.flipbook-bookmark__expanded-content[hidden] {
-	display: none;
-}
-
-.flipbook-bookmark[data-mouse-mode="turn"] {
-	touch-action: pan-y;
-}
-
-.flipbook-bookmark[data-mouse-mode="select"] {
-	-webkit-user-select: text;
-	user-select: text;
-	touch-action: auto;
-}
-
-.flipbook-bookmark[data-mouse-mode="select"] .flipbook-bookmark__content,
-.flipbook-bookmark[data-mouse-mode="select"]
-	.flipbook-bookmark__expanded-content {
-	contain: layout;
-	pointer-events: auto;
-	-webkit-user-select: text;
-	user-select: text;
-}
-
-.flipbook-bookmark[data-orientation="parallel"][data-edge="left"],
-.flipbook-bookmark[data-orientation="parallel"][data-edge="right"],
-.flipbook-bookmark[data-orientation="perpendicular"][data-edge="top"],
-.flipbook-bookmark[data-orientation="perpendicular"][data-edge="bottom"] {
-	writing-mode: vertical-rl;
-}
-
-/* Preview-open state overrides sit ahead of the orientation/edge geometry
-   rules — equal subject (.__content) must stay non-descending. */
-.flipbook-bookmark-preview[data-open="false"] .flipbook-bookmark__content {
-	opacity: 1;
-}
-
-.flipbook-bookmark[data-preview-open="true"] > .flipbook-bookmark__content {
-	opacity: 0;
-}
-
-.flipbook-bookmark[data-orientation="parallel"][data-edge="left"]
-	> .flipbook-bookmark__content,
-.flipbook-bookmark[data-orientation="parallel"][data-edge="right"]
-	> .flipbook-bookmark__content,
-.flipbook-bookmark[data-orientation="perpendicular"][data-edge="top"]
-	> .flipbook-bookmark__content,
-.flipbook-bookmark[data-orientation="perpendicular"][data-edge="bottom"]
-	> .flipbook-bookmark__content {
-	width: 100%;
-	height: var(--bookmark-exposed-major, 52px);
-}
-
-.flipbook-bookmark[data-orientation="perpendicular"][data-edge="right"]
-	> .flipbook-bookmark__content,
-.flipbook-bookmark[data-orientation="parallel"][data-edge="bottom"]
-	> .flipbook-bookmark__content {
-	left: auto;
-	right: 0;
-}
-
-.flipbook-bookmark[data-orientation="parallel"][data-edge="right"]
-	> .flipbook-bookmark__content,
-.flipbook-bookmark[data-orientation="perpendicular"][data-edge="bottom"]
-	> .flipbook-bookmark__content {
-	top: auto;
-	bottom: 0;
-}
-
-.flipbook-bookmark-preview {
-	position: fixed;
-	z-index: 2147483000;
-	pointer-events: auto;
-	transition:
-		left 0.18s ease,
-		top 0.18s ease,
-		clip-path 0.18s ease;
-}
-
-.flipbook-bookmark-preview[hidden] {
-	display: none;
-}
-
-.flipbook-bookmark--expanded {
-	position: absolute;
-	width: 100%;
-	height: 100%;
-}
-
-.flipbook-bookmark-default {
-	display: flex;
-	align-items: baseline;
-	gap: 6px;
-}
-
-.flipbook-bookmark-default small {
-	opacity: 0.7;
-}
-
-.flipbook-bookmark-preview[data-open="true"]
-	.flipbook-bookmark__expanded-content {
-	opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.flipbook-bookmark-preview,
-	.flipbook-bookmark--expanded,
-	.flipbook-bookmark__content,
-	.flipbook-bookmark__expanded-content {
-		transition: none;
-	}
-}
 
 /* ===================================================================
  * Sefer chapter tabs (issue #2543) — one tab per perek, tinted with the
@@ -658,8 +92,8 @@ html[data-sefer-view] {
 /* The provider's className lands on the library's layer element itself
    (class="flipbook-bookmarks sefer-bookmarks"), so the .flipbook-bookmarks
    compound is both accurate and needed: it keeps these selectors at or
-   above the specificity of the slot-scoped .flipbook-bookmark rules
-   earlier in this file. */
+   above the specificity of the slot-scoped .flipbook-bookmark rules in
+   the library stylesheet. */
 .he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark {
 	background: var(--cover-color, #333);
 	border-color: rgb(255 255 255 / 0.25);
@@ -689,27 +123,23 @@ html[data-sefer-view] {
 	text-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
 }
 
-/* The React renderer's output arrives inside a library-created wrapper
-   <span> — a flex item of __expanded-content with default min-width:auto,
-   so it shrink-wraps to content and overflows the ~220px reveal. */
-.sefer-bookmarks .flipbook-bookmark__expanded-content > * {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-}
-
-/* Expanded tab content: פרק X, the perek title, and source context laid
+/* Expanded tab content: the chapter reference and perek title laid
    out as one horizontal strip — a perpendicular side tab reveals roughly
-   220×24px. This element is portaled inside .flipbook-bookmark-preview,
-   so it must style itself — it cannot rely on .he-book ancestors.
-   --cover-color is passed inline by the renderer for the same reason. */
+   220×24px. The element is a direct flex item of __expanded-content (the
+   library's renderer slot is display:contents), so it needs flex sizing
+   and min-width:0 itself to stretch and truncate. It is portaled inside
+   .flipbook-bookmark-preview, so it must style itself — it cannot rely
+   on .he-book ancestors. --cover-color is passed inline by the renderer
+   for the same reason. */
 .sefer-bookmark-expanded {
 	display: flex;
 	flex-direction: row;
 	align-items: baseline;
 	gap: 6px;
+	flex: 1;
 	width: 100%;
 	height: 100%;
+	min-width: 0;
 	padding: 0 6px;
 	box-sizing: border-box;
 	overflow: hidden;
@@ -728,12 +158,6 @@ html[data-sefer-view] {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-.sefer-bookmark-expanded-source {
-	flex: none;
-	font-size: 0.85em;
-	opacity: 0.8;
 }
 
 @media (prefers-color-scheme: dark) {

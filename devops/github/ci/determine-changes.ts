@@ -28,6 +28,9 @@ interface ModuleRule {
 
 const SHARED_CI_PATHS = [
 	".github/workflows/ci.yml",
+	// Composite actions (setup-js, lcov-image) are consumed by jobs across
+	// every module — an action-only change must select their consumers.
+	".github/actions",
 	"devops/github/ci/determine-changes.ts",
 ];
 const RELEASE_CI_PATHS = [
@@ -59,6 +62,9 @@ export const MODULES = {
 			// cd-aws.yml owns the post-deploy verifier invocation contract
 			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
 			".github/workflows/cd-aws.yml",
+			// The calendar-PDF artifact publisher defines the generation/publish
+			// contract verified by the calendar_pdf_artifacts job (#2608).
+			".github/workflows/calendar-pdf-publish.yml",
 			// The deploy_verifier job also guards canonical nginx redirects.
 			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
 		],
@@ -100,6 +106,8 @@ export const MODULES = {
 			".github/workflows/app-mobile-e2e-runner.yml",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
+			// The cross-module job merges the app's coverage layers with it.
+			"devops/merge-lcov.mts",
 		],
 		// The native decoder inputs are app-owned (#2391): the generator and its
 		// manifest live under app/devops/recitation-decoder, inside this module,
@@ -122,6 +130,8 @@ export const MODULES = {
 			"devops/docker-compose.yml",
 			"devops/package.json",
 			"devops/bun.lock",
+			// admin's coverage:merge calls it to build the published report.
+			"devops/merge-lcov.mts",
 		],
 	},
 	bulletin: {
@@ -157,6 +167,20 @@ export type ModuleChanges = Record<
 
 const isAt = (file: string, path: string) =>
 	file === path || file.startsWith(`${path}/`);
+
+// The data delivery path whose change legitimately re-runs a data deployment
+// with unchanged payload content. `data_ci_changed` additionally covers shared
+// CI plumbing (ci.yml, composite actions, this detector), which must never
+// enter Release Data: the perushim producer correctly skips those runs, so no
+// current-run SQL artifact exists to bind (#2730).
+const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+
+/** Release intent for data delivery tooling, separate from generic CI checks. */
+export function isDataDeployChange(changedFiles: string[]): boolean {
+	return changedFiles.some((file) =>
+		DATA_DEPLOY_PATHS.some((path) => isAt(file, path)),
+	);
+}
 
 /**
  * Route schema-only data changes to the explicitly approved manual migration path.
@@ -282,6 +306,7 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`${key}_ci_changed=${flags.ci_changed}`,
 	]);
 	lines.push(`data_schema_only_changed=${isSchemaOnlyDataChange(files)}`);
+	lines.push(`data_deploy_changed=${isDataDeployChange(files)}`);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;

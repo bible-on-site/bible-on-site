@@ -1,6 +1,5 @@
 import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
-import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -23,6 +22,14 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
+import {
+	articleTag,
+	cachedPerKey,
+	COLLECTION_TAGS,
+	perekArticlesTag,
+	perekPerushimTag,
+	perushDetailTag,
+} from "../../../../lib/revalidate/tags";
 import {
 	articlePath,
 	authorPath,
@@ -97,43 +104,42 @@ export async function generateStaticParams({
 }
 
 /**
- * Cache article data with on-demand revalidation support.
+ * Entity-scoped caches with on-demand revalidation support: each entry
+ * carries both its collection tag and its entity tag so an admin change
+ * invalidates exactly the data and routes that consume it.
  */
-const getCachedArticle = unstable_cache(
-	async (id: number) => getArticleById(id),
-	["article"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticle = cachedPerKey(
+	"article",
+	(id: number) => String(id),
+	(key) => [COLLECTION_TAGS.articles, articleTag(Number(key))],
+	(id: number) => getArticleById(id),
 );
 
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticles = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
-const getCachedPerushDetail = unstable_cache(
-	async (perushId: number, perekId: number) =>
-		getPerushDetail(perushId, perekId),
-	["perush-detail"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
+const getCachedPerushDetail = cachedPerKey(
+	"perush-detail",
+	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
+	(key) => {
+		const [perushId, perekId] = key.split(":").map(Number);
+		return [
+			COLLECTION_TAGS.perushim,
+			perushDetailTag(perushId, perekId),
+		];
 	},
+	(perushId: number, perekId: number) => getPerushDetail(perushId, perekId),
 );
 
 export async function generateMetadata({

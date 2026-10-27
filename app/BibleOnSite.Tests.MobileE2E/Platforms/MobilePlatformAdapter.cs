@@ -278,9 +278,10 @@ public abstract class MobilePlatformAdapter
                 ["pageSourceExcludedAttributes"] = "visible,accessible",
                 // Return each candidate's real visibility and frame in its lookup.
                 ["shouldUseCompactResponses"] = false,
-                // hittable rides the same response so CanTap's per-poll read
-                // stays local instead of a second /attribute round-trip.
-                ["elementResponseAttributes"] = "rect,displayed,text,enabled,hittable"
+                // Read-only geometry/text queries must not trigger XCTest's
+                // hit testing during a UI transition. CanTap still requests
+                // hittable explicitly when an interaction needs that check.
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
@@ -432,16 +433,35 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         CreateTapAtSequence(location.X + size.Width / 2, location.Y + size.Height / 2);
     public override void GoBack(AppiumDriver driver)
     {
-        var button = driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
-            .FirstOrDefault(element => element.Displayed && CanTap(element));
-        if (button != null)
+        // WDA can report success while the touch never became a navigation —
+        // a tap landing mid-layout or an edge swipe the recognizer dropped.
+        // Confirm the tree changed and reissue the gesture once, the same
+        // one-retry idiom Relaunch uses for transient launch errors.
+        var before = driver.PageSource;
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            Tap(driver, button);
-            return;
+            // Preferences uses a custom top bar, outside UIKit's navigation bar.
+            var button = driver.FindElements(AutomationId("PreferencesBackButton"))
+                .FirstOrDefault(element => element.Displayed && CanTap(element))
+                ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
+                    .FirstOrDefault(element => element.Displayed && CanTap(element));
+            if (button != null)
+            {
+                Tap(driver, button);
+            }
+            else
+            {
+                // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
+                driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
+            }
+            if (PageChanged(driver, before))
+            {
+                return;
+            }
         }
-        // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
-        driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
     }
+    private static bool PageChanged(AppiumDriver driver, string before) =>
+        !string.Equals(driver.PageSource, before, StringComparison.Ordinal);
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import {
   analyticsStatus,
@@ -7,8 +10,37 @@ import {
   launchPlan,
   launcherComponent,
   readerReady,
+  startReleaseLog,
   waitForProcessTeardown,
 } from "./release-smoke.mjs";
+
+test("retains startup analytics and crash evidence after the device's rolling log loses it", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "release-startup-log-"));
+  const destination = join(directory, "live.txt");
+  const startup = "I mono-stdout: [Analytics] collection enabled=False\n";
+  const crash = "E ActivityManager: ANR in com.tanah.daily929\n";
+  const script = `process.stdout.write(${JSON.stringify(startup + crash)});
+    process.stdout.write('unrelated emulator output\\n'.repeat(100000));
+    process.stdout.write('capture complete'); setInterval(() => {}, 1000);`;
+  const capture = startReleaseLog(process.execPath, ["-e", script], destination);
+  try {
+    const deadline = Date.now() + 5000;
+    while (!capture.read().includes("capture complete") && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    await capture.stop();
+    const retained = capture.read();
+    const rolling = retained.slice(-1024);
+    assert.deepEqual(analyticsStatus(rolling), { state: "absent" });
+    assert.deepEqual(analyticsStatus(retained), { state: "isolated" });
+    assert.deepEqual(crashSignatures(rolling, "com.tanah.daily929"), []);
+    assert.deepEqual(crashSignatures(retained, "com.tanah.daily929"), ["ANR in com.tanah.daily929"]);
+    assert.ok(retained.endsWith("capture complete"));
+  } finally {
+    await capture.stop();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 // The verbatim signature of #2247, captured from the crashing store build on
 // the API 36 emulator: the managed setter NRE'd because nothing called

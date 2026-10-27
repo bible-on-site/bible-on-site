@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 jest.mock("next/navigation", () => ({
@@ -10,6 +10,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 import { LearningCalendar } from "@/app/calendar/components/LearningCalendar";
+import { resetCalendarPdfAssetCache } from "@/lib/download/calendar-pdf-client";
 import {
 	getCycle,
 	getCycleStartMonth,
@@ -70,10 +71,34 @@ describe("LearningCalendar", () => {
 				name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
 			}),
 		).toBeInTheDocument();
-		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365).
+		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365):
+		// one merged block covering both dates, not two duplicate cells.
 		const reviewDays = screen.getAllByRole("button", { name: /חזרה/ });
-		expect(reviewDays.length).toBeGreaterThanOrEqual(2);
-		expect(reviewDays[0]).toHaveAccessibleName(/חזרה: בראשית א - בראשית ה/);
+		expect(reviewDays.length).toBeGreaterThanOrEqual(1);
+		const merged = screen.getByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged).toBeInTheDocument();
+		expect(merged.textContent).toContain('י"ב');
+		expect(merged.textContent).toContain('י"ג');
+		// Saturday's cell is folded into Friday's block, not rendered alone.
+		expect(
+			screen.queryByRole("button", { name: /^י"ג אלול/ }),
+		).not.toBeInTheDocument();
+	});
+
+	it("merges Friday/Saturday review cells in the yearly view", () => {
+		render(<LearningCalendar {...cycleStartProps} />);
+
+		fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+
+		// אלול's mini-month shows the merged 12-13 pair as one block (#2365).
+		const merged = screen.getAllByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged.length).toBe(1);
+		expect(merged[0].textContent).toContain('י"ב');
+		expect(merged[0].textContent).toContain('י"ג');
 	});
 
 	it("navigates to the next month and syncs the ?month= query", () => {
@@ -141,6 +166,18 @@ describe("LearningCalendar", () => {
 			name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
 		});
 		expect(todayCell.textContent).toContain("היום");
+	});
+
+	it("marks a merged review block when today is one of its dates", () => {
+		// 12 Elul is the Friday half of the merged 12-13 review pair (#2365).
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57851212} />,
+		);
+
+		const merged = screen.getByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged.textContent).toContain("היום");
 	});
 
 	it("returns to today's month via the היום button", () => {
@@ -243,10 +280,10 @@ describe("LearningCalendar", () => {
 		});
 		expect(picker).toHaveValue("11");
 		expect(
-			screen.getByRole("option", { name: "מחזור 11 (משוער)" }),
+			screen.getByRole("option", { name: 'מחזור י"א (משוער)' }),
 		).toBeInTheDocument();
 		// The projected cycle's label is shown next to the picker.
-		expect(screen.getByText(/מחזור 11 \(משוער\):/)).toBeInTheDocument();
+		expect(screen.getByText(/מחזור י"א \(משוער\):/)).toBeInTheDocument();
 	});
 
 	describe("view modes", () => {
@@ -309,8 +346,27 @@ describe("LearningCalendar", () => {
 				{ scroll: false },
 			);
 			// אלול 5785 belongs to cycle 4; the heading shows the full range.
-			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 4/);
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ד'/,
+			);
 			expect(container.querySelectorAll("h3").length).toBeGreaterThan(30);
+		});
+
+		it("shows a single selected-cycle description in full-cycle view (#2725)", () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			const { container } = render(
+				<LearningCalendar {...cycleStartProps} />,
+			);
+
+			// The h2 is the one authoritative description with the range —
+			// nothing beside the picker repeats it.
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ד':/,
+			);
+			expect(screen.getAllByText(/מחזור ד':/)).toHaveLength(1);
+			expect(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+			).toHaveValue("4");
 		});
 
 		it("navigates to the next cycle in full-cycle view", () => {
@@ -323,7 +379,9 @@ describe("LearningCalendar", () => {
 				expect.stringContaining("cycle=5"),
 				{ scroll: false },
 			);
-			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 5/);
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ה'/,
+			);
 		});
 
 		it("navigates to the next year in yearly view", () => {
@@ -351,7 +409,9 @@ describe("LearningCalendar", () => {
 				expect.stringContaining("cycle=2"),
 				{ scroll: false },
 			);
-			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 2/);
+			expect(container.querySelector("h2")?.textContent).toMatch(
+				/מחזור ב'/,
+			);
 		});
 
 		it("disables previous-cycle navigation on the first cycle", () => {
@@ -377,8 +437,31 @@ describe("LearningCalendar", () => {
 		});
 	});
 
-	describe("PDF download action (#2621)", () => {
+	describe("PDF download action (#2621, #2622)", () => {
+		const MANIFEST_URL =
+			"https://assets.example/generated/calendar-pdf/manifest.json";
+
+		function manifestWith(artifacts: Record<string, unknown>) {
+			// jsdom has no fetch Response class — a structural stub is enough.
+			return {
+				ok: true,
+				status: 200,
+				headers: new Headers(),
+				text: () =>
+					Promise.resolve(
+						JSON.stringify({
+							version: 1,
+							fingerprint: "fp",
+							generatedAt: "2026-10-26T00:00:00.000Z",
+							bounds: {},
+							artifacts,
+						}),
+					),
+			} as Response;
+		}
+
 		beforeEach(() => {
+			resetCalendarPdfAssetCache();
 			global.fetch = jest.fn();
 			URL.createObjectURL = jest.fn(() => "blob:mock");
 			URL.revokeObjectURL = jest.fn();
@@ -408,17 +491,124 @@ describe("LearningCalendar", () => {
 			render(<LearningCalendar {...cycleStartProps} />);
 
 			expect(
-				screen.getByRole("button", { name: /הורדת PDF: מחזור 4/ }),
+				screen.getByRole("button", { name: /הורדת PDF: מחזור ד'/ }),
 			).toBeInTheDocument();
 		});
 
 		it("fetches nothing while the calendar is browsed", () => {
-			render(<LearningCalendar {...cycleStartProps} />);
+			render(
+				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
+			);
 
 			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
 			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
 
 			expect(global.fetch).not.toHaveBeenCalled();
+		});
+
+		it("hands the published month artifact straight to the browser", async () => {
+			const clickSpy = jest
+				.spyOn(HTMLAnchorElement.prototype, "click")
+				.mockImplementation(() => {});
+			(global.fetch as jest.Mock).mockImplementation((url: unknown) =>
+				url === MANIFEST_URL
+					? Promise.resolve(
+							manifestWith({
+								"month:578512": {
+									object: "generated/calendar-pdf/objects/x.pdf",
+									sha256: "x",
+									bytes: 10,
+									filename: "learning-calendar-578512.pdf",
+								},
+							}),
+						)
+					: Promise.reject(new Error("unexpected fetch")),
+			);
+			render(
+				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+
+			await waitFor(() =>
+				expect(screen.getByRole("status")).toHaveTextContent("החלה"),
+			);
+			// One static manifest GET — never the dynamic API or a resolver call.
+			expect(global.fetch).toHaveBeenCalledTimes(1);
+			const anchor = clickSpy.mock.contexts[0] as HTMLAnchorElement;
+			expect(anchor.href).toBe(
+				"https://assets.example/generated/calendar-pdf/objects/x.pdf",
+			);
+			expect(anchor.download).toBe("learning-calendar-578512.pdf");
+		});
+
+		it("resolves a full-cycle selection to its cycle artifact", async () => {
+			const clickSpy = jest
+				.spyOn(HTMLAnchorElement.prototype, "click")
+				.mockImplementation(() => {});
+			(global.fetch as jest.Mock).mockImplementation((url: unknown) =>
+				url === MANIFEST_URL
+					? Promise.resolve(
+							manifestWith({
+								"cycle:4": {
+									object: "generated/calendar-pdf/objects/cycle4.pdf",
+									sha256: "y",
+									bytes: 999,
+									filename: "learning-calendar-cycle-4.pdf",
+								},
+							}),
+						)
+					: Promise.reject(new Error("unexpected fetch")),
+			);
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			render(
+				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+
+			await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+			expect(
+				(clickSpy.mock.contexts[0] as HTMLAnchorElement).href,
+			).toBe("https://assets.example/generated/calendar-pdf/objects/cycle4.pdf");
+			expect(global.fetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("uses the legacy API URL when the artifact is not in the manifest", async () => {
+			const clickSpy = jest
+				.spyOn(HTMLAnchorElement.prototype, "click")
+				.mockImplementation(() => {});
+			(global.fetch as jest.Mock).mockImplementation((url: unknown) =>
+				url === MANIFEST_URL
+					? Promise.resolve(manifestWith({}))
+					: Promise.resolve({
+							ok: true,
+							status: 200,
+							headers: new Headers({
+								"Content-Disposition":
+									'attachment; filename="learning-calendar-578512.pdf"',
+							}),
+							blob: () =>
+								Promise.resolve(
+									new Blob(["%PDF"], { type: "application/pdf" }),
+								),
+						} as Response),
+			);
+			render(
+				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+
+			await waitFor(() =>
+				expect(screen.getByRole("status")).toHaveTextContent("החלה"),
+			);
+			expect(global.fetch).toHaveBeenCalledWith(
+				expect.stringContaining("/api/calendar-pdf"),
+			);
+			expect(
+				(clickSpy.mock.contexts[0] as HTMLAnchorElement).href,
+			).toBe("blob:mock");
 		});
 	});
 });
