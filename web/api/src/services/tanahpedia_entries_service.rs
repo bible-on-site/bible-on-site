@@ -13,6 +13,7 @@ use crate::{
         TanahpediaLinkedEntity, TanahpediaSynonymTarget,
     },
     providers::Database,
+    services::reading_metrics_service,
 };
 use entities::tanahpedia::{category_homepage, entry};
 use sea_orm::{
@@ -148,6 +149,9 @@ pub async fn get_entry_detail(
                 segment_end: row.segment_end,
             })
             .collect(),
+        reading_metric: reading_metrics_service::metric_by_entry_id(db, &model.id)
+            .await?
+            .map(Into::into),
     }))
 }
 
@@ -769,6 +773,23 @@ mod tests {
                         ("segment_end", Value::Int(None)),
                     ])],
                 ])
+                // Persisted entry metric attached after the joins (#2607).
+                .append_query_results::<
+                    entities::tanahpedia::entry_metric::Model,
+                    Vec<entities::tanahpedia::entry_metric::Model>,
+                    _,
+                >([vec![entities::tanahpedia::entry_metric::Model {
+                    entry_id: "entry-1".to_string(),
+                    word_count: Some(210),
+                    estimated_seconds: Some(58),
+                    words_per_minute: 220,
+                    calc_version: 1,
+                    source_hash: "e".repeat(64),
+                    computed_at: chrono::NaiveDate::from_ymd_opt(2026, 7, 19)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                }]])
                 .into_connection(),
         );
 
@@ -782,6 +803,38 @@ mod tests {
         assert_eq!(detail.occurrences[0].perek_id, 250);
         assert_eq!(detail.occurrences[0].pasuk_number, 3);
         assert_eq!(detail.occurrences[0].segment_start, None);
+        let metric = detail.reading_metric.unwrap();
+        assert_eq!(metric.word_count, Some(210));
+        assert_eq!(metric.estimated_seconds, Some(58));
+    }
+
+    #[tokio::test]
+    async fn get_entry_detail_tolerates_missing_metrics_schema() {
+        // Databases that predate the metrics migration still serve the entry —
+        // readingMetric degrades to None rather than failing the detail query.
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
+                    "entry-1",
+                    "שמשון",
+                    "שמשון",
+                )]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_errors([sea_orm::DbErr::Custom(
+                    "Query Error: Table 'tanah.tanahpedia_entry_metric' doesn't exist".to_string(),
+                )])
+                .into_connection(),
+        );
+
+        let detail = get_entry_detail(&db, "שמשון").await.unwrap().unwrap();
+
+        assert_eq!(detail.id, "entry-1");
+        assert!(detail.reading_metric.is_none());
     }
 
     #[tokio::test]

@@ -2,6 +2,7 @@ pub mod article_search;
 pub mod articles_service;
 pub mod authors_service;
 pub mod perakim_service;
+pub mod reading_metrics_service;
 pub mod sefarim_service;
 pub mod tanahpedia_entries_service;
 pub mod tanahpedia_entity_service;

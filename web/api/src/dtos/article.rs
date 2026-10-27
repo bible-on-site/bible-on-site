@@ -1,6 +1,10 @@
-use async_graphql::{ComplexObject, Context, Result, SimpleObject};
+use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
 
-use crate::{providers::Database, services::articles_service};
+use crate::{
+    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    providers::Database,
+    services::{articles_service, reading_metrics_service},
+};
 use entities::article::Model;
 
 /// One canonical {perek_id, pasuk} coordinate an article covers
@@ -33,6 +37,10 @@ pub struct Article {
     /// consumers use the primary perek association without claiming pasuk
     /// precision (legacy articles whose coverage was never mapped).
     pub coverage_verified: bool,
+    /// Shared persisted reading metrics over the full article body — not the
+    /// abstract (issue #2607). `null` = unknown/not computed; a populated
+    /// metric with wordCount 0 = verified empty body.
+    pub reading_metric: Option<ReadingMetric>,
 }
 
 impl From<Model> for Article {
@@ -46,6 +54,7 @@ impl From<Model> for Article {
             name: value.name,
             priority: value.priority as i32,
             coverage_verified: value.coverage_verified,
+            reading_metric: None,
         }
     }
 }
@@ -67,6 +76,17 @@ impl Article {
                 pasuk: model.pasuk as i32,
             })
             .collect())
+    }
+
+    /// Ordered readable-block units over the article body for word-weighted
+    /// reading-position progress (issue #2607). Resolved only when selected —
+    /// list queries never pay for it. Empty when uncomputed.
+    async fn progress_units(&self, ctx: &Context<'_>) -> Result<Vec<ReadingProgressUnit>> {
+        let units =
+            reading_metrics_service::block_units_by_article_id(ctx.data::<Database>()?, self.id)
+                .await
+                .map_err(|e| e.extend())?;
+        Ok(units.into_iter().map(Into::into).collect())
     }
 }
 
@@ -97,6 +117,9 @@ pub struct ArticleSearchHit {
     pub semantic_score: f32,
     /// Lexical (term-frequency) component of `score`.
     pub lexical_score: f32,
+    /// Shared persisted reading metrics over the full article body — filled
+    /// by the resolver via one batched lookup (issue #2607).
+    pub reading_metric: Option<ReadingMetric>,
 }
 
 /// Paginated article-search response: `total` counts all matching articles

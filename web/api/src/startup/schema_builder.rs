@@ -12,8 +12,8 @@ use crate::resolvers::authors_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
-use crate::resolvers::tanahpedia_entries_resolver;
 use crate::resolvers::tanahpedia_entity_resolver;
+use crate::resolvers::tanahpedia_entries_resolver;
 use crate::resolvers::tanahpedia_family_resolver;
 use crate::resolvers::tanahpedia_revisions_resolver;
 use crate::services::article_search::ArticleSearchIndex;
@@ -155,6 +155,21 @@ mod tests {
             .collect()
     }
 
+    fn article_metric_model(id: i32) -> entities::tanah_article_metric::Model {
+        entities::tanah_article_metric::Model {
+            article_id: id,
+            word_count: Some(500),
+            estimated_seconds: Some(137),
+            words_per_minute: 220,
+            calc_version: 1,
+            source_hash: "c".repeat(64),
+            computed_at: chrono::NaiveDate::from_ymd_opt(2026, 7, 19)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        }
+    }
+
     #[tokio::test]
     async fn schema_executes_article_resolver_queries() {
         let db = Database::from_connection(
@@ -162,32 +177,82 @@ mod tests {
                 .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
                     [vec![article_model(7, 42, 3)]],
                 )
+                // articleById metric attach
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![article_metric_model(7)]])
+                // articleById progressUnits
+                .append_query_results::<
+                    entities::tanah_article_metric_block::Model,
+                    Vec<entities::tanah_article_metric_block::Model>,
+                    _,
+                >([vec![
+                    entities::tanah_article_metric_block::Model {
+                        article_id: 7,
+                        block_idx: 0,
+                        word_count: 200,
+                        cumulative_words: 200,
+                        calc_version: 1,
+                    },
+                    entities::tanah_article_metric_block::Model {
+                        article_id: 7,
+                        block_idx: 1,
+                        word_count: 300,
+                        cumulative_words: 500,
+                        calc_version: 1,
+                    },
+                ]])
                 .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
                     [vec![article_model(8, 42, 3), article_model(9, 42, 4)]],
                 )
+                // articlesByPerekId metric attach
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![article_metric_model(9)]])
                 .into_connection(),
         );
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let by_id = schema
             .execute(Request::new(
-                "{ articleById(id: 7) { id perekId authorId name articleContent } }",
+                "{ articleById(id: 7) { id perekId authorId name articleContent readingMetric { wordCount estimatedSeconds wordsPerMinute calcVersion sourceHash } progressUnits { key wordCount cumulativeWords } } }",
             ))
             .await;
         assert!(by_id.errors.is_empty(), "{:?}", by_id.errors);
         let by_id_json = by_id.data.into_json().unwrap();
         assert_eq!(by_id_json["articleById"]["id"], 7);
         assert_eq!(by_id_json["articleById"]["articleContent"], "content-7");
+        let metric = &by_id_json["articleById"]["readingMetric"];
+        assert_eq!(metric["wordCount"], 500);
+        assert_eq!(metric["estimatedSeconds"], 137);
+        assert_eq!(metric["wordsPerMinute"], 220);
+        assert_eq!(metric["calcVersion"], 1);
+        let units = by_id_json["articleById"]["progressUnits"]
+            .as_array()
+            .unwrap();
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0]["key"], "0");
+        assert_eq!(units[1]["cumulativeWords"], 500);
 
         let by_perek = schema
             .execute(Request::new(
-                "{ articlesByPerekId(perekId: 42) { id authorId name } }",
+                "{ articlesByPerekId(perekId: 42) { id authorId name readingMetric { wordCount } } }",
             ))
             .await;
         assert!(by_perek.errors.is_empty(), "{:?}", by_perek.errors);
         let by_perek_json = by_perek.data.into_json().unwrap();
         assert_eq!(by_perek_json["articlesByPerekId"][0]["id"], 8);
         assert_eq!(by_perek_json["articlesByPerekId"][1]["authorId"], 4);
+        // Only article 9 has a metric row in the mock; article 8 degrades to null.
+        assert!(by_perek_json["articlesByPerekId"][0]["readingMetric"].is_null());
+        assert_eq!(
+            by_perek_json["articlesByPerekId"][1]["readingMetric"]["wordCount"],
+            500
+        );
     }
 
     #[tokio::test]
@@ -203,6 +268,12 @@ mod tests {
                 .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
                     [vec![verified_article]],
                 )
+                // Metric attach — no rows means readingMetric resolves null.
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![]])
                 .append_query_results::<
                     entities::article_covering_source::Model,
                     Vec<entities::article_covering_source::Model>,
@@ -308,27 +379,82 @@ mod tests {
 
     #[tokio::test]
     async fn schema_executes_perek_resolver_queries() {
+        let perek_metric = entities::tanah_perek_metric::Model {
+            perek_id: 1,
+            word_count: Some(361),
+            estimated_seconds: Some(99),
+            words_per_minute: 220,
+            calc_version: 1,
+            source_hash: "d".repeat(64),
+            computed_at: chrono::NaiveDate::from_ymd_opt(2026, 7, 19)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entities::perek::Model, Vec<entities::perek::Model>, _>([
                     vec![perek_model(1, 1, 1)],
                 ])
+                // perekByPerekId metric attach
+                .append_query_results::<
+                    entities::tanah_perek_metric::Model,
+                    Vec<entities::tanah_perek_metric::Model>,
+                    _,
+                >([vec![perek_metric]])
+                // perekByPerekId progressUnits
+                .append_query_results::<
+                    entities::tanah_perek_pasuk_metric::Model,
+                    Vec<entities::tanah_perek_pasuk_metric::Model>,
+                    _,
+                >([vec![
+                    entities::tanah_perek_pasuk_metric::Model {
+                        perek_id: 1,
+                        pasuk: 1,
+                        word_count: 7,
+                        cumulative_words: 7,
+                        calc_version: 1,
+                    },
+                    entities::tanah_perek_pasuk_metric::Model {
+                        perek_id: 1,
+                        pasuk: 2,
+                        word_count: 11,
+                        cumulative_words: 18,
+                        calc_version: 1,
+                    },
+                ]])
                 .append_query_results::<entities::perek::Model, Vec<entities::perek::Model>, _>([
                     vec![perek_model(2, 2, 1), perek_model(3, 3, 1)],
                 ])
+                // perakimBySeferId metric attach — no rows
+                .append_query_results::<
+                    entities::tanah_perek_metric::Model,
+                    Vec<entities::tanah_perek_metric::Model>,
+                    _,
+                >([vec![]])
                 .into_connection(),
         );
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let one = schema
             .execute(Request::new(
-                "{ perekByPerekId(perekId: 1) { id perekId seferId compiledSource } }",
+                "{ perekByPerekId(perekId: 1) { id perekId seferId compiledSource readingMetric { wordCount estimatedSeconds } progressUnits { key wordCount cumulativeWords } } }",
             ))
             .await;
         assert!(one.errors.is_empty(), "{:?}", one.errors);
         let one_json = one.data.into_json().unwrap();
         assert_eq!(one_json["perekByPerekId"]["perekId"], 1);
         assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א'");
+        assert_eq!(
+            one_json["perekByPerekId"]["readingMetric"]["wordCount"],
+            361
+        );
+        let units = one_json["perekByPerekId"]["progressUnits"]
+            .as_array()
+            .unwrap();
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0]["key"], "1");
+        assert_eq!(units[1]["cumulativeWords"], 18);
 
         let by_sefer = schema
             .execute(Request::new(
@@ -365,13 +491,19 @@ mod tests {
                         mock_row([("perek_id", 929_i16.into()), ("count", 7_i64.into())]),
                     ],
                 ])
+                // Starter article metric attach — one batched IN query.
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![article_metric_model(2)]])
                 .into_connection(),
         );
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
             .execute(Request::new(
-                "{ starter { authors { id name articlesCount } articles { id name } perekArticlesCounters } }",
+                "{ starter { authors { id name articlesCount } articles { id name readingMetric { wordCount estimatedSeconds } } perekArticlesCounters } }",
             ))
             .await;
 
@@ -380,6 +512,12 @@ mod tests {
         assert_eq!(json["starter"]["authors"][0]["articlesCount"], 5);
         assert_eq!(json["starter"]["authors"][1]["articlesCount"], 0);
         assert_eq!(json["starter"]["articles"][1]["id"], 2);
+        // Only article 2 has a metric row in the mock; article 1 → null.
+        assert!(json["starter"]["articles"][0]["readingMetric"].is_null());
+        assert_eq!(
+            json["starter"]["articles"][1]["readingMetric"]["wordCount"],
+            500
+        );
         assert_eq!(
             json["starter"]["perekArticlesCounters"]
                 .as_array()
