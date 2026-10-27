@@ -55,8 +55,10 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 	 * records every request URL and answers with the scope-appropriate
 	 * filename the published artifacts carry (see calendarArtifactFilename).
 	 * `delayMs` holds the response open so the pending-state behaviour is
-	 * observable mid-flight; `failFirst` answers the first request like a
-	 * missing/not-yet-published artifact would.
+	 * observable mid-flight; `failFirst` answers the first request with a
+	 * generic server failure — 503/404 map onto the honest preparing/
+	 * unavailable statuses (#2622), so only another status exercises the
+	 * failure path.
 	 */
 	function stubCalendarPdf(
 		page: Page,
@@ -71,8 +73,8 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 			}
 			if (options.failFirst && hits.length === 1) {
 				await route.fulfill({
-					status: 503,
-					json: { error: "calendar artifact not yet published" },
+					status: 500,
+					json: { error: "calendar artifact generation failed" },
 				});
 				return;
 			}
