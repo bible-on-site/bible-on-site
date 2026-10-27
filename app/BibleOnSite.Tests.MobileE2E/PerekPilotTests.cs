@@ -232,16 +232,21 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var frame = System.Drawing.Rectangle.Empty;
         while (DateTime.UtcNow < deadline)
         {
-            var row = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
-                .FirstOrDefault(element => element.Displayed && element.Text.Contains(suffix, StringComparison.Ordinal));
-            if (row != null)
+            // Read cached row geometry without extra requests to the device.
+            var row = Page.RenderedElements("SearchResultTitle")
+                .FirstOrDefault(element => element.Text.Contains(suffix, StringComparison.Ordinal));
+            if (row.Element != null)
             {
-                var current = new System.Drawing.Rectangle(row.Location, row.Size);
+                var current = new System.Drawing.Rectangle(row.Frame.Location, row.Frame.Size);
                 if (current == frame)
                 {
-                    return (row, current);
+                    return (row.Element, current);
                 }
                 frame = current;
+            }
+            else
+            {
+                frame = System.Drawing.Rectangle.Empty;
             }
             Thread.Sleep(250);
         }

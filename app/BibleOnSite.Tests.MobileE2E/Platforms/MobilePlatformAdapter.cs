@@ -278,9 +278,10 @@ public abstract class MobilePlatformAdapter
                 ["pageSourceExcludedAttributes"] = "visible,accessible",
                 // Return each candidate's real visibility and frame in its lookup.
                 ["shouldUseCompactResponses"] = false,
-                // hittable rides the same response so CanTap's per-poll read
-                // stays local instead of a second /attribute round-trip.
-                ["elementResponseAttributes"] = "rect,displayed,text,enabled,hittable"
+                // Read-only geometry/text queries must not trigger XCTest's
+                // hit testing during a UI transition. CanTap still requests
+                // hittable explicitly when an interaction needs that check.
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
