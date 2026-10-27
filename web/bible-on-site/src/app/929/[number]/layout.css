@@ -24,13 +24,16 @@ html[data-book-view] .top-nav {
    the lock applies from the moment the overlay appears — including while the
    Sefer chunk is still loading. The mounted reader keeps the same lock via
    data-sefer-view in sefer.css, which covers non-overlay consumers of Sefer.
-   scrollbar-gutter: stable keeps the scrollbar's space reserved so entering
-   and leaving the lock does not shift the layout underneath, and the existing
-   document scroll offset is preserved. Scrolling inside the book's content
-   panes is unaffected. */
+   The existing document scroll offset is preserved. Scrolling inside the
+   book's content panes is unaffected.
+   Deliberately no scrollbar-gutter here: the reader scrolls inside
+   .perekContainer, so the root viewport never shows a scrollbar on perek
+   pages — reserving a gutter only while locked would itself add/remove
+   ~15px of usable width per toggle, which is the layout shift the CLS
+   probe scores. sefer.css keeps its lock-time gutter for hosts that do
+   scroll at the root (e.g. /dev/sefer). */
 html[data-book-view] {
   overflow: hidden;
-  scrollbar-gutter: stable;
 }
 
 /* When the book (Sefer) view is active, remove the heavy SEO content
