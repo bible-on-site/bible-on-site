@@ -233,41 +233,17 @@ public class AppFixture : IAsyncLifetime
             throw new InvalidOperationException("Failed to start dotnet run process");
         }
 
-        // Wait for the app to start and initialize
-        await Task.Delay(8000); // Give app more time to compile if needed and fully initialize
-
-        // Find the actual BibleOnSite.exe process that dotnet run started
+        // dotnet run evaluates the project even with --no-build, so the app
+        // process can spawn seconds after the launcher returns on a loaded
+        // host. Poll for it instead of sampling a fixed point after 8s —
+        // keeping the original combined budget: 8s spawn grace followed by
+        // the 60s window wait below now share one deadline.
+        var startupDeadline = DateTime.UtcNow.AddSeconds(8 + 60);
         Process? targetProcess = null;
-        var processes = Process.GetProcessesByName("BibleOnSite");
-
-        Console.WriteLine($"Found {processes.Length} BibleOnSite processes");
-
-        foreach (var proc in processes)
+        Process? fallback = null;
+        while (targetProcess == null && DateTime.UtcNow < startupDeadline)
         {
-            try
-            {
-                proc.Refresh();
-                if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (proc.MainWindowHandle != IntPtr.Zero)
-                {
-                    Console.WriteLine($"Process {proc.Id} has a main window");
-                    targetProcess = proc;
-                    break;
-                }
-            }
-            catch
-            {
-                // Skip processes that can't be queried
-            }
-        }
-
-        // If no process with window found, try to use the first one that hasn't exited
-        if (targetProcess == null)
-        {
+            var processes = Process.GetProcessesByName("BibleOnSite");
             foreach (var proc in processes)
             {
                 try
@@ -278,18 +254,49 @@ public class AppFixture : IAsyncLifetime
                         continue;
                     }
 
-                    if (!proc.HasExited)
+                    if (proc.MainWindowHandle != IntPtr.Zero)
                     {
-                        Console.WriteLine($"Using process {proc.Id} (no window handle but still running)");
+                        Console.WriteLine($"Process {proc.Id} has a main window");
                         targetProcess = proc;
                         break;
+                    }
+
+                    if (!proc.HasExited)
+                    {
+                        // Prefer the latest alive match — an earlier
+                        // fallback may exit while another instance stays.
+                        fallback = proc;
                     }
                 }
                 catch
                 {
-                    // Skip
+                    // Skip processes that can't be queried
                 }
             }
+
+            // Release every snapshot handle except the selected ones.
+            foreach (var proc in processes)
+            {
+                if (!ReferenceEquals(proc, targetProcess) && !ReferenceEquals(proc, fallback))
+                {
+                    proc.Dispose();
+                }
+            }
+
+            if (targetProcess == null)
+            {
+                await Task.Delay(500);
+            }
+        }
+
+        if (targetProcess == null && fallback is { HasExited: false })
+        {
+            Console.WriteLine($"Using process {fallback.Id} (no window handle but still running)");
+            targetProcess = fallback;
+        }
+        else if (!ReferenceEquals(fallback, targetProcess))
+        {
+            fallback?.Dispose();
         }
 
         if (targetProcess == null)
@@ -300,10 +307,11 @@ public class AppFixture : IAsyncLifetime
         // Attach FlaUI to the BibleOnSite process (not the dotnet process)
         _app = Application.Attach(targetProcess.Id);
 
-        // Wait for main window to be available (startup can be slow on first run)
-        var timeout = DateTime.UtcNow.AddSeconds(60);
+        // Wait for main window to be available (startup can be slow on first
+        // run). This shares the startup deadline: process discovery simply
+        // started earlier than the old fixed 8s sample allowed.
         Exception? lastException = null;
-        while (DateTime.UtcNow < timeout)
+        while (DateTime.UtcNow < startupDeadline)
         {
             try
             {
@@ -339,7 +347,7 @@ public class AppFixture : IAsyncLifetime
         }
 
         throw new InvalidOperationException(
-            "Main window not found after 60 seconds.",
+            "Main window not found within the 68-second startup window.",
             lastException);
     }
 
