@@ -55,7 +55,7 @@
                                     Padding="0"
                                     BorderWidth="0"
                                     BackgroundColor="Transparent"
-                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                     VerticalOptions="Center"
                                     SemanticProperties.Description="ניקוי החיפוש"
                                     AutomationId="ClearArticlesSearchButton"
@@ -135,7 +135,7 @@
                                    Margin="0,10,0,0"/>
                             <Label Text="{Binding ErrorMessage}"
                                    FontSize="14"
-                                   TextColor="{StaticResource Error}"
+                                   TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
                                    HorizontalTextAlignment="Center"
                                    IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
                                    Margin="0,10,0,0"/>

@@ -24,7 +24,7 @@
                                        HorizontalTextAlignment="Center"
                                        VerticalTextAlignment="Center"
                                        LineBreakMode="TailTruncation"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                             </controls:ToolbarPill>
                         </controls:SharedTopBar.CenterContent>
                         <controls:SharedTopBar.TrailingContent>
@@ -35,7 +35,7 @@
                                     Padding="0"
                                     FontSize="13"
                                     BackgroundColor="Transparent"
-                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                         </controls:SharedTopBar.TrailingContent>
                     </controls:SharedTopBar>
                     <ContentPresenter Grid.Row="1"/>

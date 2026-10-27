@@ -46,6 +46,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCarouselNavigation();
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
     }
 
     public MasoraPage(MasoraViewModel viewModel)
@@ -58,6 +59,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCarouselNavigation();
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
+        SubscribeThemeChange();
     }
 
     /// <summary>
@@ -69,6 +71,42 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     {
         PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
         Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    /// <summary>
+    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
+    /// each pasuk's cached FormattedString at build time — a theme flip while the
+    /// page is alive must refresh the realized rows so they don't keep the other
+    /// theme's colors (#2601).
+    /// </summary>
+    private void SubscribeThemeChange()
+    {
+        if (Microsoft.Maui.Controls.Application.Current is not { } app)
+        {
+            return;
+        }
+        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
+        // when navigation returns, and must re-check the theme then.
+        Loaded += (_, _) =>
+        {
+            app.RequestedThemeChanged += OnRequestedThemeChanged;
+            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
+        };
+        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
+    }
+
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
+    {
+        Dispatcher.Dispatch(() =>
+        {
+            foreach (var unit in _viewModel.CarouselUnits)
+            {
+                foreach (var row in unit.Rows)
+                {
+                    row.Pasuk?.RefreshForThemeChange();
+                }
+            }
+        });
     }
 
     private bool _notesRefreshQueued;
