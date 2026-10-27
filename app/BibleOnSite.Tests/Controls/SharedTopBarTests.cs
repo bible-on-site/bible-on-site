@@ -199,6 +199,144 @@ public class SharedTopBarTests : IDisposable
     }
 
     [Fact]
+    public void SharedTopBar_Hamburger_WithoutOpener_IsAHarmlessNoOp()
+    {
+        // With no injected opener and no live Shell, a tap still must not
+        // crash — the flyout fallback just has nowhere to go.
+        var bar = new SharedTopBar();
+
+        var act = () => bar.NavigationButton.SendClicked();
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void SharedTopBar_BackEnabled_FollowsTheStackDepthBoundary()
+    {
+        // stackDepth > 1 is the stack-side half of the Back state: exactly one
+        // page (a root) keeps the slot disabled even though it stays visible.
+        var bar = new SharedTopBar { ShowBack = true };
+
+        bar.RefreshBackState(0);
+        bar.BackEnabled.Should().BeFalse();
+        bar.RefreshBackState(1);
+        bar.BackEnabled.Should().BeFalse("a root page has nothing to go back to");
+
+        bar.RefreshBackState(2);
+        bar.BackEnabled.Should().BeTrue("a pushed page in the stack enables Back");
+        bar.BackButton.IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SharedTopBar_BackGlyph_SkipsUndecidedAndNonVisualAncestors()
+    {
+        // Elements that never pin a flow direction (MatchParent) and
+        // non-visual ancestors like the Window are skipped on the walk up.
+        // When nothing decides, the Hebrew RTL default wins over any locale.
+        var bar = new SharedTopBar();
+        var host = new ContentView();
+        var page = new ContentPage
+        {
+            FlowDirection = FlowDirection.MatchParent,
+            Content = host,
+        };
+        _ = new Window(page);
+        host.Content = bar;
+
+        bar.BackButton.Text.Should().Be(Fonts.FluentUI.arrow_right_24_regular,
+            "no ancestor pinned a direction, so the RTL default applies");
+    }
+
+    [Fact]
+    public void SharedTopBar_BackSlot_WithoutPageAncestor_StaysDisabled()
+    {
+        // A bar outside the visual tree has no Page ancestor at all — the
+        // ancestor walk must end safely instead of inventing a stack.
+        var bar = new SharedTopBar { ShowBack = true };
+
+        bar.RefreshBackState();
+
+        bar.BackEnabled.Should().BeFalse("no Page ancestor means no back stack");
+    }
+
+    [Fact]
+    public void SharedTopBar_BackSlot_WalksPastNonPageAncestors()
+    {
+        // Intermediate containers are not Pages — the stack-depth walk must
+        // skip them and still land on the hosting Page's navigation stack.
+        var bar = new SharedTopBar { ShowBack = true };
+        var host = new ContentView();
+        _ = new ContentPage { Content = host };
+        host.Content = bar;
+
+        bar.RefreshBackState();
+
+        bar.BackEnabled.Should().BeFalse(
+            "an unnavigated page past a ContentView wrapper still has no return target");
+    }
+
+    [Fact]
+    public void SharedTopBar_BackClick_WithoutInvokerOrWindow_IsASafeNoOp()
+    {
+        // The default route is the shared IWindow.BackButtonClicked pipeline.
+        // A bar outside any window has nothing to route to and must not throw.
+        var bar = new SharedTopBar { ShowBack = true };
+        bar.BackStateProvider = () => true;
+        bar.RefreshBackState();
+
+        var act = () => bar.BackButton.SendClicked();
+
+        act.Should().NotThrow();
+        bar.BackEnabled.Should().BeTrue("the provider still reports its surface");
+    }
+
+    private sealed class BackConsumingPage : ContentPage
+    {
+        public int BackPresses;
+
+        protected override bool OnBackButtonPressed()
+        {
+            BackPresses++;
+            return true;
+        }
+    }
+
+    [Fact]
+    public void SharedTopBar_BackClick_WithoutInvoker_RidesTheWindowBackPipeline()
+    {
+        // With no injected invoker the press reaches the real pipeline:
+        // IWindow.BackButtonClicked dispatches to the page's own back
+        // handling, which consumes it — never an app exit (#2467).
+        var bar = new SharedTopBar { ShowBack = true };
+        var page = new BackConsumingPage { Content = new ContentView { Content = bar } };
+        _ = new Window(page);
+        bar.BackStateProvider = () => true;
+        bar.RefreshBackState();
+
+        bar.BackButton.SendClicked();
+
+        page.BackPresses.Should().Be(1,
+            "the default invoker rides IWindow.BackButtonClicked into the page");
+    }
+
+    [Fact]
+    public void SharedTopBar_BackClick_WindowDeclinesBack_LeavesStateIntact()
+    {
+        // The same default route when the page has nothing to consume: the
+        // shared pipeline declines and the slot stays painted enabled.
+        var bar = new SharedTopBar { ShowBack = true };
+        var page = new ContentPage { Content = new ContentView { Content = bar } };
+        _ = new Window(page);
+        bar.BackStateProvider = () => true;
+        bar.RefreshBackState();
+
+        var act = () => bar.BackButton.SendClicked();
+
+        act.Should().NotThrow();
+        bar.BackEnabled.Should().BeTrue("the provider still owns the transient surface");
+    }
+
+    [Fact]
     public void SharedTopBar_CenterAndTrailingContent_RoundTrip()
     {
         var bar = new SharedTopBar();
