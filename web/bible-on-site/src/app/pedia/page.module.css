@@ -349,6 +349,15 @@
   font-size: 1.1rem;
 }
 
+/* Footnote marker tokens shared by the inline reference sup and the
+   note-list generated letter, so both resolve to the same style and cannot
+   drift apart (#2723). */
+.entryContent,
+.homepageContent {
+  --footnote-marker-color: #1a73e8;
+  --footnote-marker-size: 11px;
+}
+
 /* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
 .homepageContent {
   display: block;
@@ -361,10 +370,10 @@
 
 .entryContent sup,
 .homepageContent sup {
-  font-size: 11px;
+  font-size: var(--footnote-marker-size);
   vertical-align: super;
   line-height: 0;
-  color: #1a73e8;
+  color: var(--footnote-marker-color);
   font-weight: normal;
 }
 
@@ -398,21 +407,40 @@
   border-top: 1px solid #dadce0;
   font-size: 0.95rem;
   color: #3c4043;
+  /* Gutter shared by the hanging indent and the generated marker box. A rem
+     value keeps both aligned no matter the marker's own font-size (#2723). */
+  --footnote-marker-indent: 1.7rem;
 }
 
 .entryContent ol:global(.footnotes) li,
 .homepageContent ol:global(.footnotes) li {
-  position: relative;
   margin: 0.35em 0;
-  padding-inline-start: 1.8em;
+  padding-inline-start: var(--footnote-marker-indent);
+  /* Hanging indent: the first line (marker + note text) reaches the item
+     edge while wrapped lines stay indented beside the marker. */
+  text-indent: calc(-1 * var(--footnote-marker-indent));
+}
+
+/* Note bodies may wrap their text in <p> — the first paragraph flows inline
+   so the generated marker shares the item's first line. */
+.entryContent ol:global(.footnotes) li > p:first-child,
+.homepageContent ol:global(.footnotes) li > p:first-child {
+  display: inline;
 }
 
 .entryContent ol:global(.footnotes) li::before,
 .homepageContent ol:global(.footnotes) li::before {
   content: attr(data-marker);
-  position: absolute;
-  inset-inline-start: 0;
-  color: #5f6368;
+  /* The marker is a real in-flow inline box — vertical-align: super is
+     ignored on absolutely positioned pseudo-elements. */
+  display: inline-block;
+  inline-size: var(--footnote-marker-indent);
+  text-indent: 0;
+  font-size: var(--footnote-marker-size);
+  line-height: 0;
+  vertical-align: super;
+  color: var(--footnote-marker-color);
+  font-weight: normal;
 }
 
 /* כותרת המקטע נוצרת גם היא — אחידה לכל דורות הסימון */
@@ -738,11 +766,6 @@
   .entryContent ol:global(.footnotes),
   .homepageContent ol:global(.footnotes) {
     color: #d7dae0;
-  }
-
-  .entryContent ol:global(.footnotes) li::before,
-  .homepageContent ol:global(.footnotes) li::before {
-    color: #9aa0a6;
   }
 
   .entryContent a:global(.footnote-backref),
