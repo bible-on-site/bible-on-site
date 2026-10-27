@@ -222,8 +222,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             }
             catch (WebDriverTimeoutException) when (attempt == 0)
             {
-                // A touch that never left the search page needs no return trip;
-                // a stray one that opened a sibling's reader does.
+                // A stray touch that opened a sibling's reader needs the
+                // trip back; one that never left the search page does not.
                 if (!Driver!.FindElements(Platform.AutomationId("PerekSearchInput")).Any(element => element.Displayed))
                 {
                     Platform.GoBack(Driver!);
