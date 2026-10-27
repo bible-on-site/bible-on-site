@@ -40,6 +40,7 @@ public class PasukMarkerTextConverterTests
 
         merged.Spans.Should().HaveCount(3);
         merged.Spans[0].Text.Should().Be("א ");
+        merged.Spans[0].FontFamily.Should().Be(PasukMarkerTextConverter.MarkerFontFamily);
         merged.Spans[0].FontAttributes.Should().Be(FontAttributes.Bold);
         merged.Spans[0].TextColor.Should().Be(Colors.Red);
         merged.Spans[0].FontSize.Should().Be(16.0);
@@ -47,6 +48,38 @@ public class PasukMarkerTextConverterTests
         merged.Spans[1].Should().NotBeSameAs(text.Spans[0]);
         merged.Spans[1].Text.Should().Be("פסוק");
         merged.Spans[2].TextColor.Should().Be(Colors.Gray);
+        merged.Spans[2].FontSize.Should().Be(14);
+    }
+
+    // #2623: the marker is reader chrome — it keeps the app's main font while
+    // the pasuk text around it renders in Taamey D.
+    [Fact]
+    public void the_marker_letter_stays_on_the_app_main_font()
+    {
+        var merged = Convert(PasukText("פסוק"), "א", 16.0)
+            .Should().BeOfType<FormattedString>().Subject;
+
+        merged.Spans[0].FontFamily.Should().Be(PasukMarkerTextConverter.MarkerFontFamily);
+        PasukMarkerTextConverter.MarkerFontFamily.Should().Be("OpenSansRegular");
+    }
+
+    // #2623: a cloned span's null FontFamily must stay *unset*. SetValue marks
+    // the property locally set, and the platform's span builder then resolves
+    // the system face for it — which is how the pasuk text kept the old face
+    // while only the marker letter changed on the first round of review.
+    [Fact]
+    public void cloned_spans_keep_an_unset_font_family_so_they_inherit_the_label_face()
+    {
+        var styledSpan = new Span { Text = "קרי", FontSize = 14 };
+        var text = PasukText("פסוק", styledSpan);
+
+        var merged = Convert(text, "א", 16.0).Should().BeOfType<FormattedString>().Subject;
+
+        merged.Spans[1].IsSet(Span.FontFamilyProperty).Should().BeFalse();
+        merged.Spans[1].FontFamily.Should().BeNull();
+        merged.Spans[2].IsSet(Span.FontFamilyProperty).Should().BeFalse();
+        // An explicitly set font property still carries over.
+        merged.Spans[2].IsSet(Span.FontSizeProperty).Should().BeTrue();
         merged.Spans[2].FontSize.Should().Be(14);
     }
 

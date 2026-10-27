@@ -15,6 +15,13 @@ public class PasukMarkerTextConverter : IMultiValueConverter
 {
     private const int MaxCachedMergesPerSource = 4;
 
+    // The pasuk-number marker is reader chrome, not scripture: it keeps the
+    // app's main face (the implicit Label style's OpenSansRegular alias) while
+    // the pasuk text it precedes renders in Taamey D (#2623). Left unset it
+    // would inherit the label's scripture face — which is exactly the
+    // wrong-glyph result the review called out.
+    internal const string MarkerFontFamily = "OpenSansRegular";
+
     // Keyed on the source FormattedString instance: Pasuk.FormattedText keeps
     // returning the same instance while its weak-ref cache lives and hands out
     // a new instance only when the content genuinely changed (recitation
@@ -79,6 +86,7 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         var markerSpan = new Span
         {
             Text = marker + " ",
+            FontFamily = MarkerFontFamily,
             FontAttributes = FontAttributes.Bold,
             TextColor = MarkerColor
         };
@@ -96,19 +104,50 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         return merged;
     }
 
-    private static Span CloneSpan(Span span) => new()
+    // Font properties copy only when the source span actually set them:
+    // SetValue marks the clone's property as locally set, and the platform
+    // span-builder resolves every set font property into its own font span —
+    // so copying an unset (null) FontFamily would pin the system face onto the
+    // pasuk text instead of letting it inherit the label's Taamey D (#2623:
+    // the cloned text kept the old face while the uncloned marker changed).
+    // FontAutoScalingEnabled, CharacterSpacing and TextDecorations resolve the
+    // same IsSet-or-inherit way, so they follow the same rule.
+    private static Span CloneSpan(Span span)
     {
-        Text = span.Text,
-        TextColor = span.TextColor,
-        BackgroundColor = span.BackgroundColor,
-        FontAttributes = span.FontAttributes,
-        FontFamily = span.FontFamily,
-        FontSize = span.FontSize,
-        CharacterSpacing = span.CharacterSpacing,
-        TextDecorations = span.TextDecorations,
-        LineHeight = span.LineHeight,
-        TextTransform = span.TextTransform
-    };
+        var clone = new Span
+        {
+            Text = span.Text,
+            TextColor = span.TextColor,
+            BackgroundColor = span.BackgroundColor,
+            LineHeight = span.LineHeight,
+            TextTransform = span.TextTransform
+        };
+        if (span.IsSet(Span.FontFamilyProperty))
+        {
+            clone.FontFamily = span.FontFamily;
+        }
+        if (span.IsSet(Span.FontSizeProperty))
+        {
+            clone.FontSize = span.FontSize;
+        }
+        if (span.IsSet(Span.FontAttributesProperty))
+        {
+            clone.FontAttributes = span.FontAttributes;
+        }
+        if (span.IsSet(Span.FontAutoScalingEnabledProperty))
+        {
+            clone.FontAutoScalingEnabled = span.FontAutoScalingEnabled;
+        }
+        if (span.IsSet(Span.CharacterSpacingProperty))
+        {
+            clone.CharacterSpacing = span.CharacterSpacing;
+        }
+        if (span.IsSet(Span.TextDecorationsProperty))
+        {
+            clone.TextDecorations = span.TextDecorations;
+        }
+        return clone;
+    }
 
     // The font size rides the key as raw bits — exact cache-key equality
     // without tripping S1244's float == rule.

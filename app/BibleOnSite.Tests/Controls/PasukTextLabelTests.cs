@@ -63,9 +63,10 @@ public class PasukTextLabelTests
     [Fact]
     public void spans_without_a_family_inherit_the_scripture_face()
     {
-        // The whole formatted-text path (qri/ktiv, reciting words, {פ}/{ס},
-        // pasuk-number markers) leaves Span.FontFamily unset — pin that the
-        // label face is the only one they can resolve to.
+        // The whole formatted-text path (qri/ktiv, reciting words, {פ}/{ס})
+        // leaves Span.FontFamily unset — pin that the label face is the only
+        // one they can resolve to. The pasuk-number marker is the deliberate
+        // exception: PasukMarkerTextConverter pins the app's main face on it.
         var label = new PasukTextLabel();
         var span = new Span { Text = "א" };
 
