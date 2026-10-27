@@ -34,7 +34,10 @@
 import { toLetters } from "gematry";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { queryText } from "@/lib/api-client";
-import { authorNameToSlug } from "@/lib/authors";
+// Import the pure slug helper directly — never the barrel: `authors/service`
+// pulls `server-only` via reading-metrics, and Playwright e2e specs import
+// this module under plain Node where that guard throws (#2607).
+import { authorNameToSlug } from "@/lib/authors/url-utils";
 import type { Scored } from "./corpus";
 import { htmlToPlainText } from "./normalize";
 import { maxEdits, prepareQuery, scorePreparedText } from "./score";
