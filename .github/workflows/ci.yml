@@ -2250,16 +2250,17 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
-      # Needs webkit on top of chromium. A first-run miss still restores the
-      # website jobs' master-seeded chromium entry so only webkit downloads;
-      # the webkit-keyed entry holds both and is PR-scoped by design: a save
-      # on miss speeds up reruns and later pushes of the same pull request.
+      # Needs webkit on top of the chromium headless shell. A first-run miss
+      # still restores the website jobs' master-seeded shell entry so only
+      # webkit downloads; the webkit-keyed entry holds both and is PR-scoped
+      # by design: a save on miss speeds up reruns and later pushes of the
+      # same pull request.
       - name: Restore playwright binaries
         id: playwright-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Restore shared chromium binaries
         id: playwright-chromium-cache
@@ -2267,7 +2268,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
@@ -2288,7 +2289,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI
