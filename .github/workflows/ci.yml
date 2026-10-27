@@ -310,6 +310,7 @@ jobs:
       data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
       data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
+      data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
     steps:
@@ -3524,11 +3525,20 @@ jobs:
     name: Release Data
     needs: [setup_env, determine_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
-    # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
-    # Data CD falls back to the always-present master artifact in that case.
+    # Delivery intent tracks the released payload only: data content, perushim
+    # pipeline inputs, or the data-deploy tooling itself. Shared CI plumbing
+    # (data_ci_changed covers ci.yml, composite actions and the detector) is
+    # never delivery intent — the producer rightly skips those runs, leaving
+    # no current-run SQL artifact to bind (#2730).
+    # When perushim_data is skipped but delivery is intended, the bind step
+    # resolves the trusted master baseline archive instead — pinned by
+    # immutable ID/digest and bound to its producing master CI run and to
+    # identical pipeline inputs (devops/github/release/data-artifact.mjs).
+    # data_ci may be skipped when only perushim inputs changed; cross_module_ci
+    # already forces data_ci success whenever data checks were needed.
     # Schema-only changes require a separately approved, selective migration.
     # Skip this entire job: success would supersede older queued data deployments.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -3540,6 +3550,9 @@ jobs:
         id: sql_source
         env:
           GH_TOKEN: ${{ github.token }}
+          # Skipped producer = generated SQL is unchanged; bind the trusted
+          # master baseline archive produced by an earlier master CI run.
+          SQL_FROM_BASELINE: ${{ needs.perushim_data.result == 'skipped' }}
         run: node devops/github/release/data-artifact.mjs
       - name: Trigger Data CD Workflow
         uses: peter-evans/repository-dispatch@v4
