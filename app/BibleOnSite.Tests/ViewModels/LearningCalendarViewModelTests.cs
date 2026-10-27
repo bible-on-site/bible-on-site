@@ -5,6 +5,7 @@ using BibleOnSite.Tests.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using Microsoft.Maui.ApplicationModel;
 using Moq;
 
 namespace BibleOnSite.Tests.ViewModels;
@@ -694,20 +695,126 @@ public class LearningCalendarViewModelTests
         vm.PrevMonthCommand.CanExecute(null).Should().BeTrue();
     }
 
+    private sealed class StubPdfAssets(Func<string, Task<Uri?>> resolve) : ICalendarPdfAssetResolver
+    {
+        public List<string> Keys { get; } = [];
+
+        public Task<Uri?> TryResolveAsync(string artifactKey)
+        {
+            Keys.Add(artifactKey);
+            return resolve(artifactKey);
+        }
+    }
+
+    private static readonly Uri PublishedAsset =
+        new("https://assets.example/generated/calendar-pdf/objects/deadbeef.pdf");
+
+    private static Mock<ILauncher> LauncherCapturing(out Func<Uri?> opened)
+    {
+        Uri? captured = null;
+        var launcher = new Mock<ILauncher>();
+        launcher.Setup(l => l.OpenAsync(It.IsAny<Uri>()))
+            .Callback<Uri>(u => captured = u)
+            .ReturnsAsync(true);
+        opened = () => captured;
+        return launcher;
+    }
+
     [Fact]
-    public async Task DownloadPdfCommand_RequiresDeviceLauncher()
+    public async Task DownloadPdfCommand_OpensThePublishedArtifactUrl()
     {
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
-        var vm = fixture.ViewModel;
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(PublishedAsset));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
         await vm.InitializeAsync();
 
-        // The export URL building is exercised in every view mode; the
-        // Launcher hand-off is device-only and faults on the unit-test host.
-        foreach (var mode in new[] { CalendarViewMode.Month, CalendarViewMode.Year, CalendarViewMode.Cycle })
-        {
-            vm.SetViewModeCommand.Execute(mode);
-            await Assert.ThrowsAnyAsync<Exception>(() => vm.DownloadPdfCommand.ExecuteAsync(null));
-        }
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+
+        // Month view resolves `month:YYYYMM` to the published object — the
+        // website API is never consulted for an available artifact (#2622).
+        assets.Keys.Should().Equal($"month:{year * 100 + month}");
+        opened().Should().Be(PublishedAsset);
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_ResolvesYearAndCycleKeysPerView()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(PublishedAsset));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+        var (year, _, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+        assets.Keys.Should().Equal($"year:{year}");
+        opened().Should().Be(PublishedAsset);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+        assets.Keys.Should().Equal($"year:{year}", $"cycle:{vm.SelectedCycle!.Value}");
+        opened().Should().Be(PublishedAsset);
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_WhenArtifactMissing_OpensTheLegacyApiUrl()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(null));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+
+        opened().Should().Be(new Uri(
+            $"{BibleOnSite.Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
+            $"?month={year * 100 + month}&view=month&cycle=1"));
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_WhenResolutionThrows_StillOpensTheLegacyApiUrl()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => throw new HttpRequestException("offline"));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+
+        opened().Should().NotBeNull();
+        opened()!.AbsoluteUri.Should().Contain("/api/calendar-pdf");
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_KeepsThePeriodSelectedAtClickTime()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var gate = new TaskCompletionSource<Uri?>();
+        var assets = new StubPdfAssets(_ => gate.Task);
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+
+        var pending = vm.DownloadPdfCommand.ExecuteAsync(null);
+        // Navigating mid-resolution must not swap the artifact being fetched.
+        vm.NextMonthCommand.Execute(null);
+        gate.SetResult(PublishedAsset);
+        await pending;
+
+        assets.Keys.Should().Equal($"month:{year * 100 + month}");
+        opened().Should().Be(PublishedAsset);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { calendarPdfManifestUrl } from "@/lib/download/calendar-pdf-manifest";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { getCurrentDate } from "@/util/date";
@@ -28,6 +29,7 @@ export default function LearningCalendarPage() {
 				initialYear={today.year}
 				initialMonth={today.getUniformMonth()}
 				todayDateNumber={hebcalDateToNumber(today)}
+				pdfManifestUrl={calendarPdfManifestUrl()}
 			/>
 		</Suspense>
 	);

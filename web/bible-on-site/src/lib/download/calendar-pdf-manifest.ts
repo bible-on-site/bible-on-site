@@ -14,10 +14,10 @@
 
 import { assetsUrl } from "@/lib/assets-url";
 import {
-	CALENDAR_PDF_MANIFEST_OBJECT,
 	type CalendarPdfManifest,
 	parseCalendarPdfManifest,
-} from "./calendar-pdf-plan";
+} from "./calendar-pdf-manifest-model";
+import { CALENDAR_PDF_MANIFEST_OBJECT } from "./calendar-pdf-plan";
 
 /** How long a fetched manifest stays hot before a request refetches it. */
 export const MANIFEST_TTL_MS = 60_000;
