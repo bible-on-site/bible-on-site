@@ -163,8 +163,14 @@ bun run coverage:merge
 This runs [merge-coverage.mts](../../../../web/bible-on-site/tests/util/coverage/merge-coverage.mts) which:
 
 1. Normalizes function names in both LCOV files
-2. Uses Docker `lcov-cli` to merge the normalized files
+2. Merges them with [devops/merge-lcov.mts](../../../../devops/merge-lcov.mts) — the unit report is `--require` (canonical universe) and the e2e report is `--hits-only-branches` (untrusted universe, same swc instrumenter so aligned BRDA tuples confirm)
 3. Outputs combined coverage to `.coverage/merged/lcov.info`
+
+### Why the e2e layer merges `--hits-only-branches` (#2670)
+
+The unit report's record set is a deterministic function of the source tree: jest instruments the files tests load and monocart's `all` sweep enumerates the rest. The e2e report enumerates whatever the instrumented dev server compiled on demand — a set that jitters run-to-run (test ordering, server-vs-client compile paths) and leaks generated webpack records (`data<content-hash>` chunks, `[json].cjs`/`[text].mjs` loader wrappers, font chunks) that are not source files. Merging e2e as a trusted layer made the merged LF/BRF denominator — and the required `codecov/project/website` gate — vary between identical runs (±0.3% against a ~0.07% margin).
+
+`--hits-only-branches` pins the merged universe to the unit report's: the e2e layer may only **confirm** hits on coordinates the canonical layer already enumerates (DA lines, FNDA on proven FN defs, and BRDA arms on identical `line,block,branch` tuples — valid because both layers share `swc-plugin-coverage-instrument`). Foreign files drop whole, foreign lines and branch arms drop individually, and hits on canonical-but-coordinate-free files (monocart `all` emits empty records for files no test loaded) drop — all surfaced in the merge log so instrumentation drift stays visible.
 
 ## Ignore Patterns
 
@@ -237,8 +243,8 @@ When Codecov reports a lower project coverage (e.g. 89.84% vs target 92%) but th
    - The number is computed from the merged LCOV we upload. If the merged report truly has lower coverage, Codecov will show it.
 
 2. **Possible causes**
-   - **Non-determinism**: E2E or unit runs may hit different code paths (timing, order), so coverage can vary between runs.
-   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `bun run coverage:merge` and **fails the job** on error (the earlier `continue-on-error` masking was removed — the LCOV container now runs with the caller's UID/GID so root-owned output stays writable); the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
+   - **Non-determinism in hit counts**: E2E or unit runs may hit different code paths (timing, order), so covered lines can vary between runs. The instrumented *universe* is pinned to the unit report (#2670), so the denominator itself cannot jitter from e2e compilation order.
+   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `bun run coverage:merge` and **fails the job** on error — both inputs are `--require`d (`--hits-only-branches` counts as required), so a missing layer fails the merge instead of publishing a partial report; the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
    - **Path/flag mismatch**: Codecov applies the `website` flag path `web/bible-on-site/src/`. If LCOV `SF:` paths differ (e.g. absolute vs repo-relative), more or fewer files can be counted and the percentage can shift.
    - **New files in denominator**: Only files under `src/` are in the project. New test files under `tests/` are not in the flag path and do not affect project coverage.
 

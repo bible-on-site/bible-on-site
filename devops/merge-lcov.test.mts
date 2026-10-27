@@ -204,26 +204,18 @@ describe("mergeLcovTexts", () => {
 		// surfaces them so an unexpected shape (new virtual chunk, a source
 		// the canonical layers stopped measuring) stays visible (#2707).
 		const dropped = new Set<string>();
-		mergeLcovTexts(
-			[UNIT, E2E],
-			"web/admin/",
-			[],
-			new Set([1]),
-			dropped,
-		);
+		mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]), new Set(), {
+			foreignFiles: dropped,
+		});
 		// server.tsx is canonical; other.ts exists only in the untrusted input.
 		assert.deepEqual([...dropped], ["web/admin/src/other.ts"]);
 	});
 
 	it("reports no foreign files when the untrusted input stays inside the universe", () => {
 		const dropped = new Set<string>();
-		mergeLcovTexts(
-			[UNIT, UNIT],
-			"web/admin/",
-			[],
-			new Set([1]),
-			dropped,
-		);
+		mergeLcovTexts([UNIT, UNIT], "web/admin/", [], new Set([1]), new Set(), {
+			foreignFiles: dropped,
+		});
 		assert.equal(dropped.size, 0);
 	});
 
@@ -231,6 +223,125 @@ describe("mergeLcovTexts", () => {
 		const first = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
 		const second = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
 		assert.equal(first, second);
+	});
+
+	it("confirms untrusted branch hits on identical canonical tuples in --hits-only-branches mode (#2670)", () => {
+		// Same instrumenter as the canonical layer (e.g. swc-plugin-coverage-
+		// instrument in both jest and the dev server): the tuple 20,0,0 names
+		// the same arm in both reports, so the e2e hit proves it covered.
+		const canonical =
+			"TN:\nSF:web/bible-on-site/src/Perek.tsx\nDA:20,1\nDA:21,0\nBRDA:20,0,0,0\nBRDA:20,0,1,0\nLF:2\nLH:1\nBRF:2\nBRH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:web/bible-on-site/src/Perek.tsx\nDA:20,4\nDA:21,3\nDA:99,2\nBRDA:20,0,0,3\nBRDA:20,0,1,0\nBRDA:30,0,0,9\nLF:3\nLH:3\nBRF:3\nBRH:2\nend_of_record\n";
+		const out = mergeLcovTexts(
+			[canonical, e2e],
+			undefined,
+			[],
+			new Set(),
+			new Set([1]),
+		);
+		// The aligned arm confirms (0 → 3); the still-unhit arm stays 0.
+		assert.ok(out.includes("BRDA:20,0,0,3\nBRDA:20,0,1,0\n"), out);
+		// The canonical DA lines confirm the same way.
+		assert.ok(out.includes("DA:20,4\nDA:21,3\n"), out);
+		// Foreign coordinates — the extra line and extra arm a dev-server
+		// compile enumerated — still never enter the universe.
+		assert.ok(!out.includes("DA:99"), out);
+		assert.ok(!out.includes("BRDA:30"), out);
+		assert.ok(out.includes("LF:2\nLH:2\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
+	});
+
+	it("keeps the merged universe identical for --hits-only-branches inputs", () => {
+		const canonical = mergeLcovTexts([UNIT], "web/admin/");
+		const merged = mergeLcovTexts(
+			[UNIT, E2E],
+			"web/admin/",
+			[],
+			new Set(),
+			new Set([1]),
+		);
+		assert.deepEqual(merged.match(/^SF:.+$/gm), canonical.match(/^SF:.+$/gm));
+		const denominators = (s: string) =>
+			s.match(/^(?:LF|BRF|FNF):\d+$/gm) ?? [];
+		assert.deepEqual(denominators(merged), denominators(canonical));
+	});
+
+	it("drops e2e-only files whole in --hits-only-branches mode", () => {
+		// Generated chunks the dev server instrumented (webpack data<hash>
+		// modules, loader wrappers) are not in the canonical universe.
+		const canonical =
+			"TN:\nSF:web/bible-on-site/src/app/page.tsx\nDA:1,2\nLF:1\nLH:1\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:web/bible-on-site/src/app/page.tsx\nDA:1,3\nLF:1\nLH:1\nend_of_record\n" +
+			"TN:\nSF:web/bible-on-site/src/app/data0595af\nDA:1,5\nLF:1\nLH:1\nend_of_record\n";
+		const dropped = new Set<string>();
+		const out = mergeLcovTexts(
+			[canonical, e2e],
+			undefined,
+			[],
+			new Set(),
+			new Set([1]),
+			{ foreignFiles: dropped },
+		);
+		assert.deepEqual(out.match(/^SF:.+$/gm), [
+			"SF:web/bible-on-site/src/app/page.tsx",
+		]);
+		assert.ok(out.includes("DA:1,3"), out);
+		assert.deepEqual([...dropped], ["web/bible-on-site/src/app/data0595af"]);
+	});
+
+	it("reports canonically-empty files whose untrusted data cannot confirm", () => {
+		// monocart's `all` enumeration lists source files no test loaded as
+		// coordinate-free records — e2e coverage there has nothing to bind to.
+		const canonical =
+			"TN:\nSF:web/bible-on-site/src/app/layout.tsx\nFNF:0\nFNH:0\nBRF:0\nBRH:0\nLF:0\nLH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:web/bible-on-site/src/app/layout.tsx\nDA:3,1\nLF:1\nLH:1\nend_of_record\n";
+		const empty = new Set<string>();
+		const foreign = new Set<string>();
+		const out = mergeLcovTexts(
+			[canonical, e2e],
+			undefined,
+			[],
+			new Set(),
+			new Set([1]),
+			{ foreignFiles: foreign, emptyCanonicalFiles: empty },
+		);
+		assert.deepEqual([...empty], ["web/bible-on-site/src/app/layout.tsx"]);
+		assert.equal(foreign.size, 0);
+		// The file's block stays empty — its e2e hits never enter.
+		assert.ok(!out.includes("DA:3"), out);
+	});
+
+	it("does not report canonically-empty files when the untrusted block is empty too", () => {
+		const canonical =
+			"TN:\nSF:web/bible-on-site/src/types.ts\nLF:0\nLH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:web/bible-on-site/src/types.ts\nLF:0\nLH:0\nend_of_record\n";
+		const empty = new Set<string>();
+		mergeLcovTexts([canonical, e2e], undefined, [], new Set(), new Set([1]), {
+			emptyCanonicalFiles: empty,
+		});
+		assert.equal(empty.size, 0);
+	});
+
+	it("still applies strict BRDA semantics to --hits-only inputs alongside --hits-only-branches", () => {
+		const canonical =
+			"TN:\nSF:src/p.tsx\nDA:5,1\nBRDA:5,0,0,0\nLF:1\nLH:1\nBRF:1\nBRH:0\nend_of_record\n";
+		const e2eAligned =
+			"TN:\nSF:src/p.tsx\nBRDA:5,0,0,7\nLF:0\nLH:0\nBRF:1\nBRH:1\nend_of_record\n";
+		const e2eStrict =
+			"TN:\nSF:src/p.tsx\nBRDA:5,0,0,9\nLF:0\nLH:0\nBRF:1\nBRH:1\nend_of_record\n";
+		const out = mergeLcovTexts(
+			[canonical, e2eAligned, e2eStrict],
+			undefined,
+			[],
+			new Set([2]),
+			new Set([1]),
+		);
+		// Aligned input confirmed its 7; the strict input's 9 must not win.
+		assert.ok(out.includes("BRDA:5,0,0,7"), out);
 	});
 
 	it("fails the CLI when a --require input is missing", () => {
@@ -241,6 +352,28 @@ describe("mergeLcovTexts", () => {
 				execFileSync(
 					process.execPath,
 					[script, "--out", out, "--require", "does-not-exist/lcov.info"],
+					{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+				),
+			(error) => {
+				const err = error as { status?: number; stderr?: string };
+				assert.equal(err.status, 1);
+				assert.match(
+					String(err.stderr),
+					/Required coverage input\(s\) missing:[\s\S]*does-not-exist\/lcov\.info/,
+				);
+				return true;
+			},
+		);
+	});
+
+	it("fails the CLI when a --hits-only-branches input is missing", () => {
+		const script = fileURLToPath(new URL("./merge-lcov.mts", import.meta.url));
+		const out = join(mkdtempSync(join(tmpdir(), "lcov-")), "merged.info");
+		assert.throws(
+			() =>
+				execFileSync(
+					process.execPath,
+					[script, "--out", out, "--hits-only-branches", "does-not-exist/lcov.info"],
 					{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
 				),
 			(error) => {

@@ -1291,9 +1291,14 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Build lcov Docker image
-        uses: ./.github/actions/lcov-image
-
+      # The published website report merges both test layers: the unit
+      # report is the canonical universe (jest + swc instrumentation plus
+      # monocart's `all` sweep enumerates a deterministic record set); the
+      # e2e layer's dev-server compilation enumerates a run-dependent set
+      # (generated chunks, compile-order drift), so it merges
+      # --hits-only-branches — it confirms hits on shared DA/FNDA/BRDA
+      # coordinates (same swc instrumenter → aligned tuples) but can never
+      # extend or dilute the denominator (#2670).
       - name: Merge Test Coverage (Unit + E2E)
         run: bun run coverage:merge
 

@@ -7,7 +7,7 @@
  * record overwrite a rich unit record and silently dropping coverage.
  *
  * Usage:
- *   node merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--hits-only <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
+ *   node merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--hits-only <file>]... [--hits-only-branches <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
  *
  * --require   input must exist; a missing one fails the merge (exit 1)
  * --hits-only like --require, but the input's instrumented universe is
@@ -24,6 +24,16 @@
  *             enumerates that no canonical layer knows are dropped whole
  *             and listed in the summary so instrumentation drift stays
  *             visible instead of silently shrinking coverage.
+ * --hits-only-branches
+ *             like --hits-only, for an input produced by the SAME
+ *             instrumenter as the canonical layers (e.g. the same swc
+ *             coverage plugin in a dev-server build, #2670): the arm
+ *             universe is still untrusted — foreign BRDA tuples never
+ *             enter the report — but a BRDA hit on a "line,block,branch"
+ *             tuple the canonical layer also enumerated provably names
+ *             the same arm, so the hit confirms it. Use this whenever the
+ *             untrusted layer shares the instrumenter; dropping its
+ *             aligned branch hits would lose real coverage.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
@@ -48,6 +58,22 @@ interface FileRecord {
 }
 
 /**
+ * Diagnostics the merge collects for untrusted inputs when the caller asks.
+ * `foreignFiles` — file blocks the untrusted input enumerated that no
+ *   canonical layer declares; their hits dropped whole.
+ * `emptyCanonicalFiles` — files a canonical layer knows but declares no
+ *   coordinates for (e.g. monocart's `all` enumeration emits an empty
+ *   record for a file no test loaded); the untrusted block's hits can
+ *   confirm nothing and drop. Listed so an unexpectedly
+ *   covered-but-unmeasurable file stays visible instead of silently
+ *   vanishing from the report.
+ */
+export interface MergeDiagnostics {
+	foreignFiles?: Set<string>;
+	emptyCanonicalFiles?: Set<string>;
+}
+
+/**
  * Merge lcov contents into a single report body, one SF block per file.
  * `hitsOnly` (indexed like `contents`) marks inputs from an untrusted
  * instrumented universe — a build that enumerates sequence points the
@@ -62,16 +88,24 @@ interface FileRecord {
  * inputs merge first regardless of CLI order, so the universe is always
  * complete before untrusted hits apply.
  *
- * When `droppedForeignFiles` is given it is filled with the normalized SF
- * paths of whole file blocks an untrusted input enumerated that no
- * canonical layer declares — dropped hits included.
+ * `hitsOnlyBranches` is the same-instrumenter variant (#2670): the
+ * untrusted layer shares the canonical layers' instrumenter (e.g. both
+ * unit and e2e compile with swc-plugin-coverage-instrument), so an
+ * identical "line,block,branch" tuple provably names the same arm and
+ * foreign BRDA hits confirm canonical arms on exact tuples. Foreign
+ * tuples still never enter the report — a dev server's on-demand
+ * compilation enumerates a nondeterministic arm set.
+ *
+ * When `diagnostics` is given its optional sets are filled with the
+ * normalized SF paths of dropped untrusted blocks (see MergeDiagnostics).
  */
 export function mergeLcovTexts(
 	contents: string[],
 	prefix?: string,
 	relocates: string[] = [],
 	hitsOnly: ReadonlySet<number> = new Set(),
-	droppedForeignFiles?: Set<string>,
+	hitsOnlyBranches: ReadonlySet<number> = new Set(),
+	diagnostics?: MergeDiagnostics,
 ): string {
 	const files = new Map<string, FileRecord>();
 	const newRecord = (): FileRecord => ({
@@ -89,34 +123,72 @@ export function mergeLcovTexts(
 		return rec;
 	};
 
+	const untrusted = (index: number) =>
+		hitsOnly.has(index) || hitsOnlyBranches.has(index);
 	const order = [...contents.keys()].sort(
-		(a, b) => Number(hitsOnly.has(a)) - Number(hitsOnly.has(b)),
+		(a, b) => Number(untrusted(a)) - Number(untrusted(b)),
 	);
 	for (const index of order) {
-		const coveredOnly = hitsOnly.has(index);
+		const coveredOnly = untrusted(index);
+		const confirmBranches = hitsOnlyBranches.has(index);
 		let rec: FileRecord | null = null;
 		// Untrusted file blocks parse into their own record first — foreign
 		// coordinates may only confirm canonical ones, so nothing merges
 		// until the whole block (FN defs included) has been inspected.
 		let foreign: FileRecord | null = null;
+		let foreignPath: string | null = null;
+		let canonicalEmpty = false;
 		const flushForeign = () => {
 			if (!foreign) return;
-			if (rec) {
+			// Alias keeps the narrowed non-null type inside nested closures
+			// (rec is reassigned between blocks).
+			const canonical = rec;
+			if (canonical) {
 				for (const [n, h] of foreign.da) {
-					if (rec.da.has(n)) rec.da.set(n, Math.max(rec.da.get(n) ?? 0, h));
+					if (canonical.da.has(n)) {
+						canonical.da.set(n, Math.max(canonical.da.get(n) ?? 0, h));
+					}
 				}
-				// BRDA block/branch indices are the instrumenter's own
-				// coordinates — the same tuple can name a different arm in
-				// another build, so untrusted branch hits never merge.
+				// Same-instrumenter inputs share BRDA coordinates: an
+				// identical tuple provably names the same arm, so its hit
+				// confirms. Tuples the canonical layer never enumerated
+				// still drop — the arm set a dev server compiles is
+				// run-dependent (#2670). For cross-instrumenter inputs
+				// (hitsOnly) equal tuples can name different arms, so no
+				// foreign BRDA arm merges at all.
+				if (confirmBranches) {
+					for (const [key, h] of foreign.brda) {
+						if (canonical.brda.has(key)) {
+							canonical.brda.set(
+								key,
+								Math.max(canonical.brda.get(key) ?? 0, h),
+							);
+						}
+					}
+				}
 				for (const [name, h] of foreign.fnda) {
 					// A function is provably the same only when the untrusted
 					// block declared it at the exact FN "line,name" the
 					// canonical build declared.
 					const proven = [...foreign.fn].some(
-						(def) => def.endsWith(`,${name}`) && rec.fn.has(def),
+						(def) => def.endsWith(`,${name}`) && canonical.fn.has(def),
 					);
-					if (proven) rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, h));
+					if (proven) {
+						canonical.fnda.set(name, Math.max(canonical.fnda.get(name) ?? 0, h));
+					}
 				}
+			}
+			if (
+				canonicalEmpty &&
+				foreignPath &&
+				(foreign.da.size > 0 ||
+					foreign.brda.size > 0 ||
+					foreign.fnda.size > 0)
+			) {
+				// The canonical layer knows the file but declares no
+				// coordinates, so nothing the block reports can confirm —
+				// surface it instead of dropping coverage silently.
+				diagnostics?.emptyCanonicalFiles?.add(foreignPath);
 			}
 			foreign = null;
 		};
@@ -142,9 +214,21 @@ export function mergeLcovTexts(
 				// hits included — reporting them without their unhit siblings
 				// would fake a fully covered file.
 				const canonicalRec = coveredOnly ? (files.get(p) ?? null) : null;
-				if (coveredOnly && !canonicalRec) droppedForeignFiles?.add(p);
+				if (coveredOnly && !canonicalRec) {
+					diagnostics?.foreignFiles?.add(p);
+				}
 				rec = coveredOnly ? canonicalRec : recordFor(p);
 				foreign = coveredOnly && rec ? newRecord() : null;
+				foreignPath = foreign ? p : null;
+				// Canonical inputs all parse before untrusted ones, so an
+				// empty record here stays empty through this input's pass —
+				// foreign data against it can never confirm.
+				canonicalEmpty =
+					!!rec &&
+					!rec.da.size &&
+					!rec.brda.size &&
+					!rec.fn.size &&
+					!rec.fnda.size;
 				continue;
 			}
 			if (line === "end_of_record") {
@@ -222,7 +306,11 @@ function main(): void {
 		process.exit(1);
 	}
 
-	const required = [...(flags.get("require") ?? []), ...(flags.get("hits-only") ?? [])];
+	const required = [
+		...(flags.get("require") ?? []),
+		...(flags.get("hits-only") ?? []),
+		...(flags.get("hits-only-branches") ?? []),
+	];
 	const missing = required.filter((p) => !existsSync(resolve(p)));
 	if (missing.length > 0) {
 		console.error(`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`);
@@ -230,6 +318,7 @@ function main(): void {
 	}
 
 	const hitsOnlySet = new Set(flags.get("hits-only") ?? []);
+	const hitsOnlyBranchesSet = new Set(flags.get("hits-only-branches") ?? []);
 	const inputs = [...required, ...(flags.get("optional") ?? [])];
 	const prefix = flags.get("prefix")?.[0];
 	const relocates = flags.get("relocate") ?? [];
@@ -238,6 +327,7 @@ function main(): void {
 	const consumedDirs = new Set<string>();
 	const contents: string[] = [];
 	const hitsOnly = new Set<number>();
+	const hitsOnlyBranches = new Set<number>();
 	for (const input of inputs) {
 		const inputPath = resolve(input);
 		if (!existsSync(inputPath)) {
@@ -246,28 +336,45 @@ function main(): void {
 		}
 		contents.push(readFileSync(inputPath, "utf8"));
 		if (hitsOnlySet.has(input)) hitsOnly.add(contents.length - 1);
+		if (hitsOnlyBranchesSet.has(input)) hitsOnlyBranches.add(contents.length - 1);
 		consumedDirs.add(dirname(inputPath));
 		console.log(`✓ Added coverage from ${inputPath}`);
 	}
 
-	const droppedForeignFiles = new Set<string>();
+	const diagnostics: MergeDiagnostics = {
+		foreignFiles: new Set(),
+		emptyCanonicalFiles: new Set(),
+	};
 	const merged = mergeLcovTexts(
 		contents,
 		prefix,
 		relocates,
 		hitsOnly,
-		droppedForeignFiles,
+		hitsOnlyBranches,
+		diagnostics,
 	);
 	const outPath = resolve(out);
 	mkdirSync(dirname(outPath), { recursive: true });
 	writeFileSync(outPath, merged);
 
-	if (droppedForeignFiles.size > 0) {
-		const shown = [...droppedForeignFiles].slice(0, 15);
-		const rest = droppedForeignFiles.size - shown.length;
+	if (diagnostics.foreignFiles?.size) {
+		const shown = [...diagnostics.foreignFiles].slice(0, 15);
+		const rest = diagnostics.foreignFiles.size - shown.length;
 		console.log(
 			`⚠ Untrusted input file(s) outside the canonical universe — ` +
-				`dropped hits included (${droppedForeignFiles.size}):\n  ` +
+				`dropped hits included (${diagnostics.foreignFiles.size}):\n  ` +
+				shown.join("\n  ") +
+				(rest > 0 ? `\n  …and ${rest} more` : ""),
+		);
+	}
+
+	if (diagnostics.emptyCanonicalFiles?.size) {
+		const shown = [...diagnostics.emptyCanonicalFiles].slice(0, 15);
+		const rest = diagnostics.emptyCanonicalFiles.size - shown.length;
+		console.log(
+			`⚠ Canonical universe declares no coordinates for file(s) the ` +
+				`untrusted input covers — its data cannot confirm and dropped ` +
+				`(${diagnostics.emptyCanonicalFiles.size}):\n  ` +
 				shown.join("\n  ") +
 				(rest > 0 ? `\n  …and ${rest} more` : ""),
 		);
