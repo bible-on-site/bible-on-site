@@ -133,14 +133,13 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // CI ships the generation-matched index; this must be an ordinary local query.
-        // One snapshot read carries the result's text and frame — the live
-        // Text/Location getters it replaces each cost a WDA round-trip.
-        var commentary = Page.RenderedElements("SearchResultTitle")
-            .First(element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal));
+        // Verse hits can arrive before the commentary wave. Wait for the
+        // matching row and stable geometry before dispatching a coordinate tap.
+        var (commentary, frame) = WaitForSettledRow(" - בראשית א א", TimeSpan.FromSeconds(45));
         var title = commentary.Text;
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
-        var position = commentary.Frame.Location;
-        Platform.Tap(driver, commentary.Element);
+        var position = frame.Location;
+        Platform.Tap(driver, commentary);
         AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
@@ -239,16 +238,22 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var frame = System.Drawing.Rectangle.Empty;
         while (DateTime.UtcNow < deadline)
         {
-            var row = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
-                .FirstOrDefault(element => element.Displayed && element.Text.Contains(suffix, StringComparison.Ordinal));
-            if (row != null)
+            // A single snapshot carries every visible candidate's text/frame;
+            // querying those properties separately costs 3N native round trips.
+            var row = Page.RenderedElements("SearchResultTitle")
+                .FirstOrDefault(element => element.Text.Contains(suffix, StringComparison.Ordinal));
+            if (row.Element != null)
             {
-                var current = new System.Drawing.Rectangle(row.Location, row.Size);
+                var current = new System.Drawing.Rectangle(row.Frame.Location, row.Frame.Size);
                 if (current == frame)
                 {
-                    return (row, current);
+                    return (row.Element, current);
                 }
                 frame = current;
+            }
+            else
+            {
+                frame = System.Drawing.Rectangle.Empty;
             }
             Thread.Sleep(250);
         }
