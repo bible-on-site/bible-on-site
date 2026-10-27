@@ -3,7 +3,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
+import {
+	getEntryProgressUnits,
+	metricOrFallback,
+} from "@/lib/reading-metrics";
 import { demoteHeadings } from "@/lib/html-headings";
 import { plainText } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
@@ -116,9 +121,21 @@ export async function EntryView({ slug }: { slug: string }) {
 			: null,
 	});
 
+	const entryProgressUnits = await metricOrFallback(
+		`tanahpedia entry ${entry.id} progress`,
+		[],
+		() => getEntryProgressUnits(entry.id),
+	);
+
 	return (
 		<div className={styles.tanahpediaPage}>
 			<JsonLd data={entryGraph} />
+			<ReadingProgress
+				units={entryProgressUnits}
+				scope={`.${styles.tanahpediaPage}`}
+				content={`.${styles.entryContent}`}
+				stickyTop="72px"
+			/>
 			<TanahpediaBreadcrumb
 				currentCategory={primaryEntityType}
 				currentEntryTitle={entry.title}

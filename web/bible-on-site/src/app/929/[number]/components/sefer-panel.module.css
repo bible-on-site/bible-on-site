@@ -243,6 +243,12 @@
 	color: #6b5835;
 }
 
+/* Reading-time estimate for a single displayed perush (#2607). */
+.scopeMetric {
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
 .scopeToggle {
 	appearance: none;
 	font: inherit;
@@ -291,6 +297,14 @@
 .deepParshan {
 	font-size: 0.75rem;
 	color: #6b5835;
+}
+
+/* Reading-time estimate on the deep-linked perush header (#2607). */
+.deepMetric {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: #8b7355;
 }
 
 .deepBack {
@@ -375,6 +389,14 @@
 	font-weight: 700;
 	color: #8b7355;
 	margin-bottom: 4px;
+}
+
+/* Per-perush reading-time estimate in the multi-perush commentary view
+   (#2607). */
+.commentaryPerushMetric {
+	margin-inline-start: 8px;
+	font-size: 0.72rem;
+	font-weight: 400;
 }
 
 .noteContent {
@@ -520,6 +542,14 @@
 
 .articleCardAbstract p {
 	margin: 0;
+}
+
+/* Full-article reading-time estimate under the card abstract (#2607). */
+.articleCardMetric {
+	display: block;
+	margin-top: 4px;
+	font-size: 0.72rem;
+	color: #8b7355;
 }
 
 /* ─── Article fullscreen (item 7) ───────────────────── */
