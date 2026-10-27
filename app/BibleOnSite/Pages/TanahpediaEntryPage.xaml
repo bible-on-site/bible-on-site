@@ -50,7 +50,7 @@
                                     <Border Padding="10,4"
                                             Margin="0,0,8,8"
                                             StrokeShape="RoundRectangle 14"
-                                            Stroke="{StaticResource Primary}"
+                                            Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                             StrokeThickness="1">
                                         <Border.GestureRecognizers>
                                             <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntityCategoryCommand}"
@@ -58,7 +58,7 @@
                                         </Border.GestureRecognizers>
                                         <Label Text="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}"
                                                FontSize="13"
-                                               TextColor="{StaticResource Primary}"/>
+                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                     </Border>
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
@@ -119,9 +119,11 @@
                                             <Label Text="{Binding Citation}"
                                                    FontSize="14"
                                                    FontAttributes="Bold"
-                                                   TextColor="{StaticResource Primary}"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                    TextDecorations="Underline"/>
-                                            <Label Grid.Column="1"
+                                            <!-- Verse citation — scripture glyphs get the shared
+                                                 Taamey D face via PasukTextLabel (#2623). -->
+                                            <controls:PasukTextLabel Grid.Column="1"
                                                    FormattedText="{Binding VerseFormatted}"
                                                    FontSize="13"
                                                    MaxLines="3"
@@ -154,7 +156,7 @@
                                                        Margin="0,2">
                                     <Label Text="{Binding Title}"
                                            FontSize="16"
-                                           TextColor="{StaticResource Primary}"
+                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                            TextDecorations="Underline">
                                         <Label.GestureRecognizers>
                                             <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"

@@ -13,6 +13,12 @@ import {
 	subscribeDivineNameMasking,
 } from "@/lib/divine-name-settings";
 
+// The DOM externs declare a narrower StorageEvent constructor than the
+// runtime one; the subscriber only reads `event.key`, so a plain Event
+// carrying the property is enough.
+const storageEvent = (key: string | null) =>
+	Object.assign(new Event("storage"), { key });
+
 beforeEach(() => {
 	localStorage.clear();
 	// The settings module keeps a snapshot cache for useSyncExternalStore;
@@ -138,19 +144,63 @@ describe("persistence and change notifications", () => {
 		expect(seen).toEqual(["dalet"]);
 	});
 	it("re-reads localStorage on cross-tab storage events", () => {
-		subscribeDivineNameMasking(() => {});
+		const unsubscribe = subscribeDivineNameMasking(() => {});
 		expect(getDivineNameMaskingSnapshot().enabled).toBe(true);
 		localStorage.setItem(
 			DIVINE_NAME_MASKING_KEY,
 			JSON.stringify({ enabled: true, yhwh: "dalet" }),
 		);
 		// Events for other keys are ignored; only our key re-reads.
-		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		window.dispatchEvent(storageEvent("otherPref"));
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("heh");
-		window.dispatchEvent(
-			new StorageEvent("storage", { key: DIVINE_NAME_MASKING_KEY }),
+		window.dispatchEvent(storageEvent(DIVINE_NAME_MASKING_KEY));
+		expect(getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
+		unsubscribe();
+	});
+	it("refreshes the stale snapshot when the first subscriber returns", () => {
+		const first = subscribeDivineNameMasking(() => {});
+		expect(getDivineNameMaskingSnapshot().yhwh).toBe("heh");
+		first();
+		// Another tab writes while no storage listener is attached; the
+		// cached snapshot can no longer observe the change.
+		localStorage.setItem(
+			DIVINE_NAME_MASKING_KEY,
+			JSON.stringify({ enabled: true, yhwh: "dalet" }),
+		);
+		const seen: string[] = [];
+		const second = subscribeDivineNameMasking(() =>
+			seen.push(getDivineNameMaskingSnapshot().yhwh),
 		);
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
+		expect(seen).toEqual(["dalet"]);
+		second();
+	});
+	it("does not notify the first subscriber when nothing changed", () => {
+		const first = subscribeDivineNameMasking(() => {});
+		first();
+		let calls = 0;
+		const second = subscribeDivineNameMasking(() => {
+			calls += 1;
+		});
+		expect(calls).toBe(0);
+		second();
+	});
+	it("seeds the snapshot for a first subscriber that never read it", async () => {
+		// A fresh module has snapshot === null — reachable for a direct
+		// (non-useSyncExternalStore) subscriber before any snapshot read.
+		jest.resetModules();
+		const fresh = await import("@/lib/divine-name-settings");
+		localStorage.setItem(
+			fresh.DIVINE_NAME_MASKING_KEY,
+			JSON.stringify({ enabled: true, yhwh: "dalet" }),
+		);
+		const seen: string[] = [];
+		const unsubscribe = fresh.subscribeDivineNameMasking(() =>
+			seen.push(fresh.getDivineNameMaskingSnapshot().yhwh),
+		);
+		expect(fresh.getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
+		expect(seen).toEqual(["dalet"]);
+		unsubscribe();
 	});
 	it("keeps the snapshot object stable between changes", () => {
 		const first = getDivineNameMaskingSnapshot();

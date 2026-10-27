@@ -1,11 +1,15 @@
+import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
-import DOMPurify from "isomorphic-dompurify";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { demoteHeadings } from "@/lib/html-headings";
+import { plainText } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
 	getEntries,
@@ -31,36 +35,29 @@ import {
 	disambiguationMetadata,
 } from "./disambiguation-view";
 
-/** Plain-text snippet for meta description (entry content may be HTML). */
-function metaDescriptionFromContent(html: string, maxLen: number): string {
-	const plain = html
-		.replace(/<[^>]*>/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-	return plain.slice(0, maxLen);
-}
-
 export async function entryMetadata(slug: string): Promise<Metadata> {
-	try {
-		const name = normalizedUniqueNameFromParam(slug);
-		const entry = await getEntryByUniqueName(name);
-		if (!entry) {
-			const resolution = await resolveSynonymSlug(name);
-			if (resolution.kind === "disambiguation") {
-				return disambiguationMetadata(name);
-			}
-			return { title: "לא נמצא" };
+	const name = normalizedUniqueNameFromParam(slug);
+	const entry = await getEntryByUniqueName(name);
+	if (!entry) {
+		const resolution = await resolveSynonymSlug(name);
+		if (resolution.kind === "disambiguation") {
+			return disambiguationMetadata(name);
 		}
-		const fromContent = entry.content
-			? metaDescriptionFromContent(entry.content, 200)
-			: "";
-		return {
-			title: `${entry.title} | תנכפדיה`,
-			description: fromContent.length > 0 ? fromContent : entry.title,
-		};
-	} catch {
+		// "Not found" metadata only for a confirmed-missing slug: a lookup
+		// failure propagates so the stale page (or a failed render) is kept
+		// instead of caching a false negative.
 		return { title: "לא נמצא" };
 	}
+	/* Stored footnote markers are decorative — normalized HTML keeps them
+	   out of the extracted description (#2615). */
+	const fromContent = entry.content
+		? plainText(normalizeFootnoteHtml(entry.content), 200)
+		: "";
+	return pageMetadata({
+		title: `${entry.title} | תנכפדיה`,
+		description: fromContent.length > 0 ? fromContent : entry.title,
+		canonical: entryHref(entry.uniqueName),
+	});
 }
 
 export async function EntryView({ slug }: { slug: string }) {
@@ -83,67 +80,30 @@ export async function EntryView({ slug }: { slug: string }) {
 			? (entry.entities[0].entityType as CategoryKey)
 			: null;
 
-	let siblingEntries: { uniqueName: string; title: string }[] = [];
-	try {
-		if (primaryEntityType) {
-			const list = await getEntriesByEntityType(
-				primaryEntityType as EntityType,
-			);
-			siblingEntries = list.map((e) => ({
-				uniqueName: e.uniqueName,
-				title: e.title,
-			}));
-		} else {
-			const list = await getEntries(500, 0);
-			siblingEntries = list.map((e) => ({
-				uniqueName: e.uniqueName,
-				title: e.title,
-			}));
-		}
-	} catch {
-		siblingEntries = [];
-	}
+	// A load failure rejects the render rather than caching a page missing
+	// its breadcrumb/family/map/occurrence sections — the last good page
+	// keeps serving and the next request retries against a recovered DB.
+	const siblingEntries = (
+		primaryEntityType
+			? await getEntriesByEntityType(primaryEntityType as EntityType)
+			: await getEntries(500, 0)
+	).map((e) => ({
+		uniqueName: e.uniqueName,
+		title: e.title,
+	}));
 
-	let personFamily = null;
 	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
-	try {
-		if (personEntity) {
-			personFamily = await getPersonFamilySummary(
+	const personFamily = personEntity
+		? await getPersonFamilySummary(
 				personEntity.entityId,
 				personEntity.entityName,
-			);
-		}
-	} catch (error) {
-		console.error(
-			"[tanahpedia] person family load failed",
-			{
-				uniqueName: entry.uniqueName,
-				entityId: personEntity?.entityId,
-			},
-			error,
-		);
-		personFamily = null;
-	}
+			)
+		: null;
 
-	let placeMapMarkers: Awaited<ReturnType<typeof getPlaceMapMarkersForEntry>> =
-		[];
-	try {
-		placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
-	} catch {
-		placeMapMarkers = [];
-	}
+	const placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
 
 	const primaryEntity = entry.entities[0] ?? null;
-	let occurrences: Awaited<ReturnType<typeof getEntryOccurrences>> = [];
-	try {
-		occurrences = await getEntryOccurrences(entry.id);
-	} catch (error) {
-		console.error(
-			"[tanahpedia] entry occurrences load failed",
-			entry.uniqueName,
-			error,
-		);
-	}
+	const occurrences = await getEntryOccurrences(entry.id);
 	const entryGraph = buildEntryGraph({
 		entry,
 		personFamily,
@@ -166,6 +126,10 @@ export async function EntryView({ slug }: { slug: string }) {
 				siblingEntries={siblingEntries}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
+			<ReadingTime
+				estimatedSeconds={entry.metric?.estimatedSeconds}
+				className={styles.readingTime}
+			/>
 
 			{entry.entities.length > 0 && (
 				<div className={styles.entityBadges}>
@@ -199,7 +163,9 @@ export async function EntryView({ slug }: { slug: string }) {
 				<article
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
-						__html: DOMPurify.sanitize(demoteHeadings(entry.content)),
+						__html: DOMPurify.sanitize(
+							normalizeFootnoteHtml(demoteHeadings(entry.content)),
+						),
 					}}
 					className={styles.entryContent}
 				/>

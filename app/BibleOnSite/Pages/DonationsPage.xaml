@@ -46,7 +46,7 @@
             <HorizontalStackLayout HorizontalOptions="Center" Spacing="4" Margin="0,20,0,0">
                 <Label Text="צור קשר"
                        FontSize="16"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        TextDecorations="Underline">
                     <Label.GestureRecognizers>
                         <TapGestureRecognizer Tapped="OnContactTapped"/>
@@ -62,7 +62,7 @@
                    FontSize="18"
                    FontAttributes="Bold"
                    HorizontalOptions="Center"
-                   TextColor="{StaticResource Primary}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    Margin="0,16,0,0"/>
 
         </VerticalStackLayout>

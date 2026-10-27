@@ -144,6 +144,58 @@ test.describe("פרשה reading root", () => {
 		await expect(page.locator('[id^="pasuk-342-"]')).toHaveCount(0);
 	});
 
+	test("aliyah markers and the מנהג variant swap in place", async ({
+		page,
+	}) => {
+		// פרשת ויגש (unit 11): the documented חב"ד division re-slices
+		// עליות ג-ה — רביעי moves from בראשית מה יט to מה כח (#2519).
+		await page.goto(`${PARASHA_ROOT}/11`);
+		await expect(
+			page.getByRole("heading", { level: 1, name: /פרשת ויגש/ }),
+		).toBeVisible();
+
+		const markerAt = (pasukId: string) =>
+			page.locator(`#${pasukId} [data-aliyah-marker]:visible`);
+		// Default Shabbat layer — prominent aliyah pills at the exact
+		// boundary pesukim; the perek label stays a modest pasuk-like
+		// text, not the old banner.
+		await expect(markerAt("pasuk-44-18").first()).toHaveText("ראשון");
+		await expect(markerAt("pasuk-45-19").first()).toHaveText("רביעי");
+		await expect(
+			page.locator('[class*="perekBreakLabelModest"]', {
+				hasText: "בראשית מה",
+			}),
+		).toBeAttached();
+
+		// The מנהג group offers the documented חב"ד variant. The layer
+		// swaps instantly without remounting scripture — it must not
+		// wait for the soft-navigation round-trip. The click may race
+		// hydration, so retry until the press lands.
+		const chabadButton = page.getByRole("button", { name: 'חב"ד' });
+		await expect(async () => {
+			if ((await chabadButton.getAttribute("aria-pressed")) !== "true") {
+				await chabadButton.click();
+			}
+			await expect(chabadButton).toHaveAttribute("aria-pressed", "true");
+		}).toPass({ timeout: 15_000 });
+		await expect(markerAt("pasuk-45-19")).toHaveCount(0);
+		await expect(markerAt("pasuk-45-28").first()).toHaveText("רביעי");
+		await expect(markerAt("pasuk-46-8").first()).toHaveText("חמישי");
+		// The choice mirrors into ?variant= once the soft navigation
+		// commits — dev-server RSC renders can take tens of seconds.
+		await expect(page).toHaveURL(/variant=/, { timeout: 60_000 });
+
+		// Re-selecting the common split clears the selection params.
+		const commonButton = page.getByRole("button", { name: "נפוץ" });
+		await expect(async () => {
+			if ((await commonButton.getAttribute("aria-pressed")) !== "true") {
+				await commonButton.click();
+			}
+			await expect(commonButton).toHaveAttribute("aria-pressed", "true");
+		}).toPass({ timeout: 15_000 });
+		await expect(markerAt("pasuk-45-19").first()).toHaveText("רביעי");
+	});
+
 	test("joined parashot keep separate unit identities", async ({ page }) => {
 		// ויקהל (22) and פקודי (23) are joined in some years but stay
 		// distinct addressable units.
@@ -182,6 +234,7 @@ test.describe("פרשה reading root", () => {
 			"?haftaraPerush=Rashi",
 			"?haftaraArticle=123",
 			"?book",
+			"?variant=x",
 			"?utm_source=test",
 			"",
 		]) {

@@ -115,15 +115,7 @@ public static class GimatryHelper
     /// </summary>
     public static int ToNumber(string phrase)
     {
-        int sum = 0;
-        foreach (char c in phrase)
-        {
-            if (LettersValues.TryGetValue(c, out int value))
-            {
-                sum += value;
-            }
-        }
-        return sum;
+        return phrase.Sum(c => LettersValues.TryGetValue(c, out int value) ? value : 0);
     }
 
     /// <summary>
@@ -131,15 +123,7 @@ public static class GimatryHelper
     /// </summary>
     public static int ToNumberWithMantzpach(string phrase)
     {
-        int sum = 0;
-        foreach (char c in phrase)
-        {
-            if (LettersValuesWithMantzpach.TryGetValue(c, out int value))
-            {
-                sum += value;
-            }
-        }
-        return sum;
+        return phrase.Sum(c => LettersValuesWithMantzpach.TryGetValue(c, out int value) ? value : 0);
     }
 
     /// <summary>
@@ -203,10 +187,7 @@ public static class GimatryHelper
             {
                 int tafCount = rest / 400;
                 int remainder = rest % 400;
-                for (int i = 0; i < tafCount; i++)
-                {
-                    result += 'ת';
-                }
+                result += new string('ת', tafCount);
                 if (remainder > 0 && ValuesToLetters.TryGetValue(remainder, out char remainderChar))
                 {
                     result += remainderChar;
@@ -230,6 +211,25 @@ public static class GimatryHelper
         result = result.Replace("יה", "טו").Replace("יו", "טז");
 
         return result;
+    }
+
+    /// <summary>
+    /// Display numeral with ASCII punctuation for UI counters (#2725): a lone
+    /// letter takes a trailing geresh (ד'), longer values a gershayim before
+    /// the last letter (י"א, ט"ו). Canonical source references keep the plain
+    /// <see cref="ToLetters(int)"/> form — this is the cycle-label presentation.
+    /// </summary>
+    /// <param name="number">The number to convert.</param>
+    /// <returns>The punctuated Hebrew numeral; empty for non-positive input.</returns>
+    public static string ToDisplayLetters(int number)
+    {
+        var letters = ToLetters(number);
+        return letters.Length switch
+        {
+            0 => string.Empty,
+            1 => $"{letters}'",
+            _ => letters.Insert(letters.Length - 1, "\""),
+        };
     }
 }
 

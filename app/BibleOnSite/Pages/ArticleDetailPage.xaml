@@ -52,7 +52,7 @@
                     <Border WidthRequest="80"
                             HeightRequest="80"
                             StrokeShape="RoundRectangle 40"
-                            Stroke="{StaticResource Primary}"
+                            Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                             StrokeThickness="2"
                             HorizontalOptions="Center">
                         <Border.GestureRecognizers>
@@ -68,7 +68,7 @@
                     <Label Text="{Binding AuthorName}"
                            FontSize="16"
                            HorizontalTextAlignment="Center"
-                           TextColor="{StaticResource Primary}">
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
                         <Label.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToAuthorCommand}"/>
                         </Label.GestureRecognizers>

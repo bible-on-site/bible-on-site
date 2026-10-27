@@ -32,7 +32,7 @@
                    FontSize="24"
                    FontAttributes="Bold"
                    HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
 
             <!-- Privacy Policy Section -->
             <VerticalStackLayout Spacing="8">
@@ -57,7 +57,7 @@
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי השירותים"
-                       FontSize="14" TextColor="{StaticResource Primary}" TextDecorations="Underline"
+                       FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" TextDecorations="Underline"
                        SemanticProperties.Description="פתיחת מדיניות הפרטיות המלאה באתר התכנית"
                        AutomationId="PrivacyPolicyLink">
                     <Label.GestureRecognizers>
@@ -78,7 +78,7 @@
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 <Label Text="לצפייה בהצהרת הנגישות"
                        FontSize="14"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        TextDecorations="Underline"
                        SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
                        AutomationId="AccessibilityStatementLink">
@@ -167,7 +167,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                     <Label Text="ספאריה"
                            FontSize="14"
-                           TextColor="{StaticResource Primary}"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                            TextDecorations="Underline">
                         <Label.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnSefariaTapped"/>
@@ -184,7 +184,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                     <Label Text="הרב דן בארי"
                            FontSize="14"
-                           TextColor="{StaticResource Primary}"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                            TextDecorations="Underline">
                         <Label.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnDanBarryTapped"/>

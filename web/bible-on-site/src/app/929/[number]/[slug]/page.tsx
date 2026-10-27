@@ -1,6 +1,5 @@
 import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
-import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -17,22 +16,34 @@ import {
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import { demoteHeadings } from "../../../../lib/html-headings";
+import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
 import {
+	articleTag,
+	cachedPerKey,
+	COLLECTION_TAGS,
+	perekArticlesTag,
+	perekPerushimTag,
+	perushDetailTag,
+} from "../../../../lib/revalidate/tags";
+import {
 	articlePath,
+	authorPath,
 	buildArticleGraph,
 	buildPerushGraph,
 	perushPath,
 } from "../../../../lib/seo/core-jsonld";
-import { plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../../components/JsonLd";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerekHeading } from "../components/PerekHeading";
@@ -93,43 +104,42 @@ export async function generateStaticParams({
 }
 
 /**
- * Cache article data with on-demand revalidation support.
+ * Entity-scoped caches with on-demand revalidation support: each entry
+ * carries both its collection tag and its entity tag so an admin change
+ * invalidates exactly the data and routes that consume it.
  */
-const getCachedArticle = unstable_cache(
-	async (id: number) => getArticleById(id),
-	["article"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticle = cachedPerKey(
+	"article",
+	(id: number) => String(id),
+	(key) => [COLLECTION_TAGS.articles, articleTag(Number(key))],
+	(id: number) => getArticleById(id),
 );
 
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticles = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
-const getCachedPerushDetail = unstable_cache(
-	async (perushId: number, perekId: number) =>
-		getPerushDetail(perushId, perekId),
-	["perush-detail"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
+const getCachedPerushDetail = cachedPerKey(
+	"perush-detail",
+	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
+	(key) => {
+		const [perushId, perekId] = key.split(":").map(Number);
+		return [
+			COLLECTION_TAGS.perushim,
+			perushDetailTag(perushId, perekId),
+		];
 	},
+	(perushId: number, perekId: number) => getPerushDetail(perushId, perekId),
 );
 
 export async function generateMetadata({
@@ -157,21 +167,37 @@ export async function generateMetadata({
 			(descriptionSource ? plainText(descriptionSource, 160) : "") ||
 			`מאמר מאת ${article.authorName}`;
 		const url = articlePath(perekId, article.id);
-		return {
+		// `article:section` is optional enrichment — an out-of-range perek
+		// segment must not fail metadata (the component still 404s mismatches).
+		const seferName =
+			perekId >= 1 && perekId <= 929
+				? getPerekByPerekId(perekId)?.sefer
+				: undefined;
+		const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
+		return pageMetadata({
 			title,
 			description,
-			alternates: {
-				canonical: url,
-			},
-			openGraph: {
-				title,
-				description,
-				url,
-				siteName: SITE_NAME,
-				locale: "he_IL",
-				type: "article",
-			},
-		};
+			canonical: url,
+			type: "article",
+			// `article:author` must be a profile URL — the author's public page.
+			authors: [absUrl(authorPath(authorNameToSlug(article.authorName)))],
+			section: seferName,
+			image: illustration
+				? {
+						url: illustration.socialSrc,
+						width: illustration.socialWidth,
+						height: illustration.socialHeight,
+						alt: illustration.alt,
+					}
+				: {
+						// The author's portrait is the page's own content image;
+						// intrinsic dimensions are unknown, so they are omitted
+						// rather than guessed.
+						url: article.authorImageUrl,
+						alt: article.authorName,
+						type: "image/jpeg",
+					},
+		});
 	}
 
 	// Otherwise it's a perush name
@@ -198,22 +224,24 @@ export async function generateMetadata({
 		notesExcerpt ||
 		`פירוש ${perush.name} מאת ${perush.parshanName} על ${perekObj.source}`;
 	const url = perushPath(perekId, perush.name);
-	return {
+	const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
+	return pageMetadata({
 		title,
 		description,
-		alternates: {
-			canonical: url,
-		},
-		openGraph: {
-			title,
-			description,
-			url,
-			siteName: SITE_NAME,
-			locale: "he_IL",
-			type: "article",
-			authors: [perush.parshanName],
-		},
-	};
+		canonical: url,
+		type: "article",
+		// Classical commentators have no public profile page, and OGP requires
+		// `article:author` to be a URL — so no `authors` value is emitted here.
+		section: perekObj.sefer,
+		image: illustration
+			? {
+					url: illustration.socialSrc,
+					width: illustration.socialWidth,
+					height: illustration.socialHeight,
+					alt: illustration.alt,
+				}
+			: undefined,
+	});
 }
 
 export default async function ArticlePage({
@@ -244,12 +272,17 @@ export default async function ArticlePage({
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
 	if (isArticle) {
-		// Handle article view
-		const article = await getCachedArticle(id);
+		// Handle article view; mention decorations (#2516) resolve against
+		// live entries per render — the returned copy carries them.
+		let article = await getCachedArticle(id);
 
 		if (!article || article.perekId !== perekId) {
 			notFound();
 		}
+
+		// Mention decorations (#2516) resolve against live entries per
+		// render; unresolved targets stay plain text.
+		article = await decorateArticleContent(article);
 
 		return (
 			<>
@@ -282,6 +315,10 @@ export default async function ArticlePage({
 							<span className={styles.authorName}>{article.authorName}</span>
 						</Link>
 						<h1 className={styles.articleTitle}>{article.name}</h1>
+						<ReadingTime
+							estimatedSeconds={article.metric?.estimatedSeconds}
+							className={styles.readingTime}
+						/>
 					</header>
 
 					{article.content && (
@@ -363,6 +400,10 @@ export default async function ArticlePage({
 						{perushDetail.name} על {perekObj.source}
 					</h1>
 					<h2 className={styles.parshanName}>{perushDetail.parshanName}</h2>
+					<ReadingTime
+						estimatedSeconds={perushDetail.metric?.estimatedSeconds}
+						className={styles.readingTime}
+					/>
 					<ShareButton
 						canonicalPath={perushPath(perekId, perushDetail.name)}
 						title={`${perushDetail.name} - ${perushDetail.parshanName}`}
@@ -391,7 +432,9 @@ export default async function ArticlePage({
 									className={styles.noteContent}
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
+										__html: DOMPurify.sanitize(
+											demoteHeadings(note.noteContent),
+										),
 									}}
 								/>
 							</div>

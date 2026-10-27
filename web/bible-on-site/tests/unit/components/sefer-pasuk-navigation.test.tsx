@@ -36,6 +36,7 @@ function mountFacingPages() {
 const scrollIntoView = jest.fn();
 
 beforeEach(() => {
+	jest.useFakeTimers();
 	mountFacingPages();
 	scrollIntoView.mockClear();
 	Element.prototype.scrollIntoView = scrollIntoView;
@@ -45,6 +46,8 @@ afterEach(() => {
 	setSeferOpenPerush(1, null);
 	setSeferOpenPerush(2, null);
 	setSeferOpenPerush(3, null);
+	jest.runOnlyPendingTimers();
+	jest.useRealTimers();
 	document.body.innerHTML = "";
 });
 
@@ -215,5 +218,51 @@ describe("useSeferOpenPerush", () => {
 		unmount();
 		act(() => setSeferOpenPerush(1, { name: 'רש"י', pesukim: new Set([1]) }));
 		expect(result.current).toBeNull();
+	});
+});
+
+describe("temporary destination highlights", () => {
+	for (const [name, navigate, target] of [
+		["commentary", scrollToPerushPasuk, findPerushPasukGroup],
+		["scripture", scrollToSeferPasuk, findSeferPasuk],
+	] as const) {
+		it(`fades the ${name} highlight after four seconds and then clears it`, () => {
+			navigate(1, 1);
+			const el = target(1, 1) as Element;
+			jest.advanceTimersByTime(3999);
+			expect(el).toHaveAttribute("data-pasuk-highlight", "");
+			jest.advanceTimersByTime(1);
+			expect(el).toHaveAttribute("data-pasuk-highlight", "fading");
+			jest.advanceTimersByTime(600);
+			expect(el).not.toHaveAttribute("data-pasuk-highlight");
+			expect(el).not.toHaveAttribute("aria-current");
+		});
+		it(`dismisses the ${name} highlight immediately on a click inside it`, () => {
+			navigate(1, 1);
+			const el = target(1, 1) as Element;
+			(el.querySelector("p") ?? el).dispatchEvent(
+				new MouseEvent("click", { bubbles: true }),
+			);
+			expect(el).not.toHaveAttribute("data-pasuk-highlight");
+			jest.advanceTimersByTime(5000);
+			expect(el).not.toHaveAttribute("data-pasuk-highlight");
+		});
+		it(`restarts the ${name} highlight timer on repeated navigation`, () => {
+			navigate(1, 1);
+			jest.advanceTimersByTime(3000);
+			navigate(1, 1);
+			const el = target(1, 1) as Element;
+			jest.advanceTimersByTime(2000);
+			expect(el).toHaveAttribute("data-pasuk-highlight", "");
+			jest.advanceTimersByTime(2600);
+			expect(el).not.toHaveAttribute("data-pasuk-highlight");
+		});
+	}
+	it("clears a pre-existing marker without registered timers", () => {
+		const old = findSeferPasuk(1, 1) as Element;
+		old.setAttribute("data-pasuk-highlight", "");
+		old.setAttribute("aria-current", "location");
+		scrollToSeferPasuk(1, 2);
+		expect(old).not.toHaveAttribute("aria-current");
 	});
 });

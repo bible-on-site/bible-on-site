@@ -17,6 +17,15 @@
   text-align: center;
 }
 
+/* Shared reading-metrics badge (#2607). */
+.readingTime {
+  display: block;
+  color: var(--muted-text, #666);
+  font-size: 0.85rem;
+  text-align: center;
+  margin: -4px 0 12px;
+}
+
 .pageSubtitle {
   font-size: 1rem;
   color: #6b7280;
@@ -340,6 +349,15 @@
   font-size: 1.1rem;
 }
 
+/* Footnote marker tokens shared by the inline reference sup and the
+   note-list generated letter, so both resolve to the same style and cannot
+   drift apart (#2723). */
+.entryContent,
+.homepageContent {
+  --footnote-marker-color: #1a73e8;
+  --footnote-marker-size: 11px;
+}
+
 /* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
 .homepageContent {
   display: block;
@@ -350,48 +368,116 @@
 .entryContent h5, .homepageContent h5 { font-size: 1em; margin-block: 1.33em; }
 .entryContent h6, .homepageContent h6 { font-size: 0.83em; margin-block: 1.67em; }
 
-.entryContent sup {
-  font-size: 11px;
+.entryContent sup,
+.homepageContent sup {
+  font-size: var(--footnote-marker-size);
   vertical-align: super;
   line-height: 0;
-  color: #1a73e8;
+  color: var(--footnote-marker-color);
   font-weight: normal;
 }
 
-.entryContent sup a {
+.entryContent sup a,
+.homepageContent sup a {
   color: inherit;
   text-decoration: none;
   padding: 0 1px;
 }
 
-.entryContent sup a:hover {
+.entryContent sup a:hover,
+.homepageContent sup a:hover {
   text-decoration: underline;
 }
 
-/* הערות שוליים (tiptap-footnotes) — האות העברית מגיעה מה-counter המובנה */
-.entryContent ol:global(.footnotes) {
-  list-style: hebrew;
+/* הערות שוליים — כל הסימונים הדקורטיביים (אות האזכור, תווית ההערה, חץ החזרה)
+   נוצרים ב-pseudo-elements מתוך data-marker, כדי שלא ייכנסו לטקסט
+   ולחילוץ SEO (#2615) */
+.entryContent a:global(.footnote-ref)::before,
+.homepageContent a:global(.footnote-ref)::before {
+  content: attr(data-marker);
+}
+
+.entryContent ol:global(.footnotes),
+.homepageContent ol:global(.footnotes) {
+  list-style: none;
   margin-top: 2rem;
   padding-top: 1rem;
-  padding-right: 2rem;
+  padding-right: 0;
   padding-left: 0;
   border-top: 1px solid #dadce0;
   font-size: 0.95rem;
   color: #3c4043;
+  /* Gutter shared by the hanging indent and the generated marker box. A rem
+     value keeps both aligned no matter the marker's own font-size (#2723). */
+  --footnote-marker-indent: 1.7rem;
 }
 
-.entryContent ol:global(.footnotes) li {
+.entryContent ol:global(.footnotes) li,
+.homepageContent ol:global(.footnotes) li {
   margin: 0.35em 0;
+  padding-inline-start: var(--footnote-marker-indent);
+  /* Hanging indent: the first line (marker + note text) reaches the item
+     edge while wrapped lines stay indented beside the marker. */
+  text-indent: calc(-1 * var(--footnote-marker-indent));
 }
 
-.entryContent ol:global(.footnotes) li p {
+/* Note bodies may wrap their text in <p> — the first paragraph flows inline
+   so the generated marker shares the item's first line. */
+.entryContent ol:global(.footnotes) li > p:first-child,
+.homepageContent ol:global(.footnotes) li > p:first-child {
+  display: inline;
+}
+
+.entryContent ol:global(.footnotes) li::before,
+.homepageContent ol:global(.footnotes) li::before {
+  content: attr(data-marker);
+  /* The marker is a real in-flow inline box — vertical-align: super is
+     ignored on absolutely positioned pseudo-elements. */
+  display: inline-block;
+  inline-size: var(--footnote-marker-indent);
+  text-indent: 0;
+  font-size: var(--footnote-marker-size);
+  line-height: 0;
+  vertical-align: super;
+  color: var(--footnote-marker-color);
+  font-weight: normal;
+}
+
+/* כותרת המקטע נוצרת גם היא — אחידה לכל דורות הסימון */
+.entryContent ol:global(.footnotes)::before,
+.homepageContent ol:global(.footnotes)::before {
+  content: "הערות";
+  display: block;
+  font-weight: 600;
+  font-size: 1.05em;
+  margin-bottom: 0.5em;
+}
+
+.entryContent ol:global(.footnotes) li p,
+.homepageContent ol:global(.footnotes) li p {
   margin: 0.15em 0;
 }
 
-.entryContent a:global(.footnote-backref) {
+.entryContent a:global(.footnote-backref),
+.homepageContent a:global(.footnote-backref) {
   margin-inline-start: 0.4em;
   text-decoration: none;
   color: #6b7280;
+}
+
+.entryContent a:global(.footnote-backref)::before,
+.homepageContent a:global(.footnote-backref)::before {
+  /* \FE0E forces text presentation so the glyph doesn't render as emoji */
+  content: "↩\FE0E";
+}
+
+/* הדגשת יעד הקפיצה מהאזכור/חזרה */
+.entryContent ol:global(.footnotes) li:target,
+.homepageContent ol:global(.footnotes) li:target,
+.entryContent sup:target,
+.homepageContent sup:target {
+  background-color: #fff3bf;
+  border-radius: 3px;
 }
 
 .entityBadges {
@@ -677,12 +763,21 @@
     color: #9aa0a6;
   }
 
-  .entryContent ol:global(.footnotes) {
+  .entryContent ol:global(.footnotes),
+  .homepageContent ol:global(.footnotes) {
     color: #d7dae0;
   }
 
-  .entryContent a:global(.footnote-backref) {
+  .entryContent a:global(.footnote-backref),
+  .homepageContent a:global(.footnote-backref) {
     color: #9aa0a6;
+  }
+
+  .entryContent ol:global(.footnotes) li:target,
+  .homepageContent ol:global(.footnotes) li:target,
+  .entryContent sup:target,
+  .homepageContent sup:target {
+    background-color: #4a3d10;
   }
 
   .entityBadge {

@@ -5,6 +5,7 @@ using BibleOnSite.Tests.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using Microsoft.Maui.ApplicationModel;
 using Moq;
 
 namespace BibleOnSite.Tests.ViewModels;
@@ -123,7 +124,7 @@ public class LearningCalendarViewModelTests
         // Only cycles 1-2 are confirmed, so the current month projects a later
         // cycle and both the label and the options are marked as estimated.
         vm.SelectedCycle.Should().NotBeNull();
-        vm.CycleLabel.Should().Contain($"מחזור {vm.SelectedCycle!.Value}");
+        vm.CycleLabel.Should().Contain($"מחזור {GimatryHelper.ToDisplayLetters(vm.SelectedCycle!.Value)}");
         vm.CycleOptions.Select(o => o.Label).Should().ContainMatch("*משוער*");
 
         var dayCells = vm.Cells.Where(c => !c.IsBlank).ToList();
@@ -203,7 +204,11 @@ public class LearningCalendarViewModelTests
         cycleStart.IsReview.Should().BeFalse();
         cycleStart.IsNone.Should().BeFalse();
         cycleStart.IsTappable.Should().BeTrue();
-        cycleStart.AccessibilityText.Should().Contain("כסלו").And.Contain("בראשית א");
+        // כט כסלו ה'תשעה was a Sunday - the accessibility text opens with the
+        // spoken weekday so screen readers and layout tests can anchor each
+        // cell to its real weekday.
+        cycleStart.AccessibilityText.Should().StartWith("יום ראשון,")
+            .And.Contain("כסלו").And.Contain("בראשית א");
 
         // In-cycle days without their own assignment are review days.
         var review = vm.Cells.Single(c => c.DateNumber == 57750330);
@@ -371,7 +376,8 @@ public class LearningCalendarViewModelTests
         vm.SelectedMonth = Option(vm.MonthOptions, 3);
 
         vm.SelectedCycle.Should().Be(Option(vm.CycleOptions, 1));
-        vm.CycleLabel.Should().Contain("מחזור 1").And.NotContain("משוער");
+        vm.CycleLabel.Should().Contain("מחזור א'").And.NotContain("משוער");
+        vm.IsCycleRangeVisible.Should().BeTrue();
     }
 
     [Fact]
@@ -408,10 +414,58 @@ public class LearningCalendarViewModelTests
         var friday = vm.Cells.First(c => c.DateNumber == 57750404);
         var saturday = vm.Cells.First(c => c.DateNumber == 57750405);
         friday.IsReview.Should().BeTrue();
-        friday.PerekSource.Should().Be("בראשית א - בראשית ג");
-        friday.AccessibilityText.Should().Contain("חזרה: בראשית א - בראשית ג");
+        friday.PerekSource.Should().Be("בראשית א-ג");
+        friday.AccessibilityText.Should().Contain("חזרה: בראשית א-ג");
         saturday.IsReview.Should().BeTrue();
-        saturday.PerekSource.Should().Be("בראשית א - בראשית ג");
+        saturday.PerekSource.Should().Be("בראשית א-ג");
+    }
+
+    [Fact]
+    public async Task MonthWeeks_MergeFridayAndSaturdayReviewIntoOneBlock()
+    {
+        // The canonical Cells list keeps one cell per date (#2365 keeps the
+        // daily assignments intact); MonthWeeks is the rendered layout.
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 4); // Tevet
+
+        var week = vm.MonthWeeks.Single(w =>
+            w.Cells.Any(c => c.DateNumber == 57750404));
+        var merged = week.Cells.Single(c => c.DateNumber == 57750404);
+        merged.Column.Should().Be(5);
+        merged.ColumnSpan.Should().Be(2);
+        merged.DayText.Should().Be(4.ToHebrewLetters());
+        merged.MergedDayText.Should().Be(5.ToHebrewLetters());
+        merged.PerekSource.Should().Be("בראשית א-ג");
+        merged.AccessibilityText.Should()
+            .Contain("יום שישי").And.Contain("שבת").And.Contain("חזרה: בראשית א-ג");
+        merged.MergedDayAccessibilityText.Should()
+            .StartWith("שבת").And.Contain("חזרה: בראשית א-ג");
+        // Saturday's standalone cell is folded into the merged block.
+        week.Cells.Should().NotContain(c => c.DateNumber == 57750405);
+        week.Cells.Should().HaveCount(6);
+    }
+
+    [Fact]
+    public async Task GroupedView_MiniMonthWeeksMergeTheReviewPair()
+    {
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+
+        var week = vm.MonthGroups
+            .SelectMany(g => g.Weeks)
+            .Single(w => w.Cells.Any(c => c.DateNumber == 57750404));
+        var merged = week.Cells.Single(c => c.DateNumber == 57750404);
+        merged.ColumnSpan.Should().Be(2);
+        merged.MergedDayText.Should().Be(5.ToHebrewLetters());
+        week.Cells.Should().NotContain(c => c.DateNumber == 57750405);
     }
 
     [Fact]
@@ -471,7 +525,13 @@ public class LearningCalendarViewModelTests
         var displayed = fixture.Schedule.GetCycleForDate(HebrewDateHelper.GetTodayDateNumber());
         var expected = displayed?.Number ?? 1;
         vm.SelectedCycle!.Value.Should().Be(expected);
-        vm.MonthLabel.Should().StartWith($"מחזור {expected}");
+        vm.MonthLabel.Should().StartWith($"מחזור {GimatryHelper.ToDisplayLetters(expected)}");
+
+        // The heading is the one authoritative cycle description — the
+        // beside-picker range that repeated it stays hidden (#2725).
+        vm.IsCycleRangeVisible.Should().BeFalse();
+        vm.CycleLabel.Should().BeEmpty();
+        vm.CycleOptions.Select(o => o.Label).Should().Contain("מחזור ד'");
 
         vm.MonthGroups.Should().HaveCountGreaterThan(1);
 
@@ -493,7 +553,7 @@ public class LearningCalendarViewModelTests
 
         vm.NextMonthCommand.Execute(null);
         vm.SelectedCycle!.Value.Should().Be(before + 1);
-        vm.MonthLabel.Should().StartWith($"מחזור {before + 1}");
+        vm.MonthLabel.Should().StartWith($"מחזור {GimatryHelper.ToDisplayLetters(before + 1)}");
 
         vm.PrevMonthCommand.Execute(null);
         vm.SelectedCycle!.Value.Should().Be(before);
@@ -642,20 +702,126 @@ public class LearningCalendarViewModelTests
         vm.PrevMonthCommand.CanExecute(null).Should().BeTrue();
     }
 
+    private sealed class StubPdfAssets(Func<string, Task<Uri?>> resolve) : ICalendarPdfAssetResolver
+    {
+        public List<string> Keys { get; } = [];
+
+        public Task<Uri?> TryResolveAsync(string artifactKey)
+        {
+            Keys.Add(artifactKey);
+            return resolve(artifactKey);
+        }
+    }
+
+    private static readonly Uri PublishedAsset =
+        new("https://assets.example/generated/calendar-pdf/objects/deadbeef.pdf");
+
+    private static Mock<ILauncher> LauncherCapturing(out Func<Uri?> opened)
+    {
+        Uri? captured = null;
+        var launcher = new Mock<ILauncher>();
+        launcher.Setup(l => l.OpenAsync(It.IsAny<Uri>()))
+            .Callback<Uri>(u => captured = u)
+            .ReturnsAsync(true);
+        opened = () => captured;
+        return launcher;
+    }
+
     [Fact]
-    public async Task DownloadPdfCommand_RequiresDeviceLauncher()
+    public async Task DownloadPdfCommand_OpensThePublishedArtifactUrl()
     {
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
-        var vm = fixture.ViewModel;
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(PublishedAsset));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
         await vm.InitializeAsync();
 
-        // The export URL building is exercised in every view mode; the
-        // Launcher hand-off is device-only and faults on the unit-test host.
-        foreach (var mode in new[] { CalendarViewMode.Month, CalendarViewMode.Year, CalendarViewMode.Cycle })
-        {
-            vm.SetViewModeCommand.Execute(mode);
-            await Assert.ThrowsAnyAsync<Exception>(() => vm.DownloadPdfCommand.ExecuteAsync(null));
-        }
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+
+        // Month view resolves `month:YYYYMM` to the published object — the
+        // website API is never consulted for an available artifact (#2622).
+        assets.Keys.Should().Equal($"month:{year * 100 + month}");
+        opened().Should().Be(PublishedAsset);
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_ResolvesYearAndCycleKeysPerView()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(PublishedAsset));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+        var (year, _, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+        assets.Keys.Should().Equal($"year:{year}");
+        opened().Should().Be(PublishedAsset);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+        assets.Keys.Should().Equal($"year:{year}", $"cycle:{vm.SelectedCycle!.Value}");
+        opened().Should().Be(PublishedAsset);
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_WhenArtifactMissing_OpensTheLegacyApiUrl()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(null));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+
+        opened().Should().Be(new Uri(
+            $"{BibleOnSite.Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
+            $"?month={year * 100 + month}&view=month&cycle=1"));
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_WhenResolutionThrows_StillOpensTheLegacyApiUrl()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => throw new HttpRequestException("offline"));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+
+        opened().Should().NotBeNull();
+        opened()!.AbsoluteUri.Should().Contain("/api/calendar-pdf");
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_KeepsThePeriodSelectedAtClickTime()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var gate = new TaskCompletionSource<Uri?>();
+        var assets = new StubPdfAssets(_ => gate.Task);
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(
+            fixture.Schedule, fixture.PerekData, fixture.Navigator.Object, assets, launcher.Object);
+        await vm.InitializeAsync();
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+
+        var pending = vm.DownloadPdfCommand.ExecuteAsync(null);
+        // Navigating mid-resolution must not swap the artifact being fetched.
+        vm.NextMonthCommand.Execute(null);
+        gate.SetResult(PublishedAsset);
+        await pending;
+
+        assets.Keys.Should().Equal($"month:{year * 100 + month}");
+        opened().Should().Be(PublishedAsset);
     }
 
     [Fact]

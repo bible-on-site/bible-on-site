@@ -14,12 +14,11 @@
  * non-Latin text (Hebrew, Arabic, etc.) requires an embedded custom font.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { type PDFFont, PDFDocument, rgb } from "pdf-lib";
 // biome-ignore lint/suspicious/noTsIgnore: @ts-expect-error fails in production build (unused directive) so we must use @ts-ignore
 // @ts-ignore — @pdf-lib/fontkit is CJS; namespace import may wrap the real instance in .default
 import * as _fontkit from "@pdf-lib/fontkit";
+import { PDFDocument, type PDFFont, rgb } from "pdf-lib";
+
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
 const fontkit: any = (_fontkit as any).default ?? _fontkit;
@@ -30,36 +29,16 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "@/data/sefer-dto";
 import { getArticlesByPerekId } from "@/lib/articles/service";
 import { getPerushimByPerekId } from "@/lib/perushim";
+import {
+	bidiRunsWidth,
+	bidiTextWidth,
+	drawBidiRuns,
+	memoizeGlyphEncoding,
+	visualTextRuns,
+} from "./bidi-text";
 import { ExportError } from "./export-error";
+import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
 import type { SemanticPageInfo } from "./types";
-
-/* ──────────────────────────── Font loading ─────────────────────────── */
-
-let regularFontCache: Uint8Array | null = null;
-let boldFontCache: Uint8Array | null = null;
-
-function loadFont(filename: string): Uint8Array {
-	const fontPath = resolve(
-		process.cwd(),
-		"src",
-		"lib",
-		"download",
-		"fonts",
-		filename,
-	);
-	return readFileSync(fontPath);
-}
-
-export function getRegularFontBytes(): Uint8Array {
-	if (!regularFontCache)
-		regularFontCache = loadFont("FrankRuhlLibre-Regular.ttf");
-	return regularFontCache;
-}
-
-export function getBoldFontBytes(): Uint8Array {
-	if (!boldFontCache) boldFontCache = loadFont("FrankRuhlLibre-Bold.ttf");
-	return boldFontCache;
-}
 
 /* ──────────────────────────── Text helpers ─────────────────────────── */
 
@@ -88,21 +67,6 @@ export function segmentsToText(segments: Segment[]): string {
  */
 export function stripTaamim(text: string): string {
 	return text.replace(/[\u0591-\u05AF]/g, "");
-}
-
-/**
- * Reverse grapheme clusters so pdf-lib (which draws LTR) renders
- * Hebrew text in the correct visual RTL order.
- *
- * Uses Intl.Segmenter to keep combining marks (nikud) attached to
- * their base character during reversal.
- */
-export function reverseGraphemes(text: string): string {
-	const segmenter = new Intl.Segmenter("he", { granularity: "grapheme" });
-	return [...segmenter.segment(text)]
-		.map((s) => s.segment)
-		.reverse()
-		.join("");
 }
 
 /** Strip HTML tags from a string, decode common entities. */
@@ -249,16 +213,11 @@ function drawRtlLine(
 	color = rgb(0, 0, 0),
 ): void {
 	const page = currentPage(ctx);
-	const visual = reverseGraphemes(text);
-	const textWidth = font.widthOfTextAtSize(visual, size);
+	// One UAX #9 pass per line — reused for both width and draw.
+	const runs = visualTextRuns(text);
+	const textWidth = bidiRunsWidth(font, runs, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
-	page.drawText(visual, {
-		x: Math.max(MARGIN, x),
-		y: ctx.y,
-		size,
-		font,
-		color,
-	});
+	drawBidiRuns(page, runs, font, size, Math.max(MARGIN, x), ctx.y, color);
 }
 
 function drawRtlWrapped(
@@ -269,7 +228,11 @@ function drawRtlWrapped(
 	lineHeight: number,
 	color = rgb(0, 0, 0),
 ): void {
-	const lines = wrapText(text, font, size, MAX_WIDTH);
+	// Measure via bidi runs so wrapping uses the same shaped runs as drawing.
+	const measuringFont = {
+		widthOfTextAtSize: (t: string, s: number) => bidiTextWidth(font, t, s),
+	};
+	const lines = wrapText(text, measuringFont, size, MAX_WIDTH);
 	for (const line of lines) {
 		ensureSpace(ctx, lineHeight);
 		drawRtlLine(ctx, line, font, size, color);
@@ -307,8 +270,12 @@ export async function buildTanachPdfForPerekRange(
 
 	const regularBytes = getRegularFontBytes();
 	const boldBytes = getBoldFontBytes();
-	const font = await doc.embedFont(regularBytes, { subset: true });
-	const boldFont = await doc.embedFont(boldBytes, { subset: true });
+	const font = memoizeGlyphEncoding(
+		await doc.embedFont(regularBytes, { subset: true }),
+	);
+	const boldFont = memoizeGlyphEncoding(
+		await doc.embedFont(boldBytes, { subset: true }),
+	);
 
 	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
 
@@ -358,13 +325,7 @@ export async function buildTanachPdfForPerekRange(
 				for (const p of perushim) {
 					ensureSpace(ctx, SMALL_LINE_HEIGHT);
 					const label = `• ${p.name} (${p.parshanName}) - ${p.noteCount} הערות`;
-					drawRtlLine(
-						ctx,
-						label,
-						font,
-						SMALL_SIZE,
-						rgb(0.2, 0.2, 0.2),
-					);
+					drawRtlLine(ctx, label, font, SMALL_SIZE, rgb(0.2, 0.2, 0.2));
 					ctx.y -= SMALL_LINE_HEIGHT;
 				}
 			}
@@ -380,35 +341,17 @@ export async function buildTanachPdfForPerekRange(
 				drawSeparator(ctx);
 
 				ensureSpace(ctx, HEADER_LINE_HEIGHT);
-				drawRtlLine(
-					ctx,
-					"מאמרים",
-					boldFont,
-					HEADER_SIZE,
-					rgb(0.15, 0.5, 0.15),
-				);
+				drawRtlLine(ctx, "מאמרים", boldFont, HEADER_SIZE, rgb(0.15, 0.5, 0.15));
 				ctx.y -= HEADER_LINE_HEIGHT;
 
 				for (const article of articles) {
 					ensureSpace(ctx, SMALL_LINE_HEIGHT * 2);
 					const titleLine = `• ${article.name}`;
-					drawRtlLine(
-						ctx,
-						titleLine,
-						boldFont,
-						SMALL_SIZE,
-						rgb(0.1, 0.1, 0.1),
-					);
+					drawRtlLine(ctx, titleLine, boldFont, SMALL_SIZE, rgb(0.1, 0.1, 0.1));
 					ctx.y -= SMALL_LINE_HEIGHT;
 
 					const byLine = `מאת: ${article.authorName}`;
-					drawRtlLine(
-						ctx,
-						byLine,
-						font,
-						SMALL_SIZE,
-						rgb(0.3, 0.3, 0.3),
-					);
+					drawRtlLine(ctx, byLine, font, SMALL_SIZE, rgb(0.3, 0.3, 0.3));
 					ctx.y -= SMALL_LINE_HEIGHT;
 
 					if (article.abstract) {

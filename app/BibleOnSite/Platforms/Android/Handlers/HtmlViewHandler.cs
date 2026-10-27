@@ -349,6 +349,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             {
                 builder.SetSpan(new URLSpan(url), span.Start, span.End, flags);
             }
+            if (span.Accent)
+            {
+                builder.SetSpan(new AccentColorSpan(), span.Start, span.End, flags);
+            }
         }
         return new RenderedContent(plan.Text, new SpannableString(builder));
     }
@@ -617,6 +621,23 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         }
     }
 
+    /// <summary>Paints a run with the view's resolved link color without any
+    /// link behavior — generated note-list markers share the inline
+    /// reference's color without inventing a link target (#2723). The color
+    /// resolves through <see cref="TextPaint.LinkColor"/> the same way
+    /// <see cref="ClickableSpan.UpdateDrawState"/> reads it, so it follows the
+    /// theme like a real link.</summary>
+    private sealed class AccentColorSpan : CharacterStyle
+    {
+        public override void UpdateDrawState(TextPaint? ds)
+        {
+            if (ds != null)
+            {
+                ds.Color = new Android.Graphics.Color(ds.LinkColor);
+            }
+        }
+    }
+
     /// <summary>Link span that routes taps through HtmlView.LinkTapped first.</summary>
     private sealed class TanahLinkSpan(string url, HtmlView? view) : ClickableSpan
     {
@@ -697,14 +718,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
                 _ => Android.Views.TextAlignment.TextStart
             };
 
-            if (view.TextAlignment == HtmlTextAlignment.Center)
-            {
-                handler.PlatformView.Gravity = Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top;
-            }
-            else
-            {
-                handler.PlatformView.Gravity = Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
-            }
+            handler.PlatformView.Gravity = view.TextAlignment == HtmlTextAlignment.Center
+                ? Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top
+                : Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
         }
 
         // Justify complete lines in either direction. TextDirection and the RLM

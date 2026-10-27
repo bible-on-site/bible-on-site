@@ -17,9 +17,10 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import { recomputeArticleMetrics } from "./reading-metrics";
 import {
-	articleInvalidation,
-	articlePath,
+	articleChange,
+	mergeCoveringSpans,
 	revalidateWebsite,
 } from "./website-revalidate";
 
@@ -307,6 +308,9 @@ export const createArticle = createServerFn({ method: "POST" })
 			if (!newArticle) {
 				throw new Error("Failed to retrieve created article");
 			}
+			// Same-transaction reading metrics (#2607): the stored decoration
+			// commits atomically with the content it describes.
+			await recomputeArticleMetrics(conn, newArticle.id, newArticle.content ?? null);
 			// Same-transaction enqueue: the index update request commits atomically
 			// with the article row.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [newArticle.id]);
@@ -317,9 +321,13 @@ export const createArticle = createServerFn({ method: "POST" })
 		});
 		// Post-commit: expire the website's article caches so the new article
 		// becomes public without a redeploy (see server/website-revalidate.ts).
-		await revalidateWebsite(
-			articleInvalidation(articlePath(created.perek_id, created.id)),
-		);
+		await revalidateWebsite([
+			articleChange({
+				id: created.id,
+				perekIds: [created.perek_id],
+				authorIds: [created.author_id],
+			}),
+		]);
 		return created;
 	});
 
@@ -337,18 +345,28 @@ export const updateArticle = createServerFn({ method: "POST" })
 
 		await ensureArticleSearchQueue();
 		let previousPerekId: number | null = null;
+		let previousAuthorId: number | null = null;
+		// The covering rows destroyed by a replace — the website unions them
+		// with the live rows to expire every touched reading unit.
+		let previousCovering: CoveringSource[] = [];
 		const updatedArticle = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
 			}
-			// A perek move changes which chapter page lists the article — the
-			// old chapter/article URL must be notified too.
-			const prev = await txQueryOne<{ perek_id: number }>(
-				conn,
-				"SELECT perek_id FROM tanah_article WHERE id = ?",
-				[data.id],
-			);
+			// A perek/author move changes which surfaces list the article —
+			// the old associations are unresolvable after the commit.
+			const prev = await txQueryOne<{
+				perek_id: number;
+				author_id: number;
+			}>(conn, "SELECT perek_id, author_id FROM tanah_article WHERE id = ?", [
+				data.id,
+			]);
 			previousPerekId = prev?.perek_id ?? null;
+			previousAuthorId = prev?.author_id ?? null;
+			// Captured unconditionally: a coverage replace OR a verified→false
+			// flip both destroy the previously-effective coverage surfaces.
+			previousCovering =
+				(await txLoadCoveringSources(conn, data.id)) ?? [];
 			await txExecute(
 				conn,
 				"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, distributable = ?, content = ? WHERE id = ?",
@@ -383,21 +401,29 @@ export const updateArticle = createServerFn({ method: "POST" })
 			if (!updated) {
 				throw new Error("Failed to retrieve updated article");
 			}
+			await recomputeArticleMetrics(conn, updated.id, updated.content ?? null);
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data.id]);
 			return {
 				...updated,
 				coveringSources: await txLoadCoveringSources(conn, data.id),
 			};
 		});
-		const urls = [articlePath(updatedArticle.perek_id, updatedArticle.id)];
-		// A perek move leaves the old chapter URL stale — notify it too.
-		if (
-			previousPerekId !== null &&
-			previousPerekId !== updatedArticle.perek_id
-		) {
-			urls.push(articlePath(previousPerekId, updatedArticle.id));
-		}
-		await revalidateWebsite(articleInvalidation(...urls));
+		// Old ∪ new associations: a perek/author move or a coverage replace
+		// leaves the old surfaces stale — the change carries both sides.
+		const perekIds = new Set([updatedArticle.perek_id]);
+		if (previousPerekId !== null) perekIds.add(previousPerekId);
+		const authorIds = new Set([updatedArticle.author_id]);
+		if (previousAuthorId !== null) authorIds.add(previousAuthorId);
+		await revalidateWebsite([
+			articleChange({
+				id: updatedArticle.id,
+				perekIds: [...perekIds],
+				authorIds: [...authorIds],
+				...(previousCovering.length > 0
+					? { coveringSpans: mergeCoveringSpans(previousCovering) }
+					: {}),
+			}),
+		]);
 		return updatedArticle;
 	});
 
@@ -406,12 +432,13 @@ export const deleteArticle = createServerFn({ method: "POST" })
 	.validator((data: number) => data)
 	.handler(async ({ data }) => {
 		await ensureArticleSearchQueue();
-		// Resolve the public URL before the delete — afterwards the row (and
-		// its perek) can no longer be enumerated.
-		const deleted = await queryOne<{ perek_id: number }>(
-			"SELECT perek_id FROM tanah_article WHERE id = ?",
+		// Resolve the associations before the delete — afterwards the row,
+		// its perek/author and its covering rows can no longer be enumerated.
+		const deleted = await queryOne<{ perek_id: number; author_id: number }>(
+			"SELECT perek_id, author_id FROM tanah_article WHERE id = ?",
 			[data],
 		);
+		const deletedCovering = (await loadCoveringSources(data)) ?? [];
 		await transaction(async (conn) => {
 			// Coverage rows are removed with the article — explicitly (the FK
 			// ON DELETE CASCADE is the backstop) so cleanup does not depend on
@@ -431,13 +458,19 @@ export const deleteArticle = createServerFn({ method: "POST" })
 			// purges it from the index — deleted articles must stop matching.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data]);
 		});
-		// The article tag covers the deleted row's perek page and every other
-		// article surface; the deleted URL is still notified so search engines
-		// recrawl and drop it.
-		await revalidateWebsite(
-			articleInvalidation(
-				...(deleted ? [articlePath(deleted.perek_id, data)] : []),
-			),
-		);
+		// The deleted row's perek/author/coverage surfaces expire; the
+		// destroyed associations ride along so no stale surface remains.
+		if (deleted) {
+			await revalidateWebsite([
+				articleChange({
+					id: data,
+					perekIds: [deleted.perek_id],
+					authorIds: [deleted.author_id],
+					...(deletedCovering.length > 0
+						? { coveringSpans: mergeCoveringSpans(deletedCovering) }
+						: {}),
+				}),
+			]);
+		}
 		return { success: true };
 	});

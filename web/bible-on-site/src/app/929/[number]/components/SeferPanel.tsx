@@ -11,10 +11,8 @@ import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
-	clearSeferPerushOverride,
 	resolveSeferPerushSelection,
 	SEFER_PERUSH_SELECTION_EVENT,
-	setSeferPerushOverride,
 	setSeferPerushSelection,
 } from "@/lib/sefer-perush-selection";
 import { getArticleForBook, getPerushNotesForPerekBatch } from "../actions";
@@ -258,15 +256,20 @@ export function SeferPanel({
 		[selection.ids, seferName],
 	);
 
-	const toggleScope = useCallback(() => {
-		if (selection.isOverride) clearSeferPerushOverride(seferName);
-		else setSeferPerushOverride(seferName, selection.ids);
-	}, [selection, seferName]);
-
 	/* ─── Commentary notes (batched per perek) ─── */
 	const [notesByPerush, setNotesByPerush] = useState<PerushNotes>({});
 	const [failedIds, setFailedIds] = useState<ReadonlySet<number>>(new Set());
 	const requestedIds = useRef(new Set<number>());
+	const notesGeneration = useRef({ perekId });
+	useEffect(() => {
+		notesGeneration.current = { perekId };
+		requestedIds.current = new Set();
+		setNotesByPerush({});
+		setFailedIds(new Set());
+		return () => {
+			notesGeneration.current = { perekId };
+		};
+	}, [perekId]);
 
 	const wantedIds = eligible
 		.filter((perush) => selectedIds.has(perush.id))
@@ -286,10 +289,12 @@ export function SeferPanel({
 			);
 		if (missing.length === 0) return;
 		for (const id of missing) requestedIds.current.add(id);
-		let cancelled = false;
+		// Selection changes must not discard an outstanding batch. Each result
+		// still belongs to this chapter, even if another batch finishes first.
+		const generation = notesGeneration.current;
 		getPerushNotesForPerekBatch(perekId, missing)
 			.then((batch) => {
-				if (cancelled) return;
+				if (generation !== notesGeneration.current) return;
 				setNotesByPerush((prev) => {
 					const next = { ...prev };
 					for (const id of missing) next[id] = batch[id] ?? [];
@@ -297,19 +302,15 @@ export function SeferPanel({
 				});
 			})
 			.catch((error) => {
+				if (generation !== notesGeneration.current) return;
 				console.error("Failed to load book commentary", {
 					perekId,
 					perushIds: missing,
 					error,
 				});
-				if (!cancelled) {
-					setFailedIds((prev) => new Set([...prev, ...missing]));
-					for (const id of missing) requestedIds.current.delete(id);
-				}
+				setFailedIds((prev) => new Set([...prev, ...missing]));
+				for (const id of missing) requestedIds.current.delete(id);
 			});
-		return () => {
-			cancelled = true;
-		};
 	}, [wantedIds, notesByPerush, failedIds, perekId]);
 
 	const retryPerush = useCallback((perushId: number) => {
@@ -394,7 +395,7 @@ export function SeferPanel({
 
 	return (
 		<section
-			className={`${seferStyles.pageBlank} ${styles.panelRoot}`}
+			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
 		>
 			{/* tablist header: פרשנים - date - מאמרים (RTL order) */}
@@ -484,59 +485,23 @@ export function SeferPanel({
 									>
 										<button
 											type="button"
-											className={styles.perushTagCheck}
+											className={styles.perushTag}
 											aria-pressed={renderedSelection.has(perush.id)}
 											aria-label={`בחירת ${perush.name}`}
-											title={`בחירת ${perush.name}`}
+											title={perush.parshanName}
 											onClick={() => togglePerush(perush.id)}
 										>
-											✓
+											<span
+												className={styles.perushTagCheck}
+												aria-hidden="true"
+											>
+												✓
+											</span>
+											<span>{perush.name}</span>
 										</button>
-										<Link
-											href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
-											/* In-book links intercept clicks for in-panel deep views;
-											 * prefetching every tag on every buffered page floods the
-											 * server with RSC requests and never reaches networkidle. */
-											prefetch={false}
-											className={styles.perushTag}
-											title={perush.parshanName}
-											onClick={(event) => {
-												// Modifier/new-tab clicks keep the anchor's
-												// dedicated perush page navigation.
-												if (
-													event.metaKey ||
-													event.ctrlKey ||
-													event.shiftKey ||
-													event.altKey
-												)
-													return;
-												event.preventDefault();
-												navigate(perush.name);
-											}}
-										>
-											{perush.name}
-										</Link>
 									</li>
 								))}
 							</ul>
-							{eligible.length > 0 && (
-								<div className={styles.scopeRow}>
-									<span>
-										{selection.isOverride
-											? `בחירה מותאמת לספר ${seferName}`
-											: 'בחירת ברירת מחדל לתנ"ך'}
-									</span>
-									<button
-										type="button"
-										className={styles.scopeToggle}
-										onClick={toggleScope}
-									>
-										{selection.isOverride
-											? 'חזרה לברירת מחדל לתנ"ך'
-											: "התאמה לספר זה"}
-									</button>
-								</div>
-							)}
 							{perekId > 0 && (
 								<div className={styles.scopeRow}>
 									<span>

@@ -154,10 +154,15 @@ describe("pedia/[uniqueName] page", () => {
 				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
 			});
 
-			expect(result).toEqual({
-				title: "משה רבנו | תנכפדיה",
-				description: "תוכן הערך על משה רבנו",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: "משה רבנו | תנכפדיה",
+					description: "תוכן הערך על משה רבנו",
+					alternates: {
+						canonical: `/pedia/${encodeURIComponent("משה-רבנו")}`,
+					},
+				}),
+			);
 		});
 
 		it("returns title only when content is empty", async () => {
@@ -175,10 +180,12 @@ describe("pedia/[uniqueName] page", () => {
 				params: Promise.resolve({ slug: encodeURIComponent("משה-רבנו") }),
 			});
 
-			expect(result).toEqual({
-				title: "משה רבנו | תנכפדיה",
-				description: "משה רבנו",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: "משה רבנו | תנכפדיה",
+					description: "משה רבנו",
+				}),
+			);
 		});
 
 		it("returns not found when entry does not exist", async () => {
@@ -212,10 +219,12 @@ describe("pedia/[uniqueName] page", () => {
 
 			await expect(
 				generateMetadata({ params: Promise.resolve({ slug: "יעקב" }) }),
-			).resolves.toEqual({
-				title: "יעקב (פירושונים) | תנכפדיה",
-				description: "לשם «יעקב» יש יותר מערך אחד בתנכפדיה.",
-			});
+			).resolves.toEqual(
+				expect.objectContaining({
+					title: "יעקב (פירושונים) | תנכפדיה",
+					description: "לשם «יעקב» יש יותר מערך אחד בתנכפדיה.",
+				}),
+			);
 		});
 
 		it("resolves percent-encoded uniqueName param like the browser sends", async () => {
@@ -235,22 +244,22 @@ describe("pedia/[uniqueName] page", () => {
 			});
 
 			expect(mockGetEntryByUniqueName).toHaveBeenCalledWith("שמשון");
-			expect(result).toEqual({
-				title: "שמשון | תנכפדיה",
-				description: "נזיר",
-			});
+			expect(result).toEqual(
+				expect.objectContaining({
+					title: "שמשון | תנכפדיה",
+					description: "נזיר",
+				}),
+			);
 		});
 
-		it("returns not found when database query fails", async () => {
+		it("propagates a database failure instead of reporting not-found", async () => {
 			mockGetEntryByUniqueName.mockRejectedValue(new Error("Database error"));
 
-			const result = await generateMetadata({
-				params: Promise.resolve({ slug: "test" }),
-			});
-
-			expect(result).toEqual({
-				title: "לא נמצא",
-			});
+			await expect(
+				generateMetadata({
+					params: Promise.resolve({ slug: "test" }),
+				}),
+			).rejects.toThrow("Database error");
 		});
 	});
 
@@ -299,8 +308,7 @@ describe("pedia/[uniqueName] page", () => {
 			},
 		);
 
-		it("keeps entry content available when occurrence loading fails", async () => {
-			const consoleError = jest.spyOn(console, "error").mockImplementation();
+		it("rejects when occurrence loading fails so a partial page is never cached", async () => {
 			mockGetEntries.mockResolvedValue([]);
 			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
 			mockGetEntryOccurrences.mockRejectedValueOnce(
@@ -315,18 +323,12 @@ describe("pedia/[uniqueName] page", () => {
 				updatedAt: "",
 				entities: [],
 			});
-			render((await EntryView({ slug: "מקורות" })) as ReactElement);
-			expect(screen.getByText("תוכן הערך נשמר")).toBeVisible();
-			expect(screen.queryByRole("table")).toBeNull();
-			expect(consoleError).toHaveBeenCalledWith(
-				"[tanahpedia] entry occurrences load failed",
-				"מקורות",
-				expect.any(Error),
+			await expect(EntryView({ slug: "מקורות" })).rejects.toThrow(
+				"sources unavailable",
 			);
 		});
 
-		it("renders entry and logs when family loading fails", async () => {
-			const consoleError = jest.spyOn(console, "error").mockImplementation();
+		it("rejects when family loading fails so a partial page is never cached", async () => {
 			mockGetEntriesByEntityType.mockResolvedValue([
 				{
 					id: "entry-1",
@@ -357,30 +359,13 @@ describe("pedia/[uniqueName] page", () => {
 				],
 			});
 
-			const result = await EntryView({ slug: "משה-רבנו" });
-
-			render(result as ReactElement);
-			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-				"\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
+			await expect(EntryView({ slug: "משה-רבנו" })).rejects.toThrow(
+				"family down",
 			);
-			expect(
-				screen.getByText("\u05ea\u05d5\u05db\u05df \u05d4\u05e2\u05e8\u05da"),
-			).toBeInTheDocument();
 			expect(mockGetEntriesByEntityType).toHaveBeenCalledWith("PERSON");
 			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
 				"entity-1",
-				"\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
-			);
-			expect(consoleError).toHaveBeenCalledWith(
-				"[tanahpedia] person family load failed",
-				{
-					uniqueName: "משה-רבנו",
-					entityId: "entity-1",
-				},
-				expect.any(Error),
-			);
-			expect((consoleError.mock.calls[0][2] as Error).message).toBe(
-				"family down",
+				"משה רבנו",
 			);
 		});
 
@@ -471,7 +456,7 @@ describe("pedia/[uniqueName] page", () => {
 			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
 		});
 
-		it("continues rendering when fallback sibling loading fails", async () => {
+		it("rejects when fallback sibling loading fails so a partial page is never cached", async () => {
 			mockGetEntries.mockRejectedValue(new Error("siblings down"));
 			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
 			mockGetEntryByUniqueName.mockResolvedValue({
@@ -484,16 +469,14 @@ describe("pedia/[uniqueName] page", () => {
 				entities: [],
 			});
 
-			const result = await EntryView({ slug: "no-siblings" });
-
-			render(result as ReactElement);
-			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-				"No Siblings",
+			await expect(EntryView({ slug: "no-siblings" })).rejects.toThrow(
+				"siblings down",
 			);
 			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
 		});
 
-		it("renders entry content when place-map loading fails", async () => {
+		it("rejects when place-map loading fails so a partial page is never cached", async () => {
+			mockGetEntries.mockResolvedValue([]);
 			mockGetPlaceMapMarkersForEntry.mockRejectedValueOnce(
 				new Error("map unavailable"),
 			);
@@ -506,15 +489,13 @@ describe("pedia/[uniqueName] page", () => {
 				updatedAt: "",
 				entities: [],
 			});
-			render((await EntryView({ slug: "map-error" })) as ReactElement);
-			expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-				"Map unavailable entry",
+			await expect(EntryView({ slug: "map-error" })).rejects.toThrow(
+				"map unavailable",
 			);
-			expect(screen.getByText("Entry content survives")).toBeVisible();
-			expect(screen.queryByRole("heading", { name: "מפה" })).toBeNull();
 		});
 
 		it("renders place maps and person family sections when available", async () => {
+			mockGetEntries.mockResolvedValue([]);
 			mockGetEntriesByEntityType.mockResolvedValue([]);
 			mockGetPersonFamilySummary.mockResolvedValue({
 				focalPersonId: "person-1",

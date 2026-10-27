@@ -19,10 +19,10 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
-            <Color x:Key="SelectedPasukBackgroundDark">#9FB4E0</Color>
+            <Color x:Key="SelectedPasukBackgroundDark">#3D5A80</Color>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
             <converters:PasukDisplayItemsConverter x:Key="PasukDisplayItemsConverter"/>
-            <converters:PasukMarkerTextConverter x:Key="PasukMarkerTextConverter" MarkerColor="{StaticResource Primary}"/>
+            <converters:PasukMarkerTextConverter x:Key="PasukMarkerTextConverter" MarkerColor="{StaticResource Primary}" MarkerColorDark="{StaticResource AccentOnDark}"/>
             <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -43,7 +43,7 @@
                    BorderWidth="0"
                    IsVisible="True"
                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
@@ -56,7 +56,7 @@
                         <TapGestureRecognizer Tapped="OnPerekSourceClicked"/>
                     </Border.GestureRecognizers>
                     <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
-                           HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                           HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                 </Border>
                     </Grid>
                 </controls:SharedTopBar.CenterContent>
@@ -64,7 +64,7 @@
                 <Button x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
                         Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
                         WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
                 </controls:SharedTopBar.TrailingContent>
@@ -129,7 +129,7 @@
                                        FontAttributes="Bold"
                                        HorizontalTextAlignment="Center"
                                        Padding="16,12"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}">
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
                                     <Label.Triggers>
                                         <!-- Keep wrapped header text clear of the floating play button -->
                                         <DataTrigger TargetType="Label"
@@ -156,7 +156,7 @@
                                         HeightRequest="40"
                                         Padding="0"
                                         BackgroundColor="Transparent"
-                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"
+                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                         HorizontalOptions="Start"
                                         VerticalOptions="Center"
                                         Margin="8,0"
@@ -262,7 +262,7 @@
                                                                            AutomationId="InlinePerushName"
                                                                            FontSize="{DynamicResource PerushNameFontSize}"
                                                                            FontAttributes="Bold"
-                                                                           TextColor="{StaticResource Primary}"/>
+                                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                                                     <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
                                                                                       FontSize="{DynamicResource PerushContentFontSize}"
                                                                                       TextAlignment="Justify"
@@ -300,7 +300,9 @@
                             <ScrollView Grid.Row="1"
                                         AutomationId="TikkunScrollView"
                                         IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}}"
-                                        Margin="8,0,8,0">
+                                        Margin="8,0,8,0"
+                                        Loaded="OnTikkunLoaded"
+                                        Scrolled="OnTikkunScrolled">
                                 <VerticalStackLayout>
                                     <!-- MAUI TapGestureRecognizer fails inside CarouselView
                                          templates on Android; LongPressBehavior.NativeTapped

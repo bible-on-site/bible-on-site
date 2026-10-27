@@ -211,4 +211,77 @@ public class AppConfigTests
                 .SetValue(_config, false);
         }
     }
+
+    [Collection("App configuration")]
+    public class GetAssetsBaseUrl
+    {
+        private static readonly object AssetsEnvLock = new();
+
+        private static void WithAssetsEnv(
+            string? baseUrl, string? endpoint, string? bucket, Action action)
+        {
+            lock (AssetsEnvLock)
+            {
+                var prevBase = Environment.GetEnvironmentVariable("ASSETS_BASE_URL");
+                var prevEndpoint = Environment.GetEnvironmentVariable("S3_ENDPOINT");
+                var prevBucket = Environment.GetEnvironmentVariable("S3_BUCKET");
+                try
+                {
+                    Environment.SetEnvironmentVariable("ASSETS_BASE_URL", baseUrl);
+                    Environment.SetEnvironmentVariable("S3_ENDPOINT", endpoint);
+                    Environment.SetEnvironmentVariable("S3_BUCKET", bucket);
+                    action();
+                }
+                finally
+                {
+                    Environment.SetEnvironmentVariable("ASSETS_BASE_URL", prevBase);
+                    Environment.SetEnvironmentVariable("S3_ENDPOINT", prevEndpoint);
+                    Environment.SetEnvironmentVariable("S3_BUCKET", prevBucket);
+                }
+            }
+        }
+
+        [Fact]
+        public void returns_environment_value_when_assets_base_url_is_set()
+        {
+            WithAssetsEnv("https://cdn.example.test/", null, null, () =>
+            {
+                // Trailing slash is trimmed so object keys join cleanly.
+                AppConfig.Instance.GetAssetsBaseUrl().Should().Be("https://cdn.example.test");
+            });
+        }
+
+        [Fact]
+        public void resolves_from_s3_endpoint_and_bucket_when_configured()
+        {
+            WithAssetsEnv(null, "http://192.0.2.9:9000", "bucket-x", () =>
+            {
+#if DEBUG
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("http://192.0.2.9:9000/bucket-x");
+#else
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("https://bible-on-site-assets.s3.il-central-1.amazonaws.com");
+#endif
+            });
+        }
+
+        [Fact]
+        public void falls_back_to_the_local_stack_defaults_in_debug()
+        {
+            WithAssetsEnv(null, null, null, () =>
+            {
+#if DEBUG
+                // The dev stack's checked-in .dev.env serves
+                // bucket bible-on-site-assets-dev on :4566; non-Android hosts
+                // reach it over loopback.
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("http://localhost:4566/bible-on-site-assets-dev");
+#else
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("https://bible-on-site-assets.s3.il-central-1.amazonaws.com");
+#endif
+            });
+        }
+    }
 }

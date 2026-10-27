@@ -38,7 +38,7 @@
                             </MultiBinding>
                         </DataTrigger.Binding>
                         <Setter Property="Stroke"
-                                Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                                Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                     </DataTrigger>
                 </Border.Triggers>
                 <controls:ArticleCard Article="{Binding .}"/>

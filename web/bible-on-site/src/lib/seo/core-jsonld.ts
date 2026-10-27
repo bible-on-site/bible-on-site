@@ -3,6 +3,8 @@ import type { PerekObj } from "@/data/perek-dto";
 import type { Article } from "@/lib/articles";
 import type { AuthorDetails } from "@/lib/authors";
 import type { PerushDetail } from "@/lib/perushim";
+import type { ReadingMetric } from "@/lib/reading-metrics";
+import { isoDurationSeconds } from "@/lib/reading-metrics";
 import type { Recitation } from "@/lib/recitation";
 import {
 	absUrl,
@@ -71,6 +73,23 @@ function tanahAndSeferNodes(seferName: string, helek: string): Thing[] {
 }
 
 /**
+ * Reading-metric fields (#2607) shared by every content node — the SAME
+ * stored complete-text baseline the UI shows (`זמן קריאה משוער`), never a
+ * `plainText`-derived count and never personal progress.
+ */
+function metricFields(
+	metric: ReadingMetric | null | undefined,
+): Record<string, unknown> {
+	if (!metric) return {};
+	return {
+		...(metric.wordCount != null ? { wordCount: metric.wordCount } : {}),
+		...(metric.estimatedSeconds != null
+			? { timeRequired: isoDurationSeconds(metric.estimatedSeconds) }
+			: {}),
+	};
+}
+
+/**
  * Build the `@graph` for a perek text page (`/929/[number]`).
  *
  * Thin: one `Chapter` node in the Tanah → Sefer → Chapter hierarchy plus a
@@ -84,6 +103,7 @@ export function buildPerekGraph(
 		Recitation,
 		"perekId" | "audioUrl" | "durationMs" | "audioSha256"
 	> | null,
+	metric?: ReadingMetric | null,
 ): Graph {
 	const path = perekPath(perekObj.perekId);
 	const url = absUrl(path);
@@ -102,6 +122,7 @@ export function buildPerekGraph(
 		name: perekObj.source,
 		inLanguage: "he",
 		isPartOf: { "@id": seferId(perekObj.sefer) },
+		...metricFields(metric),
 		...(images.length ? { image: images.map((image) => image.src) } : {}),
 	};
 	const webPage: Record<string, unknown> = {
@@ -196,6 +217,7 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
+		...metricFields(article.metric),
 	};
 	const descSource = article.abstract ?? article.content ?? "";
 	if (hasContent(descSource)) {
@@ -266,6 +288,7 @@ export function buildPerushGraph(input: PerushGraphInput): Graph {
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
+		...metricFields(perush.metric),
 	};
 	const notesHtml = perush.notes.map((note) => note.noteContent).join(" ");
 	if (hasContent(notesHtml)) {

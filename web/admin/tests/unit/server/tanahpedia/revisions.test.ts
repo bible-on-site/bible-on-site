@@ -38,11 +38,13 @@ vi.mock("~/server/db", () => ({
 
 import {
 	approveEntryRevision,
+	assertEntryFieldsValid,
 	listEntryRevisions,
 	rejectEntryRevision,
 	restoreEntryRevision,
 	saveEntryRevisioned,
 } from "~/server/tanahpedia/revisions";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 const ENTRY = {
 	id: "entry-1",
@@ -298,7 +300,9 @@ describe("approveEntryRevision", () => {
 				proposed_title: "יעקב אבינו",
 			})
 			.mockResolvedValueOnce(ENTRY)
-			.mockResolvedValueOnce(HEAD);
+			.mockResolvedValueOnce(HEAD)
+			// Post-apply content re-read feeding the metric recompute (#2607).
+			.mockResolvedValueOnce({ content: "<p>יעקב אבינו</p>" });
 		const result = await approveEntryRevision({ data: { id: "r1" } });
 		expect(result).toEqual({
 			revisionId: "r1",
@@ -313,6 +317,11 @@ describe("approveEntryRevision", () => {
 			(sql as string).includes("status = 'APPLIED'"),
 		);
 		expect(stamp?.[2]).toEqual(["entry-1", "rev-head", "r1"]);
+		// The entry metric was refreshed from the re-read applied content.
+		const metricUpsert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_metric"),
+		);
+		expect(metricUpsert?.[2]?.[0]).toBe("entry-1");
 	});
 
 	it("creates a new entry for an unlinked proposal", async () => {
@@ -331,6 +340,44 @@ describe("approveEntryRevision", () => {
 		);
 		expect(insert).toBeTruthy();
 		expect(result.entryId).toEqual(expect.any(String));
+	});
+
+	it("stores the normalized name when a proposal carries an encoded name", async () => {
+		txQueryOneMock.mockResolvedValueOnce({
+			...HEAD,
+			id: "r1",
+			entry_id: null,
+			status: "PENDING",
+			base_revision_id: null,
+			proposed_unique_name: "%D7%9E%D7%A9%D7%94",
+			proposed_title: "ערך חדש",
+		});
+		const result = await approveEntryRevision({ data: { id: "r1" } });
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry"),
+		);
+		// The stored unique_name must be the decoded form — the public router
+		// resolves /pedia/משה, never /pedia/%D7%9E%D7%A9%D7%94.
+		expect(insert?.[2]?.[1]).toBe("משה");
+		expect(result.entryId).toEqual(expect.any(String));
+	});
+
+	it("stores the normalized name when approving a rename proposal", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_unique_name: "%D7%99%D7%A2%D7%A7%D7%91",
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD);
+		await approveEntryRevision({ data: { id: "r1" } });
+		const entryUpdate = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("UPDATE tanahpedia_entry\n"),
+		);
+		expect(entryUpdate?.[2]?.[0]).toBe("יעקב");
 	});
 
 	it("requires proposedUniqueName/proposedTitle for new entries", async () => {
@@ -440,6 +487,29 @@ describe("restoreEntryRevision", () => {
 		expect(insert?.[2]?.[7]).toBe("rev-head");
 	});
 
+	it("restores an encoded snapshot name in its normalized stored form", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "old-rev",
+				proposed_unique_name: "%D7%9E%D7%A9%D7%94",
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD)
+			.mockResolvedValueOnce({ ...ENTRY, unique_name: "משה" });
+		await restoreEntryRevision({
+			data: { id: "old-rev", baseRevisionId: "rev-head" },
+		});
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
+		);
+		expect(insert?.[2]?.[2]).toBe("משה");
+		const entryUpdate = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("UPDATE tanahpedia_entry SET"),
+		);
+		expect(entryUpdate?.[2]?.[0]).toBe("משה");
+	});
+
 	it("rejects a missing revision", async () => {
 		txQueryOneMock.mockResolvedValueOnce(null);
 		await expect(
@@ -507,6 +577,7 @@ describe("website cache invalidation", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -520,13 +591,15 @@ describe("website cache invalidation", () => {
 		fetchSpy.mockRestore();
 	});
 
-	function calledUrls(): URL[] {
-		return fetchSpy.mock.calls.map(
-			(call: unknown[]) => new URL(String(call[0])),
-		);
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
 	}
 
-	it("expires pedia surfaces when a proposal goes live", async () => {
+	it("sends the entry change when a proposal goes live", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -539,14 +612,13 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		const urls = calledUrls();
-		expect(urls.length).toBeGreaterThan(0);
-		expect(urls.map((u) => u.searchParams.get("tag"))).toContain(
-			"tanahpedia-entity-refs",
-		);
+		expect(fetchSpy).toHaveBeenCalled();
+		expect(sentChanges()).toEqual([
+			{ kind: "pedia-entry", uniqueName: "yaakov" },
+		]);
 	});
 
-	it("expires pedia surfaces when a revision is restored", async () => {
+	it("sends the entry change when a revision is restored", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
 			.mockResolvedValueOnce(ENTRY)
@@ -557,16 +629,12 @@ describe("website cache invalidation", () => {
 			data: { id: "old-rev", baseRevisionId: "rev-head" },
 		});
 
-		expect(calledUrls().length).toBeGreaterThan(0);
+		expect(sentChanges()).toEqual([
+			{ kind: "pedia-entry", uniqueName: "yaakov" },
+		]);
 	});
 
-	function notifiedUrls(): string[] {
-		// The urls ride on the third (/pedia index) invalidation call.
-		const url = new URL(String(fetchSpy.mock.calls[2]?.[0] ?? ""));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports the old and new entry urls when approval renames the entry", async () => {
+	it("carries the old and new names when approval renames the entry", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -580,10 +648,16 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/yaakov-avenu", "/pedia/yaakov"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entry",
+				uniqueName: "yaakov-avenu",
+				oldUniqueName: "yaakov",
+			},
+		]);
 	});
 
-	it("keeps the entry's url when approval does not rename it", async () => {
+	it("keeps the entry's name only when approval does not rename it", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -597,12 +671,14 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		expect(notifiedUrls()).toEqual(["/pedia/yaakov"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "pedia-entry", uniqueName: "yaakov" },
+		]);
 	});
 
-	it("submits no urls when the approved entry has no name to notify", async () => {
+	it("sends nothing when the approved entry has no name to notify", async () => {
 		// Defensive: unique_name is NOT NULL, but a missing row value must not
-		// produce a bogus /pedia/null submission.
+		// produce a bogus /pedia/null notification.
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -616,11 +692,10 @@ describe("website cache invalidation", () => {
 
 		await approveEntryRevision({ data: { id: "r1" } });
 
-		expect(fetchSpy).toHaveBeenCalled();
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it("reports the old and new entry urls when a restore renames the entry", async () => {
+	it("carries the old and new names when a restore renames the entry", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({
 				...HEAD,
@@ -635,10 +710,16 @@ describe("website cache invalidation", () => {
 			data: { id: "old-rev", baseRevisionId: "rev-head" },
 		});
 
-		expect(notifiedUrls()).toEqual(["/pedia/yaakov-old", "/pedia/yaakov"]);
+		expect(sentChanges()).toEqual([
+			{
+				kind: "pedia-entry",
+				uniqueName: "yaakov-old",
+				oldUniqueName: "yaakov",
+			},
+		]);
 	});
 
-	it("submits no urls when the restored row is gone and the entry had no name", async () => {
+	it("sends nothing when the restored row is gone and the entry had no name", async () => {
 		txQueryOneMock
 			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
 			.mockResolvedValueOnce({ ...ENTRY, unique_name: null })
@@ -649,8 +730,7 @@ describe("website cache invalidation", () => {
 			data: { id: "old-rev", baseRevisionId: "rev-head" },
 		});
 
-		expect(fetchSpy).toHaveBeenCalled();
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it("does not invalidate when a proposal is rejected", async () => {
@@ -659,5 +739,34 @@ describe("website cache invalidation", () => {
 		await rejectEntryRevision({ data: { id: "r1" } });
 
 		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe("assertEntryFieldsValid", () => {
+	it("rejects a unique_name containing a path separator", () => {
+		expect(() =>
+			assertEntryFieldsValid({ unique_name: "א/ב", title: "יעקב" }),
+		).toThrow("VALIDATION");
+	});
+
+	it("rejects an over-long unique_name", () => {
+		expect(() =>
+			assertEntryFieldsValid({
+				unique_name: "א".repeat(256),
+				title: "יעקב",
+			}),
+		).toThrow("VALIDATION");
+	});
+
+	it("rejects a unique_name colliding with a reserved category route", () => {
+		expect(() =>
+			assertEntryFieldsValid({ unique_name: "אישים", title: "יעקב" }),
+		).toThrow("VALIDATION");
+	});
+
+	it("rejects a missing unique_name as an empty name", () => {
+		expect(() => assertEntryFieldsValid({ title: "יעקב" })).toThrow(
+			"VALIDATION",
+		);
 	});
 });

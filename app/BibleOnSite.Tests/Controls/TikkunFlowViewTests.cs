@@ -1,4 +1,5 @@
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
@@ -254,6 +255,58 @@ public class TikkunFlowViewTests
             view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
 
             canvas.Verify(DrawStringCall(), Times.AtLeast(2));
+        });
+    }
+
+    // #2623: תיקון קוראים is a scripture presentation — its canvas draws and
+    // measures in the same Taamey D face as the pasuk labels (a different
+    // measure face would also corrupt the justification math). The canvas
+    // resolves IFont.Name itself, so the contract fields are the oracle —
+    // the platform spell differs per OS (asset name / PostScript / URI).
+    [Fact]
+    public void draw_paints_and_measures_words_in_the_scripture_font()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אברהם יצחק")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.VerifySet(c => c.Font =
+                It.Is<IFont>(f => f.Name == ScriptureFonts.Regular.Name), Times.AtLeastOnce);
+            // The pasuk-number word is bold — its face is the bold scripture variant.
+            canvas.VerifySet(c => c.Font =
+                It.Is<IFont>(f => f.Name == ScriptureFonts.Bold.Name &&
+                                  f.Weight == FontWeights.Bold), Times.AtLeastOnce);
+            canvas.Verify(c => c.GetStringSize(It.IsAny<string>(),
+                It.Is<IFont>(f => f.Name == ScriptureFonts.Regular.Name),
+                It.IsAny<float>()), Times.AtLeastOnce);
+        });
+    }
+
+    // #2623: bundled fonts resolve to a real typeface on Android/iOS, so the
+    // canvas there drops IFont.Weight — marker words are double-struck to keep
+    // the emphasis the system font used to give (#if !WINDOWS keeps this
+    // branch active in the net10.0 test target).
+    [Fact]
+    public void draw_double_strikes_bold_marker_words_for_faux_bold()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אברהם")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            // The "א" pasuk-number marker is bold → struck twice; the verse
+            // word itself is regular → struck once.
+            canvas.Verify(c => c.DrawString("א", It.IsAny<float>(), It.IsAny<float>(),
+                It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()), Times.Exactly(2));
+            canvas.Verify(c => c.DrawString("אברהם", It.IsAny<float>(), It.IsAny<float>(),
+                It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()), Times.Once);
         });
     }
 

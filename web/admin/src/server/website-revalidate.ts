@@ -6,17 +6,32 @@ import { createServerFn } from "@tanstack/react-start";
  * The website caches all DB-backed content indefinitely
  * (`unstable_cache` with `revalidate: false`) and prerenders pages, so a
  * committed admin change only becomes public after `POST /api/revalidate`
- * expires the relevant tag/path. Each mutation server function calls this
- * after its transaction commits; inside the transaction the website could
- * re-render with pre-commit data and re-cache it stale.
+ * expires the relevant tag/path. Each mutation server function enqueues
+ * its change after the transaction commits; inside the transaction the
+ * website could re-render with pre-commit data and re-cache it stale.
  *
- * Best-effort: a failed or unconfigured call is logged and reported as
- * `false`, never thrown, so a committed save must not turn into an error.
- * Failures are also recorded (see `lastRevalidationFailure`) so the editor
- * UI can warn that the public site may still be stale; the committed change
- * then becomes public on the next successful invalidation or when an
- * operator POSTs `/api/revalidate` on the website directly (production
- * requires the `REVALIDATE_SECRET` provisioned on the website task).
+ * Two payload shapes (keep `EntityChange` in sync with
+ * web/bible-on-site/src/lib/revalidate/contract.ts):
+ *
+ * - `changes` — the admin-only entity-change events, posted as a JSON body.
+ *   The website owns the dependency index and resolves each change to the
+ *   entity-scoped cache tags and route paths that consume it; the admin
+ *   names entities (with the destroyed side of renames/moves/deletes it
+ *   alone still knows), never routes or tags.
+ * - `tag`/`path`/`type` — the legacy query-parameter requests, still sent
+ *   as query params for operator-style call sites.
+ *
+ * Debounce: enqueued requests merge into one flush per DEBOUNCE_MS window
+ * (a burst of edits across entity screens becomes a handful of website
+ * calls instead of a regeneration stampede), and each call resolves when
+ * the flush carrying its requests completes. Requests that fail delivery
+ * move to `pendingRetry` and ride along with the NEXT flush — recorded on
+ * `lastRevalidationFailure` until then so the editor UI can warn that the
+ * public site may still be stale.
+ *
+ * shortcut: per-instance queue state, accurate on the single admin ECS
+ * task; a durable DB-backed `website_revalidate_queue` (surviving task
+ * replacement) is remaining scope requiring a schema deployment.
  *
  * Configured by `VITE_WEBSITE_URL` + `REVALIDATE_SECRET`; unset means
  * "no website to invalidate" (unit tests, tooling) and becomes a no-op.
@@ -25,21 +40,75 @@ import { createServerFn } from "@tanstack/react-start";
  * `x-revalidate-secret` request header, not the URL, so it stays out of
  * access logs on the plaintext cluster hop.
  */
+
+/** A pasuk-granular span of article covering-source rows (#2189). */
+export interface ArticleCoveringSpan {
+	perekId: number;
+	pasukFrom: number;
+	pasukTo: number;
+}
+
+/** Mirrors website `EntityChange` — the dependency contract the site owns. */
+export type EntityChange =
+	| {
+			kind: "article";
+			id: number;
+			/** Old ∪ new primary perek ids. */
+			perekIds: number[];
+			/** Old ∪ new tanah_article.author_id. */
+			authorIds?: number[];
+			/** Covering spans destroyed by the change (replaced/removed side). */
+			coveringSpans?: ArticleCoveringSpan[];
+	  }
+	| {
+			kind: "author";
+			id: number;
+			name: string;
+			oldName?: string;
+	  }
+	| {
+			kind: "pedia-entry";
+			uniqueName: string;
+			oldUniqueName?: string;
+			entityTypes?: string[];
+			synonymNames?: string[];
+			refPerekIds?: number[];
+	  }
+	| {
+			kind: "pedia-entity";
+			entityId: string;
+			entityType?: string;
+			entryUniqueNames?: string[];
+			refPerekIds?: number[];
+	  }
+	| {
+			kind: "pedia-entries";
+			uniqueNames: string[];
+			entityTypes?: string[];
+			refPerekIds?: number[];
+	  };
+
 export interface RevalidateRequest {
+	/** Typed entity changes — posted as the `{changes}` JSON body. */
+	changes?: EntityChange[];
 	tag?: string;
 	path?: string;
-	/** `page` | `layout`, required when `path` is a dynamic route pattern. */
+	/** `page` | `layout`; patterns default to `page` on the website. */
 	type?: "page" | "layout";
 	/**
-	 * Site-relative public paths whose content changed (e.g. `/929/5/12`,
-	 * `/pedia/משה`). The website submits them to IndexNow once the
-	 * invalidation succeeds — include the old paths of renames/moves and the
-	 * removed paths of deletes so search engines recrawl the stale URLs too.
+	 * Site-relative public paths whose content changed. Sent as `url` query
+	 * params — the website submits them to IndexNow once invalidation
+	 * succeeds. Entity changes rarely need this: the dependency resolver
+	 * enumerates the changed paths itself.
 	 */
 	urls?: string[];
 }
 
 const TIMEOUT_MS = 5000;
+/** Burst window: requests enqueued together flush as one website call set. */
+const DEBOUNCE_MS = 300;
+/** Keep in sync with MAX_CHANGES_PER_REQUEST on the website contract. */
+const MAX_CHANGES_PER_REQUEST = 64;
 
 /**
  * `skipped` = the documented no-op (endpoint not configured), distinct from
@@ -64,10 +133,19 @@ async function postRevalidate(
 	if (request.type) query.set("type", request.type);
 	for (const url of request.urls ?? []) query.append("url", url);
 	const url = `${base}/api/revalidate?${query}`;
+	const hasChanges = (request.changes?.length ?? 0) > 0;
 	try {
 		const response = await fetch(url, {
 			method: "POST",
-			headers: { "x-revalidate-secret": secret },
+			headers: {
+				"x-revalidate-secret": secret,
+				...(hasChanges
+					? { "content-type": "application/json" }
+					: {}),
+			},
+			...(hasChanges
+				? { body: JSON.stringify({ changes: request.changes }) }
+				: {}),
 			signal: AbortSignal.timeout(TIMEOUT_MS),
 		});
 		if (!response.ok) {
@@ -85,25 +163,49 @@ async function postRevalidate(
 }
 
 export interface RevalidationFailure {
-	/** ISO timestamp of the failed batch. */
+	/** ISO timestamp of the most recent failed flush. */
 	failedAt: string;
-	/** The requests that were not applied. */
+	/** The requests still unapplied (retried on the next flush). */
 	requests: RevalidateRequest[];
 }
 
 /**
- * The still-unsatisfied invalidations: failed requests from the most recent
- * batch that did not fully apply, `null` when the last batch fully applied
- * (or nothing has run yet). Surfaced to editors via
- * `getWebsiteRevalidationStatus` so a stale public site is visible.
- *
- * shortcut: per-instance module state, accurate on the single admin ECS
- * task; upgrade to shared state (DB/queue) if the admin ever scales out.
+ * Queue state: `queued` holds requests awaiting the next flush;
+ * `pendingRetry` holds requests whose delivery failed — they prepend the
+ * next batch so a transient website outage cannot silently lose an
+ * invalidation, and `lastFailure` mirrors them until they apply.
  */
+let queued: RevalidateRequest[] = [];
+let pendingRetry: RevalidateRequest[] = [];
 let lastFailure: RevalidationFailure | null = null;
+let draining = false;
+let timer: ReturnType<typeof setTimeout> | null = null;
+/** Callers awaiting the flush that carries the current generation. */
+let generation: { resolvers: ((applied: boolean) => void)[] } | null = null;
 
 export function lastRevalidationFailure(): RevalidationFailure | null {
 	return lastFailure;
+}
+
+/**
+ * Test hook — clears the queue, retry backlog, status and the pending
+ * generation so one test's failed delivery cannot ride the next test's
+ * flush. Production callers never need this: `pendingRetry` is the
+ * correctness mechanism keeping invalidations alive across outages.
+ */
+export function __resetRevalidateForTests(): void {
+	queued = [];
+	pendingRetry = [];
+	lastFailure = null;
+	if (timer) {
+		clearTimeout(timer);
+		timer = null;
+	}
+	const leftover = generation;
+	generation = null;
+	for (const resolve of leftover?.resolvers ?? []) {
+		resolve(true);
+	}
 }
 
 /** Editor-facing freshness status polled by the revalidation warning. */
@@ -114,30 +216,117 @@ export const getWebsiteRevalidationStatus = createServerFn({
 });
 
 /**
- * Expires/invalidate the given website cache tags and paths in parallel.
- * `true` only when every request was accepted; a partial failure still
- * applied the calls that succeeded — the unapplied subset is recorded on
- * `lastRevalidationFailure` until a later batch fully succeeds.
+ * Split a flush into posts: change requests merge into `{changes}` bodies
+ * of at most MAX_CHANGES_PER_REQUEST entries (their `urls` ride the first
+ * chunk); legacy tag/path requests keep one query-parameter post each.
  */
-export async function revalidateWebsite(
-	requests: RevalidateRequest[],
-): Promise<boolean> {
-	const settled = await Promise.all(
-		requests.map(async (request) => ({
-			request,
-			outcome: await postRevalidate(request),
-		})),
-	);
-	const failed = settled
-		.filter((s) => s.outcome === "failed")
-		.map((s) => s.request);
-	lastFailure = failed.length
-		? { failedAt: new Date().toISOString(), requests: failed }
-		: null;
-	return settled.every((s) => s.outcome === "applied");
+function batchToPosts(batch: RevalidateRequest[]): RevalidateRequest[] {
+	const changes = batch.flatMap((request) => request.changes ?? []);
+	const urls = batch.flatMap((request) => request.urls ?? []);
+	const posts: RevalidateRequest[] = [];
+	for (let i = 0; i < changes.length; i += MAX_CHANGES_PER_REQUEST) {
+		posts.push({
+			changes: changes.slice(i, i + MAX_CHANGES_PER_REQUEST),
+			...(i === 0 && urls.length > 0 ? { urls } : {}),
+		});
+	}
+	for (const request of batch) {
+		if (request.changes?.length) continue;
+		posts.push({
+			tag: request.tag,
+			path: request.path,
+			type: request.type,
+			...(changes.length === 0 && request.urls?.length
+				? { urls: request.urls }
+				: {}),
+		});
+	}
+	return posts;
 }
 
-/** Public path of an article page (`/929/<perek>/<article>`). */
+async function drain(): Promise<void> {
+	if (draining) return;
+	draining = true;
+	// Retried posts ride the first batch only — re-queueing them into the
+	// loop would hot-retry a dead website forever.
+	let includeRetry = true;
+	try {
+		while (queued.length > 0 || (includeRetry && pendingRetry.length > 0)) {
+			const batch = includeRetry
+				? [...pendingRetry, ...queued]
+				: [...queued];
+			includeRetry = false;
+			pendingRetry = [];
+			queued = [];
+			const waiting = generation;
+			generation = null;
+			const posts = batchToPosts(batch);
+			const outcomes = await Promise.all(
+				posts.map(async (post) => ({
+					post,
+					outcome: await postRevalidate(post),
+				})),
+			);
+			const failed = outcomes
+				.filter((o) => o.outcome === "failed")
+				.map((o) => o.post);
+			if (failed.length > 0) {
+				pendingRetry.push(...failed);
+				lastFailure = {
+					failedAt: new Date().toISOString(),
+					requests: [...pendingRetry],
+				};
+			} else {
+				lastFailure = null;
+			}
+			const applied = outcomes.every(
+				(outcome) => outcome.outcome === "applied",
+			);
+			for (const resolve of waiting?.resolvers ?? []) {
+				resolve(failed.length === 0 && applied);
+			}
+		}
+		// Nothing flushed (e.g. an empty enqueue) — the generation's callers
+		// still need their promise resolved.
+		const leftover = generation;
+		generation = null;
+		for (const resolve of leftover?.resolvers ?? []) {
+			resolve(pendingRetry.length === 0);
+		}
+	} finally {
+		draining = false;
+	}
+}
+
+/**
+ * Enqueue invalidation work for the debounced flush. Resolves `true` when
+ * the flush carrying these requests fully applied; `false` while stale
+ * content is still pending (failed requests retry on the next flush and
+ * remain visible via `getWebsiteRevalidationStatus`).
+ */
+export function revalidateWebsite(
+	requests: RevalidateRequest[],
+): Promise<boolean> {
+	queued.push(...requests);
+	if (!generation) generation = { resolvers: [] };
+	const current = generation;
+	const waiting = new Promise<boolean>((resolve) =>
+		current.resolvers.push(resolve),
+	);
+	if (!timer && !draining) {
+		timer = setTimeout(() => {
+			timer = null;
+			void drain();
+		}, DEBOUNCE_MS);
+		timer.unref?.();
+	}
+	return waiting;
+}
+
+/**
+ * Public path of an article page (`/929/<perek>/<article>`) — kept for
+ * operator/manual `urls` use. Entity changes derive their own paths.
+ */
 export function articlePath(perekId: number, articleId: number): string {
 	return `/929/${perekId}/${articleId}`;
 }
@@ -193,4 +382,114 @@ export function pediaInvalidation(...urls: string[]): RevalidateRequest[] {
 		{ path: "/pedia", ...(urls.length ? { urls } : {}) },
 		{ tag: "tanahpedia-mention-refs" },
 	];
+}
+
+// --- typed-change builders --------------------------------------------------
+
+/**
+ * Merge single-pasuk covering rows (`{perek_id, pasuk}`) into contiguous
+ * spans for the `coveringSpans` field — a long covered section stays a
+ * handful of ranges instead of hundreds of single-verse entries.
+ */
+export function mergeCoveringSpans(
+	rows: { perek_id: number; pasuk: number }[],
+): ArticleCoveringSpan[] {
+	const sorted = [...rows].sort(
+		(a, b) => a.perek_id - b.perek_id || a.pasuk - b.pasuk,
+	);
+	const spans: ArticleCoveringSpan[] = [];
+	for (const row of sorted) {
+		const last = spans[spans.length - 1];
+		if (
+			last &&
+			last.perekId === row.perek_id &&
+			row.pasuk <= last.pasukTo + 1
+		) {
+			last.pasukTo = Math.max(last.pasukTo, row.pasuk);
+		} else {
+			spans.push({
+				perekId: row.perek_id,
+				pasukFrom: row.pasuk,
+				pasukTo: row.pasuk,
+			});
+		}
+	}
+	return spans;
+}
+
+/** An article create/update/move/delete — `perekIds`/`authorIds` are old ∪ new. */
+export function articleChange(input: {
+	id: number;
+	perekIds: number[];
+	authorIds?: number[];
+	coveringSpans?: ArticleCoveringSpan[];
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "article",
+				id: input.id,
+				perekIds: input.perekIds,
+				...(input.authorIds ? { authorIds: input.authorIds } : {}),
+				...(input.coveringSpans
+					? { coveringSpans: input.coveringSpans }
+					: {}),
+			},
+		],
+	};
+}
+
+/** An author create/update/delete — `oldName` carries a rename's old slug. */
+export function authorChange(input: {
+	id: number;
+	name: string;
+	oldName?: string;
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "author",
+				id: input.id,
+				name: input.name,
+				...(input.oldName ? { oldName: input.oldName } : {}),
+			},
+		],
+	};
+}
+
+/**
+ * A pedia entry create/update/rename/delete. `uniqueName` is the name after
+ * the change (the deleted name on delete); `oldUniqueName` carries the
+ * pre-commit name on renames. For deletes the caller should prefer
+ * `pediaChangesForEntryIds` (server/tanahpedia/paths.ts), which captures
+ * the entity types, synonyms and source perakim while the row still
+ * exists — after the delete they are unresolvable.
+ */
+export function pediaEntryChange(input: {
+	uniqueName: string;
+	oldUniqueName?: string;
+	entityTypes?: string[];
+	synonymNames?: string[];
+	refPerekIds?: number[];
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "pedia-entry",
+				uniqueName: input.uniqueName,
+				...(input.oldUniqueName
+					? { oldUniqueName: input.oldUniqueName }
+					: {}),
+				...(input.entityTypes
+					? { entityTypes: input.entityTypes }
+					: {}),
+				...(input.synonymNames
+					? { synonymNames: input.synonymNames }
+					: {}),
+				...(input.refPerekIds
+					? { refPerekIds: input.refPerekIds }
+					: {}),
+			},
+		],
+	};
 }

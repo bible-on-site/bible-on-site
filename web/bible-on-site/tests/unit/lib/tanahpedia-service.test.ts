@@ -59,6 +59,8 @@ describe("tanahpedia service", () => {
 					updatedAt: "2026-01-02",
 				},
 			])
+			// Stored reading metric (#2607) — queried between entry and entities.
+			.mockResolvedValueOnce([{ word_count: 181, estimated_seconds: 50 }])
 			.mockResolvedValueOnce([
 				{
 					id: "link-1",
@@ -71,6 +73,7 @@ describe("tanahpedia service", () => {
 
 		await expect(getEntryByUniqueName("אברהם")).resolves.toMatchObject({
 			id: "entry-abraham",
+			metric: { wordCount: 181, estimatedSeconds: 50 },
 			entities: [
 				{
 					entryId: "entry-abraham",
@@ -79,6 +82,28 @@ describe("tanahpedia service", () => {
 				},
 			],
 		});
+	});
+
+	it("keeps the entry when the optional metric read fails", async () => {
+		mockQuery
+			.mockResolvedValueOnce([
+				{
+					id: "entry-abraham",
+					uniqueName: "אברהם",
+					title: "אברהם",
+					content: "content",
+					createdAt: "2026-01-01",
+					updatedAt: "2026-01-02",
+				},
+			])
+			// Metric query rejects — the entry must still load, badge-less.
+			.mockRejectedValueOnce(new Error("metric timeout"))
+			.mockResolvedValueOnce([]);
+
+		const entry = await getEntryByUniqueName("אברהם");
+
+		expect(entry).not.toBeNull();
+		expect(entry).not.toHaveProperty("metric");
 	});
 
 	it("returns null when a unique entry name is not found", async () => {
@@ -634,16 +659,35 @@ describe("tanahpedia service", () => {
 		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["12"]);
 	});
 
-	it("logs and returns no entity references when the perek query fails", async () => {
+	it("logs and rethrows when the perek query fails so a false empty is never cached", async () => {
 		const consoleErrorSpy = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => undefined);
 		mockQuery.mockRejectedValueOnce(new Error("database unavailable"));
 
-		await expect(getEntityReferencesForPerek(99)).resolves.toEqual([]);
+		await expect(getEntityReferencesForPerek(99)).rejects.toThrow(
+			"database unavailable",
+		);
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
 			"Failed to fetch entity references for perek 99:",
 			"database unavailable",
+		);
+
+		consoleErrorSpy.mockRestore();
+	});
+
+	it("logs a non-Error rejection verbatim and still rethrows", async () => {
+		const consoleErrorSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
+		mockQuery.mockRejectedValueOnce("raw failure");
+
+		await expect(getEntityReferencesForPerek(99)).rejects.toBe(
+			"raw failure",
+		);
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			"Failed to fetch entity references for perek 99:",
+			"raw failure",
 		);
 
 		consoleErrorSpy.mockRestore();
