@@ -395,7 +395,7 @@ export function SeferPanel({
 
 	return (
 		<section
-			className={`${seferStyles.pageBlank} ${styles.panelRoot}`}
+			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
 		>
 			{/* tablist header: פרשנים - date - מאמרים (RTL order) */}
