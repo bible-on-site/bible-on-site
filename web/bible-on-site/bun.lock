@@ -9,7 +9,7 @@
         "@pdf-lib/fontkit": "1.1.1",
         "bidi-js": "1.1.0",
         "gematry": "1.0.2",
-        "html-flip-book-react": "0.0.0-alpha.67",
+        "html-flip-book-react": "0.0.0-alpha.75",
         "isomorphic-dompurify": "4.6.0",
         "jsdom": "30.1.3",
         "leaflet": "1.9.4",
@@ -958,9 +958,9 @@
 
     "html-escaper": ["html-escaper@2.0.2", "", {}, "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg=="],
 
-    "html-flip-book-react": ["html-flip-book-react@0.0.0-alpha.67", "", { "dependencies": { "html-flip-book-vanilla": "0.0.0-alpha.67" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-q4PCLukz/lw854esw3bwLiXaZnnUencryM/OHg7bcBW7Sl1ZGJfRHtyasipZSr2YyAcmO3ZCLz7guVcdMNGInA=="],
+    "html-flip-book-react": ["html-flip-book-react@0.0.0-alpha.75", "", { "dependencies": { "html-flip-book-vanilla": "0.0.0-alpha.75" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-6981yNvjdaB5htRF9unGftap3YFXTjmlMhodXzxJaWFr9Mj4IMZduJATcKb7oX2V64KSAtu61n8ONdJacMlcmg=="],
 
-    "html-flip-book-vanilla": ["html-flip-book-vanilla@0.0.0-alpha.67", "", { "dependencies": { "hammerjs": "^2.0.8", "throttle-debounce": "^5.0.2", "type-fest": "^5.4.4" } }, "sha512-mQuMamE4ODMN6/VXbO+liT6kmImZYAGGa/0bw/sfNeER+v3LE2sEFj838sfbd91/QLnC4BVvf7l5AzGqyAf9yg=="],
+    "html-flip-book-vanilla": ["html-flip-book-vanilla@0.0.0-alpha.75", "", { "dependencies": { "hammerjs": "^2.0.8", "throttle-debounce": "^5.0.2", "type-fest": "^5.4.4" } }, "sha512-rBgXjXxFGaZ+but7n14j3//UR/djd6YUV1nLN/b7ksqFDZpd8FVYiikvTCpCS7+G5pAwt5nUGpgNJd8HJsXe3Q=="],
 
     "http-assert": ["http-assert@1.5.0", "", { "dependencies": { "deep-equal": "~1.0.1", "http-errors": "~1.8.0" } }, "sha512-uPpH7OKX4H25hBmU6G1jWNaqJGpTXxey+YOUizJUAgu0AjLUeC8D73hTrhvDS5D+GJN1DN1+hhc/eF/wpxtp0w=="],
 
