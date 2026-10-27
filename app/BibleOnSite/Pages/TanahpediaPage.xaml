@@ -26,7 +26,7 @@
                         CornerRadius="14"
                         BorderWidth="0"
                         BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                         VerticalOptions="Center"
                         HorizontalOptions="Fill"
                         Margin="4,0"
@@ -69,7 +69,7 @@
                                     <Label Text="●"
                                            FontSize="10"
                                            VerticalTextAlignment="Center"
-                                           TextColor="{StaticResource Primary}"/>
+                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                     <Label Text="{Binding EntityName}"
                                            FontSize="15"
                                            FontAttributes="Bold"
@@ -88,7 +88,7 @@
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                                                     <Label Text="{Binding Title}"
                                                            FontSize="15"
-                                                           TextColor="{StaticResource Primary}"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                            TextDecorations="Underline"
                                                            VerticalTextAlignment="Center">
                                                         <Label.GestureRecognizers>
@@ -142,7 +142,7 @@
                                             <Label Grid.Column="1"
                                                    FontSize="13"
                                                    VerticalTextAlignment="Center"
-                                                   TextColor="{StaticResource Primary}">
+                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
                                                 <Label.Text>
                                                     <MultiBinding StringFormat="{}{0} ערכים">
                                                         <Binding Path="Parent.Count"/>
@@ -182,7 +182,7 @@
                                                                TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
                                                         <Label Text="{Binding Count}"
                                                                FontSize="12"
-                                                               TextColor="{StaticResource Primary}"
+                                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                                IsVisible="{Binding IsComingSoon, Converter={StaticResource InvertedBoolConverter}}"/>
                                                         <Label Text="בקרוב"
                                                                FontSize="12"
@@ -212,7 +212,7 @@
                             <DataTemplate x:DataType="models:TanahpediaEntry">
                                 <Label Text="{Binding Title}"
                                        FontSize="15"
-                                       TextColor="{StaticResource Primary}"
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                        TextDecorations="Underline"
                                        Margin="0,2">
                                     <Label.GestureRecognizers>
