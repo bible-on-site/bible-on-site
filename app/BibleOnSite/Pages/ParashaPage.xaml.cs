@@ -802,6 +802,19 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
     }
 
+    /// <summary>Feeds the Debug-only תיקון scroll-offset E2E probe (#2624).</summary>
+    private void OnTikkunScrolled(object? sender, ScrolledEventArgs e) =>
+        ReaderScrollTop.NoteScrollOffset(sender, e);
+
+    /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>
+    private void OnTikkunLoaded(object? sender, EventArgs e)
+    {
+        if (sender is Microsoft.Maui.Controls.ScrollView scrollView)
+        {
+            ReaderScrollTop.NoteScrollOffset(sender, scrollView.ScrollY);
+        }
+    }
+
     #endregion
 
     #region Articles
@@ -899,7 +912,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     #region Full Screen
 
-    /// <summary>Text button — returns to the unit view from articles, else scrolls to top.</summary>
+    /// <summary>Text button — returns to the unit view from articles, else
+    /// animates the visible unit's vertical content back to its start (#2624).</summary>
     private void OnTextButtonClicked(object? sender, EventArgs e)
     {
         if (_isShowingArticles)
@@ -908,7 +922,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
         else
         {
-            ParashaCarousel.ScrollTo(_viewModel.CarouselPosition, position: ScrollToPosition.Start, animate: false);
+            ReaderScrollTop.ScrollCurrentUnitToStart(ParashaCarousel, _viewModel.Unit);
         }
     }
 
