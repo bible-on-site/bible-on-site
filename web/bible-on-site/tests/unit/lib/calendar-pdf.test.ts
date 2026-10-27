@@ -411,6 +411,38 @@ describe("merged Friday-Shabbat review block (issue #2365)", () => {
 	});
 });
 
+describe("fitText truncation and page overflow", () => {
+	it("truncates an over-wide day label to the longest fitting prefix", async () => {
+		// A pure-Hebrew label renders as its own reversal, so the drawn op is
+		// a repeated letter either way; truncation only shortens it.
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
+			dayLabel: () => "ץ".repeat(120),
+		});
+		const labelOps = pages[0].map((o) => o.text).filter((t) => /^ץ+$/.test(t));
+		expect(labelOps).toHaveLength(1);
+		expect(labelOps[0].length).toBeGreaterThan(0);
+		expect(labelOps[0].length).toBeLessThan(120);
+	});
+
+	it("moves a month that does not fit onto a new page", async () => {
+		// 119 cells = 17 rows; one row over the page budget forces need() to
+		// break before the month is drawn.
+		const tallMonth = (title: string): CalendarPdfMonth => ({
+			title,
+			cells: Array.from({ length: 7 * 17 }, () => ({})),
+		});
+		const pages = await generateAndExtract({
+			title: "לוח",
+			months: [tallMonth("אלול")],
+			dayLabel: () => "",
+		});
+		expect(pages).toHaveLength(2);
+		expect(pages[1].map((o) => o.text).join("")).toContain(visualOrder("אלול"));
+	});
+});
+
 describe("calendar PDF text stays searchable", () => {
 	it("maps every drawn glyph to Unicode via ToUnicode CMaps", async () => {
 		const pages = await generateAndExtract({
