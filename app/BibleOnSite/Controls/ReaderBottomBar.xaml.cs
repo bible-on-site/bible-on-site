@@ -100,8 +100,8 @@ public partial class ReaderBottomBar : Grid
     {
         PerushimChevronButton.IsEnabled = !isActive;
         PerushimChevronButton.Opacity = isActive ? 0.4 : 1;
-        // Brand accent for the active state (replaces the old one-off purple);
-        // muted gray for inactive. SetAppThemeColor keeps this live on theme flips.
+        // Brand accent marks the active state, muted gray marks inactive.
+        // SetAppThemeColor keeps this live on theme flips.
         if (isActive)
         {
             ArticlesButton.SetAppThemeColor(Button.TextColorProperty,
