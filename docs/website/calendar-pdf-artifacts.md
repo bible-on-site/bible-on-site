@@ -41,6 +41,30 @@ forward entries from the live manifest after verifying their objects. Such
 entries keep their last published PDF until regenerated with `--include`;
 retiring a public key requires an explicit manifest change.
 
+## Consumers (#2622)
+
+Downloads are **on demand**: nothing fetches a PDF — or even the manifest —
+until the user activates Download.
+
+- **Website** (`LearningCalendar` → `CalendarPdfDownload`): the page passes the
+  static manifest URL (`calendarPdfManifestUrl()`) to the client. On
+  activation `resolveCalendarPdfAsset` GETs `manifest.json` once (60 s cache,
+  in-flight dedupe), maps the canonical key to the object URL, and hands it to
+  the browser — the object's `Content-Disposition: attachment; filename=…`
+  makes the browser save natively, so no `/api/calendar-pdf` call and no PDF
+  bytes cross the site. When the manifest is unreachable or the key is not
+  published, the action falls back to the legacy API URL: it re-checks a
+  fresh manifest server-side and its 404/503 map onto "unavailable" /
+  "still being prepared" statuses.
+- **App** (`LearningCalendarViewModel.DownloadPdfAsync`): resolves the same
+  canonical key via `CalendarPdfAssetService`, which lazily GETs and caches
+  the manifest under `ASSETS_BASE_URL` (default: the bucket's virtual-hosted
+  S3 URL, matching the website fallback). A resolved key opens the object URL
+  in the device browser via `Launcher`; a miss or manifest failure opens the
+  legacy `/api/calendar-pdf` URL instead. Repeated taps while a fetch is
+  pending share one request; the artifact key is captured at tap time so a
+  navigation mid-flight cannot change the delivered period.
+
 ## Commands (run from `web/bible-on-site`)
 
 ```bash

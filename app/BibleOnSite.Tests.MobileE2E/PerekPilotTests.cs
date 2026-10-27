@@ -133,15 +133,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // CI ships the generation-matched index; this must be an ordinary local query.
-        // One snapshot read carries the result's text and frame — the live
-        // Text/Location getters it replaces each cost a WDA round-trip.
-        var commentary = Page.RenderedElements("SearchResultTitle")
-            .First(element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal));
-        var title = commentary.Text;
+        var (title, position) = OpenCommentaryResult(" - בראשית א א", "בראשית ברא אלהים");
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
-        var position = commentary.Frame.Location;
-        Platform.Tap(driver, commentary.Element);
-        AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
         Page.ScrollBackTo("InlinePerushName", commentaryName);
