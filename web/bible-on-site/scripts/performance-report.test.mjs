@@ -79,6 +79,17 @@ test("nested insight evidence retains URLs, selectors, source locations and byte
 	assert.ok(audit.evidence.some((e) => e.selector === "#feature"));
 	assert.equal(report.metrics.CLS, null);
 	assert.deepEqual(collectEvidence(null), []);
+	const cached = fixture();
+	cached.configSettings.disableStorageReset = true;
+	assert.equal(
+		summarizeLighthouse(cached, { device: "mobile" }).cacheMode,
+		"retained",
+	);
+	cached.configSettings.disableStorageReset = false;
+	assert.equal(
+		summarizeLighthouse(cached, { device: "mobile" }).cacheMode,
+		"reset",
+	);
 });
 
 test("raw reports distinguish URLs that normalize to the same filename", () => {
@@ -141,6 +152,12 @@ test("summary uses medians, flags failed samples and never presents TBT as field
 	assert.match(text, /feature\.js/);
 	assert.match(performanceMarkdown(reports), /TBT is not INP/);
 	assert.match(text, /No CrUX record/);
+	const warm = { ...reports[0], cacheMode: "retained" };
+	const cold = { ...reports[1], cacheMode: "reset" };
+	const separated = performanceMarkdown([warm, cold]);
+	assert.match(separated, /cache: retained/);
+	assert.match(separated, /cache: reset/);
+	assert.equal((separated.match(/1\/1 valid/g) || []).length, 2);
 	const escaped = performanceMarkdown(
 		[],
 		[

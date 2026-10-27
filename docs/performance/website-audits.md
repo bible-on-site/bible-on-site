@@ -52,6 +52,9 @@ including full Lighthouse JSON, summaries and Web Vitals measurements. Accepted
 Lighthouse issues retain their evidence and are labeled as exemptions instead of
 disappearing from the report. Lighthouse benchmark keys include route and device;
 new series start with this change, while older ambiguous series remain historical.
+CI keeps its existing warm-up navigation and retained browser storage; summaries
+label that cache mode separately from the production collector's reset storage.
+Samples with different cache modes are never combined into one median.
 
 Workers write separate benchmark fragments, merged at global teardown before
 Bencher consumes `benchmark.json`. This avoids concurrent read/modify/write loss.

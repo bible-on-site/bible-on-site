@@ -83,6 +83,12 @@ export function summarizeLighthouse(
 		runtimeError: lhr.runtimeError,
 		warnings: lhr.runWarnings || [],
 		settings: lhr.configSettings,
+		cacheMode:
+			lhr.configSettings?.disableStorageReset === true
+				? "retained"
+				: lhr.configSettings?.disableStorageReset === false
+					? "reset"
+					: "unspecified",
 		categories: Object.fromEntries(
 			Object.entries(lhr.categories).map(([id, category]) => [
 				id,
@@ -146,16 +152,16 @@ const number = (value) =>
 export function performanceMarkdown(reports, field = [], assets = []) {
 	const groups = new Map();
 	for (const report of reports) {
-		const key = `${report.url} (${report.device})`;
+		const key = `${report.url} (${report.device}; cache: ${report.cacheMode || "unspecified"})`;
 		if (!groups.has(key)) groups.set(key, []);
 		groups.get(key).push(report);
 	}
 	const lines = [
 		"# Performance diagnostics",
 		"",
-		"Lab measurements from the recorded machine and Lighthouse device/throttling settings. These are not real-user percentiles. Timing values are milliseconds. Repeated runs use medians; savings estimates overlap and must not be added together.",
+		"Lab measurements from the recorded machine and Lighthouse device/throttling settings. These are not real-user percentiles. Cache mode is kept separate: warmed CI audits retain storage; the production collector resets it in a fresh profile. Timing values are milliseconds. Repeated runs use medians; savings estimates overlap and must not be added together.",
 		"",
-		"| Page / device | Runs | Performance | LCP | TBT | CLS |",
+		"| Page / device / cache | Runs | Performance | LCP | TBT | CLS |",
 		"| --- | ---: | ---: | ---: | ---: | ---: |",
 	];
 	for (const [key, runs] of groups) {

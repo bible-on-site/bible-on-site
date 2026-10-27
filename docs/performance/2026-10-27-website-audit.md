@@ -1,7 +1,7 @@
 # Production website audit: 27 October 2026
 
 Collected 12 Lighthouse 13.5.0 audits from the public HTTPS service between
-12:32 and 12:34 Israel time: three fresh Chrome profiles per URL/device, no
+11:32 and 11:34 Israel time: three fresh Chrome profiles per URL/device, no
 warm-up. Mobile uses Lighthouse's default simulated network and 4x CPU slowdown.
 These are observations from one machine, not real-user p75 or controlled
 before/after measurements. CrUX was unavailable because no API key was set.
