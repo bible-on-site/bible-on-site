@@ -64,6 +64,7 @@ import {
 	removeEntity,
 	updateEntry,
 } from "~/server/tanahpedia/entries";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 describe("tanahpedia entry server functions", () => {
 	beforeEach(() => {
@@ -557,6 +558,7 @@ describe("tanahpedia entry server functions", () => {
 			for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 			process.env.VITE_WEBSITE_URL = "https://site.test";
 			process.env.REVALIDATE_SECRET = "s3cr3t";
+			__resetRevalidateForTests();
 			fetchSpy = vi
 				.spyOn(globalThis, "fetch")
 				.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -570,27 +572,24 @@ describe("tanahpedia entry server functions", () => {
 			fetchSpy.mockRestore();
 		});
 
-		function revalidateCalls() {
-			return fetchSpy.mock.calls.map((call: unknown[]) => {
-				const url = new URL(String(call[0]));
-				return {
-					tag: url.searchParams.get("tag"),
-					path: url.searchParams.get("path"),
-					type: url.searchParams.get("type"),
-				};
+		/** The typed entity changes posted to the website across all calls. */
+		function sentChanges(): Record<string, unknown>[] {
+			return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+				const body = (call[1] as RequestInit | undefined)?.body;
+				return body ? (JSON.parse(String(body)).changes ?? []) : [];
 			});
 		}
 
-		// The pedia surface set: entity refs feeding perek pages, every
-		// entry/category/disambiguation route, and the index.
-		const PEDIA_CALLS = [
-			{ tag: "tanahpedia-entity-refs", path: null, type: null },
-			{ tag: null, path: "/pedia/[slug]", type: "page" },
-			{ tag: null, path: "/pedia", type: null },
-			{ tag: "tanahpedia-mention-refs", path: null, type: null },
-		];
+		/** `entryRelations` resolves the entry name + its relation tables. */
+		function mockEntryRelations(uniqueName: string) {
+			mocks.query.mockImplementation((sql: unknown) => {
+				return String(sql).includes("unique_name FROM tanahpedia_entry")
+					? Promise.resolve([{ unique_name: uniqueName }])
+					: Promise.resolve([]);
+			});
+		}
 
-		it("expires pedia surfaces after an entry create", async () => {
+		it("sends the entry change after an entry create", async () => {
 			mocks.txExecute.mockResolvedValue({ insertId: 1 });
 			mocks.txQueryOne.mockResolvedValue({
 				id: "entry-new",
@@ -610,12 +609,14 @@ describe("tanahpedia entry server functions", () => {
 				},
 			});
 
-			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+			expect(sentChanges()).toEqual([
+				{ kind: "pedia-entry", uniqueName: "שם" },
+			]);
 		});
 
-		it("expires pedia surfaces after a changed update", async () => {
+		it("sends the entry change after a changed update", async () => {
 			mocks.saveRevisionedMock.mockResolvedValue({
-				entry: { id: "entry-1" },
+				entry: { id: "entry-1", unique_name: "שם" },
 				headRevisionId: "rev-2",
 			});
 
@@ -628,7 +629,9 @@ describe("tanahpedia entry server functions", () => {
 				},
 			});
 
-			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+			expect(sentChanges()).toEqual([
+				{ kind: "pedia-entry", uniqueName: "שם" },
+			]);
 		});
 
 		it("skips invalidation when the save was a no-op", async () => {
@@ -650,30 +653,50 @@ describe("tanahpedia entry server functions", () => {
 			expect(fetchSpy).not.toHaveBeenCalled();
 		});
 
-		it("expires pedia surfaces after delete and entity link changes", async () => {
+		it("sends entry changes after delete and entity link changes", async () => {
+			mockEntryRelations("ערך");
 			mocks.execute.mockResolvedValue({ affectedRows: 1 });
 
 			await deleteEntry({ data: "entry-1" });
-			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "ערך",
+					entityTypes: [],
+					synonymNames: [],
+					refPerekIds: [],
+				},
+			]);
 
 			fetchSpy.mockClear();
 			await assignEntity({
 				data: { id: "link-1", entry_id: "entry-1", entity_id: "e-1" },
 			});
-			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "ערך",
+					entityTypes: [],
+					synonymNames: [],
+					refPerekIds: [],
+				},
+			]);
 
 			fetchSpy.mockClear();
+			mocks.queryOne.mockResolvedValue({ entry_id: "entry-1" });
 			await removeEntity({ data: "link-1" });
-			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "ערך",
+					entityTypes: [],
+					synonymNames: [],
+					refPerekIds: [],
+				},
+			]);
 		});
 
-		function notifiedUrls(): string[] {
-			// The urls ride on the third (/pedia index) invalidation call.
-			const url = new URL(String(fetchSpy.mock.calls[2][0]));
-			return url.searchParams.getAll("url");
-		}
-
-		it("reports both the old and new entry urls after a rename", async () => {
+		it("carries both the old and new names after a rename", async () => {
 			mocks.saveRevisionedMock.mockResolvedValue({
 				entry: { id: "entry-1", unique_name: "חדש" },
 				headRevisionId: "rev-2",
@@ -689,40 +712,72 @@ describe("tanahpedia entry server functions", () => {
 				},
 			});
 
-			expect(notifiedUrls()).toEqual(["/pedia/חדש", "/pedia/ישן"]);
-		});
-
-		it("reports the removed entry url after a delete", async () => {
-			mocks.queryOne.mockResolvedValue({ unique_name: "נמחק" });
-			mocks.execute.mockResolvedValue({ affectedRows: 1 });
-
-			await deleteEntry({ data: "entry-1" });
-
-			expect(notifiedUrls()).toEqual(["/pedia/נמחק"]);
-		});
-
-		it("also expires alias pages that lose a target on delete", async () => {
-			mocks.queryOne.mockResolvedValue({ unique_name: "נמחק" });
-			mocks.query.mockResolvedValue([{ name: "כינוי-א" }, { name: "כינוי-ב" }]);
-			mocks.execute.mockResolvedValue({ affectedRows: 1 });
-
-			await deleteEntry({ data: "entry-1" });
-
-			expect(notifiedUrls()).toEqual([
-				"/pedia/נמחק",
-				"/pedia/כינוי-א",
-				"/pedia/כינוי-ב",
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "חדש",
+					oldUniqueName: "ישן",
+				},
 			]);
 		});
 
-		it("reports the linked entry's url when an entity link is removed", async () => {
+		it("carries the removed entry's name after a delete", async () => {
+			mockEntryRelations("נמחק");
+			mocks.execute.mockResolvedValue({ affectedRows: 1 });
+
+			await deleteEntry({ data: "entry-1" });
+
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "נמחק",
+					entityTypes: [],
+					synonymNames: [],
+					refPerekIds: [],
+				},
+			]);
+		});
+
+		it("also expires alias and disambiguation pages that lose a target on delete", async () => {
+			mocks.query.mockImplementation((sql: unknown) => {
+				const text = String(sql);
+				if (text.includes("unique_name FROM tanahpedia_entry"))
+					return Promise.resolve([{ unique_name: "נמחק" }]);
+				if (text.includes("tanahpedia_entry_synonym"))
+					return Promise.resolve([{ name: "כינוי-א" }, { name: "כינוי-ב" }]);
+				return Promise.resolve([]);
+			});
+			mocks.execute.mockResolvedValue({ affectedRows: 1 });
+
+			await deleteEntry({ data: "entry-1" });
+
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "נמחק",
+					entityTypes: [],
+					synonymNames: ["כינוי-א", "כינוי-ב"],
+					refPerekIds: [],
+				},
+			]);
+		});
+
+		it("carries the linked entry's name when an entity link is removed", async () => {
 			mocks.queryOne.mockResolvedValue({ entry_id: "entry-1" });
-			mocks.query.mockResolvedValue([{ unique_name: "ערך" }]);
+			mockEntryRelations("ערך");
 			mocks.execute.mockResolvedValue({ affectedRows: 1 });
 
 			await removeEntity({ data: "link-1" });
 
-			expect(notifiedUrls()).toEqual(["/pedia/ערך"]);
+			expect(sentChanges()).toEqual([
+				{
+					kind: "pedia-entry",
+					uniqueName: "ערך",
+					entityTypes: [],
+					synonymNames: [],
+					refPerekIds: [],
+				},
+			]);
 		});
 	});
 });

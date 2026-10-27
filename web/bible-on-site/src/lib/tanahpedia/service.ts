@@ -980,7 +980,7 @@ export async function getMentionReferencesForPerek(
 			`Failed to fetch mention references for perek ${perekId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -1060,6 +1060,8 @@ export async function getEntityReferencesForPerek(
 			`Failed to fetch entity references for perek ${perekId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a transient failure cannot become a permanently cached
+		// empty decoration set — the caller degrades only on a missing schema.
+		throw error;
 	}
 }

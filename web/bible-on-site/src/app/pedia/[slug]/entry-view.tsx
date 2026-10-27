@@ -36,29 +36,28 @@ import {
 } from "./disambiguation-view";
 
 export async function entryMetadata(slug: string): Promise<Metadata> {
-	try {
-		const name = normalizedUniqueNameFromParam(slug);
-		const entry = await getEntryByUniqueName(name);
-		if (!entry) {
-			const resolution = await resolveSynonymSlug(name);
-			if (resolution.kind === "disambiguation") {
-				return disambiguationMetadata(name);
-			}
-			return { title: "לא נמצא" };
+	const name = normalizedUniqueNameFromParam(slug);
+	const entry = await getEntryByUniqueName(name);
+	if (!entry) {
+		const resolution = await resolveSynonymSlug(name);
+		if (resolution.kind === "disambiguation") {
+			return disambiguationMetadata(name);
 		}
-		/* Stored footnote markers are decorative — normalized HTML keeps them
-		   out of the extracted description (#2615). */
-		const fromContent = entry.content
-			? plainText(normalizeFootnoteHtml(entry.content), 200)
-			: "";
-		return pageMetadata({
-			title: `${entry.title} | תנכפדיה`,
-			description: fromContent.length > 0 ? fromContent : entry.title,
-			canonical: entryHref(entry.uniqueName),
-		});
-	} catch {
+		// "Not found" metadata only for a confirmed-missing slug: a lookup
+		// failure propagates so the stale page (or a failed render) is kept
+		// instead of caching a false negative.
 		return { title: "לא נמצא" };
 	}
+	/* Stored footnote markers are decorative — normalized HTML keeps them
+	   out of the extracted description (#2615). */
+	const fromContent = entry.content
+		? plainText(normalizeFootnoteHtml(entry.content), 200)
+		: "";
+	return pageMetadata({
+		title: `${entry.title} | תנכפדיה`,
+		description: fromContent.length > 0 ? fromContent : entry.title,
+		canonical: entryHref(entry.uniqueName),
+	});
 }
 
 export async function EntryView({ slug }: { slug: string }) {
@@ -81,67 +80,30 @@ export async function EntryView({ slug }: { slug: string }) {
 			? (entry.entities[0].entityType as CategoryKey)
 			: null;
 
-	let siblingEntries: { uniqueName: string; title: string }[] = [];
-	try {
-		if (primaryEntityType) {
-			const list = await getEntriesByEntityType(
-				primaryEntityType as EntityType,
-			);
-			siblingEntries = list.map((e) => ({
-				uniqueName: e.uniqueName,
-				title: e.title,
-			}));
-		} else {
-			const list = await getEntries(500, 0);
-			siblingEntries = list.map((e) => ({
-				uniqueName: e.uniqueName,
-				title: e.title,
-			}));
-		}
-	} catch {
-		siblingEntries = [];
-	}
+	// A load failure rejects the render rather than caching a page missing
+	// its breadcrumb/family/map/occurrence sections — the last good page
+	// keeps serving and the next request retries against a recovered DB.
+	const siblingEntries = (
+		primaryEntityType
+			? await getEntriesByEntityType(primaryEntityType as EntityType)
+			: await getEntries(500, 0)
+	).map((e) => ({
+		uniqueName: e.uniqueName,
+		title: e.title,
+	}));
 
-	let personFamily = null;
 	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
-	try {
-		if (personEntity) {
-			personFamily = await getPersonFamilySummary(
+	const personFamily = personEntity
+		? await getPersonFamilySummary(
 				personEntity.entityId,
 				personEntity.entityName,
-			);
-		}
-	} catch (error) {
-		console.error(
-			"[tanahpedia] person family load failed",
-			{
-				uniqueName: entry.uniqueName,
-				entityId: personEntity?.entityId,
-			},
-			error,
-		);
-		personFamily = null;
-	}
+			)
+		: null;
 
-	let placeMapMarkers: Awaited<ReturnType<typeof getPlaceMapMarkersForEntry>> =
-		[];
-	try {
-		placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
-	} catch {
-		placeMapMarkers = [];
-	}
+	const placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
 
 	const primaryEntity = entry.entities[0] ?? null;
-	let occurrences: Awaited<ReturnType<typeof getEntryOccurrences>> = [];
-	try {
-		occurrences = await getEntryOccurrences(entry.id);
-	} catch (error) {
-		console.error(
-			"[tanahpedia] entry occurrences load failed",
-			entry.uniqueName,
-			error,
-		);
-	}
+	const occurrences = await getEntryOccurrences(entry.id);
 	const entryGraph = buildEntryGraph({
 		entry,
 		personFamily,
