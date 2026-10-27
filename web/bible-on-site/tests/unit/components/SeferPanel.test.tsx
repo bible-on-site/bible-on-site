@@ -675,3 +675,80 @@ describe("pending commentary regression", () => {
 		expect(mockGetArticleForBook).toHaveBeenCalledWith(7);
 	});
 });
+
+describe("reading metrics", () => {
+	it("warns but keeps the article when progress-unit loading fails", async () => {
+		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleProgressUnits.mockRejectedValue(new Error("metric down"));
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
+			fireEvent.click(screen.getByText("תקציר"));
+			expect(await screen.findByText("תוכן")).toBeTruthy();
+			expect(warn).toHaveBeenCalledWith(
+				"Failed to load article reading progress",
+				expect.objectContaining({ articleId: 7 }),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("warns but keeps the commentary when note progress units fail", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockRejectedValue(
+			new Error("metric down"),
+		);
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			expect(await screen.findByText("הערה")).toBeTruthy();
+			expect(warn).toHaveBeenCalledWith(
+				"Failed to load commentary reading progress",
+				expect.objectContaining({ perekId: 1 }),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("weights the commentary progress bar by rendered stored notes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockResolvedValue({
+			1: [
+				{ key: "1:0", wordCount: 5, cumulativeWords: 5 },
+				{ key: "9:9", wordCount: 5, cumulativeWords: 10 },
+			],
+		});
+		// The progress component measures rendered units: jsdom lacks the
+		// Range layout methods and ResizeObserver it calls.
+		Range.prototype.getBoundingClientRect = () =>
+			({ top: 0, bottom: 10 }) as DOMRect;
+		Range.prototype.getClientRects = () =>
+			[] as unknown as DOMRectList;
+		global.ResizeObserver = jest.fn(() => ({
+			observe: jest.fn(),
+			unobserve: jest.fn(),
+			disconnect: jest.fn(),
+		})) as unknown as typeof ResizeObserver;
+		global.requestAnimationFrame = (cb: FrameRequestCallback) => {
+			cb(0);
+			return 0;
+		};
+		global.cancelAnimationFrame = jest.fn();
+		const { container } = await renderPanel(<SeferPanel {...PROPS} />);
+		expect(await screen.findByText("הערה")).toBeTruthy();
+		// Only the rendered note contributes: unit 9:9 is filtered out, so
+		// the bar still mounts with the single rendered unit's weight.
+		const bar = container.querySelector('[role="progressbar"]');
+		expect(bar).not.toBeNull();
+		expect(mockGetNoteProgressUnitsBatch).toHaveBeenCalledWith(1, [1]);
+	});
+});
