@@ -556,6 +556,63 @@ describe("ReadingProgress", () => {
 		delete (document as { fonts?: unknown }).fonts;
 	});
 
+	it("re-measures through ResizeObserver when the content resizes", async () => {
+		let resizeCallback: ResizeObserverCallback | undefined;
+		global.ResizeObserver = jest.fn((cb: ResizeObserverCallback) => {
+			resizeCallback = cb;
+			return {
+				observe: jest.fn(),
+				unobserve: jest.fn(),
+				disconnect: jest.fn(),
+			};
+		}) as unknown as typeof ResizeObserver;
+		const { container } = renderInScroller(
+			<ReadingProgress
+				units={[unit("a", 10)]}
+				scroller=".scroll"
+				content=".content"
+				unitSelector='[data-u="{key}"]'
+			/>,
+		);
+		const scroller = container.querySelector(".scroll") as Element;
+		const content = container.querySelector(".content") as Element;
+		const a = container.querySelector('[data-u="a"]') as Element;
+		setRect(content, 0, 100);
+		setRect(a, 0, 100);
+		rangeLines.set(a, [{ top: 0, height: 100 }]);
+		setScroller(scroller);
+		await remeasure();
+		await act(async () => {
+			resizeCallback?.([], {} as ResizeObserver);
+		});
+		expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
+	});
+
+	it("falls back to documentElement when scrollingElement is absent", async () => {
+		Object.defineProperty(document, "scrollingElement", {
+			value: null,
+			configurable: true,
+		});
+		render(
+			<div>
+				<ReadingProgress
+					units={[unit("a", 10)]}
+					content="html"
+					unitSelector='[data-u="{key}"]'
+				/>
+				<div data-u="a">unit a words</div>
+			</div>,
+		);
+		const root = document.documentElement;
+		const a = document.querySelector('[data-u="a"]') as Element;
+		setRect(a, 400, 200);
+		rangeLines.set(a, [{ top: 400, height: 200 }]);
+		setScroller(root);
+		await remeasure();
+		expect(document.querySelector('[role="progressbar"]')).not.toBeNull();
+		delete (document as { scrollingElement?: unknown }).scrollingElement;
+	});
+
 	it("removes listeners and the observer on unmount", async () => {
 		const disconnect = jest.fn();
 		global.ResizeObserver = jest.fn(() => ({
