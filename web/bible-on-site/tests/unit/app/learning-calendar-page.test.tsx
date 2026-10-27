@@ -70,10 +70,34 @@ describe("LearningCalendar", () => {
 				name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
 			}),
 		).toBeInTheDocument();
-		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365).
+		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365):
+		// one merged block covering both dates, not two duplicate cells.
 		const reviewDays = screen.getAllByRole("button", { name: /חזרה/ });
-		expect(reviewDays.length).toBeGreaterThanOrEqual(2);
-		expect(reviewDays[0]).toHaveAccessibleName(/חזרה: בראשית א - בראשית ה/);
+		expect(reviewDays.length).toBeGreaterThanOrEqual(1);
+		const merged = screen.getByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged).toBeInTheDocument();
+		expect(merged.textContent).toContain('י"ב');
+		expect(merged.textContent).toContain('י"ג');
+		// Saturday's cell is folded into Friday's block, not rendered alone.
+		expect(
+			screen.queryByRole("button", { name: /^י"ג אלול/ }),
+		).not.toBeInTheDocument();
+	});
+
+	it("merges Friday/Saturday review cells in the yearly view", () => {
+		render(<LearningCalendar {...cycleStartProps} />);
+
+		fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+
+		// אלול's mini-month shows the merged 12-13 pair as one block (#2365).
+		const merged = screen.getAllByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged.length).toBe(1);
+		expect(merged[0].textContent).toContain('י"ב');
+		expect(merged[0].textContent).toContain('י"ג');
 	});
 
 	it("navigates to the next month and syncs the ?month= query", () => {
@@ -141,6 +165,18 @@ describe("LearningCalendar", () => {
 			name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
 		});
 		expect(todayCell.textContent).toContain("היום");
+	});
+
+	it("marks a merged review block when today is one of its dates", () => {
+		// 12 Elul is the Friday half of the merged 12-13 review pair (#2365).
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57851212} />,
+		);
+
+		const merged = screen.getByRole("button", {
+			name: /י"ב אלול.*י"ג אלול.*חזרה: בראשית א-ה/,
+		});
+		expect(merged.textContent).toContain("היום");
 	});
 
 	it("returns to today's month via the היום button", () => {

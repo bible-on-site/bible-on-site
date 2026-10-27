@@ -166,6 +166,20 @@ button.cell:hover {
 	line-height: 1.5;
 }
 
+.mergedReviewCell {
+	grid-column: span 2;
+}
+
+.mergedDate {
+	flex: 1;
+	text-align: center;
+}
+
+.dayNumber:has(.mergedDate) {
+	display: flex;
+	width: 100%;
+}
+
 .noneCell {
 	background: transparent;
 	border-color: transparent;
@@ -337,6 +351,10 @@ button.miniCell {
 
 button.miniCell:hover {
 	border-color: var(--link-accent);
+}
+
+.miniMergedCell {
+	grid-column: span 2;
 }
 
 .miniReviewCell {

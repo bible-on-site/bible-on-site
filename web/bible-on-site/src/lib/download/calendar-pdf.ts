@@ -16,7 +16,11 @@ import * as _fontkit from "@pdf-lib/fontkit";
 import { toLetters } from "gematry";
 import type { PDFFont, PDFPage } from "pdf-lib";
 import { PDFDocument, rgb } from "pdf-lib";
-import type { MonthCell } from "@/data/learning-schedule";
+import {
+	type CalendarDay,
+	isMergedReviewPair,
+	type MonthCell,
+} from "@/data/learning-schedule";
 import {
 	bidiRunsWidth,
 	bidiTextWidth,
@@ -167,14 +171,34 @@ export async function generateCalendarPdf(
 				continue;
 			}
 			const day = cell.day;
-			const dim = input.dimmed?.(day) === true;
-			const cx = PAGE_WIDTH - MARGIN - col * CELL_W - CELL_W / 2;
+			// Saturday covered by Friday's merged review block (#2365).
+			// `pairShabbat` keeps `day` out of the type-guard position so it
+			// stays CalendarDay on the else path.
+			const pairShabbat: CalendarDay | undefined = cell.day;
+			if (isMergedReviewPair(month.cells[i - 1]?.day, pairShabbat)) {
+				continue;
+			}
+			const next: CalendarDay | undefined = month.cells[i + 1]?.day;
+			const merged = isMergedReviewPair(day, next) ? next : undefined;
+			const dim =
+				input.dimmed?.(day) === true &&
+				(merged === undefined || input.dimmed?.(merged) === true);
+			// A merged block spans the Friday and Saturday columns; since
+			// higher columns sit further left in the RTL grid, its center
+			// is half a cell left of Friday's center.
+			const cx =
+				PAGE_WIDTH -
+				MARGIN -
+				col * CELL_W -
+				CELL_W / 2 -
+				(merged ? CELL_W / 2 : 0);
+			const cellW = merged ? CELL_W * 2 : CELL_W;
 			const top = y;
 
 			page.drawRectangle({
-				x: cx - CELL_W / 2 + 1,
+				x: cx - cellW / 2 + 1,
 				y: top - CELL_H + 2,
-				width: CELL_W - 2,
+				width: cellW - 2,
 				height: CELL_H - 3,
 				borderColor: LINE,
 				borderWidth: day.status === "review" && !dim ? 0.8 : 0.4,
@@ -183,7 +207,9 @@ export async function generateCalendarPdf(
 			});
 			drawRtlCentered(
 				page,
-				toLetters(day.day, { addQuotes: true }),
+				merged
+					? `${toLetters(day.day, { addQuotes: true })} - ${toLetters(merged.day, { addQuotes: true })}`
+					: toLetters(day.day, { addQuotes: true }),
 				bold,
 				9,
 				cx,
@@ -191,7 +217,7 @@ export async function generateCalendarPdf(
 				dim ? MUTED : INK,
 			);
 			if (day.perekId !== undefined && !dim) {
-				const label = fitText(input.dayLabel(day), font, 6.5, CELL_W - 6);
+				const label = fitText(input.dayLabel(day), font, 6.5, cellW - 6);
 				drawRtlCentered(
 					page,
 					label,
