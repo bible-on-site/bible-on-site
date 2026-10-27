@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { devices, type Page } from "@playwright/test";
 import { expect, test } from "../util/playwright/test-fixture";
 import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
 
@@ -45,14 +45,18 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 	/** אלול 5785 — a uniform month guaranteed to exist (non-leap year). */
 	const ELUL_5785 = "578512";
 	const PDF_URL_PATTERN = "**/api/calendar-pdf**";
-	const PDF_FILENAME = "learning-calendar-578512.pdf";
+	const MONTH_FILENAME = "learning-calendar-578512.pdf";
+	const YEAR_FILENAME = "learning-calendar-year-5785.pdf";
+	const CYCLE_FILENAME = "learning-calendar-cycle-4.pdf";
 	const PDF_BODY = "%PDF-1.4 browser-test stub";
 
 	/**
 	 * Replaces the shared `/api/calendar-pdf` contract with a stub that
-	 * records every request URL. `delayMs` holds the response open so the
-	 * pending-state behaviour is observable mid-flight; `failFirst` answers
-	 * the first request like a missing/not-yet-published artifact would.
+	 * records every request URL and answers with the scope-appropriate
+	 * filename the published artifacts carry (see calendarArtifactFilename).
+	 * `delayMs` holds the response open so the pending-state behaviour is
+	 * observable mid-flight; `failFirst` answers the first request like a
+	 * missing/not-yet-published artifact would.
 	 */
 	function stubCalendarPdf(
 		page: Page,
@@ -60,7 +64,8 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		options: { delayMs?: number; failFirst?: boolean } = {},
 	) {
 		return page.route(PDF_URL_PATTERN, async (route) => {
-			hits.push(route.request().url());
+			const requestUrl = route.request().url();
+			hits.push(requestUrl);
 			if (options.delayMs) {
 				await new Promise((resolve) => setTimeout(resolve, options.delayMs));
 			}
@@ -71,11 +76,18 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 				});
 				return;
 			}
+			const params = new URL(requestUrl).searchParams;
+			const filename =
+				params.get("view") === "cycle"
+					? `learning-calendar-cycle-${params.get("cycle")}.pdf`
+					: params.get("view") === "year"
+						? `learning-calendar-year-${params.get("month")?.slice(0, 4)}.pdf`
+						: `learning-calendar-${params.get("month")}.pdf`;
 			await route.fulfill({
 				body: PDF_BODY,
 				contentType: "application/pdf",
 				headers: {
-					"Content-Disposition": `attachment; filename="${PDF_FILENAME}"`,
+					"Content-Disposition": `attachment; filename="${filename}"`,
 				},
 			});
 		});
@@ -110,7 +122,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		const requested = new URL(hits[0]);
 		expect(requested.searchParams.get("view")).toBe("month");
 		expect(requested.searchParams.get("month")).toBe(ELUL_5785);
-		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+		expect(download.suggestedFilename()).toBe(MONTH_FILENAME);
 	});
 
 	test("requests the selected year in yearly view", async ({ page }) => {
@@ -127,7 +139,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		const requested = new URL(hits[0]);
 		expect(requested.searchParams.get("view")).toBe("year");
 		expect(requested.searchParams.get("month")).toBe(ELUL_5785);
-		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+		expect(download.suggestedFilename()).toBe(YEAR_FILENAME);
 	});
 
 	test("requests the selected cycle in full-cycle view", async ({ page }) => {
@@ -144,7 +156,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		const requested = new URL(hits[0]);
 		expect(requested.searchParams.get("view")).toBe("cycle");
 		expect(requested.searchParams.get("cycle")).toBe("4");
-		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+		expect(download.suggestedFilename()).toBe(CYCLE_FILENAME);
 	});
 
 	test("blocks duplicate requests while pending and keeps the started scope when the view changes", async ({
@@ -166,7 +178,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		const download = await page.waitForEvent("download");
 		expect(hits).toHaveLength(1);
 		expect(new URL(hits[0]).searchParams.get("month")).toBe(ELUL_5785);
-		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+		expect(download.suggestedFilename()).toBe(MONTH_FILENAME);
 	});
 
 	test("reports a failure without claiming success and recovers on retry", async ({
@@ -187,6 +199,31 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 			action.click(),
 		]);
 		expect(hits).toHaveLength(2);
-		expect(download.suggestedFilename()).toBe(PDF_FILENAME);
+		expect(download.suggestedFilename()).toBe(MONTH_FILENAME);
+	});
+
+	test("activates on touch", async ({ browser }, testInfo) => {
+		// The Desktop project's context has no touchscreen, so spin up a
+		// mobile-emulated one — a real tap drives the same activation path.
+		const context = await browser.newContext({
+			...devices["Pixel 5"],
+			baseURL: testInfo.project.use.baseURL,
+		});
+		try {
+			const page = await context.newPage();
+			const hits: string[] = [];
+			await stubCalendarPdf(page, hits);
+			await page.goto(`/לוח?month=${ELUL_5785}`);
+			const action = downloadAction(page);
+			await expect(action).toBeVisible();
+			const [download] = await Promise.all([
+				page.waitForEvent("download"),
+				action.tap(),
+			]);
+			expect(hits).toHaveLength(1);
+			expect(download.suggestedFilename()).toBe(MONTH_FILENAME);
+		} finally {
+			await context.close();
+		}
 	});
 });
