@@ -90,6 +90,11 @@ EC2 instance running nginx as reverse proxy.
 - Routes to ECS via Cloud Map DNS (`website.bible-on-site.local`)
 - VPC DNS resolver (`172.31.0.2`) for service discovery
 
+Replacement sizing/architecture (t4g Graviton candidates, validation harness,
+staged DNS canary and EIP cutover) is analyzed in
+[../router-replacement-validation.md](../router-replacement-validation.md) —
+issue #2561.
+
 > **Note**: Key pair and SSL certificates must be set up manually.
 
 ### 5. `github-oidc.yaml`
