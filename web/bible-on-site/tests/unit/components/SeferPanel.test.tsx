@@ -15,13 +15,18 @@ jest.mock("next/link", () => ({
 		children,
 		href,
 		prefetch: _prefetch,
+		onClick,
 		...props
-	}: {
-		children: React.ReactNode;
-		href: string;
-		prefetch?: boolean;
-	}) => (
-		<a href={href} {...props}>
+	}: React.ComponentProps<"a"> & { prefetch?: boolean }) => (
+		<a
+			href={href}
+			{...props}
+			onClick={(event) => {
+				onClick?.(event);
+				// Browser navigation belongs to Next, which this unit test mocks.
+				event.preventDefault();
+			}}
+		>
 			{children}
 		</a>
 	),

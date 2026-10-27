@@ -71,6 +71,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
         Platform.Tap(Driver!, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
+        SaveDiagnostics("RecentSearchRestoredResults", "passed");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
         SaveDiagnostics("SearchPageClosed", "passed");
