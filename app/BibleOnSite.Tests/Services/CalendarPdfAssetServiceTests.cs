@@ -103,6 +103,37 @@ public class CalendarPdfAssetServiceTests
     }
 
     [Fact]
+    public async Task TryResolve_ManifestWithoutUsableArtifacts_ReturnsNull()
+    {
+        // A valid document carrying no artifact map at all.
+        var service = new CalendarPdfAssetService(
+            new HttpClient(new StubHandler(_ =>
+                Json("""{"version":1,"artifacts":null}"""))),
+            AssetsBase);
+        (await service.TryResolveAsync("cycle:4")).Should().BeNull();
+
+        // An artifact row that lacks its object key.
+        service = new CalendarPdfAssetService(
+            new HttpClient(new StubHandler(_ =>
+                Json("""{"version":1,"artifacts":{"cycle:4":{}}}"""))),
+            AssetsBase);
+        (await service.TryResolveAsync("cycle:4")).Should().BeNull();
+
+        // An artifact row that is itself null.
+        service = new CalendarPdfAssetService(
+            new HttpClient(new StubHandler(_ =>
+                Json("""{"version":1,"artifacts":{"cycle:4":null}}"""))),
+            AssetsBase);
+        (await service.TryResolveAsync("cycle:4")).Should().BeNull();
+
+        // A JSON null document deserializes to a null manifest.
+        service = new CalendarPdfAssetService(
+            new HttpClient(new StubHandler(_ => Json("null"))),
+            AssetsBase);
+        (await service.TryResolveAsync("cycle:4")).Should().BeNull();
+    }
+
+    [Fact]
     public async Task TryResolve_CachesManifestForTtl_OneFetchServesManyKeys()
     {
         var handler = new StubHandler(_ => Json(ManifestJson));

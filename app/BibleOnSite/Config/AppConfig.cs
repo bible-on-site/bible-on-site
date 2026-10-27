@@ -203,9 +203,11 @@ public sealed class AppConfig
     private const string DefaultAssetsBaseUrl =
         "https://bible-on-site-assets.s3.il-central-1.amazonaws.com";
 
+#if DEBUG
     /// <summary>
     /// Local S3-compatible endpoint of the dev stack (RustFS), matching the
     /// website's .dev.env. Android emulator maps host loopback to 10.0.2.2.
+    /// Only the DEBUG branch of GetAssetsBaseUrl consults it.
     /// </summary>
     private static string DevAssetsEndpoint
     {
@@ -218,6 +220,7 @@ public sealed class AppConfig
 #endif
         }
     }
+#endif
 
     /// <summary>
     /// Gets the base URL of the shared public assets bucket that hosts the

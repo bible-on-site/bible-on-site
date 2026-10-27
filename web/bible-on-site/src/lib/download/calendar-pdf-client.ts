@@ -45,6 +45,7 @@ async function fetchManifest(
 	// Defense in depth: the caller pins manifestUrl to the fixed manifest
 	// object, and the URL itself comes from server config (assetsUrl), never
 	// from user input — so this fetch is not an SSRF surface.
+	/* istanbul ignore next -- resolveCalendarPdfAsset gates the same suffix before getManifest runs */
 	if (!manifestUrl.endsWith(CALENDAR_PDF_MANIFEST_OBJECT)) {
 		return null;
 	}

@@ -285,8 +285,12 @@ export function LearningCalendar({
 		return {
 			apiUrl: `/api/calendar-pdf?${params.toString()}`,
 			manifestUrl: pdfManifestUrl,
-			artifactKey: resolved.ok ? resolved.key : "",
-			filename: resolved.ok ? resolved.filename : "learning-calendar.pdf",
+			artifactKey: resolved.ok
+				? resolved.key
+				: /* istanbul ignore next -- defensive: our own params always parse */ "",
+			filename: resolved.ok
+				? resolved.filename
+				: /* istanbul ignore next -- defensive: our own params always parse */ "learning-calendar.pdf",
 		};
 	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 

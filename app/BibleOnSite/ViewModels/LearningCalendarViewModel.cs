@@ -120,8 +120,8 @@ public partial class LearningCalendarViewModel : ObservableObject
     private readonly PerekScheduleService _schedule;
     private readonly PerekDataService _perekData;
     private readonly IAppNavigator _navigator;
-    private readonly ICalendarPdfAssetResolver? _calendarPdfAssets;
-    private readonly ILauncher? _launcher;
+    private readonly ICalendarPdfAssetResolver _calendarPdfAssets;
+    private readonly ILauncher _launcher;
 
     private int _year;
     private int _month;
@@ -146,8 +146,8 @@ public partial class LearningCalendarViewModel : ObservableObject
         _schedule = schedule;
         _perekData = perekData;
         _navigator = navigator;
-        _calendarPdfAssets = calendarPdfAssets;
-        _launcher = launcher;
+        _calendarPdfAssets = calendarPdfAssets ?? CalendarPdfAssetService.Instance;
+        _launcher = launcher ?? Launcher.Default;
     }
 
     [ObservableProperty]
@@ -739,8 +739,7 @@ public partial class LearningCalendarViewModel : ObservableObject
         Uri? resolved = null;
         try
         {
-            resolved = await (_calendarPdfAssets ?? CalendarPdfAssetService.Instance)
-                .TryResolveAsync(artifactKey);
+            resolved = await _calendarPdfAssets.TryResolveAsync(artifactKey);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: resolution failure falls back to the legacy URL
         catch (Exception ex) //NOSONAR — resolution failure falls back to the legacy URL.
@@ -751,7 +750,6 @@ public partial class LearningCalendarViewModel : ObservableObject
         var url = resolved?.ToString()
             ?? $"{Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
                 $"?month={year * 100 + month}&view={view}&cycle={cycle}";
-        var launcher = _launcher ?? Launcher.Default;
-        await launcher.OpenAsync(new Uri(url));
+        await _launcher.OpenAsync(new Uri(url));
     }
 }
