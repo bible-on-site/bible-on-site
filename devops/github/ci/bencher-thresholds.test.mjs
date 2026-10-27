@@ -9,8 +9,11 @@ const ci = readFileSync(
 
 /**
  * Threshold flag groups of the `bencher run` invocation in the Website
- * Performance job. Each `--threshold-measure <name>` starts a group that
- * collects every following `--threshold-*` flag until the next measure.
+ * Performance job. Bencher zips repeated `--threshold-*` options
+ * positionally: the Nth occurrence of each option applies to the Nth
+ * `--threshold-measure`, and `_` leaves a value unset. So the parser
+ * collects each option's values in order and pairs them by index —
+ * proximity in the command does NOT scope a flag to a measure.
  * Returns Map<measure, { [flag]: value }>.
  */
 function thresholdGroups() {
@@ -18,17 +21,27 @@ function thresholdGroups() {
 		.split("- name: Track Performance with Bencher")[1]
 		?.split("      - name: ")[0];
 	assert.ok(step, "the Bencher step must exist in ci.yml");
-	const groups = new Map();
-	let current;
-	for (const flag of step.matchAll(/--(threshold-[a-z-]+)\s+(\S+)/g)) {
+	const commandLines = step
+		.split("\n")
+		.filter((line) => !line.trimStart().startsWith("#"))
+		.join("\n");
+	const values = new Map();
+	for (const flag of commandLines.matchAll(/--(threshold-[a-z-]+)\s+(\S+)/g)) {
 		const [, option, value] = flag;
-		if (option === "threshold-measure") {
-			current = {};
-			assert.ok(!groups.has(value), `duplicate threshold for ${value}`);
-			groups.set(value, current);
-		} else if (current) {
-			current[option] = value;
+		if (!values.has(option)) values.set(option, []);
+		values.get(option).push(value);
+	}
+	const measures = values.get("threshold-measure") ?? [];
+	const groups = new Map();
+	for (const [index, measure] of measures.entries()) {
+		assert.ok(!groups.has(measure), `duplicate threshold for ${measure}`);
+		const group = {};
+		for (const [option, occurrences] of values) {
+			if (option === "threshold-measure" || index >= occurrences.length)
+				continue;
+			group[option] = occurrences[index];
 		}
+		groups.set(measure, group);
 	}
 	return groups;
 }
@@ -64,13 +77,33 @@ test("cls_ratio uses a static Lighthouse-good bound and no sampling options", ()
 	assert.equal(cls["threshold-test"], "static");
 	assert.equal(cls["threshold-upper-boundary"], "0.1");
 	assert.equal(cls["threshold-lower-boundary"], "_");
-	// Bencher rejects history-sampling options for the static test.
-	for (const option of [
-		"threshold-min-sample-size",
-		"threshold-max-sample-size",
-		"threshold-window",
-	])
+	// Bencher rejects history-sampling values for the static test. Every
+	// other group passes --threshold-max-sample-size, and the positional
+	// zip would give cls_ratio a stray 64 unless it is explicitly unset.
+	assert.equal(
+		cls["threshold-max-sample-size"],
+		"_",
+		"static test requires an explicitly unset max sample size",
+	);
+	for (const option of ["threshold-min-sample-size", "threshold-window"])
 		assert.equal(cls[option], undefined, `${option} is invalid for static`);
+});
+
+test("every threshold group uses the same option set", () => {
+	// Bencher pairs the Nth occurrence of each --threshold-* option with the
+	// Nth --threshold-measure. A group that omits an option the others use
+	// silently absorbs the value meant for the next group (the cls_ratio
+	// sample-size bug of #2718); a value must be `_` to unset it instead.
+	const signatures = [...thresholdGroups().entries()].map(
+		([measure, group]) => [measure, Object.keys(group).sort().join(",")],
+	);
+	const [first, expected] = signatures[0];
+	for (const [measure, signature] of signatures)
+		assert.equal(
+			signature,
+			expected,
+			`${measure} uses different threshold options than ${first}`,
+		);
 });
 
 test("the shared ratio measure stays percentage for the sefer-flip baseline", () => {

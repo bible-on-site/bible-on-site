@@ -897,7 +897,9 @@ jobs:
           # test on a zero CLS baseline collapses the upper boundary limit to
           # 0, so every nonzero (still-good) reading alerts (#2718). Static
           # tests reject the sample-size and window options. 0.1 is the
-          # Lighthouse "good" CLS bound.
+          # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
+          # options positionally across groups, so cls_ratio must pass
+          # --threshold-max-sample-size _ to leave it unset (#2718).
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
@@ -912,7 +914,7 @@ jobs:
             --threshold-measure size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
-            --threshold-measure cls_ratio --threshold-test static --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
+            --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
