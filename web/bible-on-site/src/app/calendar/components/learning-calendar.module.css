@@ -171,16 +171,12 @@ button.cell:hover {
 }
 
 .mergedDate {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.15rem;
+	flex: 1;
+	text-align: center;
 }
 
 .dayNumber:has(.mergedDate) {
 	display: flex;
-	gap: 0.9rem;
-	justify-content: space-around;
 	width: 100%;
 }
 

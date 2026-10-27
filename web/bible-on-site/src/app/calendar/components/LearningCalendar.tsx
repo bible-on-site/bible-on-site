@@ -619,13 +619,15 @@ function CalendarCell({
 		.filter(Boolean)
 		.join(" ");
 
+	// Merged block: each date sits centered over its own weekday column —
+	// the column headers already mark ו/ש, so no day letters inside (#2365).
 	const dayNumber = mergedWith ? (
 		<span className={styles.dayNumber}>
 			<span className={styles.mergedDate}>
-				ו {toLetters(day.day, { addQuotes: true })}
+				{toLetters(day.day, { addQuotes: true })}
 			</span>
 			<span className={styles.mergedDate}>
-				ש {toLetters(mergedWith.day, { addQuotes: true })}
+				{toLetters(mergedWith.day, { addQuotes: true })}
 			</span>
 			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
 		</span>
