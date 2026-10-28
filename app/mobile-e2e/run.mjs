@@ -12,6 +12,7 @@ import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
@@ -106,9 +107,24 @@ const shutdownMonitor = process.env.MOBILE_E2E_DOTNET_STACK
     process.env.MOBILE_E2E_DOTNET_STACK, execute)) : undefined;
 let test;
 let diagnosticsFailed = false;
-const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-  "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
-  resolve(artifacts, "device-live.log")) : undefined;
+const androidEmulator = platform === "android" && /^emulator-\d+$/.test(process.env.MOBILE_UDID);
+let nativeStream;
+if (platform === "ios") {
+  nativeStream = startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+    "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
+    resolve(artifacts, "device-live.log"));
+} else if (androidEmulator) {
+  try {
+    // Record before the first AUT launch so a process that dies between tests
+    // still leaves its PID, lifecycle and native crash output in this run.
+    nativeStream = startNativeLog(androidAdb, ["-s", process.env.MOBILE_UDID,
+      "logcat", "-b", "main,system,crash,events", "-v", "threadtime", "-T", "1"],
+      resolve(artifacts, "device-live.log"));
+  } catch (error) {
+    writeFileSync(resolve(artifacts, "android-native-log-start-error.txt"), String(error));
+    console.error("Could not start Android native log capture:", error.message);
+  }
+}
 
 async function sampleIosApp(phase) {
   const captureSignal = AbortSignal.timeout(15000);
@@ -216,8 +232,22 @@ try {
   try {
     await phase("native-log-stream", () => nativeStream?.stop());
   } catch (error) {
-    diagnosticsFailed = true;
+    if (platform === "ios") diagnosticsFailed = true;
+    else writeFileSync(resolve(artifacts, "android-native-log-stop-error.txt"), String(error));
     console.error("Could not finish native log stream:", error);
+  }
+  if (androidEmulator && process.exitCode !== 0) {
+    // Failure-only, read-only collection: never attach to a healthy app, root
+    // the emulator, retry the test, or extend the shared pilot deadline.
+    try {
+      await phase("android-crash-diagnostics", () => collectAndroidCrashDiagnostics({
+        adb: androidAdb, udid: process.env.MOBILE_UDID, artifacts, runStarted,
+        timeoutMs: budget(15000), execute,
+      }));
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "android-crash-diagnostics-error.txt"), String(error));
+      console.error("Could not capture Android crash diagnostics:", error.message);
+    }
   }
   if (platform === "ios" && test && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
