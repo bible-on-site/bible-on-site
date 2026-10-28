@@ -723,7 +723,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (_pendingArticleId is int pendingArticleId)
         {
             _pendingArticleId = null;
-            await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+            await ShellAppNavigator.Instance.GoToAsync($"articleDetail?articleId={pendingArticleId}");
         }
     }
 
@@ -859,7 +859,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             if (shell != null &&
                 !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
             {
-                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
             }
             await _viewModel.NavigateToPerekAsync(target.PerekId);
             // A link that landed while the load-failure panel was up replaces
@@ -867,7 +867,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             CarouselLoadingOverlay.Hide();
             if (target.ArticleId is int articleId && Shell.Current != null)
             {
-                await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+                await ShellAppNavigator.Instance.GoToAsync($"articleDetail?articleId={articleId}");
             }
         });
     }

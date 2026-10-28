@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
@@ -44,7 +45,7 @@ public partial class AuthorsPage : ContentPage
         {
             // Navigate to author's articles page
             var encodedName = Uri.EscapeDataString(author.Name);
-            await Shell.Current.GoToAsync($"ArticlesPage?authorId={author.Id}&authorName={encodedName}");
+            await ShellAppNavigator.Instance.GoToAsync($"ArticlesPage?authorId={author.Id}&authorName={encodedName}");
         }
     }
 }

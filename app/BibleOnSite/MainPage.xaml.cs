@@ -14,7 +14,7 @@ public partial class MainPage : ContentPage
 
 	private async void OnGoToPerekClicked(object sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("//PerekPage");
+		await ShellAppNavigator.Instance.GoToAsync("//PerekPage");
 	}
 
 	private async void OnCounterClicked(object sender, EventArgs e)

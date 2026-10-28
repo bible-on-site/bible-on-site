@@ -25,6 +25,21 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
+        // A managed exception that reaches a native boundary is a SIGABRT and
+        // the .ips report strips its stack — log every fatal channel to the
+        // device console before the runtime kills the process.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Console.Error.WriteLine($"Unhandled exception (terminating={e.IsTerminating}): {e.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Console.Error.WriteLine($"Unobserved task exception: {e.Exception}");
+            e.SetObserved();
+        };
+#if IOS || MACCATALYST
+        ObjCRuntime.Runtime.MarshalManagedException += (_, e) =>
+            Console.Error.WriteLine($"Managed exception escaping to native ({e.ExceptionMode}): {e.Exception}");
+#endif
+
         var builder = MauiApp.CreateBuilder();
 #pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices
         builder
