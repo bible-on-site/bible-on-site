@@ -2,9 +2,9 @@
 
 The [daily bulletin stack](cloudformation/daily-bulletin-ses.yaml) adds regional email delivery and subscription events to the existing admin ECS service. An admin background worker polls one standard SQS queue. The queue accepts internal send jobs and raw SES events published through SNS. There is no Lambda worker, SMTP password, dedicated IP pool, NAT gateway, new VPC, or change to existing public web routing in this stack.
 
-The application's persisted audience must remain **TEST** after deployment. Creating a `real` subscription topic or importing legacy subscribers does not authorize real-audience delivery. The later admin audience switch is a separate operator action. Do not enable a recurring bulletin schedule as part of the infrastructure rollout.
+SES production access is now granted in `il-central-1`, so AWS no longer requires recipient identity verification there. The application's persisted audience must remain **TEST** after deployment. Creating a `real` subscription topic or importing legacy subscribers does not authorize real-audience delivery. The later admin audience switch is a separate operator action. Do not enable a recurring bulletin schedule as part of the infrastructure rollout.
 
-## Baseline inspected on 2026-10-28
+## Initial baseline inspected on 2026-10-28
 
 | Item | Existing state |
 | --- | --- |
@@ -54,7 +54,7 @@ The runtime receives no Route 53 writes, IAM writes, SES identity/list administr
 
 ## Subscription and worker contracts
 
-SES supports one contact list per account. This stack creates one list with `test` and `real` topics, both defaulting to `OPT_OUT`. If a list already exists when deploying, stop and reconcile its ownership rather than creating a competing list or overwriting preferences. Provision only explicit test-topic opt-ins for the two approved test recipients; keep their addresses in private configuration or database records, never in the template or runbook. Legacy import must preserve known opt-outs and must not subscribe those addresses to `test`. See [SES list management](https://docs.aws.amazon.com/ses/latest/dg/sending-email-list-management.html).
+SES supports one contact list per account. This stack creates one list with `test` and `real` topics, both defaulting to `OPT_OUT`. If a list already exists when deploying, stop and reconcile its ownership rather than creating a competing list or overwriting preferences. Provision test-topic opt-ins only for explicitly authorized recipients and preserve subsequent opt-outs; keep their addresses in private configuration or database records, never in the template or runbook. Legacy import must preserve known opt-outs and must not subscribe those addresses to `test`. See [SES list management](https://docs.aws.amazon.com/ses/latest/dg/sending-email-list-management.html).
 
 Send one recipient per SES API request. Pass the contact-list and selected topic through `ListManagementOptions`, include `{{amazonSESUnsubscribeUrl}}` in the HTML, and use UTF-8 with the bulletin's RTL markup. Easy DKIM and single-recipient delivery allow SES to add its native unsubscribe controls. Check current contact preferences before dispatch; never reset an unsubscribe by blindly upserting `OPT_IN`. See [SES subscription management](https://docs.aws.amazon.com/ses/latest/dg/sending-email-subscription-management.html).
 
@@ -70,7 +70,7 @@ The other body is the raw SES event object, including `eventType` and `mail.mess
 
 Both paths must tolerate duplicate and out-of-order messages. Atomically claim the database delivery before sending, retain SES message IDs, process events idempotently, and do not let a late `SEND` event erase a bounce, complaint or unsubscribe. Delete a queue message only after the durable state change succeeds. An accepted SES API request is not proof of inbox delivery. A timeout or task shutdown after the request may leave an uncertain send: reconcile it with persisted IDs and events instead of automatically sending the same email again. The 120-second visibility timeout is not a duplicate-send guarantee. Keep request handling below that timeout or extend visibility while safely processing. Check every partial failure returned by `SendMessageBatch`.
 
-The current sandbox limit is account-wide. Pace sends at no more than one recipient/second across overlapping ECS tasks, including rolling deployments; one loop per process does not provide a global rate limit. Use long polling and a finite SDK timeout, handle shutdown cleanly, and keep readiness failures from crashing the admin HTTP service.
+Sending quotas apply across the account in each region. Pace sends against the current SES quota across overlapping ECS tasks, including rolling deployments; one loop per process does not provide a global rate limit. The initial sandbox allowed 200 recipients per rolling 24 hours and one recipient/second; production access is now granted in `il-central-1`. Use long polling and a finite SDK timeout, handle shutdown cleanly, and keep readiness failures from crashing the admin HTTP service.
 
 ## Validate and deploy
 
@@ -115,7 +115,7 @@ The transport's physical contact address field is optional and is not a readines
 
 Set the admin container's `stopTimeout` to 120 seconds in that cloned task definition. The current task omitted it and therefore used Fargate's 30-second default. The worker cancels queue polling on shutdown and lets a claimed SES request, database update and queue acknowledgment finish; their combined bounded network calls can exceed 30 seconds. Keep the existing image-tag deployment contract so subsequent ECR `latest` events continue rolling the service. Preserve CPU, memory, desired count, roles, secrets and network settings. See [ECS container stop timeout](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html).
 
-The sandbox requires verification of both real Gmail test recipients in `il-central-1` as well as the domain sender. An operator must initiate recipient identity verification and each mailbox owner must follow the verification email link. This template does not send those verification emails and does not request production access. A simulator address can validate SES delivery plumbing before mailbox verification. Raising production access later removes the recipient-verification requirement, but does not change the application's TEST gate. See [moving out of the sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html).
+If deploying in a region or account still in the SES sandbox, recipient identities must be verified as well as the domain sender. An operator initiates recipient identity verification and each mailbox owner follows the verification email link; a simulator address can validate delivery plumbing beforehand. This template does not send verification emails or request production access. Production access is already granted in `il-central-1`, so recipient identity verification is no longer required there. This does not change the application's TEST gate or override an unsubscribe. See [moving out of the sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html).
 
 Before considering rollout complete, verify TEST remains selected; send only the explicitly approved test bulletin; confirm each recipient's separate delivery/event record; check rendered Hebrew/RTL and unsubscribe handling; and verify queue and DLQ health. Do not activate `real` merely to test. Do not log message bodies, subscriber addresses, verification tokens or credentials.
 
