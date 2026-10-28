@@ -1,5 +1,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { after, type NextRequest, NextResponse } from "next/server";
+import { seferIdByPerekId } from "@/lib/dedications/service";
 import {
 	ChangeValidationError,
 	parseEntityChanges,
@@ -8,6 +9,7 @@ import {
 	type ResolvedInvalidation,
 	resolveEntityChanges,
 } from "@/lib/revalidate/dependencies";
+import { seferPerekDedicationsTag } from "@/lib/revalidate/tags";
 import { collectSubmissionPaths, submitIndexNow } from "@/lib/seo/indexnow";
 
 /**
@@ -176,8 +178,16 @@ export async function POST(request: NextRequest) {
 	}
 
 	try {
+		// Preserve the manual per-perek tag ingress: the book's spread map
+		// now uses one aggregate tag to stay below Next's per-entry tag limit.
+		const manualTags = tag ? [tag] : [];
+		const perekMatch = /^perek:([1-9]\d*):dedications$/.exec(tag ?? "");
+		if (perekMatch) {
+			const seferId = seferIdByPerekId(Number(perekMatch[1]));
+			if (seferId !== undefined) manualTags.push(seferPerekDedicationsTag(seferId));
+		}
 		const work: InvalidationWork = {
-			tags: [...(resolved?.tags ?? []), ...(tag ? [tag] : [])],
+			tags: [...(resolved?.tags ?? []), ...manualTags],
 			paths: [
 				...(resolved?.paths ?? []),
 				...(path && !path.includes("[") ? [path] : []),
