@@ -26,6 +26,7 @@ export function parseOptions(args) {
 			"expected-version": { type: "string" },
 		},
 	});
+	const { "expected-version": expectedVersion } = values;
 	assert.ok(
 		["website", "admin", "api"].includes(values.service),
 		"--service must be website, admin, or api",
@@ -40,12 +41,11 @@ export function parseOptions(args) {
 	);
 	if (values.service !== "api")
 		assert.equal(
-			values["expected-version"],
+			expectedVersion,
 			undefined,
 			"Only API accepts --expected-version",
 		);
-	else if (values["expected-version"] !== undefined)
-		assertPlainVersion(values["expected-version"]);
+	else if (expectedVersion !== undefined) assertPlainVersion(expectedVersion);
 	return values;
 }
 
@@ -114,9 +114,15 @@ export async function verifyImage(options, dependencies = {}) {
 	const now = dependencies.now ?? Date.now;
 	const sleep =
 		dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
-	const { service, image, arch } = options;
+	const {
+		service,
+		image,
+		arch,
+		"expected-version": requestedVersion,
+		"db-url": externalDbUrl,
+	} = options;
 	assert.equal(
-		options["db-url"],
+		externalDbUrl,
 		undefined,
 		"API qualification owns its independent MySQL server; external DB URLs are forbidden",
 	);
@@ -149,13 +155,13 @@ export async function verifyImage(options, dependencies = {}) {
 	const evidence = { service, image, arch, imageId: metadata.Id };
 	if (service !== "api")
 		assert.equal(
-			options["expected-version"],
+			requestedVersion,
 			undefined,
 			"Only API accepts --expected-version",
 		);
 	if (service === "api") {
 		const expectedVersion =
-			options["expected-version"] ??
+			requestedVersion ??
 			apiPackageVersion(
 				readFileSync(
 					new URL("../../../web/api/Cargo.toml", import.meta.url),

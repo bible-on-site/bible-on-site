@@ -104,9 +104,10 @@ export function assertApiResponses(health, graphql, expectedVersion) {
 		data.searchArticles.hits.map(({ articleId }) => articleId),
 		[1],
 	);
-	assert.equal(data.searchArticles.hits[0].authorName, "Fixture author");
-	assert.equal(data.searchArticles.hits[0].source, "Fixture book א");
-	assert.match(data.searchArticles.hits[0].excerpt, /alpha/);
+	const [firstHit] = data.searchArticles.hits;
+	assert.equal(firstHit.authorName, "Fixture author");
+	assert.equal(firstHit.source, "Fixture book א");
+	assert.match(firstHit.excerpt, /alpha/);
 	assert.equal(data.dedications.length, 2);
 	for (const [index, dedication] of [...data.dedications]
 		.sort((a, b) => a.id - b.id)
