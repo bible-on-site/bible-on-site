@@ -22,6 +22,8 @@ engines:
       - "data/annotations/test_golden_set.py"
       - "data/annotations/encoders.py"
       - "data/annotations/test_encoders.py"
+      - "data/annotations/publish.py"
+      - "data/annotations/test_publish.py"
       - "app/devops/verify_android_dex_metadata.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
