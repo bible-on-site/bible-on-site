@@ -160,6 +160,7 @@ export const MODULES = {
 			...SHARED_CI_PATHS,
 			"devops/deploy/data-deploy",
 			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
 			"devops/daily-bulletin-infra.test.mjs",
 			"web/bulletin/assets/email",
 			"web/bulletin/scripts/prepare-email-assets.mjs",
@@ -211,8 +212,13 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  */
 export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
-	const bulletinMigration = "data/mysql/tanah_daily_bulletin_upgrade.sql";
-	const hasBulletinMigration = dataFiles.includes(bulletinMigration);
+	const bulletinMigrations = [
+		"data/mysql/tanah_daily_bulletin_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+	];
+	const hasBulletinMigration = dataFiles.some((file) =>
+		bulletinMigrations.includes(file),
+	);
 	return (
 		dataFiles.length > 0 &&
 		!changedFiles.some((file) =>
@@ -221,7 +227,7 @@ export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
-				file === bulletinMigration ||
+				bulletinMigrations.includes(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.
 				(hasBulletinMigration &&

@@ -6,6 +6,7 @@
 	"perushim_structure.sql",
 	"perushim_data.sql",
 	"tanah_daily_bulletin_upgrade.sql",
+	"tanah_daily_bulletin_whatsapp_upgrade.sql",
 	"tanah_article_covering_source_upgrade.sql",
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
