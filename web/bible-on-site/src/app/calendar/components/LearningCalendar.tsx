@@ -62,6 +62,8 @@ const VIEW_MODES = [
 
 type ViewMode = (typeof VIEW_MODES)[number]["key"];
 
+type CalendarMonth = { ref: MonthRef; cells: MonthCell[] };
+
 function parseViewParam(raw: string | null): ViewMode {
 	return VIEW_MODES.some((mode) => mode.key === raw)
 		? (raw as ViewMode)
@@ -117,26 +119,50 @@ export function LearningCalendar({
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const query = searchParams.toString();
-	const pendingQuery = useRef<{ base: string; value: string } | null>(null);
 	const today = useMemo(
 		() => parseNumericalDateToHebcalDate(todayDateNumber),
 		[todayDateNumber],
 	);
 	const window = useMemo(() => getCalendarCycleWindow(today), [today]);
-	const urlSelection = useMemo(() => {
+	const urlParams = useMemo(() => {
 		const params = new URLSearchParams(query);
-		const month = parseMonthParam(params.get(MONTH_QUERY_PARAM));
-		const cycle = parseCycleParam(params.get(CYCLE_QUERY_PARAM));
 		return {
-			month: clampCalendarMonth(
-				month ?? { year: initialYear, month: initialMonth },
-				window,
-			),
+			month: parseMonthParam(params.get(MONTH_QUERY_PARAM)),
 			view: parseViewParam(params.get(VIEW_QUERY_PARAM)),
-			cycle: cycle === null ? null : Math.min(cycle, window.next.number),
+			cycle: parseCycleParam(params.get(CYCLE_QUERY_PARAM)),
 		};
-	}, [query, window, initialYear, initialMonth]);
-
+	}, [query]);
+	const urlMonth = clampCalendarMonth(
+		urlParams.month ?? { year: initialYear, month: initialMonth },
+		window,
+	);
+	const urlCycle =
+		urlParams.cycle === null
+			? null
+			: Math.min(urlParams.cycle, window.next.number);
+	const windowBounds = `${window.minMonth.year}:${window.minMonth.month}:${window.maxMonth.year}:${window.maxMonth.month}:${window.next.number}`;
+	// A clock tick with unchanged limits is the same committed selection.
+	const urlSelection = useMemo(
+		() => ({
+			query,
+			windowBounds,
+			month: { year: urlMonth.year, month: urlMonth.month },
+			view: urlParams.view,
+			cycle: urlCycle,
+		}),
+		[
+			query,
+			windowBounds,
+			urlMonth.year,
+			urlMonth.month,
+			urlParams.view,
+			urlCycle,
+		],
+	);
+	const pendingQuery = useRef<{
+		base: typeof urlSelection;
+		value: string;
+	} | null>(null);
 	const [viewed, setViewed] = useState<MonthRef>(urlSelection.month);
 	const [viewMode, setViewMode] = useState<ViewMode>(urlSelection.view);
 	const [viewedCycle, setViewedCycle] = useState<number | null>(
@@ -146,7 +172,6 @@ export function LearningCalendar({
 	// Apply actual URL changes (back/forward, shared links), without replacing
 	// an optimistic selection with the old URL while navigation is pending.
 	useEffect(() => {
-		if (pendingQuery.current?.base !== query) pendingQuery.current = null;
 		setViewed((current) =>
 			compareMonths(urlSelection.month, current) === 0
 				? current
@@ -154,14 +179,14 @@ export function LearningCalendar({
 		);
 		setViewMode(urlSelection.view);
 		setViewedCycle(urlSelection.cycle);
-	}, [query, urlSelection]);
+	}, [urlSelection]);
 
 	const pushParams = useCallback(
 		(updates: { month?: MonthRef; view?: ViewMode; cycle?: number }) => {
 			// Compose rapid actions until Next commits a new URL snapshot.
 			const pending = pendingQuery.current;
 			const params = new URLSearchParams(
-				pending?.base === query ? pending.value : query,
+				pending?.base === urlSelection ? pending.value : urlSelection.query,
 			);
 			if (updates.month) {
 				params.set(MONTH_QUERY_PARAM, formatMonthParam(updates.month));
@@ -173,10 +198,10 @@ export function LearningCalendar({
 				params.set(CYCLE_QUERY_PARAM, String(updates.cycle));
 			}
 			const value = params.toString();
-			pendingQuery.current = { base: query, value };
+			pendingQuery.current = { base: urlSelection, value };
 			router.replace(`?${value}`, { scroll: false });
 		},
-		[router, query],
+		[router, urlSelection],
 	);
 
 	const navigateMonth = useCallback(
@@ -210,13 +235,10 @@ export function LearningCalendar({
 		[viewed, window],
 	);
 
-	// The cycle owning most of the visible month: the cycle of the first
-	// scheduled day, else of the last scheduled day (inter-cycle gap months).
+	// The first scheduled day identifies the visible month's cycle.
 	const displayedCycle = useMemo(() => {
 		const days = cells.flatMap((cell) => (cell.day ? [cell.day] : []));
-		const anchor =
-			days.find((day) => day.cycle !== undefined) ??
-			[...days].reverse().find((day) => day.cycle !== undefined);
+		const anchor = days.find((day) => day.cycle !== undefined);
 		return anchor?.cycle !== undefined ? getCycle(anchor.cycle) : null;
 	}, [cells]);
 
@@ -355,10 +377,10 @@ export function LearningCalendar({
 
 	const cycleMonths = useMemo(() => {
 		if (viewMode !== "cycle") {
-			return [] as MonthCell[][];
+			return [] as CalendarMonth[];
 		}
 		const cycle = getCycle(resolvedCycle);
-		const months: MonthCell[][] = [];
+		const months: CalendarMonth[] = [];
 		let ref: MonthRef = getCycleStartMonth(cycle);
 		const endRef: MonthRef = {
 			year: cycle.end.year,
@@ -369,7 +391,10 @@ export function LearningCalendar({
 			guard < 50 && compareMonths(ref, endRef) <= 0;
 			guard += 1
 		) {
-			months.push(buildVisibleCalendarMonth(ref.year, ref.month, window));
+			months.push({
+				ref,
+				cells: buildVisibleCalendarMonth(ref.year, ref.month, window),
+			});
 			ref = nextMonth(ref);
 		}
 		return months;
@@ -598,13 +623,10 @@ export function LearningCalendar({
 
 			{viewMode === "cycle" && (
 				<div className={styles.yearGrid}>
-					{cycleMonths.map((cellsForMonth) => (
+					{cycleMonths.map(({ ref, cells: cellsForMonth }) => (
 						<MiniMonth
-							key={
-								cellsForMonth.find((cell) => cell.day !== undefined)?.day
-									?.dateNumber
-							}
-							title={getMonthLabelForCells(cellsForMonth)}
+							key={ref.year * 10000 + ref.month * 100 + 1}
+							title={getMonthLabel(ref)}
 							cells={cellsForMonth}
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
@@ -765,13 +787,6 @@ function CalendarCell({
 			)}
 		</button>
 	);
-}
-
-function getMonthLabelForCells(cells: MonthCell[]): string {
-	const day = cells.find((cell) => cell.day !== undefined)?.day;
-	return day === undefined
-		? ""
-		: getMonthLabel({ year: day.date.year, month: day.date.getUniformMonth() });
 }
 
 function MiniMonth({

@@ -479,6 +479,133 @@ describe("LearningCalendar", () => {
 		expect(screen.getByText(/מחזור י"א \(משוער\):/)).toBeInTheDocument();
 	});
 
+	it("navigates to the previous year while retaining the calendar query", () => {
+		setSearchParam("578512", { view: "year", campaign: "keep" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "שנה קודמת" }));
+		expect(mockReplace).toHaveBeenLastCalledWith(
+			"?month=578412&view=year&campaign=keep",
+			{ scroll: false },
+		);
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"ה'תשפ\"ד",
+		);
+	});
+
+	it("keeps the majority cycle when the following cycle begins late in the month", () => {
+		setSearchParam("580309");
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={58030925} />,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("8");
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ח'",
+		);
+	});
+
+	it("keeps pending month navigation when the live day changes inside the same window", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ month: "578512", campaign: "keep" }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+		rerender(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57851208} />,
+		);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+		expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5786");
+	});
+
+	it("drops pending fields when a live default-month change resets the visible selection", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ campaign: "keep" }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		rerender(
+			<LearningCalendar
+				initialYear={5786}
+				initialMonth={2}
+				todayDateNumber={57860201}
+			/>,
+		);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("2");
+		fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+		const params = new URLSearchParams(mockReplace.mock.calls.at(-1)?.[0]);
+		expect(params.get("month")).toBeNull();
+		expect(params.get("campaign")).toBe("keep");
+		expect(params.get("view")).toBe("year");
+	});
+	it("labels the full cycle's partial first and last months from their calendar months", () => {
+		setSearchParam("578512", { view: "cycle", cycle: "4" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		const headings = screen.getAllByRole("heading", { level: 3 });
+		expect(headings[0]).toHaveTextContent("אלול ה'תשפ\"ה");
+		expect(headings[headings.length - 1]).toHaveTextContent("ניסן ה'תשפ\"ט");
+	});
+	it("ignores cycle zero and uses the month-derived cycle", () => {
+		setSearchParam("578512", { view: "cycle", cycle: "0" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("4");
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ד'",
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("navigates to the previous cycle while retaining the committed query", () => {
+		setSearchParam("578512", { view: "cycle", cycle: "4", campaign: "keep" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור קודם" }));
+		expect(mockReplace).toHaveBeenLastCalledWith(
+			"?month=578512&view=cycle&cycle=3&campaign=keep",
+			{ scroll: false },
+		);
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ג'",
+		);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("3");
+	});
+
+	it("uses today's cycle when browsing a month before the programme started", () => {
+		setSearchParam("577501");
+		render(<LearningCalendar {...cycleStartProps} />);
+		const picker = screen.getByRole("combobox", { name: "בחירת מחזור לימוד" });
+		expect(picker).toHaveValue("");
+		expect(screen.getByRole("option", { name: "-" })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+		expect(picker).toHaveValue("4");
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ד'",
+		);
+	});
+
+	it("uses the first cycle and returns to today before any cycle has started", () => {
+		setSearchParam("577501");
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57750101} />,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור א'",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "היום" }));
+		expect(mockReplace).toHaveBeenLastCalledWith(
+			"?month=577501&view=cycle&cycle=1",
+			{ scroll: false },
+		);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("1");
+	});
 	describe("view modes", () => {
 		it("limits shared links, pickers and navigation to the cycle after today's", () => {
 			setSearchParam("590001", { view: "cycle", cycle: "999" });
