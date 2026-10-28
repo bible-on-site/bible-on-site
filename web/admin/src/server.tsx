@@ -10,7 +10,7 @@ import {
 	verifyIdToken,
 	verifyServiceAccessToken,
 } from "./server/auth";
-import { rescanDedicationExpiries } from "./server/dedications";
+import { rescanDedicationExpiries } from "./server/dedication-expiry";
 
 const SKIP_AUTH = process.env.SKIP_AUTH === "true";
 

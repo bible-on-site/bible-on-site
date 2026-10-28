@@ -46,13 +46,15 @@ vi.mock("@tanstack/react-start", () => ({
 
 import {
 	__resetDedicationExpiryForTests,
+	rescanDedicationExpiries,
+} from "~/server/dedication-expiry";
+import {
 	createDedication,
 	deleteDedication,
 	getDedication,
 	listDedications,
 	normalizeExpiry,
 	previewDedicationLine,
-	rescanDedicationExpiries,
 	updateDedication,
 } from "~/server/dedications";
 
