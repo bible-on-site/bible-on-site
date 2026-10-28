@@ -430,6 +430,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
 
         _entryHistory.Push(UniqueName);
+        OnPropertyChanged(nameof(HasEntryHistory));
         UniqueName = uniqueName;
         await SwitchToCurrentEntryAsync();
     }
@@ -465,6 +466,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             if (_entryHistory.Count > 0)
             {
                 UniqueName = _entryHistory.Pop();
+                OnPropertyChanged(nameof(HasEntryHistory));
                 await SwitchToCurrentEntryAsync();
                 return;
             }

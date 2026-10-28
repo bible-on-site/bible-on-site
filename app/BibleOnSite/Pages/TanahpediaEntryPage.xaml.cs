@@ -31,6 +31,9 @@ public partial class TanahpediaEntryPage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         EntryHtml.LinkTapped += OnEntryLinkTapped;
+        // The in-place person trail is a page-owned Back surface: it keeps
+        // the capsule Back enabled even at root stack depth (#2467).
+        TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
         // Person hops rebind this page in place - return to the top of the
         // destination entry instead of keeping the scrolled family section.
         _viewModel.PropertyChanged += (_, e) =>
@@ -38,6 +41,10 @@ public partial class TanahpediaEntryPage : ContentPage
             if (e.PropertyName == nameof(TanahpediaEntryViewModel.UniqueName))
             {
                 MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
+            }
+            else if (e.PropertyName == nameof(TanahpediaEntryViewModel.HasEntryHistory))
+            {
+                MainThread.BeginInvokeOnMainThread(() => TopBar.RefreshBackState());
             }
         };
     }

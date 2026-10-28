@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import picomatch from "picomatch";
-import { covIgnoreList } from "../../../.covignore.mjs";
+import {
+	getCoverageUniverse,
+	isCovIgnored,
+	projectCounters,
+	rewriteToCanonical,
+} from "./coverage-universe.js";
 
 /**
  * @typedef {Object} Position
@@ -37,25 +41,101 @@ import { covIgnoreList } from "../../../.covignore.mjs";
  * Filters coverage entries so only tracked files remain and their coverage maps
  * are rebuilt without invalid statement or branch references.
  *
+ * When the canonical instrumented universe is available, every surviving
+ * record is additionally rewritten onto the coordinates jest's transform
+ * enumerates for its file (#2670): generated/virtual modules drop, records
+ * that resolve to the same canonical file merge their hits, and foreign
+ * coordinates contribute hits only through location projection — never new
+ * denominator entries.
+ *
  * @param {Record<string, Entry>} coverage
+ * @param {string} [srcDir] - Absolute src dir; defaults to `<cwd>/src`
+ * @param {Map<string, Object>} [universe] - Canonical universe override
+ *   (tests); defaults to {@link getCoverageUniverse}(srcDir)
  * @returns {Record<string, Entry>}
  */
 const DEBUG_SANITIZE_PATH = process.env.DEBUG_SANITIZE_PATH;
 
-export function sanitizeCoverage(coverage) {
+export function sanitizeCoverage(coverage, srcDir, universe) {
 	// This module is loaded as true ESM by jest's dynamic import() (no tsx)
 	// and as CJS by playwright's bundler — neither __dirname nor import.meta
 	// parses in both contexts. Every caller runs from the package root.
-	const SRC_DIR = path.resolve(process.cwd(), "src");
+	const SRC_DIR = srcDir ?? path.resolve(process.cwd(), "src");
+	// The canonical instrumented universe (#2670): every surviving record is
+	// rewritten onto the coordinates jest's transform enumerates for the
+	// file. Records naming no real instrumentable src file — the dev
+	// server's generated modules (data<hash> chunks, `[json].cjs` wrappers,
+	// font chunks) or stale .next-cache artifacts — drop wholesale, and
+	// variant coordinates (e.g. `istanbul ignore` regions a
+	// comment-stripping compile instrumented anyway) contribute hits only
+	// through projection, never new denominator entries.
+	const canonUniverse = universe ?? getCoverageUniverse(SRC_DIR);
+	const canonicalRecords = new Map();
 	for (const file of Object.keys(coverage)) {
 		const entry = coverage[file];
 		if (!entry || !hasValidStructure(entry) || !isTracked(entry, SRC_DIR)) {
 			delete coverage[file];
 			continue;
 		}
-		sanitizeEntryData(entry.data ?? entry);
+		const canonical = canonUniverse.get(path.resolve(entry.path));
+		if (!canonical) {
+			delete coverage[file];
+			continue;
+		}
+		const projected = projectCounters(canonical, entry.data ?? entry);
+		const existing = canonicalRecords.get(canonical.path);
+		if (existing) {
+			// A second record for the same canonical file (duplicate path
+			// spellings across client/server or cached compile variants) —
+			// merge its projected hits into the keeper, drop the record.
+			mergeProjected(existing.projected, projected);
+			delete coverage[file];
+			continue;
+		}
+		canonicalRecords.set(canonical.path, {
+			key: file,
+			entry,
+			entryData: entry.data ?? entry,
+			canonical,
+			projected,
+		});
+	}
+	for (const record of canonicalRecords.values()) {
+		rewriteToCanonical(record.canonical, record.entryData, record.projected);
+		record.entry.path = record.canonical.path;
+		if (record.key !== record.canonical.path) {
+			coverage[record.canonical.path] = record.entry;
+			delete coverage[record.key];
+		}
+		sanitizeEntryData(record.entryData);
 	}
 	return coverage;
+}
+
+/** Elementwise max-merge of two canonical-keyed counter projections. */
+function mergeProjected(target, source) {
+	for (const [key, hits] of Object.entries(source.s)) {
+		target.s[key] = Math.max(target.s[key] ?? 0, hits);
+	}
+	for (const [key, hits] of Object.entries(source.f)) {
+		target.f[key] = Math.max(target.f[key] ?? 0, hits);
+	}
+	for (const [key, hits] of Object.entries(source.b)) {
+		const merged = toArmHitList(hits).map((h, i) =>
+			Math.max(h, toArmHitList(target.b[key])[i] ?? 0),
+		);
+		target.b[key] = merged;
+	}
+}
+
+function toArmHitList(counter) {
+	if (Array.isArray(counter)) return counter.map(toFiniteNumber);
+	if (counter && typeof counter === "object") {
+		return Object.keys(counter)
+			.sort((a, b) => Number(a) - Number(b))
+			.map((key) => toFiniteNumber(counter[key]));
+	}
+	return [toFiniteNumber(counter)];
 }
 
 function hasValidStructure(entry) {
@@ -72,13 +152,8 @@ function isTracked(entry, srcDir) {
 	const relativePath = path
 		.relative(projectRoot, entryPath)
 		.replace(/\\/g, "/");
-	const isIgnored = covIgnoreList.some((pattern) => {
-		// Prepend **/ if pattern doesn't already start with it, to match anywhere in path
-		const globPattern = pattern.startsWith("**/") ? pattern : `**/${pattern}`;
-		return picomatch(globPattern)(relativePath);
-	});
 
-	return isPartOfSrc && !isIgnored;
+	return isPartOfSrc && !isCovIgnored(relativePath);
 }
 
 /**

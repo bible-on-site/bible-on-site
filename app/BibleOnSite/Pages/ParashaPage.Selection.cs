@@ -284,15 +284,9 @@ public partial class ParashaPage
         NormalNavigationTitle.Text = focused && _focusedPerekId > 0
             ? $"{PerekDataService.Instance.GetPerekSource(_focusedPerekId)} {_focusedPasuk!.PasukNumHeb}"
             : _viewModel.Title;
-        // iOS has no system Back for the overlay, so the navigation slot turns
-        // into the close control there; platforms with system Back keep the
-        // shared hamburger (#2467).
-        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
-        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
-            ? Fonts.FluentUI.arrow_right_24_regular
-            : Fonts.FluentUI.navigation_24_regular;
-        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
-            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
+        // The capsule Back covers the focused-pasuk return on every platform
+        // (#2467) — the hamburger glyph and its flyout role never change.
+        NormalNavigationBar.RefreshBackState();
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;

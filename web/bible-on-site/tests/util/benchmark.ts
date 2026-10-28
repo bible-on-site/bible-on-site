@@ -10,7 +10,11 @@ import { writeBenchmark } from "../../scripts/benchmark-store.cjs";
  * - `memory_mb`: Memory usage in megabytes (browser heap, server RSS, server heap)
  * - `size_mb`: File/directory sizes in megabytes (standalone bundle, .next dir)
  * - `score`: Pass/fail or 0-1 scores (audit scores, category scores)
- * - `ratio`: Ratios/proportions (CLS)
+ * - `ratio`: Ratios/proportions (sefer flip 929-vs-dev ratio)
+ * - `cls_ratio`: Cumulative Layout Shift. CLS gets its own measure so the
+ *   Bencher threshold can use a static bound: a percentage threshold on a
+ *   zero CLS baseline collapses the upper boundary limit to 0 and alerts on
+ *   any nonzero reading (#2718).
  * - `bytes`: Raw byte counts
  * - `count`: Element/item counts
  */
@@ -20,6 +24,7 @@ export type BencherMeasure =
 	| "size_mb"
 	| "score"
 	| "ratio"
+	| "cls_ratio"
 	| "bytes"
 	| "count";
 
@@ -48,6 +53,14 @@ const BENCHMARK_OUTPUT_DIR = resolve(
  */
 export function reportBenchmark(entry: BenchmarkEntry): void {
 	writeBenchmark(BENCHMARK_OUTPUT_DIR, entry);
+}
+
+/**
+ * Maps a Web Vitals metric name to its unified Bencher measure name.
+ * CLS is the only unitless Web Vitals metric; all others are timings.
+ */
+export function webVitalsMeasure(metricName: string): BencherMeasure {
+	return metricName === "CLS" ? "cls_ratio" : "time_ms";
 }
 
 /**
