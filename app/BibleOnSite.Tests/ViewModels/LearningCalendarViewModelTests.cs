@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
 using BibleOnSite.Helpers;
+using BibleOnSite.Pages;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using Microsoft.Maui;
 using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Dispatching;
 using Moq;
 
 namespace BibleOnSite.Tests.ViewModels;
@@ -834,6 +838,117 @@ public class LearningCalendarViewModelTests
         vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
         vm.MonthGroups.Should().HaveCount(2);
         vm.NextMonthCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RefreshToday_OpensNextCycleWithoutResettingTheBrowsedPeriod()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var today = 57870217;
+        var vm = new LearningCalendarViewModel(fixture.Schedule, fixture.PerekData,
+            fixture.Navigator.Object, today: () => today);
+        vm.RefreshToday();
+        vm.CycleOptions.Should().BeEmpty();
+        await vm.InitializeAsync();
+        today = HebrewDateHelper.AddDays(today, 1);
+        vm.RefreshToday();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.SelectedCycle!.Value.Should().Be(4);
+        vm.SelectedCycle = Option(vm.CycleOptions, 5);
+        var viewedMonth = vm.SelectedMonth;
+        var viewedYear = vm.SelectedYear;
+        var notifications = new List<string?>();
+        vm.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+        vm.RefreshToday();
+        notifications.Should().BeEmpty();
+        today = 57880709;
+        vm.IsLoading = true;
+        vm.RefreshToday();
+        vm.CanExportPdf.Should().BeFalse();
+        vm.IsLoading = false;
+        vm.RefreshToday();
+        vm.SelectedCycle!.Value.Should().Be(5);
+        vm.SelectedMonth!.Value.Should().Be(viewedMonth!.Value);
+        vm.SelectedYear!.Value.Should().Be(viewedYear!.Value);
+        vm.CanExportPdf.Should().BeTrue();
+        vm.DownloadPdfCommand.CanExecute(null).Should().BeTrue();
+        notifications.Should().Contain(nameof(vm.CanExportPdf));
+    }
+
+    [Fact]
+    public async Task DownloadPdf_RechecksCycleRolloverAndTodayUsesTheNewDate()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var today = 57880709;
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(PublishedAsset));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(fixture.Schedule, fixture.PerekData,
+            fixture.Navigator.Object, assets, launcher.Object, () => today);
+        await vm.InitializeAsync();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.SelectedCycle = Option(vm.CycleOptions, 4);
+        vm.CanExportPdf.Should().BeTrue();
+        today = fixture.Schedule.GetCycle(5).StartDate;
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+        vm.SelectedCycle!.Value.Should().Be(4);
+        vm.CanExportPdf.Should().BeFalse();
+        vm.CycleOptions.Last().Value.Should().Be(6);
+        assets.Keys.Should().BeEmpty();
+        opened().Should().BeNull();
+        today = fixture.Schedule.GetCycle(6).StartDate;
+        vm.TodayCommand.Execute(null);
+        vm.SelectedCycle!.Value.Should().Be(6);
+        vm.CycleOptions.Last().Value.Should().Be(7);
+        vm.CanExportPdf.Should().BeTrue();
+    }
+
+    private sealed class CalendarPageUnderTest(LearningCalendarViewModel vm) : LearningCalendarPage(vm)
+    {
+        public void Show() => OnAppearing();
+        public void Hide() => OnDisappearing();
+    }
+
+    [Fact]
+    public async Task CalendarPage_RefreshesOnReturnResumeAndTimerWithoutLosingSelection()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var today = 57870217;
+        var vm = new LearningCalendarViewModel(fixture.Schedule, fixture.PerekData,
+            fixture.Navigator.Object, today: () => today);
+        await vm.InitializeAsync();
+        var timer = new Mock<IDispatcherTimer>();
+        timer.SetupAllProperties();
+        var dispatcher = new Mock<IDispatcher>();
+        dispatcher.Setup(d => d.CreateTimer()).Returns(timer.Object);
+        dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>())).Returns((Action action) => { action(); return true; });
+        var services = new Mock<IServiceProvider>();
+        services.Setup(s => s.GetService(typeof(IDispatcher))).Returns(dispatcher.Object);
+        var context = new Mock<IMauiContext>();
+        context.SetupGet(c => c.Services).Returns(services.Object);
+        var handler = new Mock<IViewHandler>();
+        handler.SetupGet(h => h.MauiContext).Returns(context.Object);
+        var page = new CalendarPageUnderTest(vm) { Handler = handler.Object };
+        var window = new Window(page);
+        page.Show();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.SelectedCycle = Option(vm.CycleOptions, 5);
+        vm.CanExportPdf.Should().BeFalse();
+        today = 57880709;
+        ((IWindow)window).Resumed();
+        vm.CanExportPdf.Should().BeTrue();
+        page.Hide();
+        timer.Verify(t => t.Stop(), Times.AtLeastOnce);
+        today = 57870217;
+        ((IWindow)window).Resumed();
+        vm.CanExportPdf.Should().BeTrue();
+        page.Show();
+        vm.SelectedCycle!.Value.Should().Be(5);
+        vm.CanExportPdf.Should().BeFalse();
+        today = 57880709;
+        timer.Raise(t => t.Tick += null, EventArgs.Empty);
+        vm.CanExportPdf.Should().BeTrue();
+        timer.Object.Interval.Should().Be(TimeSpan.FromMinutes(1));
+        page.Hide();
     }
 
     private static Mock<ILauncher> LauncherCapturing(out Func<Uri?> opened)

@@ -50,6 +50,10 @@ today's Jerusalem/nightfall-aware Hebrew date on hydration, refreshes it
 while the page is open and on focus/visibility changes, and supplies that
 live date to the calendar policy. A deployment date is never used as today.
 
+The native calendar refreshes its date on return from the reader, app resume
+and minute ticks while visible. Refresh keeps the viewed period, updates the
+cycle bounds and export command, and runs again before Today or PDF export.
+
 The website and app show every historical cycle, the current cycle and
 exactly one next cycle. Cycle selectors, shared links, month/year selectors
 and navigation stop at that next cycle's end. Boundary-month dates beyond

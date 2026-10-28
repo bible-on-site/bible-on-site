@@ -248,6 +248,25 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
     }
 
+    /// <summary>Refreshes date-dependent limits while preserving the viewed period.</summary>
+    public void RefreshToday()
+    {
+        if (_policy is null || IsLoading)
+        {
+            return;
+        }
+        var today = _today();
+        if (today == _todayDateNumber)
+        {
+            return;
+        }
+        _todayDateNumber = today;
+        _policy = new LearningCalendarPolicy(_schedule, today);
+        _monthOptionsYear = -1;
+        _cycle = Math.Min(_cycle, _policy.Next.Number);
+        SetMonth(_year, _month);
+    }
+
     private void SetMonth(int year, int month)
     {
         (_year, _month) = _policy!.ClampMonth(year, month);
@@ -692,6 +711,7 @@ public partial class LearningCalendarViewModel : ObservableObject
     [RelayCommand]
     private void Today()
     {
+        RefreshToday();
         _cycle = _policy!.Current?.Number ?? _policy.Next.Number;
         var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(_todayDateNumber);
         SetMonth(year, month);
@@ -738,6 +758,7 @@ public partial class LearningCalendarViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanExportPdf))]
     private async Task DownloadPdfAsync()
     {
+        RefreshToday();
         if (!CanExportPdf)
         {
             return;
