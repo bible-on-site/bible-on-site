@@ -169,6 +169,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch
         {
+            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine);
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("failed");
             CollectAppCoverage(test, "failed");

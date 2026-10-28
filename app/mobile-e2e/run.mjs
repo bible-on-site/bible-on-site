@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
+import { iosInteractionDiagnostics, sampleIosFallback } from "./ios-interaction-diagnostics.mjs";
+import { watchScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
@@ -70,15 +72,12 @@ if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
 }
 let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
-const hangMonitor = platform === "ios" ? monitorNativeInteractions(async (command) => {
-  writeFileSync(resolve(artifacts, "native-hang-command.txt"), command);
-  // Commands can exceed the observation threshold and still finish within
-  // their interaction deadline. Capture through CoreSimulator without app
-  // process queries or debugger attachment; sample stacks only after failure.
-  const error = await captureNativeFrame("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot"],
-    resolve(artifacts, "native-interaction.png"), execute);
-  if (error) console.error("Could not capture the pending interaction frame:", error.message);
+const interactions = platform === "ios" ? iosInteractionDiagnostics({
+  artifacts, udid: process.env.MOBILE_UDID,
+  nativeLog: resolve(artifacts, "device-live.log"), execute,
 }) : undefined;
+const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
+  interactions.capture(command, request)) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
@@ -152,6 +151,14 @@ async function sampleIosApp(phase) {
     console.error("Could not sample the iOS app:", error);
   }
 }
+let failureObserverConfirmed = false;
+const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
+if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
+const failureMonitor = interactions ? watchScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
+  const result = await interactions.failure(request, { signal });
+  if (result.status === "error") diagnosticsFailed = true;
+  return result;
+}) : undefined;
 const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
@@ -166,6 +173,7 @@ try {
   test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
+      MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
@@ -191,6 +199,13 @@ try {
     console.error("Could not capture test-host shutdown stacks:", error);
   }
   try {
+    await phase("scenario-failure-monitor", () => failureMonitor?.stop());
+    failureObserverConfirmed = true;
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not finish scenario-failure handoff:", error);
+  }
+  try {
     await phase("native-hang-monitor", () => hangMonitor?.stop());
   } catch (error) {
     diagnosticsFailed = true;
@@ -204,8 +219,11 @@ try {
   }
   if (platform === "ios" && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
-    // Sample surviving failed/hung apps after tests, never alongside healthy runs.
-    await phase("ios-app-sampling", () => sampleIosApp("cleanup"));
+    // Sample surviving apps only if no earlier failure handoff could identify the original.
+    // An exited/unknown pinned PID must never fall back to a later scenario's app.
+    const outcome = await phase("ios-app-sampling", () =>
+      sampleIosFallback(failureMonitor, failureObserverConfirmed, () => sampleIosApp("cleanup")));
+    writeFileSync(resolve(artifacts, "native-cleanup-sampling.json"), JSON.stringify(outcome, null, 2));
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
   if (platform === "ios") {
