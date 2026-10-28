@@ -101,10 +101,15 @@ export const getDedicationTargetOptions = createServerFn({ method: "GET" }).hand
 	},
 );
 
-/** `count` `?` placeholders for an IN clause — generated, never data. */
-function placeholders(count: number): string {
-	return Array.from({ length: count }, () => "?").join(", ");
-}
+/**
+ * Variable-length `IN` expansion that keeps the statement a pure literal:
+ * the id set binds as a JSON array param and `JSON_TABLE` expands it
+ * server-side. Splicing even a generated `?`-run (`IN (${...})`) taints
+ * the whole statement under the mysql-sqli analyzer because the fragment
+ * derives from a function argument (#2731).
+ */
+const IN_IDS =
+	"IN (SELECT v FROM JSON_TABLE(?, '$[*]' COLUMNS (v INT PATH '$')) jt)";
 
 interface LinkRows {
 	perek: { perek_id_low: number; perek_id_high: number; expires_at: string | null }[];
@@ -120,36 +125,36 @@ async function loadTargets(ids: number[]): Promise<Map<number, AdminTarget[]>> {
 	if (ids.length === 0) return new Map();
 	const [perek, sefer, helek, parasha, article, entry, masora] = await Promise.all([
 		query<LinkRows["perek"][number]>(
-			`SELECT dedication_id, perek_id_low, perek_id_high, CAST(expires_at AS CHAR) AS expires_at FROM tanah_perek_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			`SELECT dedication_id, perek_id_low, perek_id_high, CAST(expires_at AS CHAR) AS expires_at FROM tanah_perek_dedication WHERE dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		) as Promise<(LinkRows["perek"][number] & { dedication_id: number })[]>,
 		query<(LinkRows["sefer"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, sefer_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_sefer_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			`SELECT dedication_id, sefer_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_sefer_dedication WHERE dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		),
 		query<(LinkRows["helek"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, helek_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_helek_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			`SELECT dedication_id, helek_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_helek_dedication WHERE dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		),
 		query<(LinkRows["parasha"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, parasha_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_parasha_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			`SELECT dedication_id, parasha_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_parasha_dedication WHERE dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		),
 		query<(LinkRows["article"][number] & { dedication_id: number })>(
 			`SELECT ad.dedication_id, ad.article_id, a.name, CAST(ad.expires_at AS CHAR) AS expires_at
 			 FROM tanah_article_dedication ad LEFT JOIN tanah_article a ON a.id = ad.article_id
-			 WHERE ad.dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			 WHERE ad.dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		),
 		query<(LinkRows["entry"][number] & { dedication_id: number })>(
 			`SELECT ed.dedication_id, ed.entry_id, e.unique_name, CAST(ed.expires_at AS CHAR) AS expires_at
 			 FROM tanahpedia_entry_dedication ed LEFT JOIN tanahpedia_entry e ON e.id = ed.entry_id
-			 WHERE ed.dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			 WHERE ed.dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		),
 		query<(LinkRows["masora"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_masora_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
-			ids,
+			`SELECT dedication_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_masora_dedication WHERE dedication_id ${IN_IDS}`,
+			[JSON.stringify(ids)],
 		),
 	]);
 	const seferNames = new Map(
@@ -248,8 +253,8 @@ async function enrich(rows: { id: number; subject: string; expires_at: string | 
 	const [purposeLinks, types, targets] = await Promise.all([
 		ids.length
 			? query<{ dedication_id: number; dedication_type_id: number }>(
-					`SELECT dedication_id, dedication_type_id FROM tanah_dedication_dedication_type WHERE dedication_id IN (${placeholders(ids.length)})`,
-					ids,
+					`SELECT dedication_id, dedication_type_id FROM tanah_dedication_dedication_type WHERE dedication_id ${IN_IDS}`,
+					[JSON.stringify(ids)],
 				)
 			: Promise.resolve([]),
 		query<{ id: number; description: string }>("SELECT id, description FROM tanah_dedication_type"),
