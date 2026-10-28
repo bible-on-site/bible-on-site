@@ -107,7 +107,20 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ env.MODULE_NAME }}-v${{ env.MODULE_VERSION }}" --pattern "${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar.gz" --dir "${{ env.DOCKER_IMAGE_OUTPUT_DIR }}"
+          RECOVERY_FILE_ID: ${{ steps.guard.outputs.recovery_file_id }}
+          RECOVERY_FILE_NAME: ${{ steps.guard.outputs.recovery_file_name }}
+          RECOVERY_FILE_DIGEST: ${{ steps.guard.outputs.recovery_file_digest }}
+          RECOVERY_FILE_SIZE: ${{ steps.guard.outputs.recovery_file_size }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RECOVERY_FILE_ID" ]; then
+            [[ "$RECOVERY_FILE_ID" =~ ^[1-9][0-9]*$ ]]
+            test "$RECOVERY_FILE_NAME" = "${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}.tar.gz"
+            gh api "repos/$GITHUB_REPOSITORY/releases/assets/$RECOVERY_FILE_ID" -H 'Accept: application/octet-stream' > "$DOCKER_IMAGE_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+            node devops/github/release/recovery-request.mjs --verify-file --file "$DOCKER_IMAGE_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+          else
+            gh release download "${MODULE_NAME}-v${MODULE_VERSION}" --pattern "${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}.tar.gz" --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+          fi
 
       - name: Deploy to ECR
         if: ${{ steps.guard.outputs.deploy == 'true' }}
