@@ -2,6 +2,8 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { BreadcrumbDropdown } from "../../../src/app/929/[number]/components/BreadcrumbDropdown";
 
 function renderTwoDropdowns() {
@@ -25,6 +27,37 @@ function renderTwoDropdowns() {
 }
 
 describe("BreadcrumbDropdown", () => {
+	it("keeps the server preview disabled until its own click handler hydrates", async () => {
+		const dropdown = (
+			<ol>
+				<BreadcrumbDropdown label="ספר" ariaLabel="ספר נוכחי">
+					<a href="/929/1">בראשית</a>
+				</BreadcrumbDropdown>
+			</ol>
+		);
+		const container = document.createElement("div");
+		container.innerHTML = renderToString(dropdown);
+		document.body.appendChild(container);
+		let root: Root | undefined;
+		try {
+			const button = container.querySelector("button");
+			expect(button).toBeDisabled();
+			expect(button).toHaveAttribute("aria-expanded", "false");
+			const onRecoverableError = jest.fn();
+			await act(async () => {
+				root = hydrateRoot(container, dropdown, { onRecoverableError });
+			});
+			expect(container.querySelector("button")).toBe(button);
+			expect(button).toBeEnabled();
+			expect(onRecoverableError).not.toHaveBeenCalled();
+			fireEvent.click(button as HTMLButtonElement);
+			expect(button).toHaveAttribute("aria-expanded", "true");
+		} finally {
+			await act(async () => root?.unmount());
+			container.remove();
+		}
+	});
+
 	it("toggles aria-expanded when its button is activated", () => {
 		const { sefer } = renderTwoDropdowns();
 		expect(sefer).toHaveAttribute("aria-expanded", "false");
@@ -43,6 +76,12 @@ describe("BreadcrumbDropdown", () => {
 		expect(sefer).toHaveFocus();
 	});
 
+	it("keeps the selector open for a non-Escape key", () => {
+		const { sefer } = renderTwoDropdowns();
+		fireEvent.click(sefer);
+		fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" });
+		expect(sefer).toHaveAttribute("aria-expanded", "true");
+	});
 	it("closes on an outside pointer press", () => {
 		const { sefer } = renderTwoDropdowns();
 		fireEvent.click(sefer);
