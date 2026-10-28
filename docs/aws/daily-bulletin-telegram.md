@@ -14,7 +14,7 @@ Each job freezes bot ID, numeric chat ID, PDF hash, filename and caption before 
 
 ## Execution-role permission review
 
-Use the existing `AdministratorAccess-250598594267` profile in `il-central-1`. Before any write, verify account `250598594267`, the current admin task's execution role, current inline/managed policies, and token parameter **metadata** only. Never request/decrypt the token to inspect configuration. The tracked ECS template currently names `ecsTaskExecutionRole`, but the live task is authoritative. Live IAM audit was not completed during preparation because the SSO session was unavailable; no live coverage is assumed.
+Use the existing `AdministratorAccess-250598594267` profile in `il-central-1`. Before any write, verify account `250598594267`, the current admin task's execution role, current inline/managed policies, and token parameter **metadata** only. Never request/decrypt the token to inspect configuration. The tracked ECS template currently names `ecsTaskExecutionRole`, but the live task is authoritative. The read-only live audit confirmed that the current role has AmazonECSTaskExecutionRolePolicy attached and inline CloudWatchLogsFullAccess and SSMParameterReadAccess policies. The SSM policy covers the existing database, admin and revalidation parameter prefixes and the Tanahpedia revision API-key parameter; it does not cover the proposed Telegram token parameter. The optional exact-parameter policy is therefore needed for this token path. No IAM, parameter or ECS changes were made during that audit.
 
 ECS reads the parameter at container startup through the **execution role**; the application task role needs no SSM permission and application code reads only `BULLETIN_TELEGRAM_BOT_TOKEN`. The required action is `ssm:GetParameters`. A customer-managed KMS key would additionally require a separately reviewed exact-key decrypt grant; this template grants no KMS, Secrets Manager, wildcard or application-role access. [AWS execution-role permissions](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html)
 
@@ -51,7 +51,7 @@ Set these server-only nonsecret settings separately; do not use `VITE_` names:
 | Variable | Initial value |
 | --- | --- |
 | `BULLETIN_TELEGRAM_BOT_USERNAME` | Exact username of the rotated, operator-approved bot |
-| `BULLETIN_TELEGRAM_TEST_CHAT_ID` | Explicit approved numeric private channel ID |
+| `BULLETIN_TELEGRAM_TEST_CHAT_ID` | Explicit approved numeric private channel, group or supergroup ID |
 | `BULLETIN_TELEGRAM_REAL_CHAT_ID` | Absent during initial private validation |
 
 There is no application `BULLETIN_TELEGRAM_BOT_TOKEN_PARAMETER` lookup and no app SSM SDK. Reject duplicate/conflicting token entries. An absent/invalid Telegram configuration blocks Telegram only: existing email startup, queue messages, SES events and consent behavior continue. Do not add another queue consumer or change the existing `BULLETIN_EMAIL_WORKER_ENABLED`/queue settings.
@@ -60,7 +60,9 @@ ECS injects the full secret when a task starts; rotation requires new tasks/a re
 
 ## Private validation and rollback
 
-First verify persisted Telegram mode `test`/revision0, no unfinished job, a prepared immutable PDF and the explicit test target. Metadata verification must confirm the expected bot, exact numeric private channel, posting rights and no public username/active usernames, with positive member count at most2. Configured real channel details alone never switch mode. Do not post to `@BibleOnSite` during private validation or resolve a mutable username on each send.
+First verify persisted Telegram mode `test`/revision0, no unfinished job, a prepared immutable PDF and the explicit test target. Metadata verification must confirm the expected bot, exact numeric private channel, group or supergroup, bot administrator/creator rights and no public username/active usernames, with positive member count at most2. Channels additionally require the administrator permission to post messages; groups do not expose that channel-specific permission. Configured real channel details alone never switch mode. Do not post to `@alhaperek` during private validation or resolve a mutable username on each send.
+
+The owner-approved test destination is the private Test_Bulletin supergroup. Its numeric identifier stays in server-only configuration. The real destination remains a channel whose current public username must be @alhaperek; a real group or supergroup is rejected. Verification keeps the exact chat type privately for the upload, and the send acknowledgement must match both its numeric ID and verified type. A changed type is an uncertain result and cannot trigger an automatic retry.
 
 After explicit test-post authorization, enqueue once using a stable UUID and captured test revision through the authenticated admin API. Sending uploads the saved PDF bytes directly; it does not publish a new S3 URL or render/prepare content. The existing single SQS dispatcher claims each job once. Preserve the returned Telegram message/file IDs and final status; a successful provider response confirms posting, not that a person read it. On timeout/malformed/ambiguous result, stop and inspect the durable uncertain attempt; never create another key to retry it automatically.
 

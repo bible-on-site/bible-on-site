@@ -11,6 +11,7 @@ export interface VerifiedTelegramTarget {
 	username: string | null;
 }
 type Audience = "test" | "real";
+type ChatType = "channel" | "group" | "supergroup";
 type Outcome = "failed" | "uncertain";
 type RecordValue = Record<string, unknown>;
 interface TargetRequest {
@@ -77,6 +78,15 @@ function hasControl(value: string, allowNewline = false): boolean {
 function username(value: unknown): value is string {
 	return (
 		typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(value)
+	);
+}
+function allowedChatType(
+	value: unknown,
+	audience: Audience,
+): value is ChatType {
+	return (
+		value === "channel" ||
+		(audience === "test" && (value === "group" || value === "supergroup"))
 	);
 }
 function waitFor<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -220,6 +230,13 @@ export class TelegramClient {
 	}
 
 	async verifyTarget(input: TargetRequest): Promise<VerifiedTelegramTarget> {
+		const { botId, chatId, title, username } = await this.#verifyTarget(input);
+		return { botId, chatId, title, username };
+	}
+
+	async #verifyTarget(
+		input: TargetRequest,
+	): Promise<VerifiedTelegramTarget & { chatType: ChatType }> {
 		if (!targetValid(input)) return reject();
 		return this.#deadline(async (signal) => {
 			const mePending = this.#request("getMe", {}, signal);
@@ -270,7 +287,7 @@ export class TelegramClient {
 				(input.botId !== undefined && me.id !== input.botId) ||
 				!chat ||
 				chat.id !== input.chatId ||
-				chat.type !== "channel" ||
+				!allowedChatType(chat.type, input.audience) ||
 				typeof chat.title !== "string" ||
 				!chat.title.trim() ||
 				chat.title.length > 255 ||
@@ -281,7 +298,7 @@ export class TelegramClient {
 				!(
 					member.status === "creator" ||
 					(member.status === "administrator" &&
-						member.can_post_messages === true)
+						(chat.type !== "channel" || member.can_post_messages === true))
 				) ||
 				!positiveId(countValue)
 			)
@@ -301,11 +318,12 @@ export class TelegramClient {
 					return reject();
 			} else if (
 				!username(chat.username) ||
-				chat.username.toLowerCase() !== "bibleonsite"
+				chat.username.toLowerCase() !== "alhaperek"
 			)
 				return reject();
 			return {
 				botId: me.id,
+				chatType: chat.type,
 				chatId: input.chatId,
 				title: chat.title,
 				username: input.audience === "real" ? (chat.username as string) : null,
@@ -357,7 +375,7 @@ export class TelegramClient {
 			new Blob([pdf], { type: "application/pdf" }),
 			filename,
 		);
-		await this.verifyTarget(target);
+		const verified = await this.#verifyTarget(target);
 		try {
 			await input.beforeSend?.();
 		} catch (error) {
@@ -374,7 +392,7 @@ export class TelegramClient {
 				!message ||
 				!positiveId(message.message_id) ||
 				chat?.id !== target.chatId ||
-				chat.type !== "channel" ||
+				chat.type !== verified.chatType ||
 				!file ||
 				typeof file.file_id !== "string" ||
 				!/^[A-Za-z0-9_-]{1,255}$/.test(file.file_id) ||

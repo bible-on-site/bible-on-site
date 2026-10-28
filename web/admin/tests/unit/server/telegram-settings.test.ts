@@ -159,7 +159,7 @@ describe("Telegram settings and target readiness", () => {
 			botId: 123456,
 			chatId,
 			title: audience,
-			username: audience === "real" ? "BibleOnSite" : null,
+			username: audience === "real" ? "alhaperek" : null,
 		}));
 		const runtime = awaitModule.loadTelegramRuntime();
 		expect(runtime).not.toBeNull();

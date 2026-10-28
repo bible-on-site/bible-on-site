@@ -1522,7 +1522,10 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		vi.stubEnv("BULLETIN_TELEGRAM_TEST_CHAT_ID", "-1001");
 	}
 
-	function messages(controller: AbortController, bodies: unknown[]) {
+	const telegramBody = (jobId = key) =>
+		`{"kind":"telegram.send","jobId":"${jobId}"}`;
+
+	function messages(controller: AbortController, bodies: string[]) {
 		let next = 0;
 		mocks.sqs.mockImplementation(async (command) => {
 			if (command.kind !== "receive") return {};
@@ -1533,16 +1536,7 @@ describe("optional Telegram dispatch in the existing worker", () => {
 			return {
 				Messages: [
 					{
-						Body: JSON.stringify(bodies[next], (_key, value: unknown) => {
-							if (!value || typeof value !== "object" || Array.isArray(value))
-								return value;
-							return Object.fromEntries(
-								Object.entries(value).sort(([left], [right]) => {
-									if (left === right) return 0;
-									return left < right ? -1 : 1;
-								}),
-							);
-						}),
+						Body: bodies[next],
 						ReceiptHandle: `receipt-${next++}`,
 					},
 				],
@@ -1561,10 +1555,7 @@ describe("optional Telegram dispatch in the existing worker", () => {
 			vi.stubEnv(name, " ");
 			seed("test", "accepted");
 			const controller = new AbortController();
-			messages(controller, [
-				{ kind: "telegram.send", jobId: key },
-				{ kind: "send", recipientId: 1 },
-			]);
+			messages(controller, [telegramBody(), '{"kind":"send","recipientId":1}']);
 
 			await startEmailWorker(controller.signal);
 
@@ -1590,9 +1581,9 @@ describe("optional Telegram dispatch in the existing worker", () => {
 			return true;
 		});
 		messages(controller, [
-			{ kind: "telegram.send", jobId: key.toUpperCase() },
-			{ kind: "send", recipientId: 1 },
-			native,
+			`{"jobId":"${key.toUpperCase()}","kind":"telegram.send"}`,
+			'{"kind":"send","recipientId":1}',
+			'{"eventType":"Delivery"}',
 		]);
 		const receive = mocks.sqs.getMockImplementation();
 		mocks.sqs.mockImplementation(async (command) => {
@@ -1621,10 +1612,10 @@ describe("optional Telegram dispatch in the existing worker", () => {
 	});
 
 	it.each([
-		{ kind: "telegram.send" },
-		{ kind: "telegram.send", jobId: 1 },
-		{ kind: "telegram.send", jobId: "invalid" },
-		{ kind: "telegram.send", jobId: key, chatId: "-1001" },
+		'{"kind":"telegram.send"}',
+		'{"kind":"telegram.send","jobId":1}',
+		'{"kind":"telegram.send","jobId":"invalid"}',
+		`{"kind":"telegram.send","jobId":"${key}","chatId":"-1001"}`,
 	])(
 		"refuses malformed Telegram body %j before dispatch or SES parsing",
 		async (body) => {
@@ -1646,7 +1637,7 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		configureTelegram();
 		mocks.telegramProcess.mockResolvedValueOnce(false);
 		const controller = new AbortController();
-		messages(controller, [{ kind: "telegram.send", jobId: key }]);
+		messages(controller, [telegramBody()]);
 
 		await startEmailWorker(controller.signal);
 
@@ -1660,7 +1651,7 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		configureTelegram();
 		mocks.telegramProcess.mockRejectedValueOnce(new Error("private details"));
 		const controller = new AbortController();
-		messages(controller, [{ kind: "telegram.send", jobId: key }]);
+		messages(controller, [telegramBody()]);
 		mocks.delay.mockImplementationOnce(async () => controller.abort());
 
 		await startEmailWorker(controller.signal);
@@ -1679,7 +1670,7 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		mocks.parse.mockReturnValue(delivery());
 		mocks.telegramSweep.mockRejectedValueOnce(new Error("private details"));
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		messages(controller, [{ eventType: "Delivery" }]);
+		messages(controller, ['{"eventType":"Delivery"}']);
 		try {
 			await startEmailWorker(controller.signal);
 			expect(row.status).toBe("delivered");

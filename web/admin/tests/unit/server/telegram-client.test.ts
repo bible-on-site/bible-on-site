@@ -206,8 +206,8 @@ describe("Telegram configuration and target verification", () => {
 			id: CHAT,
 			type: "channel",
 			title: "Public fixture",
-			username: "BibleOnSite",
-			active_usernames: ["BibleOnSite"],
+			username: "alhaperek",
+			active_usernames: ["alhaperek"],
 		};
 		values.getChatMemberCount = 1000;
 		await expect(
@@ -215,7 +215,123 @@ describe("Telegram configuration and target verification", () => {
 				...target,
 				audience: "real",
 			}),
-		).resolves.toMatchObject({ chatId: CHAT, username: "BibleOnSite" });
+		).resolves.toMatchObject({ chatId: CHAT, username: "alhaperek" });
+	});
+	it.each(["group", "supergroup"])(
+		"posts once to an owner-only private %s without channel-specific permissions",
+		async (type) => {
+			const values = metadata();
+			values.getChat = { id: CHAT, type, title: "Private fixture" };
+			values.getChatMember = {
+				status: "administrator",
+				user: { id: BOT, is_bot: true },
+			};
+			const fetchMock = provider(values, () =>
+				json({ ...message(), chat: { id: CHAT, type } }),
+			);
+			await expect(
+				new TelegramClient(config, fetchMock).sendDocument(documentRequest),
+			).resolves.toEqual({ messageId: 42, fileId: "fixture_file_id" });
+			expect(
+				fetchMock.mock.calls.filter(([url]) => method(url) === "sendDocument"),
+			).toHaveLength(1);
+		},
+	);
+	it.each(["group", "supergroup"])(
+		"refuses a public or expanded test %s and any real group target",
+		async (type) => {
+			for (const unsafe of ["public", "extra-member", "not-admin", "real"]) {
+				const values = metadata();
+				values.getChat = {
+					id: CHAT,
+					type,
+					title: "Private fixture",
+					...(unsafe === "public" || unsafe === "real"
+						? { username: "alhaperek" }
+						: {}),
+				};
+				if (unsafe === "extra-member") values.getChatMemberCount = 3;
+				if (unsafe === "not-admin")
+					values.getChatMember = {
+						status: "member",
+						user: { id: BOT, is_bot: true },
+					};
+				const fetchMock = provider(values);
+				await outcome(
+					new TelegramClient(config, fetchMock).sendDocument({
+						...documentRequest,
+						audience: unsafe === "real" ? "real" : "test",
+					}),
+					"failed",
+				);
+				expect(
+					fetchMock.mock.calls.some(([url]) => method(url) === "sendDocument"),
+				).toBe(false);
+			}
+		},
+	);
+	it.each(["group", "supergroup"])(
+		"keeps verified %s type private without changing the public target DTO",
+		async (type) => {
+			const values = metadata();
+			values.getChat = { id: CHAT, type, title: "Private fixture" };
+			values.getChatMember = {
+				status: "administrator",
+				user: { id: BOT, is_bot: true },
+			};
+			await expect(
+				new TelegramClient(config, provider(values)).verifyTarget(target),
+			).resolves.toEqual({
+				botId: BOT,
+				chatId: CHAT,
+				title: "Private fixture",
+				username: null,
+			});
+		},
+	);
+	it.each([
+		["channel", "group"],
+		["channel", "supergroup"],
+		["group", "channel"],
+		["group", "supergroup"],
+		["supergroup", "channel"],
+		["supergroup", "group"],
+	])(
+		"keeps a verified %s upload uncertain when its acknowledgement changes to %s",
+		async (verifiedType, returnedType) => {
+			const values = metadata();
+			values.getChat = {
+				id: CHAT,
+				type: verifiedType,
+				title: "Private fixture",
+			};
+			const fetchMock = provider(values, () =>
+				json({ ...message(), chat: { id: CHAT, type: returnedType } }),
+			);
+			await outcome(
+				new TelegramClient(config, fetchMock).sendDocument(documentRequest),
+				"uncertain",
+			);
+			expect(
+				fetchMock.mock.calls.filter(([url]) => method(url) === "sendDocument"),
+			).toHaveLength(1);
+		},
+	);
+	it("refuses the former public username after the owner selected another channel", async () => {
+		const values = metadata();
+		values.getChat = {
+			id: CHAT,
+			type: "channel",
+			title: "Old fixture",
+			username: "BibleOnSite",
+		};
+		await outcome(
+			new TelegramClient(config, provider(values)).verifyTarget({
+				...target,
+				audience: "real",
+			}),
+			"failed",
+		);
 	});
 	it.each([
 		["getMe", { id: BOT, is_bot: false, username: "ExampleTestBot" }],
@@ -223,7 +339,7 @@ describe("Telegram configuration and target verification", () => {
 		["getMe", { id: BOT, is_bot: true, username: "OtherExampleBot" }],
 		["getMe", { id: 0, is_bot: true, username: "ExampleTestBot" }],
 		["getChat", { id: CHAT - 1, type: "channel", title: "Wrong target" }],
-		["getChat", { id: CHAT, type: "supergroup", title: "Wrong type" }],
+		["getChat", { id: CHAT, type: "unknown", title: "Wrong type" }],
 		["getChat", { id: CHAT, type: "private", title: "Wrong type" }],
 		[
 			"getChat",

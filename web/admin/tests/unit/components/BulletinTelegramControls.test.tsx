@@ -37,8 +37,8 @@ function ready(): BulletinTelegramState {
 			canUseReal: true,
 			blockers: [],
 		},
-		testTarget: { title: "ערוץ ניסיון פרטי לדוגמה", username: null },
-		realTarget: { title: 'תנ"ך על הפרק', username: "BibleOnSite" },
+		testTarget: { title: "יעד ניסיון פרטי לדוגמה", username: null },
+		realTarget: { title: 'תנ"ך על הפרק', username: "alhaperek" },
 		job: null,
 	};
 }
@@ -85,7 +85,7 @@ const selectReal = () =>
 		target: { value: "real" },
 	});
 const saveMode = () => screen.getByRole("button", { name: "שמירת יעד הטלגרם" });
-const loaded = () => screen.findByText("ערוץ ניסיון פרטי לדוגמה");
+const loaded = () => screen.findByText("יעד ניסיון פרטי לדוגמה");
 
 describe("independent Telegram bulletin controls", () => {
 	beforeEach(() => {
@@ -121,7 +121,7 @@ describe("independent Telegram bulletin controls", () => {
 		view();
 		await loaded();
 		expect(screen.getByLabelText("יעד השליחה בטלגרם")).toHaveValue("test");
-		expect(screen.getByText("@BibleOnSite")).toHaveAttribute("dir", "ltr");
+		expect(screen.getByText("@alhaperek")).toHaveAttribute("dir", "ltr");
 		expect(screen.getByText(/מצב הטלגרם נשמר בנפרד/)).toBeVisible();
 		expect(send()).toBeEnabled();
 		expect(mocks.read).toHaveBeenCalledWith({ data: DATE });
@@ -244,7 +244,7 @@ describe("independent Telegram bulletin controls", () => {
 		);
 		fireEvent.click(saveMode());
 		await screen.findByText(/שינוי יעד הטלגרם לא נשמר/);
-		expect(screen.getByText("מצב ניסיון - הערוץ הפרטי בלבד")).toBeVisible();
+		expect(screen.getByText("מצב ניסיון - היעד הפרטי בלבד")).toBeVisible();
 		expect(send()).toBeDisabled();
 		expect(mocks.queue).not.toHaveBeenCalled();
 	});

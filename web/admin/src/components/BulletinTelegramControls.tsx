@@ -15,7 +15,7 @@ import {
 const STATUS_NAMES = {
 	queued: "ממתין בתור",
 	sending: "בשליחה",
-	sent: "פורסם בערוץ",
+	sent: "פורסם ביעד הטלגרם",
 	failed: "השליחה נכשלה",
 	uncertain: "נדרשת בדיקה",
 	suppressed: "השליחה נחסמה",
@@ -171,11 +171,11 @@ export function BulletinTelegramControls({
 				<>
 					<p className="font-semibold">
 						{settings.audience === "test"
-							? "מצב ניסיון - הערוץ הפרטי בלבד"
+							? "מצב ניסיון - היעד הפרטי בלבד"
 							: "מצב פרסום בערוץ הציבורי"}
 					</p>
 					<p>
-						ערוץ ניסיון פרטי:{" "}
+						יעד ניסיון פרטי:{" "}
 						<strong>{state.testTarget?.title ?? "טרם הוגדר"}</strong>
 					</p>
 					<p>
@@ -191,7 +191,7 @@ export function BulletinTelegramControls({
 						)}
 					</p>
 					<p className="text-sm text-gray-600">
-						מצב הטלגרם נשמר בנפרד ממצב הדוא"ל. הניסיון מפרסם רק בערוץ הפרטי
+						מצב הטלגרם נשמר בנפרד ממצב הדוא"ל. הניסיון מפרסם רק ביעד הפרטי
 						שהוגדר.
 					</p>
 					<div className="flex flex-wrap items-end gap-3">
@@ -212,7 +212,7 @@ export function BulletinTelegramControls({
 									changeAudience.reset();
 								}}
 							>
-								<option value="test">ערוץ ניסיון פרטי</option>
+								<option value="test">יעד ניסיון פרטי</option>
 								<option value="real" disabled={!realAvailable}>
 									הערוץ הציבורי
 								</option>

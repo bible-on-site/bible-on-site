@@ -351,7 +351,7 @@ beforeEach(() => {
 			botId: 123456,
 			chatId: -100222,
 			title: "Public",
-			username: "BibleOnSite",
+			username: "alhaperek",
 		},
 	});
 	mocks.prepared.mockResolvedValue(prepared);
