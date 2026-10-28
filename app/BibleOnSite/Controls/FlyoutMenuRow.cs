@@ -45,7 +45,9 @@ public sealed class FlyoutMenuRow : ContentView
 	/// Raised on tap (touch platforms) or native Button activation — click,
 	/// Enter, Space (Windows). Wire this instead of a gesture recognizer.
 	/// </summary>
-	public event EventHandler? Activated; //NOSONAR — subscribed from XAML (Activated="...") and tests; generated event wiring is invisible to analyzers.
+#pragma warning disable S3264 // Subscribed from XAML (Activated="...") and tests; generated event wiring is invisible to analyzers.
+	public event EventHandler? Activated;
+#pragma warning restore S3264
 
 	/// <summary>
 	/// Raises <see cref="Activated"/>. Called by the Windows platform
