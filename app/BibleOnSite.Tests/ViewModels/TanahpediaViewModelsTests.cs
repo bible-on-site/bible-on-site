@@ -402,7 +402,10 @@ public class TanahpediaEntryViewModelTests
     private readonly Mock<IAppNavigator> _navigator = new();
 
     private TanahpediaEntryViewModel Create(PerekDataService? perekData = null) =>
-        new(_service.Object, _navigator.Object, perekData ?? EmptyPerekData());
+        new(_service.Object, _navigator.Object, perekData ?? EmptyPerekData(),
+            // No-op stub — LoadAsync awaits the dedication load, so a real
+            // endpoint must never be hit from unit tests (#2731).
+            StubDedicationService.Instance);
 
     private static PerekDataService EmptyPerekData()
     {
