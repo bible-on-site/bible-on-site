@@ -11,6 +11,7 @@ import {
 	verifyServiceAccessToken,
 } from "./server/auth";
 import { rescanDedicationExpiries } from "./server/dedication-expiry";
+import { ensureEmailWorkerStarted } from "./server/email-worker-runtime.server";
 
 const SKIP_AUTH = process.env.SKIP_AUTH === "true";
 
@@ -60,6 +61,7 @@ function resolveRequestOrigin(request: Request): {
 
 export default createServerEntry({
 	async fetch(request) {
+		await ensureEmailWorkerStarted();
 		const url = new URL(request.url);
 
 		// E2E coverage drain: instrumented SSR modules write istanbul coverage to

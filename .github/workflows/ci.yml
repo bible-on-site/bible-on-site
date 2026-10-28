@@ -2428,6 +2428,8 @@ jobs:
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+      - name: Verify daily bulletin mail infrastructure and assets
+        run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
