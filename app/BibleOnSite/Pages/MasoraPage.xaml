@@ -100,6 +100,7 @@
                                             AutomationId="MasoraRowsCollection"
                                             ItemsSource="{Binding Rows}"
                                             SelectionMode="None"
+                                            Loaded="OnReaderListLoaded"
                                             Margin="8,0,8,0">
                                 <CollectionView.Footer>
                                     <ContentView HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
