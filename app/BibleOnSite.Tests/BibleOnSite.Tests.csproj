@@ -56,6 +56,7 @@
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
     <Compile Include="..\BibleOnSite\Services\CalendarPdfAssetService.cs" Link="Services\CalendarPdfAssetService.cs" />
     <Compile Include="..\BibleOnSite\Services\CycleDisplayFormatter.cs" Link="Services\CycleDisplayFormatter.cs" />
+    <Compile Include="..\BibleOnSite\Services\LearningCalendarPolicy.cs" Link="Services\LearningCalendarPolicy.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesNavigation.cs" Link="Services\PreferencesNavigation.cs" />
     <Compile Include="..\BibleOnSite\Services\IAppNavigator.cs" Link="Services\IAppNavigator.cs" />
     <Compile Include="..\BibleOnSite\Services\AppDialog.cs" Link="Services\AppDialog.cs" />
@@ -85,6 +86,8 @@
     <Compile Include="..\BibleOnSite\Services\DedicationService.cs" Link="Services\DedicationService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\FlyoutMenuState.cs" Link="ViewModels\FlyoutMenuState.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
+    <!-- Exercise calendar date-refresh lifecycle with the test XAML shell. -->
+    <Compile Include="..\BibleOnSite\Pages\LearningCalendarPage.xaml.cs" Link="Pages\LearningCalendarPage.xaml.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\IPerushimSheetViewModel.cs" Link="ViewModels\IPerushimSheetViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />

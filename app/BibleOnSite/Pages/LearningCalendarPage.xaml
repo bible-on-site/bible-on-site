@@ -148,6 +148,7 @@
                     Style="{StaticResource CalendarNavButton}"
                     SemanticProperties.Description="הורדת לוח הלימוד כ-PDF"
                     AutomationId="CalendarDownloadPdf"
+                    ToolTipProperties.Text="{Binding PdfAvailabilityText}"
                     Command="{Binding DownloadPdfCommand}"/>
         </Grid>
 
