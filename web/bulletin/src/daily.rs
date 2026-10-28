@@ -145,7 +145,7 @@ table {{ border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }}
     html.push_str("<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:24px 28px\"><h2 style=\"margin:0 0 12px;font-size:13px;line-height:20px;color:#28758a\">הפרק היומי</h2><p class=\"bulletin-scripture\" dir=\"rtl\" style=\"margin:0;font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.75;text-align:justify;text-align-last:right;color:#233d48\">");
     for (index, verse) in chapter.pesukim.iter().enumerate() {
         html.push_str(&format!(
-            "<span class=\"bulletin-verse\"><span style=\"color:#28758a;font-family:Arial,sans-serif;font-size:11px;font-weight:700;vertical-align:super;line-height:0\">{}</span> {}</span> ",
+            "<span class=\"bulletin-verse\"><span class=\"bulletin-verse-number\" style=\"color:#28758a;font-family:Arial,sans-serif;font-size:14px;font-weight:700;vertical-align:baseline;line-height:inherit\">{}</span> {}</span> ",
             tanach::perek_to_hebrew((index + 1) as u32),
             escape(verse),
         ));
@@ -316,6 +316,22 @@ mod tests {
             scripture.matches("class=\"bulletin-verse\"").count(),
             chapter.pesukim.len()
         );
+        assert_eq!(
+            scripture.matches("class=\"bulletin-verse-number\"").count(),
+            chapter.pesukim.len()
+        );
+        assert_eq!(
+            scripture
+                .matches(
+                    "font-size:14px;font-weight:700;vertical-align:baseline;line-height:inherit"
+                )
+                .count(),
+            chapter.pesukim.len(),
+            "every verse letter must share the text baseline with readable inline sizing"
+        );
+        assert!(!scripture.contains("vertical-align:super"));
+        assert!(!scripture.contains("line-height:0"));
+        assert!(!scripture.contains("<sup"));
         assert!(!scripture.contains("<p"));
         assert!(!scripture.contains("<br"));
         assert!(scripture.contains("text-align:justify;text-align-last:right"));

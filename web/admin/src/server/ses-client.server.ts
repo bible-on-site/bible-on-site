@@ -8,6 +8,8 @@ import {
 	type TopicPreference,
 	UpdateContactCommand,
 } from "@aws-sdk/client-sesv2";
+import { type CSSProperties, createElement, type ReactElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 export type SesAudience = "test" | "real";
 type SubscriptionStatus = "OPT_IN" | "OPT_OUT";
@@ -21,12 +23,13 @@ const WHATSAPP = "https://wa.me/37257078640";
 const TELEGRAM = "https://t.me/BibleOnSite";
 const ICON_BASE =
 	"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/";
-// Rasterized from the website's original contact SVGs; attribution in assets manifest.
+// Rasterized project SVGs; provenance and attribution are in the assets manifest.
 const CONTACT_ICONS = {
 	email: "envelope-12f047cbf921.png",
 	phone: "phone-fba2eb24d511.png",
 	whatsapp: "whatsapp-97aa65ad2e4e.png",
 	telegram: "telegram-4d1164ab375c.png",
+	globe: "globe-62b826c2ce07.png",
 } as const;
 
 export interface SesConfig {
@@ -90,21 +93,21 @@ function authored(value: string): string {
 	return value.replace(/״/g, '"').replace(/׳/g, "'").replace(/[־–—]/g, "-");
 }
 
-function escaped(value: string): string {
-	return value.replace(/[&<>"']/g, (char) => {
-		const entities: Record<string, string> = {
-			"&": "&amp;",
-			"<": "&lt;",
-			">": "&gt;",
-			'"': "&quot;",
-			"'": "&#39;",
-		};
-		return entities[char];
-	});
-}
-
-function footerLink(href: string, label: string, ltr = false): string {
-	return `<a href="${escaped(href)}"${ltr ? ' dir="ltr"' : ""} style="color:#28758a;text-decoration:underline;${ltr ? "display:inline-block;direction:ltr;unicode-bidi:isolate;" : ""}">${escaped(label)}</a>`;
+function footerLink(href: string, label: string, ltr = false): ReactElement {
+	const style: CSSProperties = {
+		color: "#28758a",
+		textDecoration: "underline",
+	};
+	if (ltr) {
+		style.display = "inline-block";
+		style.direction = "ltr";
+		style.unicodeBidi = "isolate";
+	}
+	return createElement(
+		"a",
+		{ href, dir: ltr ? "ltr" : undefined, style },
+		label,
+	);
 }
 
 function contactLink(
@@ -112,19 +115,138 @@ function contactLink(
 	href: string,
 	label: string,
 	ltr = false,
-): string {
-	return `<span dir="rtl" style="display:inline-block;white-space:nowrap"><img src="${ICON_BASE}${CONTACT_ICONS[icon]}" width="16" height="16" alt="" role="presentation" style="display:inline-block;width:16px;height:16px;vertical-align:middle;margin-left:6px;border:0;outline:none" />${footerLink(href, label, ltr)}</span>`;
+): ReactElement {
+	return createElement(
+		"span",
+		{ dir: "rtl", style: { display: "inline-block", whiteSpace: "nowrap" } },
+		createElement("img", {
+			src: ICON_BASE + CONTACT_ICONS[icon],
+			width: 16,
+			height: 16,
+			alt: "",
+			role: "presentation",
+			// Keep React 19 resource hints out of the renderer's direct table-row slot.
+			fetchPriority: "low",
+			style: {
+				display: "inline-block",
+				width: 16,
+				height: 16,
+				verticalAlign: "middle",
+				marginLeft: 6,
+				border: 0,
+				outline: "none",
+			},
+		}),
+		footerLink(href, label, ltr),
+	);
 }
 
-function footerRow(config: SesConfig, replyTo: string): string {
-	const address = config.contactAddress
-		? `<p style="margin:8px 0 0;white-space:pre-line">${escaped(authored(config.contactAddress))}</p>`
-		: "";
-	const reply =
-		replyTo === CONTACT_EMAIL
-			? ""
-			: `<p style="margin:6px 0 0">למענה על הדיוור: ${footerLink(`mailto:${replyTo}`, replyTo, true)}</p>`;
-	return `<tr><td dir="rtl" align="right" style="padding:20px 28px;background:#f5f9fa;border-top:1px solid #dce5e7;text-align:right;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;color:#637780"><footer dir="rtl" style="text-align:right"><p style="margin:0">ליצירת קשר: ${contactLink("email", `mailto:${CONTACT_EMAIL}`, CONTACT_EMAIL, true)} &nbsp;|&nbsp; ${contactLink("phone", `tel:${PHONE}`, PHONE_DISPLAY, true)}</p><p style="margin:4px 0 0">${contactLink("whatsapp", WHATSAPP, "ווטסאפ")} &nbsp;|&nbsp; ${contactLink("telegram", TELEGRAM, "טלגרם")} &nbsp;|&nbsp; ${footerLink(WEBSITE, "לימוד יומי באתר")}</p>${reply}${address}<p style="margin:10px 0 0;font-size:12px">אפשר להסיר את הכתובת מרשימת התפוצה בכל עת: ${footerLink("{{amazonSESUnsubscribeUrl}}", "להסרה מרשימת התפוצה")}</p></footer></td></tr>`;
+function footerRow(config: SesConfig, replyTo: string): ReactElement {
+	return createElement(
+		"tr",
+		null,
+		createElement(
+			"td",
+			{
+				dir: "rtl",
+				align: "right",
+				style: {
+					padding: "20px 28px",
+					background: "#f5f9fa",
+					borderTop: "1px solid #dce5e7",
+					textAlign: "right",
+					fontFamily: "Arial,sans-serif",
+					fontSize: 13,
+					lineHeight: 1.8,
+					color: "#637780",
+				},
+			},
+			createElement(
+				"footer",
+				{ dir: "rtl", style: { textAlign: "right" } },
+				createElement(
+					"p",
+					{ style: { margin: 0 } },
+					"ליצירת קשר: ",
+					contactLink("email", `mailto:${CONTACT_EMAIL}`, CONTACT_EMAIL, true),
+					" \u00a0|\u00a0 ",
+					contactLink("phone", `tel:${PHONE}`, PHONE_DISPLAY, true),
+				),
+				createElement(
+					"p",
+					{ style: { margin: "4px 0 0" } },
+					contactLink("whatsapp", WHATSAPP, "ווטסאפ"),
+					" \u00a0|\u00a0 ",
+					contactLink("telegram", TELEGRAM, "טלגרם"),
+					" \u00a0|\u00a0 ",
+					contactLink("globe", WEBSITE, "לימוד יומי באתר"),
+				),
+				replyTo === CONTACT_EMAIL
+					? null
+					: createElement(
+							"p",
+							{ style: { margin: "6px 0 0" } },
+							"למענה על הדיוור: ",
+							footerLink(`mailto:${replyTo}`, replyTo, true),
+						),
+				config.contactAddress
+					? createElement(
+							"p",
+							{ style: { margin: "8px 0 0", whiteSpace: "pre-line" } },
+							authored(config.contactAddress),
+						)
+					: null,
+				createElement(
+					"p",
+					{ style: { margin: "10px 0 0", fontSize: 12 } },
+					"אפשר להסיר את הכתובת מרשימת התפוצה בכל עת: ",
+					footerLink("{{amazonSESUnsubscribeUrl}}", "להסרה מרשימת התפוצה"),
+				),
+			),
+		),
+	);
+}
+
+function legacyFooter(row: ReactElement): ReactElement {
+	return createElement(
+		"table",
+		{
+			role: "presentation",
+			cellPadding: 0,
+			cellSpacing: 0,
+			width: "100%",
+			dir: "rtl",
+			style: { borderCollapse: "collapse" },
+		},
+		createElement(
+			"tbody",
+			null,
+			createElement(
+				"tr",
+				null,
+				createElement(
+					"td",
+					{ align: "center" },
+					createElement(
+						"table",
+						{
+							role: "presentation",
+							cellPadding: 0,
+							cellSpacing: 0,
+							width: "600",
+							style: {
+								width: "100%",
+								maxWidth: 600,
+								borderCollapse: "collapse",
+								textAlign: "right",
+							},
+						},
+						createElement("tbody", null, row),
+					),
+				),
+			),
+		),
+	);
 }
 
 // Each RFC 2047 word stays below 75 characters without splitting UTF-8 codepoints.
@@ -331,15 +453,13 @@ export class SesClient {
 		}
 		const replyTo = this.config.replyToAddress ?? this.config.fromAddress;
 		const row = footerRow(this.config, replyTo);
-		const legacyFooter = `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" dir="rtl" style="border-collapse:collapse"><tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:100%;max-width:600px;border-collapse:collapse;text-align:right"><tbody>${row}</tbody></table></td></tr></table>`;
-		const html = input.html.includes(FOOTER_MARKER)
-			? input.html.replace(FOOTER_MARKER, () => row)
+		const hasMarker = input.html.includes(FOOTER_MARKER);
+		const footer = renderToStaticMarkup(hasMarker ? row : legacyFooter(row));
+		const html = hasMarker
+			? input.html.replace(FOOTER_MARKER, () => footer)
 			: /<\/body\s*>/i.test(input.html)
-				? input.html.replace(
-						/<\/body\s*>/i,
-						(closing) => legacyFooter + closing,
-					)
-				: input.html + legacyFooter;
+				? input.html.replace(/<\/body\s*>/i, (closing) => footer + closing)
+				: input.html + footer;
 		const tags: { Name: string; Value: string }[] = [
 			{ Name: "bulletin_audience", Value: audience },
 		];

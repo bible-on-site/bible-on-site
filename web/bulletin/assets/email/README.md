@@ -2,7 +2,7 @@
 
 These are versions of existing project artwork for use in email. The JPEG is copied byte for byte from `app/BibleOnSite/Resources/Images/logo_header.jpg`; its original dimensions are 591 × 295. Preserve that aspect ratio when displaying it.
 
-The four PNGs rasterize the website's existing SVG contact icons at 36 × 36, with transparent backgrounds and the original black artwork. Their shapes retain their aspect ratios inside the square canvas. Display them at 16 or 18 CSS pixels. No artwork was generated, redrawn, recolored, or substituted.
+The four contact PNGs rasterize the website's existing SVG icons at 36 × 36, with transparent backgrounds and the original black artwork. Their shapes retain their aspect ratios inside the square canvas without redrawing or recoloring. The globe PNG uses the project-authored 24 × 24 SVG in `source/globe.svg`, rasterized with the same 36 × 36 transparent canvas. Display these icons at 16 or 18 CSS pixels.
 
 `manifest.json` records each source path, source and output SHA-256, filename, dimensions, MIME type, size, attribution, and intended immutable S3 object key and public S3 URL. The public base is `https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/`. Those URLs describe publication targets; generating these files does not upload them or prove that the URLs are live. Publication is a separate operation against the existing public assets bucket.
 
@@ -25,5 +25,6 @@ Original SVG files and their attribution comments remain in `web/bible-on-site/p
 - Phone: [SVG Repo source](https://www.svgrepo.com/svg/525375/phone-calling).
 - WhatsApp: [SVG Repo source](https://www.svgrepo.com/svg/450391/whatsapp), identified in the SVG as `meteor-icon-kit__regular-whatsapp`.
 - Telegram: Font Awesome Free 6.7.2 by @fontawesome — https://fontawesome.com. License: https://fontawesome.com/license/free. Copyright 2025 Fonticons, Inc.
+- Globe: project-authored circle, meridians and equator in `source/globe.svg`; part of this project's artwork.
 
 The SVG Repo files contain source URLs rather than explicit license notices. This directory preserves those references and does not assign a new license to the artwork. The Telegram notice above preserves the attribution embedded in its source SVG. The project wordmark remains the existing project's brand artwork.

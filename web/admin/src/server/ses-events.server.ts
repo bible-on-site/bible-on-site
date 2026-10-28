@@ -49,15 +49,28 @@ function text(value: unknown, maximum = 256): value is string {
 }
 
 function emailAddress(value: unknown): string | null {
-	if (
-		!text(value, 254) ||
-		!/^[\x21-\x7e]+$/.test(value) ||
-		/[<>(),;:"]/.test(value) ||
-		!/^[^@]+@[^@]+\.[^@]+$/.test(value)
-	) {
+	if (typeof value !== "string" || value.length === 0 || value.length > 254) {
 		return null;
 	}
-	return value.toLowerCase();
+	let separator = -1;
+	let hasDomainDot = false;
+	for (let index = 0; index < value.length; index++) {
+		const code = value.charCodeAt(index);
+		const char = value[index];
+		if (code < 0x21 || code > 0x7e || '<>(),;:"'.includes(char)) return null;
+		if (char === "@") {
+			if (separator !== -1 || index === 0) return null;
+			separator = index;
+		} else if (
+			char === "." &&
+			separator !== -1 &&
+			index > separator + 1 &&
+			index < value.length - 1
+		) {
+			hasDomainDot = true;
+		}
+	}
+	return hasDomainDot ? value.toLowerCase() : null;
 }
 
 function singleEmail(value: unknown, objects = false): string | null {

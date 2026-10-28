@@ -72,6 +72,9 @@ function sdkError(status: number, name = "ProviderException") {
 function calls(kind: string) {
 	return mocks.send.mock.calls.filter(([command]) => command.kind === kind);
 }
+function parseEmail(html: string): Document {
+	return new DOMParser().parseFromString(html, "text/html");
+}
 
 describe("SES managed-subscription transport", () => {
 	beforeEach(() => {
@@ -340,7 +343,7 @@ describe("SES managed-subscription transport", () => {
 		await new SesClient({
 			...config,
 			senderName: 'תנ״ך <שם> & "',
-			contactAddress: "רחוב־א <כתובת> & 'בית'",
+			contactAddress: "רחוב־א <כתובת> & 'בית' <img src=x onerror=alert(1)>",
 		}).sendOne(request);
 		const html = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
 		expect(html).not.toContain("<שם>");
@@ -350,7 +353,12 @@ describe("SES managed-subscription transport", () => {
 				.map((word) => Buffer.from(word[1], "base64").toString("utf8"))
 				.join(""),
 		).toBe('תנ"ך <שם> & "');
-		expect(html).toContain("רחוב-א &lt;כתובת&gt; &amp; &#39;בית&#39;");
+		const parsed = parseEmail(html);
+		expect(parsed.querySelector("footer")?.textContent).toContain(
+			"רחוב-א <כתובת> & 'בית' <img src=x onerror=alert(1)>",
+		);
+		expect(parsed.querySelectorAll("img")).toHaveLength(5);
+		expect(parsed.querySelector("[onerror]")).toBeNull();
 		expect(html).toContain("בֶן־אָדָם");
 	});
 	it("supports fragments without an optional address or trace tag", async () => {
@@ -381,8 +389,7 @@ describe("SES managed-subscription transport", () => {
 			'<html><body><table width="680"><tbody><tr><td><h1>תנ"ך על הפרק</h1><p>Saved article</p></td></tr><!--BULLETIN_EMAIL_FOOTER--></tbody></table></body></html>';
 		await new SesClient(config).sendOne({ ...request, html });
 		const output = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
-		const container = document.createElement("div");
-		container.innerHTML = output;
+		const container = parseEmail(output);
 		const footer = container.querySelector("footer");
 		expect(footer?.closest("table")?.getAttribute("width")).toBe("680");
 		expect(footer?.closest("td")?.getAttribute("align")).toBe("right");
@@ -392,6 +399,7 @@ describe("SES managed-subscription transport", () => {
 		expect(container.querySelectorAll("footer")).toHaveLength(1);
 		expect(container.querySelectorAll("h1,h2,h3")).toHaveLength(1);
 		expect(output).not.toContain("BULLETIN_EMAIL_FOOTER");
+		expect(output).not.toContain("<link");
 		expect(output.split("{{amazonSESUnsubscribeUrl}}")).toHaveLength(2);
 		expect(container.querySelectorAll("table")).toHaveLength(1);
 		expect(footer?.textContent).not.toContain('תנ"ך על הפרק');
@@ -399,8 +407,7 @@ describe("SES managed-subscription transport", () => {
 	it("uses a centered six-hundred-pixel fallback for immutable legacy snapshots", async () => {
 		await new SesClient(config).sendOne(request);
 		const output = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
-		const container = document.createElement("div");
-		container.innerHTML = output;
+		const container = parseEmail(output);
 		const table = container.querySelector("footer")?.closest("table");
 		expect(table?.getAttribute("width")).toBe("600");
 		expect(table?.getAttribute("style")).toContain("max-width:600px");
@@ -410,8 +417,7 @@ describe("SES managed-subscription transport", () => {
 	it("includes the public website contact channels with isolated LTR phone and email", async () => {
 		await new SesClient(config).sendOne(request);
 		const output = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
-		const container = document.createElement("div");
-		container.innerHTML = output;
+		const container = parseEmail(output);
 		for (const href of [
 			"mailto:tanah.site@gmail.com",
 			"tel:+37257078640",
@@ -439,29 +445,29 @@ describe("SES managed-subscription transport", () => {
 			...config,
 			replyToAddress: "TANAH.SITE@gmail.com",
 		}).sendOne(request);
-		const container = document.createElement("div");
-		container.innerHTML =
-			calls("send")[0][0].input.Content.Simple.Body.Html.Data;
+		const container = parseEmail(
+			calls("send")[0][0].input.Content.Simple.Body.Html.Data,
+		);
 		expect(
 			container.querySelectorAll('a[href="mailto:tanah.site@gmail.com"]'),
 		).toHaveLength(1);
-		expect(container.textContent).not.toContain("למענה על הדיוור");
+		expect(container.body.textContent).not.toContain("למענה על הדיוור");
 	});
-	it("pairs the four original website contact icons with readable links using small email-safe PNGs", async () => {
+	it("pairs contact and website links with five readable email-safe PNG icons", async () => {
 		await new SesClient({
 			...config,
 			replyToAddress: "tanah.site@gmail.com",
 		}).sendOne(request);
 		const output = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
-		const container = document.createElement("div");
-		container.innerHTML = output;
+		const container = parseEmail(output);
 		const images = Array.from(container.querySelectorAll("footer img"));
-		expect(images).toHaveLength(4);
+		expect(images).toHaveLength(5);
 		const filenames = [
 			"envelope-12f047cbf921.png",
 			"phone-fba2eb24d511.png",
 			"whatsapp-97aa65ad2e4e.png",
 			"telegram-4d1164ab375c.png",
+			"globe-62b826c2ce07.png",
 		];
 		const manifest = JSON.parse(
 			readFileSync(
@@ -482,10 +488,12 @@ describe("SES managed-subscription transport", () => {
 			expect(image.getAttribute("height")).toBe("16");
 			expect(image.getAttribute("alt")).toBe("");
 			expect(image.getAttribute("role")).toBe("presentation");
+			expect(image.getAttribute("fetchpriority")).toBe("low");
 			expect(image.parentElement?.querySelector("a")?.textContent).toBeTruthy();
 		}
 		expect(output).not.toContain("data:image");
 		expect(output).not.toContain("<svg");
+		expect(output).not.toContain("<link");
 		expect(output.split("{{amazonSESUnsubscribeUrl}}")).toHaveLength(2);
 		expect(calls("send")[0][0].input.Content.Simple).not.toHaveProperty(
 			"Attachments",
@@ -502,7 +510,9 @@ describe("SES managed-subscription transport", () => {
 		});
 		const output = calls("send")[0][0].input.Content.Simple.Body.Html.Data;
 		expect(output).toContain("ops&amp;daily@example.com");
-		expect(output).toContain("&lt;כתובת&gt; $&amp; $&#39;");
+		expect(parseEmail(output).querySelector("footer")?.textContent).toContain(
+			"<כתובת> $& $'",
+		);
 		expect(output).not.toContain("BULLETIN_EMAIL_FOOTER");
 	});
 	it("fails closed if a renderer contains more than one footer insertion marker", async () => {

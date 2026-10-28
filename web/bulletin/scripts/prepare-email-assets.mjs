@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const bulletinRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -29,8 +29,7 @@ if (
 	);
 }
 
-function loadSharp() {
-	const require = createRequire(import.meta.url);
+async function loadSharp() {
 	const candidates = modulePath
 		? [modulePath]
 		: [
@@ -44,7 +43,21 @@ function loadSharp() {
 	for (const candidate of candidates) {
 		if (!candidate) continue;
 		try {
-			return require(candidate);
+			const directory = await realpath(resolve(candidate));
+			if (!(await stat(directory)).isDirectory()) continue;
+			const packageFile = resolve(directory, "package.json");
+			const metadata = JSON.parse(await readFile(packageFile, "utf8"));
+			if (metadata.name !== "sharp") continue;
+			const require = createRequire(packageFile);
+			const entrypoint = await realpath(require.resolve("sharp"));
+			const entryRelative = relative(directory, entrypoint);
+			if (
+				isAbsolute(entryRelative) ||
+				entryRelative === ".." ||
+				entryRelative.startsWith(`..${sep}`)
+			)
+				continue;
+			return require("sharp");
 		} catch {
 			// Try the next existing developer-tool installation; never install a dependency.
 		}
@@ -58,7 +71,7 @@ function sha256(bytes) {
 	return createHash("sha256").update(bytes).digest("hex");
 }
 
-const sharp = loadSharp();
+const sharp = await loadSharp();
 const outputs = [];
 const assets = [];
 
@@ -110,11 +123,14 @@ const sources = {
 	whatsapp: "https://www.svgrepo.com/svg/450391/whatsapp",
 	telegram:
 		"Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.",
+	globe: "Project-authored globe icon for the Bible On Site email footer.",
 };
 for (const [id, attribution] of Object.entries(sources)) {
 	await addAsset(
 		id,
-		`web/bible-on-site/public/icons/${id}.svg`,
+		id === "globe"
+			? "web/bulletin/assets/email/source/globe.svg"
+			: `web/bible-on-site/public/icons/${id}.svg`,
 		"png",
 		(source) =>
 			sharp(source, { density: 72 })

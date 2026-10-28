@@ -123,7 +123,7 @@ test("email images preserve their original sources and published content hashes"
 	const manifest = JSON.parse(
 		readFileSync(new URL("manifest.json", folder), "utf8"),
 	);
-	assert.equal(manifest.assets.length, 5);
+	assert.equal(manifest.assets.length, 6);
 	const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 	for (const asset of manifest.assets) {
 		const bytes = readFileSync(new URL(asset.file, folder));

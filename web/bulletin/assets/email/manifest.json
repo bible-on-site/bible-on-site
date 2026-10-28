@@ -76,6 +76,20 @@
 			"height": 36,
 			"bytes": 685,
 			"attribution": "Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc."
+		},
+		{
+			"id": "globe",
+			"sourcePath": "web/bulletin/assets/email/source/globe.svg",
+			"sourceSha256": "8b532a757955dacfe73e68db2565048e9393b320699fa6878adc685b634021fd",
+			"sha256": "62b826c2ce07d0950a780fd306a44a97a531ef85931a1aeed366877621735e5f",
+			"file": "globe-62b826c2ce07.png",
+			"s3Key": "branding/daily-bulletin/globe-62b826c2ce07.png",
+			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/globe-62b826c2ce07.png",
+			"contentType": "image/png",
+			"width": 36,
+			"height": 36,
+			"bytes": 754,
+			"attribution": "Project-authored globe icon for the Bible On Site email footer."
 		}
 	]
 }

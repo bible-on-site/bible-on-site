@@ -111,6 +111,49 @@ describe("SES event normalization", () => {
 	});
 
 	it.each([
+		"Reader+Tag@sub.Example.com",
+		`${"a".repeat(242)}@example.com`,
+		"reader@example..com",
+		"reader@..example",
+		"reader@example..",
+	])(
+		"preserves accepted address structure with a bounded linear scan: %s",
+		(address) => {
+			const event = delivery();
+			event.mail.destination = [address];
+			event.delivery.recipients = [address];
+			expect(parseSesEvent(event, expected)).toMatchObject({
+				email: address.toLowerCase(),
+			});
+		},
+	);
+
+	it.each([
+		"reader@example",
+		"reader@.example",
+		"reader@example.",
+		"@example.com",
+		"reader@@example.com",
+		"reader@example.com@other.example",
+		"reader @example.com",
+		"reader@example.com ",
+		"reader@example.com\t",
+		"reader:tag@example.com",
+		"reader,tag@example.com",
+		"reader;tag@example.com",
+		"reader(tag)@example.com",
+		'"reader"@example.com',
+	])(
+		"rejects missing address components and unsupported syntax: %s",
+		(address) => {
+			const event = delivery();
+			event.mail.destination = [address];
+			event.delivery.recipients = [address];
+			expect(parseSesEvent(event, expected)).toBeNull();
+		},
+	);
+
+	it.each([
 		["Send", { send: {} }, "send"],
 		["Reject", { reject: { reason: "Bad content" } }, "reject"],
 		[
