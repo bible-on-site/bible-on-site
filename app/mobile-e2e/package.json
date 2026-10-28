@@ -23,7 +23,7 @@
 	"devDependencies": {
 		"appium": "3.8.0",
 		"appium-uiautomator2-driver": "8.7.1",
-		"appium-xcuitest-driver": "12.21.0"
+		"appium-xcuitest-driver": "12.22.0"
 	},
 	"packageManager": "bun@1.4.4",
 	"overrides": {
