@@ -23,7 +23,7 @@ internal static class FailureDiagnostics
         var id = Guid.NewGuid().ToString("N");
         var started = Stopwatch.StartNew();
         var failedAtUtc = DateTimeOffset.UtcNow;
-        try
+        PreserveFailure(() =>
         {
             if (budget <= TimeSpan.Zero || budget > CaptureBudget)
             {
@@ -81,17 +81,32 @@ internal static class FailureDiagnostics
             {
                 Log(log, $"Failure diagnostics acknowledgement was not received within {budget.TotalSeconds:0.###} seconds; request {id} retained.");
             }
+        }, log, "Failure diagnostics handshake", exception =>
+            File.WriteAllText(Path.Join(directory, $"{id}.error.txt"), exception.ToString()));
+    }
+
+    /// <summary>After a scenario fails, secondary diagnostic faults must not replace its exception.</summary>
+    internal static void PreserveFailure(Action operation, Action<string> writeOutput,
+        string description = "Failure diagnostics", Action<Exception>? retainError = null)
+    {
+        try
+        {
+            operation();
         }
         catch (Exception exception) //NOSONAR Diagnostic failures must preserve the scenario's original exception.
         {
-            Log(log, $"Failure diagnostics handshake failed: {exception}");
+            Log(writeOutput, $"{description} failed: {exception}");
+            if (retainError == null)
+            {
+                return;
+            }
             try
             {
-                File.WriteAllText(Path.Join(directory, $"{id}.error.txt"), exception.ToString());
+                retainError(exception);
             }
             catch (Exception retentionError) //NOSONAR A diagnostic retention failure must not replace the scenario failure.
             {
-                Log(log, $"Failure diagnostics error could not be retained: {retentionError.Message}");
+                Log(writeOutput, $"Failure diagnostics error could not be retained: {retentionError.Message}");
             }
         }
     }

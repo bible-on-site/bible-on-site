@@ -110,6 +110,60 @@ public sealed class FailureDiagnosticsTests : IDisposable
             _ => throw new IOException("closed output"), TimeSpan.FromMilliseconds(50));
     }
 
+    [Fact]
+    public void DoublyFailedOutputPreservesTheOriginalException()
+    {
+        Environment.SetEnvironmentVariable(FailureDiagnostics.DirectoryVariable, Path.Join(_directory, "absent"));
+        var originalError = Console.Error;
+        using var unavailableConsole = new UnavailableConsoleWriter();
+        var outputFailures = 0;
+        var original = new InvalidOperationException("original scenario failure");
+        var output = new ListOutput(_log, _ =>
+        {
+            outputFailures++;
+            throw new IOException("test output unavailable");
+        });
+        var scenario = new FakeDeviceTest(output, new FakeSession(Path.Join(_directory, "artifacts")));
+        try
+        {
+            Console.SetError(unavailableConsole);
+            Assert.Same(original, Assert.Throws<InvalidOperationException>(() => scenario.Execute(() => throw original)));
+            Assert.True(outputFailures > 0);
+            Assert.True(unavailableConsole.FailedWrites > 0);
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+    }
+
+    [Fact]
+    public void OccupiedArtifactPathCannotReplaceTheOriginalScenarioFailure()
+    {
+        var artifacts = Path.Join(_directory, "artifacts");
+        File.WriteAllText(artifacts, "existing file must survive");
+        var original = new InvalidOperationException("original scenario failure");
+        var scenario = new FakeDeviceTest(new ListOutput(_log), new FakeSession(artifacts));
+
+        Assert.Same(original, Assert.Throws<InvalidOperationException>(() => scenario.Execute(() => throw original)));
+
+        Assert.Equal("existing file must survive", File.ReadAllText(artifacts));
+        Assert.Contains(_log, message => message.Contains("Failure diagnostics failed"));
+    }
+    [Fact]
+    public void ArtifactWriteFailureStillFailsAnOtherwisePassingScenario()
+    {
+        var artifacts = Path.Join(_directory, "artifacts");
+        File.WriteAllText(artifacts, "existing file must survive");
+        var scenario = new FakeDeviceTest(new ListOutput(_log), new FakeSession(artifacts));
+
+        Assert.ThrowsAny<IOException>(() => scenario.Execute(() =>
+        {
+            // The scenario succeeds; only writing its evidence is expected to fail.
+        }));
+
+        Assert.Equal("existing file must survive", File.ReadAllText(artifacts));
+    }
     private static void Acknowledge(string request)
     {
         var ack = request.Replace(".request.json", ".ack.json", StringComparison.Ordinal);
@@ -123,13 +177,26 @@ public sealed class FailureDiagnosticsTests : IDisposable
         Directory.Delete(_directory, true);
     }
 
-    private sealed class ListOutput(List<string> lines) : ITestOutputHelper
+    private sealed class UnavailableConsoleWriter : StringWriter
+    {
+        public int FailedWrites { get; private set; }
+        public override void WriteLine(string? value)
+        {
+            FailedWrites++;
+            throw new IOException("console error unavailable");
+        }
+    }
+    private sealed class ListOutput(List<string> lines, Action<string>? beforeWrite = null) : ITestOutputHelper
     {
         public string Output => string.Join("\n", lines);
-        public void Write(string message) => lines.Add(message);
-        public void Write(string format, params object[] args) => lines.Add(string.Format(format, args));
-        public void WriteLine(string message) => lines.Add(message);
-        public void WriteLine(string format, params object[] args) => lines.Add(string.Format(format, args));
+        public void Write(string message)
+        {
+            beforeWrite?.Invoke(message);
+            lines.Add(message);
+        }
+        public void Write(string format, params object[] args) => Write(string.Format(format, args));
+        public void WriteLine(string message) => Write(message);
+        public void WriteLine(string format, params object[] args) => Write(string.Format(format, args));
     }
 
     private sealed class FakeSession(string artifacts) : IMobileDeviceSession
