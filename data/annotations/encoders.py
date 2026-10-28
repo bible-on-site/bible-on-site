@@ -487,13 +487,22 @@ def _row_entity_type(rows_words_types):
     return counts.most_common(1)[0][0] if counts else None
 
 
-def retype_pasuk_rows(pasuk, rows, entities_fn):
+def _stamp(row, model_revision):
+    """Attach the producing model's revision tag to an emitted row."""
+    return row if model_revision is None else dict(row, model_revision=model_revision)
+
+
+def retype_pasuk_rows(pasuk, rows, entities_fn, model_revision=None):
     """Re-type baseline pasuk rows with the encoder's word labels.
 
     Detection, spans, names and acceptance stay the lexical tier's; a
     row whose words map to nothing keeps its lexical type (abstain, not
     discard — a missing entity_type vote never deletes a candidate).
+    `model_revision` restamps every row when the hybrid — not the bare
+    lexical tier — is the emitting pipeline.
     """
+    if not rows:
+        return []
     norm_text, words = pasuk_view(pasuk)
     types = word_entity_types(norm_text, words, entities_fn)
     seg_to_word = {w[0]: k for k, w in enumerate(words)}
@@ -510,12 +519,41 @@ def retype_pasuk_rows(pasuk, rows, entities_fn):
         entity_type = _row_entity_type(covered)
         if entity_type is not None:
             row = dict(row, entity_type=entity_type)
-        out.append(row)
+        out.append(_stamp(row, model_revision))
     return out
 
 
-def retype_article_rows(content, rows, entities_fn):
-    """Re-type baseline article rows the same way, per text run."""
+def retype_perek_rows(perek, base_rows, entities_fn, model_revision=None):
+    """Re-type one perek's baseline rows, grouped per pasuk.
+
+    Shared by the golden eval and the publish stage: pesukim with no
+    detected candidates skip inference entirely — a retype of zero rows
+    is empty either way, and the model call is the expensive part.
+    """
+    by_pasuk = {}
+    for row in base_rows:
+        by_pasuk.setdefault(row["pasuk_number"], []).append(row)
+    rows = []
+    for pasuk_number, pasuk in enumerate(perek["pesukim"], start=1):
+        chunk = by_pasuk.get(pasuk_number)
+        if chunk:
+            rows.extend(
+                retype_pasuk_rows(
+                    pasuk, chunk, entities_fn, model_revision
+                )
+            )
+    return rows
+
+
+def retype_article_rows(content, rows, entities_fn, model_revision=None):
+    """Re-type baseline article rows the same way, per text run.
+
+    Same contract as `retype_pasuk_rows`: spans/names/acceptance stay,
+    unmapped words abstain to the lexical type, `model_revision` restamps
+    every emitted row.
+    """
+    if not rows:
+        return []
     types_by_run = []
     for run_start, run_end in baseline_articles.iter_text_runs(content):
         norm_text, words = normalized_run(content, run_start, run_end)
@@ -535,7 +573,7 @@ def retype_article_rows(content, rows, entities_fn):
         entity_type = _row_entity_type(covered)
         if entity_type is not None:
             row = dict(row, entity_type=entity_type)
-        out.append(row)
+        out.append(_stamp(row, model_revision))
     return out
 
 
@@ -602,18 +640,14 @@ def evaluate_candidate(spec, gold_dir=ge.GOLDEN_DIR):
             chapter_tokens = lexicon["books"].get(stem, {}).get(
                 str(chapter), {}
             )
-            base_rows = baseline.decorations_for_perek(
-                perek, chapter_tokens, lexicon
+            return retype_perek_rows(
+                perek,
+                baseline.decorations_for_perek(
+                    perek, chapter_tokens, lexicon
+                ),
+                entities_fn,
+                model_revision=revision,
             )
-            rows = []
-            for pasuk_number, pasuk in enumerate(perek["pesukim"], 1):
-                chunk = [
-                    r
-                    for r in base_rows
-                    if r["pasuk_number"] == pasuk_number
-                ]
-                rows.extend(retype_pasuk_rows(pasuk, chunk, entities_fn))
-            return [dict(r, model_revision=revision) for r in rows]
         return decorations_for_perek(
             perek,
             entities_fn,
@@ -634,16 +668,19 @@ def evaluate_candidate(spec, gold_dir=ge.GOLDEN_DIR):
 
     def predict_article(article_id, content):
         if retype:
-            base_rows = baseline_articles.decorations_for_article(
-                article_id,
+            return retype_article_rows(
                 content,
-                gazetteer,
-                held,
-                word_counts=word_counts,
-                tagged_counts=tagged_counts,
+                baseline_articles.decorations_for_article(
+                    article_id,
+                    content,
+                    gazetteer,
+                    held,
+                    word_counts=word_counts,
+                    tagged_counts=tagged_counts,
+                ),
+                entities_fn,
+                model_revision=revision,
             )
-            rows = retype_article_rows(content, base_rows, entities_fn)
-            return [dict(r, model_revision=revision) for r in rows]
         return decorations_for_article(
             article_id,
             content,
