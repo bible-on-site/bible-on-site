@@ -411,7 +411,7 @@ export async function processTelegramJob(
 	id: string,
 	signal?: AbortSignal,
 ): Promise<boolean> {
-	if (!UUID.test(id) || signal?.aborted) return false;
+	if (!UUID.test(id) || signal?.aborted) return false; // nosemgrep -- fixed-width bounded literal regex; linear-time match on job id
 	const runtime = loadTelegramRuntime();
 	if (!runtime) return false;
 	const row = await readJob(id);
