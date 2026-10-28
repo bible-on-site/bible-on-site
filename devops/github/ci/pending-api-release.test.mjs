@@ -15,6 +15,7 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import {
 	apiTagVersion,
+	compareVersions,
 	latestPublishedApiRelease,
 	main,
 	normalizeApiCargo,
@@ -404,4 +405,113 @@ test("real shallow checkout compares the pinned published commit without editing
 	assert.equal(result.baselineSha, base);
 	assert.deepEqual(result.changedFiles, ["web/api/src/main.rs"]);
 	assert.equal(gitAt(checkout, ["status", "--porcelain"]), "");
+});
+
+test("canonical version parsing and lexical numeric ordering handle long hostile inputs", () => {
+	const versions = [
+		"0.0.0",
+		"0.0.9",
+		"0.0.10",
+		"0.1.0",
+		"1.0.0",
+		"9.999.1",
+		"10.0.0",
+	];
+	for (let index = 0; index < versions.length; index++) {
+		assert.equal(apiTagVersion(`api-v${versions[index]}`), versions[index]);
+		assert.equal(compareVersions(versions[index], versions[index]), 0);
+		if (index)
+			assert.equal(compareVersions(versions[index - 1], versions[index]), -1);
+	}
+	const long = "9".repeat(200_000);
+	const larger = `1${"0".repeat(200_000)}`;
+	assert.equal(apiTagVersion(`api-v${long}.0.0`), `${long}.0.0`);
+	assert.equal(compareVersions(`${long}.0.0`, `${larger}.0.0`), -1);
+	assert.equal(compareVersions(`${long}.0.0`, `8${long.slice(1)}.0.0`), 1);
+	for (const invalid of [
+		`${long}x.0.0`,
+		`${long}.0.0x`,
+		`${"0".repeat(200_000)}.0.0`,
+		".".repeat(200_000),
+		"1.2.3.4",
+		"1.02.3",
+		"1.2.-3",
+		"1.2.3\n",
+	]) {
+		assert.equal(apiTagVersion(`api-v${invalid}`), undefined);
+		assert.throws(
+			() => compareVersions(invalid, "1.2.3"),
+			/canonical API versions/,
+		);
+	}
+});
+
+test("Cargo header comments, tabs and CRLF retain exact source bytes", () => {
+	const withComments = (text, header) =>
+		text
+			.replaceAll(
+				header,
+				`${header}\t # comment with [package] and [[package]]`,
+			)
+			.replaceAll("\n", "\r\n");
+	const beforeManifest = withComments(manifest("0.1.93"), "[package]");
+	const beforeLock = withComments(lock("0.1.93"), "[[package]]");
+	const before = normalizeApiCargo(beforeManifest, beforeLock);
+	const after = normalizeApiCargo(
+		withComments(manifest("0.1.94"), "[package]"),
+		withComments(lock("0.1.94"), "[[package]]"),
+	);
+	assert.equal(before.manifest, after.manifest);
+	assert.equal(before.lock, after.lock);
+	assert.equal(
+		before.manifest,
+		beforeManifest.replace(
+			'version = "0.1.93" # own version',
+			'version = "<api-version>" # own version',
+		),
+	);
+	assert.equal(
+		before.lock,
+		beforeLock.replace('version = "0.1.93"', 'version = "<api-version>"'),
+	);
+	assert.equal(
+		normalizeApiCargo(
+			manifest("0.1.93").replace("[package]", "[package]#compact comment"),
+			lock("0.1.93"),
+		).version,
+		"0.1.93",
+	);
+	for (const invalid of [" [package]", "[package]bad", "[package]\f"]) {
+		assert.throws(
+			() =>
+				normalizeApiCargo(
+					manifest("0.1.93").replace("[package]", invalid),
+					lock("0.1.93"),
+				),
+			/one Cargo \[package\]/,
+		);
+	}
+});
+
+test("Cargo header scanning handles long comments, indentation and near-matches linearly", () => {
+	const comment = `[package]${" \t".repeat(100_000)}#${"[package]".repeat(25_000)}`;
+	const decorate = (version) =>
+		manifest(version)
+			.replace("[package]", comment)
+			.replace("[dependencies]", `${" \t".repeat(100_000)}[dependencies]`);
+	const before = normalizeApiCargo(decorate("0.1.93"), lock("0.1.93"));
+	const after = normalizeApiCargo(decorate("0.1.94"), lock("0.1.94"));
+	assert.equal(before.manifest, after.manifest);
+	assert.equal(before.lock, after.lock);
+	assert.throws(
+		() =>
+			normalizeApiCargo(
+				manifest("0.1.93").replace(
+					"[package]",
+					`[package]${" \t".repeat(100_000)}!`,
+				),
+				lock("0.1.93"),
+			),
+		/one Cargo \[package\]/,
+	);
 });

@@ -7,26 +7,42 @@ import { fileURLToPath } from "node:url";
 import { releasePayload } from "../release/release-provenance.mjs";
 import { detectChanges } from "./determine-changes.ts";
 
-const canonicalVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const commitPattern = /^[a-f0-9]{40}$/;
 const manifestPath = "web/api/Cargo.toml";
 const lockPath = "web/api/Cargo.lock";
 
+function canonicalVersionParts(version) {
+	if (typeof version !== "string") return undefined;
+	const parts = version.split(".", 4);
+	if (parts.length !== 3) return undefined;
+	for (const part of parts) {
+		if (!part || (part.length > 1 && part[0] === "0")) return undefined;
+		for (let index = 0; index < part.length; index++) {
+			const digit = part.charCodeAt(index);
+			if (digit < 48 || digit > 57) return undefined;
+		}
+	}
+	return parts;
+}
+
 export function apiTagVersion(tag) {
 	if (typeof tag !== "string" || !tag.startsWith("api-v")) return undefined;
 	const version = tag.slice(5);
-	return canonicalVersion.test(version) ? version : undefined;
+	return canonicalVersionParts(version) ? version : undefined;
 }
 
 export function compareVersions(left, right) {
-	if (!canonicalVersion.test(left) || !canonicalVersion.test(right)) {
-		throw new Error("Expected canonical API versions");
-	}
-	const a = left.split(".").map(BigInt);
-	const b = right.split(".").map(BigInt);
-	for (let i = 0; i < 3; i++) {
-		if (a[i] > b[i]) return 1;
-		if (a[i] < b[i]) return -1;
+	const a = canonicalVersionParts(left);
+	const b = canonicalVersionParts(right);
+	if (!a || !b) throw new Error("Expected canonical API versions");
+	// Canonical components have no leading zeroes: length then digit order is
+	// numeric order, without converting an unbounded component to BigInt.
+	for (let index = 0; index < 3; index++) {
+		if (a[index].length !== b[index].length) {
+			return a[index].length > b[index].length ? 1 : -1;
+		}
+		if (a[index] > b[index]) return 1;
+		if (a[index] < b[index]) return -1;
 	}
 	return 0;
 }
@@ -117,29 +133,65 @@ function uniqueField(text, name) {
 	if (fields.length !== 1) throw new Error(`Expected one Cargo ${name} field`);
 	return fields[0];
 }
+
+function* sourceLines(text) {
+	let start = 0;
+	while (start <= text.length) {
+		const newline = text.indexOf("\n", start);
+		const end = newline < 0 ? text.length : newline;
+		yield { start, end, text: text.slice(start, end) };
+		if (newline < 0) return;
+		start = newline + 1;
+	}
+}
+
+function skipHorizontalSpace(text, start = 0) {
+	while (text[start] === " " || text[start] === "\t") start++;
+	return start;
+}
+
+/** Preserve source offsets and LF/CRLF bytes; comments start only after the header. */
+function cargoHeaders(text, header) {
+	const headers = [];
+	for (const line of sourceLines(text)) {
+		const value = line.text.endsWith("\r") ? line.text.slice(0, -1) : line.text;
+		if (!value.startsWith(header)) continue;
+		const end = skipHorizontalSpace(value, header.length);
+		if (
+			end !== value.length &&
+			(value[end] !== "#" || value.includes("\r", end + 1))
+		)
+			continue;
+		headers.push({ start: line.start, end: line.end });
+	}
+	return headers;
+}
+
+function nextCargoSection(text) {
+	for (const line of sourceLines(text)) {
+		if (line.text[skipHorizontalSpace(line.text)] === "[") return line.start;
+	}
+	return text.length;
+}
+
 /** Mask only the API's own package version, keeping every dependency byte. */
 export function normalizeApiCargo(manifest, lock) {
-	const headers = [
-		...manifest.matchAll(/^\[package\][ \t]*(?:#[^\r\n]*)?\r?$/gm),
-	];
+	const headers = cargoHeaders(manifest, "[package]");
 	if (headers.length !== 1)
 		throw new Error("Expected one Cargo [package] section");
-	const start = headers[0].index + headers[0][0].length;
+	const start = headers[0].end;
 	const rest = manifest.slice(start);
-	const next = /^[ \t]*\[/m.exec(rest);
-	const body = rest.slice(0, next?.index ?? rest.length);
+	const body = rest.slice(0, nextCargoSection(rest));
 	const name = uniqueField(body, "name")[2];
 	const versionField = uniqueField(body, "version");
 	const version = versionField[2];
-	if (!canonicalVersion.test(version))
+	if (!canonicalVersionParts(version))
 		throw new Error("Invalid API package version");
-	const blocks = [
-		...lock.matchAll(/^\[\[package\]\][ \t]*(?:#[^\r\n]*)?\r?$/gm),
-	];
+	const blocks = cargoHeaders(lock, "[[package]]");
 	const own = [];
 	for (let i = 0; i < blocks.length; i++) {
-		const blockStart = blocks[i].index + blocks[i][0].length;
-		const blockEnd = blocks[i + 1]?.index ?? lock.length;
+		const blockStart = blocks[i].end;
+		const blockEnd = blocks[i + 1]?.start ?? lock.length;
 		const block = lock.slice(blockStart, blockEnd);
 		const packageName = uniqueField(block, "name")[2];
 		if (packageName !== name || /^[ \t]*source[ \t]*=/m.test(block)) continue;
