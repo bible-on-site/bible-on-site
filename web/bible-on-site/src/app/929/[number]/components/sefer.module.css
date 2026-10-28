@@ -22,7 +22,7 @@
 }
 
 .page {
-	background-color: white;
+	background-color: var(--surface-elevated, white);
 	padding: 15px;
 	position: relative;
 	box-sizing: border-box;
@@ -30,7 +30,7 @@
 
 /* Right page (content): flex column so header stays on top, scroller outside text */
 .pageContentPage {
-	background-color: white;
+	background-color: var(--surface-elevated, white);
 	padding: 15px;
 	position: relative;
 	box-sizing: border-box;
@@ -80,7 +80,7 @@
 	align-items: baseline;
 	gap: 8px;
 	font-size: 0.95rem;
-	color: #1c2c5d;
+	color: var(--pasuk-num-color, #1c2c5d);
 	font-weight: 600;
 }
 
@@ -95,7 +95,7 @@
 .perekHeader {
 	font-size: 0.9rem;
 	font-weight: 600;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	margin-top: 2px;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -116,7 +116,7 @@
 
 .perekIllustrationFigure figcaption {
 	margin-top: 4px;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	font-size: 0.75rem;
 	line-height: 1.35;
 	text-align: right;
@@ -124,7 +124,7 @@
 
 /* Left page (blank): flex column, Hebrew date at top, then articles carousel */
 .pageBlank {
-	background-color: white;
+	background-color: var(--surface-elevated, white);
 	padding: 15px;
 	position: relative;
 	box-sizing: border-box;
@@ -136,7 +136,7 @@
 
 .blankPageDate {
 	font-size: 1rem;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	text-align: center;
 	padding-top: 6px;
 	direction: rtl;
@@ -367,7 +367,7 @@
 	font-family: var(--font-tanakh), "Times New Roman", serif;
 }
 .pasukNum {
-	color: #1c2c5d;
+	color: var(--pasuk-num-color, #1c2c5d);
 	cursor: pointer;
 	font-weight: 700;
 	text-decoration: underline;
@@ -375,16 +375,22 @@
 /* Pasuk-selection mode (#2544 item 3): picked letters invert, matching the
    verse-highlight accent so the two states stay visually distinct. */
 .pasukNum[data-pasuk-selected] {
-	background: #1c2c5d;
+	background: var(--pasuk-num-color, #1c2c5d);
 	border-radius: 3px;
-	box-shadow: 0 0 0 2px rgba(28, 44, 93, 0.3);
-	color: #fff;
+	box-shadow:
+		0 0 0 2px
+		color-mix(in srgb, var(--pasuk-num-color, #1c2c5d) 30%, transparent);
+	color: var(--surface-elevated, #fff);
 	padding: 0 2px;
 }
 .pasukSelectionBar {
 	align-items: center;
-	background: rgba(255, 255, 255, 0.94);
-	border: 1px solid #d4d7e3;
+	background: color-mix(
+		in srgb,
+		var(--surface-elevated, #fff) 94%,
+		transparent
+	);
+	border: 1px solid var(--hc-muted, #d4d7e3);
 	border-radius: 8px;
 	bottom: 10px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -402,15 +408,19 @@
 }
 .pasukSelectionButton {
 	background: none;
-	border: 1px solid #1c2c5d;
+	border: 1px solid var(--pasuk-num-color, #1c2c5d);
 	border-radius: 6px;
-	color: #1c2c5d;
+	color: var(--pasuk-num-color, #1c2c5d);
 	cursor: pointer;
 	font: inherit;
 	padding: 2px 8px;
 }
 .pasukSelectionButton:hover {
-	background: rgba(28, 44, 93, 0.08);
+	background: color-mix(
+		in srgb,
+		var(--pasuk-num-color, #1c2c5d) 8%,
+		transparent
+	);
 }
 /* Destination verse after perush→perek pasuk navigation (same look as the
    reader's hash-selected verse). Division book pages anchor pesukim by id
@@ -426,14 +436,16 @@
 	border-radius: 3px;
 }
 .perekTextHeader h1 {
-	color: #9a92d1;
+	/* The original #9a92d1 measured 2.84:1 — the deeper indigo passes the
+	   large-text 3:1 threshold; --hc-accent takes it further (#2767). */
+	color: var(--hc-accent, #6f63b8);
 	font-size: 1.2em;
 	font-weight: 700;
 	margin: 0.1em 0 1em;
 	text-align: justify;
 }
 .qri label::before {
-	color: #637598;
+	color: var(--muted-text, #637598);
 	content: "קְרִי:";
 	cursor: text;
 	display: inherit;
@@ -446,49 +458,59 @@
 .tanahpediaLink {
 	color: inherit;
 	text-decoration: none;
-	border-bottom: 1px dashed #1a73e8;
+	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
 .tanahpediaLink:hover {
 	border-bottom-style: solid;
-	border-bottom-color: #1552ac;
+	border-bottom-color: var(--link-accent, #1552ac);
 }
 
 @media (prefers-color-scheme: dark) {
 	.page,
 	.pageContentPage,
 	.pageBlank {
-		background-color: #1a1f2e;
+		background-color: var(--surface-elevated, #1a1f2e);
 	}
 
 	.perekTextScrollWrapper {
-		--scrollbarBG: #2d3548;
+		--scrollbarBG: var(--border-subtle, #2d3548);
 	}
 
 	.pageHeaderRow,
 	.pasukNum {
-		color: #a8b9ff;
+		color: var(--pasuk-num-color, #a8b9ff);
 	}
 
 	.pasukNum[data-pasuk-selected] {
-		background: #a8b9ff;
-		box-shadow: 0 0 0 2px rgba(168, 185, 255, 0.35);
-		color: #1a1f2e;
+		background: var(--pasuk-num-color, #a8b9ff);
+		box-shadow:
+			0 0 0 2px
+			color-mix(in srgb, var(--pasuk-num-color, #a8b9ff) 35%, transparent);
+		color: var(--surface-elevated, #1a1f2e);
 	}
 
 	.pasukSelectionBar {
-		background: rgba(26, 31, 46, 0.94);
-		border-color: #4a5578;
-		color: #e8eaf2;
+		background: color-mix(
+			in srgb,
+			var(--surface-elevated, #1a1f2e) 94%,
+			transparent
+		);
+		border-color: var(--hc-muted, #4a5578);
+		color: var(--foreground, #e8eaf2);
 	}
 
 	.pasukSelectionButton {
-		border-color: #a8b9ff;
-		color: #a8b9ff;
+		border-color: var(--pasuk-num-color, #a8b9ff);
+		color: var(--pasuk-num-color, #a8b9ff);
 	}
 
 	.pasukSelectionButton:hover {
-		background: rgba(168, 185, 255, 0.12);
+		background: color-mix(
+			in srgb,
+			var(--pasuk-num-color, #a8b9ff) 12%,
+			transparent
+		);
 	}
 
 	.perekText [data-sefer-pasuk][data-pasuk-highlight],
@@ -501,15 +523,15 @@
 	.perekIllustrationFigure figcaption,
 	.blankPageDate,
 	.qri label::before {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.perekTextHeader h1 {
-		color: #b7adf0;
+		color: var(--hc-accent, #b7adf0);
 	}
 
 	.tanahpediaLink:hover {
-		border-bottom-color: #7eb0ff;
+		border-bottom-color: var(--link-accent, #7eb0ff);
 	}
 }
 

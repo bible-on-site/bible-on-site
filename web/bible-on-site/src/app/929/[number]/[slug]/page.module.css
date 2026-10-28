@@ -127,7 +127,7 @@
 .articleBody a:global(.tanahpedia-mention) {
   color: inherit;
   text-decoration: none;
-  border-bottom: 1px dashed #1a73e8;
+  border-bottom: 1px dashed var(--link-accent, #1a73e8);
   transition: border-color 0.2s ease;
 }
 
@@ -171,8 +171,12 @@
 	padding-right: 2rem;
 }
 
+/* Inline links inside DB-authored article prose keep a persistent non-color
+   cue (WCAG 1.4.1) — color alone is ~1.4:1 off the surrounding text (#2767). */
 .articleBody a {
-  color: #1552ac;
+  color: var(--link-accent, #1552ac);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
 }
 
 .backToPerek {
@@ -306,6 +310,13 @@ button.backLink {
   direction: rtl;
 }
 
+/* Same persistent non-color cue (1.4.1) as the article body above. */
+.noteContent a {
+  color: var(--link-accent, #1552ac);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
 .noteContent p {
   margin: 0.5rem 0;
 }
@@ -364,7 +375,7 @@ button.backLink {
 
   .authorLink:hover .authorName,
   .articleBody a {
-    color: #7eb0ff;
+    color: var(--link-accent, #7eb0ff);
   }
 
   .articleBody a:global(.tanahpedia-mention) {
@@ -387,7 +398,7 @@ button.backLink {
   }
 
   .parshanName {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .note {
