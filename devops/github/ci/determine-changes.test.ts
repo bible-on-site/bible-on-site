@@ -35,7 +35,10 @@ describe("detectChanges", () => {
 			for (const [key, flags] of Object.entries(changes)) {
 				assert.deepEqual(
 					flags,
-					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					{
+						module_changed: false,
+						ci_changed: ["website", "api", "admin"].includes(key),
+					},
 					`${file} -> ${key}`,
 				);
 			}
@@ -346,6 +349,8 @@ describe("detectChanges", () => {
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/.covignore.mjs",
 		"web/bible-on-site/shared/typing/coverage.d.ts",
+		// Standalone report inspection never ships in the website.
+		"web/bible-on-site/scripts/coverage-gaps.mjs",
 	]) {
 		test(`${path} runs website checks without a release`, () => {
 			assert.deepEqual(changed([path], "website"), [
@@ -369,7 +374,6 @@ describe("detectChanges", () => {
 		"web/bible-on-site/public/icons/search.svg",
 		"web/bible-on-site/scripts/start-server.mjs",
 		"web/bible-on-site/scripts/generate-client-catalog.mjs",
-		"web/bible-on-site/scripts/coverage-gaps.mjs",
 		"web/bible-on-site/shared/typing/other.d.ts",
 		"web/bible-on-site/tests2/util/helper.ts",
 	]) {
