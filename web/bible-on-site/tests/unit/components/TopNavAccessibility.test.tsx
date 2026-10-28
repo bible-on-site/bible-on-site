@@ -285,7 +285,9 @@ describe("TopNavAccessibility", () => {
 				JSON.stringify({ contrast: true, links: false, v: 1 }),
 			);
 			window.dispatchEvent(
-				new StorageEvent("storage", { key: SITE_A11Y_STORAGE_KEY }),
+				Object.assign(new Event("storage"), {
+					key: SITE_A11Y_STORAGE_KEY,
+				}),
 			);
 		});
 
@@ -295,6 +297,9 @@ describe("TopNavAccessibility", () => {
 		expect(
 			screen.getByRole("checkbox", { name: "קו תחתון לקישורים" }),
 		).not.toBeChecked();
+		// Cross-tab writes re-apply the root attributes in this document too.
+		expect(document.documentElement.dataset.a11yContrast).toBe("high");
+		expect(document.documentElement.dataset.a11yLinks).toBeUndefined();
 	});
 
 	it("mirrors cross-tab reader writes through the storage event", () => {
@@ -307,7 +312,9 @@ describe("TopNavAccessibility", () => {
 				JSON.stringify({ fontStep: 7, v: 2 }),
 			);
 			window.dispatchEvent(
-				new StorageEvent("storage", { key: READER_SETTINGS_STORAGE_KEY }),
+				Object.assign(new Event("storage"), {
+					key: READER_SETTINGS_STORAGE_KEY,
+				}),
 			);
 		});
 

@@ -89,8 +89,13 @@ export function TopNavAccessibility() {
 		const stored = (event: StorageEvent) => {
 			if (event.key === null || event.key === READER_SETTINGS_STORAGE_KEY)
 				setSettings(getStoredReaderSettings());
-			if (event.key === null || event.key === SITE_A11Y_STORAGE_KEY)
-				setA11y(getStoredSiteA11ySettings());
+			if (event.key === null || event.key === SITE_A11Y_STORAGE_KEY) {
+				const next = getStoredSiteA11ySettings();
+				setA11y(next);
+				// Re-apply the palette/underline so a cross-tab change updates
+				// this document too — the bootstrap only runs before paint.
+				applySiteA11ySettings(next);
+			}
 		};
 		window.addEventListener(READER_SETTINGS_EVENT, updated);
 		window.addEventListener(SITE_A11Y_EVENT, a11yUpdated);

@@ -407,6 +407,14 @@
 	margin-block: 1.67em;
 }
 
+/* Same baseline cue as the flat commentary view: links inside DB-authored
+   notes need a persistent non-color marker (WCAG 1.4.1, #2767). */
+.noteContent a {
+	color: var(--link-accent, #1552ac);
+	text-decoration: underline;
+	text-underline-offset: 0.1em;
+}
+
 .noteContent + .noteContent {
 	margin-top: 8px;
 	padding-top: 8px;
