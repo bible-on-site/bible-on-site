@@ -720,6 +720,7 @@ dependencies = [
  "dotenvy",
  "entities",
  "sea-orm",
+ "sea-query-sqlx",
  "serde",
  "tokio",
  "tracing",

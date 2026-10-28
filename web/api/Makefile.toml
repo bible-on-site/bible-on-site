@@ -139,6 +139,27 @@ args = [
   ".coverage/unit/lcov.info",
 ]
 
+# CI provides a separate empty MySQL database. Preserve the unit profiles and
+# fail if the ignored real-session regression is missing or renamed.
+[tasks.coverage-article-search-lock]
+dependencies = ["coverage-unit-dir-create"]
+command = "cargo"
+args = [
+  "llvm-cov",
+  "nextest",
+  "--locked",
+  "--no-clean",
+  "--lcov",
+  "--output-path",
+  ".coverage/unit/lcov.info",
+  "--run-ignored",
+  "only",
+  "--no-tests",
+  "fail",
+  "-E",
+  "test(=services::article_search::tests::mysql_retrain_lock_is_session_scoped_and_cleans_up)",
+]
+
 [tasks.coverage-unit-junit]
 command = "cargo"
 args = ["nextest", "run", "--profile", "ci"]
