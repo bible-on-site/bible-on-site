@@ -11,4 +11,4 @@
 # (PyPI's default torch wheel also works; the pytorch.org CPU index keeps
 # the install CUDA-free, same as the recitation CI step.)
 torch==2.14.1
-transformers==5.19.0
+transformers==5.21.0
