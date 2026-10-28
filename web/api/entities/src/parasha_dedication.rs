@@ -13,7 +13,8 @@ pub struct Model {
     pub dedication_id: i32,
     /// Assignment expiry, UTC; NULL = ongoing.
     pub expires_at: Option<DateTime>,
-    pub created_at: DateTime,
+    /// MySQL TIMESTAMP, decoded in the connection's UTC time zone.
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
