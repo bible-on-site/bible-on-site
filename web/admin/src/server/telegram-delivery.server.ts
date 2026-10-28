@@ -23,6 +23,7 @@ import {
 	txExecute,
 	txQueryOne,
 } from "./db";
+import { runOutboxSweep } from "./outbox-deadline.server";
 import {
 	TelegramClient,
 	TelegramError,
@@ -211,8 +212,7 @@ async function publishJobs(
 	jobs: { id: string }[],
 	signal?: AbortSignal,
 ): Promise<void> {
-	const deadline = AbortSignal.timeout(15_000);
-	const abortSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+	const abortSignal = signal ?? AbortSignal.timeout(15_000);
 	try {
 		for (let offset = 0; offset < jobs.length; offset += 10) {
 			abortSignal.throwIfAborted();
@@ -362,13 +362,19 @@ export async function enqueueBulletinTelegram(
 	return summary(job);
 }
 
-async function syncProductionChannel(id: string): Promise<void> {
+async function syncProductionChannel(
+	id: string,
+	signal?: AbortSignal,
+): Promise<void> {
+	signal?.throwIfAborted();
 	await transaction(async (connection) => {
+		signal?.throwIfAborted();
 		const row = await txQueryOne<JobRow>(
 			connection,
 			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date FROM tanah_daily_bulletin_telegram_job j WHERE id = ? FOR UPDATE",
 			[id],
 		);
+		signal?.throwIfAborted();
 		if (row?.audience !== "real") return;
 		const status =
 			row.status === "queued"
@@ -376,53 +382,79 @@ async function syncProductionChannel(id: string): Promise<void> {
 				: row.status === "suppressed"
 					? "failed"
 					: row.status;
+		const marker = `telegram-job:${row.id}`;
+		const provider = row.provider_message_id
+			? `telegram:${row.target_chat_id}:${row.provider_message_id}`
+			: marker;
 		await txExecute(
 			connection,
-			"UPDATE tanah_daily_bulletin_delivery SET status = ?, provider_message_id = ?, last_error = ?, lease_token = ?, lease_until = NULL, attempt_count = GREATEST(attempt_count, ?), sent_at = CASE WHEN ? = 'sent' THEN COALESCE(sent_at, UTC_TIMESTAMP()) ELSE sent_at END WHERE bulletin_date = ? AND channel = 'telegram'",
+			"UPDATE tanah_daily_bulletin_delivery SET status = ?, provider_message_id = ?, last_error = ?, sent_at = CASE WHEN ? = 'sent' THEN COALESCE(sent_at, UTC_TIMESTAMP()) ELSE sent_at END WHERE bulletin_date = ? AND channel = 'telegram' AND provider_message_id IN (?, ?) AND (status = 'sending' OR status = ?) AND ((attempt_count = 0 AND lease_token IS NULL) OR (attempt_count = 1 AND lease_token = ?)) AND lease_until IS NULL AND (sent_at IS NULL OR (status = 'sent' AND ? = 'sent' AND provider_message_id = ?))",
 			[
 				status,
-				row.provider_message_id
-					? `telegram:${row.target_chat_id}:${row.provider_message_id}`
-					: `telegram-job:${row.id}`,
+				provider,
 				row.last_error,
-				row.attempt_token,
-				row.attempt_token ? 1 : 0,
 				status,
 				row.bulletin_date,
+				marker,
+				provider,
+				status,
+				row.attempt_token,
+				status,
+				provider,
 			],
 		);
+		signal?.throwIfAborted();
 	});
 }
 
-export async function processTelegramJob(id: string): Promise<boolean> {
-	if (!UUID.test(id)) return false;
+export async function processTelegramJob(
+	id: string,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	if (!UUID.test(id) || signal?.aborted) return false;
 	const runtime = loadTelegramRuntime();
 	if (!runtime) return false;
 	const row = await readJob(id);
-	if (!row) return false;
+	if (!row || signal?.aborted) return false;
 	if (row.status === "sending") {
 		const stale = await execute(
 			"UPDATE tanah_daily_bulletin_telegram_job SET status = 'uncertain', last_error = ? WHERE id = ? AND status = 'sending' AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)",
 			[UNCERTAIN, id],
 		);
+		if (signal?.aborted) return false;
 		if (stale.affectedRows === 1) {
-			await syncProductionChannel(id);
+			await syncProductionChannel(id, signal);
 			return true;
 		}
 		return false;
 	}
 	if (row.status !== "queued") {
-		await syncProductionChannel(id);
+		await syncProductionChannel(id, signal);
+		return true;
+	}
+	if (
+		row.attempt_token !== null ||
+		row.provider_message_id !== null ||
+		row.provider_file_id !== null ||
+		row.sent_at !== null
+	) {
+		await execute(
+			"UPDATE tanah_daily_bulletin_telegram_job SET status = 'uncertain', last_error = ? WHERE id = ? AND status = 'queued' AND (attempt_token IS NOT NULL OR provider_message_id IS NOT NULL OR provider_file_id IS NOT NULL OR sent_at IS NOT NULL)",
+			[UNCERTAIN, id],
+		);
+		if (signal?.aborted) return false;
+		await syncProductionChannel(id, signal);
 		return true;
 	}
 	const token = randomUUID();
 	const claimed = await execute(
-		"UPDATE tanah_daily_bulletin_telegram_job SET status = 'sending', attempt_token = ?, started_at = UTC_TIMESTAMP(3), last_error = NULL WHERE id = ? AND status = 'queued'",
+		"UPDATE tanah_daily_bulletin_telegram_job SET status = 'sending', attempt_token = ?, started_at = UTC_TIMESTAMP(3), last_error = NULL WHERE id = ? AND status = 'queued' AND attempt_token IS NULL AND provider_message_id IS NULL AND provider_file_id IS NULL AND sent_at IS NULL",
 		[token, id],
 	);
-	if (claimed.affectedRows !== 1) return false;
+	if (claimed.affectedRows !== 1 || signal?.aborted) return false;
 	let mutationMayHaveStarted = false;
 	try {
+		signal?.throwIfAborted();
 		if (
 			Number(row.target_chat_id) !== targetChatId(runtime, row.audience) ||
 			!Number.isSafeInteger(Number(row.bot_id)) ||
@@ -430,6 +462,7 @@ export async function processTelegramJob(id: string): Promise<boolean> {
 		)
 			throw new TelegramSuppressedError();
 		const prepared = await readPreparedBulletin(row.bulletin_date);
+		signal?.throwIfAborted();
 		if (!prepared) throw new TelegramSuppressedError();
 		const pdf = Buffer.from(prepared.pdfBase64, "base64");
 		if (
@@ -437,7 +470,7 @@ export async function processTelegramJob(id: string): Promise<boolean> {
 			createHash("sha256").update(pdf).digest("hex") !== row.pdf_sha256
 		)
 			throw new TelegramSuppressedError();
-		await syncProductionChannel(id);
+		signal?.throwIfAborted();
 		const result = await new TelegramClient(runtime).sendDocument({
 			botId: Number(row.bot_id),
 			chatId: Number(row.target_chat_id),
@@ -446,7 +479,9 @@ export async function processTelegramJob(id: string): Promise<boolean> {
 			filename: row.filename,
 			caption: row.caption,
 			beforeSend: async () => {
-				await reserveTelegramSendSlot(id, token);
+				signal?.throwIfAborted();
+				await reserveTelegramSendSlot(id, token, signal);
+				signal?.throwIfAborted();
 				mutationMayHaveStarted = true;
 			},
 		});
@@ -457,6 +492,9 @@ export async function processTelegramJob(id: string): Promise<boolean> {
 		);
 		if (saved.affectedRows !== 1) throw new TelegramError("uncertain");
 	} catch (error) {
+		// A persisted claim or final reservation is never reset on shutdown.
+		// Recovery marks it uncertain rather than risking another provider POST.
+		if (signal?.aborted && !mutationMayHaveStarted) return false;
 		const status =
 			error instanceof TelegramSuppressedError
 				? "suppressed"
@@ -498,20 +536,30 @@ export async function reconcileTelegramOutbox(
 	const runtime = loadTelegramRuntime();
 	if (!runtime) return;
 	if (queueUrl !== runtime.queueUrl) throw new Error(QUEUE_FAILED);
-	const stale = await query<{ id: string }>(
-		"SELECT id FROM tanah_daily_bulletin_telegram_job WHERE status = 'sending' AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND) ORDER BY id LIMIT 100",
-	);
-	for (const { id } of stale) {
-		if (signal?.aborted) return;
-		const changed = await execute(
-			"UPDATE tanah_daily_bulletin_telegram_job SET status = 'uncertain', last_error = ? WHERE id = ? AND status = 'sending' AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)",
-			[UNCERTAIN, id],
-		);
-		if (changed.affectedRows === 1) await syncProductionChannel(id);
+	try {
+		await runOutboxSweep(signal, async (sweepSignal) => {
+			const stale = await query<{ id: string }>(
+				"SELECT id FROM tanah_daily_bulletin_telegram_job WHERE status = 'sending' AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND) ORDER BY id LIMIT 100",
+			);
+			sweepSignal.throwIfAborted();
+			for (const { id } of stale) {
+				sweepSignal.throwIfAborted();
+				const changed = await execute(
+					"UPDATE tanah_daily_bulletin_telegram_job SET status = 'uncertain', last_error = ? WHERE id = ? AND status = 'sending' AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)",
+					[UNCERTAIN, id],
+				);
+				sweepSignal.throwIfAborted();
+				if (changed.affectedRows === 1)
+					await syncProductionChannel(id, sweepSignal);
+			}
+			sweepSignal.throwIfAborted();
+			const queued = await query<{ id: string }>(
+				"SELECT id FROM tanah_daily_bulletin_telegram_job WHERE status = 'queued' ORDER BY id LIMIT 100",
+			);
+			sweepSignal.throwIfAborted();
+			await publishJobs(client, queueUrl, queued, sweepSignal);
+		});
+	} catch {
+		throw new Error(QUEUE_FAILED);
 	}
-	if (signal?.aborted) return;
-	const queued = await query<{ id: string }>(
-		"SELECT id FROM tanah_daily_bulletin_telegram_job WHERE status = 'queued' ORDER BY id LIMIT 100",
-	);
-	await publishJobs(client, queueUrl, queued, signal);
 }

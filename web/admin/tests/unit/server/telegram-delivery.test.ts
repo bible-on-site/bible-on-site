@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deferred } from "../../util/deferred";
 
 const mocks = vi.hoisted(() => ({
 	query: vi.fn(),
@@ -164,6 +165,23 @@ let state: {
 let transactionTail: Promise<void>;
 let failAccepted = false;
 let failOutcome = false;
+async function flush() {
+	for (let index = 0; index < 30; index++) await Promise.resolve();
+}
+function configureRealSlot() {
+	vi.stubEnv("BULLETIN_TELEGRAM_BOT_TOKEN", config.token);
+	vi.stubEnv("BULLETIN_TELEGRAM_BOT_USERNAME", config.expectedBotUsername);
+	vi.stubEnv("BULLETIN_TELEGRAM_TEST_CHAT_ID", String(config.testChatId));
+	vi.stubEnv("BULLETIN_TELEGRAM_REAL_CHAT_ID", String(config.realChatId));
+	vi.stubEnv("BULLETIN_EMAIL_QUEUE_URL", config.queueUrl);
+	vi.stubEnv("BULLETIN_SES_ACCOUNT_ID", "123456789012");
+	vi.stubEnv("BULLETIN_SES_REGION", config.region);
+}
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.useRealTimers();
+	vi.unstubAllEnvs();
+});
 const request = (
 	requestKey = key,
 	audience: TelegramAudience = "test",
@@ -200,6 +218,27 @@ function fixture(
 	};
 }
 function select(sql: string, params: unknown[] = []): unknown {
+	if (sql.includes("AS wait_ms")) return { wait_ms: 0 };
+	if (sql.includes("LEFT JOIN tanah_daily_bulletin_delivery")) {
+		const job = state.jobs.find((j) => j.id === params[0]);
+		if (
+			!job ||
+			job.audience !== state.settings.audience ||
+			job.settings_revision !== state.settings.revision
+		)
+			return null;
+		if (
+			job.audience === "real" &&
+			(state.channel !== "sending" ||
+				state.channelAttempts !== 1 ||
+				state.channelHistory.provider_message_id !== `telegram-job:${job.id}` ||
+				state.channelHistory.lease_token !== job.attempt_token ||
+				state.channelHistory.sent_at !== null ||
+				state.channelHistory.lease_until !== null)
+		)
+			return null;
+		return structuredClone(job);
+	}
 	if (sql.includes("telegram_settings")) return structuredClone(state.settings);
 	if (sql.includes("FROM tanah_daily_bulletin_delivery"))
 		return {
@@ -257,6 +296,7 @@ function write(sql: string, params: unknown[] = []) {
 		return { affectedRows: 1 };
 	}
 	if (sql.startsWith("UPDATE tanah_daily_bulletin_telegram_settings")) {
+		if (sql.includes("SET next_send_at")) return { affectedRows: 1 };
 		state.settings = {
 			audience: params[0] as TelegramAudience,
 			revision: state.settings.revision + 1,
@@ -264,8 +304,50 @@ function write(sql: string, params: unknown[] = []) {
 		return { affectedRows: 1 };
 	}
 	if (sql.startsWith("UPDATE tanah_daily_bulletin_delivery")) {
+		if (sql.includes("SET attempt_count = 1")) {
+			if (
+				state.channel !== "sending" ||
+				state.channelAttempts !== 0 ||
+				state.channelHistory.provider_message_id !== params[2] ||
+				state.channelHistory.sent_at !== null ||
+				state.channelHistory.lease_token !== null ||
+				state.channelHistory.lease_until !== null
+			)
+				return { affectedRows: 0 };
+			state.channelAttempts = 1;
+			state.channelHistory.lease_token = params[0] as string;
+			return { affectedRows: 1 };
+		}
 		if (sql.includes("SET status = 'sending'")) {
 			state.channel = "sending";
+			state.channelHistory.provider_message_id = params[0] as string;
+			return { affectedRows: 1 };
+		}
+		if (sql.includes("provider_message_id IN")) {
+			if (
+				![params[5], params[6]].includes(
+					state.channelHistory.provider_message_id,
+				) ||
+				(state.channel !== "sending" && state.channel !== params[7]) ||
+				!(
+					(state.channelAttempts === 0 &&
+						state.channelHistory.lease_token === null) ||
+					(state.channelAttempts === 1 &&
+						state.channelHistory.lease_token === params[8])
+				) ||
+				state.channelHistory.lease_until !== null ||
+				(state.channelHistory.sent_at !== null &&
+					!(
+						state.channel === "sent" &&
+						params[9] === "sent" &&
+						state.channelHistory.provider_message_id === params[10]
+					))
+			)
+				return { affectedRows: 0 };
+			state.channelHistory.provider_message_id = params[1] as string;
+			if (params[0] === "sent")
+				state.channelHistory.sent_at ??= `${date}T12:01:00.000Z`;
+			state.channel = params[0] as string;
 			return { affectedRows: 1 };
 		}
 		state.channel = params[0] as string;
@@ -274,7 +356,13 @@ function write(sql: string, params: unknown[] = []) {
 	}
 	if (sql.includes("SET status = 'sending'")) {
 		const row = state.jobs.find(
-			(j) => j.id === params[1] && j.status === "queued",
+			(j) =>
+				j.id === params[1] &&
+				j.status === "queued" &&
+				j.attempt_token === null &&
+				j.provider_message_id === null &&
+				j.provider_file_id === null &&
+				j.sent_at === null,
 		);
 		if (!row) return { affectedRows: 0 };
 		row.status = "sending";
@@ -283,7 +371,15 @@ function write(sql: string, params: unknown[] = []) {
 	}
 	if (sql.includes("SET status = 'uncertain'")) {
 		const row = state.jobs.find(
-			(j) => j.id === params[1] && j.status === "sending" && j.stale,
+			(j) =>
+				j.id === params[1] &&
+				(sql.includes("status = 'queued'")
+					? j.status === "queued" &&
+						(j.attempt_token !== null ||
+							j.provider_message_id !== null ||
+							j.provider_file_id !== null ||
+							j.sent_at !== null)
+					: j.status === "sending" && j.stale),
 		);
 		if (!row) return { affectedRows: 0 };
 		row.status = "uncertain";
@@ -355,7 +451,23 @@ beforeEach(() => {
 		},
 	});
 	mocks.prepared.mockResolvedValue(prepared);
-	mocks.reserve.mockResolvedValue(undefined);
+	mocks.reserve.mockImplementation(async (id, token, signal?: AbortSignal) => {
+		signal?.throwIfAborted();
+		const job = state.jobs.find((j) => j.id === id);
+		if (job?.audience === "real") {
+			if (
+				state.channel !== "sending" ||
+				state.channelHistory.provider_message_id !== `telegram-job:${id}` ||
+				state.channelAttempts !== 0 ||
+				state.channelHistory.sent_at !== null ||
+				state.channelHistory.lease_token !== null ||
+				state.channelHistory.lease_until !== null
+			)
+				throw new TelegramSuppressedError();
+			state.channelAttempts = 1;
+			state.channelHistory.lease_token = token;
+		}
+	});
 	mocks.send.mockImplementation(async (input) => {
 		await input.beforeSend();
 		return { messageId: 10, fileId: "file-1" };
@@ -602,6 +714,147 @@ describe("Telegram enqueue and UI state", () => {
 });
 
 describe("Telegram durable attempt and recovery", () => {
+	it("runs the real final reservation before ACK without a premature audit attempt", async () => {
+		configureRealSlot();
+		const actual = await vi.importActual<
+			typeof import("~/server/telegram-settings.server")
+		>("~/server/telegram-settings.server");
+		mocks.reserve.mockImplementation(actual.reserveTelegramSendSlot);
+		state.settings.audience = "real";
+		const job = await enqueueBulletinTelegram(request(key, "real"));
+		expect(state.channelAttempts).toBe(0);
+		expect(state.channelHistory.lease_token).toBeNull();
+		await processTelegramJob(job.id);
+		expect(state.jobs[0].status).toBe("sent");
+		expect(state.channel).toBe("sent");
+		expect(state.channelAttempts).toBe(1);
+		expect(state.channelHistory).toMatchObject({
+			provider_message_id: "telegram:-100222:10",
+			lease_token: state.jobs[0].attempt_token,
+		});
+		expect(mocks.send).toHaveBeenCalledOnce();
+		await processTelegramJob(job.id);
+		expect(mocks.send).toHaveBeenCalledOnce();
+	});
+	it.each(["status", "attempt", "provider", "sent", "lease", "until"])(
+		"preserves an external legacy %s change with the same reserved job",
+		async (field) => {
+			configureRealSlot();
+			const actual = await vi.importActual<
+				typeof import("~/server/telegram-settings.server")
+			>("~/server/telegram-settings.server");
+			mocks.reserve.mockImplementation(actual.reserveTelegramSendSlot);
+			state.settings.audience = "real";
+			const job = await enqueueBulletinTelegram(request(key, "real"));
+			if (field === "status") state.channel = "sent";
+			if (field === "attempt") state.channelAttempts = 1;
+			if (field === "provider")
+				state.channelHistory.provider_message_id = "external-provider-message";
+			if (field === "sent") state.channelHistory.sent_at = "external-sent-time";
+			if (field === "lease")
+				state.channelHistory.lease_token = "external-lease";
+			if (field === "until")
+				state.channelHistory.lease_until = "external-lease-until";
+			const before = structuredClone({
+				channel: state.channel,
+				count: state.channelAttempts,
+				history: state.channelHistory,
+			});
+			let uploads = 0;
+			mocks.send.mockImplementation(async (input) => {
+				await input.beforeSend();
+				uploads++;
+				return { messageId: 10, fileId: "file" };
+			});
+			await processTelegramJob(job.id);
+			expect(uploads).toBe(0);
+			expect(state.jobs[0].status).toBe("suppressed");
+			expect({
+				channel: state.channel,
+				count: state.channelAttempts,
+				history: state.channelHistory,
+			}).toEqual(before);
+		},
+	);
+	it.each([
+		"attempt_token",
+		"provider_message_id",
+		"provider_file_id",
+		"sent_at",
+	] as const)(
+		"never reuploads a queued row retaining prior %s",
+		async (field) => {
+			const job = fixture();
+			Object.assign(job, {
+				[field]: field === "provider_message_id" ? 12 : "retained-history",
+			});
+			state.jobs.push(job);
+			await processTelegramJob(job.id);
+			expect(job.status).toBe("uncertain");
+			expect(mocks.prepared).not.toHaveBeenCalled();
+			expect(mocks.send).not.toHaveBeenCalled();
+		},
+	);
+	it.each(["read", "claim", "prepared", "reservation"])(
+		"shutdown during %s cannot start a new provider upload or reset a durable claim",
+		async (stage) => {
+			const shutdown = new AbortController();
+			state.jobs.push(fixture());
+			if (stage === "read")
+				mocks.queryOne.mockImplementationOnce(async (sql, params) => {
+					const result = select(sql, params);
+					shutdown.abort();
+					return result;
+				});
+			if (stage === "claim")
+				mocks.execute.mockImplementationOnce(async (sql, params) => {
+					const result = write(sql, params);
+					shutdown.abort();
+					return result;
+				});
+			if (stage === "prepared")
+				mocks.prepared.mockImplementationOnce(async () => {
+					shutdown.abort();
+					return prepared;
+				});
+			if (stage === "reservation")
+				mocks.reserve.mockImplementationOnce(async () => {
+					shutdown.abort();
+				});
+			let uploads = 0;
+			mocks.send.mockImplementation(async (input) => {
+				await input.beforeSend();
+				uploads++;
+				return { messageId: 10, fileId: "file" };
+			});
+			expect(await processTelegramJob(key, shutdown.signal)).toBe(false);
+			expect(uploads).toBe(0);
+			expect(state.jobs[0].status).toBe(
+				stage === "read" ? "queued" : "sending",
+			);
+			if (stage !== "read") expect(state.jobs[0].attempt_token).not.toBeNull();
+		},
+	);
+	it("allows an upload already issued before shutdown to drain and persist its acknowledgement", async () => {
+		const shutdown = new AbortController();
+		state.jobs.push(fixture());
+		mocks.send.mockImplementation(async (input) => {
+			await input.beforeSend();
+			shutdown.abort();
+			return { messageId: 10, fileId: "file" };
+		});
+		expect(await processTelegramJob(key, shutdown.signal)).toBe(true);
+		expect(state.jobs[0].status).toBe("sent");
+		expect(state.jobs[0].provider_message_id).toBe(10);
+	});
+	it("an already stopped process job performs no runtime, database or provider work", async () => {
+		const shutdown = new AbortController();
+		shutdown.abort();
+		expect(await processTelegramJob(key, shutdown.signal)).toBe(false);
+		expect(mocks.runtime).not.toHaveBeenCalled();
+		expect(mocks.queryOne).not.toHaveBeenCalled();
+		expect(mocks.send).not.toHaveBeenCalled();
+	});
 	it("two simultaneous queue deliveries perform one provider POST", async () => {
 		state.jobs.push(fixture());
 		await Promise.all([processTelegramJob(key), processTelegramJob(key)]);
@@ -689,8 +942,8 @@ describe("Telegram durable attempt and recovery", () => {
 	});
 	it("real accepted posting alone updates Telegram production state and never email", async () => {
 		state.settings.audience = "real";
-		state.jobs.push(fixture("real"));
-		await processTelegramJob(key);
+		const job = await enqueueBulletinTelegram(request(key, "real"));
+		await processTelegramJob(job.id);
 		expect(state.channel).toBe("sent");
 		expect(
 			state.writes
@@ -819,15 +1072,119 @@ describe("Telegram durable attempt and recovery", () => {
 			shutdown.abort();
 			return result;
 		});
-		await reconcileTelegramOutbox(
-			{ send: mocks.sqs } as unknown as SQSClient,
-			config.queueUrl,
-			shutdown.signal,
-		);
+		await expect(
+			reconcileTelegramOutbox(
+				{ send: mocks.sqs } as unknown as SQSClient,
+				config.queueUrl,
+				shutdown.signal,
+			),
+		).rejects.toThrow("לתור");
 		expect(state.jobs.map((job) => job.status)).toEqual([
 			"uncertain",
 			"sending",
 		]);
+		expect(mocks.sqs).not.toHaveBeenCalled();
+		expect(mocks.send).not.toHaveBeenCalled();
+	});
+	it("returns at15s when the initial database lookup never resolves", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+			const controller = new AbortController();
+			setTimeout(() => controller.abort(), milliseconds);
+			return controller.signal;
+		});
+		mocks.query.mockImplementationOnce(() => new Promise(() => {}));
+		let finished = false;
+		const pending = reconcileTelegramOutbox(
+			{ send: mocks.sqs } as unknown as SQSClient,
+			config.queueUrl,
+		);
+		const stopped = expect(pending).rejects.toThrow("לתור");
+		void pending.then(
+			() => {
+				finished = true;
+			},
+			() => {
+				finished = true;
+			},
+		);
+		await vi.advanceTimersByTimeAsync(14_999);
+		expect(finished).toBe(false);
+		await vi.advanceTimersByTimeAsync(1);
+		await stopped;
+		expect(finished).toBe(true);
+		expect(AbortSignal.timeout).toHaveBeenCalledExactlyOnceWith(15_000);
+		expect(mocks.execute).not.toHaveBeenCalled();
+		expect(mocks.sqs).not.toHaveBeenCalled();
+		expect(mocks.send).not.toHaveBeenCalled();
+	});
+	it.each(["stale-read", "stale-write", "audit-lock", "queued-read"])(
+		"shutdown observes a late %s without any further database work or publication",
+		async (stage) => {
+			const shutdown = new AbortController();
+			const held = deferred<unknown>();
+			state.jobs.push({ ...fixture("real", "sending"), stale: true });
+			if (stage === "stale-read")
+				mocks.query.mockImplementationOnce(() => held.promise);
+			if (stage === "stale-write")
+				mocks.execute.mockImplementationOnce(() => held.promise);
+			if (stage === "audit-lock")
+				mocks.txQueryOne.mockImplementationOnce(() => held.promise);
+			if (stage === "queued-read") {
+				state.jobs = [fixture()];
+				mocks.query
+					.mockResolvedValueOnce([])
+					.mockImplementationOnce(() => held.promise);
+			}
+			const pending = reconcileTelegramOutbox(
+				{ send: mocks.sqs } as unknown as SQSClient,
+				config.queueUrl,
+				shutdown.signal,
+			);
+			const stopped = expect(pending).rejects.toThrow("לתור");
+			await flush();
+			shutdown.abort();
+			await stopped;
+			const calls = [
+				mocks.query.mock.calls.length,
+				mocks.execute.mock.calls.length,
+				mocks.txQueryOne.mock.calls.length,
+				mocks.txExecute.mock.calls.length,
+			];
+			held.resolve(
+				stage === "stale-write"
+					? { affectedRows: 1 }
+					: stage === "audit-lock"
+						? fixture("real", "uncertain")
+						: [{ id: key }],
+			);
+			await flush();
+			expect([
+				mocks.query.mock.calls.length,
+				mocks.execute.mock.calls.length,
+				mocks.txQueryOne.mock.calls.length,
+				mocks.txExecute.mock.calls.length,
+			]).toEqual(calls);
+			expect(mocks.sqs).not.toHaveBeenCalled();
+			expect(mocks.send).not.toHaveBeenCalled();
+		},
+	);
+	it("observes a database rejection after shutdown without later publication", async () => {
+		const shutdown = new AbortController();
+		const held = deferred<unknown>();
+		mocks.query.mockImplementationOnce(() => held.promise);
+		const pending = reconcileTelegramOutbox(
+			{ send: mocks.sqs } as unknown as SQSClient,
+			config.queueUrl,
+			shutdown.signal,
+		);
+		const stopped = expect(pending).rejects.toThrow("לתור");
+		await flush();
+		shutdown.abort();
+		await stopped;
+		held.reject(new Error("private late database detail"));
+		await flush();
+		expect(mocks.query).toHaveBeenCalledOnce();
 		expect(mocks.sqs).not.toHaveBeenCalled();
 		expect(mocks.send).not.toHaveBeenCalled();
 	});

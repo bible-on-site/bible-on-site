@@ -1,3 +1,4 @@
+import { runOutboxSweep } from "./outbox-deadline.server";
 import "@tanstack/react-start/server-only";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -135,20 +136,23 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 	};
 }
 
-async function refreshJob(jobId: string): Promise<void> {
+async function refreshJob(jobId: string, signal?: AbortSignal): Promise<void> {
 	await transaction(async (connection) => {
+		signal?.throwIfAborted();
 		// Lock before counting: concurrent event handlers cannot publish stale totals.
 		const job = await txQueryOne<JobRow>(
 			connection,
 			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date FROM tanah_daily_bulletin_email_job j WHERE id = ? FOR UPDATE",
 			[jobId],
 		);
+		signal?.throwIfAborted();
 		if (!job) return;
 		const rows = await txQuery<CountRow>(
 			connection,
 			"SELECT status, COUNT(*) AS count FROM tanah_daily_bulletin_email_recipient WHERE job_id = ? GROUP BY status",
 			[jobId],
 		);
+		signal?.throwIfAborted();
 		const status = aggregate(countsMap(rows));
 		const error =
 			status === "uncertain" ? UNCERTAIN : status === "failed" ? FAILED : null;
@@ -157,6 +161,7 @@ async function refreshJob(jobId: string): Promise<void> {
 			"UPDATE tanah_daily_bulletin_email_job SET status = ?, last_error = ? WHERE id = ?",
 			[status, error, jobId],
 		);
+		signal?.throwIfAborted();
 		if (job.audience === "real") {
 			const channelStatus =
 				status === "delivered"
@@ -205,8 +210,7 @@ async function publishRecipients(
 	recipients: { id: number }[],
 	shutdown?: AbortSignal,
 ): Promise<void> {
-	const deadline = AbortSignal.timeout(15_000);
-	const signal = shutdown ? AbortSignal.any([deadline, shutdown]) : deadline;
+	const signal = shutdown ?? AbortSignal.timeout(15_000);
 	try {
 		for (let index = 0; index < recipients.length; index += 10) {
 			signal.throwIfAborted();
@@ -254,31 +258,39 @@ async function reconcileEmailOutbox(
 	queueUrl: string,
 	shutdown?: AbortSignal,
 ): Promise<void> {
-	shutdown?.throwIfAborted();
-	// Recovery must not depend on the original SQS message still existing: it may
-	// already be in the DLQ after a database outage. Never requeue an expired claim.
-	const stale = await query<{ id: number; job_id: string }>(
-		`SELECT id, job_id FROM tanah_daily_bulletin_email_recipient WHERE status = 'sending'
+	await runOutboxSweep(shutdown, async (signal) => {
+		// Recovery must not depend on the original SQS message still existing: it may
+		// already be in the DLQ after a database outage. Never requeue an expired claim.
+		const stale = await query<{ id: number; job_id: string }>(
+			`SELECT id, job_id FROM tanah_daily_bulletin_email_recipient WHERE status = 'sending'
 		 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND) ORDER BY id LIMIT 100`,
-	);
-	const jobs = new Set<string>();
-	for (const row of stale) {
-		const changed = await execute(
-			`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
+		);
+		signal.throwIfAborted();
+		const jobs = new Set<string>();
+		for (const row of stale) {
+			signal.throwIfAborted();
+			const changed = await execute(
+				`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
 			 WHERE id = ? AND status = 'sending'
 			 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)`,
-			[UNCERTAIN, row.id],
+				[UNCERTAIN, row.id],
+			);
+			signal.throwIfAborted();
+			if (changed.affectedRows === 1) jobs.add(row.job_id);
+		}
+		for (const id of jobs) {
+			signal.throwIfAborted();
+			await refreshJob(id, signal);
+		}
+		signal.throwIfAborted();
+		// The committed rows form an outbox. Re-publishing is safe because send claims
+		// are atomic, and only queued recipients are ever eligible for this sweep.
+		const recipients = await query<{ id: number }>(
+			"SELECT id FROM tanah_daily_bulletin_email_recipient WHERE status = 'queued' ORDER BY id LIMIT 100",
 		);
-		if (changed.affectedRows === 1) jobs.add(row.job_id);
-	}
-	for (const id of jobs) await refreshJob(id);
-	shutdown?.throwIfAborted();
-	// The committed rows form an outbox. Re-publishing is safe because send claims
-	// are atomic, and only queued recipients are ever eligible for this sweep.
-	const recipients = await query<{ id: number }>(
-		"SELECT id FROM tanah_daily_bulletin_email_recipient WHERE status = 'queued' ORDER BY id LIMIT 100",
-	);
-	await publishRecipients(client, queueUrl, recipients, shutdown);
+		signal.throwIfAborted();
+		await publishRecipients(client, queueUrl, recipients, signal);
+	});
 }
 
 export async function enqueueBulletinEmail(
@@ -642,6 +654,7 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					if (signal.aborted) break;
 					try {
 						const telegram = await optionalTelegramDelivery();
+						if (signal.aborted) break;
 						await telegram?.reconcileTelegramOutbox(
 							client,
 							runtime.queueUrl,
@@ -702,9 +715,11 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 							TELEGRAM_JOB_ID.test(payload.jobId)
 						) {
 							const telegram = await optionalTelegramDelivery();
+							if (signal.aborted) break;
 							if (telegram)
 								handled = await telegram.processTelegramJob(
 									payload.jobId.toLowerCase(),
+									signal,
 								);
 						}
 					} else {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deferred } from "../../util/deferred";
 
 const mocks = vi.hoisted(() => ({
 	query: vi.fn(),
@@ -1207,6 +1208,67 @@ describe("SES events", () => {
 });
 
 describe("summary and queue loop", () => {
+	it.each([
+		["deadline", "read"],
+		["shutdown", "read"],
+		["deadline", "write"],
+		["shutdown", "write"],
+		["deadline", "sync"],
+		["shutdown", "sync"],
+	] as const)(
+		"bounds the whole sweep on %s during a held DB %s and stops its late continuation",
+		async (reason, stage) => {
+			const row = seed("real", "sending");
+			row.started_at = "2000-01-01 00:00:00.000";
+			const gate = deferred<void>();
+			const deadline = new AbortController();
+			const shutdown = new AbortController();
+			vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+			if (stage === "read")
+				mocks.query.mockImplementationOnce(async (sql, params) => {
+					await gate.promise;
+					return read(sql, params);
+				});
+			if (stage === "write")
+				mocks.execute.mockImplementationOnce(async (sql, params) => {
+					await gate.promise;
+					return write(sql, params);
+				});
+			if (stage === "sync")
+				mocks.txQueryOne.mockImplementationOnce(
+					async (_connection, sql, params) => {
+						await gate.promise;
+						return read(sql, params)[0] ?? null;
+					},
+				);
+			mocks.sqs.mockImplementation(async () => {
+				shutdown.abort();
+				return {};
+			});
+			const pending = startEmailWorker(shutdown.signal);
+			for (let turn = 0; turn < 16; turn++) await Promise.resolve();
+			expect(
+				stage === "read"
+					? mocks.query
+					: stage === "write"
+						? mocks.execute
+						: mocks.txQueryOne,
+			).toHaveBeenCalledOnce();
+			(reason === "deadline" ? deadline : shutdown).abort();
+			await pending;
+			expect(mocks.sqs.mock.calls.map(([command]) => command.kind)).toEqual(
+				reason === "deadline" ? ["receive"] : [],
+			);
+			gate.resolve();
+			for (let turn = 0; turn < 16; turn++) await Promise.resolve();
+			expect(mocks.query).toHaveBeenCalledOnce();
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+			expect(mocks.txQuery).not.toHaveBeenCalled();
+			expect(mocks.sendOne).not.toHaveBeenCalled();
+			expect(mocks.telegramProcess).not.toHaveBeenCalled();
+			expect(mocks.destroy).toHaveBeenCalledOnce();
+		},
+	);
 	it("reads a summary without network requests", async () => {
 		expect(await readLatestEmailJob(date)).toBeNull();
 		seed();
@@ -1593,7 +1655,10 @@ describe("optional Telegram dispatch in the existing worker", () => {
 
 		await startEmailWorker(controller.signal);
 
-		expect(mocks.telegramProcess).toHaveBeenCalledExactlyOnceWith(key);
+		expect(mocks.telegramProcess).toHaveBeenCalledExactlyOnceWith(
+			key,
+			controller.signal,
+		);
 		expect(mocks.telegramSweep).toHaveBeenCalledExactlyOnceWith(
 			expect.objectContaining({ send: mocks.sqs }),
 			config.queueUrl,

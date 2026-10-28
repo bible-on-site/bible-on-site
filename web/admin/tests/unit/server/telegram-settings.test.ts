@@ -197,17 +197,38 @@ describe("Telegram settings and target readiness", () => {
 });
 
 describe("last-moment Telegram send slot", () => {
-	function ready(waitMs = 0) {
+	let legacy: {
+		status: string;
+		provider_message_id: string | null;
+		attempt_count: number;
+		sent_at: string | null;
+		lease_token: string | null;
+		lease_until: string | null;
+	};
+	function ready(waitMs = 0, audience: "test" | "real" = "test") {
 		configure();
+		if (audience === "real")
+			vi.stubEnv("BULLETIN_TELEGRAM_REAL_CHAT_ID", "-100222");
+		legacy = {
+			status: "sending",
+			provider_message_id: "telegram-job:job",
+			attempt_count: 0,
+			sent_at: null,
+			lease_token: null,
+			lease_until: null,
+		};
 		mocks.txQueryOne.mockImplementation(async (_unused, sql) => {
+			if (sql.includes("FROM tanah_daily_bulletin_delivery"))
+				return { ...legacy };
 			if (
 				sql.includes("FROM tanah_daily_bulletin_telegram_settings") &&
 				sql.includes("FOR UPDATE")
 			)
-				return { audience: "test", revision: 2 };
+				return { audience, revision: 2 };
 			if (sql.includes("FROM tanah_daily_bulletin_telegram_job"))
 				return {
-					audience: "test",
+					bulletin_date: "2026-10-28",
+					audience,
 					settings_revision: 2,
 					status: "sending",
 					attempt_token: "claim",
@@ -215,11 +236,11 @@ describe("last-moment Telegram send slot", () => {
 			return { wait_ms: waitMs };
 		});
 		mocks.queryOne.mockResolvedValue({
-			audience: "test",
+			audience,
 			settings_revision: 2,
 			status: "sending",
 			attempt_token: "claim",
-			target_chat_id: -100111,
+			target_chat_id: audience === "real" ? -100222 : -100111,
 		});
 	}
 	it("allocates pacing under the lock and waits only after transaction completion", async () => {
@@ -275,5 +296,136 @@ describe("last-moment Telegram send slot", () => {
 			awaitModule.reserveTelegramSendSlot("job", "claim"),
 		).rejects.toThrow();
 		expect(mocks.wait).not.toHaveBeenCalled();
+	});
+	it("reserves one real ledger attempt under the same lock before the final target check", async () => {
+		ready(0, "real");
+		await awaitModule.reserveTelegramSendSlot("job", "claim");
+		expect(mocks.txExecute).toHaveBeenCalledTimes(2);
+		expect(mocks.txExecute.mock.calls[0][1]).toContain(
+			"SET attempt_count = 1, lease_token = ?",
+		);
+		expect(mocks.txExecute.mock.calls[0][2]).toEqual([
+			"claim",
+			"2026-10-28",
+			"telegram-job:job",
+		]);
+		expect(mocks.queryOne.mock.calls[0][0]).toContain(
+			"d.lease_token = j.attempt_token",
+		);
+	});
+	it.each(["status", "provider", "attempt", "sent", "lease", "until"])(
+		"refuses external real-ledger %s history before reserving",
+		async (field) => {
+			ready(0, "real");
+			if (field === "status") legacy.status = "sent";
+			if (field === "provider") legacy.provider_message_id = "external";
+			if (field === "attempt") legacy.attempt_count = 1;
+			if (field === "sent") legacy.sent_at = "external";
+			if (field === "lease") legacy.lease_token = "external";
+			if (field === "until") legacy.lease_until = "external";
+			await expect(
+				awaitModule.reserveTelegramSendSlot("job", "claim"),
+			).rejects.toThrow();
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+			expect(mocks.queryOne).not.toHaveBeenCalled();
+		},
+	);
+	it("refuses a lost real-ledger reservation without allocating another pacing slot", async () => {
+		ready(0, "real");
+		mocks.txExecute.mockResolvedValueOnce({ affectedRows: 0 });
+		await expect(
+			awaitModule.reserveTelegramSendSlot("job", "claim"),
+		).rejects.toThrow();
+		expect(mocks.txExecute).toHaveBeenCalledOnce();
+		expect(mocks.queryOne).not.toHaveBeenCalled();
+	});
+	it.each([
+		"settings",
+		"job",
+		"legacy",
+		"timing",
+		"reservation",
+		"pacing",
+		"final",
+	])(
+		"shutdown after %s I/O prevents the next send-slot step",
+		async (stage) => {
+			ready(0, "real");
+			const shutdown = new AbortController();
+			const reader = mocks.txQueryOne.getMockImplementation();
+			mocks.txQueryOne.mockImplementation(async (...args) => {
+				const result = await reader?.(...args);
+				const sql = String(args[1]);
+				if (
+					(stage === "settings" &&
+						sql.includes("settings") &&
+						sql.includes("FOR UPDATE")) ||
+					(stage === "job" &&
+						sql.includes("FROM tanah_daily_bulletin_telegram_job")) ||
+					(stage === "legacy" &&
+						sql.includes("FROM tanah_daily_bulletin_delivery")) ||
+					(stage === "timing" && sql.includes("AS wait_ms"))
+				)
+					shutdown.abort();
+				return result;
+			});
+			mocks.txExecute.mockImplementation(async (_connection, sql) => {
+				if (
+					(stage === "reservation" && sql.includes("SET attempt_count")) ||
+					(stage === "pacing" && sql.includes("SET next_send_at"))
+				)
+					shutdown.abort();
+				return { affectedRows: 1 };
+			});
+			if (stage === "final")
+				mocks.queryOne.mockImplementationOnce(async () => {
+					shutdown.abort();
+					return {
+						audience: "real",
+						status: "sending",
+						attempt_token: "claim",
+						target_chat_id: -100222,
+					};
+				});
+			await expect(
+				awaitModule.reserveTelegramSendSlot("job", "claim", shutdown.signal),
+			).rejects.toThrow();
+			if (stage !== "final") expect(mocks.queryOne).not.toHaveBeenCalled();
+			if (["settings", "job", "legacy"].includes(stage))
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+		},
+	);
+	it("stops before transaction work when already cancelled", async () => {
+		ready();
+		const shutdown = new AbortController();
+		shutdown.abort();
+		await expect(
+			awaitModule.reserveTelegramSendSlot("job", "claim", shutdown.signal),
+		).rejects.toThrow();
+		expect(mocks.transaction).not.toHaveBeenCalled();
+	});
+	it("passes shutdown to pacing and never performs a final lookup after cancelled pacing", async () => {
+		ready(250);
+		const shutdown = new AbortController();
+		mocks.wait.mockImplementationOnce(
+			async (_milliseconds, _value, options) => {
+				expect(options.signal).toBe(shutdown.signal);
+				shutdown.abort();
+			},
+		);
+		await expect(
+			awaitModule.reserveTelegramSendSlot("job", "claim", shutdown.signal),
+		).rejects.toThrow();
+		expect(mocks.queryOne).not.toHaveBeenCalled();
+	});
+	it("rechecks real-ledger ownership after pacing", async () => {
+		ready(250, "real");
+		mocks.queryOne.mockResolvedValueOnce(null);
+		await expect(
+			awaitModule.reserveTelegramSendSlot("job", "claim"),
+		).rejects.toThrow();
+		expect(mocks.queryOne.mock.calls[0][0]).toContain(
+			"d.sent_at IS NULL AND d.lease_until IS NULL",
+		);
 	});
 });
