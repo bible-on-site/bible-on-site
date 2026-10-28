@@ -220,7 +220,7 @@
   border-top: 1px solid rgba(136, 139, 239, 0.29);
   padding: 8px 0 8px 0;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   font-size: 0.875rem;
   direction: ltr;
   width: 100%;
