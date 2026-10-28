@@ -18,7 +18,7 @@
  *                 reported and enforced on deterministic payloads
  *                 (robots.txt, sitemap.xml).
  *  3. edge      — candidate-only assertions: x-amz-cf-id present, x-cache is
- *                 never Hit, a repeated 404 is still a Miss, POST/OPTIONS are
+ *                 never Hit, repeated 404s have no cache age, POST/OPTIONS are
  *                 forwarded, and a Range request matches the origin's answer.
  *
  * Usage:
@@ -128,7 +128,8 @@ const BASELINE_HOSTS = [
 		location: "https://admin.xn--febl3a.com/",
 	},
 	// Admin is session-gated; reachability (not a specific status) is the
-	// evidence — the admin subdomain is never routed through the edge.
+	// evidence. Pin admin DNS directly before any apex cutover: the current
+	// wildcard records follow the apex and would otherwise follow the edge.
 	{
 		name: "admin co.il reachable",
 		url: "https://admin.xn--febl3a.co.il/",
@@ -253,7 +254,7 @@ function show(value) {
 }
 
 /** Read a response into a comparable record; body always consumed. */
-async function probe(url, { method = "GET", headers = {}, body } = {}) {
+export async function probe(url, { method = "GET", headers = {}, body } = {}) {
 	const started = performance.now();
 	// Fetch a parsed URL object, not a raw string — the parse boundary is the
 	// contract (same shape verify-public-content.mjs uses); origins are
@@ -276,6 +277,7 @@ async function probe(url, { method = "GET", headers = {}, body } = {}) {
 		setCookies: response.headers.getSetCookie(),
 		xAmzCfId: response.headers.get("x-amz-cf-id"),
 		xCache: response.headers.get("x-cache"),
+		age: response.headers.get("age"),
 		via: response.headers.get("via"),
 		bytes: buf.length,
 		sha256: sha256(buf),
@@ -295,7 +297,7 @@ export function isAbsoluteLocation(location) {
 
 /**
  * Normalize a Location header to path+query+hash. Relative references
- * resolve against the request URL. Host equality is asserted separately
+ * resolve against the request URL. Origin equality is asserted separately
  * for absolute targets — an edge must not redirect to a different site.
  */
 export function normalizeLocation(location, requestUrl) {
@@ -328,14 +330,13 @@ export function cookieSignature(setCookie) {
 	return `${name};${attrs.join(";")}`;
 }
 
-/** Extract <link rel="canonical" href="..."> path+query from HTML bytes. */
-export function canonicalHref(buf) {
+/** Resolve the canonical URL against the actual viewer-facing request URL. */
+export function canonicalHref(buf, requestUrl) {
 	const match = /<link[^>]*rel="canonical"[^>]*href="([^"]+)"/.exec(
 		buf.toString("utf8"),
 	);
 	if (!match) return null;
-	const resolved = new URL(match[1], "https://placeholder.invalid");
-	return `${resolved.pathname}${resolved.search}`;
+	return new URL(match[1], requestUrl).href;
 }
 
 /** Extract <title>...</title> text from HTML bytes. */
@@ -380,12 +381,12 @@ export function comparePair(base, candidate, { bodyEqual = false } = {}) {
 			);
 		} else if (
 			baseAbs &&
-			new URL(base.location, base.url).host !==
-				new URL(candidate.location, candidate.url).host
+			new URL(base.location, base.url).origin !==
+				new URL(candidate.location, candidate.url).origin
 		) {
 			fail(
-				`redirect host drift: candidate sends ${new URL(candidate.location, candidate.url).host}, ` +
-					`base sends ${new URL(base.location, base.url).host}`,
+				`redirect origin drift: candidate sends ${new URL(candidate.location, candidate.url).origin}, ` +
+					`base sends ${new URL(base.location, base.url).origin}`,
 			);
 		}
 	}
@@ -416,10 +417,11 @@ export function comparePair(base, candidate, { bodyEqual = false } = {}) {
 		}
 	}
 	if (isHtml(base) && isHtml(candidate)) {
-		if (canonicalHref(candidate.body) !== canonicalHref(base.body)) {
+		const baseCanonical = canonicalHref(base.body, base.url);
+		const candCanonical = canonicalHref(candidate.body, candidate.url);
+		if (candCanonical !== baseCanonical) {
 			fail(
-				`canonical ${show(canonicalHref(candidate.body))} != ` +
-					show(canonicalHref(base.body)),
+				`canonical ${show(candCanonical)} != ${show(baseCanonical)}`,
 			);
 		}
 		if (titleText(candidate.body) !== titleText(base.body)) {
@@ -452,6 +454,15 @@ export function edgeFindings(candidate) {
 		findings.push({
 			level: "fail",
 			detail: `x-cache is ${show(candidate.xCache)} — caching must stay disabled during validation`,
+		});
+	}
+	// CloudFront can label cached errors "Error from cloudfront" rather than
+	// "Hit". Even Age: 0 means the response has entered a cache; an uncached
+	// origin error has no Age header and must remain a valid 404 probe.
+	if (candidate.age !== null && candidate.age !== undefined) {
+		findings.push({
+			level: "fail",
+			detail: `age is ${show(candidate.age)} — cached responses are forbidden during validation`,
 		});
 	}
 	return findings;
@@ -550,10 +561,11 @@ function summarize(record) {
 		bytes: record.bytes,
 		ms: record.ms,
 		xCache: record.xCache,
+		age: record.age,
 	};
 }
 
-/** Repeat a missing path twice: a 404 must stay a Miss when caching is off. */
+/** Repeat a missing path twice: both 404s must remain uncached. */
 async function runNegativeCacheCheck(candidate) {
 	const path_ = `/edge-compat-missing-${Date.now()}`;
 	const first = await probe(new URL(path_, candidate).href);

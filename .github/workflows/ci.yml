@@ -3243,6 +3243,7 @@ jobs:
         run: |
           bun run test:version
           bun run test:review-audit
+          node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
           node review-audit/scan-catch.cjs
