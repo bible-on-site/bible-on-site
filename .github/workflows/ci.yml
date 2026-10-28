@@ -3610,6 +3610,7 @@ jobs:
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.aar", "label": "iOS asset packs (.aar — Apple-hosted Background Assets)", "cd_key": "ios_assetpacks_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/asset-packs.json", "label": "iOS asset-pack plan (verified pack manifest for release-time reuse)", "cd_key": "ios_packplan_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "payloads/*", "label": "iOS pack payloads (HTTPS delivery below iOS 26)", "cd_key": "ios_payloads_artifact_name"}
         ]
       cd_event_type: deploy-app
