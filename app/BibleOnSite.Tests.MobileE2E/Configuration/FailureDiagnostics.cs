@@ -96,11 +96,11 @@ internal static class FailureDiagnostics
         }
     }
 
-    private static void Log(Action<string> log, string message)
+    private static void Log(Action<string> writeOutput, string message)
     {
         try
         {
-            log(message);
+            writeOutput(message);
         }
         catch (Exception exception) //NOSONAR Test output may already be unavailable; preserve the original scenario failure.
         {

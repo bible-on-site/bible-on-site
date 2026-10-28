@@ -138,7 +138,10 @@ public sealed class FailureDiagnosticsTests : IDisposable
         public MobileTestConfiguration Configuration { get; } = new(MobilePlatform.IOS,
             "/test/app", "test-device", artifacts, new Uri("http://127.0.0.1:4723"));
         public AppiumDriver? Driver => null;
-        public void Acquire(IReadOnlyDictionary<string, string>? environment) { }
+        public void Acquire(IReadOnlyDictionary<string, string>? environment)
+        {
+            // This fixture exercises failure handling without creating a native device session.
+        }
     }
 
     private sealed class FakeDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)

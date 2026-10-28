@@ -193,7 +193,9 @@ for (const [label, values, status] of [
 });
 
 test("scenario watcher rejects invalid identity, test and deadline payloads without sampling", async t => {
-  for (const values of [{ id: otherFailureId }, { test: "" }, { test: "bad\nname" }, { sessionId: "../session" },
+  for (const values of [{ id: otherFailureId }, { test: "" }, { test: "bad\nname" }, { test: "bad\u0000name" },
+    { test: "bad\u007fname" }, { test: "a".repeat(2049) }, { sessionId: "../session" }, { sessionId: "" },
+    { sessionId: "a".repeat(129) }, { sessionId: "a".repeat(4096) }, { sessionId: "session_id" }, { sessionId: "séssion" },
     { failedAtUtc: "not-a-date" }, { deadlineUtc: new Date(Date.now() + 30000).toISOString() }]) {
     const directory = await fixture(t); const watcher = watcherFixture();
     const monitor = scenarioMonitor(t, directory, () => assert.fail("must not sample"), { watch: watcher.watch.bind(watcher) });
@@ -202,6 +204,28 @@ test("scenario watcher rejects invalid identity, test and deadline payloads with
     await assert.rejects(monitor.stop(), AggregateError);
     assert.equal(monitor.received, 1);
     await assert.rejects(readFile(join(directory, `${failureId}.ack.json`)), { code: "ENOENT" });
+  }
+});
+
+test("session and Unicode test names retain their accepted length boundaries", { timeout: 5000 }, async t => {
+  for (const sessionId of ["A", "Az0-".repeat(32)]) {
+    const directory = await fixture(t); const acknowledged = deferred(); const calls = [];
+    const monitor = scenarioMonitor(t, directory, async request => { calls.push(request); return { status: "captured" }; },
+      { observe: acknowledged.resolve });
+    await publishFailure(directory, failureRequest(failureId, { sessionId, test: "א".repeat(2048) }));
+    await acknowledged.promise; await monitor.stop();
+    assert.equal(calls.length, 1); assert.equal(calls[0].sessionId, sessionId); assert.equal(calls[0].test.length, 2048);
+  }
+});
+
+test("filename validation rejects wrong lengths and non-ASCII hex without sampling", async t => {
+  for (const id of [failureId.slice(1), `${failureId}f`, failureId.toUpperCase(), `é${failureId.slice(1)}`, "a".repeat(4096)]) {
+    const directory = await fixture(t); const watcher = watcherFixture();
+    const monitor = scenarioMonitor(t, directory, () => assert.fail("must not sample malformed identity"),
+      { watch: watcher.watch.bind(watcher) });
+    watcher.emit(`${id}.request.json`);
+    await assert.rejects(monitor.stop(), AggregateError);
+    assert.equal(monitor.received, 1);
   }
 });
 

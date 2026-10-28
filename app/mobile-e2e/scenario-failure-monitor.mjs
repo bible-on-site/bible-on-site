@@ -2,9 +2,36 @@ import { watch as watchDirectory } from "node:fs";
 import { lstat, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-const REQUEST = /^([0-9a-f]{32})\.request\.json$/;
+const REQUEST_SUFFIX = ".request.json";
 const CAPTURE_LIMIT_MS = 15000;
 class ScenarioDeadlineError extends Error {}
+
+function requestId(name) {
+  if (name.length !== 32 + REQUEST_SUFFIX.length || !name.endsWith(REQUEST_SUFFIX)) return;
+  const id = name.slice(0, 32);
+  for (const character of id) {
+    const code = character.charCodeAt(0);
+    if (!(code >= 48 && code <= 57) && !(code >= 97 && code <= 102)) return;
+  }
+  return id;
+}
+
+function containsControlCharacter(value) {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
+function validSessionId(value) {
+  if (typeof value !== "string" || value.length < 1 || value.length > 128) return false;
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code !== 45 && !(code >= 48 && code <= 57) && !(code >= 65 && code <= 90) && !(code >= 97 && code <= 122)) return false;
+  }
+  return true;
+}
 
 function utcInstant(value) {
   if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,7})?(?:Z|\+00:00)$/.test(value)) return NaN;
@@ -16,8 +43,8 @@ function validateRequest(request, id, now) {
   const failed = utcInstant(request?.failedAtUtc);
   const deadline = utcInstant(request?.deadlineUtc);
   if (request?.id !== id || typeof request.test !== "string" || !request.test.trim() ||
-    request.test.length > 2048 || /[\u0000-\u001f\u007f]/.test(request.test) ||
-    !(request.sessionId === null || (typeof request.sessionId === "string" && /^[A-Za-z0-9-]{1,128}$/.test(request.sessionId))) ||
+    request.test.length > 2048 || containsControlCharacter(request.test) ||
+    !(request.sessionId === null || validSessionId(request.sessionId)) ||
     !Number.isFinite(failed) || !Number.isFinite(deadline) || failed > now ||
     deadline <= failed || deadline - failed > CAPTURE_LIMIT_MS) {
     throw new Error(`Invalid scenario failure request: ${id}`);
@@ -97,13 +124,12 @@ export function watchScenarioFailures(directory, capture, {
   function enqueue(filename, queuedDeadline) {
     if (stopped && queuedDeadline === undefined) return;
     const name = filename.toString();
-    if (name.endsWith(".request.json")) received.add(name);
-    const match = REQUEST.exec(name);
-    if (!match) {
-      if (name.endsWith(".request.json")) failures.push(new Error(`Invalid scenario request filename: ${name}`));
+    if (name.endsWith(REQUEST_SUFFIX)) received.add(name);
+    const id = requestId(name);
+    if (!id) {
+      if (name.endsWith(REQUEST_SUFFIX)) failures.push(new Error(`Invalid scenario request filename: ${name}`));
       return;
     }
-    const id = match[1];
     if (seen.has(id)) return;
     seen.add(id);
     const record = { deadline: queuedDeadline ?? now() + CAPTURE_LIMIT_MS };
@@ -125,7 +151,7 @@ export function watchScenarioFailures(directory, capture, {
     const task = readdir(root).then(names => {
       for (const name of names) {
         if (receiptsOnly) {
-          if (name.endsWith(".request.json")) received.add(name);
+          if (name.endsWith(REQUEST_SUFFIX)) received.add(name);
         } else enqueue(name, deadline);
       }
     })
