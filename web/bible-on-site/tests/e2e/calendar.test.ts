@@ -1,6 +1,13 @@
 import { devices, type Page } from "@playwright/test";
+import { getCalendarCycleWindow } from "../../src/data/learning-calendar-policy";
+import { getCycle, getMonthOrder } from "../../src/data/learning-schedule";
+import { constructTsetAwareHDate } from "../../src/util/hebdates-util";
 import { expect, test } from "../util/playwright/test-fixture";
 import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
+
+function liveWindow() {
+	return getCalendarCycleWindow(constructTsetAwareHDate(new Date()));
+}
 
 test.describe("/לוח learning calendar", () => {
 	test("renders the shared blue top bar on direct load", async ({ page }) => {
@@ -21,9 +28,7 @@ test.describe("/לוח learning calendar", () => {
 			.locator("#main-menu")
 			.getByRole("link", { name: "לוח לימוד יומי", exact: true })
 			.click();
-		await page.waitForURL(
-			(url) => decodeURIComponent(url.pathname) === "/לוח",
-		);
+		await page.waitForURL((url) => decodeURIComponent(url.pathname) === "/לוח");
 		await expect(
 			page.getByRole("heading", { name: "לוח לימוד יומי" }),
 		).toBeVisible();
@@ -41,13 +46,91 @@ test.describe("/לוח learning calendar", () => {
 	});
 });
 
+test.describe("/לוח cycle visibility and export limits", () => {
+	test("clamps a future shared link and stops at the next cycle", async ({
+		page,
+	}) => {
+		const window = liveWindow();
+		await page.goto(`/לוח?view=cycle&cycle=${window.next.number + 5}`);
+		const picker = page.getByRole("combobox", { name: "בחירת מחזור לימוד" });
+		await expect(picker).toHaveValue(String(window.next.number));
+		await expect(picker.locator("option")).toHaveCount(window.next.number);
+		await expect(
+			page.getByRole("button", { name: "מחזור הבא", exact: true }),
+		).toBeDisabled();
+		await page.getByRole("button", { name: "היום", exact: true }).click();
+		await expect(picker).toHaveValue(
+			String(window.current?.number ?? window.next.number),
+		);
+		await expect(page.getByRole("button", { name: /הורדת PDF/ })).toBeEnabled();
+	});
+
+	test("keeps historical cycles readable without fetching an export", async ({
+		page,
+	}) => {
+		const window = liveWindow();
+		const historical = (window.current?.number ?? window.next.number) - 1;
+		const hits: string[] = [];
+		page.on("request", (request) => {
+			if (request.url().includes("calendar-pdf")) hits.push(request.url());
+		});
+		await page.goto(`/לוח?view=cycle&cycle=${historical}`);
+		await expect(
+			page.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue(String(historical));
+		await expect(
+			page.getByRole("button", { name: /הורדת PDF/ }),
+		).toBeDisabled();
+		await expect(page.getByRole("status")).toContainText(
+			"החל משנה לפני תחילתו",
+		);
+		expect(hits).toEqual([]);
+	});
+
+	test("limits month/year navigation without showing later cycle assignments", async ({
+		page,
+	}) => {
+		const window = liveWindow();
+		await page.goto(`/לוח?month=${window.maxMonth.year + 5}01`);
+		await expect(
+			page.getByRole("combobox", { name: "שנה", exact: true }),
+		).toHaveValue(String(window.maxMonth.year));
+		await expect(
+			page.getByRole("combobox", { name: "חודש", exact: true }),
+		).toHaveValue(String(window.maxMonth.month));
+		await expect(
+			page.getByRole("button", { name: "חודש הבא", exact: true }),
+		).toBeDisabled();
+		await page.getByRole("button", { name: "שנתי", exact: true }).click();
+		await expect(page.locator("main h3")).toHaveCount(
+			getMonthOrder(window.maxMonth.year).indexOf(window.maxMonth.month) + 1,
+		);
+		await expect(
+			page.getByRole("button", { name: "שנה הבאה", exact: true }),
+		).toBeDisabled();
+		await expect(
+			page.getByRole("button", { name: /הורדת PDF/ }),
+		).toBeDisabled();
+	});
+});
+
 test.describe("/לוח calendar PDF download (#2621)", () => {
-	/** אלול 5785 — a uniform month guaranteed to exist (non-leap year). */
-	const ELUL_5785 = "578512";
+	let STUDY_MONTH: string;
+	let currentCycle: number;
+	let MONTH_FILENAME: string;
+	let YEAR_FILENAME: string;
+	let CYCLE_FILENAME: string;
+	test.beforeAll(() => {
+		const window = liveWindow();
+		currentCycle = window.current?.number ?? window.next.number;
+		// A complete interior month/year avoids intentionally ineligible boundaries.
+		const interior = getCycle(currentCycle).start.add(450);
+		STUDY_MONTH = `${interior.year}${String(interior.getUniformMonth()).padStart(2, "0")}`;
+		MONTH_FILENAME = `learning-calendar-${STUDY_MONTH}.pdf`;
+		YEAR_FILENAME = `learning-calendar-year-${interior.year}.pdf`;
+		CYCLE_FILENAME = `learning-calendar-cycle-${currentCycle}.pdf`;
+	});
 	const PDF_URL_PATTERN = "**/api/calendar-pdf**";
-	const MONTH_FILENAME = "learning-calendar-578512.pdf";
-	const YEAR_FILENAME = "learning-calendar-year-5785.pdf";
-	const CYCLE_FILENAME = "learning-calendar-cycle-4.pdf";
 	const PDF_BODY = "%PDF-1.4 browser-test stub";
 
 	/**
@@ -60,11 +143,16 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 	 * unavailable statuses (#2622), so only another status exercises the
 	 * failure path.
 	 */
-	function stubCalendarPdf(
+	async function stubCalendarPdf(
 		page: Page,
 		hits: string[],
 		options: { delayMs?: number; failFirst?: boolean } = {},
 	) {
+		// Exercise the API fallback deterministically; a real public manifest
+		// must never let this browser test download production assets.
+		await page.route("**/generated/calendar-pdf/manifest.json", (route) =>
+			route.fulfill({ status: 503 }),
+		);
 		return page.route(PDF_URL_PATTERN, async (route) => {
 			const requestUrl = route.request().url();
 			hits.push(requestUrl);
@@ -104,14 +192,16 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 	}) => {
 		const hits: string[] = [];
 		await stubCalendarPdf(page, hits);
-		await page.goto(`/לוח?month=${ELUL_5785}`);
+		await page.goto(`/לוח?month=${STUDY_MONTH}`);
 		const action = downloadAction(page);
 		await expect(action).toBeVisible();
 
 		// Browsing the calendar must not eagerly fetch a PDF.
 		await page.getByRole("button", { name: "חודש הבא" }).click();
 		await page.getByRole("button", { name: "חודש קודם" }).click();
-		await expect(page).toHaveURL(/month=578512/);
+		await expect(page).toHaveURL(
+			(url) => url.searchParams.get("month") === STUDY_MONTH,
+		);
 		expect(hits).toHaveLength(0);
 
 		await action.focus();
@@ -123,14 +213,14 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		expect(hits).toHaveLength(1);
 		const requested = new URL(hits[0]);
 		expect(requested.searchParams.get("view")).toBe("month");
-		expect(requested.searchParams.get("month")).toBe(ELUL_5785);
+		expect(requested.searchParams.get("month")).toBe(STUDY_MONTH);
 		expect(download.suggestedFilename()).toBe(MONTH_FILENAME);
 	});
 
 	test("requests the selected year in yearly view", async ({ page }) => {
 		const hits: string[] = [];
 		await stubCalendarPdf(page, hits);
-		await page.goto(`/לוח?month=${ELUL_5785}&view=year`);
+		await page.goto(`/לוח?month=${STUDY_MONTH}&view=year`);
 
 		const [download] = await Promise.all([
 			page.waitForEvent("download"),
@@ -140,14 +230,16 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		expect(hits).toHaveLength(1);
 		const requested = new URL(hits[0]);
 		expect(requested.searchParams.get("view")).toBe("year");
-		expect(requested.searchParams.get("month")).toBe(ELUL_5785);
+		expect(requested.searchParams.get("month")).toBe(STUDY_MONTH);
 		expect(download.suggestedFilename()).toBe(YEAR_FILENAME);
 	});
 
 	test("requests the selected cycle in full-cycle view", async ({ page }) => {
 		const hits: string[] = [];
 		await stubCalendarPdf(page, hits);
-		await page.goto(`/לוח?month=${ELUL_5785}&view=cycle&cycle=4`);
+		await page.goto(
+			`/לוח?month=${STUDY_MONTH}&view=cycle&cycle=${currentCycle}`,
+		);
 
 		const [download] = await Promise.all([
 			page.waitForEvent("download"),
@@ -157,7 +249,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		expect(hits).toHaveLength(1);
 		const requested = new URL(hits[0]);
 		expect(requested.searchParams.get("view")).toBe("cycle");
-		expect(requested.searchParams.get("cycle")).toBe("4");
+		expect(requested.searchParams.get("cycle")).toBe(String(currentCycle));
 		expect(download.suggestedFilename()).toBe(CYCLE_FILENAME);
 	});
 
@@ -167,7 +259,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 		const hits: string[] = [];
 		// A slow response keeps the request in flight across the assertions.
 		await stubCalendarPdf(page, hits, { delayMs: 500 });
-		await page.goto(`/לוח?month=${ELUL_5785}`);
+		await page.goto(`/לוח?month=${STUDY_MONTH}`);
 		const action = downloadAction(page);
 
 		await action.click();
@@ -179,7 +271,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 
 		const download = await page.waitForEvent("download");
 		expect(hits).toHaveLength(1);
-		expect(new URL(hits[0]).searchParams.get("month")).toBe(ELUL_5785);
+		expect(new URL(hits[0]).searchParams.get("month")).toBe(STUDY_MONTH);
 		expect(download.suggestedFilename()).toBe(MONTH_FILENAME);
 	});
 
@@ -188,7 +280,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 	}) => {
 		const hits: string[] = [];
 		await stubCalendarPdf(page, hits, { failFirst: true });
-		await page.goto(`/לוח?month=${ELUL_5785}`);
+		await page.goto(`/לוח?month=${STUDY_MONTH}`);
 		const action = downloadAction(page);
 		const status = action.locator("..").getByRole("status");
 
@@ -215,7 +307,7 @@ test.describe("/לוח calendar PDF download (#2621)", () => {
 			const page = await context.newPage();
 			const hits: string[] = [];
 			await stubCalendarPdf(page, hits);
-			await page.goto(`/לוח?month=${ELUL_5785}`);
+			await page.goto(`/לוח?month=${STUDY_MONTH}`);
 			const action = downloadAction(page);
 			await expect(action).toBeVisible();
 			const [download] = await Promise.all([
