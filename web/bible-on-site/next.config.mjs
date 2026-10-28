@@ -31,11 +31,12 @@ const parashaDivision = JSON.parse(
 		"utf8",
 	),
 );
-/** First parasha unitId per Torah sefer — the book-chrome URLs land
- * there. Unit ids are positional (index + 1) like the data module's. */
-const parashaSeferFirstUnits = Object.entries(
-	parashaDivision.units.reduce((first, unit, index) => {
-		if (!(unit.sefer in first)) first[unit.sefer] = index + 1;
+/** First parasha canonical slug per Torah sefer — the book-chrome URLs
+ * land there. Internal rewrite destinations carry the canonical slug so
+ * only canonical params reach the /parasha/[unit] route (issue #2738). */
+const parashaSeferFirstSlugs = Object.entries(
+	parashaDivision.units.reduce((first, unit) => {
+		if (!(unit.sefer in first)) first[unit.sefer] = unit.slug;
 		return first;
 	}, {}),
 );
@@ -210,7 +211,7 @@ const nextConfig = {
 				// the /parasha route dir like מסורה does through /masora.
 				{ source: "/פרשה", destination: "/parasha" },
 				{ source: `/${encodeURIComponent("פרשה")}`, destination: "/parasha" },
-				...parashaSeferFirstUnits.flatMap(([sefer, unitId]) =>
+				...parashaSeferFirstSlugs.flatMap(([sefer, firstSlug]) =>
 					Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
 						["פרשה", encodeURIComponent("פרשה")].flatMap((root) =>
 							[
@@ -218,7 +219,7 @@ const nextConfig = {
 								`/${root}/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
 							].map((source) => ({
 								source,
-								destination: `/parasha/${unitId}?book&bookPage=${page}`,
+								destination: `/parasha/${encodeURIComponent(firstSlug)}?book&bookPage=${page}`,
 							})),
 						),
 					),
