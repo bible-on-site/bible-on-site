@@ -157,8 +157,13 @@ export const MODULES = {
 	data: {
 		directory: "data",
 		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
-		ciPaths: [...SHARED_CI_PATHS, "devops/deploy/data-deploy"],
+		ciPaths: [
+			...SHARED_CI_PATHS,
+			"devops/deploy/data-deploy",
+			"devops/deploy/ecr-deploy",
+		],
 	},
 	perushim_pipeline: {
 		directory: "data/sefaria/pipelines/perushim-view",

@@ -1,7 +1,7 @@
 # ARM64/Graviton multi-arch validation and canary plan (issue #2562)
 
-Investigates ARM64/Graviton savings for the three ECS Fargate services —
-website, API and admin — **without changing production behavior or breaking
+Investigates ARM64/Graviton savings for the three ECS Fargate services -
+website, API and admin - **without changing production behavior or breaking
 rollback**, as required by
 [#2562](https://github.com/bible-on-site/bible-on-site/issues/2562).
 Follow-up from [#2576](https://github.com/bible-on-site/bible-on-site/issues/2576);
@@ -36,7 +36,7 @@ index/child digests captured for the exact build being qualified:
 | Base image | Used by | linux/arm64 child |
 | --- | --- | --- |
 | `node:26.12.1-alpine` | website + admin (all stages) | yes (`arm64/v8`) |
-| `oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a` | website + admin (`COPY --from` of the bun binary) | yes — the pinned digest is itself an **OCI index** containing `linux/amd64` and `linux/arm64`, so the pinned reference resolves per-architecture and does not smuggle an x86 bun into an ARM image |
+| `oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a` | website + admin (`COPY --from` of the bun binary) | yes - the pinned digest is itself an **OCI index** containing `linux/amd64` and `linux/arm64`, so the pinned reference resolves per-architecture and does not smuggle an x86 bun into an ARM image |
 | `rust:1.99.1-alpine` | API build stage | yes (`arm64/v8`) |
 | `alpine:3.24.3` | API final stage | yes (`arm64/v8`) |
 
@@ -67,17 +67,29 @@ importantly, ECS only observes checks configured in the **task definition**,
 not an image's `HEALTHCHECK` alone. The current reference definitions have no
 API/admin task health check; confirm the live definitions before rollout.
 
+API startup also launches the article-search worker unconditionally. It runs
+three `CREATE TABLE IF NOT EXISTS` statements, may retrain/write derived
+search tables, and periodically drains/reconciles the search queue. HTTP
+read-only probes do not make an API task read-only. Qualify the complete
+worker against an isolated database; use DB-enforced SELECT-only credentials
+for any deliberately limited production-data read test, recording that the
+worker cannot be fully qualified under those grants. A normal production
+`DB_URL` must not be cloned into another investigation task on the assumption
+that startup only reads.
+
 ## What still needs proof on actual ARM hardware
 
 Registry and code inspection cannot substitute for the issue's required
-runtime verification. **Unproven until phase 2 below runs:**
+runtime verification. This migration checklist is only partly covered by
+the dated native-build and placement evidence below; untested items remain
+qualification gates:
 
 1. Startup/readiness on Graviton under the deployed limits (0.25 vCPU;
    2048 MB website, 512 MB api/admin), including the website's cold
    canonical-data load that caused the 2026-10-06 handover stalls
    ([record](deployment-readiness-2026-10-06.md)).
 2. SSM `Secrets:` resolution at task start (`DB_URL`, `REVALIDATE_SECRET`,
-   `INDEXNOW_KEY`) and networking via the live private-DNS SSM endpoint —
+   `INDEXNOW_KEY`) and networking via the live private-DNS SSM endpoint -
    unchanged in principle (secret injection is execution-role + endpoint
    work, not ISA work) but must be observed on the candidate task.
 3. DB/API behavior: GraphQL queries against `tanah-mysql`, website dynamic
@@ -85,7 +97,7 @@ runtime verification. **Unproven until phase 2 below runs:**
 4. sharp transcode correctness on the bulletin-export path, plus successful
    native build tooling and a recorded final-image native artifact inventory.
 5. Public content: canonical/legacy URL matrix, recitation content and
-   playback, image/audio Range+CORS — the same probe set the audit and
+   playback, image/audio Range+CORS - the same probe set the audit and
    post-deploy verifier already run.
 6. Measured startup latency, peak memory and CPU under realistic traffic
    versus an amd64 baseline.
@@ -103,19 +115,22 @@ Israel (Tel Aviv) / `il-central-1`, USD/hour:
 
 | Meter | x86 | ARM64 | Delta |
 | --- | --- | --- | --- |
-| On-demand vCPU | 0.0518144 | 0.04145152 | **−20.0%** |
-| On-demand GB | 0.0056896 | 0.00455168 | **−20.0%** |
-| Spot vCPU | 0.01554432 | 0.01243546 | **−20.0%** |
-| Spot GB | 0.00170688 | 0.0013655 | **−20.0%** |
+| On-demand vCPU | 0.0518144 | 0.04145152 | **-20.0%** |
+| On-demand GB | 0.0056896 | 0.00455168 | **-20.0%** |
+| Spot vCPU | 0.01554432 | 0.01243546 | **-20.0%** |
+| Spot GB | 0.00170688 | 0.0013655 | **-20.0%** |
 
 Monthly compute (730 h) per service at current sizes:
 
 | Service | Size (vCPU/GB) | Today | On ARM64 | Delta/mo |
 | --- | --- | --- | --- | --- |
-| website | 0.25 / 2 | $17.76 on-demand | $14.21 on-demand | **−$3.55** |
-| api | 0.25 / 0.5 | $11.53 on-demand | $9.23 on-demand | **−$2.31** |
-| admin | 0.25 / 0.5 | $3.46 Spot x86 | $2.77 Spot ARM *if* ARM Spot placement works | **−$0.69** |
-| **Total Fargate compute** | | **$32.75** | **$26.21** | **−$6.54 (−20%)** |
+| website | 0.25 / 2 | $17.76 on-demand | $14.21 on-demand | **-$3.55** |
+| api | 0.25 / 0.5 | $11.53 on-demand | $9.23 on-demand | **-$2.31** |
+| admin | 0.25 / 0.5 | $3.46 Spot x86 | $2.77 Spot ARM *if* ARM Spot placement works | **-$0.69** |
+| **Total Fargate compute** | | **$32.76** | **$26.20** | **-$6.55 (-20%)** |
+
+Totals use unrounded hourly calculations before rounding to cents; displayed
+service rows are rounded separately.
 
 The math method is the same one that produced the audit's $11.53/$3.46
 figures (verified against the published rates here). The default **20 GB
@@ -123,15 +138,16 @@ of Fargate ephemeral storage is included at no additional charge**; only
 configured storage above that allowance is billed. Architecture does not
 change that allowance or public IPv4, CloudWatch Logs, and data-transfer
 pricing. Publishing additional image children can increase ECR storage and
-build costs, so $6.54 is the gross compute saving, not a guaranteed net bill
+build costs, so $6.55 is the gross compute saving, not a guaranteed net bill
 reduction. See [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/).
 **Admin caveat:**
-ARM on-demand ($9.23) costs *more* than today's x86 Spot ($3.46) — admin
+ARM on-demand ($9.23) costs *more* than today's x86 Spot ($3.46) - admin
 must migrate onto Spot ARM capacity, or the move is a cost regression.
-ARM Spot capacity in il-central-1 is unproven until measured.
+The dated investigation below proves one ARM Spot placement in il-central-1;
+it does not establish future capacity or complete admin qualification.
 
 This is a modest saving. The honest expectation is ~$6.5/month of Fargate
-compute, ~20% of that line — not a large bill change. The migration's cost
+compute, ~20% of that line - not a large bill change. The migration's cost
 must justify its risk; that call is Dorad's per the approval rule.
 
 ## Native CI qualification added in this change
@@ -167,7 +183,7 @@ Three properties constrain the design:
 
 - `docker buildx build --load` exports a **single** platform; the
   `docker`-driver builder cannot emit a manifest list without the
-  containerd image store. Per-architecture builds are therefore required —
+  containerd image store. Per-architecture builds are therefore required -
   which also keeps today's tar release contract intact per arch.
 - `docker save` preserves a single-arch image; the multi-arch object in
   ECR is assembled at push time from already-pushed children.
@@ -180,14 +196,14 @@ Three properties constrain the design:
    dockerize jobs: `linux/amd64` keeps `ubuntu-latest`; `linux/arm64` runs
    on `ubuntu-24.04-arm` (GitHub-hosted ARM64 runner, free for this public
    repository). QEMU (`docker/setup-qemu-action`) is the correctness
-   fallback — viable for the small admin/API images, too slow to be the
+   fallback - viable for the small admin/API images, too slow to be the
    routine path for the Rust release build and the SSG website build.
    Preserve `<image>-v<ver>.tar.gz` as the amd64 release asset and add
    `<image>-v<ver>-arm64.tar.gz` for ARM64. Update every producer/consumer
    together; renaming the amd64 tar would break the existing release contract.
 2. **Publish the index at deploy time.** `cd-aws.yml` pushes each arch tar
    via `crane push` to `v<ver>-amd64`/`v<ver>-arm64`, then composes the
-   manifest list over already-pushed children —
+   manifest list over already-pushed children -
    `crane index append -t <repo>:v<ver> -m <repo>:v<ver>-amd64 -m <repo>:v<ver>-arm64`
    and the same for `latest` (`docker buildx imagetools create` is the
    equivalent; crane is already installed in cd-aws). Only the final
@@ -207,7 +223,7 @@ Three properties constrain the design:
    same trigger condition as its amd64 twin (the merge-gating rule in
    `.github/instructions/aws-workflows.instructions.md`), so a broken arm64
    build blocks merges exactly like an amd64 one. The website remains
-   master-push-only for its DB-backed SSG build — its arm64 variant runs
+   master-push-only for its DB-backed SSG build - its arm64 variant runs
    there before the release it feeds, never as a pre-merge no-op.
 5. **Manifest/digest inspection in CI.** Record `crane manifest
    <repo>:v<ver>` / `docker buildx imagetools inspect` output (amd64 +
@@ -261,7 +277,7 @@ The safest sequencing: phase 1 ships per-arch builds + `v<ver>-<arch>`
 tags only, leaving `v<ver>`/`latest` pointing at the amd64 image exactly as
 today. The isolated ARM64 candidate then pins the `v<ver>-arm64` digest.
 The index flip on `v<ver>`/`latest` lands only when a service is approved
-to migrate — so the tag semantic changes at the moment it is actually
+to migrate - so the tag semantic changes at the moment it is actually
 needed, not before. Both sub-phases keep amd64 published. Digests identify
 immutable content, but the retention prerequisite above is what preserves
 that content for recovery.
@@ -278,13 +294,22 @@ Do not equate regional prices or an On-Demand launch with ARM Spot placement.
    task-definition health checks, live security-group access, and lifecycle
    policies. Require one COMPLETED deployment, pending 0, and no concurrent
    release. Save the private baseline outside Git without printing secrets.
+   Audit startup/background side effects **before registration or launch**.
+   API must have a separately scoped isolated DB secret for full worker tests,
+   or a DB-enforced SELECT-only secret for explicitly limited read tests.
+   If that prerequisite is unavailable, stop without launching API.
 2. Clone each full current definition, strip AWS response metadata, and
    register an isolated candidate under a new family. Change only family,
    `runtimePlatform`, and image to the qualified ARM64 child digest. Preserve
-   roles, resources, logs, environments and every secret reference. Network
+   roles, resources, logs, environments and unrelated secret references. For
+   API, explicitly replace its DB_URL secret reference with the approved
+   isolated/read-only one and record that controlled deviation; never retain
+   production write credentials merely to keep the clone byte-identical.
+   Any required new secret/IAM access needs its own precise authorization. Network
    configuration belongs to `run-task`; copy the service's subnets, security
    groups and public-IP setting separately rather than inventing new ones.
-3. Run a standalone candidate with no service/discovery registration and no
+3. Only after the startup/isolation gate passes, run a standalone candidate
+   with no service/discovery registration and no
    router/DNS change. Use On-Demand `FARGATE` for website/API. Test admin
    separately using **only `FARGATE_SPOT`**, with explicit weight 1; record
    the returned task's actual capacity provider, ARM64 architecture, image
@@ -292,11 +317,14 @@ Do not equate regional prices or an On-Demand launch with ARM Spot placement.
    On-Demand for failed Spot placement. Immediate placement proves that
    attempt, not future Spot availability.
 4. Probe the task's private IP from an authorized host in the VPC. Inspect
-   router tools/access before depending on it; install/stage the verifiers
-   and their dependencies without changing Nginx. If current SG access is
+   router tools/access before depending on it. Prefer an existing strict-host-
+   checked SSH tunnel bound to local loopback and run matching verifiers
+   locally; the observed router has Python/curl but no Node. Do not install
+   tooling or change Nginx merely to run the probes. If current SG access is
    insufficient, stop and present the precise additive rule and cleanup for
    approval rather than changing networking as an unstated prerequisite.
-5. Run the qualification checks below. Read-only DB/API probes are permitted
+5. Run the qualification checks below with the already verified isolation.
+   HTTP methods alone are not a write boundary. Read-only DB/API probes are permitted
    within the investigation scope. Admin write/revalidation testing needs an
    isolated test database and candidate website target, or separate explicit
    approval of the exact production mutation; cloning production credentials
@@ -480,6 +508,8 @@ aws ecs register-task-definition \
   --cli-input-json file:///tmp/td-candidate.json --region il-central-1
 
 # Website/API candidate: FARGATE means On-Demand, not Spot.
+# API registration/launch is forbidden until its isolated/read-only DB secret
+# has passed the earlier startup-isolation gate; the production DB_URL is unsafe.
 # Copy the actual service's network settings into the private network JSON.
 aws ecs run-task --cluster bible-on-site-cluster \
   --task-definition bible-on-site-website-arm64-candidate:<rev> \
@@ -495,12 +525,13 @@ aws ecs run-task --cluster bible-on-site-cluster \
 aws ecs describe-tasks --cluster bible-on-site-cluster --tasks <candidate-task-arn> \
   --region il-central-1
 
-# Website probes on the prepared VPC probe host, from the matching checkout.
-# Requires installed website dependencies and process DB_URL (read-only).
+# Website probes from a matching local checkout through an existing SSH tunnel.
+# Bind the tunnel to loopback, keep strict host checking, and close it afterward.
+# Requires local website dependencies and process DB_URL (read-only).
 # Clear DB_URL after the probe; never print or save its value.
 node web/bible-on-site/scripts/verify-public-content.mjs \
-  --origin http://<task-private-ip>:3000 --database
-python data/recitation/deployment.py --origin http://<task-private-ip>:3000 \
+  --origin http://127.0.0.1:<forwarded-port> --database
+python data/recitation/deployment.py --origin http://127.0.0.1:<forwarded-port> \
   --version <exact-image-application-version> --check-audio
 
 # Recovery uses a separately prepared, known-good digest-pinned definition.
@@ -514,6 +545,35 @@ aws ecs stop-task --cluster bible-on-site-cluster --task <candidate-task-arn> \
 aws ecs deregister-task-definition --task-definition <candidate-family>:<rev> \
   --region il-central-1
 ```
+
+## Search-worker correctness fix and production impact
+
+The investigation found that search retraining acquired and released a
+session-scoped MySQL advisory lock through independent pool checkouts.
+The follow-up fix retains one physical SQLx session and executes acquisition,
+all existing retrain SQL, and release on it. Closing that session on drop
+also covers cancellation during an in-flight statement; another worker cannot
+start on a different session before the earlier statement has finished.
+The real-MySQL regression covers contention, SQL errors, cancellation during
+an active delayed write, typed blob parameters, and a one-connection pool.
+It runs explicitly in the existing API coverage job and contributes its hits
+to the unit report before the normal coverage merge.
+
+This corrects serialization of the existing worker; it adds no schema,
+canonical content, public URL, authentication, IAM, network, or ECS resource
+change. Worker startup/write behavior remains enabled by default, which is
+why candidate database isolation is still required. The direct
+sea-query-sqlx dependency uses the exact binder version already frozen under
+SeaORM; no dependency versions are upgraded.
+
+Merging API source changes can ship a normal amd64 API release through the
+existing CD path. It does not migrate any service to ARM. Before review, the
+current API 0.1.93 amd64 image was pulled by its actual running digest,
+privately archived with a checksum, and a complete cloned digest-pinned
+recovery request was prepared without applying it. If recovery is needed,
+register that request and restore the affected API service using the captured
+configuration, then verify health/version and public probes. A rollback pin
+must later be deliberately returned to the normal release contract.
 
 ## Dated investigation evidence
 
@@ -533,7 +593,8 @@ production configuration was changed by this audit.
 - Current latest tags were single-image Docker v2 manifests, not multi-arch
   indexes. No ARM image placement or routine ARM release was proven.
 - Live ECR retention differs by repository: website has a count-based
-  15-image expiry policy; API has no lifecycle policy; admin has a policy.
+  15-image expiry policy; API has no lifecycle policy; admin also expires
+  beyond 15 images.
   Inspect and preview each actual policy before relying on rollback images;
   do not infer fleet-wide retention from the reference template.
 - FARGATE and FARGATE_SPOT providers were ACTIVE and Container Insights was
@@ -544,12 +605,69 @@ production configuration was changed by this audit.
   candidates; do not add IAM, SSM registration or ingress as an implicit fix.
 - Public price feeds were reread: all four on-demand and four Spot rates
   matched the table. At the live resource sizes, gross compute savings remain
-  approximately $6.54/month, before extra image storage/build overhead.
+  approximately $6.55/month, before extra image storage/build overhead.
 - Local amd64 rehearsal built the real admin image and website dependency
   stage. Admin authentication redirect and unauthenticated server-function
   protection passed at 0.25 vCPU/512 MiB. Native SWC compilation and Sharp
   JPEG conversion passed at 0.25 vCPU/2048 MiB. These are amd64 checks, not
   ARM64 runtime evidence; native ARM execution remains a CI/candidate gate.
+
+### 2026-10-28 native builds and isolated placement tests
+
+[CI run 40655741226](https://github.com/bible-on-site/bible-on-site/actions/runs/40655741226)
+passed all six native amd64/ARM64 legs: API/admin final images and website
+SWC/Sharp dependency probes. Source merge revision was
+`c69294b484cb28928f43a1208816a0f6d8781aa6`. Immutable Actions artifact ZIP digests
+and the contained image archive checksums were verified before placement.
+These results predate subsequent search-worker serialization hardening; its
+final head must receive the same build checks.
+
+Existing SSH key/host trust, forwarding and current task security-group
+access were verified without changing IAM, SSM, Nginx or ingress. Baseline
+website readiness/recitation, API health and admin auth probes passed. Local
+loopback forwarding makes installing Node on the router unnecessary.
+
+- Admin ARM64 actually placed on FARGATE_SPOT in 23.85 seconds at 0.25 vCPU
+  and 512 MiB. Its login redirect and unauthenticated server-function response
+  matched the live amd64 baseline. Two distinct Container Insights observation times (four task/container
+  records) recorded a 22 MiB memory peak and 2.596/256 CPU units. This short auth/idle
+  observation is not a representative-load benchmark or a full signed-in
+  author-edit/revalidation test.
+- API ARM64 placed on FARGATE in 23.50 seconds at the existing limits. Health
+  was successful and a real article GraphQL read matched production. The
+  strict version comparison failed: candidate 0.1.94 versus production
+  0.1.93. Comparing the published 0.1.93 source with the tested merge found
+  only the package version in Cargo.toml and Cargo.lock changed; API source,
+  Dockerfile and dependency versions were identical. Preserve the failed
+  exact-version result rather than relabeling it a complete migration pass.
+- The API startup review then identified the background worker's write
+  potential. Its captured application stream contains two SET statements,
+  three CREATE TABLE IF NOT EXISTS statements and six SELECT statements;
+  no INSERT/UPDATE/DELETE/REPLACE or retraining was observed. This is not a
+  database audit trail or proof of zero side effects. Further API launches
+  using production write credentials are blocked until the isolation
+  prerequisite is met. No corrective production data writes were performed.
+- Both candidates were stopped, their revisions deregistered and their
+  separate temporary ECR repositories removed. The original services retained
+  their task revisions, providers and stable counts. No production image tag,
+  service, router, IAM, DNS or security-group setting was changed.
+
+Regional private ECR standard storage was verified through the AmazonECR
+price-list API at $0.10/GB-month. Each additional 10 GB of billed image storage
+reduces the $6.55 gross monthly saving by $1; 20 GB would leave $4.55/month,
+and 65.5 GB would consume the saving entirely. Retaining rollback histories
+must take priority over shrinking the image count. Actual net savings still
+need the full website ARM image size, measured retained/deduplicated layers
+and any Actions artifact/cache storage charges. Current latest compressed
+image sizes were about 1099.5 MiB website, 14.8 MiB API and 124.5 MiB admin;
+summing image sizes is not an exact billed-storage measurement.
+
+Production migration remains unqualified: normal multi-arch release delivery
+and temporary-pin exit are not implemented; API/admin ECS readiness checks,
+full website SSG/runtime, isolated API worker/full admin mutation tests,
+representative comparative performance and retained/pullable rollback proof
+remain required. A compatible ARM build and one successful Spot placement do
+not remove these gates.
 
 The initial report supplied repository/registry feasibility and published-rate
 estimates. It contained no successful ARM64 application build, isolated AWS
@@ -566,6 +684,7 @@ References: [#2562](https://github.com/bible-on-site/bible-on-site/issues/2562),
 [ecs-services.yaml](cloudformation/ecs-services.yaml),
 [ecr-ecs-auto-deploy.yaml](cloudformation/ecr-ecs-auto-deploy.yaml),
 [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/),
+[ECR pricing](https://aws.amazon.com/ecr/pricing/),
 [ECS task ARM64 runtime platform](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#runtime-platform),
 [ECS health-check rules](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/healthcheck.html),
 [ECS deployment health semantics](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_definition_parameters.html#deploymentConfiguration),

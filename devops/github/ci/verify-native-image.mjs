@@ -22,8 +22,9 @@ export function parseOptions(args) {
 	assert.ok(["website", "admin", "api"].includes(values.service), "--service must be website, admin, or api");
 	assert.ok(["amd64", "arm64"].includes(values.arch), "--arch must be amd64 or arm64");
 	assert.ok(values.image && !values.image.startsWith("-"), "--image is required");
-	if (values.service === "api") assertLocalFixture(values["db-url"]);
-	else assert.equal(values["db-url"], undefined, "Only the API smoke check accepts --db-url");
+	const { "db-url": databaseUrl } = values;
+	if (values.service === "api") assertLocalFixture(databaseUrl);
+	else assert.equal(databaseUrl, undefined, "Only the API smoke check accepts --db-url");
 	return values;
 }
 
@@ -90,9 +91,9 @@ export async function verifyImage(options, dependencies = {}) {
 	const docker = dependencies.docker ?? runDocker;
 	const now = dependencies.now ?? Date.now;
 	const sleep = dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
-	const { service, image, arch } = options;
+	const { service, image, arch, "db-url": databaseUrl } = options;
 	assert.equal(dependencies.runnerArch ?? process.arch, arch === "amd64" ? "x64" : "arm64", "Host must be a native runner for the requested architecture");
-	if (service === "api") assertLocalFixture(options["db-url"]);
+	if (service === "api") assertLocalFixture(databaseUrl);
 	const metadata = JSON.parse(docker(["image", "inspect", "--format", "{{json .}}", image]));
 	assert.equal(metadata.Os, "linux");
 	assert.equal(metadata.Architecture, arch, "Image metadata must match the native runner");
@@ -117,7 +118,7 @@ export async function verifyImage(options, dependencies = {}) {
 				"-e", "AWS_EC2_METADATA_DISABLED=true",
 			] : [
 				"--network", "host", "-e", "PROFILE=prod", "-e", "HOST=127.0.0.1",
-				"-e", "PORT=3003", "-e", `DB_URL=${options["db-url"]}`,
+				"-e", "PORT=3003", "-e", `DB_URL=${databaseUrl}`,
 			];
 			created = true;
 			docker([...common, "--detach", ...env, image]);

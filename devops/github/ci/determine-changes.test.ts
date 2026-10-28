@@ -446,6 +446,29 @@ describe("detectChanges", () => {
 		);
 	});
 
+	test("ECR deployer changes run recovery checks without data delivery or a release", () => {
+		for (const file of [
+			"devops/deploy/ecr-deploy/ecr-client.mts",
+			"devops/deploy/ecr-deploy/ecr-client.test.mts",
+			"devops/deploy/ecr-deploy/resume-image.mts",
+			"devops/deploy/ecr-deploy/resume-image.test.mts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "data" },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+		assert.equal(
+			detectChanges(["devops/deploy/ecr-deploy-old.mts"]).data.ci_changed,
+			false,
+		);
+	});
+
 	test("module directories match path segments, not prefixes", () => {
 		const changes = detectChanges(["web/api-docs/readme.md", "appendix.md"]);
 		assert.equal(changes.api.module_changed, false);

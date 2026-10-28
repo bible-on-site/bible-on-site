@@ -1769,6 +1769,19 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      # Mock connections cannot prove session-scoped MySQL advisory locks.
+      # Run the ignored regression explicitly and add its production-code hits
+      # to the existing unit LCOV report before E2E and the normal coverage merge.
+      - name: Verify article-search advisory lock with MySQL and coverage
+        working-directory: ${{ env.API_DIRECTORY }}
+        env:
+          MYSQL_PWD: test_123
+          ARTICLE_SEARCH_LOCK_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/article_search_lock_test
+        run: |
+          mysql --host=127.0.0.1 --user=root --execute='CREATE DATABASE article_search_lock_test'
+          trap 'mysql --host=127.0.0.1 --user=root --execute="DROP DATABASE article_search_lock_test"' EXIT
+          cargo make coverage-article-search-lock
+
       - name: Setup tests bun, Node.js and dependencies
         id: tests-bun-cache
         uses: ./.github/actions/setup-js
