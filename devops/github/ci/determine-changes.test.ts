@@ -24,6 +24,24 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("native image validation changes select all three services without a release", () => {
+		for (const file of [
+			".github/workflows/architecture-validation.yml",
+			"devops/github/ci/verify-native-image.mjs",
+			"devops/github/ci/verify-native-image.test.mjs",
+			"devops/github/ci/verify-website-native.mjs",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					`${file} -> ${key}`,
+				);
+			}
+		}
+	});
+
 	test("playback derivatives release both website and native book packages", () => {
 		assert.deepEqual(changed(["web/bible-on-site/src/data/recitation/opus-playback.json"], "website", "app"), [
 			{ module_changed: true, ci_changed: false }, { module_changed: true, ci_changed: false },
@@ -388,9 +406,9 @@ describe("detectChanges", () => {
 		}
 	});
 
-	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
+	test("release Docker build inputs validate the affected images without releasing", () => {
 		for (const [file, keys] of [
-			["web/.dockerignore", ["api", "bulletin", "admin"]],
+			["web/.dockerignore", ["website", "api", "bulletin", "admin"]],
 			[".github/workflows/shared-dockerize.yml", ["api"]],
 			["web/api/entities/src/lib.rs", ["bulletin"]],
 		] as const) {

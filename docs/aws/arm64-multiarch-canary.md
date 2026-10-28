@@ -9,12 +9,14 @@ reference audit: [cost-risk-audit-2026-10-23.md](cost-risk-audit-2026-10-23.md).
 
 **No production architecture/image/service change or AWS-related PR merge
 without Dorad's explicit approval of the specific PR's current impact.
-Auto-merge off.** This document is research only. No AWS credentials were
-available for this pass (`aws sts get-caller-identity` returns
-NoCredentials), so nothing below was applied to AWS: every "verified" claim
-comes from repository code, published registry manifests or the published
-AWS price list, and every live step is marked **[requires AWS access +
-approval]**.
+Auto-merge off.** This document separates repository/registry research,
+read-only AWS inspection, isolated validation, and production migration.
+The initial research pass had no AWS credentials; its findings are not live
+AWS proof. A later authenticated investigation does not authorize a production
+migration. Record dated observations below and leave unexecuted steps marked
+as proposals. Candidate tasks, image pushes, task-definition registration,
+lifecycle changes, and service updates require the applicable explicit scope
+of approval before execution.
 
 Production baseline from the 2026-10-23 audit (re-read live before any
 approved step): account **250598594267**, region **il-central-1**, cluster
@@ -23,12 +25,13 @@ approved step): account **250598594267**, region **il-central-1**, cluster
 desired/running 1. Website/API run on-demand `FARGATE`; admin runs
 `FARGATE_SPOT` since 2026-10-24 ([rollout record](admin-spot-rollout.md)).
 
-## What is already proven — image feasibility
+## Repository and registry feasibility
 
-### Every base image already ships linux/arm64
+### Base images have ARM64 variants
 
-Verified by reading the registry manifests directly (anonymous Docker Hub
-pull, `Accept: image.index`):
+The initial research pass inspected these registry indexes (anonymous
+Docker Hub access). Mutable tags must be rechecked and their resolved
+index/child digests captured for the exact build being qualified:
 
 | Base image | Used by | linux/arm64 child |
 | --- | --- | --- |
@@ -37,26 +40,32 @@ pull, `Accept: image.index`):
 | `rust:1.99.1-alpine` | API build stage | yes (`arm64/v8`) |
 | `alpine:3.24.3` | API final stage | yes (`arm64/v8`) |
 
-No `FROM` line, pinned digest or base-image pin needs changing to produce
-arm64 builds.
+These indexes make native ARM64 builds plausible without changing the
+`FROM` references. They do not prove that dependency installation, application
+build, or the final image runs correctly on ARM64.
 
-### Native dependencies per service
+### Native build dependencies and runtime dependencies
 
-| Service | Native surface | ARM64 assessment |
+The lockfiles describe available packages, not a successful install or a
+complete inventory of the final image. Keep build and runtime claims separate:
+
+| Service | Build-time native surface | Runtime surface and remaining proof |
 | --- | --- | --- |
-| website (Next.js 16.4.3 standalone) | `sharp@0.35.5` is the only native module. Used in `src/lib/download/perek-export-content.ts` to resize/re-encode perek illustration JPEGs for bulletin export — no font rendering inside the container; fonts (`src/app/fonts/*.woff*`, `src/lib/download/fonts/*.ttf`) ship as bundled bytes | `bun.lock` already pins `@img/sharp-linuxmusl-arm64` and `@img/sharp-libvips-linuxmusl-arm64`, so `bun install --frozen-lockfile` inside an arm64 build resolves the musl-arm64 prebuilt binary. Runtime proof (real transcode output on the export path) is still required |
-| admin (TanStack Start, Node) | none — `mysql2`, `@aws-sdk/*`, `jose`, `nitro`/TanStack and `tiptap` are pure JavaScript | Lowest-risk image; also the service that already tolerates interruption (Spot, one user) |
-| api (Rust, musl static) | `actix-web`, `sea-orm`/`sqlx-mysql`, `tokio-native-tls` → `openssl-sys`; the Dockerfile links OpenSSL statically via `openssl-libs-static` | `openssl-libs-static` exists for aarch64 musl in alpine 3.24; `ring` in the lock graph has upstream aarch64 support. Compiling the identical Dockerfile inside an arm64 image build produces a native musl binary — **no cross-compile toolchain needed** |
-| bulletin (Lambda ZIP, `web/bulletin/Dockerfile`) | same Rust musl pattern | Out of #2562 scope: the deliverable is a ZIP pushed through `cd-bulletin.yml`, not an ECS image. A musl aarch64 binary + Lambda `architectures: [arm64]` is a later, separately approved saving |
+| website (Next.js 16.4.3 standalone) | Next SWC, Bun, and tooling such as esbuild have architecture-specific packages; inspect the resolved Linux/musl ARM64 packages during the real image build | `sharp@0.35.5` is used by `src/lib/download/perek-export-content.ts` for illustration resize/JPEG conversion. `bun.lock` includes `@img/sharp-linuxmusl-arm64` and `@img/sharp-libvips-linuxmusl-arm64`; successful install, standalone tracing, and an actual transcode still need proof. Inspect the packaged output for any other native artifacts before claiming a complete runtime audit |
+| admin (TanStack Start, Node) | Vite/Rolldown, Lightning CSS, and Tailwind Oxide include native build components; its lockfile has Linux/musl ARM64 variants | Application dependencies such as `mysql2`, `@aws-sdk/*`, and `jose` are JavaScript. This does not prove the generated `.output` is entirely architecture-neutral; inspect it, start it on ARM64, and exercise authentication and DB reads |
+| api (Rust, musl static) | Native `cargo build --locked --release`, including `openssl-sys` and the `ring` dependency graph; the Dockerfile uses `openssl-libs-static` | Alpine aarch64 packages and upstream aarch64 support establish feasibility. Build the actual image natively, inspect the ELF architecture/linkage, then test its GraphQL and DB paths. Native ARM64 builds avoid a cross-compile toolchain |
+| bulletin (Lambda ZIP, `web/bulletin/Dockerfile`) | Rust musl | Out of #2562 scope; its ZIP and Lambda architecture are a separate approval/change |
 
-### Entrypoints are arch-neutral
+The website/admin Node entrypoints are JavaScript; API `/bin/server` must be
+compiled for the target architecture. Fonts bundled as bytes do not require
+container-side font rendering. These facts do not remove the native build
+requirements above.
 
-- website: `node start-server.mjs` → `server.js` standalone bundle — pure JS.
-- admin: `node .output/server/index.mjs` — pure JS.
-- api: `/bin/server` musl static binary — produced per-arch by the same
-  `cargo build --locked --release` inside the per-arch build stage.
-- Container health checks use `curl` installed via `apk` in the runner
-  stage — resolves to the arm64 apk package automatically.
+The website Dockerfile defines a health check. API/admin must be probed
+explicitly; do not assume every image has a Docker health check. More
+importantly, ECS only observes checks configured in the **task definition**,
+not an image's `HEALTHCHECK` alone. The current reference definitions have no
+API/admin task health check; confirm the live definitions before rollout.
 
 ## What still needs proof on actual ARM hardware
 
@@ -73,8 +82,8 @@ runtime verification. **Unproven until phase 2 below runs:**
    work, not ISA work) but must be observed on the candidate task.
 3. DB/API behavior: GraphQL queries against `tanah-mysql`, website dynamic
    pages/ISR, admin session/auth flow.
-4. sharp transcode correctness on the bulletin-export path (the one native
-   module in the fleet).
+4. sharp transcode correctness on the bulletin-export path, plus successful
+   native build tooling and a recorded final-image native artifact inventory.
 5. Public content: canonical/legacy URL matrix, recitation content and
    playback, image/audio Range+CORS — the same probe set the audit and
    post-deploy verifier already run.
@@ -109,9 +118,14 @@ Monthly compute (730 h) per service at current sizes:
 | **Total Fargate compute** | | **$32.75** | **$26.21** | **−$6.54 (−20%)** |
 
 The math method is the same one that produced the audit's $11.53/$3.46
-figures (verified against the published rates here). Unchanged by
-architecture: the 20 GB Fargate ephemeral storage (~$2.14/task/mo), public
-IPv4, CloudWatch Logs, data transfer and ECR storage. **Admin caveat:**
+figures (verified against the published rates here). The default **20 GB
+of Fargate ephemeral storage is included at no additional charge**; only
+configured storage above that allowance is billed. Architecture does not
+change that allowance or public IPv4, CloudWatch Logs, and data-transfer
+pricing. Publishing additional image children can increase ECR storage and
+build costs, so $6.54 is the gross compute saving, not a guaranteed net bill
+reduction. See [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/).
+**Admin caveat:**
 ARM on-demand ($9.23) costs *more* than today's x86 Spot ($3.46) — admin
 must migrate onto Spot ARM capacity, or the move is a cost regression.
 ARM Spot capacity in il-central-1 is unproven until measured.
@@ -120,7 +134,25 @@ This is a modest saving. The honest expectation is ~$6.5/month of Fargate
 compute, ~20% of that line — not a large bill change. The migration's cost
 must justify its risk; that call is Dorad's per the approval rule.
 
-## Pipeline changes needed (proposal — not wired by this document)
+## Native CI qualification added in this change
+
+[architecture-validation.yml](../../.github/workflows/architecture-validation.yml)
+runs on native amd64 and ARM64 GitHub-hosted runners. Its callers and
+`cross_module_ci` gating are added together. It uses no AWS credentials and
+does not push ECR images, publish release assets, change `latest`, register
+ECS definitions, or update production services.
+
+- API/admin build their real final image and run native runtime smoke probes.
+  Isolated candidate image tars, checksums, and inspection metadata are kept
+  as seven-day Actions artifacts, separate from the production release path.
+- Website validates its dependency stage, including native Sharp/SWC loading.
+  It does not perform production-DB-backed SSG or qualify the website's full
+  standalone runtime. Those remain explicit gates before website migration.
+- Workflow implementation is not successful execution evidence. Record the
+  exact head, run results, artifact hashes and scope below after CI finishes.
+  Seven-day candidate retention is not a production rollback-retention policy.
+
+## Multi-arch release changes still needed (proposal only)
 
 Current chain (`shared-dockerize.yml`, `package_admin` in `ci.yml`,
 `shared-release.yml`, `cd-aws.yml`, `devops/deploy/ecr-deploy`):
@@ -150,19 +182,23 @@ Three properties constrain the design:
    repository). QEMU (`docker/setup-qemu-action`) is the correctness
    fallback — viable for the small admin/API images, too slow to be the
    routine path for the Rust release build and the SSG website build.
-   Each arch produces its own
-   `<image>-v<ver>-<arch>.tar.gz` release asset; the amd64 artifact name and
-   contract are unchanged.
+   Preserve `<image>-v<ver>.tar.gz` as the amd64 release asset and add
+   `<image>-v<ver>-arm64.tar.gz` for ARM64. Update every producer/consumer
+   together; renaming the amd64 tar would break the existing release contract.
 2. **Publish the index at deploy time.** `cd-aws.yml` pushes each arch tar
    via `crane push` to `v<ver>-amd64`/`v<ver>-arm64`, then composes the
    manifest list over already-pushed children —
    `crane index append -t <repo>:v<ver> -m <repo>:v<ver>-amd64 -m <repo>:v<ver>-arm64`
    and the same for `latest` (`docker buildx imagetools create` is the
-   equivalent; crane is already installed in cd-aws). Pushing `latest` as
-   an index still fires exactly one auto-deploy, and existing X86_64 task
-   definitions resolve the amd64 child — production behavior is unchanged.
-   `resume-image.mts`'s `PutImage` path also carries an index manifest
-   (same-repo children already exist).
+   equivalent; crane is already installed in cd-aws). Only the final
+   `latest` publication should match the current EventBridge tag filter;
+   arch/version pushes must not match. ECR notifications are best effort,
+   so verify the actual deployment rather than promising exactly one event.
+   Existing X86_64 definitions should resolve the amd64 child of a complete
+   index; verify both platform pulls and their image/version provenance.
+   Before index publication, test `resume-image.mts` with an index media type
+   and all referenced children present in the same repository. No support
+   claim substitutes for that end-to-end qualification.
 3. **Per-arch build caches.** The website `deps-cache` ECR tag is a
    single-arch amd64 image; arm64 builds need a parallel ref
    (`bible-on-site:deps-cache-arm64`). The `type=gha` scopes for api/admin
@@ -179,18 +215,45 @@ Three properties constrain the design:
    candidate/rollback digests are artifacts of the run, matching the
    issue's "inspect manifest digests" requirement.
 
-### Deployer code notes (hardening for the change, not blockers)
+### Deployer and retention prerequisites
 
-- `getRemoteImageTags` sorts every non-`latest` tag as a version; `deps-cache`
-  already lands in that list today and degrades remote-version detection to
-  "assume local is newer" (an invalid semver branch). Adding
-  `v<ver>-amd64`/`v<ver>-arm64` tags keeps `semver.coerce` comparisons
-  correct, but the deployer should filter to the `^v\d+\.\d+\.\d+$` release
-  pattern when arch tags arrive so detection stays exact.
-- ECR lifecycle "keep last 15 images" now retires a release roughly 3×
-  faster (two children + index per release). Pinned rollback digests must
-  be recorded privately per the admin-spot practice before relying on
-  image-level rollback.
+- Remote version selection must accept only canonical release tags matching
+  `^v\d+\.\d+\.\d+$`, compare semantically, and ignore cache/architecture
+  tags. Otherwise `deps-cache` and `v<ver>-arm64` can distort the decision.
+  Validate empty, paginated, and mixed-tag results before multi-arch rollout.
+- Read the **live** ECR lifecycle policy and run a preview against the
+  proposed tag/index layout. Two platform children plus an index increase
+  image count, but retention is not a simple threefold formula: ECR cannot
+  expire a child while a retained manifest list references it. A limit of
+  15 images is not a promise of 15 rollback releases.
+- Recording a digest does **not** preserve its manifest or layers. Before
+  migration, retain the running known-good amd64 image and any required
+  index/children under a reviewed lifecycle policy, or in a verified recovery
+  repository with retention that covers the rollout and rollback window.
+  Preview policies, confirm the rollback digest is retrievable, and rehearse
+  restoring/pulling it. A new tag alone does not protect an image from a
+  policy selecting all images. Any policy/repository change is separately
+  AWS-impacting and needs approval before application.
+
+See [ECR lifecycle evaluation](https://docs.aws.amazon.com/AmazonECR/latest/userguide/LifecyclePolicies.html).
+
+### Steady-state release contract must be settled before service migration
+
+The deployed ECR event handler calls `UpdateService(forceNewDeployment=True)`;
+it does not register a new task revision or replace a digest pin. Leaving an
+ARM64 service pinned to a qualification digest freezes routine releases.
+
+The proposed minimal-change steady state is an ARM64 task revision using
+`<repo>:latest`, with each approved routine release publishing a complete,
+validated amd64+arm64 index. Use a digest pin for isolated qualification and
+for a bounded migration/recovery step, then explicitly transition to that
+reviewed steady-state revision before the next release. Verify its resolved
+ARM child equals the qualified digest and that no concurrent release/tag
+change occurred. Alternatively, implement and validate a per-release,
+digest-pinned task-revision deployer before choosing permanent pins. That is
+a different pipeline change, not functionality provided by the current
+force-only handler. Until one contract is implemented and approved, service
+migration is blocked.
 
 ### Phasing that keeps `latest` amd64-only until approved
 
@@ -199,169 +262,302 @@ tags only, leaving `v<ver>`/`latest` pointing at the amd64 image exactly as
 today. The isolated ARM64 candidate then pins the `v<ver>-arm64` digest.
 The index flip on `v<ver>`/`latest` lands only when a service is approved
 to migrate — so the tag semantic changes at the moment it is actually
-needed, not before. Both sub-phases keep amd64 published and prior digests
-immutable.
+needed, not before. Both sub-phases keep amd64 published. Digests identify
+immutable content, but the retention prerequisite above is what preserves
+that content for recovery.
 
-## Isolated candidate design (phase 2 — [requires AWS access + approval])
+## Isolated candidate design (phase 2 - requires authorized AWS access)
 
-Multi-arch manifests do **not** make ECS choose Graviton: task definitions
-without `runtimePlatform` default to X86_64, and `runtimePlatform` cannot
-be edited in place — a new task-definition revision carries it.
+Multi-arch manifests do not select Graviton by themselves. Definitions without
+`runtimePlatform` default to X86_64; ARM64 needs a new revision with explicit
+`cpuArchitecture: ARM64` and Linux Fargate platform version 1.4.0 or later.
+Do not equate regional prices or an On-Demand launch with ARM Spot placement.
 
-1. Re-read live state (account, service revisions, running digests, one
-   COMPLETED deployment, pending 0) — the audit baseline is a snapshot, not
-   evidence of current state.
-2. `aws ecs describe-task-definition` the service's current revision; strip
-   response metadata; register an **isolated candidate under a new family**
-   (e.g. `bible-on-site-website-arm64-candidate`) changing only:
-   - `runtimePlatform = { cpuArchitecture: "ARM64", operatingSystemFamily: "LINUX" }`
-   - container `image` = `<repo>@sha256:<arm64-child-digest>` (pinned
-     digest, never `latest`; a `v<ver>-arm64` tag is the readable alias of
-     the same digest).
-   Everything else — execution/task roles, awsvpc networking, CPU/memory,
-   log configuration, health check, environment and every `Secrets:`
-   ValueFrom — is cloned verbatim per the task-revision rule.
-3. `aws ecs run-task` a standalone candidate task — **no service, no Cloud
-   Map registration, no router/nginx change**. Probe it from the nginx EC2
-   router host over the task's VPC-private IP via SSM Session Manager (the
-   router already sits inside the VPC; no security-group or public-ingress
-   change is needed). If router probing proves impossible, a temporary
-   scoped SG rule for the probing host is the additive fallback.
-4. Verification set — all existing tooling, already origin-parameterized
-   (exact commands in the appendix; `--origin` takes the task's
-   VPC-private endpoint, e.g. port 3000 for the website):
-   - `verify-public-content.mjs --origin <candidate-origin> --database`
-     (read-only DB paths)
-   - `data/recitation/deployment.py --origin <candidate-origin>
-     --version <v> --check-audio`
-   - container health check (the Dockerfile HEALTHCHECK command) plus
-     `/api/health/ready`, `/api/recitation`, `/api/recitation/2`
-   - GraphQL reads against `api.<host>` routes for the API candidate;
-     admin login/auth redirect + a revalidation round-trip for admin
-   - a bulletin-export request exercising the sharp transcode
-   - `verify-canonical-hosts.mjs` redirect matrix against the public
-     origin (unchanged behavior proof — runs against production, since the
-     candidate is not publicly routed).
-   - Measure time-to-healthy, then replay a representative slice of the
-     router access log against the candidate while sampling Container
-     Insights CPU/memory; compare against an amd64 same-day baseline.
-5. Tear down the candidate task after capture; leave no task, service or
-   registry residue beyond the tagged images.
+1. Re-read account/region, service revisions, running image digests,
+   platform version, actual capacity providers, network configuration,
+   task-definition health checks, live security-group access, and lifecycle
+   policies. Require one COMPLETED deployment, pending 0, and no concurrent
+   release. Save the private baseline outside Git without printing secrets.
+2. Clone each full current definition, strip AWS response metadata, and
+   register an isolated candidate under a new family. Change only family,
+   `runtimePlatform`, and image to the qualified ARM64 child digest. Preserve
+   roles, resources, logs, environments and every secret reference. Network
+   configuration belongs to `run-task`; copy the service's subnets, security
+   groups and public-IP setting separately rather than inventing new ones.
+3. Run a standalone candidate with no service/discovery registration and no
+   router/DNS change. Use On-Demand `FARGATE` for website/API. Test admin
+   separately using **only `FARGATE_SPOT`**, with explicit weight 1; record
+   the returned task's actual capacity provider, ARM64 architecture, image
+   digest, exit status and placement failures. Do not silently substitute
+   On-Demand for failed Spot placement. Immediate placement proves that
+   attempt, not future Spot availability.
+4. Probe the task's private IP from an authorized host in the VPC. Inspect
+   router tools/access before depending on it; install/stage the verifiers
+   and their dependencies without changing Nginx. If current SG access is
+   insufficient, stop and present the precise additive rule and cleanup for
+   approval rather than changing networking as an unstated prerequisite.
+5. Run the qualification checks below. Read-only DB/API probes are permitted
+   within the investigation scope. Admin write/revalidation testing needs an
+   isolated test database and candidate website target, or separate explicit
+   approval of the exact production mutation; cloning production credentials
+   does not make a write test isolated.
+6. Stop candidate tasks, confirm STOPPED, deregister their temporary candidate
+   revisions, and record cleanup. Preserve required image evidence/recovery
+   artifacts and logs. Do not delete production task definitions or images.
 
-## Canary rollout plan (phase 3+ — per-service, each step separately approved)
+### Probe prerequisites and qualification gates
 
-Order: **admin → api → website**. Admin is already Spot with an accepted
-interruption tolerance and a pure-JS image; the API is a single static
-binary; the website is last — public traffic, SSG, the sharp path and the
-largest surface.
+The appendix is a template, not a self-contained command that can be pasted
+on an unprepared router. Use the exact source revision and matching canonical
+recitation JSON/playback inventory for the candidate image. The probe host
+needs the repository's supported Node/Python, the website dependencies that
+provide `parse5` and `mysql2`, and access to the read-only DB endpoint.
+`verify-public-content.mjs --database` reads **the probe process's `DB_URL`**;
+ECS secret injection only provides it inside the task. Supply an authorized
+read-only connection through process memory without logging/saving its value,
+then clear it. Never copy a production `.env` or decrypted credential into Git.
 
-For each service, one at a time, retaining on-demand FARGATE capacity
-(admin stays on whichever Spot provider measured viable):
+Run website verifiers against port 3000, API requests against port 3003, and
+admin requests against port 3101. API GraphQL is `POST /` on the candidate
+endpoint; a request to public `api.<host>` does not exercise the candidate.
+Preserve the expected Host/auth callback semantics when testing a private IP.
+Website-specific `/api/health/ready` and recitation routes do not apply to
+API/admin. Check public canonical redirects and legacy S3 image/audio
+Range/CORS separately against the public origin; no candidate is publicly
+routed. When a recitation verifier sends the private candidate origin as its
+CORS `Origin`, compare that response with the unchanged production S3 policy;
+a production-only allowlist cannot be made to accept the probe by loosening
+CORS. Record the distinction between candidate metadata proof and public
+asset compatibility proof.
 
-1. **Gate**: phases 1–2 complete and verified for that service; explicit
-   approval of the specific change.
-2. **Publish the index** for that repo's `v<ver>`/`latest` (amd64 +
-   arm64 children; existing X86_64 task defs still resolve amd64).
-3. **Register the migration revision**: clone the live task definition
-   verbatim again, setting `runtimePlatform` ARM64 and pinning the arm64
-   digest — same recipe as the candidate, now on the service's own family.
-4. **Update the service** to the new revision. With
-   `minimumHealthyPercent=100`/`maximumPercent=200`, the old amd64 task
-   keeps serving until the arm64 task passes health checks; Cloud Map
-   MULTIVALUE refresh then drains it — the same handover behavior as a
-   normal image release.
-5. **Verify beyond `services-stable`** (the audit's requirement): one
-   primary deployment with `rolloutState=COMPLETED`, desired=running=1,
-   pending=0, running task-definition revision is the candidate revision,
-   container health + logs clean, reported application version correct,
-   and the full public probe set (canonical/legacy URLs, recitation,
-   image generation/export, S3 Range/CORS unchanged).
-6. **Soak** at least one normal release cycle for that service — proving a
-   routine release ships multi-arch end-to-end — before touching the next
-   service.
+| Gate | Required evidence before rollout |
+| --- | --- |
+| Build and architecture | Real per-service Linux/musl ARM64 image build succeeds with frozen lockfiles; inspect final ELF/native artifacts and image platform; capture source, index and child digests |
+| Startup | At deployed CPU/memory limits, candidate starts within the existing packaged-image startup budget; no crash, OOM, secret-resolution or DB-connection error; website's three readiness routes pass |
+| Website content | `verify-public-content.mjs --database` passes against the candidate with a real read-only corpus baseline; ready extension/chapter response bodies match the release's canonical data |
+| Native image path | Actual bulletin illustration export produces a valid JPEG with expected dimensions/content; merely importing Sharp is insufficient |
+| API/admin | Read-only GraphQL/DB responses and admin login/auth redirects match amd64; explicit readiness checks pass; controlled write/revalidation test is isolated or separately approved |
+| Recitation and assets | Candidate version/metadata/canonical timings match; existing public playback, original MP3, MIME, byte-range and CORS checks pass without URL/policy changes |
+| Capacity and performance | Record same-day amd64/ARM64 startup time, p50/p95 latency, peak memory and CPU under the same bounded representative replay; zero probe failures/OOMs, no resource-limit increase, candidate p95 no worse than the measured amd64 baseline |
+| Admin Spot | An ARM64 task actually runs on FARGATE_SPOT at current limits; record placement/time and retain x86 Spot recovery; do not infer capacity from the On-Demand candidate |
+| Recovery | Known-good amd64 manifest/layers are retained and pullable; a complete digest-pinned rollback task-definition request and provider/network baseline are prepared and privately verified |
+
+Record measured values and run identifiers. A skipped check is unproven and
+blocks the affected migration. A timeout is a failure to investigate, not a
+reason to widen the existing timeout. Redact access-log personal data and
+replay only reviewed read-only routes; do not replay production writes or
+credentials. If Container Insights is not enabled, use available task metrics
+or a separately approved measurement method rather than enabling a new paid
+service as an implicit step.
+
+## Canary rollout plan (phase 3+ - separate specific approval required)
+
+Proposed order: admin, API, then website. Admin has accepted interruption
+tolerance, but its native build and Spot placement must still pass. A
+single-instance rolling replacement is not a percentage-based traffic canary.
+The isolated qualification task provides the pre-production canary; a service
+update is a production cutover requiring its own approval.
+
+Before **each service**:
+
+1. Complete every applicable qualification gate and settle/implement the
+   steady-state release contract. Present the exact PR/current image and
+   production changes, URL/backward-compatibility impact, cost and rollback
+   for Dorad's approval. Preserve website/API On-Demand capacity and admin's
+   approved Spot strategy; do not change shared defaults.
+2. Prepare and verify a recovery definition pinned to the **running known-good
+   amd64 digest**, preserving all other live fields. Ensure its image is
+   retained for the entire rollout/recovery window. Save the full task,
+   service/provider/network and public-probe baseline privately. A previous
+   revision that says `:latest` is not a pinned rollback.
+3. Confirm the actual service task definition has application readiness
+   checks understood by ECS. Current reference API/admin definitions omit
+   them. Without task/LB checks, ECS may count a RUNNING task healthy after
+   40 seconds; `minimumHealthyPercent=100` does not prove HTTP readiness.
+   Add and validate an approved readiness prerequisite, or design a separately
+   approved guarded handover that retains the known-good task until private
+   and public probes pass. Do not promise automatic protection from Docker
+   `HEALTHCHECK`, Cloud Map, or `services-stable` alone.
+4. Freeze overlapping releases for the bounded cutover, publish and inspect
+   the complete index only when authorized, and wait for any event-triggered
+   deployment to settle before the next service update. Verify both platform
+   children, current tag and running digest. Register a full cloned ARM64
+   migration revision pinned to the qualified ARM child, then update only
+   the intended service. Keep minHealthy100/max200 and the current website
+   readiness/drain behavior. No automatic retention protects an interrupted
+   Spot task; that remains the accepted admin availability risk.
+5. Observe handover continuously. Require one primary COMPLETED deployment,
+   desired=running=1, pending=0, the expected task revision, actual ARM64
+   image digest/provider, correct reported application version, clean logs
+   and all candidate/public compatibility probes. Verify the old task stops
+   and discovery refreshes. Cloud Map does not itself implement listener drain;
+   retain the website launcher/stop-timeout behavior documented in
+   [deployment readiness](deployment-readiness-2026-10-06.md).
+6. Complete the approved transition from the temporary pin to the implemented
+   steady-state release contract, explicitly verify its resolved ARM digest,
+   then observe one normal release. Require its new expected application
+   version **and changed ARM image digest** to serve through the full probes;
+   a successful force-redeploy of the previous pinned image is not a release.
+   Only then consider the next service.
 
 ### Rollback
 
-- **Immediate**: `aws ecs update-service --cluster bible-on-site-cluster
-  --service <svc> --task-definition <previous-amd64-revision>
-  --force-new-deployment`. The prior revision is immutable and references
-  its amd64 image; with min-healthy semantics the replacement is a normal
-  redeploy, and any `latest` index still resolves the amd64 child for it.
-- **If `latest` drift is implicated**: re-point `latest`/`v<ver>` to the
-  amd64-only manifest (`PutImage`/`crane index`) — the digest is immutable
-  and recorded at deploy time.
-- **Private rollback record** per the admin-spot runbook: task JSON, image
-  digests (candidate + rollback), service config and probe baselines kept
-  outside Git before each service's step.
+- Stop further publication/cutover steps and use the **prepared digest-pinned
+  amd64 recovery revision**, not an arbitrary previous revision that still
+  points to `latest`. Verify its manifest/layers remain available before the
+  update. Restore the captured provider strategy if it changed; a task
+  definition does not contain that service setting. Keep all other service
+  networking/discovery/resource settings intact.
+- Update the intended service to that recovery revision, wait for one
+  COMPLETED primary deployment, and verify the actual known-good digest,
+  application version, provider, HTTP/auth, canonical/legacy URLs and asset
+  behavior. Monitor throughout the transition; min-healthy is not an
+  application-health guarantee without real ECS readiness checks.
+- Do not re-point release/version tags as the default rollback. Tag changes
+  can trigger the deploy handler and affect other release consumers. Any
+  necessary tag repair needs explicit scope, complete manifest/children and
+  verification of its effect before publication resumes.
+- A recovery pin deliberately pauses automatic image updates. Record it and
+  deliberately restore the approved normal-release contract only after the
+  incident is resolved and the replacement image is requalified. Do not
+  silently leave the force-only release path pinned.
 
 ### Guard conditions that stop a migration
 
-- arm64 child fails to pull, crashes, or fails health/readiness →
-  automatic min-healthy retention keeps the amd64 task; roll back the
-  revision.
-- sharp export, SSM injection, DB or recitation probes fail on the
-  candidate → fix in the image/CI, never in production config.
-- ARM Spot placement fails for admin → keep admin x86 Spot (already the
-  cheapest option); do not move admin to ARM on-demand for a regression.
+- Pull/build/startup/readiness failure, unexpected digest/version, DB/secret
+  error, OOM, latency regression or any public compatibility failure: stop
+  and recover using the prepared pinned revision. Do not rely on min-healthy
+  to retain an application that has no ECS-observed readiness check.
+- Missing recovery image, retention evidence, qualification output, readiness
+  protection, or steady-state release proof: migration stays blocked.
+- ARM Spot placement fails: leave admin on x86 Spot. ARM On-Demand is a cost
+  regression at these rates and needs a separate decision.
 
 ## Compatibility risks and open questions
 
 | Risk / question | Status |
 | --- | --- |
-| arm64 bun binary | Resolved — pinned `oven/bun` digest is an OCI index with an arm64 child |
-| arm64 Node/Rust/Alpine bases | Resolved — verified in the registry indexes |
-| sharp musl-arm64 | Lockfile-pinned; runtime transcode proof still required on the candidate |
-| Rust `openssl-sys`/static musl on aarch64 | Same alpine packages exist for aarch64; needs a real build to confirm |
-| QEMU vs native ARM builds | Native `ubuntu-24.04-arm` recommended; QEMU too slow for SSG/Rust routine gating |
-| Manifest lists with the `docker` driver | Cannot `--load` multi-arch — per-arch artifacts + index-at-push is the design |
-| `latest` EventBridge trigger | Index push under `latest` fires one deploy; `-<arch>`/`v<ver>` pushes never trigger |
-| `runtimePlatform` omission | Unset silently stays X86_64 — must be explicit on every ARM64 revision |
-| Fargate ARM64 in il-central-1 | Published rates strongly imply support; must be confirmed by real placement |
-| ARM Spot capacity for admin | Unproven; x86 Spot is already cheaper than ARM on-demand — decide from measurement |
-| ECR lifecycle vs rollback digests | ~3× faster churn — record pinned digests privately before relying on them |
-| `deps-cache`/`type=gha` caches | Need per-arch refs/scopes or arm64 builds lose (or poison) the cache |
-| Private-DNS SSM endpoint | Unchanged by architecture; candidate proves secret injection as a check, not a risk |
-| Candidate public probes | Probed via router-in-VPC; no SG/DNS/router change in phase 2 |
+| ARM64 base/Bun indexes | Initial registry inspection found variants; capture exact digests again for the qualification build |
+| Native dependency completeness | Lockfile availability is evidence only; SWC/Sharp and admin build bindings need real ARM builds and final-image inspection |
+| Rust static musl on aarch64 | Package/upstream support exists; actual image build, ELF inspection and DB/GraphQL proof required |
+| QEMU vs native ARM | Prefer native runners; record actual build duration rather than assuming emulation is adequate |
+| Single-platform release tars | Preserve the amd64 asset contract; add ARM64 asset and compose complete index at publication |
+| EventBridge | Tag filter matches latest; notifications are best effort, so verify observed deployment/digest |
+| Steady-state releases | Force-only deployment cannot advance a digest pin; temporary pin exit or a new per-release revision deployer is mandatory |
+| Readiness protection | Inspect live ECS checks; API/admin reference definitions have none, so minHealthy100 alone is insufficient |
+| Fargate ARM64 / admin Spot | Published support/rates do not prove placement at the required region/subnets/provider |
+| Rollback retention | Saved digest/revision alone is insufficient; live lifecycle preview and retrievable known-good image required |
+| Probe host / DB_URL | Stage matching tools/data/dependencies and a separate read-only probe-process connection; no secrets in logs/Git |
+| Private-DNS SSM endpoint | Keep it; qualified candidate must resolve current task secrets without networking changes |
+| Public assets / URLs | Preserve legacy public S3 paths, MIME/Range/CORS and canonical/legacy redirects; no policy change to accommodate a private-IP probe |
 
 ## Read-only / candidate command reference
 
+Templates use placeholders, an already selected authorized SSO profile, and
+`il-central-1`. State reads are read-only. Registration, task launch/stop,
+retention changes and service updates are writes requiring the applicable
+explicit approval; this reference is not an instruction to apply them now.
+Keep decrypted values out of command output and repository files.
+
 ```bash
-# Re-read live state before any approved step
+# Read current identity/state, without retrieving decrypted secret values.
 aws sts get-caller-identity
 aws ecs describe-services --cluster bible-on-site-cluster \
   --services bible-on-site-website bible-on-site-api bible-on-site-admin \
   --region il-central-1
 
-# Inspect what a tag resolves to (index vs single-arch) after CI pushes
+# Inspect the exact index and retained known-good image before any write.
 crane manifest <acct>.dkr.ecr.il-central-1.amazonaws.com/bible-on-site:v<ver>
 aws ecr describe-images --repository-name bible-on-site \
   --image-ids imageTag=v<ver> --region il-central-1
+aws ecr get-lifecycle-policy --repository-name bible-on-site --region il-central-1
 
-# Clone -> candidate task definition (strip response metadata, add runtimePlatform)
+# Prepare a full candidate JSON privately from the live definition.
+# Strip response metadata; change family, runtimePlatform, and image only.
 aws ecs describe-task-definition --task-definition bible-on-site-website:<rev> \
   --region il-central-1 --query taskDefinition > /tmp/td.json
-aws ecs register-task-definition --family bible-on-site-website-arm64-candidate \
+aws ecs register-task-definition \
   --cli-input-json file:///tmp/td-candidate.json --region il-central-1
 
-# Isolated candidate task (no service, no Cloud Map, no router change)
+# Website/API candidate: FARGATE means On-Demand, not Spot.
+# Copy the actual service's network settings into the private network JSON.
 aws ecs run-task --cluster bible-on-site-cluster \
   --task-definition bible-on-site-website-arm64-candidate:<rev> \
-  --launch-type FARGATE \
-  --network-configuration 'awsvpcConfiguration={subnets=[<s>],securityGroups=[<sg>],assignPublicIp=ENABLED}' \
+  --launch-type FARGATE --platform-version 1.4.0 \
+  --network-configuration file:///tmp/candidate-network.json --region il-central-1
+
+# Separate admin ARM Spot placement test; omit --launch-type.
+aws ecs run-task --cluster bible-on-site-cluster \
+  --task-definition bible-on-site-admin-arm64-candidate:<rev> \
+  --capacity-provider-strategy capacityProvider=FARGATE_SPOT,weight=1 \
+  --platform-version 1.4.0 \
+  --network-configuration file:///tmp/admin-candidate-network.json --region il-central-1
+aws ecs describe-tasks --cluster bible-on-site-cluster --tasks <candidate-task-arn> \
   --region il-central-1
 
-# Candidate probes (run from the router host over the task's private IP;
-# admin candidate uses :3101, api candidate :3003)
+# Website probes on the prepared VPC probe host, from the matching checkout.
+# Requires installed website dependencies and process DB_URL (read-only).
+# Clear DB_URL after the probe; never print or save its value.
 node web/bible-on-site/scripts/verify-public-content.mjs \
   --origin http://<task-private-ip>:3000 --database
 python data/recitation/deployment.py --origin http://<task-private-ip>:3000 \
-  --version <v> --check-audio
+  --version <exact-image-application-version> --check-audio
 
-# Rollback a migrated service to its immutable amd64 revision
+# Recovery uses a separately prepared, known-good digest-pinned definition.
 aws ecs update-service --cluster bible-on-site-cluster --service <svc> \
-  --task-definition <family>:<previous-rev> --force-new-deployment \
+  --task-definition <family>:<pinned-amd64-recovery-rev> --force-new-deployment \
+  --region il-central-1
+
+# Candidate cleanup after capture (never target a production service task).
+aws ecs stop-task --cluster bible-on-site-cluster --task <candidate-task-arn> \
+  --reason arm64-qualification-complete --region il-central-1
+aws ecs deregister-task-definition --task-definition <candidate-family>:<rev> \
   --region il-central-1
 ```
+
+## Dated investigation evidence
+
+### 2026-10-28 authenticated read-only audit
+
+The intended account and il-central-1 region were verified through the
+existing SSO profile. Private raw snapshots were captured outside Git; no
+production configuration was changed by this audit.
+
+- Website/API/admin each had one COMPLETED deployment, desired/running 1
+  and pending 0. Task revisions remained website:16, api:5 and admin:6.
+  Their CPU/memory matched the cost table. Website/API were on FARGATE;
+  admin used FARGATE_SPOT. Runtime architecture was unset (default X86_64).
+- The live website task definition had an ECS health check; API/admin had
+  none. The readiness prerequisite above is therefore a live migration gate,
+  not merely a reference-template concern.
+- Current latest tags were single-image Docker v2 manifests, not multi-arch
+  indexes. No ARM image placement or routine ARM release was proven.
+- Live ECR retention differs by repository: website has a count-based
+  15-image expiry policy; API has no lifecycle policy; admin has a policy.
+  Inspect and preview each actual policy before relying on rollback images;
+  do not infer fleet-wide retention from the reference template.
+- FARGATE and FARGATE_SPOT providers were ACTIVE and Container Insights was
+  enabled. Neither observation proves ARM placement or acceptable resource use.
+- The account had one running EC2 instance and no SSM-managed instances in
+  this region. The proposed SSM router probe path was not available as
+  described. Verify an existing private probe/tunnel path before launching
+  candidates; do not add IAM, SSM registration or ingress as an implicit fix.
+- Public price feeds were reread: all four on-demand and four Spot rates
+  matched the table. At the live resource sizes, gross compute savings remain
+  approximately $6.54/month, before extra image storage/build overhead.
+- Local amd64 rehearsal built the real admin image and website dependency
+  stage. Admin authentication redirect and unauthenticated server-function
+  protection passed at 0.25 vCPU/512 MiB. Native SWC compilation and Sharp
+  JPEG conversion passed at 0.25 vCPU/2048 MiB. These are amd64 checks, not
+  ARM64 runtime evidence; native ARM execution remains a CI/candidate gate.
+
+The initial report supplied repository/registry feasibility and published-rate
+estimates. It contained no successful ARM64 application build, isolated AWS
+candidate run, Spot placement measurement, production migration, or normal
+ARM64 release-cycle proof. Add dated authenticated observations and validation
+results here with their scope and remaining gates; never infer live proof
+from a green docs-only CI run. Keep task snapshots, secrets and raw operational
+records private. No production architecture change is authorized by this plan.
 
 References: [#2562](https://github.com/bible-on-site/bible-on-site/issues/2562),
 [#2576](https://github.com/bible-on-site/bible-on-site/issues/2576),
@@ -370,4 +566,8 @@ References: [#2562](https://github.com/bible-on-site/bible-on-site/issues/2562),
 [ecs-services.yaml](cloudformation/ecs-services.yaml),
 [ecr-ecs-auto-deploy.yaml](cloudformation/ecr-ecs-auto-deploy.yaml),
 [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/),
-[ECS task ARM64 runtime platform](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#runtime-platform).
+[ECS task ARM64 runtime platform](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#runtime-platform),
+[ECS health-check rules](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/healthcheck.html),
+[ECS deployment health semantics](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_definition_parameters.html#deploymentConfiguration),
+[Fargate capacity provider / ARM Spot requirements](https://docs.aws.amazon.com/cli/latest/reference/ecs/run-task.html),
+[ECR EventBridge delivery](https://docs.aws.amazon.com/AmazonECR/latest/userguide/ecr-eventbridge.html).
