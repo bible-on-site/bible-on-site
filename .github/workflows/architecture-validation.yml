@@ -1,0 +1,133 @@
+name: Native Container Validation
+
+# Build-only research. No AWS credentials, registry publication, release assets,
+# or production deployment are available to this workflow.
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Service Dockerfile to validate (website, api, admin)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service to validate without publishing an image
+        required: true
+        type: choice
+        options: [website, api, admin]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: ${{ inputs.service }} / ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            machine: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            machine: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      SERVICE: ${{ inputs.service }}
+      ARCH: ${{ matrix.arch }}
+      EXPECTED_MACHINE: ${{ matrix.machine }}
+      IMAGE: validation-${{ inputs.service }}:${{ matrix.arch }}
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+
+      - name: Require a native runner and a supported service
+        run: |
+          test "$(uname -m)" = "$EXPECTED_MACHINE"
+          case "$SERVICE" in website|api|admin) ;; *) exit 1 ;; esac
+
+      - name: Setup validation Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Test native image verifier
+        run: node --test devops/github/ci/verify-native-image.test.mjs
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the service Dockerfile natively
+        uses: docker/build-push-action@v7
+        with:
+          context: web
+          file: web/${{ inputs.service == 'website' && 'bible-on-site' || inputs.service }}/Dockerfile
+          target: ${{ inputs.service == 'website' && 'deps' || '' }}
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          push: false
+          provenance: false
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=native-validation-${{ inputs.service }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=native-validation-${{ inputs.service }}-${{ matrix.arch }}
+
+      - name: Install isolated API fixture database
+        if: ${{ inputs.service == 'api' }}
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: mysql
+          auto-start: true
+
+      - name: Create empty API smoke database
+        if: ${{ inputs.service == 'api' }}
+        env:
+          MYSQL_PWD: test_123
+        run: |
+          mysql --host=127.0.0.1 --user=root --execute='CREATE DATABASE native_image_smoke'
+          mysql --host=127.0.0.1 --user=root native_image_smoke < data/mysql/tanah_dynamic_structure.sql
+
+      - name: Verify the native image at deployed resource limits
+        env:
+          SMOKE_DB_URL: ${{ inputs.service == 'api' && 'mysql://root:test_123@127.0.0.1:3306/native_image_smoke' || '' }}
+        run: |
+          mkdir -p candidate
+          ARGS=(--service "$SERVICE" --image "$IMAGE" --arch "$ARCH")
+          if [ "$SERVICE" = api ]; then ARGS+=(--db-url "$SMOKE_DB_URL"); fi
+          node devops/github/ci/verify-native-image.mjs "${ARGS[@]}" | tee candidate/native-smoke.json
+
+      # These are research candidates only. Standard release tar names and
+      # ECR v<version>/latest tags remain owned by the existing release flow.
+      - name: Archive validated candidate and provenance
+        if: ${{ inputs.service != 'website' }}
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          mkdir -p candidate
+          docker image inspect "$IMAGE" > candidate/image-inspect.json
+          docker save "$IMAGE" | gzip > "candidate/$SERVICE-$ARCH.tar.gz"
+          (cd candidate && sha256sum "$SERVICE-$ARCH.tar.gz" > SHA256SUMS)
+          node --input-type=module -e 'import { writeFileSync } from "node:fs"; const { SERVICE: service, ARCH: arch, IMAGE: image, SOURCE_SHA: sourceSha, RUN_ID: runId, RUN_ATTEMPT: runAttempt } = process.env; writeFileSync("candidate/source.json", JSON.stringify({ service, arch, image, sourceSha, runId, runAttempt }, null, 2) + "\n");'
+
+      - name: Store isolated candidate artifact
+        if: ${{ inputs.service != 'website' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-candidate-${{ inputs.service }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Store website native dependency evidence
+        if: ${{ inputs.service == 'website' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-dependencies-website-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate/native-smoke.json
+          if-no-files-found: error
+          retention-days: 7
