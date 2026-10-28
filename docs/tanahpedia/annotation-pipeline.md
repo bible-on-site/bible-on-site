@@ -25,8 +25,8 @@ model re-invocation; deleting/unpublishing must revoke them the same way.
 | Candidate | License | Domain fit | Verdict |
 | --------- | ------- | ---------- | ------- |
 | **ETCBC BHSA** (`github.com/ETCBC/bhsa`, Text-Fabric) | **CC BY-NC 4.0** | The only corpus with full Biblical-Hebrew morphological annotation (POS, morphology, phrase function, qri/ktiv) | **Evaluation baseline only.** Non-commercial clause makes it unusable as a production derivation source without a license determination; its underlying text is BHS, not our Sefaria-sourced canonical text, so word-boundary alignment needs reconciliation. Text-Fabric tooling itself is MIT. Where the corpus *can* legally help: measuring baseline accuracy on Biblical Hebrew without shipping its annotations. |
-| **AlephBERT** (`OnlpLab/AlephBERT`, HF `onlplab/alephbert-base`) | **Apache-2.0** | Modern Hebrew; evaluated on SPMRL/UD treebanks incl. POS, morphological segmentation, NER | **Primary neural candidate for article (rabbinic/modern) Hebrew.** Clean license, published benchmark suite, morphological-extraction head designed for Hebrew's fused prefixes — directly useful for stripping ב/ל/מ/ש/ו/ה/כ prefixes before name resolution. |
-| **DictaBERT** family (`dicta-il`) | **CC BY 4.0** | Modern Hebrew; `dictabert-morph` is a dedicated morphological analyzer; **BEREL** targets Rabbinic Hebrew specifically | **Strong candidate, best domain coverage for articles** (BEREL is literally trained on rabbinic corpora). Attribution required — acceptable, same class as our other sourced data. Verify BEREL's exact model-card license before pinning. |
+| **AlephBERT** (`OnlpLab/AlephBERT`, HF `onlplab/alephbert-base`) | **Apache-2.0** | Modern Hebrew; evaluated on SPMRL/UD treebanks incl. POS, morphological segmentation, NER | **No official token-classification head — the base model is fill-mask only.** Community NER fine-tunes exist (e.g. `jony6484/alephbert-base-finetuned-ner-v2`) and measured slightly better pasuk typing (0.718 hybrid) than DictaBERT (0.654), but the repos declare **no license — they cannot ship**; comparison-only, mirroring BHSA's eval-only position. |
+| **DictaBERT** family (`dicta-il`) | **CC BY 4.0** | Modern Hebrew; `dictabert-morph` is a dedicated morphological analyzer; **BEREL** targets Rabbinic Hebrew specifically | **Measured winner for the typing tier.** `dictabert-ner` (base) lifts `type_accuracy` 0.55→0.65 (pasuk) / 0.67→0.89 (article) when re-typing morphhb candidates; base ties large everywhere and beats it on pasuk. Attribution required — acceptable, same class as our other sourced data. **BEREL's model card is Apache-2.0** (verified — cleaner than expected) but it is fill-mask only: no published classification head, so it stayed unmeasured this increment. |
 | **HeBERT** | Apache-2.0 (check per-variant) | Modern Hebrew, older | Superseded by DictaBERT/AlephBERT on the same benchmarks — no reason to pick it. |
 | **Multilingual mBERT** | Apache-2.0 | Weak on Hebrew morphology | Baseline floor only; AlephBERT paper documents it underperforms dedicated Hebrew models. |
 | **Local LLM (instruct) hybrid** | model-dependent (e.g. Gemma/Llama licenses) | Can classify ambiguous mentions with context | Reserved for the ambiguity tier **if and only if** the deterministic+encoder path misses the quality bar — per issue, evaluate dedicated classifiers first. No API calls; everything pinned and local. |
@@ -152,12 +152,18 @@ then derives the link target.
 
 ## Open decisions recorded for implementation
 
-1. **BEREL license confirmation** on its exact model card (CC-BY
-   expected; pin only after verifying).
+1. ~~**BEREL license confirmation**~~ — **resolved: Apache-2.0** on
+   `dicta-il/BEREL` (verified on the model card). BEREL itself is
+   fill-mask only, so it stays unmeasured until/unless a classification
+   head is fine-tuned.
 2. **BHSA legal position** — keep it strictly out of shipped artifacts
    (eval-only) unless a license determination says otherwise.
-3. **Encoder vs LLM tier for ambiguity** — decided by the measured
-   golden-set gap after the lexical+encoder baseline lands, not before.
+3. **Encoder vs LLM tier for ambiguity** — the measured gap after the
+   encoder comparison is a *detection*-complete, typing-improved hybrid
+   (`type_acc` 0.65/0.89); residual misses are qri/ktiv and spelling
+   typing plus genuinely ambiguous person/place/nation cases. The
+   next-tier question is a fine-tuned head or an LLM ambiguity pass —
+   decided after the encoder tier lands in the pipeline.
 4. **`segment_*` vs character offsets for articles** — articles have no
    canonical segmentation; `span_start/span_end` are character offsets
    into the stored content with the revision hash as the staleness key.
@@ -208,7 +214,21 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   normalization bugs, gazetteer coverage floor, prefixed-compound
   over-holding) are documented in `data/annotations/GOLDEN.md` —
   they are the bar the encoder comparison must beat.
+- Encoder classifier comparison (`data/annotations/encoders.py`):
+  a normalized-matching-view adapter that feeds HF
+  token-classification output into the same contract rows, with
+  pinned revisions, per-candidate license tracking, `detect`
+  (end-to-end) and `retype` (morphhb detection + encoder typing)
+  modes, and a comparison CLI recording
+  `golden/encoder-metrics/*.json`. Measured verdict: encoders type
+  far better than they detect, so the selected tier is **morphhb
+  detection + `dictabert-ner` re-typing** (CC-BY-4.0) — type accuracy
+  0.55→0.65 pasuk / 0.67→0.89 article at zero detection cost. BEREL
+  verified Apache-2.0 but unrunnable (fill-mask only); the only
+  AlephBERT NER legs are licenseless community fine-tunes — flagged
+  comparison-only. See `data/annotations/GOLDEN.md` for the full
+  table and per-category findings.
 
-Remaining sequence: encoder classifier comparison (BEREL license
-check first) against the golden-set bar → production import of the
-published pasuk + article baseline rows.
+Remaining sequence: wire the hybrid (lexical detect + DictaBERT
+re-type) into the pipeline's publish path → production import of the
+published pasuk + article rows.
