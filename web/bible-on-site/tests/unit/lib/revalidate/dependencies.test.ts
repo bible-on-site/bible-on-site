@@ -198,6 +198,20 @@ describe("resolveEntityChanges", () => {
 		);
 	});
 
+	it.each(["article", "author"] as const)(
+		"propagates a non-schema %s covering lookup failure instead of acknowledging incomplete invalidation", async (kind) => {
+			const failure = Object.assign(new Error("covering lookup unavailable"), { code: "ER_CONNECTION_LOST" });
+			mockQuery.mockImplementation(async (sql: string) => {
+				if (sql.includes("covering_source")) throw failure;
+				return [];
+			});
+			const change = kind === "article" ?
+				{ kind, id: 12, perekIds: [5] } : { kind, id: 3, name: "רשי" };
+			await expect(resolveEntityChanges([change])).rejects.toBe(failure);
+			expect(mockQuery.mock.calls.some(([sql]) => sql.includes("covering_source"))).toBe(true);
+		},
+	);
+
 	it("skips author page deps when the author row no longer exists", async () => {
 		stubDb({ authorName: null });
 		const out = await resolveEntityChanges([
@@ -432,7 +446,9 @@ describe("resolveEntityChanges", () => {
 				perekRanges: Array.from({ length: 512 }, () => ({ low: 1, high: 929 })),
 			},
 		]);
-		expect(out.tags).toHaveLength(929);
+		expect(out.tags.filter((tag) => tag.startsWith("perek:"))).toHaveLength(929);
+		expect(out.tags.filter((tag) => tag.startsWith("sefer:"))).toHaveLength(35);
+		expect(out.tags).toHaveLength(929 + 35);
 		expect(out.paths).toHaveLength(929);
 		expect(out.paths).toEqual(expect.arrayContaining(["/929/1", "/929/929"]));
 		expect(out.patterns).toEqual([]);
@@ -444,13 +460,36 @@ describe("resolveEntityChanges", () => {
 		const out = await resolveEntityChanges([
 			{ kind: "dedication", id: 7, perekRanges: [{ low: 50, high: 51 }] },
 		]);
-		expect(out.tags).toEqual(["perek:50:dedications", "perek:51:dedications"]);
+		expect(out.tags).toEqual([
+			"perek:50:dedications", "perek:51:dedications",
+			"sefer:1:perek-dedications", "sefer:2:perek-dedications",
+		]);
 		expect(out.paths).toEqual(
 			expect.arrayContaining(["/929/1", "/929/50", "/929/51", "/929/90"]),
 		);
 		expect(out.paths).not.toContain("/929/91");
 		expect(out.paths).toHaveLength(90);
 		expect(out.urls).toEqual(out.paths);
+	});
+
+	it("expires both aggregate books when a perek dedication moves beyond the largest book", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 717, high: 717 }] },
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 718, high: 718 }] },
+		]);
+		expect(out.tags).toEqual([
+			"perek:717:dedications", "sefer:25:perek-dedications",
+			"perek:718:dedications", "sefer:26:perek-dedications",
+		]);
+		expect(out.paths).toHaveLength(150 + 31);
+		expect(out.paths).toEqual(expect.arrayContaining([
+			"/929/568", "/929/717", "/929/718", "/929/748",
+		]));
+		expect(out.paths).not.toContain("/929/567");
+		expect(out.paths).not.toContain("/929/749");
+		expect(out.urls).toEqual(out.paths);
+		expect(out.patterns).toEqual([]);
 	});
 
 	it("preserves article and entry invalidation tags after their target rows were deleted", async () => {
