@@ -30,7 +30,7 @@
 .emptyMessage {
   margin: 0;
   padding: 12px 16px;
-  color: #637598;
+  color: var(--muted-text, #637598);
   font-size: 0.95rem;
   text-align: center;
 }
@@ -195,7 +195,7 @@ button.carouselItem {
   }
 
   .emptyMessage {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .carousel {

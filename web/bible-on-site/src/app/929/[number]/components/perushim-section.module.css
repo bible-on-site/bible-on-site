@@ -30,7 +30,7 @@
 .emptyMessage {
   margin: 0;
   padding: 12px 16px;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
   font-size: 0.95rem;
   text-align: center;
 }
@@ -83,7 +83,7 @@
 }
 
 .carouselItem:hover {
-  border-color: #8b7355;
+  border-color: var(--hc-muted, #8b7355);
   box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
   transform: translateY(-1px);
 }
@@ -107,7 +107,7 @@
 
 .parshanName {
   font-size: 0.8rem;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
   line-height: 1.2;
 }
 
@@ -157,7 +157,7 @@
 
 .parshanSubtitle {
   font-size: 0.8rem;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
 }
 
 .notesContainer {
@@ -187,7 +187,7 @@
 .pasukLabel {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
   margin-bottom: 6px;
 }
 
@@ -226,6 +226,15 @@
 .noteContent h4 { font-size: 1.17em; margin-block: 1em; }
 .noteContent h5 { font-size: 1em; margin-block: 1.33em; }
 .noteContent h6 { font-size: 0.83em; margin-block: 1.67em; }
+
+/* Inline links inside DB-authored commentary need a persistent non-color
+   cue (WCAG 1.4.1) — the global `a { text-decoration: none }` reset would
+   otherwise hide them completely (#2767). */
+.noteContent a {
+  color: var(--link-accent, #1552ac);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
 
 .noteContent + .noteContent {
   margin-top: 8px;
@@ -275,18 +284,18 @@
 
   .sectionTitle,
   .perushName {
-    color: #cbb98c;
+    color: var(--hc-muted, #cbb98c);
   }
 
   .emptyMessage,
   .parshanName,
   .pasukLabel,
   .parshanSubtitle {
-    color: #b8a578;
+    color: var(--hc-muted, #b8a578);
   }
 
   .pasukLink:hover {
-    color: #cbb98c;
+    color: var(--hc-muted, #cbb98c);
   }
 
   .pasukGroup[data-pasuk-highlight] {
@@ -309,18 +318,18 @@
   }
 
   .carouselItem:hover {
-    border-color: #8b7355;
+    border-color: var(--hc-muted, #8b7355);
   }
 
   .noteCount {
-    color: #cbb98c;
+    color: var(--hc-muted, #cbb98c);
     background: #2a241a;
   }
 
   .backButton,
   .shareButton {
     border-color: #4a4030;
-    color: #cbb98c;
+    color: var(--hc-muted, #cbb98c);
   }
 
   .backButton:hover,

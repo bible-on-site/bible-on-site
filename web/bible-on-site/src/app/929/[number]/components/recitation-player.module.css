@@ -13,7 +13,7 @@
 	border-radius: 5px;
 	padding: 5px 3px;
 	margin: 0;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	background: transparent;
 	font: inherit;
 	font-size: 0.9rem;
@@ -40,7 +40,7 @@ button.heading {
 	min-width: 66px;
 	position: relative;
 	gap: 2px;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	vertical-align: middle;
 }
 .notice {
@@ -180,7 +180,7 @@ button.heading {
 
 @media (prefers-color-scheme: dark) {
 	.heading {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
@@ -190,13 +190,13 @@ button.heading {
 	}
 
 	.controls {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.notice {
 		border-color: #2d3548;
 		background: #1a1f2e;
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.toggle[aria-pressed="true"] {
