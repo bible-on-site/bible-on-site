@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { parashaCanonicalPath } from "../../src/data/parasha/parasha-slugs";
 import { SITE_ORIGIN } from "../../src/lib/seo/jsonld";
 
 const NEXT_BUILD_DIR = resolve(__dirname, "../../.next");
@@ -101,7 +102,9 @@ test.describe("Production metadata snapshots", () => {
 		expect(paths.filter((path) => /^\/פרשה(?:\/|$)/.test(path)).sort()).toEqual(
 			[
 				"/פרשה",
-				...Array.from({ length: 54 }, (_, index) => `/פרשה/${index + 1}`),
+				...Array.from({ length: 54 }, (_, index) =>
+					parashaCanonicalPath(index + 1),
+				),
 			].sort(),
 		);
 		expect(

@@ -54,9 +54,10 @@ public sealed class ParashaUnit : INotifyPropertyChanged
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-    /// <summary>Stable contiguous id within the division; the slug is its decimal form.</summary>
+    /// <summary>Stable contiguous id within the division.</summary>
     public int UnitId { get; set; }
 
+    /// <summary>Canonical website slug — the Hebrew parasha name (issue #2738).</summary>
     public required string Slug { get; set; }
 
     /// <summary>Id of one of the five Torah sefarim.</summary>
