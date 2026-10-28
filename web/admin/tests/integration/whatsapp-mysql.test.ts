@@ -87,7 +87,7 @@ print(json.dumps(namespace["parse_statements"](namespace["preprocess_sql"](sql))
 async function migrate(statements: string[]): Promise<void> {
 	const connection = await db.pool.getConnection();
 	try {
-		for (const statement of statements) await connection.query(statement);
+		for (const statement of statements) await connection.query(statement); // nosemgrep: node-mysql-sqli -- statements are parsed from repo-owned migration SQL files, never user input
 	} finally {
 		connection.release();
 	}

@@ -232,8 +232,8 @@ export class WhatsAppClient {
 			!config ||
 			!text(config.instanceId) ||
 			!text(config.apiToken) ||
-			!/^[1-9][0-9]{3,19}$/.test(config.instanceId.trim()) ||
-			!/^[A-Za-z0-9_-]{16,256}$/.test(config.apiToken.trim())
+			!/^[1-9][0-9]{3,19}$/.test(config.instanceId.trim()) || // nosemgrep -- bounded single-quantifier literal; linear-time match, no ReDoS surface
+			!/^[A-Za-z0-9_-]{16,256}$/.test(config.apiToken.trim()) // nosemgrep -- bounded single-quantifier literal; linear-time match, no ReDoS surface
 		)
 			reject();
 		this.#instanceId = config.instanceId.trim();
