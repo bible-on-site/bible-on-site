@@ -9,3 +9,6 @@ pub mod tanahpedia_entries_service;
 pub mod tanahpedia_family_service;
 pub mod tanahpedia_revisions_service;
 pub mod tanahpedia_search_service;
+
+#[cfg(test)]
+mod mysql_timestamps;

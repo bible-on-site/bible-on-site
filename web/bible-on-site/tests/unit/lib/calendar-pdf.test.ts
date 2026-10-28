@@ -640,7 +640,7 @@ describe("per-page range headings (#2727)", () => {
 			fakeMonth("אדר ב", monthCells, { year: 5784, month: 14 }),
 		];
 		const heading = await dataPageHeading(months);
-		expect(heading).toBe(visualOrder("אדר א׳-אדר ב׳ ה'תשפ\"ד"));
+		expect(heading).toBe(visualOrder("אדר א'-אדר ב' ה'תשפ\"ד"));
 	});
 
 	it("uses the lone month's own label on the final single-month page", async () => {

@@ -19,7 +19,7 @@ jest.mock("@/hooks/useIsWideEnough", () => ({
 
 const mockGet = jest.fn().mockReturnValue(null);
 const mockReplace = jest.fn();
-let mockPathname = "/פרשה/5";
+let mockPathname = "/פרשה/חיי-שרה";
 let mockSeferMountCount = 0;
 jest.mock("next/navigation", () => ({
 	useSearchParams: () => ({
@@ -99,17 +99,17 @@ describe("ParashaSeferComposite (wide screen)", () => {
 
 	beforeEach(() => {
 		mockGet.mockReturnValue(null);
-		mockPathname = "/פרשה/5";
+		mockPathname = "/פרשה/חיי-שרה";
 		mockReplace.mockClear();
 		mockSeferMountCount = 0;
 		localStorage.clear();
 		delete document.documentElement.dataset.bookView;
-		window.history.replaceState(null, "", "/פרשה/5");
+		window.history.replaceState(null, "", "/פרשה/חיי-שרה");
 	});
 
 	it("keeps a pasuk citation visible despite a saved book preference", () => {
 		localStorage.setItem("parashaViewMode", "book");
-		window.history.replaceState(null, "", "/פרשה/5#pasuk-3-2");
+		window.history.replaceState(null, "", "/פרשה/חיי-שרה#pasuk-3-2");
 		render(<ParashaSeferComposite {...props} />);
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(screen.queryByTestId("sefer")).toBeNull();
@@ -123,7 +123,7 @@ describe("ParashaSeferComposite (wide screen)", () => {
 	it("applies the stored book preference once", () => {
 		localStorage.setItem("parashaViewMode", "book");
 		render(<ParashaSeferComposite {...props} />);
-		expect(mockReplace).toHaveBeenCalledWith("/פרשה/5?book=", {
+		expect(mockReplace).toHaveBeenCalledWith("/פרשה/חיי-שרה?book=", {
 			scroll: false,
 		});
 	});
@@ -146,7 +146,7 @@ describe("ParashaSeferComposite (wide screen)", () => {
 			fireEvent.click(checkbox);
 		});
 
-		expect(mockReplace).toHaveBeenCalledWith("/פרשה/5?book=", {
+		expect(mockReplace).toHaveBeenCalledWith("/פרשה/חיי-שרה?book=", {
 			scroll: false,
 		});
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
@@ -163,7 +163,7 @@ describe("ParashaSeferComposite (wide screen)", () => {
 			);
 		});
 
-		expect(mockReplace).toHaveBeenCalledWith("/פרשה/5?book=", {
+		expect(mockReplace).toHaveBeenCalledWith("/פרשה/חיי-שרה?book=", {
 			scroll: false,
 		});
 		expect(await screen.findByTestId("sefer")).toBeVisible();
@@ -217,7 +217,7 @@ describe("ParashaSeferComposite (wide screen)", () => {
 				fireEvent.click(screen.getByRole("checkbox"));
 			});
 			act(() => jest.advanceTimersByTime(1000));
-			expect(mockReplace).toHaveBeenCalledWith("/פרשה/5", {
+			expect(mockReplace).toHaveBeenCalledWith("/פרשה/חיי-שרה", {
 				scroll: false,
 			});
 			expect(localStorage.getItem("parashaViewMode")).toBe("seo");

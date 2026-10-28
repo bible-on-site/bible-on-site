@@ -42,6 +42,10 @@ export const perekDedicationsTag = (perekId: number) =>
 export const seferDedicationsTag = (seferId: number) =>
 	`sefer:${seferId}:dedications`;
 
+/** Perek-scoped dedication lines aggregated across one sefer's spreads. */
+export const seferPerekDedicationsTag = (seferId: number) =>
+	`sefer:${seferId}:perek-dedications`;
+
 /** Dedications matching one helek's context. */
 export const helekDedicationsTag = (helekId: number) =>
 	`helek:${helekId}:dedications`;
