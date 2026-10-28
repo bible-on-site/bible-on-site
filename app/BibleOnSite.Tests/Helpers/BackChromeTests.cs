@@ -44,20 +44,30 @@ public class BackChromeTests : IDisposable
     }
 
     [Fact]
-    public void Apply_TogglesANamedBackButtonOnNonAndroid()
+    public void Apply_SetsCapsuleBackOnSharedTopBarPages()
     {
-        // The test host is not Android, so the in-app chrome always shows.
-        var backButton = new Button { IsVisible = false };
-        var page = new ContentPage();
-        page.Content = backButton;
-        var scope = new Microsoft.Maui.Controls.Internals.NameScope();
-        Microsoft.Maui.Controls.Internals.NameScope.SetNameScope(page, scope);
-        ((Microsoft.Maui.Controls.Internals.INameScope)scope).RegisterName("BackButton", backButton);
+        // The test host is not Android/Windows, so the capsule affordance shows.
+        var bar = new BibleOnSite.Controls.SharedTopBar { ShowBack = false };
+        var page = new ContentPage { Content = bar };
 
         BackChrome.Apply(page);
 
-        backButton.IsVisible.Should().BeTrue();
+        bar.ShowBack.Should().BeTrue("non-Android platforms keep the capsule Back slot");
+        bar.BackButton.IsVisible.Should().BeTrue();
+        bar.BackEnabled.Should().BeFalse("an unattached page has no return target");
+    }
 
+    [Fact]
+    public void Apply_RefreshesTransientStateReportedByThePage()
+    {
+        var bar = new BibleOnSite.Controls.SharedTopBar { ShowBack = true };
+        var page = new ContentPage { Content = bar };
+        bar.BackStateProvider = () => true;
+
+        BackChrome.Apply(page);
+
+        bar.BackEnabled.Should().BeTrue(
+            "a page-owned transient surface keeps Back enabled even at a root");
     }
     [Fact]
     public void Apply_UpdatesTheSharedPreferencesTemplateBackState()

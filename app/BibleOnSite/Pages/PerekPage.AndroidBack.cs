@@ -46,11 +46,11 @@ public partial class PerekPage
     private void UpdateReaderBack()
     {
         // Root-page overlays do not add a Shell navigation entry. Android needs
-        // an enabled callback before predictive Back begins to consume them.
+        // an enabled callback before predictive Back begins to consume them —
+        // the same transient set the capsule Back reports (#2467).
         if (_readerBack != null)
         {
-            _readerBack.Enabled = ChapterSearch.IsSearchOpen || SelectionBar.IsVisible
-                || ExitFullScreenButton.IsVisible;
+            _readerBack.Enabled = OwnsReaderReturnSurface();
         }
     }
 
