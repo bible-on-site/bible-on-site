@@ -32,7 +32,9 @@ await waitForAndroidDevice({
 		appendFileSync(readinessLog, `${JSON.stringify(observation)}\n`),
 });
 if (process.platform === "linux") {
-	const receipt = await captureEmulatorOwners({ avdName: process.env.AVD_NAME ?? "mobile_e2e", udid, execute });
+	if (!androidSdk) throw new Error("Set ANDROID_HOME or ANDROID_SDK_ROOT to verify the SDK launcher.");
+	const receipt = await captureEmulatorOwners({ avdName: process.env.AVD_NAME ?? "mobile_e2e", udid, execute,
+		launcherPath: resolve(androidSdk, "emulator", "emulator") });
 	const destination = resolve(artifacts, "avd-owners.json");
 	const temporary = destination + "." + process.pid + ".tmp";
 	writeFileSync(temporary, JSON.stringify(receipt), { flag: "wx", mode: 0o600 });

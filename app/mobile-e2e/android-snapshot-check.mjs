@@ -12,7 +12,7 @@
 // directory before any cache save is allowed to capture it.
 import { execFile } from "node:child_process";
 import { appendFileSync, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, mkdirSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -93,7 +93,7 @@ function validProcessPid(pid) {
 }
 
 /** Linux identity survives argv teardown; start time fences PID reuse. */
-export function linuxProcessIdentity(pid, { read = readFileSync, stat = statSync } = {}) {
+export function linuxProcessIdentity(pid, { read = readFileSync, stat = statSync, includeArguments = false } = {}) {
 	if (!validProcessPid(pid))
 		throw new Error("Invalid emulator process identity.");
 	const state = () => {
@@ -123,18 +123,22 @@ export function linuxProcessIdentity(pid, { read = readFileSync, stat = statSync
 		if (["Z", "X", "x"].includes(after.state)) return { ...after, exited: true };
 		throw new Error("Cannot inspect the live emulator executable.", { cause: error });
 	}
-	let command;
-	try { command = read("/proc/" + pid + "/cmdline", "utf8").split("\0").filter(Boolean).join(" "); }
+	let args;
+	try {
+		args = read("/proc/" + pid + "/cmdline", "utf8").split("\0");
+		if (args.at(-1) === "") args.pop();
+	}
 	catch (error) { return absent(error); }
 	let after;
 	try { after = state(); } catch (error) { return absent(error); }
 	if (before.startTime !== after.startTime) throw new Error("Emulator PID changed during inspection.");
 	if (["Z", "X", "x"].includes(after.state)) return { ...after, exited: true };
-	return { ...after, device: executable.dev.toString(), inode: executable.ino.toString(), command };
+	return { ...after, device: executable.dev.toString(), inode: executable.ino.toString(),
+		command: args.filter(Boolean).join(" "), ...(includeArguments ? { arguments: args } : {}) };
 }
 
 export async function captureEmulatorOwners({
-	avdName, udid, execute = promisify(execFile), inspectProcess = linuxProcessIdentity,
+	avdName, udid, launcherPath, execute = promisify(execFile), inspectProcess = linuxProcessIdentity,
 }) {
 	if (!/^[A-Za-z0-9_-]+$/.test(avdName) || !/^emulator-\d+$/.test(udid))
 		throw new Error("Require an explicit AVD and emulator serial.");
@@ -142,13 +146,20 @@ export async function captureEmulatorOwners({
 	const owned = emulatorProcesses(running.join("\n"), avdName, udid);
 	if (!owned.length || owned.length !== running.length)
 		throw new Error("Cannot record unverified emulator ownership.");
+	let launcher;
+	if (launcherPath) {
+		const path = realpathSync(launcherPath);
+		const info = statSync(path, { bigint: true });
+		if (basename(path) !== "emulator" || !info.isFile()) throw new Error("Invalid SDK emulator launcher.");
+		launcher = { path, device: info.dev.toString(), inode: info.ino.toString() };
+	}
 	const owners = owned.map((line) => {
 		const identity = inspectProcess(processPid(line));
 		if (identity.exited) throw new Error("Emulator exited before owner handoff.");
 		const command = identity.pid + " " + identity.command;
 		if (emulatorProcesses(command, avdName, udid).length !== 1)
 			throw new Error("Cannot record current emulator ownership.");
-		return { ...identity, command };
+		return { ...identity, command, ...(launcher ? { launcher } : {}) };
 	});
 	return { schema: 1, avdName, udid, capturedAt: new Date().toISOString(), owners };
 }
@@ -161,10 +172,47 @@ export function readEmulatorOwners(path, avdName, udid) {
 		!Array.isArray(receipt.owners) || !receipt.owners.length ||
 		receipt.owners.some((owner) => !owner || typeof owner.pid !== "string" ||
 			!validProcessPid(owner.pid) || ["startTime", "device", "inode"].some((key) =>
-				typeof owner[key] !== "string" || !/^\d+$/.test(owner[key]))) ||
+				typeof owner[key] !== "string" || !/^\d+$/.test(owner[key])) ||
+			(owner.launcher !== undefined && (!owner.launcher || typeof owner.launcher.path !== "string" ||
+				!isAbsolute(owner.launcher.path) || basename(owner.launcher.path) !== "emulator" ||
+				["device", "inode"].some((key) => typeof owner.launcher[key] !== "string" || !/^\d+$/.test(owner.launcher[key]))))) ||
 		new Set(receipt.owners.map((owner) => owner.pid)).size !== receipt.owners.length)
 		throw new Error("Invalid or mismatched emulator owner receipt.");
 	return receipt.owners;
+}
+
+// The SDK's shutdown watchdog returns before its AVD startup path. It is not
+// a lock owner or a termination candidate: wait for its own process to disappear.
+function watchdogArguments(args, owner) {
+	return Array.isArray(args) && args.length === 5 &&
+		args[0] === owner.launcher?.path && args[1] === "-kill" &&
+		args[2] === owner.pid && args[3] === "-sleep" && args[4] === "20";
+}
+
+function shutdownWatchdog(line, owners, previous, inspectProcess, observedOwners, avdName, udid) {
+	const pid = processPid(line);
+	const displayed = line.split(/\s+/).slice(1);
+	const owner = previous?.owner ?? owners.find((item) => watchdogArguments(displayed, item));
+	if (!owner?.launcher) return null;
+	const identity = inspectProcess(pid, { includeArguments: true });
+	if (identity.startTime !== undefined && previous && identity.startTime !== previous.identity.startTime)
+		throw new Error("Shutdown watchdog PID was reused; refusing the next launch.");
+	if (!identity.exited) {
+		if (identity.device !== owner.launcher.device || identity.inode !== owner.launcher.inode ||
+			(previous && (identity.device !== previous.identity.device || identity.inode !== previous.identity.inode)) ||
+			(!watchdogArguments(identity.arguments, owner) && !(previous && identity.arguments?.length === 0)) ||
+			(!watchdogArguments(displayed, owner) && !(previous && displayed.length === 1)))
+			throw new Error("Cannot verify the SDK shutdown watchdog; refusing the next launch.");
+	} else if (!previous) {
+		// An unrecorded zombie has no executable/argv left to verify.
+		return null;
+	}
+	const target = observedOwners.get(owner.pid) ?? inspectProcess(owner.pid);
+	if ((target.startTime !== undefined && target.startTime !== owner.startTime) ||
+		(!target.exited && (target.device !== owner.device || target.inode !== owner.inode ||
+			!receiptTargetMatches(target.pid + " " + target.command, avdName, udid))))
+		throw new Error("Shutdown watchdog target identity changed; refusing the next launch.");
+	return { owner, identity: identity.exited && previous ? previous.identity : identity };
 }
 
 function receiptTargetMatches(line, avdName, udid) {
@@ -280,10 +328,11 @@ export async function confirmSaved({
 	const started = now();
 	let killRetried = false;
 	let pkillTried = false;
+	const watchdogs = new Map();
 	while (now() - started < timeout) {
 		let running;
 		try {
-			running = await runningEmulators(execute, owners.map((owner) => owner.pid));
+			running = await runningEmulators(execute, [...owners.map((owner) => owner.pid), ...watchdogs.keys()]);
 		} catch (error) {
 			observe({ note: "Cannot confirm emulator ownership", error: String(error) });
 			throw new Error("Cannot prove the emulator stopped; refusing the next launch.", { cause: error });
@@ -308,11 +357,13 @@ export async function confirmSaved({
 		}
 		const owned = emulatorProcesses(running.join("\n"), avdName, udid);
 		let exiting = false;
+		const observedOwners = new Map();
 		for (const line of running) {
 			const owner = owners.find((item) => item.pid === processPid(line));
 			if (!owner) continue;
 			observe({ process: line, recordedOwner: owner });
 			const identity = inspectProcess(owner.pid);
+			observedOwners.set(owner.pid, identity);
 			observe({ owner: identity, process: line });
 			if (identity.startTime !== undefined && identity.startTime !== owner.startTime)
 				throw new Error("Emulator PID was reused; refusing termination and the next launch.");
@@ -323,11 +374,23 @@ export async function confirmSaved({
 				throw new Error("Emulator owner identity changed; refusing termination and the next launch.");
 			if (!owned.includes(line)) owned.push(line);
 		}
-		if (owned.length !== running.length) {
+		const waiting = [];
+		for (const line of running) {
+			const pid = processPid(line);
+			if (!watchdogs.has(pid) && !line.split(/\s+/).includes("-kill")) continue;
+			const watchdog = shutdownWatchdog(line, owners, watchdogs.get(pid), inspectProcess, observedOwners, avdName, udid);
+			const index = owned.indexOf(line);
+			if (index !== -1) owned.splice(index, 1);
+			if (!watchdog) continue;
+			watchdogs.set(pid, watchdog);
+			waiting.push(line);
+			observe({ watchdog: { pid, targetPid: watchdog.owner.pid, startTime: watchdog.identity.startTime }, process: line });
+		}
+		if (owned.length + waiting.length !== running.length) {
 			observe({ note: "Another emulator has active or unknown AVD ownership", processes: running, saved: false });
 			throw new Error("Emulator AVD/port ownership is unknown; refusing termination and the next launch.");
 		}
-		if (exiting) {
+		if (exiting || waiting.length) {
 			// A stale PS row is not absence: require the next PS + ADB proof.
 			await sleep(POLL_INTERVAL_MS);
 			continue;

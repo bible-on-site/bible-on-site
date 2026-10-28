@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { join } from "node:path";
@@ -365,12 +365,135 @@ test("owner receipt rejects malformed, foreign and duplicate identities", (t) =>
 	assert.deepEqual(readEmulatorOwners(path, "mobile_e2e", "emulator-5554"), receipt.owners);
 	for (const bad of [null, {}, { ...receipt, udid: "emulator-5556" },
 		{ ...receipt, avdName: "other" }, { ...receipt, owners: [ownerIdentity(), ownerIdentity()] },
-		{ ...receipt, owners: [{ ...ownerIdentity(), startTime: null }] }]) {
+		{ ...receipt, owners: [{ ...ownerIdentity(), startTime: null }] },
+		...[null, {}, { path: "emulator", device: "1", inode: "2" },
+			{ path: "/sdk/emulator", device: "1", inode: null }].map((launcher) =>
+			({ ...receipt, owners: [{ ...ownerIdentity(), launcher }] }))]) {
 		writeFileSync(path, JSON.stringify(bad));
 		assert.throws(() => readEmulatorOwners(path, "mobile_e2e", "emulator-5554"), /Invalid or mismatched/);
 	}
 	writeFileSync(path, "{");
 	assert.throws(() => readEmulatorOwners(path, "mobile_e2e", "emulator-5554"), SyntaxError);
+});
+
+test("ready handoff records the actual SDK launcher identity", async (t) => {
+	const { home } = fixture(t);
+	const launcherPath = join(home, "emulator");
+	writeFileSync(launcherPath, "task launcher fixture");
+	const options = { avdName: "mobile_e2e", udid: "emulator-5554", launcherPath,
+		execute: async () => ({ stdout: "42 qemu-system-x86_64 -avd mobile_e2e -port 5554" }),
+		inspectProcess: ownerIdentity };
+	const receipt = await captureEmulatorOwners(options);
+	const info = statSync(launcherPath, { bigint: true });
+	assert.deepEqual(receipt.owners[0].launcher, {
+		path: realpathSync(launcherPath), device: info.dev.toString(), inode: info.ino.toString(),
+	});
+	rmSync(launcherPath);
+	mkdirSync(launcherPath);
+	await assert.rejects(captureEmulatorOwners(options), /Invalid SDK emulator launcher/);
+});
+
+const sdkLauncher = { path: "/usr/local/lib/android/sdk/emulator/emulator", device: "2049", inode: "7" };
+const shutdownOwner = { ...ownerIdentity("6345"), startTime: "74451", launcher: sdkLauncher };
+const watchdogArgs = [sdkLauncher.path, "-kill", "6345", "-sleep", "20"];
+const watchdogIdentity = () => ({ pid: "6722", state: "S", startTime: "75000",
+	device: sdkLauncher.device, inode: sdkLauncher.inode, arguments: watchdogArgs, command: watchdogArgs.join(" ") });
+const watchdogRow = "6722 " + watchdogArgs.join(" ");
+const zombieOwner = () => ({ pid: "6345", state: "Z", startTime: "74451", exited: true });
+
+test("verified shutdown watchdog and zombie rows wait for process and ADB absence", async (t) => {
+	const { avdDir, options } = fixture(t);
+	const lock = join(avdDir, "snapshot.lock.lock");
+	writeFileSync(lock, "6345");
+	let polls = 0, clock = 0, adbPolls = 0;
+	const commands = [], sleeps = [], observations = [];
+	assert.equal(await confirmSaved({ ...options, owners: [shutdownOwner],
+		now: () => clock,
+		observe: (value) => observations.push(value),
+		sleep: async (duration) => { assert.equal(existsSync(lock), true); sleeps.push(duration); clock += duration; },
+		execute: async (command) => {
+			commands.push(command);
+			if (command === "ps") return { stdout: ++polls === 1 ? "6345 [qemu-system-x86] <defunct>\n" + watchdogRow :
+				polls === 2 ? "6722 ?" : "9 node confirm.mjs" };
+			return { stdout: ++adbPolls === 1 ? "List of devices attached\nemulator-5554\toffline\n" : "List of devices attached\n\n" };
+		},
+		inspectProcess: (pid, inspection) => {
+			if (pid === "6345") return polls === 1 ? zombieOwner() : { pid, exited: true };
+			assert.equal(pid, "6722");
+			assert.equal(inspection.includeArguments, true);
+			return polls === 1 ? watchdogIdentity() : { ...watchdogIdentity(), arguments: [], command: "" };
+		},
+	}), true);
+	assert.deepEqual(sleeps, [2000, 2000, 2000]);
+	assert.equal(polls, 4);
+	assert.equal(existsSync(lock), false);
+	assert.ok(observations.some((value) => value.watchdog?.targetPid === "6345"));
+	assert.ok(commands.every((command) => ["ps", "/adb"].includes(command)));
+});
+
+for (const [name, row, owner, identity, target] of [
+	["unverified SDK", watchdogRow, { ...shutdownOwner, launcher: undefined }, watchdogIdentity(), zombieOwner()],
+	["foreign SDK path", watchdogRow.replace(sdkLauncher.path, "/other/emulator"), shutdownOwner, watchdogIdentity(), zombieOwner()],
+	["wrong target", watchdogRow.replace("6345", "9999"), shutdownOwner, watchdogIdentity(), zombieOwner()],
+	["extra AVD arguments", watchdogRow + " -avd mobile_e2e", shutdownOwner, watchdogIdentity(), zombieOwner()],
+	["changed sleep", watchdogRow.replace("20", "21"), shutdownOwner, watchdogIdentity(), zombieOwner()],
+	["foreign executable", watchdogRow, shutdownOwner, { ...watchdogIdentity(), inode: "8" }, zombieOwner()],
+	["foreign executable device", watchdogRow, shutdownOwner, { ...watchdogIdentity(), device: "8" }, zombieOwner()],
+	["foreign kernel target", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [sdkLauncher.path, "-kill", "9999", "-sleep", "20"] }, zombieOwner()],
+	["coalesced kernel argument", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [sdkLauncher.path, "-kill 6345 -sleep 20"] }, zombieOwner()],
+	["extra empty kernel argument", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [...watchdogArgs, ""] }, zombieOwner()],
+	["unverified exited helper", watchdogRow, shutdownOwner, { pid: "6722", state: "Z", startTime: "75000", exited: true }, zombieOwner()],
+	["unrecorded helper argv teardown", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [], command: "" }, zombieOwner()],
+	["reused target PID", watchdogRow, shutdownOwner, watchdogIdentity(), { ...zombieOwner(), startTime: "74452" }],
+	["unreadable helper", watchdogRow, shutdownOwner, null, zombieOwner()],
+]) {
+	test("shutdown watchdog rejects " + name, async (t) => {
+		const { avdDir, options } = fixture(t);
+		const lock = join(avdDir, "snapshot.lock.lock");
+		writeFileSync(lock, "6345");
+		const commands = [];
+		await assert.rejects(confirmSaved({ ...options, owners: [owner],
+			execute: async (command) => { commands.push(command); return { stdout: "6345 [qemu-system-x86] <defunct>\n" + row }; },
+			inspectProcess: (pid) => {
+				if (pid === "6345") return target;
+				if (!identity) throw new Error("helper inspection denied");
+				return identity;
+			},
+			sleep: async () => { throw new Error("Unverified processes must fail before waiting."); },
+		}), /refusing|ownership|inspection/);
+		assert.deepEqual(commands, ["ps"]);
+		assert.equal(readFileSync(lock, "utf8"), "6345");
+	});
+}
+
+test("a verified shutdown watchdog cannot become a reused or repurposed process", async (t) => {
+	for (const identity of [{ ...watchdogIdentity(), startTime: "75001" },
+		{ ...watchdogIdentity(), arguments: [sdkLauncher.path, "-avd", "other"] }]) {
+		const { options } = fixture(t);
+		let polls = 0, clock = 0;
+		await assert.rejects(confirmSaved({ ...options, owners: [shutdownOwner],
+			now: () => clock, sleep: async (duration) => { clock += duration; },
+			execute: async () => { polls += 1; return { stdout: "6345 [qemu-system-x86] <defunct>\n" + watchdogRow }; },
+			inspectProcess: (pid) => pid === "6345" ? zombieOwner() : polls === 1 ? watchdogIdentity() : identity,
+		}), /reused|Cannot verify/);
+		assert.equal(clock, 2000);
+	}
+});
+
+test("shutdown watchdog waits stay within the original deadline and never signal it", async (t) => {
+	const { avdDir, options } = fixture(t);
+	const lock = join(avdDir, "snapshot.lock.lock");
+	writeFileSync(lock, "6345");
+	let clock = 0;
+	const commands = [];
+	await assert.rejects(confirmSaved({ ...options, owners: [shutdownOwner],
+		now: () => clock, sleep: async (duration) => { assert.equal(duration, 2000); clock += duration; },
+		execute: async (command) => { commands.push(command); return { stdout: "6345 [qemu-system-x86] <defunct>\n" + watchdogRow }; },
+		inspectProcess: (pid) => pid === "6345" ? zombieOwner() : watchdogIdentity(),
+	}), /refusing/);
+	assert.equal(clock, 150000);
+	assert.ok(commands.every((command) => command === "ps"));
+	assert.equal(readFileSync(lock, "utf8"), "6345");
 });
 
 test("recorded argv teardown waits for PS and ADB absence before cleaning locks", async (t) => {
@@ -468,6 +591,16 @@ test("Linux identity reads stable kernel start time and executable device/inode"
 		read: () => procStat("S", ++reads === 1 ? "100" : "101"),
 		stat: () => ({ dev: 1n, ino: 2n }),
 	}), /PID changed during inspection/);
+});
+
+test("Linux watchdog identity preserves exact NUL-separated kernel arguments", () => {
+	const args = [...watchdogArgs, ""];
+	const identity = linuxProcessIdentity("42", {
+		includeArguments: true,
+		read: (path) => path.endsWith("/cmdline") ? [...args, ""].join("\0") : procStat(),
+		stat: () => ({ dev: 1n, ino: 2n }),
+	});
+	assert.deepEqual(identity.arguments, args);
 });
 
 test("Linux inspection distinguishes exited processes from unavailable live executable metadata", () => {
