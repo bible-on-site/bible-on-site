@@ -17,6 +17,7 @@
 export const MAX_CHANGES_PER_REQUEST = 64;
 const MAX_STRING = 256;
 const MAX_LIST = 512;
+const MAX_PEREK_ID = 929;
 
 /** A pasuk-granular scripture span of verified article coverage (#2189). */
 export interface ArticleCoveringSpan {
@@ -184,6 +185,15 @@ function optPerekRanges(
 		const r = asRecord(range, `${at}[${i}]`);
 		const low = reqInt(r.low, `${at}[${i}].low`);
 		const high = reqInt(r.high, `${at}[${i}].high`);
+		// Every reading surface uses the canonical 1..929 corpus. Bound
+		// ranges before dependency resolution expands each member into
+		// cache tags and routes; list-size limits alone do not bound work.
+		if (low > MAX_PEREK_ID) {
+			fail(`${at}[${i}].low: expected perek id 1..${MAX_PEREK_ID}`);
+		}
+		if (high > MAX_PEREK_ID) {
+			fail(`${at}[${i}].high: expected perek id 1..${MAX_PEREK_ID}`);
+		}
 		if (high < low) {
 			fail(`${at}[${i}]: high before low`);
 		}

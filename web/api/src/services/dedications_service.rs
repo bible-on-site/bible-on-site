@@ -803,10 +803,11 @@ async fn insert_purposes(
     Ok(())
 }
 
-/// Deletes every assignment row of a dedication across all link tables — the
+/// Deletes every assignment row of a dedication across all target tables — the
 /// FK cascades normally do this, but doing it explicitly keeps the delete
 /// correct even on a legacy schema where the guarded FK could not be added.
-async fn delete_all_links(
+/// Purpose links are independent and must survive target replacement.
+async fn delete_targets(
     txn: &impl ConnectionTrait,
     dedication_id: i32,
 ) -> Result<(), ServiceError> {
@@ -842,11 +843,6 @@ async fn delete_all_links(
         .map_err(internal)?;
     masora_dedication::Entity::delete_many()
         .filter(masora_dedication::Column::DedicationId.eq(dedication_id))
-        .exec(txn)
-        .await
-        .map_err(internal)?;
-    dedication_dedication_type::Entity::delete_many()
-        .filter(dedication_dedication_type::Column::DedicationId.eq(dedication_id))
         .exec(txn)
         .await
         .map_err(internal)?;
@@ -944,7 +940,7 @@ pub async fn update(
 
     if let Some(targets) = &input.targets {
         let validated = validate_targets(&txn, targets).await?;
-        delete_all_links(&txn, id).await?;
+        delete_targets(&txn, id).await?;
         insert_targets(&txn, id, &validated).await?;
     }
 
@@ -956,7 +952,12 @@ pub async fn update(
 /// Returns false when nothing was removed.
 pub async fn remove(db: &Database, id: i32) -> Result<bool, ServiceError> {
     let txn = db.get_connection().begin().await.map_err(internal)?;
-    delete_all_links(&txn, id).await?;
+    delete_targets(&txn, id).await?;
+    dedication_dedication_type::Entity::delete_many()
+        .filter(dedication_dedication_type::Column::DedicationId.eq(id))
+        .exec(&txn)
+        .await
+        .map_err(internal)?;
     let result = dedication::Entity::delete_by_id(id)
         .exec(&txn)
         .await
@@ -1960,5 +1961,364 @@ mod tests {
             .into_connection();
         let db = Database::from_connection(mock);
         assert!(remove(&db, 1).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn update_target_replacement_preserves_purposes() {
+        for replace_purposes in [false, true] {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results([vec![dedication_model(9, "subject", None)]])
+                // Extra result lets this test observe an unintended purpose deletion too.
+                .append_exec_results(exec_results(12, 0, 1));
+            if replace_purposes {
+                mock = mock.append_query_results([vec![dedication_type::Model {
+                    id: 1,
+                    description: "purpose".into(),
+                }]]);
+            }
+            let mock = empty_link_tables(mock)
+                .append_query_results([vec![dedication_model(9, "subject", None)]])
+                .append_query_results([vec![dedication_dedication_type::Model {
+                    dedication_id: 9,
+                    dedication_type_id: 1,
+                }]])
+                .append_query_results([vec![dedication_type::Model {
+                    id: 1,
+                    description: "purpose".into(),
+                }]]);
+            let db = Database::from_connection(mock.into_connection());
+            let result = update(
+                &db,
+                9,
+                UpdateDedicationInput {
+                    subject: None,
+                    expires_at: None,
+                    clear_expires_at: None,
+                    purpose_type_ids: replace_purposes.then_some(vec![1]),
+                    targets: Some(vec![]),
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.purposes, ["purpose"]);
+            assert!(result.scopes.is_empty());
+            let log = db.get_connection().clone().into_transaction_log();
+            let sql = format!("{log:?}");
+            assert_eq!(
+                sql.matches("DELETE FROM `tanah_dedication_dedication_type`")
+                    .count(),
+                usize::from(replace_purposes),
+                "target replacement must not delete purpose links: {sql}"
+            );
+            assert_eq!(
+                sql.matches("DELETE FROM `tanah_masora_dedication`").count(),
+                1
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn assignment_inserts_keep_target_identity_and_expiry_for_every_scope() {
+        let expiry = ts("2032-01-02 03:04:05");
+        let targets = [
+            (
+                ScopeTarget::Perek { low: 1, high: 50 },
+                "tanah_perek_dedication",
+            ),
+            (
+                ScopeTarget::Sefer { sefer_id: 24 },
+                "tanah_sefer_dedication",
+            ),
+            (ScopeTarget::Helek { helek_id: 2 }, "tanah_helek_dedication"),
+            (
+                ScopeTarget::Parasha { parasha_id: 3 },
+                "tanah_parasha_dedication",
+            ),
+            (
+                ScopeTarget::Article { article_id: 19 },
+                "tanah_article_dedication",
+            ),
+            (
+                ScopeTarget::TanahpediaEntry {
+                    entry_id: "entry-1".into(),
+                },
+                "tanahpedia_entry_dedication",
+            ),
+            (ScopeTarget::Masora, "tanah_masora_dedication"),
+        ];
+        for expires_at in [None, Some(expiry)] {
+            for (target, table) in &targets {
+                let conn = MockDatabase::new(DatabaseBackend::MySql)
+                    .append_exec_results(exec_results(1, 0, 1))
+                    .into_connection();
+                insert_targets(
+                    &conn,
+                    17,
+                    &[ValidatedTarget {
+                        target: target.clone(),
+                        expires_at,
+                    }],
+                )
+                .await
+                .unwrap();
+                let log = conn.into_transaction_log();
+                let sql = format!("{log:?}");
+                assert!(sql.contains(&format!("INSERT INTO `{table}`")), "{sql}");
+                assert!(
+                    sql.contains("dedication_id") && sql.contains("expires_at"),
+                    "{sql}"
+                );
+                assert!(sql.contains("17"), "{sql}");
+                if expires_at.is_some() {
+                    assert!(sql.contains("2032-01-02"), "{sql}");
+                } else {
+                    assert!(sql.contains("None"), "{sql}");
+                }
+                match target {
+                    ScopeTarget::Perek { .. } => {
+                        assert!(sql.contains("perek_id_low") && sql.contains("perek_id_high"))
+                    }
+                    ScopeTarget::TanahpediaEntry { .. } => assert!(sql.contains("entry-1")),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_purpose_ids_insert_one_link() {
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_exec_results(exec_results(2, 0, 1))
+            .into_connection();
+        insert_purposes(&conn, 17, &[1, 1, 2, 2]).await.unwrap();
+        let sql = format!("{:?}", conn.into_transaction_log());
+        assert_eq!(
+            sql.matches("INSERT INTO `tanah_dedication_dedication_type`")
+                .count(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_assignment_expiry_rolls_back_without_writing() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let error = create(
+            &db,
+            "subject".into(),
+            None,
+            vec![],
+            vec![target_input(DedicationScopeKind::Masora, |target| {
+                target.expires_at = Some("2032-01-01".into());
+            })],
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+        let sql = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(sql.contains("ROLLBACK"), "{sql}");
+        assert!(!sql.contains("INSERT INTO"), "{sql}");
+    }
+
+    fn canonical_perek(id: i32) -> entities::perek::Model {
+        entities::perek::Model {
+            id,
+            perek_id: Some(id),
+            sefer_id: Some(1),
+            sefer_name: None,
+            additional: None,
+            additional_letter: None,
+            perek: None,
+            perek_in_context: None,
+            date: None,
+            hebdate: None,
+            tseit: None,
+            header: None,
+            pasuk_count: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn target_validation_accepts_each_real_identity_and_normalizes_expiry() {
+        let now = ts(NOW);
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results([vec![canonical_perek(1)], vec![canonical_perek(50)]])
+            .append_query_results([vec![sefer_model(1, 1, 50)]])
+            .append_query_results([vec![helek_model(1, 1, 5)]])
+            .append_query_results([vec![article::Model {
+                id: 19,
+                perek_id: 1,
+                author_id: 1,
+                article_abstract: None,
+                name: "article".into(),
+                priority: 0,
+                content: None,
+                coverage_verified: false,
+            }]])
+            .append_query_results([vec![entry::Model {
+                id: "entry-1".into(),
+                unique_name: "Entry".into(),
+                title: "Entry".into(),
+                content: None,
+                created_at: now,
+                updated_at: now,
+            }]])
+            .into_connection();
+        let inputs = [
+            (
+                target_input(DedicationScopeKind::Perek, |i| {
+                    i.perek_id_low = Some(1);
+                    i.perek_id_high = Some(50);
+                }),
+                ScopeTarget::Perek { low: 1, high: 50 },
+            ),
+            (
+                target_input(DedicationScopeKind::Sefer, |i| i.sefer_id = Some(1)),
+                ScopeTarget::Sefer { sefer_id: 1 },
+            ),
+            (
+                target_input(DedicationScopeKind::Helek, |i| i.helek_id = Some(1)),
+                ScopeTarget::Helek { helek_id: 1 },
+            ),
+            (
+                target_input(DedicationScopeKind::Parasha, |i| i.parasha_id = Some(3)),
+                ScopeTarget::Parasha { parasha_id: 3 },
+            ),
+            (
+                target_input(DedicationScopeKind::Article, |i| i.article_id = Some(19)),
+                ScopeTarget::Article { article_id: 19 },
+            ),
+            (
+                target_input(DedicationScopeKind::TanahpediaEntry, |i| {
+                    i.entry_id = Some("entry-1".into())
+                }),
+                ScopeTarget::TanahpediaEntry {
+                    entry_id: "entry-1".into(),
+                },
+            ),
+            (
+                target_input(DedicationScopeKind::Masora, |_| {}),
+                ScopeTarget::Masora,
+            ),
+        ];
+        for (mut input, expected) in inputs {
+            input.expires_at = Some("2030-06-15T15:00:00+03:00".into());
+            let validated = validate_target(&conn, &input).await.unwrap();
+            assert_eq!(validated.target, expected);
+            assert_eq!(validated.expires_at, Some(now));
+        }
+    }
+
+    #[tokio::test]
+    async fn perek_validation_rejects_missing_high_bound_even_when_low_exists() {
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results([vec![canonical_perek(1)], vec![]])
+            .into_connection();
+        let error = validate_target(
+            &conn,
+            &target_input(DedicationScopeKind::Perek, |i| {
+                i.perek_id_low = Some(1);
+                i.perek_id_high = Some(930);
+            }),
+        )
+        .await
+        .err()
+        .unwrap();
+        assert!(matches!(error, ServiceError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn article_resolution_filters_unmatched_and_expired_assignments() {
+        let now = ts(NOW);
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results([vec![
+                article_dedication::Model {
+                    article_id: 19,
+                    dedication_id: 1,
+                    expires_at: Some(now),
+                },
+                article_dedication::Model {
+                    article_id: 20,
+                    dedication_id: 2,
+                    expires_at: None,
+                },
+                article_dedication::Model {
+                    article_id: 19,
+                    dedication_id: 3,
+                    expires_at: None,
+                },
+            ]])
+            .append_query_results([vec![dedication_model(3, "active", None)]])
+            .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
+            .append_query_results::<dedication_type::Model, Vec<_>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(conn);
+        let out = resolve(
+            &db,
+            DedicationContext {
+                article_ids: vec![19],
+                ..Default::default()
+            },
+            now,
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].dedication.id, 3);
+        assert_eq!(
+            out[0].scopes,
+            [ScopeMatch {
+                target: ScopeTarget::Article { article_id: 19 },
+                expires_at: None
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn update_sets_expiry_in_utc_without_replacing_targets_or_purposes() {
+        let expiry = ts("2030-06-15 12:00:00");
+        let mock = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results([vec![dedication_model(9, "subject", None)]])
+            .append_exec_results(exec_results(1, 0, 1));
+        let mock = empty_link_tables(mock)
+            .append_query_results([vec![dedication_model(9, "subject", Some(expiry))]])
+            .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
+            .append_query_results::<dedication_type::Model, Vec<_>, _>([vec![]]);
+        let db = Database::from_connection(mock.into_connection());
+        let result = update(
+            &db,
+            9,
+            UpdateDedicationInput {
+                subject: None,
+                expires_at: Some("2030-06-15T15:00:00+03:00".into()),
+                clear_expires_at: Some(false),
+                purpose_type_ids: None,
+                targets: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.dedication.expires_at, Some(expiry));
+        let sql = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(
+            sql.contains("UPDATE `tanah_dedication` SET `expires_at` = ?"),
+            "{sql}"
+        );
+        assert!(sql.contains("2030-06-15T12:00:00"), "{sql}");
+        assert!(!sql.contains("DELETE FROM"), "{sql}");
+    }
+
+    #[tokio::test]
+    async fn empty_admin_listing_returns_empty_without_loading_purpose_links() {
+        let mock = empty_link_tables(MockDatabase::new(DatabaseBackend::MySql))
+            .append_query_results::<dedication::Model, Vec<_>, _>([vec![]])
+            .append_query_results::<dedication_type::Model, Vec<_>, _>([vec![]]);
+        let db = Database::from_connection(mock.into_connection());
+        assert!(list_all(&db).await.unwrap().is_empty());
+        let sql = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(
+            !sql.contains("FROM `tanah_dedication_dedication_type`"),
+            "{sql}"
+        );
     }
 }

@@ -601,23 +601,25 @@ async function resolveDedication(
 ) {
 	let scoped = false;
 
+	const perekIds = new Set<number>();
 	for (const range of change.perekRanges ?? []) {
 		for (let perekId = range.low; perekId <= range.high; perekId++) {
-			addTag(sink, perekDedicationsTag(perekId));
-			addPath(sink, `/929/${perekId}`);
-			scoped = true;
+			perekIds.add(perekId);
 		}
-		// Book-view fan-out: every `/929/{mate}` route of an intersected
-		// sefer renders that sefer's whole spread map, so a range edit
-		// changes its neighbours' HTML too. Their cache entries already
-		// expire through the collected perek tags; the extra paths re-ping
-		// the changed URLs for IndexNow.
-		for (let perekId = range.low; perekId <= range.high; perekId++) {
-			const seferId = seferIdByPerekId(perekId);
-			if (seferId === undefined) continue;
-			for (const mateId of seferPerekIds(seferId)) {
-				addPath(sink, `/929/${mateId}`);
-			}
+	}
+	const affectedSefarim = new Set<number>();
+	for (const perekId of perekIds) {
+		addTag(sink, perekDedicationsTag(perekId));
+		addPath(sink, `/929/${perekId}`);
+		scoped = true;
+		const seferId = seferIdByPerekId(perekId);
+		if (seferId !== undefined) affectedSefarim.add(seferId);
+	}
+	// Every route of an intersected sefer renders its whole spread map.
+	// Expand each book once, including when the ranges overlap or repeat.
+	for (const seferId of affectedSefarim) {
+		for (const mateId of seferPerekIds(seferId)) {
+			addPath(sink, `/929/${mateId}`);
 		}
 	}
 	for (const seferId of change.seferIds ?? []) {

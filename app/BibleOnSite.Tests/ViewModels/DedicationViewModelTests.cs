@@ -184,6 +184,69 @@ public class DedicationViewModelTests
         viewModel.HasDedications.Should().BeFalse();
     }
 
+    [Fact]
+    public void ParashaViewModel_dedication_failure_keeps_the_unit_visible()
+    {
+        var dedications = new FakeDedicationService
+        {
+            Responder = _ => Task.FromException<List<Dedication>>(new InvalidOperationException("api down")),
+        };
+        var (viewModel, _) = CreateParashaViewModel(dedications);
+
+        viewModel.Unit = CreateUnit(30);
+
+        viewModel.UnitId.Should().Be(30);
+        viewModel.DedicationLines.Should().BeEmpty();
+        viewModel.HasDedications.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParashaViewModel_fast_swipe_discards_stale_dedication_success_or_failure(bool fails)
+    {
+        var gate = new TaskCompletionSource<List<Dedication>>();
+        var dedications = new FakeDedicationService
+        {
+            Responder = context => context.ParashaIds!.Contains(1)
+                ? gate.Task
+                : Task.FromResult(new List<Dedication> { new() { Subject = "שרה" } }),
+        };
+        var (viewModel, _) = CreateParashaViewModel(dedications);
+
+        viewModel.Unit = CreateUnit(1);
+        viewModel.Unit = CreateUnit(2);
+        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+
+        if (fails)
+        {
+            gate.SetException(new InvalidOperationException("old request failed"));
+        }
+        else
+        {
+            gate.SetResult([new Dedication { Subject = "ישן" }]);
+        }
+        await Task.Yield();
+
+        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+        viewModel.HasDedications.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ParashaViewModel_clearing_unit_invalidates_an_inflight_dedication()
+    {
+        var gate = new TaskCompletionSource<List<Dedication>>();
+        var (viewModel, _) = CreateParashaViewModel(new FakeDedicationService { Responder = _ => gate.Task });
+        viewModel.Unit = CreateUnit(30);
+
+        viewModel.Unit = null;
+        gate.SetResult([new Dedication { Subject = "ישן" }]);
+        await Task.Yield();
+
+        viewModel.DedicationLines.Should().BeEmpty();
+        viewModel.HasDedications.Should().BeFalse();
+    }
+
     private static ParashaUnit CreateUnit(int unitId) => new()
     {
         UnitId = unitId,
@@ -254,6 +317,46 @@ public class DedicationViewModelTests
         viewModel.ShowEntry.Should().BeTrue();
         viewModel.DedicationLines.Should().BeEmpty();
         viewModel.HasDedications.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TanahpediaEntryViewModel_entry_hop_discards_stale_dedication_success_or_failure(bool fails)
+    {
+        _tanahpedia.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail { Id = "e1", UniqueName = "משה", Title = "משה" });
+        _tanahpedia.Setup(s => s.GetEntryDetailAsync("אהרן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail { Id = "e2", UniqueName = "אהרן", Title = "אהרן" });
+        var gate = new TaskCompletionSource<List<Dedication>>();
+        var dedications = new FakeDedicationService
+        {
+            Responder = context => context.EntryIds!.Contains("e1")
+                ? gate.Task
+                : Task.FromResult(new List<Dedication> { new() { Subject = "שרה" } }),
+        };
+        var (viewModel, _) = CreateEntryViewModel(dedications);
+        viewModel.UniqueName = "משה";
+        var originalLoad = viewModel.LoadAsync();
+        dedications.Contexts.Should().ContainSingle();
+
+        await viewModel.OpenPersonEntryAsync("אהרן");
+        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+
+        if (fails)
+        {
+            gate.SetException(new InvalidOperationException("old request failed"));
+        }
+        else
+        {
+            gate.SetResult([new Dedication { Subject = "ישן" }]);
+        }
+        await originalLoad;
+
+        viewModel.Title.Should().Be("אהרן");
+        viewModel.ShowEntry.Should().BeTrue();
+        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+        dedications.Contexts.SelectMany(context => context.EntryIds!).Should().Equal("e1", "e2");
     }
 
     #endregion

@@ -343,7 +343,7 @@ function DedicationForm({
 						<select
 							value={target.kind}
 							onChange={(e) =>
-								updateTarget(index, { kind: e.target.value as DedicationTargetKind, seferId: e.target.value === "sefer" ? 1 : undefined })
+								updateTarget(index, { kind: e.target.value as DedicationTargetKind, seferId: e.target.value === "sefer" ? 1 : undefined, helekId: e.target.value === "helek" ? 1 : undefined })
 							}
 							className="border rounded-lg px-2 py-1 text-sm"
 						>

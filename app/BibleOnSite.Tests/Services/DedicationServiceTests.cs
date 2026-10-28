@@ -134,6 +134,69 @@ public class DedicationServiceTests
 
         await act.Should().ThrowAsync<GraphQLException>();
     }
+
+    [Theory]
+    [InlineData("{\"data\":{}}")]
+    [InlineData("{\"data\":{\"dedications\":null}}")]
+    public async Task GetDedicationsAsync_missing_dedications_returns_empty_list(string json)
+    {
+        var service = CreateService(new GraphQLTransport(json));
+
+        var dedications = await service.GetDedicationsAsync(new DedicationContext(), TestContext.Current.CancellationToken);
+
+        dedications.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetDedicationsAsync_normalizes_nullable_response_fields()
+    {
+        var service = CreateService(new GraphQLTransport("""
+            {"data":{"dedications":[
+              {"id":1,"subject":null,"purposes":null,"scopes":null},
+              {"id":2,"scopes":[{"kind":null}]}
+            ]}}
+            """));
+
+        var dedications = await service.GetDedicationsAsync(new DedicationContext(), TestContext.Current.CancellationToken);
+
+        dedications.Should().HaveCount(2);
+        dedications[0].Subject.Should().BeEmpty();
+        dedications[0].Purposes.Should().BeEmpty();
+        dedications[0].Scopes.Should().BeEmpty();
+        dedications[0].ExpiresAt.Should().BeNull();
+        dedications[1].Scopes.Should().ContainSingle().Which.Kind.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetDedicationsAsync_preserves_each_non_perek_scope_identity()
+    {
+        var service = CreateService(new GraphQLTransport("""
+            {"data":{"dedications":[{"id":1,"subject":"שרה","scopes":[
+              {"kind":"HELEK","helekId":2},
+              {"kind":"PARASHA","parashaId":30},
+              {"kind":"ARTICLE","articleId":42},
+              {"kind":"TANAHPEDIA_ENTRY","entryId":"entry-1"},
+              {"kind":"MASORA"}
+            ]}]}}
+            """));
+
+        var dedications = await service.GetDedicationsAsync(new DedicationContext(), TestContext.Current.CancellationToken);
+
+        var scopes = dedications.Should().ContainSingle().Which.Scopes;
+        scopes.Select(s => s.Kind).Should().Equal("HELEK", "PARASHA", "ARTICLE", "TANAHPEDIA_ENTRY", "MASORA");
+        scopes[0].HelekId.Should().Be(2);
+        scopes[1].ParashaId.Should().Be(30);
+        scopes[2].ArticleId.Should().Be(42);
+        scopes[3].EntryId.Should().Be("entry-1");
+        scopes[4].PerekIdLow.Should().BeNull();
+        scopes[4].PerekIdHigh.Should().BeNull();
+        scopes[4].SeferId.Should().BeNull();
+        scopes[4].HelekId.Should().BeNull();
+        scopes[4].ParashaId.Should().BeNull();
+        scopes[4].ArticleId.Should().BeNull();
+        scopes[4].EntryId.Should().BeNull();
+        scopes[4].ExpiresAt.Should().BeNull();
+    }
 }
 
 public class DedicationFormatterTests

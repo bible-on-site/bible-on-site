@@ -13,9 +13,12 @@ jest.mock("../../../src/lib/api-client", () => ({
 // tests a passthrough keeps every call live so fixture tables apply per
 // test, while recording the stamped tags for invalidation-contract checks
 // (same convention as tests/unit/lib/revalidate/tags.test.ts).
+const mockCacheDefinitions: { key: unknown; opts: unknown }[] = [];
 const mockUnstableCache = jest.fn(
-	(fn: (...a: unknown[]) => unknown, _key: unknown, _opts: unknown) =>
-		(...a: unknown[]) => fn(...a),
+	(fn: (...a: unknown[]) => unknown, key: unknown, opts: unknown) => {
+		mockCacheDefinitions.push({ key, opts });
+		return (...a: unknown[]) => fn(...a);
+	},
 );
 jest.mock("next/cache", () => ({
 	unstable_cache: (
@@ -35,23 +38,29 @@ function stampedOpts(
 	baseKey: string,
 	key?: string,
 ): { tags?: string[]; revalidate?: number | false } | undefined {
-	const call = mockUnstableCache.mock.calls.find(
-		([, k]) =>
+	// Aggregate caches and per-key wrappers are defined once. Keep their
+	// options without re-importing sources: isolateModules replaces the
+	// SWC coverage counters for the same instrumented module mid-suite.
+	const definition = mockCacheDefinitions.find(
+		({ key: k }) =>
 			Array.isArray(k) &&
 			k[0] === baseKey &&
 			(key === undefined || k[1] === key),
 	);
-	return call?.[2] as
+	return definition?.opts as
 		| { tags?: string[]; revalidate?: number | false }
 		| undefined;
 }
 
 import {
+	helekIdBySeferId,
 	parseExpiryUtc,
 	resolveDedications,
 	seferIdByName,
+	seferIdByPerekId,
 	seferPerekIds,
 } from "../../../src/lib/dedications/service";
+import type { DedicationContext } from "../../../src/lib/dedications/types";
 import { formatDedication } from "../../../src/lib/dedications/types";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -120,6 +129,13 @@ describe("parseExpiryUtc", () => {
 });
 
 describe("sefer helpers", () => {
+	it("does not invent ancestors for ids outside the canonical corpus", () => {
+		expect(seferIdByPerekId(0)).toBeUndefined();
+		expect(seferIdByPerekId(930)).toBeUndefined();
+		expect(helekIdBySeferId(0)).toBeUndefined();
+		expect(helekIdBySeferId(999)).toBeUndefined();
+	});
+
 	it("enumerates canonical perek ids of a sefer", () => {
 		const ids = seferPerekIds(BERESHIT_SEFER_ID);
 		expect(ids[0]).toBe(1);
@@ -137,6 +153,125 @@ describe("sefer helpers", () => {
 });
 
 describe("resolveDedications", () => {
+	const scopeFixtures: [
+		keyof FixtureTables,
+		DedicationContext,
+		Record<string, unknown>,
+	][] = [
+		["perek", { perekIds: [1] }, { perek_id_low: 1, perek_id_high: 2 }],
+		["sefer", { seferIds: [1] }, { sefer_id: 1 }],
+		["helek", { helekIds: [1] }, { helek_id: 1 }],
+		["parasha", { parashaIds: [4] }, { parasha_id: 4 }],
+		["article", { articleIds: [9] }, { article_id: 9 }],
+		["entry", { entryIds: ["entry-1"] }, { entry_id: "entry-1" }],
+		["masora", { masora: true }, {}],
+	];
+
+	it.each(scopeFixtures)(
+		"keeps only live %s assignments at the exact UTC boundary",
+		async (table, context, identity) => {
+			stubTables({
+				[table]: [
+					{ ...identity, dedication_id: 1, expires_at: EXACT },
+					{ ...identity, dedication_id: 2, expires_at: PAST },
+					{ ...identity, dedication_id: 3, expires_at: FUTURE },
+				],
+				dedication: [{ id: 3, subject: "live", expires_at: FUTURE }],
+			});
+			const out = await resolveDedications(context, NOW);
+			expect(out).toHaveLength(1);
+			expect(out[0].id).toBe(3);
+			expect(out[0].expiresAt?.toISOString()).toBe("2026-06-01T00:00:00.000Z");
+			expect(out[0].scopes[0].expiresAt?.toISOString()).toBe(
+				"2026-06-01T00:00:00.000Z",
+			);
+		},
+	);
+
+	it("does not attach unrelated direct scopes to a matched dedication", async () => {
+		stubTables({
+			sefer: [{ sefer_id: 2, dedication_id: 10, expires_at: null }],
+			helek: [{ helek_id: 2, dedication_id: 10, expires_at: null }],
+			parasha: [{ parasha_id: 5, dedication_id: 10, expires_at: null }],
+			article: [{ article_id: 10, dedication_id: 10, expires_at: null }],
+			entry: [{ entry_id: "other", dedication_id: 10, expires_at: null }],
+			masora: [{ dedication_id: 10, expires_at: null }],
+			dedication: [{ id: 10, subject: "masora only", expires_at: null }],
+		});
+		const out = await resolveDedications(
+			{
+				seferIds: [1],
+				helekIds: [1],
+				parashaIds: [4],
+				articleIds: [9],
+				entryIds: ["requested"],
+				masora: true,
+			},
+			NOW,
+		);
+		expect(out[0].scopes).toEqual([{ kind: "MASORA", expiresAt: null }]);
+	});
+
+	it("deduplicates repeated scopes, skips orphaned rows, and sorts results and purposes", async () => {
+		const scope = {
+			perek_id_low: 1,
+			perek_id_high: 2,
+			dedication_id: 20,
+			expires_at: null,
+		};
+		stubTables({
+			perek: [
+				scope,
+				{ ...scope },
+				{ ...scope, dedication_id: 10 },
+				{ ...scope, dedication_id: 99 },
+			],
+			dedication: [
+				{ id: 20, subject: "second", expires_at: null },
+				{ id: 10, subject: "first", expires_at: null },
+			],
+			purposeLink: [
+				{ dedication_id: 20, dedication_type_id: 2 },
+				{ dedication_id: 20, dedication_type_id: 1 },
+				{ dedication_id: 20, dedication_type_id: 99 },
+			],
+			type: [
+				{ id: 1, description: "A" },
+				{ id: 2, description: "Z" },
+			],
+		});
+		const out = await resolveDedications({ perekIds: [1, 2] }, NOW);
+		expect(out.map((dedication) => dedication.id)).toEqual([10, 20]);
+		expect(out.map((dedication) => dedication.scopes.length)).toEqual([1, 1]);
+		expect(out[0].purposes).toEqual([]);
+		expect(out[1].purposes).toEqual(["A", "Z"]);
+		expect(
+			mockQuery.mock.calls.find(([sql]) => sql.includes("WHERE id IN"))?.[1],
+		).toEqual([10, 20, 99]);
+	});
+
+	it("ignores unknown ancestors while retaining an explicitly requested valid helek", async () => {
+		stubTables({
+			helek: [{ helek_id: 1, dedication_id: 10, expires_at: null }],
+			dedication: [{ id: 10, subject: "known helek", expires_at: null }],
+		});
+		expect(
+			await resolveDedications(
+				{ perekIds: [930], seferIds: [999], helekIds: [1] },
+				NOW,
+			),
+		).toMatchObject([{ id: 10, scopes: [{ kind: "HELEK", helekId: 1 }] }]);
+	});
+
+	it("degrades a missing expiry column during a partial schema rollout", async () => {
+		mockQuery.mockRejectedValue(
+			Object.assign(new Error("column missing"), {
+				code: "ER_BAD_FIELD_ERROR",
+			}),
+		);
+		expect(await resolveDedications({ perekIds: [1] }, NOW)).toEqual([]);
+	});
+
 	it("returns nothing when no context identities are given", async () => {
 		stubTables({});
 		expect(await resolveDedications({}, NOW)).toEqual([]);
@@ -219,12 +354,8 @@ describe("resolveDedications", () => {
 
 	it("matches parasha, article, entry and masora scopes", async () => {
 		stubTables({
-			parasha: [
-				{ parasha_id: 4, dedication_id: 20, expires_at: null },
-			],
-			article: [
-				{ article_id: 9, dedication_id: 21, expires_at: null },
-			],
+			parasha: [{ parasha_id: 4, dedication_id: 20, expires_at: null }],
+			article: [{ article_id: 9, dedication_id: 21, expires_at: null }],
 			entry: [
 				{
 					entry_id: "persons#abraham",
@@ -341,10 +472,7 @@ describe("resolveDedications", () => {
 		});
 		const out = await resolveDedications({ perekIds: [1] }, NOW);
 		expect(out).toHaveLength(1);
-		expect(out[0].scopes.map((s) => s.kind).sort()).toEqual([
-			"PEREK",
-			"SEFER",
-		]);
+		expect(out[0].scopes.map((s) => s.kind).sort()).toEqual(["PEREK", "SEFER"]);
 	});
 
 	it("returns no dedications when the schema is not deployed yet", async () => {
@@ -365,6 +493,66 @@ describe("resolveDedications", () => {
 });
 
 describe("cached loader tag contracts", () => {
+	it("keeps unknown perek and sefer cache keys free of invented ancestor tags", async () => {
+		stubTables({});
+		const { getPerekDedications, getSeferDedications } = await import(
+			"../../../src/lib/dedications/loaders"
+		);
+		expect(await getPerekDedications(930)).toEqual([]);
+		expect(await getSeferDedications(999)).toEqual([]);
+		expect(stampedTags("perek-dedications", "930")).toEqual([
+			"dedications",
+			"perek:930:dedications",
+		]);
+		expect(stampedTags("sefer-dedications", "999")).toEqual([
+			"dedications",
+			"sefer:999:dedications",
+		]);
+	});
+
+	it("loads each independent reading surface with its own identity and cache tag", async () => {
+		stubTables({
+			helek: [{ helek_id: 2, dedication_id: 12, expires_at: null }],
+			parasha: [{ parasha_id: 4, dedication_id: 20, expires_at: null }],
+			article: [{ article_id: 9, dedication_id: 21, expires_at: null }],
+			entry: [{ entry_id: "entry-1", dedication_id: 22, expires_at: null }],
+			dedication: [12, 20, 21, 22].map((id) => ({
+				id,
+				subject: String(id),
+				expires_at: null,
+			})),
+		});
+		const loaders = await import("../../../src/lib/dedications/loaders");
+		expect((await loaders.getHelekDedications(2)).map((d) => d.id)).toEqual([
+			12,
+		]);
+		expect((await loaders.getParashaDedications(4)).map((d) => d.id)).toEqual([
+			20,
+		]);
+		expect((await loaders.getArticleDedications(9)).map((d) => d.id)).toEqual([
+			21,
+		]);
+		expect(
+			(await loaders.getEntryDedications("entry-1")).map((d) => d.id),
+		).toEqual([22]);
+		expect(stampedTags("helek-dedications", "2")).toEqual([
+			"dedications",
+			"helek:2:dedications",
+		]);
+		expect(stampedTags("parasha-dedications", "4")).toEqual([
+			"dedications",
+			"parasha:4:dedications",
+		]);
+		expect(stampedTags("article-dedications", "9")).toEqual([
+			"dedications",
+			"article:9:dedications",
+		]);
+		expect(stampedTags("pedia-entry-dedications", "entry-1")).toEqual([
+			"dedications",
+			"pedia-entry:entry-1:dedications",
+		]);
+	});
+
 	it("tags perek entries with their sefer and helek ancestors", async () => {
 		stubTables({});
 		const { getPerekDedications } = await import(
@@ -408,18 +596,8 @@ describe("cached loader tag contracts", () => {
 	});
 
 	it("stamps no time bound so consuming routes stay fully static", async () => {
-		// Module-load stamps (masora/bookshelf) are recorded once per
-		// module registry; an isolated re-import lets this assertion see
-		// them without clearing the shared module state other tests use.
-		let loaders!: typeof import("../../../src/lib/dedications/loaders");
-		jest.isolateModules(() => {
-			const api =
-				require("../../../src/lib/api-client") as typeof import("../../../src/lib/api-client");
-			(api.query as jest.MockedFunction<typeof query>).mockImplementation(
-				async () => [],
-			);
-			loaders = require("../../../src/lib/dedications/loaders");
-		});
+		stubTables({});
+		const loaders = await import("../../../src/lib/dedications/loaders");
 		await loaders.getPerekDedications(BERESHIT_FIRST_PEREK);
 		await loaders.getMasoraDedications();
 		await loaders.getBookshelfDedications();
@@ -443,6 +621,38 @@ describe("getSeferPerekDedicationLines", () => {
 		return getSeferPerekDedicationLines(seferId);
 	};
 
+	it("shows an overlapping dedication only once on each spread", async () => {
+		stubTables({
+			perek: [
+				{
+					perek_id_low: 1,
+					perek_id_high: 3,
+					dedication_id: 10,
+					expires_at: null,
+				},
+				{
+					perek_id_low: 2,
+					perek_id_high: 4,
+					dedication_id: 10,
+					expires_at: null,
+				},
+			],
+			dedication: [{ id: 10, subject: "one dedication", expires_at: null }],
+		});
+		expect(await load(1)).toEqual({
+			1: ["מוקדש לone dedication"],
+			2: ["מוקדש לone dedication"],
+			3: ["מוקדש לone dedication"],
+			4: ["מוקדש לone dedication"],
+		});
+	});
+
+	it("does not query the database for an unknown sefer", async () => {
+		stubTables({});
+		expect(await load(999)).toEqual({});
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
 	it("attaches each line to exactly the perakim its PEREK scope covers", async () => {
 		stubTables({
 			perek: [
@@ -453,9 +663,7 @@ describe("getSeferPerekDedicationLines", () => {
 					expires_at: null,
 				},
 			],
-			dedication: [
-				{ id: 10, subject: "ראובן בן יקוט", expires_at: null },
-			],
+			dedication: [{ id: 10, subject: "ראובן בן יקוט", expires_at: null }],
 			purposeLink: [{ dedication_id: 10, dedication_type_id: 2 }],
 			type: [{ id: 2, description: "לרפואה" }],
 		});
@@ -505,9 +713,11 @@ describe("getSeferPerekDedicationLines", () => {
 			dedication: [{ id: 10, subject: "x", expires_at: null }],
 		});
 		const map = await load(BERESHIT_SEFER_ID);
-		expect(Object.keys(map).map(Number).sort((a, b) => a - b)).toEqual([
-			49, 50,
-		]);
+		expect(
+			Object.keys(map)
+				.map(Number)
+				.sort((a, b) => a - b),
+		).toEqual([49, 50]);
 	});
 
 	it("keeps several dedications on one perek in dedication-id order", async () => {
@@ -669,14 +879,14 @@ describe("formatDedication", () => {
 	});
 
 	it("omits the parentheses when no purposes exist", () => {
-		expect(
-			formatDedication({ subject: "יעל בת רחל", purposes: [] }),
-		).toBe("מוקדש ליעל בת רחל");
+		expect(formatDedication({ subject: "יעל בת רחל", purposes: [] })).toBe(
+			"מוקדש ליעל בת רחל",
+		);
 	});
 
 	it("skips blank purposes", () => {
-		expect(
-			formatDedication({ subject: "x", purposes: ["  ", 'לע"נ'] }),
-		).toBe('מוקדש לx (לע"נ)');
+		expect(formatDedication({ subject: "x", purposes: ["  ", 'לע"נ'] })).toBe(
+			'מוקדש לx (לע"נ)',
+		);
 	});
 });

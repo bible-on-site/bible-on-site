@@ -231,3 +231,146 @@ pub struct UpdateDedicationInput {
     /// listed here are removed.
     pub targets: Option<Vec<DedicationTargetInput>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::dedications_service::ScopeTarget;
+
+    #[test]
+    fn scope_conversion_exposes_only_the_selected_target_identity() {
+        let expires_at =
+            chrono::NaiveDateTime::parse_from_str("2030-06-15 12:34:56", "%Y-%m-%d %H:%M:%S")
+                .unwrap();
+        let cases = [
+            (
+                ScopeTarget::Perek { low: 2, high: 50 },
+                DedicationScopeKind::Perek,
+                [Some(2), Some(50), None, None, None, None],
+                None,
+            ),
+            (
+                ScopeTarget::Sefer { sefer_id: 24 },
+                DedicationScopeKind::Sefer,
+                [None, None, Some(24), None, None, None],
+                None,
+            ),
+            (
+                ScopeTarget::Helek { helek_id: 2 },
+                DedicationScopeKind::Helek,
+                [None, None, None, Some(2), None, None],
+                None,
+            ),
+            (
+                ScopeTarget::Parasha { parasha_id: 3 },
+                DedicationScopeKind::Parasha,
+                [None, None, None, None, Some(3), None],
+                None,
+            ),
+            (
+                ScopeTarget::Article { article_id: 19 },
+                DedicationScopeKind::Article,
+                [None, None, None, None, None, Some(19)],
+                None,
+            ),
+            (
+                ScopeTarget::TanahpediaEntry {
+                    entry_id: "person-1".into(),
+                },
+                DedicationScopeKind::TanahpediaEntry,
+                [None; 6],
+                Some("person-1"),
+            ),
+            (
+                ScopeTarget::Masora,
+                DedicationScopeKind::Masora,
+                [None; 6],
+                None,
+            ),
+        ];
+        for (target, kind, identities, entry_id) in cases {
+            for expiry in [None, Some(expires_at)] {
+                let scope = DedicationScope::from(ScopeMatch {
+                    target: target.clone(),
+                    expires_at: expiry,
+                });
+                assert_eq!(scope.kind, kind);
+                assert_eq!(
+                    [
+                        scope.perek_id_low,
+                        scope.perek_id_high,
+                        scope.sefer_id,
+                        scope.helek_id,
+                        scope.parasha_id,
+                        scope.article_id
+                    ],
+                    identities
+                );
+                assert_eq!(scope.entry_id.as_deref(), entry_id);
+                assert_eq!(
+                    scope.expires_at.as_deref(),
+                    expiry.map(|_| "2030-06-15T12:34:56Z")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aggregate_conversion_preserves_content_and_both_expiry_levels() {
+        let expiry =
+            chrono::NaiveDateTime::parse_from_str("2031-01-02 03:04:05", "%Y-%m-%d %H:%M:%S")
+                .unwrap();
+        for expires_at in [None, Some(expiry)] {
+            let dto = Dedication::from(DedicationAggregate {
+                dedication: entities::dedication::Model {
+                    id: 7,
+                    subject: "Subject".into(),
+                    expires_at,
+                },
+                purposes: vec!["First".into(), "Second".into()],
+                scopes: vec![ScopeMatch {
+                    target: ScopeTarget::Masora,
+                    expires_at: None,
+                }],
+            });
+            assert_eq!(dto.id, 7);
+            assert_eq!(dto.subject, "Subject");
+            assert_eq!(dto.purposes, ["First", "Second"]);
+            assert_eq!(
+                dto.expires_at.as_deref(),
+                expires_at.map(|_| "2031-01-02T03:04:05Z")
+            );
+            assert_eq!(dto.scopes.len(), 1);
+            assert_eq!(dto.scopes[0].kind, DedicationScopeKind::Masora);
+            assert!(dto.scopes[0].expires_at.is_none());
+        }
+    }
+
+    #[test]
+    fn graphql_inputs_round_trip_explicit_expiry_and_replacement_fields() {
+        use async_graphql::{InputType, Value, value};
+        fn round_trip<T: InputType + Clone + std::fmt::Debug>(value: Value) {
+            let input = T::parse(Some(value.clone())).unwrap();
+            assert_eq!(
+                input.clone().to_value().into_json().unwrap(),
+                value.into_json().unwrap()
+            );
+        }
+        round_trip::<DedicationContextInput>(value!({
+            "perekIds": [1, 2], "seferIds": [1], "helekIds": [1],
+            "parashaIds": [3], "entryIds": ["entry-1"], "articleIds": [19], "masora": true
+        }));
+        round_trip::<CreateDedicationInput>(value!({
+            "subject": "subject", "expiresAt": "2030-06-15T12:00:00Z",
+            "purposeTypeIds": [1, 2], "targets": [{
+                "kind": "MASORA", "perekIdLow": null, "perekIdHigh": null,
+                "seferId": null, "helekId": null, "parashaId": null, "articleId": null,
+                "entryId": null, "expiresAt": "2031-01-02T03:04:05Z"
+            }]
+        }));
+        round_trip::<UpdateDedicationInput>(value!({
+            "subject": null, "expiresAt": null, "clearExpiresAt": true,
+            "purposeTypeIds": [], "targets": []
+        }));
+    }
+}

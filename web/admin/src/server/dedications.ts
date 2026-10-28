@@ -348,7 +348,10 @@ export function normalizeExpiry(value?: string | null): string | null {
 	const trimmed = value.trim().replace("T", " ");
 	if (!EXPIRY_PATTERN.test(trimmed)) throw new Error("תוקף חייב להיות בפורמט YYYY-MM-DD HH:mm (UTC)");
 	const normalized = trimmed.length === 16 ? `${trimmed}:00` : trimmed;
-	if (Number.isNaN(new Date(`${normalized.replace(" ", "T")}Z`).getTime())) {
+	const instant = new Date(`${normalized.replace(" ", "T")}Z`);
+	// Date normalizes values such as February 30 and 24:00. Reject those
+	// rollovers so the stored DATETIME matches the UTC instant entered.
+	if (Number.isNaN(instant.getTime()) || instant.toISOString().slice(0, 19).replace("T", " ") !== normalized) {
 		throw new Error("תוקף אינו תאריך חוקי");
 	}
 	return normalized;
