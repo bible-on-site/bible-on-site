@@ -318,7 +318,6 @@ describe("detectChanges", () => {
 		"web/bible-on-site/playwright-global-setup.js",
 		"web/bible-on-site/playwright-global-teardown-coverage.js",
 		"web/bible-on-site/launch-e2e-server.mts",
-		"web/bible-on-site/get-debug-port.js",
 		// Test env and coverage fixtures.
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/.covignore.mjs",
