@@ -1,8 +1,9 @@
-# Optional dependencies for `encoders.py` — the encoder comparison
-# runner (issue #2516). The rest of data/annotations is stdlib-only;
-# these are needed ONLY to re-run the measured model comparison
-# (golden/encoder-metrics/*.json is the recorded artifact — CI never
-# installs this).
+# Optional dependencies for `encoders.py` and `publish.py --retype`
+# (issue #2516). The rest of data/annotations is stdlib-only;
+# these are needed ONLY to run a real encoder — re-running the measured
+# comparison (golden/encoder-metrics/*.json is the recorded artifact) or
+# a hybrid publish run. CI never installs this; tests inject
+# `entities_fn` fakes instead.
 #
 # Install into a local venv:
 #   python -m venv .venv
