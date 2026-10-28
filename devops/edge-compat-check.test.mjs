@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import test from "node:test";
 import {
 	canonicalHref,
@@ -9,6 +11,7 @@ import {
 	isAbsoluteLocation,
 	nextStaticAssetPath,
 	normalizeLocation,
+	probe,
 	titleText,
 } from "./edge-compat-check.mjs";
 
@@ -38,6 +41,7 @@ function record(overrides = {}) {
 		setCookies: [],
 		xAmzCfId: null,
 		xCache: null,
+		age: null,
 		via: null,
 		bytes: body.length,
 		sha256: sha256(body),
@@ -58,6 +62,8 @@ function edge(overrides = {}) {
 }
 
 const fails = (findings) => findings.filter((f) => f.level === "fail");
+const canonicalPage = (href) =>
+	`<html><head><link rel="canonical" href="${href}"><title>t</title></head></html>`;
 
 test("normalizeLocation", async (t) => {
 	await t.test("returns null for no Location header", () => {
@@ -88,16 +94,31 @@ test("normalizeLocation", async (t) => {
 });
 
 test("canonicalHref", async (t) => {
-	await t.test("extracts path+query from an absolute canonical", () => {
+	await t.test("preserves the origin of an absolute canonical", () => {
 		const html = Buffer.from(
 			'<link rel="canonical" href="https://xn--febl3a.co.il/929/315?x=1">',
 		);
-		assert.equal(canonicalHref(html), "/929/315?x=1");
-	});
-	await t.test("extracts a relative canonical", () => {
 		assert.equal(
-			canonicalHref(Buffer.from('<link rel="canonical" href="/929/315">')),
-			"/929/315",
+			canonicalHref(html, "https://d1234abcdef.cloudfront.net/929/315"),
+			"https://xn--febl3a.co.il/929/315?x=1",
+		);
+	});
+	await t.test("resolves a relative canonical against the request URL", () => {
+		assert.equal(
+			canonicalHref(
+				Buffer.from('<link rel="canonical" href="../315?book">'),
+				"https://d1234abcdef.cloudfront.net/929/316/",
+			),
+			"https://d1234abcdef.cloudfront.net/929/315?book",
+		);
+	});
+	await t.test("resolves protocol-relative canonical schemes", () => {
+		assert.equal(
+			canonicalHref(
+				Buffer.from('<link rel="canonical" href="//xn--febl3a.co.il/929/315">'),
+				"https://d1234abcdef.cloudfront.net/929/315",
+			),
+			"https://xn--febl3a.co.il/929/315",
 		);
 	});
 	await t.test("returns null without a canonical", () => {
@@ -156,7 +177,27 @@ test("comparePair", async (t) => {
 			}),
 		);
 		assert.ok(
-			fails(findings).some((f) => f.detail.includes("host drift")),
+			fails(findings).some((f) => f.detail.includes("origin drift")),
+		);
+	});
+
+	await t.test("fails when an absolute redirect downgrades HTTPS", () => {
+		const findings = comparePair(
+			record({ status: 308, location: "https://xn--febl3a.co.il/929/315" }),
+			edge({ status: 308, location: "http://xn--febl3a.co.il/929/315" }),
+		);
+		assert.ok(
+			fails(findings).some((f) => f.detail.includes("origin drift")),
+		);
+	});
+
+	await t.test("fails when a redirect changes the origin port", () => {
+		const findings = comparePair(
+			record({ status: 308, location: "https://xn--febl3a.co.il/929/315" }),
+			edge({ status: 308, location: "https://xn--febl3a.co.il:8443/929/315" }),
+		);
+		assert.ok(
+			fails(findings).some((f) => f.detail.includes("origin drift")),
 		);
 	});
 
@@ -194,6 +235,42 @@ test("comparePair", async (t) => {
 			'<html><head><link rel="canonical" href="/929/316"><title>t</title></head></html>';
 		const findings = comparePair(record(), edge({ body }));
 		assert.ok(fails(findings).some((f) => f.detail.includes("canonical")));
+	});
+
+	await t.test("passes the same public absolute canonical on both hosts", () => {
+		const body = canonicalPage("https://xn--febl3a.co.il/929/315");
+		assert.deepEqual(comparePair(record({ body }), edge({ body })), []);
+	});
+
+	for (const [name, href] of [
+		["candidate hostname", "https://d1234abcdef.cloudfront.net/929/315"],
+		["HTTP downgrade", "http://xn--febl3a.co.il/929/315"],
+		["candidate-relative URL", "/929/315"],
+	]) {
+		await t.test(`fails a canonical with the same path but ${name}`, () => {
+			const findings = comparePair(
+				record({ body: canonicalPage("https://xn--febl3a.co.il/929/315") }),
+				edge({ body: canonicalPage(href) }),
+			);
+			assert.ok(fails(findings).some((f) => f.detail.includes("canonical")));
+		});
+	}
+
+	await t.test("fails identical relative canonicals that resolve to different hosts", () => {
+		const body = canonicalPage("/929/315");
+		assert.ok(
+			fails(comparePair(record({ body }), edge({ body }))).some((f) =>
+				f.detail.includes("canonical"),
+			),
+		);
+	});
+
+	await t.test("accepts different canonical forms resolving to the same public URL", () => {
+		const findings = comparePair(
+			record({ body: canonicalPage("/929/315") }),
+			edge({ body: canonicalPage("https://xn--febl3a.co.il/929/315") }),
+		);
+		assert.deepEqual(fails(findings), []);
 	});
 
 	await t.test("reports body drift as a note unless byte equality is required", () => {
@@ -315,4 +392,40 @@ test("edgeFindings", async (t) => {
 			),
 		);
 	});
+	await t.test("accepts an uncached origin 404 with CloudFront error labeling", () => {
+		assert.deepEqual(
+			edgeFindings(edge({ status: 404, xCache: "Error from cloudfront" })),
+			[],
+		);
+	});
+	for (const age of ["0", "12"]) {
+		await t.test(`fails a cached error with Age: ${age}`, () => {
+			const findings = edgeFindings(
+				edge({ status: 404, xCache: "Error from cloudfront", age }),
+			);
+			assert.ok(fails(findings).some((f) => f.detail.includes("age")));
+		});
+	}
+});
+
+test("HTTP probes preserve cache-age evidence for cached and uncached errors", async (t) => {
+	const server = createServer((request, response) => {
+		const headers = {
+			"x-amz-cf-id": "edge-request-id",
+			"x-cache": "Error from cloudfront",
+		};
+		if (request.url !== "/uncached") headers.age = request.url.slice(1);
+		response.writeHead(404, headers);
+		response.end("missing");
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	t.after(() => new Promise((resolve) => server.close(resolve)));
+	const origin = `http://127.0.0.1:${server.address().port}`;
+	for (const age of ["0", "12", null]) {
+		const result = await probe(`${origin}/${age ?? "uncached"}`);
+		assert.equal(result.age, age);
+		assert.equal(result.status, 404);
+		assert.equal(fails(edgeFindings(result)).length, age === null ? 0 : 1);
+	}
 });
