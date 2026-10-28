@@ -101,6 +101,7 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	downloadErrorMessage,
 	runDownload,
 	toHebrewChapterNumber,
 } from "./sefer-page-utils";
@@ -189,7 +190,6 @@ const Sefer = (props: {
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
-	const [downloadError, setDownloadError] = useState<string | null>(null);
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
@@ -692,28 +692,28 @@ const Sefer = (props: {
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,
 							downloadContext: { seferName: perekObj.sefer },
+							// The library's error surface keeps the menu open with a
+							// retry path; onDownloadError supplies the app's Hebrew
+							// text for it (#2778).
+							onDownloadError: downloadErrorMessage,
 							// Masking is read at click time so a just-changed setting applies.
 							onDownloadSefer: () =>
-								runDownload(
-									() =>
-										downloadSefer({
-											seferName: perekObj.sefer,
-											perekIds:
-												perekIds && perekIds.length > 0
-													? perekIds
-													: [perekObj.perekId],
-											divineNameMasking: getDivineNameMaskingSettings(),
-										}),
-									setDownloadError,
+								runDownload(() =>
+									downloadSefer({
+										seferName: perekObj.sefer,
+										perekIds:
+											perekIds && perekIds.length > 0
+												? perekIds
+												: [perekObj.perekId],
+										divineNameMasking: getDivineNameMaskingSettings(),
+									}),
 								),
 							onDownloadPageRange: (pages, semanticPages, context) =>
-								runDownload(
-									() =>
-										downloadPageRanges(pages, semanticPages, {
-											...context,
-											divineNameMasking: getDivineNameMaskingSettings(),
-										}),
-									setDownloadError,
+								runDownload(() =>
+									downloadPageRanges(pages, semanticPages, {
+										...context,
+										divineNameMasking: getDivineNameMaskingSettings(),
+									}),
 								),
 						}}
 					/>
@@ -749,11 +749,6 @@ const Sefer = (props: {
 						<LastPageButton />
 					</div>
 					<div className="flipbook-toolbar-end">
-						{downloadError && (
-							<p role="alert" className={styles.downloadError}>
-								{downloadError}
-							</p>
-						)}
 						<DownloadDropdown ariaLabel="הורדה">
 							<DownloadMaskingHint />
 						</DownloadDropdown>
