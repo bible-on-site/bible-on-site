@@ -1,0 +1,14 @@
+# Optional dependencies for `encoders.py` — the encoder comparison
+# runner (issue #2516). The rest of data/annotations is stdlib-only;
+# these are needed ONLY to re-run the measured model comparison
+# (golden/encoder-metrics/*.json is the recorded artifact — CI never
+# installs this).
+#
+# Install into a local venv:
+#   python -m venv .venv
+#   .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+#   .venv/bin/pip install transformers==5.19.0
+# (PyPI's default torch wheel also works; the pytorch.org CPU index keeps
+# the install CUDA-free, same as the recitation CI step.)
+torch==2.14.1
+transformers==5.19.0
