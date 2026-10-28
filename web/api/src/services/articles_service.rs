@@ -208,12 +208,7 @@ pub async fn search_articles(
         None => None,
     };
     let page = index
-        .search(
-            phrase,
-            limit as usize,
-            offset as usize,
-            author_ids.as_ref(),
-        )
+        .search(phrase, limit as usize, offset as usize, author_ids.as_ref())
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
@@ -310,9 +305,7 @@ async fn article_ids_by_author(
         .into_tuple::<i32>()
         .all(db.get_connection())
         .await
-        .map_err(|db_err| {
-            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-        })
+        .map_err(|db_err| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err)))
         .map(|ids| ids.into_iter().collect())
 }
 
@@ -884,16 +877,22 @@ mod tests {
             .expect("search");
         assert_eq!(results.total, 0);
         assert!(results.hits.is_empty());
-        assert!(search_articles(&db, &index, "alpha", None, None, Some(0))
-            .await
-            .is_err());
-        assert!(search_articles(&db, &index, "alpha", None, None, Some(-3))
-            .await
-            .is_err());
+        assert!(
+            search_articles(&db, &index, "alpha", None, None, Some(0))
+                .await
+                .is_err()
+        );
+        assert!(
+            search_articles(&db, &index, "alpha", None, None, Some(-3))
+                .await
+                .is_err()
+        );
         let db_err = create_mock_db_with_query_error("author ids query failed");
-        assert!(search_articles(&db_err, &index, "alpha", None, None, Some(9))
-            .await
-            .is_err());
+        assert!(
+            search_articles(&db_err, &index, "alpha", None, None, Some(9))
+                .await
+                .is_err()
+        );
     }
 
     fn covering_source_model(article_id: i32, perek_id: i32, pasuk: i16) -> CoveringSourceModel {

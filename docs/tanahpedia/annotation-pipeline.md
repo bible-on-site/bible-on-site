@@ -228,7 +228,60 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   AlephBERT NER legs are licenseless community fine-tunes — flagged
   comparison-only. See `data/annotations/GOLDEN.md` for the full
   table and per-category findings.
+- Publish stage (`data/annotations/publish.py`): the measured hybrid
+  wired into the import path — `pasuk_rows`/`article_rows` run the
+  lexical detection tiers and re-vote `entity_type` through the same
+  `encoders.py` retype functions the eval measured, restamping each
+  row with the encoder's `name@sha+contract1` tag. The model stays
+  opt-in (`entities_fn` injection; `--no-retype` emits the
+  deterministic lexical set for diagnosis), unlicensed/unrunnable
+  candidates are refused, and inference skips sources with no
+  detections. The importer gained `--supersede-model <revision>` —
+  the deliberate model-upgrade path: `dedupe_key` includes
+  `model_revision`, so a revision swap would otherwise leave the old
+  `auto` rows rendering beside the new ones at the same spans;
+  supersede deletes the old revision's `auto`+`held` rows within the
+  imported domains while `manual`/`rejected` decisions survive.
 
-Remaining sequence: wire the hybrid (lexical detect + DictaBERT
-re-type) into the pipeline's publish path → production import of the
-published pasuk + article rows.
+Remaining sequence: gated production import of the published pasuk +
+article rows (exact commands below) → BEREL fine-tune / LLM
+ambiguity-tier decision once the residual qri-ktiv+spelling typing
+misses are re-measured against live output.
+
+### Gated publish/import run (explicit approval required)
+
+```bash
+# 1. Optional encoder deps — once, into a local venv
+#    (data/annotations/requirements-encoders.txt).
+python -m venv data/annotations/.venv
+data/annotations/.venv/bin/pip install \
+    --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+data/annotations/.venv/bin/pip install transformers==5.19.0
+
+# 2. Article input straight from the database (verbatim bytes — the
+#    export must not normalize; content_hash is the staleness key).
+node --import tsx devops/export-tanahpedia-articles.mts \
+    --out /tmp/tanahpedia-articles.json --env-file <module>/.dev.env
+
+# 3. Publish rows — detection + dictabert-ner re-type. Pasuk domain is
+#    the full canonical corpus (~30-40 min CPU for the encoder pass).
+data/annotations/.venv/bin/python data/annotations/publish.py \
+    --pasuk-out /tmp/mentions-pasuk.json \
+    --articles /tmp/tanahpedia-articles.json \
+    --article-out /tmp/mentions-article.json
+
+# 4. Dry-run, then import. First production import needs no supersede;
+#    if a preview import of the lexical tier ever ran against the
+#    target DB, supersede its revisions so one live revision decorates
+#    each span:
+#      --supersede-model morphhb-lexical-baseline@3d15126f+contract1  (pasuk)
+#      --supersede-model morphhb-gazetteer@3d15126f+contract1        (article)
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-pasuk.json --dry-run --env-file <module>/.dev.env
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-pasuk.json --env-file <module>/.dev.env
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-article.json --dry-run --env-file <module>/.dev.env
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-article.json --env-file <module>/.dev.env
+```

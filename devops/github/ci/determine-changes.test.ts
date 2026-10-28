@@ -24,6 +24,24 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("native image validation changes select all three services without a release", () => {
+		for (const file of [
+			".github/workflows/architecture-validation.yml",
+			"devops/github/ci/verify-native-image.mjs",
+			"devops/github/ci/verify-native-image.test.mjs",
+			"devops/github/ci/verify-website-native.mjs",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					`${file} -> ${key}`,
+				);
+			}
+		}
+	});
+
 	test("playback derivatives release both website and native book packages", () => {
 		assert.deepEqual(
 			changed(
@@ -393,9 +411,9 @@ describe("detectChanges", () => {
 		}
 	});
 
-	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
+	test("release Docker build inputs validate the affected images without releasing", () => {
 		for (const [file, keys] of [
-			["web/.dockerignore", ["api", "bulletin", "admin"]],
+			["web/.dockerignore", ["website", "api", "bulletin", "admin"]],
 			[".github/workflows/shared-dockerize.yml", ["api"]],
 			["web/api/entities/src/lib.rs", ["bulletin"]],
 		] as const) {
@@ -429,6 +447,29 @@ describe("detectChanges", () => {
 		);
 		assert.equal(
 			detectChanges(["devops/deploy/data-deploy-old.mts"]).data.ci_changed,
+			false,
+		);
+	});
+
+	test("ECR deployer changes run recovery checks without data delivery or a release", () => {
+		for (const file of [
+			"devops/deploy/ecr-deploy/ecr-client.mts",
+			"devops/deploy/ecr-deploy/ecr-client.test.mts",
+			"devops/deploy/ecr-deploy/resume-image.mts",
+			"devops/deploy/ecr-deploy/resume-image.test.mts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "data" },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+		assert.equal(
+			detectChanges(["devops/deploy/ecr-deploy-old.mts"]).data.ci_changed,
 			false,
 		);
 	});

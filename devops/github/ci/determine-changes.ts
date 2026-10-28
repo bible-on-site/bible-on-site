@@ -39,6 +39,13 @@ const RELEASE_CI_PATHS = [
 ];
 // Shared build context of every web/ release Docker image (#2292).
 const DOCKER_BUILD_CI_PATHS = ["web/.dockerignore"];
+// Native validation uses the same service Dockerfiles without publishing.
+const NATIVE_IMAGE_CI_PATHS = [
+	".github/workflows/architecture-validation.yml",
+	"devops/github/ci/verify-native-image.mjs",
+	"devops/github/ci/verify-native-image.test.mjs",
+	"devops/github/ci/verify-website-native.mjs",
+];
 // Deterministic E2E test-selection tooling plus the shared Playwright
 // evidence reporter — consumed by the website, admin and API E2E jobs
 // (the Appium suite already lists the selector under `app`, #2085).
@@ -53,6 +60,8 @@ export const MODULES = {
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
 		ciPaths: [
+			...NATIVE_IMAGE_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			"devops/github/ci/bencher-comparison.mjs",
@@ -78,6 +87,7 @@ export const MODULES = {
 	api: {
 		directory: "web/api",
 		ciPaths: [
+			...NATIVE_IMAGE_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
@@ -120,6 +130,7 @@ export const MODULES = {
 	admin: {
 		directory: "web/admin",
 		ciPaths: [
+			...NATIVE_IMAGE_CI_PATHS,
 			...SHARED_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
@@ -143,6 +154,7 @@ export const MODULES = {
 	data: {
 		directory: "data",
 		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
 		ciPaths: [
 			...SHARED_CI_PATHS,
@@ -156,6 +168,7 @@ export const MODULES = {
 			"web/bible-on-site/public/icons/phone.svg",
 			"web/bible-on-site/public/icons/whatsapp.svg",
 			"web/bible-on-site/public/icons/telegram.svg",
+			"devops/deploy/ecr-deploy",
 		],
 	},
 	perushim_pipeline: {
