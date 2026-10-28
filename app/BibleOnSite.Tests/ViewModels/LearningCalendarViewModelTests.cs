@@ -928,7 +928,12 @@ public class LearningCalendarViewModelTests
         var handler = new Mock<IViewHandler>();
         handler.SetupGet(h => h.MauiContext).Returns(context.Object);
         var page = new CalendarPageUnderTest(vm) { Handler = handler.Object };
+        // Cancelling navigation before first appearance must leave no active clock.
+        page.Hide();
+        timer.Verify(t => t.Start(), Times.Never);
         var window = new Window(page);
+        page.Show();
+        // Repeated appearance must not leave a second resume subscription after Hide.
         page.Show();
         vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
         vm.SelectedCycle = Option(vm.CycleOptions, 5);
