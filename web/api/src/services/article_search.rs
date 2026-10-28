@@ -27,7 +27,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr};
+use sea_orm::{
+    ConnectionTrait, DatabaseConnection, DatabaseConnectionType, DbBackend, DbErr, ExecResult,
+    QueryResult, RuntimeErr, Statement, Values,
+    sqlx::{self, Executor, MySql, pool::PoolConnection},
+};
+use sea_query_sqlx::SqlxValues;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
@@ -508,23 +513,162 @@ async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
     Ok(dirty)
 }
 
+/// Named locks belong to physical MySQL sessions, not the connection pool.
+/// Never return a session that might own this lock to the pool, even if an
+/// acquisition response, retrain, or release is interrupted by cancellation.
+enum RetrainLock<'a> {
+    MySql(Mutex<PoolConnection<MySql>>),
+    Mock(&'a DatabaseConnection),
+}
+
+impl<'a> RetrainLock<'a> {
+    async fn acquire(conn: &'a DatabaseConnection) -> Result<Option<Self>, DbErr> {
+        if conn.is_mock_connection() {
+            return Ok(store::try_lock(conn).await?.then_some(Self::Mock(conn)));
+        }
+        if !matches!(
+            conn.inner,
+            DatabaseConnectionType::SqlxMySqlPoolConnection(_)
+        ) {
+            return Err(DbErr::Custom(
+                "article-search retraining requires MySQL".into(),
+            ));
+        }
+        let pool = conn.get_mysql_connection_pool();
+        let mut session = pool
+            .acquire()
+            .await
+            .map_err(|err| DbErr::Conn(RuntimeErr::SqlxError(err.into())))?;
+        // Set this BEFORE GET_LOCK: MySQL may grant it before cancellation
+        // prevents the response from reaching this future.
+        session.close_on_drop();
+        let acquired: Option<i64> =
+            sqlx::query_scalar("SELECT GET_LOCK('article_search_retrain', 0)")
+                .fetch_one(&mut *session)
+                .await
+                .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))?;
+        match acquired {
+            Some(1) => Ok(Some(Self::MySql(Mutex::new(session)))),
+            Some(0) => Ok(None),
+            _ => Err(DbErr::Custom(
+                "MySQL failed to acquire the article-search named lock".into(),
+            )),
+        }
+    }
+
+    async fn release(self) -> Result<(), DbErr> {
+        match self {
+            Self::MySql(session) => {
+                let mut session = session.into_inner();
+                let released: Option<i64> =
+                    sqlx::query_scalar("SELECT RELEASE_LOCK('article_search_retrain')")
+                        .fetch_one(&mut *session)
+                        .await
+                        .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))?;
+                if released != Some(1) {
+                    return Err(DbErr::Custom(
+                        "article-search retrain session did not own its named lock".into(),
+                    ));
+                }
+                session
+                    .close()
+                    .await
+                    .map_err(|err| DbErr::Conn(RuntimeErr::SqlxError(err.into())))
+            }
+            Self::Mock(conn) => store::release_lock(conn).await,
+        }
+    }
+}
+
+// Mirror SeaORM's SQLx binder, preserving its typed parameters and row/result
+// conversions while keeping every retrain statement on the lock-owning session.
+fn retrain_query(stmt: &Statement) -> sqlx::query::Query<'_, MySql, SqlxValues> {
+    sqlx::query_with(
+        sqlx::AssertSqlSafe(stmt.sql.as_str()),
+        SqlxValues(stmt.values.clone().unwrap_or(Values(Vec::new()))),
+    )
+}
+
+#[async_graphql::async_trait::async_trait]
+impl ConnectionTrait for RetrainLock<'_> {
+    fn get_database_backend(&self) -> DbBackend {
+        DbBackend::MySql
+    }
+
+    async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
+        match self {
+            Self::MySql(session) => {
+                let mut session = session.lock().await;
+                retrain_query(&stmt)
+                    .execute(&mut **session)
+                    .await
+                    .map(Into::into)
+                    .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))
+            }
+            Self::Mock(conn) => conn.execute_raw(stmt).await,
+        }
+    }
+
+    async fn execute_unprepared(&self, sql: &str) -> Result<ExecResult, DbErr> {
+        match self {
+            Self::MySql(session) => {
+                let mut session = session.lock().await;
+                (&mut **session)
+                    .execute(sqlx::AssertSqlSafe(sql.to_owned()))
+                    .await
+                    .map(Into::into)
+                    .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))
+            }
+            Self::Mock(conn) => conn.execute_unprepared(sql).await,
+        }
+    }
+
+    async fn query_one_raw(&self, stmt: Statement) -> Result<Option<QueryResult>, DbErr> {
+        match self {
+            Self::MySql(session) => {
+                let mut session = session.lock().await;
+                retrain_query(&stmt)
+                    .fetch_optional(&mut **session)
+                    .await
+                    .map(|row| row.map(Into::into))
+                    .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))
+            }
+            Self::Mock(conn) => conn.query_one_raw(stmt).await,
+        }
+    }
+
+    async fn query_all_raw(&self, stmt: Statement) -> Result<Vec<QueryResult>, DbErr> {
+        match self {
+            Self::MySql(session) => {
+                let mut session = session.lock().await;
+                retrain_query(&stmt)
+                    .fetch_all(&mut **session)
+                    .await
+                    .map(|rows| rows.into_iter().map(Into::into).collect())
+                    .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))
+            }
+            Self::Mock(conn) => conn.query_all_raw(stmt).await,
+        }
+    }
+}
+
 /// Retrains the model over the whole corpus and rewrites all document rows.
 /// Guarded by a MySQL advisory lock so multiple API instances never retrain
 /// concurrently. Returns the trained doc count, or `None` when another
 /// instance holds the lock.
 pub async fn retrain(conn: &DatabaseConnection) -> Result<Option<usize>, DbErr> {
-    if !store::try_lock(conn).await? {
+    let Some(lock) = RetrainLock::acquire(conn).await? else {
         debug!("another instance is retraining the article index");
         return Ok(None);
-    }
-    let result = retrain_locked(conn).await;
-    if let Err(err) = store::release_lock(conn).await {
+    };
+    let result = retrain_locked(&lock).await;
+    if let Err(err) = lock.release().await {
         warn!(error = %err, "failed to release article-search retrain lock");
     }
     result.map(Some)
 }
 
-async fn retrain_locked(conn: &DatabaseConnection) -> Result<usize, DbErr> {
+async fn retrain_locked<C: ConnectionTrait>(conn: &C) -> Result<usize, DbErr> {
     let rows = conn
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::MySql,
@@ -1030,7 +1174,10 @@ mod tests {
         );
 
         // The failed refresh probe degrades to the warm snapshot.
-        let page = index.search("alpha", 10, 0, None).await.expect("warm search");
+        let page = index
+            .search("alpha", 10, 0, None)
+            .await
+            .expect("warm search");
         assert_eq!(page.total, 2);
 
         let page = index.search("alpha", 1, 1, None).await.expect("paginated");
@@ -1245,6 +1392,350 @@ mod tests {
             ])
             .into_connection();
         assert_eq!(retrain(&conn).await.expect("retrain"), Some(2));
+    }
+
+    #[tokio::test]
+    async fn retrain_rejects_a_disconnected_database() {
+        let error = retrain(&DatabaseConnection::default())
+            .await
+            .expect_err("a named lock requires a MySQL pool");
+        assert!(error.to_string().contains("requires MySQL"));
+    }
+
+    #[tokio::test]
+    async fn retrain_keeps_the_primary_error_when_release_also_fails() {
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
+            ])
+            .append_query_errors([DbErr::Custom("retrain source read failed".into())])
+            .append_exec_errors([DbErr::Custom("lock release also failed".into())])
+            .into_connection();
+        let error = retrain(&conn).await.expect_err("primary retrain failure");
+        assert!(error.to_string().contains("retrain source read failed"));
+    }
+
+    /// The API coverage CI job explicitly invokes this real-database regression.
+    #[tokio::test]
+    #[ignore = "requires isolated MySQL and ARTICLE_SEARCH_LOCK_TEST_DB_URL; API coverage CI runs it"]
+    async fn mysql_retrain_lock_is_session_scoped_and_cleans_up() {
+        use sea_orm::{
+            SqlxMySqlConnector,
+            sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions},
+        };
+        let url = std::env::var("ARTICLE_SEARCH_LOCK_TEST_DB_URL")
+            .expect("isolated MySQL fixture URL is required");
+        let options: MySqlConnectOptions = url.parse().expect("valid fixture URL");
+        // Never run this regression against the application's database.
+        assert_eq!(options.get_database(), Some("article_search_lock_test"));
+        let pool = MySqlPoolOptions::new()
+            .max_connections(4)
+            .min_connections(4)
+            .connect_with(options.clone())
+            .await
+            .expect("isolated fixture");
+        let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
+        // Own and reset only this explicitly named disposable fixture DB.
+        pool.execute("DROP TABLE IF EXISTS tanah_article, article_search_state, article_search_doc, article_search_queue")
+            .await.expect("reset isolated fixture");
+
+        let first = RetrainLock::acquire(&conn)
+            .await
+            .expect("acquire")
+            .expect("lock");
+        let holder: Option<u64> =
+            sqlx::query_scalar("SELECT IS_USED_LOCK('article_search_retrain')")
+                .fetch_one(&pool)
+                .await
+                .expect("inspect holder");
+        let mut other = pool.acquire().await.expect("another physical session");
+        let other_id: u64 = sqlx::query_scalar("SELECT CONNECTION_ID()")
+            .fetch_one(&mut *other)
+            .await
+            .expect("other session id");
+        assert_ne!(holder, Some(other_id));
+        drop(other);
+        // Sharing the same pool must not re-enter the first session's lock.
+        assert!(
+            RetrainLock::acquire(&conn)
+                .await
+                .expect("second worker")
+                .is_none()
+        );
+        first.release().await.expect("same-session release");
+        assert_retrain_lock_free(&pool).await;
+
+        // The empty fixture has no source table: a real retrain SQL error
+        // must release ownership without closing the shared pool.
+        assert!(retrain(&conn).await.is_err());
+        assert_retrain_lock_free(&pool).await;
+
+        // Cancellation bypasses release(); close-on-drop must still free it.
+        let (ready, acquired) = tokio::sync::oneshot::channel();
+        let worker_conn = conn.clone();
+        let worker = tokio::spawn(async move {
+            let lock = RetrainLock::acquire(&worker_conn)
+                .await
+                .expect("worker acquire")
+                .expect("worker owns lock");
+            ready.send(()).expect("signal acquisition");
+            std::future::pending::<()>().await;
+            drop(lock);
+        });
+        acquired.await.expect("worker started");
+        assert!(
+            RetrainLock::acquire(&conn)
+                .await
+                .expect("contender")
+                .is_none()
+        );
+        worker.abort();
+        assert!(worker.await.expect_err("worker cancelled").is_cancelled());
+        assert_retrain_lock_free(&pool).await;
+        let next = RetrainLock::acquire(&conn)
+            .await
+            .expect("reacquire")
+            .expect("next worker");
+        next.release().await.expect("next release");
+
+        pool.execute("CREATE TABLE IF NOT EXISTS lock_cancellation_probe (id INT PRIMARY KEY, value INT NOT NULL)")
+            .await.expect("isolated probe table");
+        pool.execute("DELETE FROM lock_cancellation_probe")
+            .await
+            .expect("empty isolated probe");
+        let (ready, started) = tokio::sync::oneshot::channel();
+        let work_conn = conn.clone();
+        let in_flight = tokio::spawn(async move {
+            let lock = RetrainLock::acquire(&work_conn)
+                .await
+                .expect("work acquire")
+                .expect("work lock");
+            let id = lock
+                .query_one_raw(Statement::from_string(
+                    DbBackend::MySql,
+                    "SELECT CONNECTION_ID() AS id",
+                ))
+                .await
+                .expect("work session")
+                .expect("work session row")
+                .try_get::<u64>("", "id")
+                .expect("work id");
+            ready.send(id).expect("signal work session");
+            lock.execute_raw(Statement::from_string(
+                DbBackend::MySql,
+                "INSERT INTO lock_cancellation_probe VALUES (1, SLEEP(0.5))",
+            ))
+            .await
+            .expect("delayed mutation");
+            lock.release().await.expect("work release");
+        });
+        let work_id = started.await.expect("work started");
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let state: Option<String> = sqlx::query_scalar(
+                    "SELECT STATE FROM information_schema.PROCESSLIST WHERE ID = ?",
+                )
+                .bind(work_id)
+                .fetch_optional(&pool)
+                .await
+                .expect("observe in-flight SQL")
+                .flatten();
+                if state.as_deref() == Some("User sleep") {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("mutation must be running before cancellation");
+        in_flight.abort();
+        assert!(
+            in_flight
+                .await
+                .expect_err("in-flight worker cancelled")
+                .is_cancelled()
+        );
+        let newer = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Some(lock) = RetrainLock::acquire(&conn).await.expect("new worker") {
+                    break lock;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("cancelled session eventually frees its lock");
+        let still_running: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID = ? AND INFO IS NOT NULL",
+        )
+        .bind(work_id)
+        .fetch_one(&pool)
+        .await
+        .expect("old SQL status");
+        assert_eq!(
+            still_running, 0,
+            "a newer worker must never overlap cancelled in-flight SQL"
+        );
+        newer.release().await.expect("new worker release");
+
+        // Losing the named lock is reported instead of treating a successful
+        // SQL response (RELEASE_LOCK=0/NULL) as a successful release.
+        let mut lost = RetrainLock::acquire(&conn)
+            .await
+            .expect("acquire lost lock")
+            .expect("lost lock guard");
+        if let RetrainLock::MySql(session) = &mut lost {
+            let _: Option<i64> =
+                sqlx::query_scalar("SELECT RELEASE_LOCK('article_search_retrain')")
+                    .fetch_one(&mut **session.get_mut())
+                    .await
+                    .expect("simulate lost ownership");
+        } else {
+            panic!("real MySQL session required");
+        }
+        assert!(lost.release().await.is_err());
+        assert_retrain_lock_free(&pool).await;
+
+        // Exercise the complete production retrain path, including the same
+        // typed integer/blob parameters used by SeaORM's normal binder.
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL)")
+            .await.expect("isolated article source");
+        pool.execute("INSERT INTO tanah_article VALUES (1, 'alpha beta', 'alpha', '<p>alpha gamma</p>', 1, 1), (2, 'beta gamma', NULL, 'gamma delta', 1, 1)")
+            .await.expect("isolated source rows");
+        store::ensure_schema(&conn)
+            .await
+            .expect("derived fixture schema");
+        assert_eq!(
+            retrain(&conn).await.expect("real complete retrain"),
+            Some(2)
+        );
+        let state: (i32, i32, i32) = sqlx::query_as(
+            "SELECT schema_version, model_epoch, doc_count FROM article_search_state WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("trained state");
+        assert_eq!(state, (store::SCHEMA_VERSION, 1, 2));
+        let docs: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM article_search_doc WHERE model_epoch = 1 AND OCTET_LENGTH(vector) > 0 AND OCTET_LENGTH(terms) > 0",
+        ).fetch_one(&pool).await.expect("bound document blobs");
+        assert_eq!(docs, 2);
+
+        // The adapter runs the body on its retained session, so a one-slot
+        // pool is supported rather than requiring spare connection capacity.
+        let small_pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("one-slot pool");
+        let small = SqlxMySqlConnector::from_sqlx_mysql_pool(small_pool.clone());
+        let single = RetrainLock::acquire(&small)
+            .await
+            .expect("one-slot acquire")
+            .expect("one-slot owns lock");
+        let row = single
+            .query_one_raw(Statement::from_string(
+                DbBackend::MySql,
+                "SELECT CONNECTION_ID() AS id",
+            ))
+            .await
+            .expect("same-session query")
+            .expect("session id");
+        let id: u64 = row.try_get("", "id").expect("decode session id");
+        let owner = single
+            .query_one_raw(Statement::from_string(
+                DbBackend::MySql,
+                "SELECT IS_USED_LOCK('article_search_retrain') AS id",
+            ))
+            .await
+            .expect("lock owner query")
+            .expect("lock owner row");
+        assert_eq!(owner.try_get::<u64>("", "id").expect("owner id"), id);
+        assert_eq!(single.get_database_backend(), DbBackend::MySql);
+        assert!(matches!(
+            single
+                .execute_raw(Statement::from_string(
+                    DbBackend::MySql,
+                    "INSERT INTO lock_adapter_missing_table VALUES (1)"
+                ))
+                .await,
+            Err(DbErr::Exec(_))
+        ));
+        assert!(matches!(
+            single
+                .execute_unprepared("UPDATE lock_adapter_missing_table SET id = 2")
+                .await,
+            Err(DbErr::Exec(_))
+        ));
+        assert!(matches!(
+            single
+                .query_one_raw(Statement::from_string(
+                    DbBackend::MySql,
+                    "SELECT id FROM lock_adapter_missing_table"
+                ))
+                .await,
+            Err(DbErr::Query(_))
+        ));
+        assert!(matches!(
+            single
+                .query_all_raw(Statement::from_string(
+                    DbBackend::MySql,
+                    "SELECT id FROM lock_adapter_missing_table"
+                ))
+                .await,
+            Err(DbErr::Query(_))
+        ));
+        assert!(
+            single
+                .query_one_raw(Statement::from_string(
+                    DbBackend::MySql,
+                    "SELECT 1 AS value WHERE FALSE"
+                ))
+                .await
+                .expect("empty result")
+                .is_none()
+        );
+        let after_error = single
+            .query_one_raw(Statement::from_string(
+                DbBackend::MySql,
+                "SELECT CONNECTION_ID() AS id",
+            ))
+            .await
+            .expect("session survives SQL error")
+            .expect("session id after error");
+        assert_eq!(
+            after_error.try_get::<u64>("", "id").expect("same session"),
+            id
+        );
+        single
+            .execute_unprepared("UPDATE lock_cancellation_probe SET value = value + 1")
+            .await
+            .expect("same-session unprepared statement");
+        single.release().await.expect("one-slot release");
+        assert_eq!(
+            retrain(&small).await.expect("one-slot complete retrain"),
+            Some(2)
+        );
+        small_pool.close().await;
+        pool.close().await;
+    }
+
+    async fn assert_retrain_lock_free(pool: &sqlx::MySqlPool) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let free: Option<i64> =
+                    sqlx::query_scalar("SELECT IS_FREE_LOCK('article_search_retrain')")
+                        .fetch_one(pool)
+                        .await
+                        .expect("inspect named lock");
+                if free == Some(1) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("dropped session must release its named lock");
     }
 
     #[tokio::test]

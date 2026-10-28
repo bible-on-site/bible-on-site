@@ -3,6 +3,12 @@
  */
 import { fireEvent, render, screen, act } from "@testing-library/react";
 
+// Bypass unstable_cache — just run the wrapped function directly (#2731:
+// dedication loaders are tag-cached).
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+
 // Mock Bookshelf to avoid rendering the complex 3D component.
 // The real Bookshelf passes todaysPerekId (5) for today's sefer, not perekFrom (1).
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({

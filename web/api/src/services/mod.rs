@@ -1,10 +1,11 @@
 pub mod article_search;
 pub mod articles_service;
 pub mod authors_service;
+pub mod dedications_service;
 pub mod perakim_service;
 pub mod sefarim_service;
-pub mod tanahpedia_entries_service;
 pub mod tanahpedia_entity_service;
-pub mod tanahpedia_search_service;
+pub mod tanahpedia_entries_service;
 pub mod tanahpedia_family_service;
 pub mod tanahpedia_revisions_service;
+pub mod tanahpedia_search_service;

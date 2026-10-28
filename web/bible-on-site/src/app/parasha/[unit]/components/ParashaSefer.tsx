@@ -79,6 +79,8 @@ const ParashaSefer = (props: {
 	perushim: RangePerushSummary[];
 	haftaraArticles: ArticleSummary[];
 	haftaraPerushim: RangePerushSummary[];
+	/** Parasha-scoped dedication lines per unit — once per Torah spread (#2731). */
+	dedicationsByUnit?: Record<number, string[]>;
 	initialBookPage: BookPage | null;
 	haftara: boolean;
 	initialContent?: {
@@ -99,6 +101,7 @@ const ParashaSefer = (props: {
 		perushim,
 		haftaraArticles,
 		haftaraPerushim,
+		dedicationsByUnit,
 		initialBookPage,
 		haftara,
 		initialContent,
@@ -242,7 +245,7 @@ const ParashaSefer = (props: {
 		return [
 			<React.Fragment key={`parasha-${unit.unitId}`}>
 				<section
-					className={seferStyles.pageContentPage}
+					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 					data-sefer-unit-text={torahKey}
 				>
 					<div className={seferStyles.pageHeaderRight}>
@@ -257,6 +260,16 @@ const ParashaSefer = (props: {
 						<span>{`פרשת ${unit.name}`}</span>
 						<span>{unit.refSpan}</span>
 					</div>
+					{/* The parasha's dedication once at whole-parasha level —
+						never repeated per constituent perek (#2731). */}
+					{(dedicationsByUnit?.[unit.unitId] ?? []).map(
+						(line, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
+							<p key={index} className={seferStyles.perekDedication}>
+								{line}
+							</p>
+						),
+					)}
 					{/* Pasuk-numeral clicks navigate the facing open perush;
 						the delegated handler no-ops everywhere else. */}
 					{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
@@ -318,7 +331,7 @@ const ParashaSefer = (props: {
 			</React.Fragment>,
 			<React.Fragment key={`haftara-${unit.unitId}`}>
 				<section
-					className={seferStyles.pageContentPage}
+					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 					data-sefer-unit-text={haftaraKey}
 				>
 					<div className={seferStyles.pageHeaderRight}>

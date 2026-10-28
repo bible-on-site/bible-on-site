@@ -6,6 +6,11 @@ import {
 import { parashaCanonicalSlug } from "@/data/parasha/parasha-slugs";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug, normalizeAuthorName } from "@/lib/authors";
+import {
+	HELEK_SEFER_IDS,
+	seferIdByPerekId,
+	seferPerekIds,
+} from "@/lib/dedications/service";
 import { isMissingMysqlSchema } from "@/lib/mysql-errors";
 import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { canonicalPasukCount } from "@/lib/reading/queries";
@@ -16,14 +21,22 @@ import type {
 	EntityChange,
 } from "@/lib/revalidate/contract";
 import {
+	articleDedicationsTag,
 	articleTag,
 	authorArticlesTag,
 	authorTag,
+	bookshelfDedicationsTag,
 	COLLECTION_TAGS,
 	entityRefsTag,
+	entryDedicationsTag,
+	helekDedicationsTag,
 	masoraArticlesTag,
+	masoraDedicationsTag,
 	parashaArticlesTag,
+	parashaDedicationsTag,
 	perekArticlesTag,
+	perekDedicationsTag,
+	seferDedicationsTag,
 } from "@/lib/revalidate/tags";
 
 /**
@@ -93,10 +106,13 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.authors,
 		COLLECTION_TAGS.pediaEntityRefs,
 		COLLECTION_TAGS.pediaMentionRefs,
+		COLLECTION_TAGS.dedications,
 	]);
 	sink.patterns.add("/pedia/[slug]");
 	sink.paths.add("/pedia");
 	sink.paths.add("/929/authors");
+	sink.paths.add("/");
+	sink.paths.add("/bookshelf");
 }
 
 function categoryPath(entityType: string): string | null {
@@ -565,6 +581,116 @@ function resolvePediaEntries(
 	);
 }
 
+// --- dedication resolution (#2731) ------------------------------------------
+//
+// Each surface displays only its own scope level (a sefer dedication lives
+// on the bookshelf spine and the sefer cover, a perek dedication at the
+// perek heading), so a change invalidates just the consumers of the scopes
+// it carries. Rendered pages expire through the scoped cache tags their
+// renders collected; paths feed IndexNow where the HTML itself changed
+// (the flat perek heading, parasha and pedia entry pages are indexed;
+// masora units are deliberately noindex).
+
+/** Expire the bookshelf: helek headings and sefer spines render these. */
+function addBookshelfDeps(sink: Sink) {
+	addTag(sink, bookshelfDedicationsTag);
+	addPath(sink, "/");
+	addPath(sink, "/bookshelf");
+}
+
+async function resolveDedication(
+	sink: Sink,
+	change: Extract<EntityChange, { kind: "dedication" }>,
+) {
+	let scoped = false;
+
+	const perekIds = new Set<number>();
+	for (const range of change.perekRanges ?? []) {
+		for (let perekId = range.low; perekId <= range.high; perekId++) {
+			perekIds.add(perekId);
+		}
+	}
+	const affectedSefarim = new Set<number>();
+	for (const perekId of perekIds) {
+		addTag(sink, perekDedicationsTag(perekId));
+		addPath(sink, `/929/${perekId}`);
+		scoped = true;
+		const seferId = seferIdByPerekId(perekId);
+		if (seferId !== undefined) affectedSefarim.add(seferId);
+	}
+	// Every route of an intersected sefer renders its whole spread map.
+	// Expand each book once, including when the ranges overlap or repeat.
+	for (const seferId of affectedSefarim) {
+		for (const mateId of seferPerekIds(seferId)) {
+			addPath(sink, `/929/${mateId}`);
+		}
+	}
+	for (const seferId of change.seferIds ?? []) {
+		addTag(sink, seferDedicationsTag(seferId));
+		addBookshelfDeps(sink);
+		// Ancestor scope: every flat perek page of the sefer renders the
+		// line in its heading — those routes changed (cache expiry already
+		// flows through the ancestor tags the loaders collect; the paths
+		// feed IndexNow).
+		for (const perekId of seferPerekIds(seferId)) {
+			addPath(sink, `/929/${perekId}`);
+		}
+		scoped = true;
+	}
+	for (const helekId of change.helekIds ?? []) {
+		addTag(sink, helekDedicationsTag(helekId));
+		addBookshelfDeps(sink);
+		for (const seferId of HELEK_SEFER_IDS[helekId] ?? []) {
+			for (const perekId of seferPerekIds(seferId)) {
+				addPath(sink, `/929/${perekId}`);
+			}
+		}
+		scoped = true;
+	}
+	for (const parashaId of change.parashaIds ?? []) {
+		addTag(sink, parashaDedicationsTag(parashaId));
+		addPath(sink, `/parasha/${parashaId}`);
+		scoped = true;
+	}
+	for (const articleId of change.articleIds ?? []) {
+		addTag(sink, articleDedicationsTag(articleId));
+		const article = await query<{ perek_id: number }>(
+			`SELECT perek_id FROM tanah_article WHERE id = ?`,
+			[articleId],
+		);
+		if (article[0]) {
+			addPath(sink, `/929/${article[0].perek_id}/${articleId}`);
+		}
+		scoped = true;
+	}
+	for (const entryId of change.entryIds ?? []) {
+		addTag(sink, entryDedicationsTag(entryId));
+		const entry = await query<{ unique_name: string }>(
+			`SELECT unique_name FROM tanahpedia_entry WHERE id = ?`,
+			[entryId],
+		);
+		if (entry[0]) {
+			addPath(sink, `/pedia/${entry[0].unique_name}`);
+		}
+		scoped = true;
+	}
+	if (change.masora === true) {
+		addTag(sink, masoraDedicationsTag);
+		scoped = true;
+	}
+
+	if (!scoped) {
+		// No assignment payload (unknown shape or a delete without the
+		// pre-commit snapshot): expire every dedication surface rather
+		// than under-invalidate.
+		addTag(sink, COLLECTION_TAGS.dedications);
+		addTag(sink, bookshelfDedicationsTag);
+		addTag(sink, masoraDedicationsTag);
+		addPath(sink, "/");
+		addPath(sink, "/bookshelf");
+	}
+}
+
 /**
  * Resolves the union dependency set of a batch of committed entity
  * changes. Coalescing happens naturally: repeated events collapse into
@@ -591,6 +717,9 @@ export async function resolveEntityChanges(
 				break;
 			case "pedia-entries":
 				resolvePediaEntries(sink, change);
+				break;
+			case "dedication":
+				await resolveDedication(sink, change);
 				break;
 		}
 	}

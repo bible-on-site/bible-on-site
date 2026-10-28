@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.93"
+version = "0.1.95"
 edition = "2024"
 
 [dependencies]
@@ -33,6 +33,8 @@ sea-orm = { version = "2.0.4", default-features = false, features = [
     "sqlx-mysql",
     "runtime-tokio-native-tls",
 ] }
+# Use the same frozen binder as SeaORM for the retained retrain session.
+sea-query-sqlx = { version = "0.9.1", default-features = false, features = ["sqlx-mysql"] }
 entities = { path = "./entities" }
 uuid = { version = "1.26.1", features = ["v4"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }

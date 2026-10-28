@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dedupeKey, rowId } from "./import-tanahpedia-mentions.mts";
+import { dedupeKey, rowId, supersedeStatement } from "./import-tanahpedia-mentions.mts";
 
 const pasukRow = {
 	source_kind: "pasuk" as const,
@@ -52,6 +52,29 @@ describe("dedupeKey", () => {
 	});
 	it("separates pasuk and article source identities", () => {
 		assert.notEqual(dedupeKey(pasukRow), dedupeKey(articleRow));
+	});
+});
+
+describe("supersedeStatement", () => {
+	it("deletes only pipeline-emitted states of the superseded revision", () => {
+		const { sql } = supersedeStatement("old-rev@1", [pasukRow]);
+		assert.match(sql, /model_revision = \?/);
+		assert.match(sql, /acceptance IN \('auto','held'\)/);
+	});
+	it("scopes the delete to the file's source kinds, deduped", () => {
+		const { sql, params } = supersedeStatement("old-rev@1", [
+			pasukRow,
+			articleRow,
+			pasukRow,
+		]);
+		assert.match(sql, /source_kind IN \(\?, \?\)/);
+		assert.deepEqual(params, ["old-rev@1", "pasuk", "article"]);
+	});
+	it("refuses to supersede the revision being imported", () => {
+		assert.throws(
+			() => supersedeStatement("test-model@1", [pasukRow]),
+			/matches the file's own revision/,
+		);
 	});
 });
 
