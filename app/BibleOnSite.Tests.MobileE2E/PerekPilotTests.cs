@@ -35,10 +35,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var sourceTop = source.Frame.Location.Y;
         var sourceBottom = sourceTop + source.Frame.Size.Height;
         Page.Tap("PerekSource");
-        var headerInput = Page.RenderedElements("PerekSearchInput").First();
-        Assert.InRange(headerInput.Frame.Location.Y + headerInput.Frame.Size.Height / 2, sourceTop, sourceBottom);
+        // The first iOS snapshot after the tap can still precede the search page.
         Page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
         Page.WaitFor("RecentSearches");
+        var headerInput = Page.RenderedElements("PerekSearchInput").First();
+        Assert.InRange(headerInput.Frame.Location.Y + headerInput.Frame.Size.Height / 2, sourceTop, sourceBottom);
         Assert.Empty(Page.RenderedElements("PerekHeader"));
         var searchPage = Page.RenderedElements("SearchPanel").First();
         var windowWidth = DriverTelemetry.WindowSize(Driver!).Width;
