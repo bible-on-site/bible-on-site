@@ -1,12 +1,14 @@
 namespace BibleOnSite.Controls;
 
+using BibleOnSite.Helpers;
+
 /// <summary>
 /// The reader's notched bottom bar — perushim chevron, text-mode, articles
 /// (with count badge) and fullscreen buttons — shared by the perek, parasha
 /// and masora readers so the layer cannot drift.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
-public partial class ReaderBottomBar : Grid
+public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 #pragma warning restore S2333
 {
     /// <summary>Height of the bar before the safe-area inset is added.</summary>

@@ -47,8 +47,7 @@
         <!-- Exit Full Screen Button (floating, draggable, hidden by default) -->
         <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton" Grid.Row="1"
                 Margin="16,16,16,100"
-                ZIndex="100"
-                ExitRequested="OnExitFullScreenClicked"/>
+                ZIndex="100"/>
 
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
@@ -190,26 +189,19 @@
             <controls:ReaderArticlesView Grid.Row="2"
                             x:Name="ArticlesCollection"
                             EmptyText="אין מאמרים ליחידה זו"
-                            SelectedArticleId="{Binding SelectedArticleId}"
-                            ArticleSelected="OnArticleSelected"/>
+                            SelectedArticleId="{Binding SelectedArticleId}"/>
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"
-                                IsOpenChanged="OnPerushimSheetOpenChanged"/>
+        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"/>
 
         <!-- Bottom Navigation Bar with Circular Menu - OVERLAY floating at bottom -->
         <controls:ReaderBottomBar x:Name="BottomBar" Grid.Row="1"
               ZIndex="100"
-              ArticlesBadgeCount="{Binding ArticlesCount}"
-              PerushimToggleRequested="OnPerushimChevronClicked"
-              TextModeRequested="OnTextButtonClicked"
-              ArticlesRequested="OnArticlesButtonClicked"
-              FullScreenRequested="OnFullScreenClicked"/>
+              ArticlesBadgeCount="{Binding ArticlesCount}"/>
 
         <!-- Circular navigation fan - shared layer (scrim + satellites + FAB) -->
-        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150"
-                                Opening="OnFanMenuOpening">
+        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150">
             <controls:ReaderFanMenu.Satellites>
                 <!-- Previous unit (bottom-left satellite). Disabled at the first unit via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="PrevUnitButton"
