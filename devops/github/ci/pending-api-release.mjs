@@ -233,6 +233,41 @@ function apiTree(ref, git) {
 	return entries;
 }
 
+/** Fetch metadata only when absent, preserving an existing full repository. */
+function ensurePublishedCommit(sha, git) {
+	try {
+		if (
+			git(["rev-parse", "--verify", "--quiet", `${sha}^{commit}`]).trim() !==
+			sha
+		) {
+			throw new Error("Published API source resolved to another commit");
+		}
+		return;
+	} catch (error) {
+		// Quiet rev-parse uses status 1 with no output for an absent object.
+		// Repository, permission, process and other Git failures remain fatal.
+		if (
+			error.status !== 1 ||
+			error.signal ||
+			String(error.stdout ?? "").trim() ||
+			String(error.stderr ?? "").trim()
+		)
+			throw error;
+	}
+	const shallow = git(["rev-parse", "--is-shallow-repository"]).trim();
+	if (shallow !== "true" && shallow !== "false")
+		throw new Error("Cannot determine API checkout history depth");
+	git([
+		"fetch",
+		"--no-tags",
+		...(shallow === "true" ? ["--depth=1"] : []),
+		"origin",
+		sha,
+	]);
+	if (git(["rev-parse", "--verify", `${sha}^{commit}`]).trim() !== sha) {
+		throw new Error("Published API source could not be fetched");
+	}
+}
 export function pendingApiRelease({
 	repo,
 	headSha,
@@ -247,13 +282,7 @@ export function pendingApiRelease({
 		throw new Error("Checkout differs from API source SHA");
 	const release = latestPublishedApiRelease(repo, request);
 	const baselineSha = publishedReleaseCommit(repo, release, request);
-	git(["fetch", "--no-tags", "--depth=1", "origin", baselineSha]);
-	if (
-		git(["rev-parse", "--verify", `${baselineSha}^{commit}`]).trim() !==
-		baselineSha
-	) {
-		throw new Error("Published API source could not be fetched");
-	}
+	ensurePublishedCommit(baselineSha, git);
 	const baseline = apiTree(baselineSha, git);
 	const current = apiTree(headSha, git);
 	const cargo = (ref, tree) => {

@@ -50,10 +50,14 @@ function fixture({
 	before = files("0.1.93"),
 	after = files("0.1.94"),
 	beforeModes = {},
+	present = true,
+	shallow = false,
 	afterModes = {},
 	release = published(),
 } = {}) {
 	const calls = [];
+	let available = present;
+
 	const request = (endpoint) => {
 		if (endpoint.endsWith("/releases?per_page=100&page=1")) return [release];
 		if (endpoint.endsWith(`/git/ref/tags/${tag}`))
@@ -65,9 +69,21 @@ function fixture({
 	};
 	const git = (args) => {
 		calls.push(args);
-		if (args[0] === "fetch") return "";
-		if (args[0] === "rev-parse")
-			return args[1] === "HEAD" ? headSha : baselineSha;
+		if (args[0] === "fetch") {
+			available = true;
+			return "";
+		}
+		if (args[0] === "rev-parse") {
+			if (args[1] === "HEAD") return headSha;
+			if (args[1] === "--is-shallow-repository") return String(shallow);
+			if (args.includes("--quiet") && !available)
+				throw Object.assign(new Error("missing commit"), {
+					status: 1,
+					stdout: "",
+					stderr: "",
+				});
+			return baselineSha;
+		}
 		const beforeRef =
 			args[args[0] === "ls-tree" ? 3 : 1].startsWith(baselineSha);
 		const source = beforeRef ? before : after;
@@ -88,6 +104,7 @@ function fixture({
 
 test("published baseline selection paginates and excludes drafts, prereleases and noncanonical tags", () => {
 	const calls = [];
+
 	const latest = latestPublishedApiRelease(repo, (endpoint) => {
 		calls.push(endpoint);
 		if (endpoint.endsWith("page=1"))
@@ -235,12 +252,80 @@ test("a version-only autobump or CI-only followup does not select an API release
 	assert.deepEqual(result.changedFiles, []);
 	assert.equal(result.baselineTag, tag);
 	assert.equal(result.baselineSha, baselineSha);
-	assert.deepEqual(
-		input.calls.find((args) => args[0] === "fetch"),
-		["fetch", "--no-tags", "--depth=1", "origin", baselineSha],
+	assert.equal(
+		input.calls.some(
+			(args) => args[0] === "fetch" || args.includes("--is-shallow-repository"),
+		),
+		false,
 	);
 });
 
+for (const shallow of [true, false]) {
+	test(`a missing published commit uses ${shallow ? "shallow" : "full"} fetch arguments`, () => {
+		const input = fixture({ present: false, shallow });
+		assert.equal(pendingApiRelease(input).pending, false);
+		assert.deepEqual(
+			input.calls.find((args) => args[0] === "fetch"),
+			[
+				"fetch",
+				"--no-tags",
+				...(shallow ? ["--depth=1"] : []),
+				"origin",
+				baselineSha,
+			],
+		);
+	});
+}
+
+test("commit lookup and shallow-state inspection errors fail closed before any fetch", () => {
+	for (const error of [
+		Object.assign(new Error("bad repository"), { status: 128 }),
+		Object.assign(new Error("permission denied"), {
+			status: 1,
+			stderr: "denied",
+		}),
+		Object.assign(new Error("aborted Git"), { status: 1, signal: "SIGTERM" }),
+		Object.assign(new Error("missing executable"), { code: "ENOENT" }),
+	]) {
+		const input = fixture();
+		assert.throws(
+			() =>
+				pendingApiRelease({
+					...input,
+					git: (args) => {
+						if (args.includes("--quiet")) throw error;
+						return input.git(args);
+					},
+				}),
+			error,
+		);
+		assert.equal(
+			input.calls.some((args) => args[0] === "fetch"),
+			false,
+		);
+	}
+	for (const state of ["unknown", new Error("cannot inspect checkout")]) {
+		const input = fixture({ present: false });
+		assert.throws(
+			() =>
+				pendingApiRelease({
+					...input,
+					git: (args) => {
+						if (args.includes("--is-shallow-repository")) {
+							if (state instanceof Error) throw state;
+							return state;
+						}
+						return input.git(args);
+					},
+				}),
+			/history depth|cannot inspect/,
+		);
+		assert.equal(
+			input.calls.some((args) => args[0] === "fetch"),
+			false,
+		);
+	}
+});
 for (const [name, change] of [
 	[
 		"API source",
@@ -296,7 +381,7 @@ test("stale version, checkout mismatch and fetch errors fail closed", () => {
 		() => pendingApiRelease({ ...wrongHead, headSha: "d".repeat(40) }),
 		/Checkout differs/,
 	);
-	const input = fixture();
+	const input = fixture({ present: false });
 	assert.throws(
 		() =>
 			pendingApiRelease({
@@ -354,59 +439,115 @@ test("CLI skips non-master events and writes the exact workflow output contract"
 	assert.equal(existsSync(failedOutput), false);
 });
 
-test("real shallow checkout compares the pinned published commit without editing tracked files", (t) => {
-	const temp = mkdtempSync(path.join(os.tmpdir(), "pending-api-git-"));
-	t.after(() => rmSync(temp, { recursive: true, force: true }));
-	const remote = path.join(temp, "origin"),
-		checkout = path.join(temp, "checkout");
-	mkdirSync(remote);
-	const gitAt = (cwd, args) =>
-		execFileSync("git", args, {
-			cwd,
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
+for (const variant of [
+	{ name: "shallow", shallow: true, missing: true, orphan: false },
+	{
+		name: "full with cached baseline",
+		shallow: false,
+		missing: false,
+		orphan: false,
+	},
+	{
+		name: "full with missing baseline",
+		shallow: false,
+		missing: true,
+		orphan: true,
+	},
+]) {
+	test(`real ${variant.name} checkout preserves its history depth and tracked files`, (t) => {
+		const temp = mkdtempSync(path.join(os.tmpdir(), "pending-api-git-"));
+		t.after(() => rmSync(temp, { recursive: true, force: true }));
+		const remote = path.join(temp, "origin"),
+			checkout = path.join(temp, "checkout");
+		mkdirSync(remote);
+		const gitAt = (cwd, args) =>
+			execFileSync("git", args, {
+				cwd,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "pipe"],
+			});
+		gitAt(remote, ["init"]);
+		gitAt(remote, ["config", "user.name", "Test"]);
+		gitAt(remote, ["config", "user.email", "test@example.invalid"]);
+		const writeFiles = (entries) => {
+			for (const [file, content] of entries) {
+				const target = path.join(remote, file);
+				mkdirSync(path.dirname(target), { recursive: true });
+				writeFileSync(target, content);
+			}
+		};
+		writeFiles(files("0.1.93"));
+		gitAt(remote, ["add", "."]);
+		gitAt(remote, ["commit", "-m", "published API"]);
+		const base = gitAt(remote, ["rev-parse", "HEAD"]).trim();
+		gitAt(remote, ["tag", tag]);
+		if (variant.orphan) gitAt(remote, ["checkout", "--orphan", "independent"]);
+		const changed = files("0.1.94");
+		changed.set("web/api/src/main.rs", 'fn main() { println!("fixed"); }\n');
+		writeFiles(changed);
+		gitAt(remote, ["add", "."]);
+		gitAt(remote, ["commit", "-m", "pending API"]);
+		const head = gitAt(remote, ["rev-parse", "HEAD"]).trim();
+		gitAt(temp, [
+			"clone",
+			"--single-branch",
+			"--no-tags",
+			...(variant.shallow ? ["--depth=1"] : []),
+			pathToFileURL(remote).href,
+			checkout,
+		]);
+		assert.equal(
+			gitAt(checkout, ["rev-parse", "--is-shallow-repository"]).trim(),
+			String(variant.shallow),
+		);
+		if (variant.missing)
+			assert.throws(
+				() =>
+					gitAt(checkout, [
+						"rev-parse",
+						"--verify",
+						"--quiet",
+						`${base}^{commit}`,
+					]),
+				(error) => error.status === 1,
+			);
+		else
+			assert.equal(
+				gitAt(checkout, [
+					"rev-parse",
+					"--verify",
+					"--quiet",
+					`${base}^{commit}`,
+				]).trim(),
+				base,
+			);
+		const fetches = [];
+		const result = pendingApiRelease({
+			repo,
+			headSha: head,
+			git: (args) => {
+				if (args[0] === "fetch") fetches.push(args);
+				return gitAt(checkout, args);
+			},
+			request: (endpoint) =>
+				endpoint.includes("/releases?")
+					? [published()]
+					: { ref: `refs/tags/${tag}`, object: { type: "commit", sha: base } },
 		});
-	gitAt(remote, ["init"]);
-	gitAt(remote, ["config", "user.name", "Test"]);
-	gitAt(remote, ["config", "user.email", "test@example.invalid"]);
-	const writeFiles = (entries) => {
-		for (const [file, content] of entries) {
-			const target = path.join(remote, file);
-			mkdirSync(path.dirname(target), { recursive: true });
-			writeFileSync(target, content);
-		}
-	};
-	writeFiles(files("0.1.93"));
-	gitAt(remote, ["add", "."]);
-	gitAt(remote, ["commit", "-m", "published API"]);
-	const base = gitAt(remote, ["rev-parse", "HEAD"]).trim();
-	gitAt(remote, ["tag", tag]);
-	const changed = files("0.1.94");
-	changed.set("web/api/src/main.rs", 'fn main() { println!("fixed"); }\n');
-	writeFiles(changed);
-	gitAt(remote, ["add", "."]);
-	gitAt(remote, ["commit", "-m", "pending API"]);
-	const head = gitAt(remote, ["rev-parse", "HEAD"]).trim();
-	gitAt(temp, ["clone", "--depth=1", pathToFileURL(remote).href, checkout]);
-	assert.equal(
-		gitAt(checkout, ["rev-parse", "--is-shallow-repository"]).trim(),
-		"true",
-	);
-	const result = pendingApiRelease({
-		repo,
-		headSha: head,
-		git: (args) => gitAt(checkout, args),
-		request: (endpoint) =>
-			endpoint.includes("/releases?")
-				? [published()]
-				: { ref: `refs/tags/${tag}`, object: { type: "commit", sha: base } },
+		assert.equal(result.pending, true);
+		assert.equal(result.baselineSha, base);
+		assert.deepEqual(result.changedFiles, ["web/api/src/main.rs"]);
+		assert.equal(gitAt(checkout, ["status", "--porcelain"]), "");
+		// The former unconditional --depth=1 fetch fails this full-checkout assertion.
+		assert.equal(
+			gitAt(checkout, ["rev-parse", "--is-shallow-repository"]).trim(),
+			String(variant.shallow),
+		);
+		assert.equal(fetches.length, Number(variant.missing));
+		if (variant.missing)
+			assert.equal(fetches[0].includes("--depth=1"), variant.shallow);
 	});
-	assert.equal(result.pending, true);
-	assert.equal(result.baselineSha, base);
-	assert.deepEqual(result.changedFiles, ["web/api/src/main.rs"]);
-	assert.equal(gitAt(checkout, ["status", "--porcelain"]), "");
-});
-
+}
 test("canonical version parsing and lexical numeric ordering handle long hostile inputs", () => {
 	const versions = [
 		"0.0.0",
@@ -449,11 +590,10 @@ test("canonical version parsing and lexical numeric ordering handle long hostile
 test("Cargo header comments, tabs and CRLF retain exact source bytes", () => {
 	const withComments = (text, header) =>
 		text
-			.replaceAll(
-				header,
-				`${header}\t # comment with [package] and [[package]]`,
-			)
-			.replaceAll("\n", "\r\n");
+			.split(header)
+			.join(`${header}\t # comment with [package] and [[package]]`)
+			.split("\n")
+			.join("\r\n");
 	const beforeManifest = withComments(manifest("0.1.93"), "[package]");
 	const beforeLock = withComments(lock("0.1.93"), "[[package]]");
 	const before = normalizeApiCargo(beforeManifest, beforeLock);

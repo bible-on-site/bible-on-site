@@ -192,6 +192,10 @@ checks and packaging. Other module flags stay unchanged, and all existing
 Cross Module CI, release and CD provenance guards still apply. Nothing promotes
 an artifact from a failed source run.
 
+Available pinned commits are reused. A missing commit is fetched without
+changing repository history depth; depth-limited fetches are restricted to
+checkouts that were already shallow.
+
 The lookup is read-only and fails the selection job on metadata, provenance,
 fetch or version ambiguity. It runs only as a fallback on master pushes;
 ordinary API-change pushes retain their existing version-collision path.
