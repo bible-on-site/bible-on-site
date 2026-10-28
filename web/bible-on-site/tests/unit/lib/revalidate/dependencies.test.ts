@@ -40,6 +40,7 @@ jest.mock("../../../../src/lib/authors", () => ({
 }));
 
 import { query } from "../../../../src/lib/api-client";
+import { SEFER_NAME_BY_ID } from "../../../../src/lib/dedications/service";
 import { resolveEntityChanges } from "../../../../src/lib/revalidate/dependencies";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -432,7 +433,7 @@ describe("resolveEntityChanges", () => {
 				perekRanges: Array.from({ length: 512 }, () => ({ low: 1, high: 929 })),
 			},
 		]);
-		expect(out.tags).toHaveLength(929);
+		expect(out.tags).toHaveLength(929 + Object.keys(SEFER_NAME_BY_ID).length);
 		expect(out.paths).toHaveLength(929);
 		expect(out.paths).toEqual(expect.arrayContaining(["/929/1", "/929/929"]));
 		expect(out.patterns).toEqual([]);
@@ -444,7 +445,12 @@ describe("resolveEntityChanges", () => {
 		const out = await resolveEntityChanges([
 			{ kind: "dedication", id: 7, perekRanges: [{ low: 50, high: 51 }] },
 		]);
-		expect(out.tags).toEqual(["perek:50:dedications", "perek:51:dedications"]);
+		expect(out.tags).toEqual([
+			"perek:50:dedications",
+			"perek:51:dedications",
+			"sefer:1:perek-dedications",
+			"sefer:2:perek-dedications",
+		]);
 		expect(out.paths).toEqual(
 			expect.arrayContaining(["/929/1", "/929/50", "/929/51", "/929/90"]),
 		);

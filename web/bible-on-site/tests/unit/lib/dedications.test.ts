@@ -582,18 +582,40 @@ describe("cached loader tag contracts", () => {
 		]);
 	});
 
-	it("tags the sefer spread map with every perek of the sefer", async () => {
-		stubTables({});
-		const { getSeferPerekDedicationLines } = await import(
-			"../../../src/lib/dedications/loaders"
-		);
-		await getSeferPerekDedicationLines(BERESHIT_SEFER_ID);
-		const tags = stampedTags("sefer-perek-dedication-lines", "1");
-		expect(tags[0]).toBe("dedications");
-		expect(tags).toContain("perek:1:dedications");
-		expect(tags).toContain("perek:50:dedications");
-		expect(tags.filter((t) => t.startsWith("perek:"))).toHaveLength(50);
-	});
+	it.each(["בראשית", "תהילים"])(
+		"tags the %s spread map within the framework limit",
+		async (name) => {
+			stubTables({});
+			const { getSeferPerekDedicationLines } = await import(
+				"../../../src/lib/dedications/loaders"
+			);
+			const seferId = seferIdByName(name);
+			if (seferId === undefined) throw new Error(`Unknown sefer: ${name}`);
+			await getSeferPerekDedicationLines(seferId);
+			const tags = stampedTags(
+				"sefer-perek-dedication-lines-v2",
+				String(seferId),
+			);
+			expect(tags.length).toBeLessThanOrEqual(128);
+			expect(tags).toEqual([
+				"dedications",
+				`sefer:${seferId}:perek-dedications`,
+			]);
+			const { resolveEntityChanges } = await import(
+				"../../../src/lib/revalidate/dependencies"
+			);
+			for (const perekId of seferPerekIds(seferId)) {
+				const invalidation = await resolveEntityChanges([
+					{
+						kind: "dedication",
+						id: 7,
+						perekRanges: [{ low: perekId, high: perekId }],
+					},
+				]);
+				expect(invalidation.tags.some((tag) => tags.includes(tag))).toBe(true);
+			}
+		},
+	);
 
 	it("stamps no time bound so consuming routes stay fully static", async () => {
 		stubTables({});
