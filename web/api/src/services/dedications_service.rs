@@ -1160,7 +1160,7 @@ mod tests {
                 sefer_id: 7,
                 dedication_id: 9,
                 expires_at: None,
-                created_at: ts("2020-01-01 00:00:00"),
+                created_at: ts("2020-01-01 00:00:00").and_utc(),
             }]])
             // helek_dedication::all — helek 2 match, dedication 10
             .append_query_results::<
@@ -1171,7 +1171,7 @@ mod tests {
                 helek_id: 2,
                 dedication_id: 10,
                 expires_at: None,
-                created_at: ts("2020-01-01 00:00:00"),
+                created_at: ts("2020-01-01 00:00:00").and_utc(),
             }]])
             // dedication::find in {9,10}
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
@@ -1272,7 +1272,7 @@ mod tests {
             >([vec![masora_dedication::Model {
                 dedication_id: 7,
                 expires_at: None,
-                created_at: ts("2020-01-01 00:00:00"),
+                created_at: ts("2020-01-01 00:00:00").and_utc(),
             }]])
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(7, "masora dedication", None),
@@ -1321,7 +1321,7 @@ mod tests {
                 parasha_id: 12,
                 dedication_id: 3,
                 expires_at: None,
-                created_at: ts("2020-01-01 00:00:00"),
+                created_at: ts("2020-01-01 00:00:00").and_utc(),
             }]])
             .append_query_results::<
                 tanahpedia_entry_dedication::Model,
@@ -1331,7 +1331,7 @@ mod tests {
                 entry_id: "entry-1".into(),
                 dedication_id: 4,
                 expires_at: None,
-                created_at: ts("2020-01-01 00:00:00"),
+                created_at: ts("2020-01-01 00:00:00").and_utc(),
             }]])
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(3, "parasha ded", None),
@@ -1763,7 +1763,7 @@ mod tests {
                 sefer_id: 24,
                 dedication_id: 42,
                 expires_at: None,
-                created_at: ts("2030-01-01 00:00:00"),
+                created_at: ts("2030-01-01 00:00:00").and_utc(),
             }]])
             .append_query_results::<
                 helek_dedication::Model,
