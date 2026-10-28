@@ -215,13 +215,13 @@ mod tests {
                         article_id: 7,
                         perek_id: 42,
                         pasuk: 3,
-                        created_at,
+                        created_at: created_at.and_utc(),
                     },
                     entities::article_covering_source::Model {
                         article_id: 7,
                         perek_id: 43,
                         pasuk: 1,
-                        created_at,
+                        created_at: created_at.and_utc(),
                     },
                 ]])
                 .into_connection(),
@@ -864,7 +864,7 @@ mod tests {
                     sefer_id: 24,
                     dedication_id: 42,
                     expires_at: None,
-                    created_at: now,
+                    created_at: now.and_utc(),
                 }]])
                 .append_query_results::<
                     entities::helek_dedication::Model,
@@ -978,13 +978,13 @@ mod tests {
                         sefer_id: 24,
                         dedication_id: 42,
                         expires_at: None,
-                        created_at: now,
+                        created_at: now.and_utc(),
                     },
                     sefer_dedication::Model {
                         sefer_id: 7,
                         dedication_id: 43,
                         expires_at: None,
-                        created_at: now,
+                        created_at: now.and_utc(),
                     },
                 ]])
                 // hydrate: dedication 42 (+43 filtered out upstream)
