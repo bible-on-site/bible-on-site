@@ -44,7 +44,6 @@ function executor(outputs = {}, observe = () => {}) {
     const key = args.slice(2).join(" ");
     const value = outputs[key];
     if (value instanceof Error) throw value;
-    if (typeof value === "function") return value();
     return { stdout: value ?? (key === "shell date +%z" ? "+0000\n" : ""), stderr: "" };
   };
 }
