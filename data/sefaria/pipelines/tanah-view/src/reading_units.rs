@@ -1874,6 +1874,24 @@ mod tests {
         }
     }
 
+    /// A slug that is empty or still carries spaces/maqaf fails the
+    /// canonical-slug shape check — the shared table ships hyphen-joined
+    /// Hebrew only, and bad data must fail loudly rather than emit a
+    /// broken route segment (issue #2738).
+    #[test]
+    fn parasha_derivation_rejects_non_canonical_slug() {
+        for slug in ["", "פלוני פלוני", "פלוני־פלוני"] {
+            let mut unit = parasha_fixture_unit("בראשית", (1, 1), (1, 5), vec![]);
+            unit.slug = slug.to_string();
+            let source = parasha_fixture_source(vec![unit]);
+            let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+            assert!(
+                err.to_string().contains("is not hyphen-joined Hebrew"),
+                "{err}"
+            );
+        }
+    }
+
     /// A haftara with no customs gets the bare `haftara-` id and an
     /// empty label; a custom name missing from the labels table falls
     /// back to the raw key.

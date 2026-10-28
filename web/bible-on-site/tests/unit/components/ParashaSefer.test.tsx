@@ -151,6 +151,7 @@ jest.mock("@/app/929/[number]/components/sefer-document-title", () => ({
 
 import { setUnitOpenPerush } from "@/app/components/reading/unit-book-navigation";
 import ParashaSefer from "@/app/parasha/[unit]/components/ParashaSefer";
+import { parashaUnitDocumentTitle } from "@/app/parasha/[unit]/components/parasha-book-utils";
 import type {
 	BookPage,
 	ParashaBookUnit,
@@ -451,6 +452,34 @@ describe("ParashaSefer", () => {
 		});
 		expect(window.location.search).not.toContain("perush=");
 		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+	});
+
+	it("clears the selection when popstate lands on an unresolvable unit segment", () => {
+		// `unitIdFor`'s null arm: a /פרשה book route whose segment claims
+		// no unit parses as no selection instead of latching a numeric
+		// fallback (issue #2738).
+		render(
+			<ParashaSefer
+				{...baseProps()}
+				initialContent={{ scope: "torah", kind: "perush", slug: 'רש"י' }}
+			/>,
+		);
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		act(() => {
+			history.pushState(null, "", "/פרשה/לא-פרשה?book");
+			window.dispatchEvent(new Event("popstate"));
+		});
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+	});
+
+	it("falls back to the decimal id when the current unit is outside the book", () => {
+		// Defensive end of the slug lookup: a currentUnitId no rendered
+		// unit claims can't produce a Hebrew slug — routes and the flat
+		// title degrade to the id rather than crashing the book.
+		render(<ParashaSefer {...baseProps()} currentUnitId={99} isVisible={false} />);
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalledWith(
+			parashaUnitDocumentTitle(""),
+		);
 	});
 
 	it("marks text pages for the facing blank's pasuk navigation", () => {

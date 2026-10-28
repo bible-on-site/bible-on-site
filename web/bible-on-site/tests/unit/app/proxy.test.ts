@@ -58,6 +58,17 @@ describe("proxy", () => {
 			);
 		});
 
+		it("consolidates deeper ASCII-root paths verbatim under the Hebrew root", async () => {
+			// Book-chrome depth paths keep their remaining segments — the
+			// Hebrew root's own chrome handling (noindex / 404) applies
+			// after the redirect.
+			const result = await proxy(makeRequest("/parasha/בראשית/כריכה"));
+			expect(result?.status).toBe(308);
+			expect(decodeURIComponent(result?.headers.get("location") ?? "")).toBe(
+				"https://localhost/פרשה/בראשית/כריכה",
+			);
+		});
+
 		it.each([
 			"/פרשה",
 			"/פרשה/בראשית",

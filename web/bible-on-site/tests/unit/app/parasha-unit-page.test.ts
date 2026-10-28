@@ -63,6 +63,7 @@ describe("פרשה unit metadata", () => {
 		// Legacy numeric ids, aliases, and malformed/unknown segments all
 		// redirect or 404 at the proxy before reaching the route — and
 		// dynamicParams=false only serves the canonical static params.
+		// "%" fails decodeURIComponent outright (URI malformed).
 		"3",
 		"פרשת לך לך",
 		"שלח לך",
@@ -71,6 +72,7 @@ describe("פרשה unit metadata", () => {
 		"55",
 		"abc",
 		"פרשה-של-דמיון",
+		"%",
 	])(
 		"calls notFound for non-canonical unit %s",
 		async (unit) => {
