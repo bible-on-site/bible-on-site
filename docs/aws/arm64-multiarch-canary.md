@@ -71,9 +71,10 @@ API startup also launches the article-search worker unconditionally. It runs
 three `CREATE TABLE IF NOT EXISTS` statements, may retrain/write derived
 search tables, and periodically drains/reconciles the search queue. HTTP
 read-only probes do not make an API task read-only. Qualify the complete
-worker against an isolated database; use DB-enforced SELECT-only credentials
-for any deliberately limited production-data read test, recording that the
-worker cannot be fully qualified under those grants. A normal production
+worker against a separate MySQL server. A separate schema or SELECT-only
+credentials on the production server are insufficient: the worker's named
+`article_search_retrain` lock is server-wide and can contend with production.
+Do not connect an API candidate to that server, even for HTTP read probes. A normal production
 `DB_URL` must not be cloned into another investigation task on the assumption
 that startup only reads.
 
@@ -137,9 +138,17 @@ figures (verified against the published rates here). The default **20 GB
 of Fargate ephemeral storage is included at no additional charge**; only
 configured storage above that allowance is billed. Architecture does not
 change that allowance or public IPv4, CloudWatch Logs, and data-transfer
-pricing. Publishing additional image children can increase ECR storage and
-build costs, so $6.55 is the gross compute saving, not a guaranteed net bill
-reduction. See [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/).
+pricing. This public repository's standard GitHub-hosted amd64 and ARM64
+build runners are free; adding a native ARM build does not add billed build
+minutes. See [GitHub's standard runner pricing](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+Additional ECR layers cost $0.10/GB-month in this region: 1 GB adds $0.10/month,
+and 10 GB adds $1/month. The API image is about 15 MiB compressed, so its
+additional image storage is small compared with the estimated $2.31/month
+API compute saving. Retained layers and Actions artifact/cache storage still
+need measurement; the current evidence supports likely net savings, with
+qualification and rollback as the remaining migration gates. See
+[AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/) and
+[ECR pricing](https://aws.amazon.com/ecr/pricing/).
 **Admin caveat:**
 ARM on-demand ($9.23) costs *more* than today's x86 Spot ($3.46) - admin
 must migrate onto Spot ARM capacity, or the move is a cost regression.
@@ -282,6 +291,33 @@ needed, not before. Both sub-phases keep amd64 published. Digests identify
 immutable content, but the retention prerequisite above is what preserves
 that content for recovery.
 
+### API release preparation (2026-10-29)
+
+The current implementation prepares the API first. Its regular packaging job
+builds and verifies both final images on native runners. Published releases
+retain the existing amd64 archive name and add an ARM64 archive; deployment
+verifies both published SHA256 digests and matching source/version labels.
+The publisher stages immutable `v<version>-amd64` and `v<version>-arm64`
+children. With `API_MULTIARCH_RELEASES` unset or `false`, canonical version
+and `latest` still resolve to the amd64 image. No service architecture changes.
+
+Before merging, verify the API ECR repository uses `IMMUTABLE_WITH_EXCLUSION`
+with only exact `latest` mutable. Authenticated inspection found no API
+lifecycle policy; preserve that retention, rather than applying the reference
+file's former fictional 15-image policy. Do not deploy the reference template.
+An established multi-architecture `latest` cannot be downgraded by turning
+the flag off or replaying a legacy single-image release. Enabling index
+publication requires a new version; an immutable amd64 version cannot be
+rewritten as an index.
+
+The API adds `/health/ready` for database/search-worker readiness while keeping
+`/health` unchanged. Local full worker and HTTP checks pass against disposable
+MySQL servers. Native ARM CI and representative isolated Fargate comparisons
+remain required before a production cutover. ECS readiness, circuit-breaker,
+and architecture changes belong to that later qualified step; they are not
+part of this release preparation. Preserve the healthy 0.1.95 full task
+definition and image as rollback, since older images lack this new endpoint.
+
 ## Isolated candidate design (phase 2 - requires authorized AWS access)
 
 Multi-arch manifests do not select Graviton by themselves. Definitions without
@@ -295,15 +331,16 @@ Do not equate regional prices or an On-Demand launch with ARM Spot placement.
    policies. Require one COMPLETED deployment, pending 0, and no concurrent
    release. Save the private baseline outside Git without printing secrets.
    Audit startup/background side effects **before registration or launch**.
-   API must have a separately scoped isolated DB secret for full worker tests,
-   or a DB-enforced SELECT-only secret for explicitly limited read tests.
+   API must have a separately scoped DB secret for a separate MySQL server
+   for full worker tests; another schema or read-only account on production
+   does not isolate the server-wide search lock.
    If that prerequisite is unavailable, stop without launching API.
 2. Clone each full current definition, strip AWS response metadata, and
    register an isolated candidate under a new family. Change only family,
    `runtimePlatform`, and image to the qualified ARM64 child digest. Preserve
    roles, resources, logs, environments and unrelated secret references. For
    API, explicitly replace its DB_URL secret reference with the approved
-   isolated/read-only one and record that controlled deviation; never retain
+   separate-server one and record that controlled deviation; never retain
    production write credentials merely to keep the clone byte-identical.
    Any required new secret/IAM access needs its own precise authorization. Network
    configuration belongs to `run-task`; copy the service's subnets, security
@@ -508,7 +545,7 @@ aws ecs register-task-definition \
   --cli-input-json file:///tmp/td-candidate.json --region il-central-1
 
 # Website/API candidate: FARGATE means On-Demand, not Spot.
-# API registration/launch is forbidden until its isolated/read-only DB secret
+# API registration/launch is forbidden until its separate-server DB secret
 # has passed the earlier startup-isolation gate; the production DB_URL is unsafe.
 # Copy the actual service's network settings into the private network JSON.
 aws ecs run-task --cluster bible-on-site-cluster \
@@ -605,7 +642,8 @@ production configuration was changed by this audit.
   candidates; do not add IAM, SSM registration or ingress as an implicit fix.
 - Public price feeds were reread: all four on-demand and four Spot rates
   matched the table. At the live resource sizes, gross compute savings remain
-  approximately $6.55/month, before extra image storage/build overhead.
+  approximately $6.55/month, before small incremental image storage; the
+  standard public-repository build runners are free.
 - Local amd64 rehearsal built the real admin image and website dependency
   stage. Admin authentication redirect and unauthenticated server-function
   protection passed at 0.25 vCPU/512 MiB. Native SWC compilation and Sharp

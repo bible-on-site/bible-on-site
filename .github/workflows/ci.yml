@@ -460,6 +460,20 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
 
+  package_api_arm64:
+    name: Package API ARM64
+    needs: [setup_env, determine_changes]
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.api_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true')) }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write # Required by shared-dockerize.yml
+    secrets: inherit
+    uses: ./.github/workflows/shared-dockerize.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      image_arch: arm64
+
   package_app:
     name: Package App
     # Wait for perushim_data so the app is packaged with up-to-date perushim notes
@@ -2470,7 +2484,7 @@ jobs:
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts
+        run: node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2927,6 +2941,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       [
+        setup_env,
         determine_changes,
         website_performance,
         website_e2e,
@@ -2937,6 +2952,7 @@ jobs:
         package_ios_pr,
         package_windows_pr,
         package_api,
+        package_api_arm64,
         package_bulletin,
         package_admin,
         app_mobile_e2e,
@@ -3057,9 +3073,14 @@ jobs:
               exit 1
             fi
           fi
-          if [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_api.result }}" != "success" ]; then
-              echo "API release Docker build failed or did not run"
+          if { [ "${{ github.event_name }}" = "push" ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = "true" ] && [ "$API_MODULE_CHANGED" = "true" ]; } ||
+            { [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; }; then
+            if [ "${{ needs.package_api.result }}" != "success" ] || [ "${{ needs.package_api_arm64.result }}" != "success" ]; then
+              echo "An API release Docker build failed or did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_api.outputs.module_version }}" ] || [ "${{ needs.package_api.outputs.module_version }}" != "${{ needs.package_api_arm64.outputs.module_version }}" ]; then
+              echo "API architecture builds require the same nonempty release version"
               exit 1
             fi
           fi
@@ -3349,6 +3370,10 @@ jobs:
         with:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
+      - name: Measure release and image-publisher regression coverage
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: bun run coverage:release
+
       - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
@@ -3571,10 +3596,10 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version != '' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3584,7 +3609,7 @@ jobs:
       module_name: api
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
       module_version: ${{ needs.package_api.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_api_arm64.outputs.docker_artifact_name }}", "path": "web/api/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_app:

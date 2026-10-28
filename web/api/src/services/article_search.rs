@@ -24,7 +24,10 @@ pub mod store;
 pub mod text;
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 
 use sea_orm::{
@@ -86,6 +89,7 @@ pub struct ScoredDoc {
 
 /// Immutable point-in-time index — swapped atomically on reload.
 struct Snapshot {
+    initialized: bool,
     epoch: i32,
     model: LsaModel,
     /// `doc_ids[i]` is the article id of document slot i.
@@ -100,6 +104,7 @@ struct Snapshot {
 impl Snapshot {
     fn empty() -> Self {
         Self {
+            initialized: false,
             epoch: 0,
             model: LsaModel {
                 dims: 0,
@@ -249,6 +254,7 @@ pub struct ArticleSearchIndex {
     inner: Arc<RwLock<Snapshot>>,
     db: Database,
     reload_lock: Arc<Mutex<()>>,
+    worker_running: Arc<AtomicBool>,
 }
 
 impl ArticleSearchIndex {
@@ -258,6 +264,7 @@ impl ArticleSearchIndex {
             inner: Arc::new(RwLock::new(Snapshot::empty())),
             db,
             reload_lock: Arc::new(Mutex::new(())),
+            worker_running: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -285,23 +292,37 @@ impl ArticleSearchIndex {
             return Ok(());
         };
         let rows = store::load_docs(self.conn()).await?;
+        // Retrain writes epoch-zero docs before publishing and stamping its
+        // new model. Never combine rows from that window with another basis.
+        if rows.iter().any(|row| row.model_epoch != state.model_epoch) {
+            debug!("article search publication in progress; retaining prior snapshot");
+            return Ok(());
+        }
         let mut doc_ids = Vec::with_capacity(rows.len());
         let mut vectors = Vec::with_capacity(rows.len());
         let mut doc_lens = Vec::with_capacity(rows.len());
         let mut postings: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
-        for (slot, row) in rows.into_iter().enumerate() {
+        for row in rows {
             let Some(vector) = deserialize_vector(&row.vector) else {
                 continue;
             };
             if vector.len() != model.dims {
                 continue;
             }
+            let slot = doc_ids.len();
             doc_ids.push(row.article_id);
             vectors.push(vector);
             doc_lens.push(row.plain_len.max(1) as u32);
             for (tid, tf) in deserialize_terms(&row.terms) {
                 postings.entry(tid).or_default().push((slot as u32, tf));
             }
+        }
+
+        // doc_count describes the training corpus, not the exact incremental
+        // row count. Only a nonempty model with no usable docs is inconsistent.
+        if state.doc_count > 0 && doc_ids.is_empty() {
+            warn!("nonempty article search model has no usable docs; retaining prior snapshot");
+            return Ok(());
         }
         for posts in postings.values_mut() {
             posts.sort_by_key(|(slot, _)| *slot);
@@ -312,6 +333,7 @@ impl ArticleSearchIndex {
             doc_lens.iter().map(|&l| l as f64).sum::<f64>() as f32 / doc_lens.len() as f32
         };
         *self.inner.write().await = Snapshot {
+            initialized: true,
             epoch: state.model_epoch,
             model,
             doc_ids,
@@ -321,6 +343,21 @@ impl ArticleSearchIndex {
             avg_len: avg_len.max(1.0),
         };
         Ok(())
+    }
+
+    /// Requires a live worker, a loaded compatible snapshot, and a working DB.
+    /// A warm snapshot remains usable while another process retrains it.
+    pub async fn is_ready(&self) -> bool {
+        if !self.worker_running.load(Ordering::Acquire) || !self.inner.read().await.initialized {
+            return false;
+        }
+        let probe = self.conn().query_one_raw(Statement::from_string(
+            DbBackend::MySql,
+            "SELECT 1 AS ready",
+        ));
+        matches!(tokio::time::timeout(Duration::from_secs(1), probe).await,
+            Ok(Ok(Some(row))) if matches!(row.try_get::<i32>("", "ready"), Ok(1)))
+            && self.worker_running.load(Ordering::Acquire)
     }
 
     /// Cheap probe — reloads only when the persisted epoch moved.
@@ -754,34 +791,55 @@ async fn retrain_locked<C: ConnectionTrait>(conn: &C) -> Result<usize, DbErr> {
     Ok(rows.len())
 }
 
+struct WorkerLiveness(Arc<AtomicBool>);
+
+impl Drop for WorkerLiveness {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+async fn initialize(index: &ArticleSearchIndex) {
+    if let Err(err) = index.load().await {
+        warn!(error = %err, "article search initial load failed");
+    }
+    // A compatible persisted snapshot (including a trained empty corpus) can
+    // serve immediately. Do not contend with an existing retrain on rolling boot.
+    let initialized = index.inner.read().await.initialized;
+    if !initialized {
+        match retrain(index.conn()).await {
+            Ok(Some(n)) => info!(docs = n, "article search index built"),
+            Ok(None) => {}
+            Err(err) => warn!(error = %err, "initial article index build failed"),
+        }
+        if let Err(err) = index.load().await {
+            warn!(error = %err, "article search reload failed");
+        }
+    }
+}
+
 /// Boot-time ensure + the background worker: drain the queue every
 /// `TICK_SECS`, reconcile by content hash every `SWEEP_EVERY_TICKS` ticks, and
 /// retrain when drift crosses the threshold. Never returns under normal
 /// operation; panics would kill the spawned task without taking the API down.
 pub async fn run_worker(index: ArticleSearchIndex) {
+    let _liveness = WorkerLiveness(index.worker_running.clone());
+    index.worker_running.store(true, Ordering::Release);
     if let Err(err) = store::ensure_schema(index.conn()).await {
         warn!(error = %err, "article search schema setup failed; worker exiting");
         return;
     }
-    if let Err(err) = index.load().await {
-        warn!(error = %err, "article search initial load failed");
-    }
-    // First boot (no state row) or schema bump → full rebuild from the
-    // authoritative tables.
-    match store::state_probe(index.conn()).await {
-        Ok(Some((_, docs))) if docs > 0 => {}
-        _ => match retrain(index.conn()).await {
-            Ok(Some(n)) => info!(docs = n, "article search index built"),
-            Ok(None) => {}
-            Err(err) => warn!(error = %err, "initial article index build failed"),
-        },
-    }
-    if let Err(err) = index.load().await {
-        warn!(error = %err, "article search reload failed");
-    }
+    initialize(&index).await;
     let mut tick: u32 = 0;
     loop {
         tokio::time::sleep(Duration::from_secs(TICK_SECS)).await;
+        // A different instance may have owned GET_LOCK during our first boot.
+        // Recover on the existing tick without blocking that owner or claiming ready.
+        let initialized = index.inner.read().await.initialized;
+        if !initialized {
+            initialize(&index).await;
+            continue;
+        }
         tick = tick.wrapping_add(1);
         worker_tick(&index, tick).await;
     }
@@ -807,7 +865,8 @@ async fn worker_tick(index: &ArticleSearchIndex, tick: u32) {
         }
     };
     let docs = index.doc_count().await;
-    let should_retrain = dirty >= RETRAIN_MIN_DIRTY
+    let should_retrain = (docs == 0 && dirty > 0)
+        || dirty >= RETRAIN_MIN_DIRTY
         || (docs > 0 && dirty as f32 / docs.max(1) as f32 >= RETRAIN_RATIO);
     if should_retrain {
         match retrain(index.conn()).await {
@@ -884,6 +943,7 @@ mod tests {
         let avg =
             doc_lens.iter().map(|&l| l as f64).sum::<f64>() as f32 / doc_lens.len().max(1) as f32;
         Snapshot {
+            initialized: true,
             epoch: 1,
             model,
             doc_ids,
@@ -1038,6 +1098,7 @@ mod tests {
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                 vec![mock_row([
                     ("schema_version", 999_i32.into()),
+                    ("doc_count", 0_i32.into()),
                     ("model_epoch", 1_i32.into()),
                     ("model", vec![1_u8].into()),
                 ])],
@@ -1052,6 +1113,7 @@ mod tests {
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                 vec![mock_row([
                     ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 0_i32.into()),
                     ("model_epoch", 1_i32.into()),
                     ("model", vec![9_u8, 9, 9].into()),
                 ])],
@@ -1069,6 +1131,7 @@ mod tests {
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                 vec![mock_row([
                     ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 1_i32.into()),
                     ("model_epoch", 3_i32.into()),
                     ("model", serialize_model(&model).into()),
                 ])],
@@ -1077,6 +1140,7 @@ mod tests {
                     mock_row([
                         ("article_id", 20_i32.into()),
                         ("plain_len", 10_i32.into()),
+                        ("model_epoch", 3_i32.into()),
                         ("vector", vec![1_u8, 2, 3].into()),
                         ("terms", vec![].into()),
                     ]),
@@ -1084,12 +1148,14 @@ mod tests {
                     mock_row([
                         ("article_id", 21_i32.into()),
                         ("plain_len", 10_i32.into()),
+                        ("model_epoch", 3_i32.into()),
                         ("vector", serialize_vector(&[1.0, 2.0]).into()),
                         ("terms", vec![].into()),
                     ]),
                     mock_row([
                         ("article_id", 22_i32.into()),
                         ("plain_len", 10_i32.into()),
+                        ("model_epoch", 3_i32.into()),
                         ("vector", serialize_vector(&[1.0]).into()),
                         ("terms", serialize_terms(&[(0, 4)]).into()),
                     ]),
@@ -1103,6 +1169,89 @@ mod tests {
         let page = index.search("alpha", 10, 0, None).await.expect("search");
         assert_eq!(page.total, 1);
         assert_eq!(page.hits[0].article_id, 22);
+        assert!(
+            page.hits[0].lexical > 0.0,
+            "skipped corrupt rows must not shift posting slots"
+        );
+    }
+
+    #[tokio::test]
+    async fn load_defers_incomplete_publication_and_preserves_the_warm_snapshot() {
+        let doc = |epoch: i32, valid: bool| {
+            mock_row([
+                ("article_id", 1_i32.into()),
+                ("model_epoch", epoch.into()),
+                ("plain_len", 10_i32.into()),
+                (
+                    "vector",
+                    if valid {
+                        serialize_vector(&[1.0]).into()
+                    } else {
+                        vec![1_u8].into()
+                    },
+                ),
+                ("terms", serialize_terms(&[(0, 4)]).into()),
+            ])
+        };
+        for rows in [
+            vec![doc(7_i32, true), doc(0_i32, true)],
+            Vec::new(),
+            vec![doc(7_i32, false)],
+        ] {
+            for warm in [false, true] {
+                let conn = mock_conn()
+                    .append_query_results([
+                        vec![mock_row([
+                            ("schema_version", store::SCHEMA_VERSION.into()),
+                            ("model_epoch", 7_i32.into()),
+                            ("doc_count", 1_i32.into()),
+                            ("model", serialize_model(&toy_model()).into()),
+                        ])],
+                        rows.clone(),
+                        vec![mock_row([("ready", 1_i32.into())])],
+                    ])
+                    .into_connection();
+                let index = index_on(conn);
+                index.worker_running.store(true, Ordering::Release);
+                if warm {
+                    *index.inner.write().await =
+                        make_snapshot(toy_model(), vec![(99, vec![(0, 4)], 10)]);
+                }
+                index.load().await.expect("defer inconsistent publication");
+                assert_eq!(index.is_ready().await, warm);
+                let snapshot = index.inner.read().await;
+                assert_eq!(snapshot.doc_ids, if warm { vec![99] } else { Vec::new() });
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn load_accepts_incremental_row_count_changes_under_the_same_model() {
+        let conn = mock_conn()
+            .append_query_results([
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 7_i32.into()),
+                    ("doc_count", 1_i32.into()),
+                    ("model", serialize_model(&toy_model()).into()),
+                ])],
+                [1_i32, 2]
+                    .map(|id| {
+                        mock_row([
+                            ("article_id", id.into()),
+                            ("model_epoch", 7_i32.into()),
+                            ("plain_len", 10_i32.into()),
+                            ("vector", serialize_vector(&[1.0]).into()),
+                            ("terms", serialize_terms(&[(0, 4)]).into()),
+                        ])
+                    })
+                    .to_vec(),
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index.load().await.expect("incremental docs");
+        assert_eq!(index.doc_count().await, 2);
+        assert!(index.inner.read().await.initialized);
     }
 
     #[tokio::test]
@@ -1143,12 +1292,14 @@ mod tests {
                 ])],
                 vec![mock_row([
                     ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 1_i32.into()),
                     ("model_epoch", 9_i32.into()),
                     ("model", serialize_model(&model).into()),
                 ])],
                 vec![mock_row([
                     ("article_id", 30_i32.into()),
                     ("plain_len", 10_i32.into()),
+                    ("model_epoch", 9_i32.into()),
                     ("vector", serialize_vector(&[1.0]).into()),
                     ("terms", serialize_terms(&[(0, 1)]).into()),
                 ])],
@@ -1750,66 +1901,135 @@ mod tests {
 
     #[tokio::test]
     async fn run_worker_boots_and_parks_in_the_tick_sleep() {
-        // ensure_schema (3 execs) → load (state+docs) → probe (docs>0, so no
-        // initial retrain) → reload (state+docs) → sleep(TICK_SECS). Mock ops
-        // complete synchronously, so a few yields park the task in the sleep.
+        let model = toy_model();
         let conn = mock_conn()
             .append_exec_results(vec![
                 MockExecResult {
                     last_insert_id: 0,
-                    rows_affected: 1,
+                    rows_affected: 1
                 };
                 3
             ])
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                vec![], // initial load: no state row
                 vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 0_i32.into()),
                     ("model_epoch", 1_i32.into()),
-                    ("doc_count", 5_i32.into()),
-                ])], // probe: trained already → no retrain
-                vec![], // reload: no state row
+                    ("model", serialize_model(&model).into()),
+                ])],
+                vec![],
+                vec![mock_row([("ready", 1_i32.into())])],
             ])
             .into_connection();
         let index = index_on(conn);
-        let handle = tokio::spawn(run_worker(index));
+        let handle = tokio::spawn(run_worker(index.clone()));
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
+        // Even an empty loaded snapshot is valid; no GET_LOCK was attempted.
+        assert!(index.is_ready().await);
         assert!(!handle.is_finished());
         handle.abort();
         let _ = handle.await;
+        assert!(
+            !index.is_ready().await,
+            "cancelled worker must not remain ready"
+        );
     }
 
     #[tokio::test]
-    async fn run_worker_retrains_on_first_boot() {
-        // ensure_schema ok, load finds no state, probe reports 0 docs →
-        // initial retrain (lock contended → Ok(None)), reload, then sleep.
+    async fn cold_worker_recovers_after_another_instance_releases_the_lock() {
         let conn = mock_conn()
-            .append_exec_results(vec![
-                MockExecResult {
-                    last_insert_id: 0,
-                    rows_affected: 1,
-                };
-                3
-            ])
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                vec![], // initial load: no state
+                vec![], // first load: no model
+                vec![mock_row([("acquired", 0_i64.into())])],
+                vec![], // other owner has not published yet
                 vec![mock_row([
-                    ("model_epoch", 0_i32.into()),
+                    ("schema_version", store::SCHEMA_VERSION.into()),
                     ("doc_count", 0_i32.into()),
-                ])], // probe: empty → retrain
-                vec![mock_row([("acquired", 0_i64.into())])], // lock held → skip
-                vec![], // reload: still no state
+                    ("model_epoch", 1_i32.into()),
+                    ("model", serialize_model(&toy_model()).into()),
+                ])],
+                vec![],
+                vec![mock_row([("ready", 1_i32.into())])],
             ])
             .into_connection();
         let index = index_on(conn);
-        let handle = tokio::spawn(run_worker(index));
-        for _ in 0..8 {
-            tokio::task::yield_now().await;
+        let _liveness = WorkerLiveness(index.worker_running.clone());
+        index.worker_running.store(true, Ordering::Release);
+        initialize(&index).await;
+        assert!(!index.is_ready().await);
+        initialize(&index).await;
+        assert!(index.is_ready().await);
+    }
+
+    #[tokio::test]
+    async fn readiness_rejects_cold_missing_failed_and_invalid_database_probes() {
+        for result in [
+            Ok(vec![]),
+            Ok(vec![mock_row([("ready", 0_i32.into())])]),
+            Ok(vec![mock_row([("wrong_column", 1_i32.into())])]),
+            Err(DbErr::Custom("database unavailable".into())),
+        ] {
+            let conn = match result {
+                Ok(rows) => mock_conn().append_query_results([rows]),
+                Err(err) => mock_conn().append_query_errors([err]),
+            }
+            .into_connection();
+            let index = index_on(conn);
+            assert!(!index.is_ready().await, "cold snapshot is not ready");
+            *index.inner.write().await = make_snapshot(toy_model(), Vec::new());
+            assert!(
+                !index.is_ready().await,
+                "snapshot without a worker is not ready"
+            );
+            index.worker_running.store(true, Ordering::Release);
+            assert!(!index.is_ready().await);
         }
-        assert!(!handle.is_finished());
-        handle.abort();
-        let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn worker_trains_the_first_queued_article_after_an_empty_corpus() {
+        let article = || {
+            mock_row([
+                ("id", 7_i32.into()),
+                ("name", "alpha".into()),
+                ("abstract", Value::String(None)),
+                ("content", "alpha beta".into()),
+            ])
+        };
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 7_i32.into())])],
+                vec![article()],
+                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![article()],
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 1_i32.into()),
+                    ("model_epoch", 2_i32.into()),
+                    ("model", serialize_model(&toy_model()).into()),
+                ])],
+                vec![mock_row([
+                    ("article_id", 7_i32.into()),
+                    ("plain_len", 10_i32.into()),
+                    ("model_epoch", 2_i32.into()),
+                    ("vector", serialize_vector(&[1.0]).into()),
+                    ("terms", serialize_terms(&[(0, 4)]).into()),
+                ])],
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1
+                };
+                5
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 1).await;
+        assert_eq!(index.doc_count().await, 1);
+        assert_eq!(index.inner.read().await.search("alpha")[0].article_id, 7);
     }
 
     #[tokio::test]
@@ -1863,6 +2083,7 @@ mod tests {
                 ])], // corpus
                 vec![mock_row([
                     ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 0_i32.into()),
                     ("model_epoch", 9_i32.into()),
                     ("model", serialize_model(&model).into()),
                 ])], // reload state
@@ -1892,6 +2113,7 @@ mod tests {
                 ])], // fetch
                 vec![mock_row([
                     ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 0_i32.into()),
                     ("model_epoch", 2_i32.into()),
                     ("model", serialize_model(&toy_model()).into()),
                 ])], // fold-in load state

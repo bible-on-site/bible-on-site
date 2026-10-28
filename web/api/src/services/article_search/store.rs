@@ -198,10 +198,11 @@ pub async fn indexed_hashes<C: ConnectionTrait>(conn: &C) -> Result<Vec<(i32, [u
 }
 
 /// Stored model row: serialized model blob, schema version, and epoch.
-/// (`dims`/`doc_count` columns stay for operational observability but aren't
-/// read back — the blob carries its own dimensions.)
+/// The training-time count distinguishes a valid empty corpus from missing docs.
+/// The blob carries its own dimensions.
 #[derive(Debug, Clone)]
 pub struct StoredState {
+    pub doc_count: i32,
     pub schema_version: i32,
     pub model_epoch: i32,
     pub blob: Vec<u8>,
@@ -211,11 +212,12 @@ pub async fn load_state<C: ConnectionTrait>(conn: &C) -> Result<Option<StoredSta
     let row = conn
         .query_one_raw(Statement::from_string(
             DbBackend::MySql,
-            "SELECT schema_version, model_epoch, model FROM article_search_state WHERE id = 1",
+            "SELECT schema_version, model_epoch, doc_count, model FROM article_search_state WHERE id = 1",
         ))
         .await?;
     row.map(|row| {
         Ok(StoredState {
+            doc_count: row.try_get("", "doc_count")?,
             schema_version: row.try_get("", "schema_version")?,
             model_epoch: row.try_get("", "model_epoch")?,
             blob: row.try_get("", "model")?,
@@ -270,6 +272,7 @@ pub async fn state_probe<C: ConnectionTrait>(conn: &C) -> Result<Option<(i32, i3
 /// Indexed document row: unit embedding plus compressed term statistics.
 #[derive(Debug, Clone)]
 pub struct StoredDoc {
+    pub model_epoch: i32,
     pub article_id: i32,
     pub plain_len: i32,
     pub vector: Vec<u8>,
@@ -280,12 +283,13 @@ pub async fn load_docs<C: ConnectionTrait>(conn: &C) -> Result<Vec<StoredDoc>, D
     let rows = conn
         .query_all_raw(Statement::from_string(
             DbBackend::MySql,
-            "SELECT article_id, plain_len, vector, terms FROM article_search_doc",
+            "SELECT article_id, model_epoch, plain_len, vector, terms FROM article_search_doc",
         ))
         .await?;
     rows.into_iter()
         .map(|row| {
             Ok(StoredDoc {
+                model_epoch: row.try_get("", "model_epoch")?,
                 article_id: row.try_get("", "article_id")?,
                 plain_len: row.try_get("", "plain_len")?,
                 vector: row.try_get("", "vector")?,
@@ -532,11 +536,13 @@ mod tests {
     async fn load_state_and_state_probe_map_the_singleton_row() {
         let conn = conn_with_queries(vec![vec![mock_row([
             ("schema_version", SCHEMA_VERSION.into()),
+            ("doc_count", 42_i32.into()),
             ("model_epoch", 7_i32.into()),
             ("model", vec![9_u8, 8].into()),
         ])]]);
         let state = load_state(&conn).await.expect("state").expect("row");
         assert_eq!(state.model_epoch, 7);
+        assert_eq!(state.doc_count, 42);
         assert_eq!(state.blob, vec![9_u8, 8]);
 
         let conn = conn_with_queries(vec![vec![]]);
@@ -556,6 +562,7 @@ mod tests {
     async fn load_docs_maps_stored_rows() {
         let conn = conn_with_queries(vec![vec![mock_row([
             ("article_id", 6_i32.into()),
+            ("model_epoch", 7_i32.into()),
             ("plain_len", 120_i32.into()),
             ("vector", vec![0_u8, 0, 0, 0].into()),
             ("terms", vec![1_u8].into()),
@@ -563,6 +570,7 @@ mod tests {
         let docs = load_docs(&conn).await.expect("docs");
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].article_id, 6);
+        assert_eq!(docs[0].model_epoch, 7);
         assert_eq!(docs[0].plain_len, 120);
         assert_eq!(docs[0].vector, vec![0_u8, 0, 0, 0]);
     }
