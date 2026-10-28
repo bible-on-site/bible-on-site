@@ -36,7 +36,11 @@ describe("BreadcrumbDropdown", () => {
 			</ol>
 		);
 		const container = document.createElement("div");
-		container.innerHTML = renderToString(dropdown);
+		const parsed = new DOMParser().parseFromString(
+			renderToString(dropdown),
+			"text/html",
+		);
+		container.append(...parsed.body.childNodes);
 		document.body.appendChild(container);
 		let root: Root | undefined;
 		try {
