@@ -396,6 +396,36 @@ jobs:
       - name: Verify calendar-PDF artifacts
         run: bun run check:calendar-pdf
 
+  validate_website_architectures:
+    name: Validate Website Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: website
+
+  validate_api_architectures:
+    name: Validate API Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: api
+
+  validate_admin_architectures:
+    name: Validate Admin Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: admin
+
   package_website:
     name: Package Website
     needs: [setup_env, determine_changes]
@@ -893,6 +923,13 @@ jobs:
           # master push history intact; reset only feature/queue comparisons.
           node "$GITHUB_WORKSPACE/devops/github/ci/bencher-comparison.mjs" > "$RUNNER_TEMP/bencher-comparison-args.txt"
           mapfile -t BENCHER_COMPARISON_ARGS < "$RUNNER_TEMP/bencher-comparison-args.txt"
+          # CLS gets a dedicated measure with a static boundary: a percentage
+          # test on a zero CLS baseline collapses the upper boundary limit to
+          # 0, so every nonzero (still-good) reading alerts (#2718). Static
+          # tests reject the sample-size and window options. 0.1 is the
+          # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
+          # options positionally across groups, so cls_ratio must pass
+          # --threshold-max-sample-size _ to leave it unset (#2718).
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
@@ -907,6 +944,7 @@ jobs:
             --threshold-measure size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
+            --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
@@ -1291,9 +1329,13 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Build lcov Docker image
-        uses: ./.github/actions/lcov-image
-
+      # The published website report merges both test layers as a plain
+      # union of --require inputs. Both enumerate the same canonical
+      # universe: sanitizeCoverage projects every collected record onto the
+      # coordinates jest's transform emits for the file and drops records
+      # that name no real instrumentable src file, so dev-server generated
+      # modules and compile-variant coordinates can never reach the merge
+      # (#2670).
       - name: Merge Test Coverage (Unit + E2E)
         run: bun run coverage:merge
 
@@ -1738,6 +1780,19 @@ jobs:
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+
+      # Mock connections cannot prove session-scoped MySQL advisory locks.
+      # Run the ignored regression explicitly and add its production-code hits
+      # to the existing unit LCOV report before E2E and the normal coverage merge.
+      - name: Verify article-search advisory lock with MySQL and coverage
+        working-directory: ${{ env.API_DIRECTORY }}
+        env:
+          MYSQL_PWD: test_123
+          ARTICLE_SEARCH_LOCK_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/article_search_lock_test
+        run: |
+          mysql --host=127.0.0.1 --user=root --execute='CREATE DATABASE article_search_lock_test'
+          trap 'mysql --host=127.0.0.1 --user=root --execute="DROP DATABASE article_search_lock_test"' EXIT
+          cargo make coverage-article-search-lock
 
       - name: Setup tests bun, Node.js and dependencies
         id: tests-bun-cache
@@ -2365,15 +2420,21 @@ jobs:
           .venv/bin/python -m unittest -v
           .venv/bin/python publish.py
           .venv/bin/python audit.py
+      - name: Score the mention-annotation pipeline against its golden set
+        run: |
+          python3 -m unittest discover -s data/annotations -p 'test_*.py'
+          python3 data/annotations/golden_eval.py --check
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+      - name: Verify daily bulletin mail infrastructure and assets
+        run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --test deploy/ecr-deploy/resume-image.test.mts
+        run: node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2851,6 +2912,9 @@ jobs:
         determine_baseline_availability,
         determine_docker_image_availability,
         calendar_pdf_artifacts,
+        validate_website_architectures,
+        validate_api_architectures,
+        validate_admin_architectures,
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
@@ -2893,6 +2957,33 @@ jobs:
           if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
             if [ "${{ needs.deploy_verifier.result }}" != "success" ]; then
               echo "CD verifier dependency contract did not pass."
+              exit 1
+            fi
+          fi
+
+          # Match validate_website_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_website_architectures.result }}" != "success" ]; then
+              echo "Website native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          # Match validate_api_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_api_architectures.result }}" != "success" ]; then
+              echo "API native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          # Match validate_admin_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_admin_architectures.result }}" != "success" ]; then
+              echo "Admin native image validation failed or did not run"
               exit 1
             fi
           fi
@@ -3230,7 +3321,7 @@ jobs:
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
           node review-audit/scan-catch.cjs
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/bencher-thresholds.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;

@@ -734,7 +734,7 @@ public partial class PerekPage
         // then the perek picker and the open fan menu previously fell
         // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
+        { _chrome.ExitFullScreen(); return true; }
         if (PerekPickerPopup.IsVisible)
         { PerekPickerPopup.Hide(); return true; }
         if (FanMenu.IsOpen)

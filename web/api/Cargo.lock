@@ -707,7 +707,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.93"
+version = "0.1.95"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -720,6 +720,7 @@ dependencies = [
  "dotenvy",
  "entities",
  "sea-orm",
+ "sea-query-sqlx",
  "serde",
  "tokio",
  "tracing",

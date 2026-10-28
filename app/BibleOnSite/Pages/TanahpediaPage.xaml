@@ -4,56 +4,39 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.TanahpediaPage"
              x:Name="Page"
              x:DataType="viewmodels:TanahpediaViewModel"
              Title="תנכפדיה"
-             FlowDirection="RightToLeft">
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
     <!-- Flyout landing page: the page stays on the navigation stack, so the
-         device/system Back still returns to the reader. -->
-    <Shell.BackButtonBehavior>
-        <BackButtonBehavior IsVisible="False"/>
-    </Shell.BackButtonBehavior>
+         capsule Back still returns to the reader (#2467). -->
+    <Grid RowDefinitions="Auto,*">
+        <!-- The shared navigation capsule: hamburger at the far-right edge,
+             Back immediately beside it, then the title pill opening the
+             scoped Tanahpedia search — the same bar as every other page. -->
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="TanahpediaMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <Button Text="תנכפדיה"
+                        FontSize="20"
+                        Padding="12,0"
+                        HeightRequest="40"
+                        CornerRadius="14"
+                        BorderWidth="0"
+                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                        VerticalOptions="Center"
+                        HorizontalOptions="Fill"
+                        Margin="4,0"
+                        SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                        AutomationId="TanahpediaSearchTitle"
+                        Clicked="OnSearchTitleClicked"/>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
 
-    <!-- Shared top bar: hamburger that opens the flyout, like every
-         other page in the app. -->
-    <Shell.TitleView>
-        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
-            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="20"
-                    WidthRequest="40"
-                    HeightRequest="40"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                    SemanticProperties.Description="תפריט"
-                    AutomationId="TanahpediaMenuButton"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Start"
-                    Clicked="OnMenuButtonClicked"/>
-            <!-- Title pill like the reader's source pill: opens the scoped
-                 Tanahpedia search overlay. -->
-            <Button Grid.Column="1"
-                    Text="תנכפדיה"
-                    FontSize="20"
-                    Padding="12,0"
-                    HeightRequest="40"
-                    CornerRadius="14"
-                    BorderWidth="0"
-                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Start"
-                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
-                    AutomationId="TanahpediaSearchTitle"
-                    Clicked="OnSearchTitleClicked"/>
-        </Grid>
-    </Shell.TitleView>
-
-    <Grid>
+    <Grid Grid.Row="1">
         <!-- Content -->
         <ScrollView IsVisible="{Binding HasError, Converter={StaticResource InvertedBoolConverter}}">
             <VerticalStackLayout Padding="16" Spacing="20">
@@ -284,5 +267,6 @@
              reader's floating search, Tanahpedia provider only, all
              categories selected by default on the landing page. -->
         <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch" />
+    </Grid>
     </Grid>
 </ContentPage>

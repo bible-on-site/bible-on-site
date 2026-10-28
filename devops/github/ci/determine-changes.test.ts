@@ -24,10 +24,36 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("native image validation changes select all three services without a release", () => {
+		for (const file of [
+			".github/workflows/architecture-validation.yml",
+			"devops/github/ci/verify-native-image.mjs",
+			"devops/github/ci/verify-native-image.test.mjs",
+			"devops/github/ci/verify-website-native.mjs",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					`${file} -> ${key}`,
+				);
+			}
+		}
+	});
+
 	test("playback derivatives release both website and native book packages", () => {
-		assert.deepEqual(changed(["web/bible-on-site/src/data/recitation/opus-playback.json"], "website", "app"), [
-			{ module_changed: true, ci_changed: false }, { module_changed: true, ci_changed: false },
-		]);
+		assert.deepEqual(
+			changed(
+				["web/bible-on-site/src/data/recitation/opus-playback.json"],
+				"website",
+				"app",
+			),
+			[
+				{ module_changed: true, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
+			],
+		);
 	});
 	test("benchmark comparison changes check the website without releasing a module", () => {
 		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
@@ -59,7 +85,9 @@ describe("detectChanges", () => {
 	test("device runner workflow changes require app checks without a release", () => {
 		// #2373: the runner owns emulator/install logic and the Release startup
 		// smoke leg — a runner-only edit must not skip the checks it hosts.
-		const changes = detectChanges([".github/workflows/app-mobile-e2e-runner.yml"]);
+		const changes = detectChanges([
+			".github/workflows/app-mobile-e2e-runner.yml",
+		]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
 		assert.equal(changes.website.ci_changed, false);
 	});
@@ -97,11 +125,7 @@ describe("detectChanges", () => {
 
 	test("devops manifest changes select the deploy verifier guard", () => {
 		for (const file of ["devops/package.json", "devops/bun.lock"]) {
-			assert.equal(
-				detectChanges([file]).admin.ci_changed,
-				true,
-				file,
-			);
+			assert.equal(detectChanges([file]).admin.ci_changed, true, file);
 		}
 	});
 
@@ -233,7 +257,7 @@ describe("detectChanges", () => {
 		const release = ci
 			.split("  release_app:\n")[1]
 			.split("\n  release_bulletin:")[0];
-		const match = release.match(/^      extra_module_paths: '([^']+)'$/m);
+		const match = release.match(/^ {6}extra_module_paths: '([^']+)'$/m);
 		assert.ok(match, "Native packaged inputs must be passed to release notes");
 		assert.deepEqual(JSON.parse(match[1]), [
 			"data/recitation/recitation.sqlite",
@@ -318,7 +342,6 @@ describe("detectChanges", () => {
 		"web/bible-on-site/playwright-global-setup.js",
 		"web/bible-on-site/playwright-global-teardown-coverage.js",
 		"web/bible-on-site/launch-e2e-server.mts",
-		"web/bible-on-site/get-debug-port.js",
 		// Test env and coverage fixtures.
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/.covignore.mjs",
@@ -388,9 +411,9 @@ describe("detectChanges", () => {
 		}
 	});
 
-	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
+	test("release Docker build inputs validate the affected images without releasing", () => {
 		for (const [file, keys] of [
-			["web/.dockerignore", ["api", "bulletin", "admin"]],
+			["web/.dockerignore", ["website", "api", "bulletin", "admin"]],
 			[".github/workflows/shared-dockerize.yml", ["api"]],
 			["web/api/entities/src/lib.rs", ["bulletin"]],
 		] as const) {
@@ -428,6 +451,29 @@ describe("detectChanges", () => {
 		);
 	});
 
+	test("ECR deployer changes run recovery checks without data delivery or a release", () => {
+		for (const file of [
+			"devops/deploy/ecr-deploy/ecr-client.mts",
+			"devops/deploy/ecr-deploy/ecr-client.test.mts",
+			"devops/deploy/ecr-deploy/resume-image.mts",
+			"devops/deploy/ecr-deploy/resume-image.test.mts",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "data" },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+		assert.equal(
+			detectChanges(["devops/deploy/ecr-deploy-old.mts"]).data.ci_changed,
+			false,
+		);
+	});
+
 	test("module directories match path segments, not prefixes", () => {
 		const changes = detectChanges(["web/api-docs/readme.md", "appendix.md"]);
 		assert.equal(changes.api.module_changed, false);
@@ -459,51 +505,113 @@ const SHARED_FILES = [
 describe("isSchemaOnlyDataChange", () => {
 	for (const [name, files, expected] of [
 		["no data changes", [], false],
-		["tooling-only changes retain normal deployment behavior", [
-			"devops/deploy/data-deploy/sql-files.json",
-			"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
-			"devops/deploy/README.md",
-		], false],
-		["schema recovery with associated tooling and documentation", [
-			"data/mysql/tanahpedia_alter_mention_decoration.sql",
-			"devops/deploy/data-deploy/sql-files.json",
-			"devops/deploy/data-deploy/index.mts",
-			"devops/deploy/data-deploy/test_lambda_parser.py",
-			"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
-			"devops/deploy/README.md",
-			".github/workflows/ci.yml",
-		], true],
-		["multiple schema migrations", [
-			"data/mysql/tanahpedia_alter_mention_decoration.sql",
-			"data/mysql/tanahpedia_alter_source_citation.sql",
-		], true],
-		["schema plus static SQL requires full deployment", [
-			"data/mysql/tanahpedia_alter_mention_decoration.sql",
-			"data/mysql/tanah_static_structure.sql",
-		], false],
-		["schema plus pipeline changes requires full deployment", [
-			"data/mysql/tanahpedia_alter_mention_decoration.sql",
-			"data/sefaria/pipelines/perushim-view/src/main.rs",
-		], false],
-		["schema plus external pipeline scripture requires full deployment", [
-			"data/mysql/tanahpedia_alter_mention_decoration.sql",
-			...MODULES.perushim_pipeline.extraModulePaths,
-		], false],
-		["scripture data requires full deployment", [
-			"data/mysql/tanah_sefarim_and_perakim_data.sql",
-		], false],
-		["recitation data retains normal deployment behavior", [
-			"data/recitation/recitation.sqlite",
-		], false],
-		["nested migration names do not qualify", [
-			"data/mysql/nested/tanahpedia_alter_mention_decoration.sql",
-		], false],
-		["non-SQL migration names do not qualify", [
-			"data/mysql/tanahpedia_alter_mention_decoration.sql.bak",
-		], false],
-		["an empty migration name does not qualify", [
-			"data/mysql/tanahpedia_alter_.sql",
-		], false],
+		[
+			"tooling-only changes retain normal deployment behavior",
+			[
+				"devops/deploy/data-deploy/sql-files.json",
+				"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+				"devops/deploy/README.md",
+			],
+			false,
+		],
+		[
+			"schema recovery with associated tooling and documentation",
+			[
+				"data/mysql/tanahpedia_alter_mention_decoration.sql",
+				"devops/deploy/data-deploy/sql-files.json",
+				"devops/deploy/data-deploy/index.mts",
+				"devops/deploy/data-deploy/test_lambda_parser.py",
+				"docs/aws/cloudformation/data-deploy/data-deploy-lambda.py",
+				"devops/deploy/README.md",
+				".github/workflows/ci.yml",
+			],
+			true,
+		],
+		[
+			"multiple schema migrations",
+			[
+				"data/mysql/tanahpedia_alter_mention_decoration.sql",
+				"data/mysql/tanahpedia_alter_source_citation.sql",
+			],
+			true,
+		],
+		[
+			"bulletin upgrade with bootstrap preservation tests stays manual",
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"web/admin/src/server/ses-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"bulletin upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
+			true,
+		],
+		[
+			"bootstrap changes alone retain normal deployment behavior",
+			["data/mysql/db-populator/src/main.rs"],
+			false,
+		],
+		[
+			"bulletin upgrade cannot hide production content changes",
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			],
+			false,
+		],
+		[
+			"schema plus static SQL requires full deployment",
+			[
+				"data/mysql/tanahpedia_alter_mention_decoration.sql",
+				"data/mysql/tanah_static_structure.sql",
+			],
+			false,
+		],
+		[
+			"schema plus pipeline changes requires full deployment",
+			[
+				"data/mysql/tanahpedia_alter_mention_decoration.sql",
+				"data/sefaria/pipelines/perushim-view/src/main.rs",
+			],
+			false,
+		],
+		[
+			"schema plus external pipeline scripture requires full deployment",
+			[
+				"data/mysql/tanahpedia_alter_mention_decoration.sql",
+				...MODULES.perushim_pipeline.extraModulePaths,
+			],
+			false,
+		],
+		[
+			"scripture data requires full deployment",
+			["data/mysql/tanah_sefarim_and_perakim_data.sql"],
+			false,
+		],
+		[
+			"recitation data retains normal deployment behavior",
+			["data/recitation/recitation.sqlite"],
+			false,
+		],
+		[
+			"nested migration names do not qualify",
+			["data/mysql/nested/tanahpedia_alter_mention_decoration.sql"],
+			false,
+		],
+		[
+			"non-SQL migration names do not qualify",
+			["data/mysql/tanahpedia_alter_mention_decoration.sql.bak"],
+			false,
+		],
+		[
+			"an empty migration name does not qualify",
+			["data/mysql/tanahpedia_alter_.sql"],
+			false,
+		],
 		["data path itself does not qualify", ["data"], false],
 	] as const) {
 		test(name, () => {
@@ -516,18 +624,52 @@ describe("isSchemaOnlyDataChange", () => {
 			new URL("../../../.github/workflows/ci.yml", import.meta.url),
 			"utf8",
 		).replace(/\r/g, "");
-		assert.match(ci, /^      data_schema_only_changed: \$\{\{ steps\.determine\.outputs\.data_schema_only_changed \}\}$/m);
-		const release = ci.split("  release_data:\n")[1].split("\n  bump_versions:")[0];
-		const condition = release.match(/^    if: (.+)$/m)?.[1];
+		assert.match(
+			ci,
+			/^ {6}data_schema_only_changed: \$\{\{ steps\.determine\.outputs\.data_schema_only_changed \}\}$/m,
+		);
+		const release = ci
+			.split("  release_data:\n")[1]
+			.split("\n  bump_versions:")[0];
+		const condition = release.match(/^ {4}if: (.+)$/m)?.[1];
 		assert.ok(condition, "Data release requires a job-level condition");
-		assert.ok(condition.includes("needs.determine_changes.outputs.data_schema_only_changed == 'false'"));
+		assert.ok(
+			condition.includes(
+				"needs.determine_changes.outputs.data_schema_only_changed == 'false'",
+			),
+		);
 	});
+});
+
+test("SES infrastructure changes select data checks without releasing content", () => {
+	for (const file of [
+		"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+		"devops/daily-bulletin-infra.test.mjs",
+		"web/bulletin/assets/email/manifest.json",
+		"web/bulletin/scripts/prepare-email-assets.mjs",
+		"app/BibleOnSite/Resources/Images/logo_header.jpg",
+		"web/bible-on-site/public/icons/envelope.svg",
+		"web/bible-on-site/public/icons/phone.svg",
+		"web/bible-on-site/public/icons/whatsapp.svg",
+		"web/bible-on-site/public/icons/telegram.svg",
+	]) {
+		const changes = detectChanges([file]);
+		assert.equal(changes.data.ci_changed, true);
+		assert.equal(changes.data.module_changed, false);
+		assert.equal(isDataDeployChange([file]), false);
+	}
 });
 
 describe("isDataDeployChange", () => {
 	test("data-deploy tooling changes signal delivery intent", () => {
-		assert.equal(isDataDeployChange(["devops/deploy/data-deploy/index.mts"]), true);
-		assert.equal(isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]), true);
+		assert.equal(
+			isDataDeployChange(["devops/deploy/data-deploy/index.mts"]),
+			true,
+		);
+		assert.equal(
+			isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]),
+			true,
+		);
 	});
 
 	test("shared CI plumbing and data content are not delivery intent", () => {
@@ -620,7 +762,10 @@ describe("main", () => {
 			git(work, "config", "user.name", "CI fixture");
 			git(work, "config", "user.email", "ci-fixture@example.invalid");
 			git(work, "config", "core.autocrlf", "false");
-			const root = commit(work, changeKind === "delete" ? changedPath : "README.md");
+			const root = commit(
+				work,
+				changeKind === "delete" ? changedPath : "README.md",
+			);
 			git(work, "checkout", "--quiet", "-b", "replaced");
 			const replaced = commit(work, "web/admin/src/main.tsx");
 			git(work, "checkout", "--quiet", "master");

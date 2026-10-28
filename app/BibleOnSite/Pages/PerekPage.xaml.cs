@@ -35,8 +35,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 600;
 
-    // Articles view state
-    private bool _isShowingArticles;
+    // Articles view state is owned by the shared reader chrome (#2573).
+    private ReaderChrome _chrome = null!;
 
     // Guard: ignore CurrentItemChanged events fired by the CarouselView during
     // initial collection assignment.  Without this, the handler resets the
@@ -69,6 +69,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         DebugLog.Write("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        SetupReaderChrome();
         DebugLog.Write("[Startup] PerekPage resources and navigation");
         SubscribeViewModelChanges();
         SetupFontSizeResources();
@@ -76,6 +77,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
+        WireReaderBackChrome();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -87,13 +89,97 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
+        SetupReaderChrome();
         SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
-        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
+        WireReaderBackChrome();
+    }
+
+    private void WireReaderBackChrome()
+    {
+        // The capsule Back owns return affordances now (#2467): at this root
+        // page it stays enabled while a transient surface (focused pasuk,
+        // reader menu, search, selection, fullscreen) would consume Back —
+        // the same surfaces TryHandleReaderBack serves. The hamburger keeps
+        // its single job and is never repurposed into a close control.
+        NormalNavigationBar.BackStateProvider = OwnsReaderReturnSurface;
+        // Overlay visibility flips outside UpdateSelectionBar (item taps and
+        // the scrim close the menu without it), so paint changes ride the
+        // same IsVisible notifications the Android back callback uses.
+        ReaderMenuOverlay.PropertyChanged += OnReaderSurfaceVisibilityChanged;
+        ExitFullScreenButton.PropertyChanged += OnReaderSurfaceVisibilityChanged;
+        // The perushim sheet owns Back while open (#2766) — keep the
+        // affordance state in sync without relying on IsVisible flips.
+        PerushimPanel.IsOpenChanged += (_, _) => NormalNavigationBar.RefreshBackState();
+    }
+
+    private void OnReaderSurfaceVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsVisible))
+        {
+            NormalNavigationBar.RefreshBackState();
+#if ANDROID
+            UpdateReaderBack();
+#endif
+        }
+    }
+
+    /// <summary>
+    /// Wires the shared reader chrome — bottom bar, perushim sheet, articles
+    /// view, fullscreen and fan prev/next refresh plus picker cleanup —
+    /// through the one coordinator every reader page uses (#2573). Only the
+    /// division adapters differ: perek ids, perek articles, perek navigation.
+    /// </summary>
+    private void SetupReaderChrome()
+    {
+        _chrome = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = BottomBar,
+                PerushimSheet = PerushimPanel,
+                FanMenu = FanMenu,
+                PreviousSatellite = PrevPerekButton,
+                NextSatellite = NextPerekButton,
+                ExitFullscreenButton = ExitFullScreenButton,
+                ArticlesView = ArticlesCollection,
+                ReaderContent = PerekCarousel,
+                Toolbar = ReaderToolbar,
+                Host = MainGrid,
+                ContentArea = ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = () => { LoadArticles(); return Task.CompletedTask; },
+                CurrentUnit = () => _viewModel.Perek,
+                SelectArticle = id => _viewModel.SelectedArticleId = id,
+                CanGoPrevious = () => _viewModel.CanGoToPreviousPerek,
+                CanGoNext = () => _viewModel.CanGoToNextPerek,
+                IsSelectableUnit = perekId => perekId is >= 1 and <= 929,
+                CurrentUnitId = () => _viewModel.PerekId,
+                NavigateToUnitAsync = perekId => _viewModel.NavigateToPerekAsync(perekId),
+                FullscreenStateChanged = OnReaderFullscreenStateChanged,
+            });
+    }
+
+    /// <summary>
+    /// Perek extras after a fullscreen transition: the search surface closes on
+    /// entry, the reader keeps no native Back affordance, and Android's
+    /// predictive-Back callback re-evaluates its overlays.
+    /// </summary>
+    private void OnReaderFullscreenStateChanged(bool isFullScreen)
+    {
+        if (isFullScreen)
+        {
+            ChapterSearch.Close();
+        }
+        Shell.SetNavBarIsVisible(this, false);
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     /// <summary>
@@ -214,10 +300,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // NavigateToPerekAsync before this event fires, including perushim)
             UpdateSelectionBar();
             SetAnalyticsScreenForPerek();
-            if (FanMenu.IsOpen)
-            {
-                RefreshNavButtonVisuals();
-            }
+            _chrome.RefreshPrevNext();
 
             UpdateArticlesCount();
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
@@ -342,38 +425,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     UpdateArticlesCount();
-                    if (_isShowingArticles)
+                    if (_chrome.IsShowingArticles)
                     {
                         LoadArticles();
                     }
-                    // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
-                    RefreshNavButtonVisuals();
+                    _chrome.RefreshPrevNext();
                 });
             }
         };
-    }
-
-    /// <summary>
-    /// Forces the prev/next buttons to update their visual state.
-    /// Workaround for MAUI bug where button disabled visual doesn't refresh in AbsoluteLayout.
-    /// We control opacity directly instead of relying on VSM.
-    /// </summary>
-    private void RefreshNavButtonVisuals()
-    {
-        // Only update if menu is open (buttons visible)
-        if (!FanMenu.IsOpen)
-        {
-            return;
-        }
-
-        var canPrev = _viewModel.CanGoToPreviousPerek;
-        var canNext = _viewModel.CanGoToNextPerek;
-
-        PrevPerekButton.IsEnabled = canPrev;
-        PrevPerekButton.Opacity = canPrev ? 1.0 : 0.4;
-
-        NextPerekButton.IsEnabled = canNext;
-        NextPerekButton.Opacity = canNext ? 1.0 : 0.4;
     }
 
 #if ANDROID
@@ -382,7 +441,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -393,7 +452,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
             ContainsTouch(SelectionBar, position))
@@ -1198,15 +1257,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // leave the chapter title blank, and later swipes update it as well.
             NormalNavigationTitle.SetBinding(Button.TextProperty, nameof(PerekViewModel.Source));
         }
-        // iOS has no system Back for the overlay, so the navigation slot turns
-        // into the close control there; platforms with system Back keep the
-        // shared hamburger (#2467).
-        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
-        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
-            ? Fonts.FluentUI.arrow_right_24_regular
-            : Fonts.FluentUI.navigation_24_regular;
-        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
-            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
+        // The capsule Back covers the focused-pasuk return on every platform
+        // (#2467) — the hamburger glyph and its flyout role never change.
+        NormalNavigationBar.RefreshBackState();
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
@@ -1297,16 +1350,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     #region Circular Menu Methods
 
     /// <summary>
-    /// The fan refreshes each satellite's enabled state as it opens, so
-    /// prev/next fade in dimmed at the perek edges.
-    /// </summary>
-    private void OnFanMenuOpening(object? sender, EventArgs e)
-    {
-        PrevPerekButton.IsEnabled = _viewModel.CanGoToPreviousPerek;
-        NextPerekButton.IsEnabled = _viewModel.CanGoToNextPerek;
-    }
-
-    /// <summary>
     /// Handles menu item click - keeps menu open (don't close).
     /// </summary>
     private void OnMenuItemClicked(object? sender, EventArgs e)
@@ -1316,18 +1359,19 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// iOS has no system Back for the focused-pasuk overlay — the toolbar's
-    /// navigation slot acts as its close control there (#2466).
+    /// Whether a transient reader surface would consume Back — mirrors
+    /// <see cref="TryHandleReaderBack"/>'s ordering without acting on it, so
+    /// the capsule's enabled state reflects the same surfaces the shared
+    /// back pipeline serves (#2467).
     /// </summary>
-    private bool OnFocusedPasukNavigationIntercepted()
-    {
-        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
-        {
-            return false;
-        }
-        ClearAllSelections();
-        return true;
-    }
+    private bool OwnsReaderReturnSurface() =>
+        ExitFullScreenButton.IsVisible
+        || ReaderMenuOverlay.IsOpen
+        || PerushimPanel.IsOpen
+        || ChapterSearch.IsSearchOpen
+        || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
+            _chapterRecitationSelection, _focusedPasuk != null,
+            _recitationCursor.PlayingKey != null);
 
     /// <summary>
     /// Opens/closes the reader options menu (הקראות, שניים מקרא, תיקון קוראים).
@@ -1418,152 +1462,17 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// Handles perek selection from the picker popup. A confirmed selection
-    /// completes the navigation: the picker closes itself and the radial menu
-    /// that opened it closes too, leaving the reader undimmed and interactive.
+    /// Handles perek selection from the picker popup — the shared chrome
+    /// completes the cleanup (fan closes) and navigates via the perek adapter.
     /// </summary>
-    private async void OnPerekPickerSelected(int perekId)
-    {
-        await FanMenu.CloseAsync();
-
-        if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
-        {
-            await _viewModel.NavigateToPerekAsync(perekId);
-        }
-    }
-
-    /// <summary>
-    /// Handles text button click - returns to perek view if showing articles,
-    /// otherwise animates the visible perek's vertical content back to its
-    /// first pasuk (#2624). The shared helper resolves the realized scroll
-    /// surface of the current carousel item (regular list or תיקון קוראים),
-    /// so a stale or off-screen item can never be scrolled.
-    /// </summary>
-    private void OnTextButtonClicked(object? sender, EventArgs e)
-    {
-        if (_isShowingArticles)
-        {
-            // Return to perek view
-            ShowPerekView();
-        }
-        else
-        {
-            ReaderScrollTop.ScrollCurrentUnitToStart(PerekCarousel, _viewModel.Perek);
-        }
-    }
-
-    /// <summary>
-    /// Handles articles button click - shows articles view.
-    /// </summary>
-    private void OnArticlesButtonClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            DebugLog.Write("[Articles] Button clicked, _isShowingArticles=" + _isShowingArticles);
-
-            if (_isShowingArticles)
-            {
-                // Already showing articles, do nothing or toggle back
-                return;
-            }
-
-            ShowArticlesView();
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
-        catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
-        }
-    }
-
-    /// <summary>
-    /// Shows the articles view with flip animation.
-    /// </summary>
-    private void ShowArticlesView()
-    {
-        try
-        {
-            DebugLog.Write("[Articles] ShowArticlesView starting...");
-            PerushimPanel.CloseImmediate();
-            _isShowingArticles = true;
-
-            // Load articles for the current perek (header stays the same)
-            DebugLog.Write("[Articles] Loading articles...");
-            LoadArticles();
-            DebugLog.Write("[Articles] Articles loaded");
-
-            // Simple visibility swap instead of animation (animation may crash on Windows)
-            DebugLog.Write("[Articles] Switching visibility...");
-            PerekCarousel.IsVisible = false;
-            ArticlesCollection.IsVisible = true;
-            DebugLog.Write("[Articles] Visibility switched");
-
-            // Update button states - highlight articles button
-            DebugLog.Write("[Articles] Updating button color...");
-            BottomBar.IsArticlesActive = true;
-            DebugLog.Write("[Articles] ShowArticlesView complete");
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
-        catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Articles] Error in ShowArticlesView: {ex}");
-        }
-    }
-
-    /// <summary>
-    /// Returns to the perek view with flip animation.
-    /// </summary>
-    private async void ShowPerekView()
-    {
-        try
-        {
-            _isShowingArticles = false;
-            _viewModel.SelectedArticleId = null;
-
-            // Simple visibility swap instead of animation
-            ArticlesCollection.IsVisible = false;
-            PerekCarousel.IsVisible = true;
-
-            // Reset button color
-            BottomBar.IsArticlesActive = false;
-
-            await Task.CompletedTask; // Keep async signature
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: perek-view styling failure is log-only
-        catch (Exception ex) //NOSONAR — perek-view styling failure is log-only.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Articles] Error in ShowPerekView: {ex}");
-        }
-    }
-
-    /// <summary>
-    /// Handles article selection - navigates to article detail.
-    /// </summary>
-#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
-    private async void OnArticleSelected(object? sender, Article article)
-#pragma warning restore S1172
-    {
-        _viewModel.SelectedArticleId = article.Id;
-
-        // Navigate to article detail page
-        try
-        {
-            await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
-        catch (Exception ex) //NOSONAR — articles list degrades to empty.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
-        }
-    }
+    private async void OnPerekPickerSelected(int perekId) =>
+        await _chrome.CompletePickerSelectionAsync(perekId);
 
     /// <summary>
     /// Loads articles for the current perek from the StarterService snapshot —
     /// same Priority ordering and Author wiring the GraphQL query produced.
+    /// The shared chrome calls this through its ReloadArticlesAsync adapter
+    /// when the articles view opens or the perek changes underneath it.
     /// </summary>
     private void LoadArticles()
     {
@@ -1578,39 +1487,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             Console.Error.WriteLine($"Error loading articles: {ex.Message}");
             ArticlesCollection.ItemsSource = new List<Article>();
         }
-    }
-
-    /// <summary>
-    /// Handles perushim chevron button click - toggles the perushim sliding panel.
-    /// </summary>
-    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
-    {
-        // Cap the drag-up expansion so the sheet's top edge stays under the
-        // status bar/pill: content + toolbar rows already begin below it.
-        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
-        await PerushimPanel.ToggleAsync(MainGrid.Height, ContentArea.Height + toolbarHeight - 8);
-    }
-
-    /// <summary>Mirrors the sheet's open state onto the chevron glyph.</summary>
-#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
-    private void OnPerushimSheetOpenChanged(object? sender, bool isOpen) =>
-#pragma warning restore S1172
-        BottomBar.IsPerushimOpen = isOpen;
-
-    /// <summary>
-    /// Handles full screen button click - hides top and bottom bars, shows exit button.
-    /// </summary>
-    private void OnFullScreenClicked(object? sender, EventArgs e)
-    {
-        EnterFullScreen();
-    }
-
-    /// <summary>
-    /// Handles exit full screen button click - restores normal view.
-    /// </summary>
-    private void OnExitFullScreenClicked(object? sender, EventArgs e)
-    {
-        ExitFullScreen();
     }
 
     /// <summary>
@@ -1667,11 +1543,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Persist the current perek as last learnt so the user can resume here
         _viewModel.SaveLastLearntPerek();
 
-        // Refresh nav button visuals if menu is open (synchronous)
-        if (FanMenu.IsOpen)
-        {
-            RefreshNavButtonVisuals();
-        }
+        _chrome.RefreshPrevNext();
 
         DebugLog.Write($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
 
@@ -1679,55 +1551,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         UpdateArticlesCount();
         _ = _viewModel.LoadPerushimAsync(perek.PerekId);
         _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             LoadArticles();
         }
-    }
-
-    /// <summary>
-    /// Enters full screen mode - hides navigation and bottom bar.
-    /// </summary>
-    private void EnterFullScreen()
-    {
-        ChapterSearch.Close();
-        // Snap the fan closed without animation so nothing stays dimmed
-        FanMenu.ResetToClosed();
-
-        // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
-        Shell.SetNavBarIsVisible(this, false);
-        ReaderToolbar.IsVisible = false;
-
-        // Hide bottom bar completely
-        BottomBar.IsVisible = false;
-        FanMenu.IsVisible = false;
-
-        // Show floating exit button (reset position first)
-        ExitFullScreenButton.ResetPosition();
-        ExitFullScreenButton.IsVisible = true;
-#if ANDROID
-        UpdateReaderBack();
-#endif
-    }
-
-    /// <summary>
-    /// Exits full screen mode - restores navigation and bottom bar.
-    /// </summary>
-    private void ExitFullScreen()
-    {
-        // Hide floating exit button first
-        ExitFullScreenButton.IsVisible = false;
-
-        // Restore the reader toolbar without introducing a native Back button.
-        Shell.SetNavBarIsVisible(this, false);
-        ReaderToolbar.IsVisible = true;
-
-        // Show bottom bar
-        BottomBar.IsVisible = true;
-        FanMenu.IsVisible = true;
-#if ANDROID
-        UpdateReaderBack();
-#endif
     }
 
     #endregion

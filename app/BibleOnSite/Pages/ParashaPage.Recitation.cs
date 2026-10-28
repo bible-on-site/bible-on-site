@@ -910,7 +910,7 @@ public partial class ParashaPage
         // then the unit picker and the open fan menu previously fell
         // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
+        { _chrome.ExitFullScreen(); return true; }
         if (ParashaUnitPickerPopup.IsVisible)
         { ParashaUnitPickerPopup.Hide(); return true; }
         if (FanMenu.IsOpen)

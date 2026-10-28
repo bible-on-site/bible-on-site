@@ -3,7 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:local="clr-namespace:BibleOnSite"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:services="clr-namespace:BibleOnSite.Services"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
              x:Class="BibleOnSite.App">
     <Application.Resources>
@@ -15,7 +14,11 @@
 
             <ControlTemplate x:Key="PreferencesPageTemplate">
                 <Grid RowDefinitions="Auto,*">
-                    <controls:SharedTopBar NavigationAutomationId="PreferencesNavigationButton">
+                    <!-- The capsule Back inside SharedTopBar replaces the old
+                         text "חזור" button — one recognizable icon at one
+                         stable slot on every page (#2467). -->
+                    <controls:SharedTopBar NavigationAutomationId="PreferencesNavigationButton"
+                                           ShowBack="{TemplateBinding ShowBack}">
                         <controls:SharedTopBar.CenterContent>
                             <controls:ToolbarPill>
                                 <Label Text="{TemplateBinding Title}"
@@ -27,16 +30,6 @@
                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                             </controls:ToolbarPill>
                         </controls:SharedTopBar.CenterContent>
-                        <controls:SharedTopBar.TrailingContent>
-                            <Button Text="חזור"
-                                    AutomationId="PreferencesBackButton"
-                                    Command="{x:Static services:PreferencesNavigation.BackCommand}"
-                                    IsVisible="{TemplateBinding ShowBack}"
-                                    Padding="0"
-                                    FontSize="13"
-                                    BackgroundColor="Transparent"
-                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
-                        </controls:SharedTopBar.TrailingContent>
                     </controls:SharedTopBar>
                     <ContentPresenter Grid.Row="1"/>
                 </Grid>

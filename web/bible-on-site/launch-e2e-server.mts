@@ -44,7 +44,7 @@ writeFileSync(
 	`[${new Date().toISOString()}] [INIT] E2E Server Launcher started\n`,
 );
 
-// --coverage is passed by Playwright when MEASURE_COV=1; NODE_OPTIONS/env are set by config
+// --coverage is passed by Playwright when MEASURE_COV=1; env vars come from the playwright config
 const _useCoverage = process.argv.includes("--coverage");
 
 try {
