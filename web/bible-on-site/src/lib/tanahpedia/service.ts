@@ -972,7 +972,7 @@ export async function getMentionReferencesForPerek(
 			   AND d.acceptance IN ('auto', 'manual')
 			 GROUP BY d.id
 			 HAVING COUNT(DISTINCT names.entryId) <= 1
-			 ORDER BY pasukNumber, segmentStart`,
+			 ORDER BY pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
 			[String(perekId)],
 		);
 	} catch (error) {
@@ -1022,7 +1022,7 @@ export async function getMentionReferencesForArticle(
 			   AND d.acceptance IN ('auto', 'manual')
 			 GROUP BY d.id
 			 HAVING COUNT(DISTINCT names.entryId) <= 1
-			 ORDER BY spanStart`,
+			 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
 			[String(articleId), contentHash],
 		);
 	} catch (error) {
