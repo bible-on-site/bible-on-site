@@ -42,7 +42,8 @@
                         IsVisible="{Binding ShowEntry}">
                 <VerticalStackLayout Padding="16" Spacing="14">
                 <VerticalStackLayout.MaximumWidthRequest>
-                    <OnPlatform x:TypeArguments="x:Double" Default="-1">
+                    <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                    <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
                         <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
                     </OnPlatform>
                 </VerticalStackLayout.MaximumWidthRequest>

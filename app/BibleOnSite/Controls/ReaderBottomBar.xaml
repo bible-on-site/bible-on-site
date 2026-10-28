@@ -11,8 +11,10 @@
       <!-- Windows: the bar's actions sit at proportional offsets, so at full
            width they scatter to the window edges; cap + center keeps them
            clustered under the reading column (#2766). -->
+      <!-- Default must be PositiveInfinity — an explicit -1
+           collapses the element on mobile. -->
       <Grid.MaximumWidthRequest>
-        <OnPlatform x:TypeArguments="x:Double" Default="-1">
+        <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
           <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderBarMaxWidth}"/>
         </OnPlatform>
       </Grid.MaximumWidthRequest>

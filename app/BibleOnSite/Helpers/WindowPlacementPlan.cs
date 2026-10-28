@@ -66,6 +66,37 @@ public static class WindowPlacementPlan
         => a.X < b.X + b.Width && a.X + a.Width > b.X
            && a.Y < b.Y + b.Height && a.Y + a.Height > b.Y;
 
+    /// <summary>Intersection area of two rectangles (0 when disjoint).</summary>
+    public static double IntersectionArea(DesktopRect a, DesktopRect b)
+    {
+        var width = Math.Max(0, Math.Min(a.X + a.Width, b.X + b.Width) - Math.Max(a.X, b.X));
+        var height = Math.Max(0, Math.Min(a.Y + a.Height, b.Y + b.Height) - Math.Max(a.Y, b.Y));
+        return width * height;
+    }
+
+    /// <summary>
+    /// Clamps a saved rectangle to the work area it overlaps most, so even a
+    /// one-pixel edge on a still-connected display keeps a grabbable
+    /// <see cref="MinVisibleEdge"/> on screen. Falls back to
+    /// <paramref name="fallback"/> when no work area intersects at all.
+    /// </summary>
+    public static DesktopRect ClampToBestDisplay(
+        DesktopRect bounds, IReadOnlyList<DesktopRect> workAreas, DesktopRect fallback)
+    {
+        var best = fallback;
+        var bestOverlap = 0d;
+        foreach (var workArea in workAreas)
+        {
+            var overlap = IntersectionArea(bounds, workArea);
+            if (overlap > bestOverlap)
+            {
+                bestOverlap = overlap;
+                best = workArea;
+            }
+        }
+        return ClampToWorkArea(bounds, bestOverlap > 0 ? best : fallback);
+    }
+
     /// <summary>
     /// Serializes a saved rectangle plus the maximized flag in the stable
     /// <c>"x,y,w,h|m"</c> format stored in Preferences.

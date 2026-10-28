@@ -44,6 +44,9 @@ internal sealed class DesktopWindowChrome
 	private DesktopRect _lastNormalBounds;
 	private bool _hasNormalBounds;
 	private bool _pendingMaximized;
+	// The window's last Restored/Maximized state — Minimized is reported on
+	// close too, so the saved "maximized" bit must not read it directly.
+	private OverlappedPresenterState _lastNonMinimizedState = OverlappedPresenterState.Restored;
 
 	private DesktopWindowChrome(MauiWindow window, AppShell shell)
 	{
@@ -57,7 +60,7 @@ internal sealed class DesktopWindowChrome
 	/// Window and applied when it is created) and hooks the one-time
 	/// platform wiring.
 	/// </summary>
-	public static void Attach(MauiWindow window, AppShell shell)
+	public static DesktopWindowChrome Attach(MauiWindow window, AppShell shell)
 	{
 		var chrome = new DesktopWindowChrome(window, shell);
 		window.MinimumWidth = WindowPlacementPlan.MinWindowWidth;
@@ -66,15 +69,21 @@ internal sealed class DesktopWindowChrome
 		window.HandlerChanged += chrome.OnWindowHandlerChanged;
 		window.Destroying += chrome.OnDestroying;
 		shell.Navigated += chrome.OnNavigated;
+		// CompleteStartup swaps the loading ShellContent's page in place —
+		// not a navigation — so the startup reader's focus only arrives via
+		// the CurrentPage property change.
+		shell.PropertyChanged += chrome.OnShellPropertyChanged;
+		return chrome;
 	}
 
 	#region Placement
 
 	private void ApplyInitialPlacement()
 	{
-		// Before the platform window exists there is no per-monitor scale;
-		// the primary display's density is the right approximation because
-		// Windows creates new windows on the primary work area.
+		// Before the platform window exists, per-monitor scale is
+		// unavailable — the primary display's density is the right
+		// approximation because Windows creates new windows on the
+		// primary work area.
 		var density = DeviceDisplay.MainDisplayInfo.Density;
 		var primary = DisplayArea.Primary.WorkArea;
 		var workArea = new DesktopRect(primary.X / density, primary.Y / density,
@@ -85,14 +94,16 @@ internal sealed class DesktopWindowChrome
 				Preferences.Default.Get<string?>(PlacementPreferenceKey, null),
 				out var saved, out var maximized))
 		{
-			// Keep a saved position that still lands on ANY connected
-			// display (multi-monitor restore); otherwise pull it back onto
-			// the primary work area so the window can never be stranded.
-			var displays = DisplayArea.FindAll();
-			var onSomeDisplay = displays.Any(d => WindowPlacementPlan.Intersects(saved,
-				new DesktopRect(d.WorkArea.X / density, d.WorkArea.Y / density,
-					d.WorkArea.Width / density, d.WorkArea.Height / density)));
-			bounds = onSomeDisplay ? saved : WindowPlacementPlan.ClampToWorkArea(saved, workArea);
+			// Always clamp onto the display the rect overlaps most: a saved
+			// position intersecting a work area by a single pixel still needs
+			// MinVisibleEdge of title bar somewhere reachable. For a rect
+			// already inside a display the clamp is a no-op, and a rect on no
+			// display falls back to the primary work area.
+			var workAreas = DisplayArea.FindAll()
+				.Select(d => new DesktopRect(d.WorkArea.X / density, d.WorkArea.Y / density,
+					d.WorkArea.Width / density, d.WorkArea.Height / density))
+				.ToList();
+			bounds = WindowPlacementPlan.ClampToBestDisplay(saved, workAreas, workArea);
 			_pendingMaximized = maximized;
 		}
 		else
@@ -125,6 +136,11 @@ internal sealed class DesktopWindowChrome
 			return;
 		}
 
+		if (presenter.State is OverlappedPresenterState.Restored or OverlappedPresenterState.Maximized)
+		{
+			_lastNonMinimizedState = presenter.State;
+		}
+
 		// The MAUI Window's own X/Y/Width/Height report the maximized frame
 		// while maximized, so the "normal" rect only updates while restored.
 		if (presenter.State == OverlappedPresenterState.Restored
@@ -142,8 +158,13 @@ internal sealed class DesktopWindowChrome
 			return;
 		}
 
-		var maximized = presenter.State == OverlappedPresenterState.Maximized;
-		if (!maximized && presenter.State == OverlappedPresenterState.Restored)
+		// A minimized close reports Minimized, not the state the window had
+		// before minimizing — the remembered state decides the saved flag so
+		// a maximized-then-minimized close still restores maximized.
+		var maximized = presenter.State == OverlappedPresenterState.Maximized
+			|| (presenter.State == OverlappedPresenterState.Minimized
+				&& _lastNonMinimizedState == OverlappedPresenterState.Maximized);
+		if (presenter.State == OverlappedPresenterState.Restored)
 		{
 			_lastNormalBounds = new DesktopRect(_window.X, _window.Y, _window.Width, _window.Height);
 			_hasNormalBounds = true;
@@ -251,8 +272,9 @@ internal sealed class DesktopWindowChrome
 	/// surfaces; only when nothing was dismissed does the press become
 	/// in-app navigation through the same IWindow.BackButtonClicked
 	/// pipeline as the title-bar button (which owns the exit confirmation).
+	/// Internal so the title-bar button rides this same ordering.
 	/// </summary>
-	private void RunBack()
+	internal void RunBack()
 	{
 		var surfaceDismissed = !_shell.FlyoutIsPresented
 			&& (_shell.CurrentPage as IWindowsDesktopSurface)?.DismissTopmostSurface() == true;
@@ -294,7 +316,17 @@ internal sealed class DesktopWindowChrome
 
 	#region Initial focus
 
-	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
+	private void OnNavigated(object? sender, ShellNavigatedEventArgs e) => FocusCurrentPage();
+
+	private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+	{
+		if (e.PropertyName == nameof(Shell.CurrentPage))
+		{
+			FocusCurrentPage();
+		}
+	}
+
+	private void FocusCurrentPage()
 	{
 		if (_shell.CurrentPage is not { } page || page is not IWindowsDesktopSurface surface)
 		{
@@ -305,6 +337,7 @@ internal sealed class DesktopWindowChrome
 		if (_focusHookedPages.Add(page))
 		{
 			page.HandlerChanged += OnPageHandlerChanged;
+			page.Unloaded += OnPageUnloaded;
 		}
 	}
 
@@ -313,6 +346,21 @@ internal sealed class DesktopWindowChrome
 		if (sender is Page page)
 		{
 			page.Dispatcher.Dispatch(() => (page as IWindowsDesktopSurface)?.FocusInitialElement());
+		}
+	}
+
+	/// <summary>
+	/// A popped page unloads and leaves the hooked set — the strong
+	/// reference plus the HandlerChanged subscription would otherwise keep
+	/// every visited reader page alive for the window's lifetime. A page
+	/// that becomes current again is re-hooked by FocusCurrentPage.
+	/// </summary>
+	private void OnPageUnloaded(object? sender, EventArgs e)
+	{
+		if (sender is Page page && _focusHookedPages.Remove(page))
+		{
+			page.HandlerChanged -= OnPageHandlerChanged;
+			page.Unloaded -= OnPageUnloaded;
 		}
 	}
 

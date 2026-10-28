@@ -82,7 +82,8 @@
                              On Windows the column caps and centers (#2766). -->
                         <Grid RowDefinitions="Auto,*">
                             <Grid.MaximumWidthRequest>
-                                <OnPlatform x:TypeArguments="x:Double" Default="-1">
+                                <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
                                     <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
                                 </OnPlatform>
                             </Grid.MaximumWidthRequest>

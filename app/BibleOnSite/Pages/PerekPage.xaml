@@ -126,8 +126,11 @@
                              monitor is unreadable; touch platforms fill. -->
                         <Grid RowDefinitions="Auto,*"
                               AutomationProperties.ExcludedWithChildren="{Binding IsOffscreenCarouselPage}">
+                            <!-- Default must be PositiveInfinity — an explicit -1
+                                 collapses the element on mobile (it counts as a set
+                                 maximum, not as "unset"). -->
                             <Grid.MaximumWidthRequest>
-                                <OnPlatform x:TypeArguments="x:Double" Default="-1">
+                                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
                                     <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
                                 </OnPlatform>
                             </Grid.MaximumWidthRequest>

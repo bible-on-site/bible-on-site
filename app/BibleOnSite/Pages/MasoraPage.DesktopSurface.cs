@@ -9,7 +9,7 @@ namespace BibleOnSite.Pages;
 /// The masora reader has no in-page search surface, so it does not
 /// implement <see cref="IWindowsSearchSurface"/>.
 /// </summary>
-public partial class MasoraPage : IWindowsDesktopSurface
+public partial class MasoraPage : IWindowsDesktopSurface //NOSONAR — partial required: MasoraPage is split across 3 declaration parts.
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
 

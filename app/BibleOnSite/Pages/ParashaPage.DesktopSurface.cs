@@ -8,7 +8,7 @@ namespace BibleOnSite.Pages;
 /// page's transient surfaces through the existing reader Back chain, and
 /// Ctrl+F opens the parasha search.
 /// </summary>
-public partial class ParashaPage : IWindowsDesktopSurface, IWindowsSearchSurface
+public partial class ParashaPage : IWindowsDesktopSurface, IWindowsSearchSurface //NOSONAR — partial required: ParashaPage is split across 6 declaration parts.
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
 

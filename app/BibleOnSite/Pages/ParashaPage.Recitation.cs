@@ -917,6 +917,8 @@ public partial class ParashaPage
         { _ = FanMenu.CloseAsync(); return true; }
         if (ReaderMenuOverlay.IsOpen)
         { ReaderMenuOverlay.Close(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

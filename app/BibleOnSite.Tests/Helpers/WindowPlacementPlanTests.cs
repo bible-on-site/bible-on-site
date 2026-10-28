@@ -135,4 +135,60 @@ public class WindowPlacementPlanTests
         WindowPlacementPlan.Intersects(a, new DesktopRect(200, 0, 100, 100)).Should().BeFalse();
         WindowPlacementPlan.Intersects(a, new DesktopRect(0, 200, 100, 100)).Should().BeFalse();
     }
+
+    [Fact]
+    public void IntersectionArea_PartialOverlap_ReturnsCoveredArea()
+    {
+        var a = new DesktopRect(0, 0, 100, 100);
+        WindowPlacementPlan.IntersectionArea(a, new DesktopRect(50, 50, 100, 100))
+            .Should().Be(2500);
+    }
+
+    [Fact]
+    public void IntersectionArea_Disjoint_ReturnsZero()
+    {
+        var a = new DesktopRect(0, 0, 100, 100);
+        WindowPlacementPlan.IntersectionArea(a, new DesktopRect(200, 0, 100, 100)).Should().Be(0);
+        WindowPlacementPlan.IntersectionArea(a, new DesktopRect(0, 200, 100, 100)).Should().Be(0);
+    }
+
+    [Fact]
+    public void ClampToBestDisplay_BoundsInsideDisplay_PassesThrough()
+    {
+        var second = new DesktopRect(1920, 0, 1920, 1040);
+        var bounds = new DesktopRect(2000, 100, 800, 700);
+        WindowPlacementPlan.ClampToBestDisplay(bounds, [WorkArea, second], WorkArea)
+            .Should().Be(bounds);
+    }
+
+    [Fact]
+    public void ClampToBestDisplay_OnePixelOverlapOnDisconnectedEdge_KeepsVisibleEdge()
+    {
+        // Saved from a second monitor that no longer exists: only 1px would
+        // intersect the primary display, so the restore must still guarantee
+        // MinVisibleEdge of title bar instead of trusting the intersection.
+        var bounds = new DesktopRect(1919, 50, 800, 700);
+        var result = WindowPlacementPlan.ClampToBestDisplay(bounds, [WorkArea], WorkArea);
+        result.X.Should().BeLessThanOrEqualTo(1920 - WindowPlacementPlan.MinVisibleEdge);
+    }
+
+    [Fact]
+    public void ClampToBestDisplay_SpanningTwoDisplays_ClampsToDominantDisplay()
+    {
+        var second = new DesktopRect(1920, 0, 1920, 1040);
+        // Mostly on the second display; its own left edge pokes 1px past it.
+        var bounds = new DesktopRect(1919, 50, 900, 700);
+        var result = WindowPlacementPlan.ClampToBestDisplay(bounds, [WorkArea, second], WorkArea);
+        result.X.Should().BeGreaterThanOrEqualTo(second.X + WindowPlacementPlan.MinVisibleEdge - result.Width);
+        result.X.Should().BeLessThanOrEqualTo(second.X + second.Width - WindowPlacementPlan.MinVisibleEdge);
+    }
+
+    [Fact]
+    public void ClampToBestDisplay_NoIntersection_FallsBackToPrimaryWorkArea()
+    {
+        var farAway = new DesktopRect(5000, 5000, 800, 700);
+        var result = WindowPlacementPlan.ClampToBestDisplay(farAway, [WorkArea], WorkArea);
+        result.X.Should().BeLessThanOrEqualTo(WorkArea.X + WorkArea.Width - WindowPlacementPlan.MinVisibleEdge);
+        result.Y.Should().BeLessThanOrEqualTo(WorkArea.Y + WorkArea.Height - WindowPlacementPlan.MinVisibleEdge);
+    }
 }

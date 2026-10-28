@@ -8,7 +8,7 @@ namespace BibleOnSite.Pages;
 /// page's transient surfaces through the existing reader Back chain, and
 /// Ctrl+F opens the perek search.
 /// </summary>
-public partial class PerekPage : IWindowsDesktopSurface, IWindowsSearchSurface
+public partial class PerekPage : IWindowsDesktopSurface, IWindowsSearchSurface //NOSONAR — partial required: PerekPage is split across 5 declaration parts.
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
 

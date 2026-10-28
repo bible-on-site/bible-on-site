@@ -661,6 +661,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         { MasoraUnitPickerPopup.Hide(); return true; }
         if (FanMenu.IsOpen)
         { _ = FanMenu.CloseAsync(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         return false;
     }
 
