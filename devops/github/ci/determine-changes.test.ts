@@ -1005,7 +1005,7 @@ describe("publisher docstring AST proof", () => {
 		["UTF8 columns", '"""תיעוד יצוא ללא שינוי בקוד"""'],
 		[
 			"CRLF docstring",
-			publisherSource.slice(0, publisherDocEnd).replaceAll("\n", "\r\n"),
+			publisherSource.slice(0, publisherDocEnd).split("\n").join("\r\n"),
 		],
 		[
 			"escaped delimiter",
@@ -1052,7 +1052,7 @@ describe("publisher docstring AST proof", () => {
 	});
 	test("preserves all source bytes outside the docstring, including line endings", () => {
 		assert.equal(
-			astDocProof(publisherSource, correctedPublisher.replaceAll("\n", "\r\n")),
+			astDocProof(publisherSource, correctedPublisher.split("\n").join("\r\n")),
 			false,
 		);
 	});
@@ -1115,7 +1115,7 @@ function publisherFixture(
 		"clone",
 		"--quiet",
 		...(shallow ? ["--depth=1"] : []),
-		`file://${origin.replaceAll("\\", "/")}`,
+		`file://${origin.split("\\").join("/")}`,
 		clone,
 	);
 	return {
@@ -1227,9 +1227,10 @@ describe("publisher docstring release routing", () => {
 				ci_changed: true,
 			});
 			assert.equal(changes.perushim_pipeline.module_changed, pipeline);
-			assert.match(
-				output,
-				new RegExp(`^data_schema_only_changed=${schemaOnly}$`, "m"),
+			assert.ok(
+				output
+					.split(/\r?\n/)
+					.includes(`data_schema_only_changed=${schemaOnly}`),
 			);
 		});
 	}
