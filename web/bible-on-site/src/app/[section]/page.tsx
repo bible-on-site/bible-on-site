@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
+import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
@@ -94,6 +95,9 @@ export default async function Home({ params }: Props) {
 	const meta = getSection(section);
 	if (section !== undefined && !meta) notFound();
 	const scrollTarget = meta?.scrollTarget;
+	// Shelf dedications (#2731) — tag-cached, so a dedication change expires
+	// this render through `dedications:bookshelf`.
+	const dedications = await getBookshelfDedicationLines();
 	return (
 		<div className={styles.page}>
 			{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
@@ -143,7 +147,7 @@ export default async function Home({ params }: Props) {
 				</section>
 				<div className={styles.alHaperekDivider} />
 			</section>
-			<TanahSefarimSection />
+			<TanahSefarimSection dedications={dedications} />
 			<NumbersSection />
 			<AppSection />
 			<TosSection />

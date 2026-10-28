@@ -86,6 +86,21 @@ export type EntityChange =
 			uniqueNames: string[];
 			entityTypes?: string[];
 			refPerekIds?: number[];
+	  }
+	| {
+			kind: "dedication";
+			/** tanah_dedication.id — survives edits/deletes. */
+			id: number;
+			/** Old ∪ new assignments (#2731); the website maps them to scoped tags/paths. */
+			perekRanges?: { low: number; high: number }[];
+			seferIds?: number[];
+			helekIds?: number[];
+			parashaIds?: number[];
+			articleIds?: number[];
+			/** Canonical tanahpedia_entry ids of entry-scoped assignments. */
+			entryIds?: string[];
+			/** True when the dedication carries the whole-masora scope. */
+			masora?: boolean;
 	  };
 
 export interface RevalidateRequest {
@@ -465,6 +480,39 @@ export function authorChange(input: {
  * the entity types, synonyms and source perakim while the row still
  * exists — after the delete they are unresolvable.
  */
+/**
+ * A dedication create/update/delete (#2731). The caller supplies the old ∪
+ * new assignment set — gathered pre-commit on deletes, post-commit
+ * otherwise — and the website's dependency resolver maps it to the scoped
+ * dedication tags and pages.
+ */
+export function dedicationChange(input: {
+	id: number;
+	perekRanges?: { low: number; high: number }[];
+	seferIds?: number[];
+	helekIds?: number[];
+	parashaIds?: number[];
+	articleIds?: number[];
+	entryIds?: string[];
+	masora?: boolean;
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "dedication",
+				id: input.id,
+				...(input.perekRanges?.length ? { perekRanges: input.perekRanges } : {}),
+				...(input.seferIds?.length ? { seferIds: input.seferIds } : {}),
+				...(input.helekIds?.length ? { helekIds: input.helekIds } : {}),
+				...(input.parashaIds?.length ? { parashaIds: input.parashaIds } : {}),
+				...(input.articleIds?.length ? { articleIds: input.articleIds } : {}),
+				...(input.entryIds?.length ? { entryIds: input.entryIds } : {}),
+				...(input.masora ? { masora: true } : {}),
+			},
+		],
+	};
+}
+
 export function pediaEntryChange(input: {
 	uniqueName: string;
 	oldUniqueName?: string;

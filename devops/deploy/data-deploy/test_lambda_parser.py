@@ -116,6 +116,41 @@ class LambdaParserSafetyTests(unittest.TestCase):
         self.assertEqual(len(statements), 34)
         self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
 
+    def test_dedication_upgrade_is_in_manifest_and_lambda_safe(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        self.assertIn("tanah_dedication_upgrade.sql", manifest)
+        path = ROOT / "data/mysql" / "tanah_dedication_upgrade.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        processed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
+        statements = LAMBDA.parse_statements(processed)
+        # Two session settings plus 18 idempotent blocks (bootstrap creates,
+        # guarded column adds, guarded FK adds and the scope link tables),
+        # each a SET/PREPARE/EXECUTE/DEALLOCATE group.
+        self.assertEqual(len(statements), 74)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
+        # The rewriter must not see literal table-creation keywords: every
+        # new or preserved dedication table is built inside a string.
+        self.assertNotIn("CREATE TABLE", processed.upper().replace("CREATE ', 'TABLE", ""))
+
+    def test_dedication_seed_data_is_in_manifest_and_idempotent(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        self.assertIn("tanah_dedication_data.sql", manifest)
+        self.assertLess(
+            manifest.index("tanah_dedication_upgrade.sql"),
+            manifest.index("tanah_dedication_data.sql"),
+        )
+        path = ROOT / "data/mysql" / "tanah_dedication_data.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        processed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
+        statements = LAMBDA.parse_statements(processed)
+        # 2 session settings + 3 type guards x (SET + INSERT)
+        # + 5 records x (INSERT + SET + INSERT IGNORE + INSERT IGNORE).
+        self.assertEqual(len(statements), 28)
+        # Seed content must never wipe anything.
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|REPLACE|CREATE)\b")
+        for subject in ("מרדכי בן זאב", "יעל בת רחל", "מזל בת רחל", "עלושה בת גֿזלה", "ראובן בן יקוט"):
+            self.assertIn(subject, processed)
+
     def test_mention_schema_is_in_manifest_and_remains_one_additive_statement(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         self.assertIn(MIGRATION, manifest)

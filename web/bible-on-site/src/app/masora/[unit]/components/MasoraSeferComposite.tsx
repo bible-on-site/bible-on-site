@@ -66,6 +66,8 @@ export const MasoraSeferComposite = (props: {
 	perekSources: Record<number, string>;
 	articles: ArticleSummary[];
 	perushim: RangePerushSummary[];
+	/** Feature-level מסורה על הפרק dedication lines (#2731). */
+	coverDedications?: string[];
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 	const router = useRouter();
@@ -203,6 +205,7 @@ export const MasoraSeferComposite = (props: {
 						perekSources={props.perekSources}
 						articles={props.articles}
 						perushim={props.perushim}
+						coverDedications={props.coverDedications}
 						initialBookPage={initialBookPage}
 						initialContent={initialContent}
 						isVisible={currentlyToggled}

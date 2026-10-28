@@ -162,6 +162,10 @@ const Sefer = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	imagesByPerek?: Record<number, PerekIllustration[]>;
+	/** Sefer-scoped dedication lines for the front cover (#2731). */
+	seferDedications?: string[];
+	/** Perek-scoped dedication lines by canonical perek id (#2731). */
+	perekDedications?: Record<number, string[]>;
 	initialSlug?: string;
 	initialBookPage?: BookPage | null;
 	/** Whether the reader is shown. A host may keep it mounted but hidden (the
@@ -416,6 +420,7 @@ const Sefer = (props: {
 				seferName={perekObj.sefer}
 				subtitle={SEFER_COVER_SUBTITLE}
 				edition={SEFER_COVER_EDITION}
+				dedications={props.seferDedications}
 			/>
 		</section>
 	);
@@ -487,6 +492,16 @@ const Sefer = (props: {
 									{toHebrewChapterNumber(perekIdx + 1)}
 								</span>
 							</div>
+							{(props.perekDedications?.[pagePerekId ?? 0] ?? []).map(
+								(line, index) => (
+									// The perek's dedication sits at its reading heading —
+									// sefer/helek scopes live on the cover and shelf (#2731).
+									// biome-ignore lint/suspicious/noArrayIndexKey: content is the identity
+									<p key={index} className={styles.perekDedication}>
+										{line}
+									</p>
+								),
+							)}
 							<RecitationHeader title={perek.header} />
 						</div>
 						<div className={styles.perekTextScrollWrapper}>
