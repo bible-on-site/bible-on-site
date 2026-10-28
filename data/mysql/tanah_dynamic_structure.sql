@@ -78,6 +78,8 @@ DROP TABLE IF EXISTS `tanah_dedication`;
 CREATE TABLE `tanah_dedication` (
     `id` mediumint NOT NULL AUTO_INCREMENT,
     `subject` varchar(1023) NOT NULL,
+    -- Whole-dedication expiry, UTC; NULL = ongoing (#2731).
+    `expires_at` datetime NULL DEFAULT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */
@@ -133,7 +135,13 @@ DROP TABLE IF EXISTS `tanah_article_dedication`;
 CREATE TABLE `tanah_article_dedication` (
     `article_id` mediumint NOT NULL,
     `dedication_id` mediumint NOT NULL,
-    PRIMARY KEY (`article_id`, `dedication_id`)
+    -- Assignment-level expiry, UTC; NULL = ongoing (#2731).
+    `expires_at` datetime NULL DEFAULT NULL,
+    PRIMARY KEY (`article_id`, `dedication_id`),
+    CONSTRAINT `fk_article_dedication_article` FOREIGN KEY (`article_id`)
+        REFERENCES `tanah_article` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_article_dedication_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */
 ;
@@ -148,7 +156,11 @@ DROP TABLE IF EXISTS `tanah_dedication_dedication_type`;
 CREATE TABLE `tanah_dedication_dedication_type` (
     `dedication_id` mediumint NOT NULL,
     `dedication_type_id` tinyint NOT NULL,
-    PRIMARY KEY (`dedication_id`, `dedication_type_id`)
+    PRIMARY KEY (`dedication_id`, `dedication_type_id`),
+    CONSTRAINT `fk_ddt_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_ddt_type` FOREIGN KEY (`dedication_type_id`)
+        REFERENCES `tanah_dedication_type` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */
 ;
@@ -164,8 +176,106 @@ CREATE TABLE `tanah_perek_dedication` (
     `perek_id_low` int NOT NULL,
     `perek_id_high` int NOT NULL,
     `dedication_id` mediumint NOT NULL,
-    PRIMARY KEY (`perek_id_low`, `perek_id_high`, `dedication_id`)
+    -- Assignment-level expiry, UTC; NULL = ongoing (#2731).
+    `expires_at` datetime NULL DEFAULT NULL,
+    PRIMARY KEY (`perek_id_low`, `perek_id_high`, `dedication_id`),
+    CONSTRAINT `fk_perek_dedication_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3;
+
+--
+-- Table structure for table `tanah_sefer_dedication`
+--
+DROP TABLE IF EXISTS `tanah_sefer_dedication`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- Full-sefer scope (#2731). sefer_id carries no FK: deploys recreate
+-- tanah_sefer and a cascade would delete still-valid assignments; the write
+-- path validates the canonical sefer id instead.
+CREATE TABLE `tanah_sefer_dedication` (
+    `sefer_id` int NOT NULL,
+    `dedication_id` mediumint NOT NULL,
+    `expires_at` datetime NULL DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`sefer_id`, `dedication_id`),
+    KEY `idx_sefer_dedication` (`dedication_id`),
+    CONSTRAINT `fk_sefer_dedication_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+--
+-- Table structure for table `tanah_helek_dedication`
+--
+DROP TABLE IF EXISTS `tanah_helek_dedication`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- Full-helek scope (#2731). helek_id carries no FK for the same reason.
+CREATE TABLE `tanah_helek_dedication` (
+    `helek_id` tinyint NOT NULL,
+    `dedication_id` mediumint NOT NULL,
+    `expires_at` datetime NULL DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`helek_id`, `dedication_id`),
+    KEY `idx_helek_dedication` (`dedication_id`),
+    CONSTRAINT `fk_helek_dedication_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+--
+-- Table structure for table `tanah_parasha_dedication`
+--
+DROP TABLE IF EXISTS `tanah_parasha_dedication`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- Weekly-parasha scope (#2731): parasha_id is the unit id of the shared
+-- parasha division (the /פרשה route identity). Joined weekly readings keep
+-- each parasha's own identity, so each side of a combined reading carries
+-- its own dedication rows.
+CREATE TABLE `tanah_parasha_dedication` (
+    `parasha_id` smallint NOT NULL,
+    `dedication_id` mediumint NOT NULL,
+    `expires_at` datetime NULL DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`parasha_id`, `dedication_id`),
+    KEY `idx_parasha_dedication` (`dedication_id`),
+    CONSTRAINT `chk_parasha_dedication_id` CHECK (`parasha_id` >= 1),
+    CONSTRAINT `fk_parasha_dedication_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+--
+-- Table structure for table `tanah_masora_dedication`
+--
+DROP TABLE IF EXISTS `tanah_masora_dedication`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- Whole-feature מסורה על הפרק scope (#2731): one row per dedication, never
+-- per internal masoretic parasha.
+CREATE TABLE `tanah_masora_dedication` (
+    `dedication_id` mediumint NOT NULL,
+    `expires_at` datetime NULL DEFAULT NULL,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`dedication_id`),
+    CONSTRAINT `fk_masora_dedication_dedication` FOREIGN KEY (`dedication_id`)
+        REFERENCES `tanah_dedication` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+-- The Tanahpedia-entry scope table (tanahpedia_entry_dedication) is created
+-- by tanah_dedication_upgrade.sql instead: this file runs before the
+-- Tanahpedia structure exists in the db-populator ordering, and its FK to
+-- tanahpedia_entry requires the target table to be present already.
 /*!40101 SET character_set_client = @saved_cs_client */
 ;
 --

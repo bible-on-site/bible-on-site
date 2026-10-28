@@ -10,8 +10,19 @@ import {
 	verifyIdToken,
 	verifyServiceAccessToken,
 } from "./server/auth";
+import { rescanDedicationExpiries } from "./server/dedication-expiry";
 
 const SKIP_AUTH = process.env.SKIP_AUTH === "true";
+
+// Boot catch-up for expiry-instant invalidations (#2731): arms timers for
+// future dedication expiries and flushes ones that elapsed while the admin
+// was down. Skipped when the website endpoint is not configured — every
+// flush would no-op on the same check anyway.
+if (process.env.VITE_WEBSITE_URL && process.env.REVALIDATE_SECRET) {
+	void rescanDedicationExpiries().catch((error) =>
+		console.error("dedication expiry rescan failed:", error),
+	);
+}
 
 function firstHeaderValue(value: string | null): string | null {
 	if (!value) return null;

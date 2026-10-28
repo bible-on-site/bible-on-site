@@ -146,6 +146,21 @@
                                            FontSize="14"
                                            HorizontalTextAlignment="Center"
                                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                    <!-- Whole-parasha dedications (#2731) — bound to the page's
+                                         view model, which tracks the displayed unit -->
+                                    <VerticalStackLayout Spacing="0"
+                                                         BindableLayout.ItemsSource="{Binding BindingContext.DedicationLines, Source={x:Reference ParashaPageRoot}}"
+                                                         IsVisible="{Binding BindingContext.HasDedications, Source={x:Reference ParashaPageRoot}}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Label Text="{Binding .}"
+                                                       FontSize="13"
+                                                       FontAttributes="Italic"
+                                                       HorizontalTextAlignment="Center"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
                                 </VerticalStackLayout>
                                 <!-- קריינות: plays the whole unit; shown only when the
                                      menu checkbox is checked and the unit has audio -->

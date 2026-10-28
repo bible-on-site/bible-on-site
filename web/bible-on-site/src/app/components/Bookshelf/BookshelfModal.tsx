@@ -1,7 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getBookshelfDedicationLines } from "@/app/929/[number]/actions";
+import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import { Bookshelf } from "./Bookshelf";
 import styles from "./bookshelf-modal.module.css";
@@ -21,6 +23,24 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 	const router = useRouter();
 	const dialogRef = useRef<HTMLDialogElement>(null);
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
+	// Shelf dedications (#2731) load when the picker actually opens — the
+	// readers never pay the query for a modal they may not open.
+	const [dedications, setDedications] =
+		useState<BookshelfDedicationLines | null>(null);
+	useEffect(() => {
+		if (!isOpen || dedications !== null) return;
+		let cancelled = false;
+		getBookshelfDedicationLines()
+			.then((result) => {
+				if (!cancelled) setDedications(result);
+			})
+			.catch((error) => {
+				console.error("Failed to load bookshelf dedications", error);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [isOpen, dedications]);
 
 	// Handle escape key
 	useEffect(() => {
@@ -95,7 +115,10 @@ const BookshelfModal: React.FC<BookshelfModalProps> = ({ isOpen, onClose }) => {
 				>
 					×
 				</button>
-				<Bookshelf onSeferClick={handleSeferClick} />
+				<Bookshelf
+					onSeferClick={handleSeferClick}
+					dedications={dedications ?? undefined}
+				/>
 			</div>
 		</dialog>
 	);
