@@ -440,8 +440,10 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         var before = driver.PageSource;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            // Preferences uses a custom top bar, outside UIKit's navigation bar.
-            var button = driver.FindElements(AutomationId("PreferencesBackButton"))
+            // The shared capsule back is the app's visible back control on the
+            // custom top-bar pages (preferences, readers) — all outside UIKit's
+            // navigation bar (#2467).
+            var button = driver.FindElements(AutomationId("TopBarBackButton"))
                 .FirstOrDefault(element => element.Displayed && CanTap(element))
                 ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
                     .FirstOrDefault(element => element.Displayed && CanTap(element));
