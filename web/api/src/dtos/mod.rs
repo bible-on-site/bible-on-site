@@ -1,5 +1,6 @@
 pub mod article;
 pub mod author;
+pub mod dedication;
 pub mod perek;
 pub mod sefer;
 pub mod starter;

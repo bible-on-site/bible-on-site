@@ -68,6 +68,8 @@ export const ParashaSeferComposite = (props: {
 	perushim: RangePerushSummary[];
 	haftaraArticles: ArticleSummary[];
 	haftaraPerushim: RangePerushSummary[];
+	/** Parasha-scoped dedication lines per unit — once per Torah spread (#2731). */
+	dedicationsByUnit?: Record<number, string[]>;
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 	const router = useRouter();
@@ -227,6 +229,7 @@ export const ParashaSeferComposite = (props: {
 						perushim={props.perushim}
 						haftaraArticles={props.haftaraArticles}
 						haftaraPerushim={props.haftaraPerushim}
+						dedicationsByUnit={props.dedicationsByUnit}
 						initialBookPage={initialBookPage}
 						haftara={searchParams.get("haftara") != null}
 						initialContent={initialContent}

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
+import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
 import styles from "./TanahSefarimSection.module.css";
 
 // Dynamically import Bookshelf with no SSR to avoid hydration issues
@@ -22,7 +23,12 @@ const Bookshelf = dynamic(
 	},
 );
 
-export function TanahSefarimSection() {
+export function TanahSefarimSection({
+	dedications,
+}: {
+	/** Shelf dedication lines loaded by the server page (#2731). */
+	dedications?: BookshelfDedicationLines;
+}) {
 	const router = useRouter();
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 
@@ -39,7 +45,7 @@ export function TanahSefarimSection() {
 				<h3>בחרו ספר כדי להתחיל ללמוד</h3>
 			</header>
 			<div className={styles.bookshelfContainer}>
-				<Bookshelf onSeferClick={handleSeferClick} />
+				<Bookshelf onSeferClick={handleSeferClick} dedications={dedications} />
 			</div>
 			<div className={styles.bottomDivider} />
 		</section>
