@@ -442,6 +442,9 @@ describe("resolveEntityChanges", () => {
 
 	it("resolves a perek-range dedication change to its perakim", async () => {
 		stubDb({});
+		// Perakim 3-4 sit inside בראשית (1-50): their flat pages changed,
+		// and so did the book spread of every other perek in the sefer —
+		// the range also fans out to the whole sefer's /929 paths (#2731).
 		const out = await resolveEntityChanges([
 			{ kind: "dedication", id: 7, perekRanges: [{ low: 3, high: 4 }] },
 		]);
@@ -452,8 +455,10 @@ describe("resolveEntityChanges", () => {
 			]),
 		);
 		expect(out.paths).toEqual(
-			expect.arrayContaining(["/929/3", "/929/4"]),
+			expect.arrayContaining(["/929/1", "/929/3", "/929/4", "/929/50"]),
 		);
+		expect(out.paths).not.toContain("/929/51");
+		expect(out.paths.filter((p) => p.startsWith("/929/"))).toHaveLength(50);
 	});
 
 	it("expires a sefer dedication across its whole perek range", async () => {

@@ -64,7 +64,7 @@ function DedicationsPage() {
 		queryKey: ["dedications", search, show],
 		queryFn: () => listDedications({ data: { search, show } }),
 	});
-	const { data: types } = useQuery({ queryKey: ["dedication-types"], queryFn: () => getDedicationTypes() });
+	const { data: types, isLoading: typesLoading } = useQuery({ queryKey: ["dedication-types"], queryFn: () => getDedicationTypes() });
 	const { data: targetOptions } = useQuery({
 		queryKey: ["dedication-target-options"],
 		queryFn: () => getDedicationTargetOptions(),
@@ -91,12 +91,17 @@ function DedicationsPage() {
 	});
 	const error = createMutation.error ?? updateMutation.error ?? deleteMutation.error;
 
+	// purposeTypeIds come from the record itself — mapping names through the
+	// still-loading types query used to open the editor with an empty
+	// selection that saving then applied as a full wipe (#2731). The edit
+	// button also stays disabled until the types list resolves so the
+	// purpose checkboxes never render empty.
+
 	const openEdit = (d: AdminDedication) =>
 		setForm({
 			id: d.id,
 			subject: d.subject,
-			purposeTypeIds:
-				types?.filter((t) => d.purposes.includes(t.description)).map((t) => t.id) ?? [],
+			purposeTypeIds: d.purposeTypeIds,
 			expiresAt: toInputExpiry(d.expiresAt),
 			targets: targetsToInputs(d),
 		});
@@ -183,7 +188,13 @@ function DedicationsPage() {
 										{d.expired ? " (פג)" : ""}
 									</td>
 									<td className="px-4 py-2 whitespace-nowrap">
-										<button type="button" onClick={() => openEdit(d)} className="text-blue-600 hover:underline ml-3">
+										<button
+											type="button"
+											onClick={() => openEdit(d)}
+											disabled={typesLoading}
+											title={typesLoading ? "טוען מטרות..." : undefined}
+											className="text-blue-600 hover:underline ml-3 disabled:opacity-50 disabled:no-underline"
+										>
 											ערוך
 										</button>
 										<button

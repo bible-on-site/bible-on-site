@@ -299,7 +299,18 @@ pub async fn resolve(
         }
     }
 
-    hydrate(db, matched, true, now).await
+    if matched.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut ids: Vec<i32> = matched.iter().map(|(id, _)| *id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let dedications = dedication::Entity::find()
+        .filter(dedication::Column::Id.is_in(ids))
+        .all(db.get_connection())
+        .await
+        .map_err(internal)?;
+    hydrate(db, dedications, matched, true, now).await
 }
 
 /// Admin listing: every dedication with every assignment, including expired —
@@ -410,38 +421,36 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    hydrate(db, matched, false, Utc::now().naive_utc()).await
+    // The dedication table drives the listing — a row with no assignments
+    // still appears (empty scope list) so an unassigned creation neither
+    // errors the mutation's post-commit read nor hides from the admin list.
+    let dedications = dedication::Entity::find()
+        .all(db.get_connection())
+        .await
+        .map_err(internal)?;
+    hydrate(db, dedications, matched, false, Utc::now().naive_utc()).await
 }
 
-/// Loads the dedication rows + purposes for the matched ids and folds
-/// `matched` into per-dedication aggregates. `active_only` drops expired
-/// dedications (public path); the admin path keeps them.
+/// Loads the purpose links for `dedications` and folds `matched` into
+/// per-dedication aggregates. `active_only` drops expired dedications
+/// (public path); the admin path keeps them.
 async fn hydrate(
     db: &Database,
+    dedications: Vec<dedication::Model>,
     matched: Vec<(i32, ScopeMatch)>,
     active_only: bool,
     now: NaiveDateTime,
 ) -> Result<Vec<DedicationAggregate>, ServiceError> {
-    if matched.is_empty() {
-        return Ok(Vec::new());
-    }
-    let ids: Vec<i32> = {
-        let mut v: Vec<i32> = matched.iter().map(|(id, _)| *id).collect();
-        v.sort_unstable();
-        v.dedup();
-        v
+    let ids: Vec<i32> = dedications.iter().map(|d| d.id).collect();
+    let purpose_links = if ids.is_empty() {
+        Vec::new()
+    } else {
+        dedication_dedication_type::Entity::find()
+            .filter(dedication_dedication_type::Column::DedicationId.is_in(ids))
+            .all(db.get_connection())
+            .await
+            .map_err(internal)?
     };
-    let dedications = dedication::Entity::find()
-        .filter(dedication::Column::Id.is_in(ids.clone()))
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?;
-
-    let purpose_links = dedication_dedication_type::Entity::find()
-        .filter(dedication_dedication_type::Column::DedicationId.is_in(ids.clone()))
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?;
     let types = dedication_type::Entity::find()
         .all(db.get_connection())
         .await
@@ -1446,6 +1455,94 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].dedication.id, 9);
         assert_eq!(out[0].scopes[0].expires_at, Some(ts("2000-01-01 00:00:00")));
+    }
+
+    fn empty_link_tables(mock: MockDatabase) -> MockDatabase {
+        mock.append_query_results::<
+            perek_dedication::Model,
+            Vec<perek_dedication::Model>,
+            _,
+        >([vec![]])
+        .append_query_results::<sefer_dedication::Model, Vec<sefer_dedication::Model>, _>([vec![]])
+        .append_query_results::<helek_dedication::Model, Vec<helek_dedication::Model>, _>([vec![]])
+        .append_query_results::<
+            parasha_dedication::Model,
+            Vec<parasha_dedication::Model>,
+            _,
+        >([vec![]])
+        .append_query_results::<
+            article_dedication::Model,
+            Vec<article_dedication::Model>,
+            _,
+        >([vec![]])
+        .append_query_results::<
+            tanahpedia_entry_dedication::Model,
+            Vec<tanahpedia_entry_dedication::Model>,
+            _,
+        >([vec![]])
+        .append_query_results::<
+            masora_dedication::Model,
+            Vec<masora_dedication::Model>,
+            _,
+        >([vec![]])
+    }
+
+    #[tokio::test]
+    async fn list_all_includes_targetless_dedication() {
+        // A dedication with no assignments still lists — keying the admin
+        // view off link rows alone hid it (#2731).
+        let mock = empty_link_tables(MockDatabase::new(DatabaseBackend::MySql))
+            .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                dedication_model(9, "לרפואה שלמה", None),
+            ]])
+            .append_query_results::<
+                dedication_dedication_type::Model,
+                Vec<dedication_dedication_type::Model>,
+                _,
+            >([vec![]])
+            .append_query_results::<
+                dedication_type::Model,
+                Vec<dedication_type::Model>,
+                _,
+            >([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock);
+
+        let out = list_all(&db).await.unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].dedication.id, 9);
+        assert!(out[0].scopes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn create_with_no_targets_returns_the_stored_aggregate() {
+        // Regression (#2731): an unassigned creation committed fine, then
+        // the post-commit reload reported Not Found because the listing
+        // keyed off assignment rows alone.
+        let mock = MockDatabase::new(DatabaseBackend::MySql)
+            // insert dedication
+            .append_exec_results(exec_results(1, 42, 1));
+        // find_aggregate → list_all: empty link tables + the new row.
+        let mock = empty_link_tables(mock)
+            .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([
+                vec![dedication_model(42, "x", None)],
+            ])
+            .append_query_results::<
+                dedication_dedication_type::Model,
+                Vec<dedication_dedication_type::Model>,
+                _,
+            >([vec![]])
+            .append_query_results::<
+                dedication_type::Model,
+                Vec<dedication_type::Model>,
+                _,
+            >([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock);
+
+        let out = create(&db, "x".into(), None, vec![], vec![]).await.unwrap();
+        assert_eq!(out.dedication.id, 42);
+        assert!(out.scopes.is_empty());
     }
 
     fn target_input(

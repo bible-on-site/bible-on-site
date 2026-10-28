@@ -69,6 +69,10 @@ export interface AdminDedication {
 	/** True when expires_at <= now (UTC) — still listed, admin sees expired rows. */
 	expired: boolean;
 	purposes: string[];
+	/** tanah_dedication_type ids of `purposes` — the edit form restores the
+	 * selection straight from the record, without waiting on the types
+	 * query (a race that wiped purposes on save, #2731). */
+	purposeTypeIds: number[];
 	targets: AdminTarget[];
 }
 
@@ -97,6 +101,11 @@ export const getDedicationTargetOptions = createServerFn({ method: "GET" }).hand
 	},
 );
 
+/** `count` `?` placeholders for an IN clause — generated, never data. */
+function placeholders(count: number): string {
+	return Array.from({ length: count }, () => "?").join(", ");
+}
+
 interface LinkRows {
 	perek: { perek_id_low: number; perek_id_high: number; expires_at: string | null }[];
 	sefer: { sefer_id: number; expires_at: string | null }[];
@@ -109,38 +118,37 @@ interface LinkRows {
 
 async function loadTargets(ids: number[]): Promise<Map<number, AdminTarget[]>> {
 	if (ids.length === 0) return new Map();
-	const ph = ids.map(() => "?").join(", ");
 	const [perek, sefer, helek, parasha, article, entry, masora] = await Promise.all([
 		query<LinkRows["perek"][number]>(
-			`SELECT dedication_id, perek_id_low, perek_id_high, CAST(expires_at AS CHAR) AS expires_at FROM tanah_perek_dedication WHERE dedication_id IN (${ph})`,
+			`SELECT dedication_id, perek_id_low, perek_id_high, CAST(expires_at AS CHAR) AS expires_at FROM tanah_perek_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		) as Promise<(LinkRows["perek"][number] & { dedication_id: number })[]>,
 		query<(LinkRows["sefer"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, sefer_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_sefer_dedication WHERE dedication_id IN (${ph})`,
+			`SELECT dedication_id, sefer_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_sefer_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		),
 		query<(LinkRows["helek"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, helek_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_helek_dedication WHERE dedication_id IN (${ph})`,
+			`SELECT dedication_id, helek_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_helek_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		),
 		query<(LinkRows["parasha"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, parasha_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_parasha_dedication WHERE dedication_id IN (${ph})`,
+			`SELECT dedication_id, parasha_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_parasha_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		),
 		query<(LinkRows["article"][number] & { dedication_id: number })>(
 			`SELECT ad.dedication_id, ad.article_id, a.name, CAST(ad.expires_at AS CHAR) AS expires_at
 			 FROM tanah_article_dedication ad LEFT JOIN tanah_article a ON a.id = ad.article_id
-			 WHERE ad.dedication_id IN (${ph})`,
+			 WHERE ad.dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		),
 		query<(LinkRows["entry"][number] & { dedication_id: number })>(
 			`SELECT ed.dedication_id, ed.entry_id, e.unique_name, CAST(ed.expires_at AS CHAR) AS expires_at
 			 FROM tanahpedia_entry_dedication ed LEFT JOIN tanahpedia_entry e ON e.id = ed.entry_id
-			 WHERE ed.dedication_id IN (${ph})`,
+			 WHERE ed.dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		),
 		query<(LinkRows["masora"][number] & { dedication_id: number })>(
-			`SELECT dedication_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_masora_dedication WHERE dedication_id IN (${ph})`,
+			`SELECT dedication_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_masora_dedication WHERE dedication_id IN (${placeholders(ids.length)})`,
 			ids,
 		),
 	]);
@@ -237,11 +245,10 @@ function changeFromTargets(targets: AdminTarget[] | DedicationTargetInput[]) {
 
 async function enrich(rows: { id: number; subject: string; expires_at: string | null; expired: number }[]): Promise<AdminDedication[]> {
 	const ids = rows.map((r) => r.id);
-	const ph = ids.map(() => "?").join(", ");
 	const [purposeLinks, types, targets] = await Promise.all([
 		ids.length
 			? query<{ dedication_id: number; dedication_type_id: number }>(
-					`SELECT dedication_id, dedication_type_id FROM tanah_dedication_dedication_type WHERE dedication_id IN (${ph})`,
+					`SELECT dedication_id, dedication_type_id FROM tanah_dedication_dedication_type WHERE dedication_id IN (${placeholders(ids.length)})`,
 					ids,
 				)
 			: Promise.resolve([]),
@@ -249,18 +256,21 @@ async function enrich(rows: { id: number; subject: string; expires_at: string | 
 		loadTargets(ids),
 	]);
 	const typeNames = new Map(types.map((t) => [t.id, t.description]));
-	const purposesById = new Map<number, string[]>();
+	const purposeIdsById = new Map<number, number[]>();
+	const purposeNamesById = new Map<number, string[]>();
 	for (const link of purposeLinks) {
 		const name = typeNames.get(link.dedication_type_id);
 		if (!name) continue;
-		purposesById.set(link.dedication_id, [...(purposesById.get(link.dedication_id) ?? []), name].sort());
+		purposeIdsById.set(link.dedication_id, [...(purposeIdsById.get(link.dedication_id) ?? []), link.dedication_type_id]);
+		purposeNamesById.set(link.dedication_id, [...(purposeNamesById.get(link.dedication_id) ?? []), name].sort());
 	}
 	return rows.map((row) => ({
 		id: row.id,
 		subject: row.subject,
 		expiresAt: row.expires_at,
 		expired: row.expired === 1,
-		purposes: purposesById.get(row.id) ?? [],
+		purposes: purposeNamesById.get(row.id) ?? [],
+		purposeTypeIds: purposeIdsById.get(row.id) ?? [],
 		targets: targets.get(row.id) ?? [],
 	}));
 }
@@ -269,6 +279,30 @@ export interface ListFilter {
 	search?: string;
 	/** "active" (default) | "expired" | "all" — expired rows stay manageable (#2731). */
 	show?: "active" | "expired" | "all";
+}
+
+/**
+ * A dedication is publicly live only while itself unexpired AND at least
+ * one assignment is unexpired — the same rule the public resolver applies
+ * per scope, so the "active" tab must see through assignment expiry too
+ * (#2731). A row with no live target sits on the expired tab. `outer` is
+ * the enclosing query's tanah_dedication alias (or the bare table name).
+ */
+function liveTargetClause(outer: string): string {
+	return [
+		"tanah_perek_dedication",
+		"tanah_sefer_dedication",
+		"tanah_helek_dedication",
+		"tanah_parasha_dedication",
+		"tanah_article_dedication",
+		"tanahpedia_entry_dedication",
+		"tanah_masora_dedication",
+	]
+		.map(
+			(table) =>
+				`EXISTS (SELECT 1 FROM ${table} lt WHERE lt.dedication_id = ${outer}.id AND (lt.expires_at IS NULL OR lt.expires_at > UTC_TIMESTAMP()))`,
+		)
+		.join(" OR ");
 }
 
 export const listDedications = createServerFn({ method: "GET" })
@@ -280,12 +314,17 @@ export const listDedications = createServerFn({ method: "GET" })
 			clauses.push("d.subject LIKE ?");
 			params.push(`%${data.search.trim()}%`);
 		}
-		if (data.show === "active") clauses.push("(d.expires_at IS NULL OR d.expires_at > UTC_TIMESTAMP())");
-		if (data.show === "expired") clauses.push("(d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP())");
+		if (data.show === "active") {
+			clauses.push("(d.expires_at IS NULL OR d.expires_at > UTC_TIMESTAMP())");
+			clauses.push(`(${liveTargetClause("d")})`);
+		}
+		if (data.show === "expired") {
+			clauses.push(`((d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) OR NOT (${liveTargetClause("d")}))`);
+		}
 		const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 		const rows = await query<{ id: number; subject: string; expires_at: string | null; expired: number }>(
 			`SELECT d.id, d.subject, CAST(d.expires_at AS CHAR) AS expires_at,
-			        (d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) AS expired
+			        ((d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) OR NOT (${liveTargetClause("d")})) AS expired
 			 FROM tanah_dedication d ${where} ORDER BY d.id`,
 			params,
 		);
@@ -297,7 +336,7 @@ export const getDedication = createServerFn({ method: "GET" })
 	.handler(async ({ data: id }): Promise<AdminDedication | null> => {
 		const rows = await query<{ id: number; subject: string; expires_at: string | null; expired: number }>(
 			`SELECT id, subject, CAST(expires_at AS CHAR) AS expires_at,
-			        (expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP()) AS expired
+			        ((expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP()) OR NOT (${liveTargetClause("tanah_dedication")})) AS expired
 			 FROM tanah_dedication WHERE id = ?`,
 			[id],
 		);
@@ -428,14 +467,17 @@ export const createDedication = createServerFn({ method: "POST" })
 			}
 			return insertId;
 		});
-		// Post-commit: expire every scoped page that now renders it (#2731).
+		// Post-commit: expire every scoped page that now renders it (#2731),
+		// and arm the expiry-instant wake-up for stored expiries.
 		void revalidateWebsite([dedicationChange({ id, ...changeFromTargets(data.targets) })]);
+		void syncDedicationExpiry(id);
 		return {
 			id,
 			subject: data.subject,
 			expiresAt: data.expiresAt,
 			expired: false,
 			purposes: [],
+			purposeTypeIds: data.purposeTypeIds,
 			targets: data.targets.map((t) => ({ kind: t.kind, label: targetLabel(t), expiresAt: t.expiresAt ?? null })),
 		};
 	});
@@ -593,6 +635,7 @@ export const updateDedication = createServerFn({ method: "POST" })
 			}
 		});
 		void revalidateWebsite([dedicationChange(mergeChanges(data.id, oldTargets, data.targets))]);
+		void syncDedicationExpiry(data.id);
 		return { id: data.id };
 	});
 
@@ -605,6 +648,7 @@ export const deleteDedication = createServerFn({ method: "POST" })
 			await txExecute(connection, "DELETE FROM tanah_dedication WHERE id = ?", [id]);
 		});
 		void revalidateWebsite([dedicationChange({ id, ...changeFromTargets(oldTargets) })]);
+		clearDedicationExpiry(id);
 		return { id };
 	});
 
@@ -612,4 +656,139 @@ export const deleteDedication = createServerFn({ method: "POST" })
 export function previewDedicationLine(subject: string, purposes: string[]): string {
 	const clean = purposes.filter((p) => p.trim().length > 0);
 	return clean.length === 0 ? `מוקדש ל${subject}` : `מוקדש ל${subject} (${clean.join(", ")})`;
+}
+
+// --- expiry-triggered invalidation (#2731) ----------------------------------
+//
+// Dedication expiry is clock-driven: the website loaders carry a one-hour
+// `revalidate` bound as a backstop, but an instant-precise expiry still
+// needs an invalidation when `expires_at` passes. The admin server arms
+// one wake-up per dedication at its earliest future expiry (own row or
+// any link row); on wake the dedication's *current* scope set is emitted
+// as the same change a save sends, and the website expires those
+// surfaces.
+//
+// State is re-derived from the DB on every call: mid-flight edits move
+// the next instant, deletes end the chain, and instants beyond the
+// setTimeout cap re-arm on wake. Timers are per-instance like the
+// revalidate queue (website-revalidate.ts): a restart replays the scan
+// (`rescanDedicationExpiries`), and an expiry that elapsed while the
+// admin was down flushes on that rescan — over-invalidation is the safe
+// direction everywhere here.
+
+/** Longest single `setTimeout` arm (~24.8 days); farther instants re-arm. */
+const MAX_TIMER_MS = 2_147_483_647;
+const expiryTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+interface ExpiryState {
+	/** Earliest still-future expiry instant across the row + its links (UTC). */
+	next: Date | null;
+	/** True when at least one stored expiry already elapsed. */
+	elapsed: boolean;
+}
+
+async function dedicationExpiryState(id: number): Promise<ExpiryState> {
+	const rows = await query<{
+		next_expiry: string | null;
+		has_elapsed: number;
+	}>(
+		`SELECT CAST(MIN(CASE WHEN e.expires_at > UTC_TIMESTAMP() THEN e.expires_at END) AS CHAR) AS next_expiry,
+		        MAX(e.expires_at <= UTC_TIMESTAMP()) AS has_elapsed
+		 FROM (
+		     SELECT expires_at FROM tanah_dedication WHERE id = ?
+		     UNION ALL SELECT expires_at FROM tanah_perek_dedication WHERE dedication_id = ?
+		     UNION ALL SELECT expires_at FROM tanah_sefer_dedication WHERE dedication_id = ?
+		     UNION ALL SELECT expires_at FROM tanah_helek_dedication WHERE dedication_id = ?
+		     UNION ALL SELECT expires_at FROM tanah_parasha_dedication WHERE dedication_id = ?
+		     UNION ALL SELECT expires_at FROM tanah_article_dedication WHERE dedication_id = ?
+		     UNION ALL SELECT expires_at FROM tanahpedia_entry_dedication WHERE dedication_id = ?
+		     UNION ALL SELECT expires_at FROM tanah_masora_dedication WHERE dedication_id = ?
+		 ) e
+		 WHERE e.expires_at IS NOT NULL`,
+		[id, id, id, id, id, id, id, id],
+	);
+	const row = rows[0];
+	return {
+		next: row?.next_expiry
+			? new Date(`${row.next_expiry.replace(" ", "T")}Z`)
+			: null,
+		elapsed: row?.has_elapsed === 1,
+	};
+}
+
+/**
+ * Re-derives one dedication's expiry state: flushes the scope invalidation
+ * when an expiry already elapsed (the wake itself or a downtime gap) and
+ * arms the next wake-up. Fire-and-forget from the mutation path — errors
+ * are logged, never thrown into the editor's save response.
+ */
+async function syncDedicationExpiry(id: number): Promise<void> {
+	const existing = expiryTimers.get(id);
+	if (existing) {
+		clearTimeout(existing);
+		expiryTimers.delete(id);
+	}
+	let state: ExpiryState;
+	try {
+		state = await dedicationExpiryState(id);
+	} catch (error) {
+		console.error(`dedication expiry state failed for ${id}:`, error);
+		return;
+	}
+	if (state.elapsed) {
+		try {
+			const targets = await currentTargets(id);
+			void revalidateWebsite([
+				dedicationChange({ id, ...changeFromTargets(targets) }),
+			]);
+		} catch (error) {
+			console.error(`dedication expiry flush failed for ${id}:`, error);
+		}
+	}
+	if (state.next !== null) {
+		const delay = Math.min(state.next.getTime() - Date.now(), MAX_TIMER_MS);
+		const timer = setTimeout(() => {
+			expiryTimers.delete(id);
+			void syncDedicationExpiry(id);
+		}, delay);
+		timer.unref?.();
+		expiryTimers.set(id, timer);
+	}
+}
+
+/** Drops a pending wake-up — the delete's own invalidation already ran. */
+function clearDedicationExpiry(id: number): void {
+	const existing = expiryTimers.get(id);
+	if (existing) clearTimeout(existing);
+	expiryTimers.delete(id);
+}
+
+/** Test hook: drops every armed expiry wake-up (same convention as
+ * `__resetRevalidateForTests` in website-revalidate.ts). */
+export function __resetDedicationExpiryForTests(): void {
+	for (const timer of expiryTimers.values()) clearTimeout(timer);
+	expiryTimers.clear();
+}
+
+/**
+ * Boot catch-up: re-derives every dedication that stores any expiry —
+ * arms the future instants and flushes the ones that elapsed while the
+ * admin was down (their rendered surfaces may still show the retired
+ * dedication). Called once from the server entry when website
+ * revalidation is configured; the flushes ride the same debounced queue.
+ */
+export async function rescanDedicationExpiries(): Promise<void> {
+	const rows = await query<{ id: number }>(
+		`SELECT DISTINCT dedication_id AS id FROM (
+		     SELECT id AS dedication_id, expires_at FROM tanah_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanah_perek_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanah_sefer_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanah_helek_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanah_parasha_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanah_article_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanahpedia_entry_dedication
+		     UNION ALL SELECT dedication_id, expires_at FROM tanah_masora_dedication
+		 ) expiries WHERE expires_at IS NOT NULL`,
+	);
+	await Promise.all(rows.map((row) => syncDedicationExpiry(row.id)));
 }

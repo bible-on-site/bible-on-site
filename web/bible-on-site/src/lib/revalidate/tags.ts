@@ -118,13 +118,17 @@ export const mentionRefsTag = (perekId: number) =>
  * entity key (also part of the cache key so entries never collide — the
  * invocation args ride along in the key as well) and `tagsFor` returns
  * its collection + entity tags. A thrown loader error is never cached —
- * the next call re-runs the loader.
+ * the next call re-runs the loader. `options.revalidate` bounds the
+ * entry's lifetime (seconds) for clock-driven data like dedication
+ * expiry — a positive value also raises the revalidation frequency of
+ * every statically rendered route that consumes the entry.
  */
 export function cachedPerKey<A extends unknown[], R>(
 	baseKey: string,
 	keyOf: (...args: A) => string,
 	tagsFor: (key: string) => string[],
 	loader: (...args: A) => Promise<R>,
+	options?: { revalidate?: number | false },
 ): (...args: A) => Promise<R> {
 	const instances = new Map<string, (...args: A) => Promise<R>>();
 	return (...args: A) => {
@@ -133,7 +137,7 @@ export function cachedPerKey<A extends unknown[], R>(
 		if (!fn) {
 			fn = unstable_cache((...a: A) => loader(...a), [baseKey, key], {
 				tags: tagsFor(key),
-				revalidate: false,
+				revalidate: options?.revalidate ?? false,
 			});
 			instances.set(key, fn);
 		}

@@ -5,7 +5,11 @@ import {
 } from "@/data/parasha/parasha-units";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug, normalizeAuthorName } from "@/lib/authors";
-import { HELEK_SEFER_IDS, seferPerekIds } from "@/lib/dedications/service";
+import {
+	HELEK_SEFER_IDS,
+	seferIdByPerekId,
+	seferPerekIds,
+} from "@/lib/dedications/service";
 import { isMissingMysqlSchema } from "@/lib/mysql-errors";
 import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { canonicalPasukCount } from "@/lib/reading/queries";
@@ -602,6 +606,18 @@ async function resolveDedication(
 			addTag(sink, perekDedicationsTag(perekId));
 			addPath(sink, `/929/${perekId}`);
 			scoped = true;
+		}
+		// Book-view fan-out: every `/929/{mate}` route of an intersected
+		// sefer renders that sefer's whole spread map, so a range edit
+		// changes its neighbours' HTML too. Their cache entries already
+		// expire through the collected perek tags; the extra paths re-ping
+		// the changed URLs for IndexNow.
+		for (let perekId = range.low; perekId <= range.high; perekId++) {
+			const seferId = seferIdByPerekId(perekId);
+			if (seferId === undefined) continue;
+			for (const mateId of seferPerekIds(seferId)) {
+				addPath(sink, `/929/${mateId}`);
+			}
 		}
 	}
 	for (const seferId of change.seferIds ?? []) {

@@ -27,10 +27,23 @@ jest.mock("next/cache", () => ({
 
 /** The `opts` passed to unstable_cache for a given `[baseKey, key]` pair. */
 function stampedTags(baseKey: string, key: string): string[] {
+	return stampedOpts(baseKey, key)?.tags ?? [];
+}
+
+/** The whole `opts` (tags + revalidate bound) stamped on one cache entry. */
+function stampedOpts(
+	baseKey: string,
+	key?: string,
+): { tags?: string[]; revalidate?: number | false } | undefined {
 	const call = mockUnstableCache.mock.calls.find(
-		([, k]) => Array.isArray(k) && k[0] === baseKey && k[1] === key,
+		([, k]) =>
+			Array.isArray(k) &&
+			k[0] === baseKey &&
+			(key === undefined || k[1] === key),
 	);
-	return (call?.[2] as { tags?: string[] } | undefined)?.tags ?? [];
+	return call?.[2] as
+		| { tags?: string[]; revalidate?: number | false }
+		| undefined;
 }
 
 import {
@@ -393,6 +406,31 @@ describe("cached loader tag contracts", () => {
 		expect(tags).toContain("perek:50:dedications");
 		expect(tags.filter((t) => t.startsWith("perek:"))).toHaveLength(50);
 	});
+
+	it("bounds every dedication entry by the expiry backstop", async () => {
+		// Module-load stamps (masora/bookshelf) are recorded once per
+		// module registry; an isolated re-import lets this assertion see
+		// them without clearing the shared module state other tests use.
+		let loaders!: typeof import("../../../src/lib/dedications/loaders");
+		jest.isolateModules(() => {
+			const api =
+				require("../../../src/lib/api-client") as typeof import("../../../src/lib/api-client");
+			(api.query as jest.MockedFunction<typeof query>).mockImplementation(
+				async () => [],
+			);
+			loaders = require("../../../src/lib/dedications/loaders");
+		});
+		await loaders.getPerekDedications(BERESHIT_FIRST_PEREK);
+		await loaders.getMasoraDedications();
+		await loaders.getBookshelfDedications();
+		// Clock-driven expiry needs a time bound underneath the tag
+		// invalidation — a permanent entry could serve a retired
+		// dedication forever (#2731). The admin wake-up narrows the
+		// visible lag; this keeps the worst case at one hour.
+		expect(stampedOpts("perek-dedications", "1")?.revalidate).toBe(3600);
+		expect(stampedOpts("masora-dedications")?.revalidate).toBe(3600);
+		expect(stampedOpts("bookshelf-dedications")?.revalidate).toBe(3600);
+	});
 });
 
 describe("getSeferPerekDedicationLines", () => {
@@ -495,6 +533,130 @@ describe("getSeferPerekDedicationLines", () => {
 		const map = await load(BERESHIT_SEFER_ID);
 		expect(map[7]).toEqual(["מוקדש לa", "מוקדש לb"]);
 		expect(map[8]).toEqual(["מוקדש לb"]);
+	});
+});
+
+describe("getBookshelfDedications", () => {
+	const load = async () => {
+		const { getBookshelfDedications } = await import(
+			"../../../src/lib/dedications/loaders"
+		);
+		return getBookshelfDedications();
+	};
+
+	it("resolves the whole shelf in one pass and buckets by matched scope", async () => {
+		stubTables({
+			helek: [
+				{
+					helek_id: TORAH_HELEK_ID,
+					dedication_id: 12,
+					expires_at: null,
+				},
+			],
+			sefer: [
+				{
+					sefer_id: BERESHIT_SEFER_ID,
+					dedication_id: 11,
+					expires_at: null,
+				},
+			],
+			dedication: [
+				{ id: 11, subject: "sefer dedication", expires_at: null },
+				{ id: 12, subject: "helek dedication", expires_at: null },
+			],
+		});
+		const out = await load();
+		expect(out.helek[TORAH_HELEK_ID]?.map((d) => d.id)).toEqual([12]);
+		expect(out.sefer[BERESHIT_SEFER_ID]?.map((d) => d.id)).toEqual([11]);
+		// One resolution for the whole shelf — the link tables are scanned
+		// once, not once per helek and per sefer.
+		const seferScans = mockQuery.mock.calls.filter(([sql]) =>
+			(sql as string).includes("tanah_sefer_dedication"),
+		);
+		const helekScans = mockQuery.mock.calls.filter(([sql]) =>
+			(sql as string).includes("tanah_helek_dedication"),
+		);
+		expect(seferScans).toHaveLength(1);
+		expect(helekScans).toHaveLength(1);
+	});
+
+	it("lands a multi-scope dedication on every shelf it owns", async () => {
+		stubTables({
+			helek: [
+				{
+					helek_id: TORAH_HELEK_ID,
+					dedication_id: 10,
+					expires_at: null,
+				},
+			],
+			sefer: [
+				{
+					sefer_id: BERESHIT_SEFER_ID,
+					dedication_id: 10,
+					expires_at: null,
+				},
+			],
+			dedication: [{ id: 10, subject: "both", expires_at: null }],
+		});
+		const out = await load();
+		expect(out.helek[TORAH_HELEK_ID]?.map((d) => d.id)).toEqual([10]);
+		expect(out.sefer[BERESHIT_SEFER_ID]?.map((d) => d.id)).toEqual([10]);
+	});
+
+	it("keeps helek-only dedications off the sefer shelves", async () => {
+		stubTables({
+			helek: [
+				{
+					helek_id: TORAH_HELEK_ID,
+					dedication_id: 12,
+					expires_at: null,
+				},
+			],
+			dedication: [{ id: 12, subject: "helek only", expires_at: null }],
+		});
+		const out = await load();
+		expect(out.helek[TORAH_HELEK_ID]?.map((d) => d.id)).toEqual([12]);
+		expect(Object.keys(out.sefer)).toEqual([]);
+	});
+
+	it("returns empty helek lists and no sefer entries when nothing applies", async () => {
+		stubTables({});
+		const out = await load();
+		expect(Object.values(out.helek)).toEqual([[], [], []]);
+		expect(out.sefer).toEqual({});
+	});
+});
+
+describe("getBookshelfDedicationLines", () => {
+	it("projects the buckets to display lines keyed by canonical names", async () => {
+		stubTables({
+			helek: [
+				{
+					helek_id: TORAH_HELEK_ID,
+					dedication_id: 12,
+					expires_at: null,
+				},
+			],
+			sefer: [
+				{
+					sefer_id: BERESHIT_SEFER_ID,
+					dedication_id: 11,
+					expires_at: null,
+				},
+			],
+			dedication: [
+				{ id: 11, subject: "ראובן", expires_at: null },
+				{ id: 12, subject: "שמעון", expires_at: null },
+			],
+			purposeLink: [{ dedication_id: 11, dedication_type_id: 1 }],
+			type: [{ id: 1, description: 'לע"נ' }],
+		});
+		const { getBookshelfDedicationLines } = await import(
+			"../../../src/lib/dedications/loaders"
+		);
+		const lines = await getBookshelfDedicationLines();
+		expect(lines.bySefer.בראשית).toEqual(['מוקדש לראובן (לע"נ)']);
+		expect(lines.byHelek.תורה).toEqual(["מוקדש לשמעון"]);
 	});
 });
 

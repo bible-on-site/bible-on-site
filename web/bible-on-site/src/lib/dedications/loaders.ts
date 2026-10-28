@@ -29,6 +29,19 @@ import {
 } from "./service";
 import { formatDedication, type Dedication } from "./types";
 
+/**
+ * Dedication expiry is clock-driven: the admin server arms a wake-up at
+ * every stored `expires_at` instant (web/admin server/dedications.ts),
+ * but a down or unreachable admin leaves only the event-driven tag
+ * invalidations — an expired line would sit on rendered pages forever.
+ * A modest time bound guarantees every dedication cache — and every
+ * prerendered route that collected it — refreshes within an hour even
+ * without the wake-up; tag invalidation still governs immediately
+ * (#2731).
+ */
+const DEDICATION_CACHE_MAX_AGE_S = 60 * 60;
+const TIME_BOUND = { revalidate: DEDICATION_CACHE_MAX_AGE_S };
+
 /** Every cache tag a perek resolution consumes: its own plus the sefer and
  * helek ancestors whose scopes it inherits — an ancestor-scope change must
  * expire the entry or the flat heading keeps serving it stale. */
@@ -61,6 +74,7 @@ export const getPerekDedications = cachedPerKey(
 	(perekId: number) => String(perekId),
 	(key) => perekContextTags(Number(key)),
 	(perekId: number) => resolveDedications({ perekIds: [perekId] }),
+	TIME_BOUND,
 );
 
 /** Active dedications for one sefer (direct + helek ancestor). */
@@ -69,6 +83,7 @@ export const getSeferDedications = cachedPerKey(
 	(seferId: number) => String(seferId),
 	(key) => seferContextTags(Number(key)),
 	(seferId: number) => resolveDedications({ seferIds: [seferId] }),
+	TIME_BOUND,
 );
 
 /**
@@ -118,6 +133,7 @@ export const getSeferPerekDedicationLines = cachedPerKey(
 		}
 		return lines;
 	},
+	TIME_BOUND,
 );
 
 /** Active dedications for one helek. */
@@ -126,6 +142,7 @@ export const getHelekDedications = cachedPerKey(
 	(helekId: number) => String(helekId),
 	(key) => [COLLECTION_TAGS.dedications, helekDedicationsTag(Number(key))],
 	(helekId: number) => resolveDedications({ helekIds: [helekId] }),
+	TIME_BOUND,
 );
 
 /** Active dedications for one weekly parasha unit. */
@@ -134,6 +151,7 @@ export const getParashaDedications = cachedPerKey(
 	(unitId: number) => String(unitId),
 	(key) => [COLLECTION_TAGS.dedications, parashaDedicationsTag(Number(key))],
 	(unitId: number) => resolveDedications({ parashaIds: [unitId] }),
+	TIME_BOUND,
 );
 
 /** Active dedications for one article (the preserved legacy scope). */
@@ -142,6 +160,7 @@ export const getArticleDedications = cachedPerKey(
 	(articleId: number) => String(articleId),
 	(key) => [COLLECTION_TAGS.dedications, articleDedicationsTag(Number(key))],
 	(articleId: number) => resolveDedications({ articleIds: [articleId] }),
+	TIME_BOUND,
 );
 
 /** Active dedications for one Tanahpedia entry (canonical entry id). */
@@ -150,6 +169,7 @@ export const getEntryDedications = cachedPerKey(
 	(entryId: string) => entryId,
 	(key) => [COLLECTION_TAGS.dedications, entryDedicationsTag(key)],
 	(entryId: string) => resolveDedications({ entryIds: [entryId] }),
+	TIME_BOUND,
 );
 
 /**
@@ -159,7 +179,10 @@ export const getEntryDedications = cachedPerKey(
 export const getMasoraDedications = unstable_cache(
 	() => resolveDedications({ masora: true }),
 	["masora-dedications"],
-	{ tags: [COLLECTION_TAGS.dedications, masoraDedicationsTag], revalidate: false },
+	{
+		tags: [COLLECTION_TAGS.dedications, masoraDedicationsTag],
+		revalidate: DEDICATION_CACHE_MAX_AGE_S,
+	},
 );
 
 /**
@@ -173,30 +196,39 @@ export const getBookshelfDedications = unstable_cache(
 		helek: Record<number, Dedication[]>;
 		sefer: Record<number, Dedication[]>;
 	}> => {
+		// One resolution over every helek and sefer id — the link tables are
+		// scanned regardless, so a cold render buckets the single result set
+		// instead of repeating the scan once per shelf entry.
+		const dedications = await resolveDedications({
+			helekIds: Object.keys(HELEK_SEFER_IDS).map(Number),
+			seferIds: Object.keys(SEFER_NAME_BY_ID).map(Number),
+		});
 		const helek: Record<number, Dedication[]> = {};
 		for (const helekId of Object.keys(HELEK_SEFER_IDS)) {
-			helek[Number(helekId)] = await resolveDedications({
-				helekIds: [Number(helekId)],
-			});
+			helek[Number(helekId)] = [];
 		}
 		const sefer: Record<number, Dedication[]> = {};
-		for (let seferId = 1; seferId <= 35; seferId++) {
-			const dedications = await resolveDedications({
-				seferIds: [seferId],
-			});
-			// Keep only sefer-scoped matches — the helek dedication already
-			// renders at the helek heading, not beside every sefer.
-			const scoped = dedications.filter((dedication) =>
-				dedication.scopes.some((scope) => scope.kind === "SEFER"),
-			);
-			if (scoped.length > 0) sefer[seferId] = scoped;
+		for (const dedication of dedications) {
+			for (const scope of dedication.scopes) {
+				if (scope.kind === "HELEK" && scope.helekId !== undefined) {
+					helek[scope.helekId]?.push(dedication);
+				}
+				// Only sefer-scoped matches land beside a sefer — a helek
+				// dedication already renders at the helek heading, not beside
+				// every sefer it owns.
+				if (scope.kind === "SEFER" && scope.seferId !== undefined) {
+					const bucket = sefer[scope.seferId] ?? [];
+					bucket.push(dedication);
+					sefer[scope.seferId] = bucket;
+				}
+			}
 		}
 		return { helek, sefer };
 	},
 	["bookshelf-dedications"],
 	{
 		tags: [COLLECTION_TAGS.dedications, bookshelfDedicationsTag],
-		revalidate: false,
+		revalidate: DEDICATION_CACHE_MAX_AGE_S,
 	},
 );
 
