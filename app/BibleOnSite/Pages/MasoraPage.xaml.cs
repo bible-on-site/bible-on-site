@@ -22,8 +22,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     private readonly MasoraViewModel _viewModel;
     private bool _isLoading;
 
-    // Articles view state
-    private bool _isShowingArticles;
+    // Articles view state is owned by the shared reader chrome (#2573).
+    private ReaderChrome _chrome = null!;
 
     // Guard: ignore CurrentItemChanged events fired by the CarouselView during
     // initial collection assignment — the ViewModel already holds the unit.
@@ -41,6 +41,20 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         InitializeComponent();
         _viewModel = new MasoraViewModel();
         BindingContext = _viewModel;
+        FinishSetup();
+    }
+
+    public MasoraPage(MasoraViewModel viewModel)
+    {
+        InitializeComponent();
+        _viewModel = viewModel;
+        BindingContext = _viewModel;
+        FinishSetup();
+    }
+
+    private void FinishSetup()
+    {
+        SetupReaderChrome();
         SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
@@ -49,17 +63,42 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SubscribeThemeChange();
     }
 
-    public MasoraPage(MasoraViewModel viewModel)
+    /// <summary>
+    /// Wires the shared reader chrome — bottom bar, perushim sheet, articles
+    /// view, fullscreen and fan prev/next refresh plus picker cleanup —
+    /// through the one coordinator every reader page uses (#2573). Only the
+    /// division adapters differ: unit ids, unit articles, unit navigation.
+    /// The masora reader needs no FullscreenStateChanged extras: Android's
+    /// Back callback already re-evaluates on ExitFullScreenButton visibility.
+    /// </summary>
+    private void SetupReaderChrome()
     {
-        InitializeComponent();
-        _viewModel = viewModel;
-        BindingContext = _viewModel;
-        SubscribeViewModelChanges();
-        SetupFontSizeResources();
-        SetupCarouselNavigation();
-        SetupUnitPickerEvents();
-        SubscribeNotesMaterialization();
-        SubscribeThemeChange();
+        _chrome = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = BottomBar,
+                PerushimSheet = PerushimPanel,
+                FanMenu = FanMenu,
+                PreviousSatellite = PrevUnitButton,
+                NextSatellite = NextUnitButton,
+                ExitFullscreenButton = ExitFullScreenButton,
+                ArticlesView = ArticlesCollection,
+                ReaderContent = MasoraCarousel,
+                Toolbar = ReaderToolbar,
+                Host = MainGrid,
+                ContentArea = ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = ShowUnitArticlesAsync,
+                CurrentUnit = () => _viewModel.Unit,
+                SelectArticle = id => _viewModel.SelectedArticleId = id,
+                CanGoPrevious = () => _viewModel.CanGoToPreviousUnit,
+                CanGoNext = () => _viewModel.CanGoToNextUnit,
+                IsSelectableUnit = unitId => unitId > 0,
+                CurrentUnitId = () => _viewModel.UnitId,
+                NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
+            });
     }
 
     /// <summary>
@@ -158,11 +197,13 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// <summary>
     /// Wires the unit picker's confirm event in code (rather than XAML event
     /// wiring) so the subscription is explicit beside the other setup calls.
+    /// The shared chrome completes the selection: it closes the fan that opened
+    /// the picker and navigates a valid, different unit id (#2476).
     /// </summary>
     private void SetupUnitPickerEvents()
     {
         MasoraUnitPickerPopup.UnitSelected += async (_, unitId) =>
-            await OnUnitPickerSelectedAsync(unitId);
+            await _chrome.CompletePickerSelectionAsync(unitId);
     }
 
     /// <summary>
@@ -211,14 +252,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         // overshoot the target and land on the following unit.
         _carouselInitializing = false;
 
-        if (FanMenu.IsOpen)
-        {
-            RefreshNavButtonVisuals();
-        }
+        _chrome.RefreshPrevNext();
 
         _ = UpdateArticlesCountAsync();
         _ = _viewModel.PreloadAdjacentRowsAsync(_viewModel.UnitId);
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             _ = ShowUnitArticlesAsync();
         }
@@ -263,34 +301,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     private void OnUnitChangedOnMainThread()
     {
         _ = UpdateArticlesCountAsync();
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             _ = ShowUnitArticlesAsync();
         }
-        // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
-        RefreshNavButtonVisuals();
-    }
-
-    /// <summary>
-    /// Forces the prev/next buttons to update their visual state.
-    /// Workaround for MAUI bug where button disabled visual doesn't refresh in AbsoluteLayout.
-    /// </summary>
-    private void RefreshNavButtonVisuals()
-    {
-        // Only update if menu is open (buttons visible)
-        if (!FanMenu.IsOpen)
-        {
-            return;
-        }
-
-        var canPrev = _viewModel.CanGoToPreviousUnit;
-        var canNext = _viewModel.CanGoToNextUnit;
-
-        PrevUnitButton.IsEnabled = canPrev;
-        PrevUnitButton.Opacity = canPrev ? 1.0 : 0.4;
-
-        NextUnitButton.IsEnabled = canNext;
-        NextUnitButton.Opacity = canNext ? 1.0 : 0.4;
+        _chrome.RefreshPrevNext();
     }
 
     protected override async void OnAppearing()
@@ -428,18 +443,13 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
         // Synchronous state update — fast, no guard needed.
         _viewModel.Unit = unit;
-
-        // Refresh nav button visuals if menu is open (synchronous)
-        if (FanMenu.IsOpen)
-        {
-            RefreshNavButtonVisuals();
-        }
+        _chrome.RefreshPrevNext();
 
         // Fire async tasks in the background — never block the next swipe
         _ = UpdateArticlesCountAsync();
         _ = _viewModel.LoadPerushimAsync(unit);
         _ = _viewModel.PreloadAdjacentRowsAsync(unit.UnitId);
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             _ = ShowUnitArticlesAsync();
         }
@@ -447,38 +457,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     #region Circular Menu
 
-    /// <summary>
-    /// Fan open — refresh prev/next enabled state before the satellites fade
-    /// in, so a disabled edge button animates to its dimmed opacity.
-    /// </summary>
-    private void OnFanMenuOpening(object? sender, EventArgs e)
-    {
-        PrevUnitButton.IsEnabled = _viewModel.CanGoToPreviousUnit;
-        NextUnitButton.IsEnabled = _viewModel.CanGoToNextUnit;
-    }
-
     /// <summary>Handles tap on a satellite menu item — the menu closes.</summary>
     private async void OnMenuItemClicked(object? sender, EventArgs e)
     {
         // Command-based buttons already fired their command; just close.
         await FanMenu.CloseAsync();
-    }
-
-    /// <summary>Syncs the chevron glyph with the perushim sheet's open state.</summary>
-#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
-    private void OnPerushimSheetOpenChanged(object? sender, bool isOpen)
-#pragma warning restore S1172
-    {
-        BottomBar.IsPerushimOpen = isOpen;
-    }
-
-    /// <summary>Bottom-bar chevron — toggles the perushim sheet.</summary>
-    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
-    {
-        // Cap the drag-up expansion so the sheet's top edge stays under the
-        // status bar/pill: content + toolbar rows already begin below it.
-        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
-        await PerushimPanel.ToggleAsync(MainGrid.Height, ContentArea.Height + toolbarHeight - 8);
     }
 
     #endregion
@@ -494,25 +477,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     private void OnUnitPickerClicked(object? sender, EventArgs e)
     {
         MasoraUnitPickerPopup.Show(_viewModel.UnitId);
-    }
-
-    /// <summary>
-    /// Handles unit selection from the picker popup. A confirmed selection
-    /// completes the navigation: the picker closes itself and the radial menu
-    /// that opened it closes too, leaving the reader undimmed and interactive
-    /// (#2476).
-    /// </summary>
-    private async Task OnUnitPickerSelectedAsync(int unitId)
-    {
-        if (FanMenu.IsOpen)
-        {
-            await FanMenu.CloseAsync();
-        }
-
-        if (unitId > 0 && unitId != _viewModel.UnitId)
-        {
-            await _viewModel.NavigateToUnitAsync(unitId);
-        }
     }
 
     #endregion
@@ -539,46 +503,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         }
     }
 
-    /// <summary>Handles articles button click - shows the unit's articles.</summary>
-    private async void OnArticlesButtonClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            if (_isShowingArticles)
-            {
-                return;
-            }
-
-            PerushimPanel.CloseImmediate();
-            _isShowingArticles = true;
-            await ShowUnitArticlesAsync();
-
-            MasoraCarousel.IsVisible = false;
-            ArticlesCollection.IsVisible = true;
-
-            BottomBar.IsArticlesActive = true;
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: articles-button styling failure is log-only
-        catch (Exception ex) //NOSONAR — articles-button styling failure is log-only.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
-        }
-    }
-
-    /// <summary>Returns to the unit text view.</summary>
-    private void ShowUnitView()
-    {
-        _isShowingArticles = false;
-        _viewModel.SelectedArticleId = null;
-
-        ArticlesCollection.IsVisible = false;
-        MasoraCarousel.IsVisible = true;
-
-        BottomBar.IsArticlesActive = false;
-    }
-
-    /// <summary>Pushes the unit's loaded articles into the articles grid.</summary>
+    /// <summary>
+    /// Pushes the unit's loaded articles into the articles grid — the shared
+    /// chrome calls this through its ReloadArticlesAsync adapter when the
+    /// articles view opens or the unit changes underneath it.
+    /// </summary>
     private async Task ShowUnitArticlesAsync()
     {
         var unit = _viewModel.Unit;
@@ -590,66 +519,9 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         ArticlesCollection.ItemsSource = _viewModel.Articles;
     }
 
-    /// <summary>Handles article selection - navigates to article detail.</summary>
-#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
-    private async void OnArticleSelected(object? sender, Article article)
-#pragma warning restore S1172
-    {
-        _viewModel.SelectedArticleId = article.Id;
-        try
-        {
-            await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
-        catch (Exception ex) //NOSONAR — article navigation failure is log-only.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
-        }
-    }
-
     #endregion
 
-    #region Full Screen
-
-    /// <summary>Text button — returns to the unit view from articles, else
-    /// animates the visible unit's vertical content back to its start (#2624).</summary>
-    private void OnTextButtonClicked(object? sender, EventArgs e)
-    {
-        if (_isShowingArticles)
-        {
-            ShowUnitView();
-        }
-        else
-        {
-            ReaderScrollTop.ScrollCurrentUnitToStart(MasoraCarousel, _viewModel.Unit);
-        }
-    }
-
-    /// <summary>Enters full screen mode - hides top and bottom bars, shows exit button.</summary>
-    private void OnFullScreenClicked(object? sender, EventArgs e)
-    {
-        // Close circular menu if open — snaps to the closed state with no
-        // animation so the scrim cannot linger over the fullscreen reader.
-        FanMenu.ResetToClosed();
-
-        ReaderToolbar.IsVisible = false;
-        BottomBar.IsVisible = false;
-        FanMenu.IsVisible = false;
-        ExitFullScreenButton.ResetPosition();
-        ExitFullScreenButton.IsVisible = true;
-    }
-
-    /// <summary>Exits full screen mode - restores navigation and bottom bar.</summary>
-    private void OnExitFullScreenClicked(object? sender, EventArgs e) => ExitFullScreen();
-
-    private void ExitFullScreen()
-    {
-        ExitFullScreenButton.IsVisible = false;
-        ReaderToolbar.IsVisible = true;
-        BottomBar.IsVisible = true;
-        FanMenu.IsVisible = true;
-    }
+    #region Back
 
     protected override bool OnBackButtonPressed()
     {
@@ -659,7 +531,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     private bool TryHandleReaderBack()
     {
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
+        { _chrome.ExitFullScreen(); return true; }
         return false;
     }
 
