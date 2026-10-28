@@ -3,8 +3,9 @@ import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { test } from "node:test";
+import { createConnection } from "node:net";
 import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
-import { watchScenarioFailures } from "./scenario-failure-monitor.mjs";
+import { listenScenarioFailures, watchScenarioFailures } from "./scenario-failure-monitor.mjs";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "mobile-host-stacks-"));
@@ -96,7 +97,7 @@ function closeOnTestExit(t, monitor) {
   return monitor;
 }
 function scenarioMonitor(t, directory, capture, options) {
-  return closeOnTestExit(t, watchScenarioFailures(directory, capture, options));
+  return closeOnTestExit(t, watchScenarioFailures(directory, capture, { watch: null, ...options }));
 }
 async function publishFailure(directory, request) {
   const temporary = join(directory, `${request.id}.pending`);
@@ -104,19 +105,115 @@ async function publishFailure(directory, request) {
   await rename(temporary, join(directory, `${request.id}.request.json`));
 }
 
-test("scenario watcher observes real atomic publication and writes unique matching acknowledgements", { timeout: 5000 }, async t => {
-  const directory = await fixture(t);
-  const finished = deferred();
-  const calls = [];
-  const monitor = scenarioMonitor(t, directory, async request => { calls.push(request.id); return { status: "captured" }; },
-    { observe: () => { if (calls.length === 2) finished.resolve(); } });
-  await publishFailure(directory, failureRequest());
-  await publishFailure(directory, failureRequest(otherFailureId));
-  await finished.promise;
+function notifyFailure(port, input, { end = false } = {}) {
+  return new Promise(resolveReply => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    const chunks = [];
+    let error;
+    socket.on("error", failure => { error = failure; });
+    socket.on("data", chunk => { chunks.push(chunk); });
+    socket.on("close", () => resolveReply({ reply: Buffer.concat(chunks).toString("utf8"), error }));
+    socket.on("connect", () => {
+      for (const chunk of Array.isArray(input) ? input : [input]) socket.write(chunk);
+      if (end) socket.end();
+    });
+  });
+}
+
+test("ready loopback channel captures atomic publications after the startup scan while filesystem events are lost", { timeout: 5000 }, async t => {
+  const directory = await fixture(t); const initialObserved = deferred(); const calls = [];
+  await publishFailure(directory, failureRequest(failureId, { sessionId: null }));
+  const watcher = watcherFixture();
+  const monitor = closeOnTestExit(t, await listenScenarioFailures(directory, async request => {
+    calls.push(request.id); return { status: "captured" };
+  }, { watch: watcher.watch.bind(watcher), observe: ack => { if (ack.id === failureId) initialObserved.resolve(); } }));
+  await initialObserved.promise;
+  assert.deepEqual(calls, []);
+  const thirdId = "22222222222222222222222222222222";
+  for (const id of [otherFailureId, thirdId]) await publishFailure(directory, failureRequest(id));
+  // The injected native watcher never becomes ready and emits no events.
+  // Both receipts were published after the initial scan completed.
+  const replies = await Promise.all([otherFailureId, thirdId].map(id => notifyFailure(monitor.port, id + "\n")));
+  assert.deepEqual(replies.map(item => item.reply), [otherFailureId + "\n", thirdId + "\n"]);
+  assert.equal(monitor.received, 3);
+  assert.deepEqual(calls.sort(), [otherFailureId, thirdId].sort());
+  for (const id of calls) assert.deepEqual(JSON.parse(await readFile(join(directory, id + ".ack.json"), "utf8")), { id, status: "captured" });
   await monitor.stop();
-  assert.equal(monitor.received, 2);
-  assert.deepEqual(calls.sort(), [failureId, otherFailureId].sort());
-  for (const id of calls) assert.deepEqual(JSON.parse(await readFile(join(directory, `${id}.ack.json`), "utf8")), { id, status: "captured" });
+});
+
+test("loopback notification joins watcher work and withholds its reply until capture and ack publication", { timeout: 5000 }, async t => {
+  const directory = await fixture(t); const watcher = watcherFixture();
+  const started = deferred(); const release = deferred(); let calls = 0;
+  const monitor = closeOnTestExit(t, await listenScenarioFailures(directory, async () => {
+    calls++; started.resolve(); await release.promise; return { status: "captured" };
+  }, { watch: watcher.watch.bind(watcher) }));
+  await publishFailure(directory, failureRequest());
+  watcher.emit(failureId + ".request.json");
+  await started.promise;
+  const response = notifyFailure(monitor.port, [failureId.slice(0, 16), failureId.slice(16) + "\n"]);
+  await assert.rejects(readFile(join(directory, failureId + ".ack.json")), { code: "ENOENT" });
+  release.resolve();
+  assert.equal((await response).reply, failureId + "\n");
+  assert.equal(calls, 1);
+  assert.equal(JSON.parse(await readFile(join(directory, failureId + ".ack.json"), "utf8")).id, failureId);
+  await monitor.stop();
+});
+
+test("loopback framing rejects malformed, oversized and incomplete input before capture", { timeout: 5000 }, async t => {
+  for (const input of [failureId.toUpperCase() + "\n", failureId + "\r\n", failureId + "\nx",
+    failureId.slice(1) + "\n", Buffer.concat([Buffer.from([0xff]), Buffer.from(failureId.slice(1) + "\n")])]) {
+    const directory = await fixture(t);
+    const monitor = closeOnTestExit(t, await listenScenarioFailures(directory, () => assert.fail("must not capture malformed input")));
+    assert.equal((await notifyFailure(monitor.port, input, { end: true })).reply, "");
+    assert.equal(monitor.received, 0);
+    await assert.rejects(monitor.stop(), AggregateError);
+  }
+});
+
+test("loopback notification cannot acknowledge a missing or mismatched durable request", { timeout: 5000 }, async t => {
+  for (const mismatchedAck of [false, true]) {
+    const directory = await fixture(t);
+    if (mismatchedAck) {
+      await publishFailure(directory, failureRequest());
+      await writeFile(join(directory, failureId + ".ack.json"), JSON.stringify({ id: otherFailureId, status: "captured" }));
+    }
+    const monitor = closeOnTestExit(t, await listenScenarioFailures(directory, () => assert.fail("must not capture invalid request")));
+    assert.equal((await notifyFailure(monitor.port, failureId + "\n")).reply, "");
+    await assert.rejects(monitor.stop(), AggregateError);
+  }
+});
+
+test("loopback deadline never replies or publishes an ack while cancelled capture remains unsettled", { timeout: 5000 }, async t => {
+  const directory = await fixture(t); const started = deferred(); const release = deferred();
+  const now = Date.parse("2026-10-28T17:00:00.000Z"); let aborted = false;
+  const monitor = closeOnTestExit(t, await listenScenarioFailures(directory, (_request, { signal }) => {
+    signal.addEventListener("abort", () => { aborted = true; }); started.resolve(); return release.promise;
+  }, { now: () => now }));
+  await publishFailure(directory, failureRequest(failureId, {
+    failedAtUtc: "2026-10-28T16:59:45.100Z", deadlineUtc: "2026-10-28T17:00:00.100Z",
+  }));
+  const response = notifyFailure(monitor.port, failureId + "\n");
+  await started.promise;
+  assert.equal((await response).reply, "");
+  assert.equal(aborted, true);
+  await assert.rejects(readFile(join(directory, failureId + ".ack.json")), { code: "ENOENT" });
+  await assert.rejects(monitor.stop(), AggregateError);
+  release.resolve({ status: "captured" });
+  await Promise.resolve();
+  await assert.rejects(readFile(join(directory, failureId + ".ack.json")), { code: "ENOENT" });
+});
+
+test("loopback clean shutdown closes an incomplete connection without launching work", { timeout: 5000 }, async t => {
+  const directory = await fixture(t);
+  const monitor = closeOnTestExit(t, await listenScenarioFailures(directory, () => assert.fail("must not capture on stop")));
+  const socket = createConnection({ host: "127.0.0.1", port: monitor.port });
+  socket.on("error", () => { /* shutdown may reset an incomplete local connection */ });
+  await new Promise(resolveConnected => socket.once("connect", resolveConnected));
+  socket.write("abc");
+  const closed = new Promise(resolveClosed => socket.once("close", resolveClosed));
+  await monitor.stop(); await closed;
+  assert.equal(monitor.received, 0);
+  await monitor.stop();
 });
 
 test("stop drains an already queued startup scan instead of discarding its failure handoff", { timeout: 5000 }, async t => {
@@ -166,7 +263,7 @@ test("duplicate watch events capture once, and acknowledgement waits for the cap
 test("capture rejection is acknowledged and reported by stop without an unhandled promise", { timeout: 5000 }, async t => {
   const directory = await fixture(t); const acknowledged = deferred();
   const monitor = scenarioMonitor(t, directory, async () => { throw new Error("native capture failed"); }, { observe: acknowledged.resolve });
-  await publishFailure(directory, failureRequest()); await acknowledged.promise;
+  await publishFailure(directory, failureRequest()); await monitor.notify(failureId); await acknowledged.promise;
   const ack = JSON.parse(await readFile(join(directory, `${failureId}.ack.json`), "utf8"));
   assert.equal(ack.status, "error"); assert.equal(ack.id, failureId); assert.match(ack.error, /native capture failed/);
   await assert.rejects(monitor.stop(), error => error instanceof AggregateError && error.errors.some(item => /native capture failed/.test(item.message)));
@@ -176,7 +273,7 @@ test("returned capture errors preserve structured diagnostics in the acknowledge
   const directory = await fixture(t); const acknowledged = deferred();
   const error = { message: "native process terminated", code: 9, signal: "SIGKILL" };
   const monitor = scenarioMonitor(t, directory, async () => ({ status: "error", error }), { observe: acknowledged.resolve });
-  await publishFailure(directory, failureRequest()); await acknowledged.promise;
+  await publishFailure(directory, failureRequest()); await monitor.notify(failureId); await acknowledged.promise;
   assert.deepEqual(JSON.parse(await readFile(join(directory, `${failureId}.ack.json`), "utf8")), { id: failureId, status: "error", error });
   await assert.rejects(monitor.stop(), failure => failure instanceof AggregateError && failure.errors.some(item => item.message === error.message));
 });
@@ -187,7 +284,7 @@ for (const [label, values, status] of [
 ]) test(`scenario watcher counts and acknowledges ${label} without sampling`, { timeout: 5000 }, async t => {
   const directory = await fixture(t); const acknowledged = deferred();
   const monitor = scenarioMonitor(t, directory, () => assert.fail("must not sample"), { observe: acknowledged.resolve });
-  await publishFailure(directory, failureRequest(failureId, values)); await acknowledged.promise; await monitor.stop();
+  await publishFailure(directory, failureRequest(failureId, values)); await monitor.notify(failureId); await acknowledged.promise; await monitor.stop();
   assert.equal(monitor.received, 1);
   assert.equal(JSON.parse(await readFile(join(directory, `${failureId}.ack.json`), "utf8")).status, status);
 });
@@ -213,7 +310,7 @@ test("session and Unicode test names retain their accepted length boundaries", {
     const monitor = scenarioMonitor(t, directory, async request => { calls.push(request); return { status: "captured" }; },
       { observe: acknowledged.resolve });
     await publishFailure(directory, failureRequest(failureId, { sessionId, test: "א".repeat(2048) }));
-    await acknowledged.promise; await monitor.stop();
+    await monitor.notify(failureId); await acknowledged.promise; await monitor.stop();
     assert.equal(calls.length, 1); assert.equal(calls[0].sessionId, sessionId); assert.equal(calls[0].test.length, 2048);
   }
 });
@@ -251,6 +348,7 @@ test("canonical UTC offsets are accepted and a deadline aborts capture without a
   await publishFailure(directory, failureRequest(failureId, {
     failedAtUtc: "2026-10-28T16:59:45.1000000+00:00", deadlineUtc: "2026-10-28T17:00:00.1000000+00:00",
   }));
+  void monitor.notify(failureId);
   await started.promise;
   await assert.rejects(monitor.stop(), AggregateError);
   assert.equal(aborted, true);

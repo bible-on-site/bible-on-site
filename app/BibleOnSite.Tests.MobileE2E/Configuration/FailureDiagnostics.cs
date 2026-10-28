@@ -1,4 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
@@ -7,13 +11,15 @@ namespace BibleOnSite.Tests.MobileE2E.Configuration;
 internal static class FailureDiagnostics
 {
     internal const string DirectoryVariable = "MOBILE_E2E_FAILURE_DIAGNOSTICS";
+    internal const string PortVariable = "MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT";
     private static readonly TimeSpan CaptureBudget = TimeSpan.FromSeconds(15);
 
     internal static void BeforeFailure(string test, string? sessionId, Action<string> log) =>
-        WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget);
+        WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
+            notificationPort: Environment.GetEnvironmentVariable(PortVariable));
 
     internal static void WaitForCapture(string? directory, string test, string? sessionId,
-        Action<string> log, TimeSpan budget, Action<string>? published = null)
+        Action<string> log, TimeSpan budget, Action<string>? published = null, string? notificationPort = null)
     {
         if (string.IsNullOrEmpty(directory))
         {
@@ -35,25 +41,6 @@ internal static class FailureDiagnostics
             }
 
             var ack = Path.Join(directory, $"{id}.ack.json");
-            var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var watcher = new FileSystemWatcher(directory, Path.GetFileName(ack));
-            Exception? watchError = null;
-            void Observe(object sender, FileSystemEventArgs args)
-            {
-                if (File.Exists(ack))
-                {
-                    completed.TrySetResult(true);
-                }
-            }
-            watcher.Created += Observe;
-            watcher.Renamed += Observe;
-            watcher.Error += (_, args) =>
-            {
-                watchError = args.GetException();
-                completed.TrySetResult(true);
-            };
-            // Observe before publication: even an immediate acknowledgement cannot be lost.
-            watcher.EnableRaisingEvents = true;
             var request = Path.Join(directory, $"{id}.request.json");
             var temporary = request + ".tmp";
             File.WriteAllText(temporary, JsonSerializer.Serialize(new
@@ -67,22 +54,61 @@ internal static class FailureDiagnostics
             File.Move(temporary, request);
             published?.Invoke(request);
 
+            if (!int.TryParse(notificationPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port)
+                || port is < 1 or > 65535)
+            {
+                throw new InvalidDataException("The supervisor's loopback notification port is missing or invalid.");
+            }
             var remaining = budget - started.Elapsed;
-            if (!File.Exists(ack) && remaining > TimeSpan.Zero)
-            {
-                // One bounded OS event wait, with no polling or scenario retry.
-                completed.Task.Wait(remaining);
-            }
-            if (watchError != null)
-            {
-                throw new IOException("Failure diagnostics acknowledgement watcher failed.", watchError);
-            }
-            if (!File.Exists(ack))
+            // The listening supervisor is ready before the harness starts. One socket exchange,
+            // rather than a filesystem subscription race, carries notification and completion.
+            if (remaining <= TimeSpan.Zero || !NotifyCaptureAsync(port, id, ack, remaining).GetAwaiter().GetResult())
             {
                 Log(log, $"Failure diagnostics acknowledgement was not received within {budget.TotalSeconds:0.###} seconds; request {id} retained.");
             }
         }, log, "Failure diagnostics handshake", exception =>
             File.WriteAllText(Path.Join(directory, $"{id}.error.txt"), exception.ToString()));
+    }
+
+    private static async Task<bool> NotifyCaptureAsync(int port, string id, string acknowledgement, TimeSpan remaining)
+    {
+        using var deadline = new CancellationTokenSource(remaining);
+        using var client = new TcpClient(AddressFamily.InterNetwork);
+        try
+        {
+            await client.ConnectAsync(IPAddress.Loopback, port, deadline.Token).ConfigureAwait(false);
+            using var stream = client.GetStream();
+            var notification = Encoding.ASCII.GetBytes(id + "\n");
+            await stream.WriteAsync(notification, deadline.Token).ConfigureAwait(false);
+            var response = new byte[notification.Length];
+            var received = 0;
+            while (received < response.Length)
+            {
+                var count = await stream.ReadAsync(response.AsMemory(received), deadline.Token).ConfigureAwait(false);
+                if (count == 0)
+                {
+                    throw new EndOfStreamException("Failure diagnostics supervisor closed before acknowledgement.");
+                }
+                received += count;
+            }
+            if (!response.AsSpan().SequenceEqual(notification))
+            {
+                throw new InvalidDataException("Failure diagnostics supervisor acknowledged a different request.");
+            }
+            if (await stream.ReadAsync(new byte[1], deadline.Token).ConfigureAwait(false) != 0)
+            {
+                throw new InvalidDataException("Failure diagnostics supervisor sent extra acknowledgement data.");
+            }
+            if (!File.Exists(acknowledgement))
+            {
+                throw new InvalidDataException("Failure diagnostics supervisor did not retain its acknowledgement.");
+            }
+            return true;
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            return false;
+        }
     }
 
     /// <summary>After a scenario fails, secondary diagnostic faults must not replace its exception.</summary>

@@ -1,4 +1,5 @@
 import { watch as watchDirectory } from "node:fs";
+import { createServer } from "node:net";
 import { lstat, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
@@ -76,7 +77,7 @@ export function watchScenarioFailures(directory, capture, {
   watch = watchDirectory, now = Date.now, observe = () => {},
 } = {}) {
   const root = resolve(directory);
-  const seen = new Set();
+  const work = new Map();
   const received = new Set();
   const pending = new Map();
   const scans = new Map();
@@ -101,7 +102,10 @@ export function watchScenarioFailures(directory, capture, {
     try {
       const ack = await lstat(join(root, `${id}.ack.json`));
       if (!ack.isFile() || ack.isSymbolicLink()) throw new Error(`Invalid scenario acknowledgement: ${id}`);
-      return;
+      if (ack.size > 16384) throw new Error("Oversized scenario acknowledgement");
+      const result = JSON.parse(await readFile(join(root, id + ".ack.json"), "utf8"));
+      if (result.id !== id || !["captured", "exited", "unknown", "expired", "error"].includes(result.status)) throw new Error("Invalid scenario acknowledgement");
+      return { id, status: result.status };
     } catch (error) { if (error.code !== "ENOENT") throw error; }
     if (record.deadline <= now()) return acknowledge(id, { status: "expired" });
     if (request.sessionId === null) return acknowledge(id, { status: "unknown" });
@@ -130,8 +134,7 @@ export function watchScenarioFailures(directory, capture, {
       if (name.endsWith(REQUEST_SUFFIX)) failures.push(new Error(`Invalid scenario request filename: ${name}`));
       return;
     }
-    if (seen.has(id)) return;
-    seen.add(id);
+    if (work.has(id)) return work.get(id);
     const record = { deadline: queuedDeadline ?? now() + CAPTURE_LIMIT_MS };
     const task = (async () => {
       let acknowledgement;
@@ -142,8 +145,11 @@ export function watchScenarioFailures(directory, capture, {
         try { observe(acknowledgement); }
         catch (error) { failures.push(error); }
       }
+      return acknowledgement;
     })();
+    work.set(id, task);
     pending.set(task, record);
+    return task;
   }
 
   function scan(receiptsOnly = false) {
@@ -160,20 +166,25 @@ export function watchScenarioFailures(directory, capture, {
     return task;
   }
 
-  // Install the watcher first so an atomic rename cannot fall between the
-  // startup scan and subscription. A missing filename triggers a single scan.
-  const watcher = watch(root, (_event, filename) => {
+  // Directory events are supplemental. macOS activates its FSEvents stream
+  // asynchronously; the ready loopback channel calls notify without that gap.
+  // A missing filename still triggers one receipt scan.
+  const watcher = watch?.(root, (_event, filename) => {
     if (filename == null) { if (!stopped) void scan(); }
     else enqueue(filename);
   });
-  watcher.on("error", error => { failures.push(error); });
+  watcher?.on("error", error => { failures.push(error); });
   void scan();
   return {
     get received() { return received.size; },
+    notify(id) {
+      if (typeof id !== "string" || requestId(id + REQUEST_SUFFIX) !== id) throw new Error("Invalid scenario notification id");
+      return enqueue(id + REQUEST_SUFFIX);
+    },
     stop() {
       if (stopResult) return stopResult;
       stopped = true;
-      watcher.close();
+      watcher?.close();
       // fs.watch is advisory. After the producer exits, count any published
       // receipt whose notification was lost without starting late sampling.
       void scan(true);
@@ -193,6 +204,83 @@ export function watchScenarioFailures(directory, capture, {
         if (failures.length) throw new AggregateError(failures, "Scenario failure diagnostics failed");
       })();
       return stopResult;
+    },
+  };
+}
+
+/** Start a reliable local channel before the child can publish a failure. */
+export async function listenScenarioFailures(directory, capture, options = {}) {
+  const monitor = watchScenarioFailures(directory, capture, { ...options, watch: options.watch ?? null });
+  const sockets = new Set();
+  const failures = [];
+  const server = createServer({ allowHalfOpen: true }, socket => {
+    sockets.add(socket);
+    let input = Buffer.alloc(0);
+    let accepted = false;
+    let invalid = false;
+    const timer = setTimeout(() => socket.destroy(), CAPTURE_LIMIT_MS);
+    function rejectInput(message) {
+      if (invalid) return;
+      invalid = true;
+      failures.push(new Error(message));
+      // A malformed later packet cannot release a producer during sampling.
+      if (!accepted) socket.destroy();
+    }
+    socket.on("error", error => { failures.push(error); });
+    socket.on("end", () => { if (!accepted) rejectInput("Incomplete scenario notification"); });
+    socket.on("close", () => { clearTimeout(timer); sockets.delete(socket); });
+    socket.on("data", chunk => {
+      if (accepted) { rejectInput("Extra scenario notification input"); return; }
+      if (input.length + chunk.length > 33) { rejectInput("Oversized scenario notification"); return; }
+      input = Buffer.concat([input, chunk]);
+      if (input.length < 33) return;
+      const id = input.subarray(0, 32).toString("ascii");
+      if (input[32] !== 10 || requestId(id + REQUEST_SUFFIX) !== id ||
+        !input.subarray(0, 32).equals(Buffer.from(id, "ascii"))) {
+        rejectInput("Invalid scenario notification frame"); return;
+      }
+      accepted = true;
+      Promise.resolve().then(() => monitor.notify(id)).then(
+        acknowledgement => {
+          if (!invalid && acknowledgement?.id === id) socket.end(id + "\n");
+          else socket.end();
+        },
+        error => { failures.push(error); socket.end(); },
+      );
+    });
+  });
+  // listen resolves only after the OS accepts loopback connections.
+  try {
+    await new Promise((resolveListening, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        server.removeListener("error", reject);
+        resolveListening();
+      });
+    });
+  } catch (error) {
+    await monitor.stop();
+    throw error;
+  }
+  server.on("error", error => { failures.push(error); });
+  const address = server.address();
+  let stopping;
+  return {
+    port: address.port,
+    get received() { return monitor.received; },
+    stop() {
+      if (stopping) return stopping;
+      stopping = (async () => {
+        const closed = new Promise(resolveClosed => server.close(resolveClosed));
+        try { await monitor.stop(); }
+        catch (error) { failures.push(error); }
+        finally {
+          for (const socket of sockets) socket.destroy();
+          await closed;
+        }
+        if (failures.length) throw new AggregateError(failures, "Scenario notification channel failed");
+      })();
+      return stopping;
     },
   };
 }

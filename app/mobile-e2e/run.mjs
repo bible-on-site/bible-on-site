@@ -7,7 +7,7 @@ import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 import { iosInteractionDiagnostics, sampleIosFallback } from "./ios-interaction-diagnostics.mjs";
-import { watchScenarioFailures } from "./scenario-failure-monitor.mjs";
+import { listenScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
@@ -154,16 +154,17 @@ async function sampleIosApp(phase) {
 let failureObserverConfirmed = false;
 const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
 if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
-const failureMonitor = interactions ? watchScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
-  const result = await interactions.failure(request, { signal });
-  if (result.status === "error") diagnosticsFailed = true;
-  return result;
-}) : undefined;
+let failureMonitor;
 const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
+  failureMonitor = interactions ? await listenScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
+    const result = await interactions.failure(request, { signal });
+    if (result.status === "error") diagnosticsFailed = true;
+    return result;
+  }) : undefined;
   const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
     probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
@@ -174,6 +175,7 @@ try {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
+      MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
@@ -217,7 +219,7 @@ try {
     diagnosticsFailed = true;
     console.error("Could not finish native log stream:", error);
   }
-  if (platform === "ios" && process.exitCode !== 0) {
+  if (platform === "ios" && test && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
     // Sample surviving apps only if no earlier failure handoff could identify the original.
     // An exited/unknown pinned PID must never fall back to a later scenario's app.
