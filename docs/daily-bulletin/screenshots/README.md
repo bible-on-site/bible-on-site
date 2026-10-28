@@ -34,3 +34,20 @@ The local source artifacts are `.outputs/ses-email-before.html` and `.outputs/se
 ```powershell
 node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '900,1100' --full-page --wait-for-selector .bulletin-verse-number file:///ABSOLUTE_WORKTREE_PATH/.outputs/ses-email-react-footer-complete.html docs/daily-bulletin/screenshots/email-after.png
 ```
+
+## Telegram controls evidence
+
+- [Before](telegram-before.png): the actual `DailyBulletinPage` component before Telegram controls were added, at 1440 x 1100.
+- [After](telegram-after.png): the same component and fixture with the independent Telegram panel, persisted test mode, named private target and disabled public activation.
+- [Phone](telegram-after-mobile.png): the after component at 390 x 844, with the existing chapter, email controls and HTML preview retained.
+
+These full-page Chromium captures use an ignored local Vite harness in `.outputs/telegram-visual/`. It imports the actual source component and admin Tailwind stylesheet. Only server functions and the router link use fixture adapters. Both versions show the same synthetic saved bulletin, two `example.com` email recipients and 52 pending subscribers. Telegram target metadata and readiness are synthetic display fixtures, not evidence of a configured or verified bot. The private target is a sample name; the public handle is the website's published `@BibleOnSite` link.
+
+Every fixture mutation throws instead of sending, preparing or changing an audience. The harness uses no database, AWS profile, token, provider API, authentication session or personal browser profile. No send control was clicked. Visual inspection confirmed readable RTL labels, separate email and Telegram modes, the preserved preview and no horizontal overflow on either viewport. The preview server was stopped after capture.
+
+The baseline was captured before editing the source component with the repository Playwright CLI. The after capture waits for the offscreen iframe's sample heading before taking the full-page image:
+
+```powershell
+node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '1440,1100' --full-page --wait-for-selector 'body:has(iframe):has(#email-audience)' --wait-for-timeout 1000 http://127.0.0.1:3119/ .outputs/telegram-before.png
+node .outputs/telegram-visual/capture.mjs
+```

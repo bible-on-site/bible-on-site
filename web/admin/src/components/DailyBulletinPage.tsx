@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
 import type {
 	BulletinEmailState,
 	EmailAudience,
@@ -50,6 +51,7 @@ type QueueRequest = {
 
 export function DailyBulletinPage() {
 	const [date, setDate] = useState(todayInJerusalem);
+	const [telegramBusy, setTelegramBusy] = useState(false);
 	const [requestedAudience, setRequestedAudience] =
 		useState<EmailAudience | null>(null);
 	const [confirmReal, setConfirmReal] = useState(false);
@@ -111,8 +113,9 @@ export function DailyBulletinPage() {
 		onError: () =>
 			queryClient.invalidateQueries({ queryKey: ["bulletin-email"] }),
 	});
-	const busy =
+	const emailBusy =
 		prepare.isPending || queueEmail.isPending || changeAudience.isPending;
+	const busy = emailBusy || telegramBusy;
 	const state = email.data;
 	const settings = state?.settings;
 	const selectedAudience = requestedAudience ?? settings?.audience ?? "test";
@@ -430,6 +433,11 @@ export function DailyBulletinPage() {
 									: "שליחת ניסיון בלבד"}
 						</button>
 					</section>
+					<BulletinTelegramControls
+						date={date}
+						disabled={emailBusy}
+						onBusyChange={setTelegramBusy}
+					/>
 					<section className="rounded-xl border border-gray-200 bg-white p-4">
 						<h2 className="mb-3 text-xl font-semibold">תצוגת דוא"ל</h2>
 						<iframe

@@ -13,6 +13,15 @@ const template = YAML.parse(
 		"utf8",
 	),
 );
+const telegramTemplate = YAML.parse(
+	readFileSync(
+		new URL(
+			"../docs/aws/cloudformation/daily-bulletin-telegram.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	),
+);
 
 // Bun preserves the scalar values of the !Ref and !GetAtt intrinsic tags.
 // SQS rejects a policy statement with multiple resources or another queue's ARN.
@@ -145,4 +154,36 @@ test("email images preserve their original sources and published content hashes"
 			assert.equal(bytes.readUInt32BE(20), 36);
 		}
 	}
+});
+
+test("Telegram grants only one parameter read to the existing execution role", () => {
+	assert.deepEqual(Object.keys(telegramTemplate.Parameters), [
+		"AdminExecutionRoleName",
+	]);
+	assert.equal(
+		telegramTemplate.Parameters.AdminExecutionRoleName.Default,
+		"ecsTaskExecutionRole",
+	);
+	const resources = Object.values(telegramTemplate.Resources);
+	assert.equal(resources.length, 1, "no token, task, role or queue creation");
+	const [policy] = resources;
+	assert.equal(policy.Type, "AWS::IAM::Policy");
+	assert.deepEqual(policy.Properties.Roles, ["AdminExecutionRoleName"]);
+	const statements = policy.Properties.PolicyDocument.Statement;
+	assert.equal(statements.length, 1);
+	assert.equal(statements[0].Effect, "Allow");
+	assert.deepEqual(statements[0].Action, ["ssm:GetParameters"]);
+	assert.equal(
+		statements[0].Resource,
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: CloudFormation resolves this !Sub expression.
+		"arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-telegram-bot-token",
+	);
+	assert.equal(
+		telegramTemplate.Outputs.BotTokenParameterArn.Value,
+		statements[0].Resource,
+	);
+	assert.equal(
+		telegramTemplate.Outputs.BotTokenContainerVariable.Value,
+		"BULLETIN_TELEGRAM_BOT_TOKEN",
+	);
 });

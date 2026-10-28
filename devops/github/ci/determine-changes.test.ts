@@ -35,7 +35,10 @@ describe("detectChanges", () => {
 			for (const [key, flags] of Object.entries(changes)) {
 				assert.deepEqual(
 					flags,
-					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					{
+						module_changed: false,
+						ci_changed: ["website", "api", "admin"].includes(key),
+					},
 					`${file} -> ${key}`,
 				);
 			}
@@ -550,6 +553,38 @@ describe("isSchemaOnlyDataChange", () => {
 			true,
 		],
 		[
+			"Telegram upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"],
+			true,
+		],
+		[
+			"Telegram upgrade with preservation fixture stays manual",
+			[
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"web/admin/src/server/telegram-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"both channel migrations with preservation fixture stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+			],
+			true,
+		],
+		[
+			"Telegram upgrade cannot hide a full content rebuild",
+			[
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_static_structure.sql",
+			],
+			false,
+		],
+		[
 			"bootstrap changes alone retain normal deployment behavior",
 			["data/mysql/db-populator/src/main.rs"],
 			false,
@@ -641,9 +676,10 @@ describe("isSchemaOnlyDataChange", () => {
 	});
 });
 
-test("SES infrastructure changes select data checks without releasing content", () => {
+test("bulletin infrastructure changes select data checks without releasing content", () => {
 	for (const file of [
 		"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+		"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",

@@ -42,6 +42,20 @@ const UNCERTAIN = "תוצאת השליחה אינה ודאית. נדרשת בד�
 const SUPPRESSED = "השליחה נעצרה בעקבות שינוי במצב הדיוור או בהסכמת הנמען.";
 const QUEUE_FAILED =
 	"לא ניתן להעביר את כל הנמענים לתור. אפשר לנסות שוב באותה בקשה.";
+const TELEGRAM_JOB_ID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function optionalTelegramDelivery() {
+	if (
+		[
+			"BULLETIN_TELEGRAM_BOT_TOKEN",
+			"BULLETIN_TELEGRAM_BOT_USERNAME",
+			"BULLETIN_TELEGRAM_TEST_CHAT_ID",
+		].some((name) => !process.env[name]?.trim())
+	)
+		return null;
+	return import("./telegram-delivery.server");
+}
 
 type RecipientStatus = EmailJobStatus | "bounced" | "complained";
 interface JobRow {
@@ -189,9 +203,13 @@ async function publishRecipients(
 	client: SQSClient,
 	queueUrl: string,
 	recipients: { id: number }[],
+	shutdown?: AbortSignal,
 ): Promise<void> {
+	const deadline = AbortSignal.timeout(15_000);
+	const signal = shutdown ? AbortSignal.any([deadline, shutdown]) : deadline;
 	try {
 		for (let index = 0; index < recipients.length; index += 10) {
+			signal.throwIfAborted();
 			const entries = recipients.slice(index, index + 10).map(({ id }) => ({
 				Id: String(id),
 				MessageBody: JSON.stringify({ kind: "send", recipientId: Number(id) }),
@@ -201,8 +219,9 @@ async function publishRecipients(
 					QueueUrl: queueUrl,
 					Entries: entries,
 				}),
-				{ abortSignal: AbortSignal.timeout(15_000) },
+				{ abortSignal: signal },
 			);
+			signal.throwIfAborted();
 			const acknowledged = new Set(result.Successful?.map((entry) => entry.Id));
 			if (
 				result.Failed?.length ||
@@ -233,7 +252,9 @@ async function publishQueued(jobId: string): Promise<void> {
 async function reconcileEmailOutbox(
 	client: SQSClient,
 	queueUrl: string,
+	shutdown?: AbortSignal,
 ): Promise<void> {
+	shutdown?.throwIfAborted();
 	// Recovery must not depend on the original SQS message still existing: it may
 	// already be in the DLQ after a database outage. Never requeue an expired claim.
 	const stale = await query<{ id: number; job_id: string }>(
@@ -251,12 +272,13 @@ async function reconcileEmailOutbox(
 		if (changed.affectedRows === 1) jobs.add(row.job_id);
 	}
 	for (const id of jobs) await refreshJob(id);
+	shutdown?.throwIfAborted();
 	// The committed rows form an outbox. Re-publishing is safe because send claims
 	// are atomic, and only queued recipients are ever eligible for this sweep.
 	const recipients = await query<{ id: number }>(
 		"SELECT id FROM tanah_daily_bulletin_email_recipient WHERE status = 'queued' ORDER BY id LIMIT 100",
 	);
-	await publishRecipients(client, queueUrl, recipients);
+	await publishRecipients(client, queueUrl, recipients, shutdown);
 }
 
 export async function enqueueBulletinEmail(
@@ -308,6 +330,29 @@ export async function enqueueBulletinEmail(
 		);
 		if (active)
 			throw new Error("יש בקשת שליחה פתוחה או שתוצאתה אינה ודאית לתאריך זה");
+		if (expected.audience === "real") {
+			const previous = await txQueryOne<{
+				status: string;
+				attempt_count: number;
+				provider_message_id: string | null;
+				sent_at: Date | string | null;
+				lease_token: string | null;
+				lease_until: Date | string | null;
+			}>(
+				connection,
+				"SELECT status, attempt_count, provider_message_id, sent_at, lease_token, lease_until FROM tanah_daily_bulletin_delivery WHERE bulletin_date = ? AND channel = 'email' FOR UPDATE",
+				[date],
+			);
+			if (
+				previous?.status !== "pending" ||
+				Number(previous.attempt_count) !== 0 ||
+				previous.provider_message_id !== null ||
+				previous.sent_at !== null ||
+				previous.lease_token !== null ||
+				previous.lease_until !== null
+			)
+				throw new Error("קיים ניסיון דיוור קודם לתאריך זה ונדרשת בדיקה");
+		}
 		const subscribers = await txQuery<{ id: number; email: string }>(
 			connection,
 			"SELECT id, email FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed' ORDER BY id FOR UPDATE",
@@ -327,6 +372,16 @@ export async function enqueueBulletinEmail(
 				"INSERT INTO tanah_daily_bulletin_email_recipient (job_id, subscriber_id, email) VALUES (?, ?, ?)",
 				[id, subscriber.id, subscriber.email.toLowerCase()],
 			);
+		}
+		if (expected.audience === "real") {
+			const reserved = await txExecute(
+				connection,
+				`UPDATE tanah_daily_bulletin_delivery SET status = ?, provider_message_id = ?
+				 WHERE bulletin_date = ? AND channel = 'email' AND status = 'pending' AND attempt_count = 0
+				 AND provider_message_id IS NULL AND sent_at IS NULL AND lease_token IS NULL AND lease_until IS NULL`,
+				["sending", `ses:${id}`, date],
+			);
+			if (reserved.affectedRows !== 1) throw new DeliverySuppressed();
 		}
 		const inserted = await txQueryOne<JobRow>(
 			connection,
@@ -583,7 +638,19 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 			try {
 				if (Date.now() >= nextSweep) {
 					nextSweep = Date.now() + 30_000;
-					await reconcileEmailOutbox(client, runtime.queueUrl);
+					await reconcileEmailOutbox(client, runtime.queueUrl, signal);
+					if (signal.aborted) break;
+					try {
+						const telegram = await optionalTelegramDelivery();
+						await telegram?.reconcileTelegramOutbox(
+							client,
+							runtime.queueUrl,
+							signal,
+						);
+					} catch {
+						if (!signal.aborted)
+							console.error("Telegram bulletin outbox reconciliation failed");
+					}
 				}
 				if (signal.aborted) break;
 				const result = await client.send(
@@ -622,6 +689,24 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					) {
 						await processEmailRecipient(payload.recipientId);
 						handled = true;
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						payload.kind === "telegram.send"
+					) {
+						if (
+							Object.keys(payload).length === 2 &&
+							"jobId" in payload &&
+							typeof payload.jobId === "string" &&
+							TELEGRAM_JOB_ID.test(payload.jobId)
+						) {
+							const telegram = await optionalTelegramDelivery();
+							if (telegram)
+								handled = await telegram.processTelegramJob(
+									payload.jobId.toLowerCase(),
+								);
+						}
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {

@@ -132,6 +132,22 @@ class LambdaParserSafetyTests(unittest.TestCase):
         # new or preserved dedication table is built inside a string.
         self.assertNotIn("CREATE TABLE", processed.upper().replace("CREATE ', 'TABLE", ""))
 
+    def test_telegram_upgrade_is_additive_and_follows_saved_bulletin_schema(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        migration = "tanah_daily_bulletin_telegram_upgrade.sql"
+        self.assertIn(migration, manifest)
+        self.assertLess(manifest.index("tanah_daily_bulletin_upgrade.sql"), manifest.index(migration))
+        path = ROOT / "data/mysql" / migration
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        # Two session settings, two four-statement DDL blocks, one INSERT IGNORE.
+        self.assertEqual(len(LAMBDA.parse_statements(processed)), 11)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
+        self.assertNotIn("CREATE TABLE", processed.upper().replace("CREATE ', 'TABLE", ""))
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+        self.assertIn("INSERT IGNORE INTO tanah_daily_bulletin_telegram_settings (id) VALUES (1)", source)
+
     def test_dedication_seed_data_is_in_manifest_and_idempotent(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         self.assertIn("tanah_dedication_data.sql", manifest)
