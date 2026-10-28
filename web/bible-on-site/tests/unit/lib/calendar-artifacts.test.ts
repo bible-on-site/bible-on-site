@@ -303,8 +303,8 @@ describe("buildCalendarPdfInput", () => {
 		const input = buildCalendarPdfInput("cycle:4");
 		expect(input).not.toBeNull();
 		expect(input?.scope).toBe("cycle");
-		expect(input?.title).toContain("מחזור 4");
-		// Subtitle is the cycle's Hebrew date range, not the "מחזור 4" label.
+		expect(input?.title).toContain("מחזור ד'");
+		// Subtitle is the cycle's Hebrew date range, not the "מחזור ד'" label.
 		expect(input?.subtitle).toContain("-");
 		expect(input?.months.length).toBeGreaterThan(30);
 		const dimmed = input?.dimmed;

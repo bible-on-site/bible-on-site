@@ -77,7 +77,7 @@ public class MiniMonthViewModel
 
     /// <summary>
     /// A grouped-view month section whose cells and week rows materialize on
-    /// first access. The full-cycle view lists ~31 months: building every
+    /// first access. The full-cycle view lists ~44 months: building every
     /// section's cells eagerly at view-switch time blocked the UI thread long
     /// enough to ANR on device, so only the shells are built up front.
     /// </summary>
@@ -130,6 +130,9 @@ public partial class LearningCalendarViewModel : ObservableObject
     private bool _suppressSelection;
     private int _monthOptionsYear = -1;
     private int _cycleOptionsCount = -1;
+    private LearningCalendarPolicy? _policy;
+    private int _yearOptionsMax = -1;
+    private readonly Func<int> _today;
 
     public LearningCalendarViewModel()
         : this(PerekScheduleService.Instance, PerekDataService.Instance, ShellAppNavigator.Instance)
@@ -141,13 +144,15 @@ public partial class LearningCalendarViewModel : ObservableObject
         PerekDataService perekData,
         IAppNavigator navigator,
         ICalendarPdfAssetResolver? calendarPdfAssets = null,
-        ILauncher? launcher = null)
+        ILauncher? launcher = null,
+        Func<int>? today = null)
     {
         _schedule = schedule;
         _perekData = perekData;
         _navigator = navigator;
         _calendarPdfAssets = calendarPdfAssets ?? CalendarPdfAssetService.Instance;
         _launcher = launcher ?? Launcher.Default;
+        _today = today ?? HebrewDateHelper.GetTodayDateNumber;
     }
 
     [ObservableProperty]
@@ -166,12 +171,19 @@ public partial class LearningCalendarViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMonthView))]
     [NotifyPropertyChangedFor(nameof(IsGroupedView))]
+    [NotifyPropertyChangedFor(nameof(IsCycleRangeVisible))]
     private CalendarViewMode _viewMode = CalendarViewMode.Month;
 
     public bool IsMonthView => ViewMode == CalendarViewMode.Month;
 
     /// <summary>Yearly and full-cycle views both render grouped mini-months.</summary>
     public bool IsGroupedView => ViewMode != CalendarViewMode.Month;
+
+    /// <summary>
+    /// The contextual cycle range beside the picker shows only in month/year
+    /// views; the full-cycle heading already carries that label (#2725).
+    /// </summary>
+    public bool IsCycleRangeVisible => ViewMode != CalendarViewMode.Cycle;
 
     [ObservableProperty]
     private ObservableCollection<PickerOption> _monthOptions = new();
@@ -217,7 +229,9 @@ public partial class LearningCalendarViewModel : ObservableObject
             await _perekData.LoadAsync();
             await _schedule.LoadAsync();
 
-            _todayDateNumber = HebrewDateHelper.GetTodayDateNumber();
+            _todayDateNumber = _today();
+            _policy = new LearningCalendarPolicy(_schedule, _todayDateNumber);
+            _monthOptionsYear = -1;
             var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(_todayDateNumber);
             SetMonth(year, month);
             ErrorMessage = string.Empty;
@@ -234,10 +248,28 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
     }
 
+    /// <summary>Refreshes date-dependent limits while preserving the viewed period.</summary>
+    public void RefreshToday()
+    {
+        if (_policy is null || IsLoading)
+        {
+            return;
+        }
+        var today = _today();
+        if (today == _todayDateNumber)
+        {
+            return;
+        }
+        _todayDateNumber = today;
+        _policy = new LearningCalendarPolicy(_schedule, today);
+        _monthOptionsYear = -1;
+        _cycle = Math.Min(_cycle, _policy.Next.Number);
+        SetMonth(_year, _month);
+    }
+
     private void SetMonth(int year, int month)
     {
-        _year = year;
-        _month = month;
+        (_year, _month) = _policy!.ClampMonth(year, month);
         RebuildPickerOptions();
         // The month grid is hidden in the grouped views; building its cells
         // there only floods the hidden CollectionView with change churn (#2455).
@@ -255,37 +287,28 @@ public partial class LearningCalendarViewModel : ObservableObject
         {
             // Picker option lists are rebuilt only when their inputs change:
             // MonthOptions depend on the viewed year, YearOptions on schedule
-            // data, and CycleOptions grow only past the last confirmed cycle
+            // data, and CycleOptions follow today's current/next cycle window
             // (#2455 — every navigation used to re-allocate all three lists and
             // re-bind the pickers).
             if (_monthOptionsYear != _year)
             {
                 _monthOptionsYear = _year;
                 MonthOptions = new ObservableCollection<PickerOption>(
-                    HebrewDateHelper.GetMonthOrder(_year).Select(month =>
+                    _policy!.Months(_year).Select(month =>
                         new PickerOption(month, HebrewDateHelper.GetHebrewMonthName(
                             month, HebrewDateHelper.IsHebrewLeapYear(_year)))));
             }
 
             var firstCycleYear = HebrewDateHelper.NumberToHebrewDate(_schedule.GetCycle(1).StartDate).Year;
-            var lastConfirmedNumber = Math.Max(1, _schedule.LastConfirmedCycleNumber);
-            var lastConfirmedYear = HebrewDateHelper.NumberToHebrewDate(
-                _schedule.GetCycle(lastConfirmedNumber).EndDate).Year;
-            if (YearOptions.Count == 0)
+            var lastVisibleYear = _policy!.MaxMonth.Year;
+            if (_yearOptionsMax != lastVisibleYear)
             {
-                var years = new SortedSet<int> { _year };
-                for (var year = firstCycleYear; year <= lastConfirmedYear; year++)
+                _yearOptionsMax = lastVisibleYear;
+                var years = new SortedSet<int>();
+                for (var year = firstCycleYear; year <= lastVisibleYear; year++)
                 {
                     years.Add(year);
                 }
-                YearOptions = new ObservableCollection<PickerOption>(
-                    years.Select(year => new PickerOption(year, $"ה'{GimatryHelper.ToLetters(year % 1000)}")));
-            }
-            else if (!YearOptions.Any(o => o.Value == _year))
-            {
-                // A manually picked year outside the listed range still has to
-                // appear in the picker.
-                var years = YearOptions.Select(o => o.Value).Append(_year).OrderBy(y => y);
                 YearOptions = new ObservableCollection<PickerOption>(
                     years.Select(year => new PickerOption(year, $"ה'{GimatryHelper.ToLetters(year % 1000)}")));
             }
@@ -295,18 +318,15 @@ public partial class LearningCalendarViewModel : ObservableObject
                 : _schedule.GetCycleForDate(_year * 10000 + _month * 100 + 1)
                     ?? _schedule.GetCycleForDate(_year * 10000 + _month * 100 +
                         HebrewDateHelper.GetDaysInMonth(_year, _month));
-            var maxCycle = Math.Max(lastConfirmedNumber, displayed?.Number ?? 1);
+            var maxCycle = _policy.Next.Number;
             if (_cycleOptionsCount != maxCycle)
             {
                 _cycleOptionsCount = maxCycle;
                 CycleOptions = new ObservableCollection<PickerOption>(
                     Enumerable.Range(1, maxCycle).Select(number =>
-                    {
-                        var cycle = _schedule.GetCycle(number);
-                        return new PickerOption(
+                        new PickerOption(
                             number,
-                            $"מחזור {number}{(cycle.Projected ? " (משוער)" : string.Empty)}");
-                    }));
+                            CycleDisplayFormatter.Name(_schedule.GetCycle(number)))));
             }
 
             SelectedMonth = MonthOptions.FirstOrDefault(o => o.Value == _month);
@@ -319,28 +339,32 @@ public partial class LearningCalendarViewModel : ObservableObject
             {
                 CalendarViewMode.Year => $"שנת ה'{GimatryHelper.ToLetters(_year % 1000)}",
                 CalendarViewMode.Cycle when displayed is not null =>
-                    $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
-                        $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
-                        $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}",
+                    CycleDisplayFormatter.Label(displayed),
                 _ =>
                     $"{HebrewDateHelper.GetHebrewMonthName(_month, HebrewDateHelper.IsHebrewLeapYear(_year))} " +
                     $"ה'{GimatryHelper.ToLetters(_year % 1000)}",
             };
-            CycleLabel = displayed is null
+            // Beside the picker, month/year views show the contextual cycle's
+            // range once. The full-cycle view's heading already carries the
+            // selected cycle's label — repeating it here duplicated it (#2725).
+            CycleLabel = displayed is null || ViewMode == CalendarViewMode.Cycle
                 ? string.Empty
-                : $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
-                    $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
-                    $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}";
+                : CycleDisplayFormatter.Label(displayed);
         }
         finally
         {
             _suppressSelection = false;
         }
+        PrevMonthCommand.NotifyCanExecuteChanged();
+        NextMonthCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanExportPdf));
+        OnPropertyChanged(nameof(PdfAvailabilityText));
+        DownloadPdfCommand.NotifyCanExecuteChanged();
     }
 
     private void RebuildCells()
     {
-        var days = _schedule.BuildMonth(_year, _month);
+        var days = _policy!.BuildMonth(_year, _month);
         // Cells keeps one entry per date — the canonical daily assignments.
         // MonthWeeks is the merged layout the month grid renders (#2365); it
         // reuses the same cell instances instead of building a second model.
@@ -359,17 +383,17 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
 
         // Each group's day cells resolve lazily with the rest of its content,
-        // so switching to the ~31-month cycle view only pays for the visible
+        // so switching to the ~44-month cycle view only pays for the visible
         // sections instead of blocking on ~2500 view models up front.
         IEnumerable<(string Title, Func<IReadOnlyList<PerekScheduleService.MonthCell>> Days)> groups;
         Func<PerekScheduleService.CalendarDay, bool>? dimmed = null;
         if (ViewMode == CalendarViewMode.Year)
         {
             var year = _year;
-            groups = HebrewDateHelper.GetMonthOrder(year).Select(month =>
+            groups = _policy!.Months(year).Select(month =>
                 ($"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))}",
                     (Func<IReadOnlyList<PerekScheduleService.MonthCell>>)(
-                        () => _schedule.BuildMonth(year, month))));
+                        () => _policy.BuildMonth(year, month))));
         }
         else
         {
@@ -394,7 +418,7 @@ public partial class LearningCalendarViewModel : ObservableObject
                 months.Add((
                     $"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))} " +
                         $"ה'{GimatryHelper.ToLetters(year % 1000)}",
-                    () => _schedule.BuildMonth(monthYear, monthNumber)));
+                    () => _policy!.BuildMonth(monthYear, monthNumber)));
                 (year, month) = HebrewDateHelper.NextMonth(year, month);
             }
             groups = months;
@@ -557,7 +581,7 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     private void SetCycle(int cycleNumber)
     {
-        _cycle = Math.Max(1, cycleNumber);
+        _cycle = Math.Clamp(cycleNumber, 1, _policy!.Next.Number);
         RebuildPickerOptions();
         if (ViewMode == CalendarViewMode.Month)
         {
@@ -632,9 +656,15 @@ public partial class LearningCalendarViewModel : ObservableObject
         PrevMonthCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanNavigatePrev => ViewMode != CalendarViewMode.Cycle || _cycle > 1;
+    private bool CanNavigatePrev => _policy is not null && (ViewMode == CalendarViewMode.Cycle ? _cycle > 1
+        : ViewMode == CalendarViewMode.Year ? _year > _policy.MinMonth.Year
+        : (_year, _month) != _policy.MinMonth);
 
-    [RelayCommand]
+    private bool CanNavigateNext => _policy is not null && (ViewMode == CalendarViewMode.Cycle ? _cycle < _policy.Next.Number
+        : ViewMode == CalendarViewMode.Year ? _year < _policy.MaxMonth.Year
+        : (_year, _month) != _policy.MaxMonth);
+
+    [RelayCommand(CanExecute = nameof(CanNavigateNext))]
     private void NextMonth()
     {
         switch (ViewMode)
@@ -681,6 +711,8 @@ public partial class LearningCalendarViewModel : ObservableObject
     [RelayCommand]
     private void Today()
     {
+        RefreshToday();
+        _cycle = _policy!.Current?.Number ?? _policy.Next.Number;
         var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(_todayDateNumber);
         SetMonth(year, month);
     }
@@ -700,6 +732,15 @@ public partial class LearningCalendarViewModel : ObservableObject
         await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
     }
 
+    public bool CanExportPdf => _policy?.CanExport(ViewMode switch
+    {
+        CalendarViewMode.Year => "year",
+        CalendarViewMode.Cycle => "cycle",
+        _ => "month",
+    }, _year, _month, _cycle) == true;
+
+    public string PdfAvailabilityText => CanExportPdf ? string.Empty : LearningCalendarPolicy.PdfUnavailable;
+
     /// <summary>
     /// Hands the PDF export of the currently viewed period (#2366) to the
     /// device browser, which owns download/save/share.
@@ -714,9 +755,14 @@ public partial class LearningCalendarViewModel : ObservableObject
     /// Fetching a not-yet-cached PDF needs connectivity; browsing the
     /// calendar itself stays offline.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExportPdf))]
     private async Task DownloadPdfAsync()
     {
+        RefreshToday();
+        if (!CanExportPdf)
+        {
+            return;
+        }
         // Capture the selection up-front: a navigation during the manifest
         // fetch must not change which artifact this download delivers.
         var mode = ViewMode;

@@ -35,6 +35,11 @@ import {
 	parashaArticlesTag,
 	parashaPerushimTag,
 } from "@/lib/revalidate/tags";
+import { getParashaDedications } from "@/lib/dedications/loaders";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
@@ -182,6 +187,19 @@ export default async function ParashaUnitPage({
 		bookPerekSources[perekId] = getPerekByPerekId(perekId).source;
 	}
 
+	// Parasha dedications (#2731): each unit's dedication renders once on
+	// its Torah spread in the book, so the page collects a cached
+	// `parasha:{id}:dedications` tag per unit the book can reach.
+	const dedicationsByUnit: Record<number, string[]> = {};
+	await Promise.all(
+		bookUnits.map(async (bookUnit) => {
+			const lines = dedicationLines(
+				await getParashaDedications(bookUnit.unitId),
+			);
+			if (lines.length > 0) dedicationsByUnit[bookUnit.unitId] = lines;
+		}),
+	);
+
 	return (
 		<>
 			{/* useSearchParams inside the composite requires a boundary so
@@ -201,6 +219,7 @@ export default async function ParashaUnitPage({
 					perushim={perushim}
 					haftaraArticles={haftaraArticles}
 					haftaraPerushim={haftaraPerushim}
+					dedicationsByUnit={dedicationsByUnit}
 				/>
 			</Suspense>
 			<div className={`${perekStyles.perekContainer} seo-content`}>
@@ -209,6 +228,7 @@ export default async function ParashaUnitPage({
 					פרשת {unit.heading}
 					<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
 				</h1>
+				<DedicationLines lines={dedicationsByUnit[unitId] ?? []} />
 				<h2 className={styles.readingLabel}>קריאת התורה</h2>
 				<Suspense>
 					<AliyahControls

@@ -1,0 +1,76 @@
+namespace BibleOnSite.Models;
+
+/// <summary>
+/// One dedication honouring <see cref="Subject"/> for <see cref="Purposes"/>,
+/// as resolved by the API's `dedications` query for a reading context (#2731).
+/// </summary>
+public class Dedication
+{
+    public int Id { get; set; }
+
+    public string Subject { get; set; } = string.Empty;
+
+    /// <summary>Purpose descriptions (לע"נ, רפואה שלימה, ...).</summary>
+    public List<string> Purposes { get; set; } = [];
+
+    /// <summary>Whole-dedication expiry (UTC wall-clock); null = ongoing.</summary>
+    public string? ExpiresAt { get; set; }
+
+    /// <summary>The assignments that matched the requested context.</summary>
+    public List<DedicationScope> Scopes { get; set; } = [];
+}
+
+/// <summary>One assignment of a dedication to a target.</summary>
+public class DedicationScope
+{
+    /// <summary>PEREK | SEFER | HELEK | PARASHA | ARTICLE | TANAHPEDIA_ENTRY | MASORA.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    public int? PerekIdLow { get; set; }
+    public int? PerekIdHigh { get; set; }
+    public int? SeferId { get; set; }
+    public int? HelekId { get; set; }
+    public int? ParashaId { get; set; }
+    public int? ArticleId { get; set; }
+
+    /// <summary>Canonical tanahpedia_entry id (not the mutable unique_name).</summary>
+    public string? EntryId { get; set; }
+
+    /// <summary>Assignment-level expiry (UTC wall-clock); null = ongoing.</summary>
+    public string? ExpiresAt { get; set; }
+}
+
+/// <summary>
+/// Reading-context input for `dedications(context:)`: pass every identity the
+/// context carries — the API resolves perek → sefer → helek ancestors itself.
+/// </summary>
+public class DedicationContext
+{
+    public List<int>? PerekIds { get; set; }
+    public List<int>? SeferIds { get; set; }
+    public List<int>? HelekIds { get; set; }
+    public List<int>? ParashaIds { get; set; }
+    public List<string>? EntryIds { get; set; }
+    public List<int>? ArticleIds { get; set; }
+
+    /// <summary>True for a מסורה על הפרק reading context (feature-level scope).</summary>
+    public bool? Masora { get; set; }
+}
+
+public static class DedicationFormatter
+{
+    /// <summary>
+    /// The rendered line — mirrors the website's `formatDedication` and the
+    /// API's presentation contract: `מוקדש ל{subject} ({purposes})`.
+    /// </summary>
+    public static string Format(Dedication dedication)
+    {
+        var purposes = dedication.Purposes.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        return purposes.Count == 0
+            ? $"מוקדש ל{dedication.Subject}"
+            : $"מוקדש ל{dedication.Subject} ({string.Join(", ", purposes)})";
+    }
+
+    public static List<string> FormatAll(IEnumerable<Dedication> dedications) =>
+        dedications.Select(Format).ToList();
+}

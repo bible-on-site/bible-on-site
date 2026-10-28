@@ -31,6 +31,8 @@ export default function ParashaLoadedSefer(props: {
 	perushim: RangePerushSummary[];
 	haftaraArticles: ArticleSummary[];
 	haftaraPerushim: RangePerushSummary[];
+	/** Parasha-scoped dedication lines per unit (#2731). */
+	dedicationsByUnit?: Record<number, string[]>;
 	initialBookPage: BookPage | null;
 	haftara: boolean;
 	initialContent?: {
@@ -152,6 +154,7 @@ export default function ParashaLoadedSefer(props: {
 			perushim={props.perushim}
 			haftaraArticles={props.haftaraArticles}
 			haftaraPerushim={props.haftaraPerushim}
+			dedicationsByUnit={props.dedicationsByUnit}
 			initialBookPage={props.initialBookPage}
 			haftara={props.haftara}
 			initialContent={props.initialContent}

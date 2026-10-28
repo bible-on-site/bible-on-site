@@ -224,6 +224,76 @@ button.block {
   margin-top: 4px;
 }
 
+// Sefer dedication — vertical text pinned to the spine's physical left
+// edge (#2731). `vertical-lr` stacks extra dedications as columns growing
+// rightward toward the title without spilling onto the neighbouring sefer.
+.spineDedication {
+  font-family: inherit;
+  position: absolute;
+  top: 5%;
+  left: 1px;
+  height: 90%;
+  // Up to ~half the spine width so a wrapped column still clears the title.
+  width: 50%;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+  line-height: 1.3;
+  overflow: hidden;
+  pointer-events: none;
+
+  p {
+    margin: 0;
+    padding-left: 0.12em;
+    white-space: normal;
+    text-align: start;
+  }
+}
+
+// Helek dedication caption beside a shelf's helek heading (#2731),
+// tucked under the 3D scene in multi-shelf mode.
+.helekDedications {
+  margin-top: 4px;
+  text-align: center;
+  direction: rtl;
+  font-size: 0.75rem;
+  color: #4c3a28;
+  line-height: 1.35;
+
+  p {
+    margin: 0;
+  }
+}
+
+// Single-shelf mode: one strip under the scene, groups width-aligned to
+// their helek's shelf span so each caption sits by its heading (#2731).
+.helekDedicationStrip {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  direction: rtl;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.helekDedicationGroup {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: center;
+  direction: rtl;
+  font-size: 0.72rem;
+  color: #4c3a28;
+  line-height: 1.3;
+
+  p {
+    margin: 0;
+  }
+}
+
 // Bookmark ribbon on today's sefer — hangs from top of spine.
 // Uses two pseudo-layers: white outline (::before, slightly larger) behind
 // the red ribbon (::after), both V-notched via clip-path.

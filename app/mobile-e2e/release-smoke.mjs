@@ -37,6 +37,21 @@ const ANALYTICS_COMPILED_OUT =
 
 const FATAL_SIGNAL = /Fatal signal \d+ \(SIG/;
 const DIED_PID = /\(pid \d+\) has died/;
+const TEARDOWN_DEADLINE_MS = 10000;
+
+// Killing the app — force-stop, `pm clear`, or `install -r` over a running
+// package — races the per-phase logcat clear: WMS posts the dead window's
+// WIN DEATH on the system_server thread after the kill returns, so a clear
+// that wins the race still records the stale death as a crash of the new
+// launch (the upgrade phase hit this in #2700). Wait for the process to die
+// and give the window teardown one more poll to post before clearing.
+export async function waitForProcessTeardown(isAlive, sleep, deadlineMs = TEARDOWN_DEADLINE_MS) {
+  const goneDeadline = Date.now() + deadlineMs;
+  while (await isAlive() && Date.now() < goneDeadline) {
+    await sleep(POLL_MS);
+  }
+  await sleep(POLL_MS);
+}
 
 // Unexpected-death records scoped to this package. "has died"/"WIN DEATH" are
 // checked only inside a launch window (logcat is cleared per phase), where a
@@ -162,6 +177,8 @@ async function main() {
     (await execute(adb, ["-s", udid, "shell", ...args], { timeout: ADB_CALL_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 })).stdout;
   const device = async (...args) =>
     (await execute(adb, ["-s", udid, ...args], { timeout: ADB_CALL_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 })).stdout;
+  const processAlive = async () =>
+    (await shell("pidof", APP_PACKAGE).catch(() => "")).trim().length > 0;
 
   // The workflow's device-readiness record greps this file at the artifacts
   // root, matching android-ready.mjs — a genuinely booted device authorizes
@@ -238,6 +255,11 @@ async function main() {
         log(`${name}: install says ${out.trim().split("\n").pop()}`);
         if (!/Success/.test(out)) return fail(`install failed: ${out.trim()}`);
         if (install === "fresh") await shell("pm", "clear", APP_PACKAGE);
+        // `install -r` over a running app force-stops it exactly like the
+        // stopFirst path's force-stop does; let its window teardown post
+        // before the logcat clear so the stale WIN DEATH cannot read as a
+        // crash of the new launch.
+        await waitForProcessTeardown(processAlive, delay);
       }
       await device("logcat", "-c");
       liveLog = startReleaseLog(adb, ["-s", udid, "logcat", "-v", "threadtime"],
@@ -317,15 +339,7 @@ async function main() {
   for (const step of launchPlan()) {
     if (step.stopFirst) {
       await shell("am", "force-stop", APP_PACKAGE);
-      // WMS posts the killed window's WIN DEATH on the system_server thread,
-      // so it lands after force-stop returns — a logcat clear that wins the
-      // race still records it as a crash of the new launch. Wait for the
-      // process and its window teardown to finish first.
-      const goneDeadline = Date.now() + 10000;
-      while ((await shell("pidof", APP_PACKAGE).catch(() => "")).trim() && Date.now() < goneDeadline) {
-        await delay(POLL_MS);
-      }
-      await delay(POLL_MS);
+      await waitForProcessTeardown(processAlive, delay);
       log(`${step.name}: force-stopped the app; the marker file persists for this install`);
     }
     await runPhase(step);

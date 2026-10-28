@@ -162,7 +162,7 @@ tap(find(nodes, "GoToPerushimSettingsButton"))
 nodes, _ = wait_for("DownloadPerushimButton")
 capture("download-settings", verify=False)
 check.assertIsNotNone(find(nodes, "PreferencesNavigationButton"), "Preferences must retain the shared app top bar")
-check.assertIsNone(find(nodes, "PreferencesBackButton"), "Android default must hide the optional in-app Back button")
+check.assertIsNone(find(nodes, "TopBarBackButton"), "Android default must hide the optional in-app Back button")
 check.assertTrue(any(n.get("text") == "העדפות - חבילות הרחבה" for n in nodes),
                  "Download shortcut must open the regular preferences at extension packs")
 tap(find(nodes, "DownloadPerushimButton"))

@@ -315,6 +315,7 @@ jobs:
       data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
       data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
+      data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
     steps:
@@ -399,6 +400,36 @@ jobs:
       # overlapping CI runs can never race on a cache save.
       - name: Verify calendar-PDF artifacts
         run: bun run check:calendar-pdf
+
+  validate_website_architectures:
+    name: Validate Website Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: website
+
+  validate_api_architectures:
+    name: Validate API Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: api
+
+  validate_admin_architectures:
+    name: Validate Admin Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: admin
 
   package_website:
     name: Package Website
@@ -899,6 +930,13 @@ jobs:
           # master push history intact; reset only feature/queue comparisons.
           node "$GITHUB_WORKSPACE/devops/github/ci/bencher-comparison.mjs" > "$RUNNER_TEMP/bencher-comparison-args.txt"
           mapfile -t BENCHER_COMPARISON_ARGS < "$RUNNER_TEMP/bencher-comparison-args.txt"
+          # CLS gets a dedicated measure with a static boundary: a percentage
+          # test on a zero CLS baseline collapses the upper boundary limit to
+          # 0, so every nonzero (still-good) reading alerts (#2718). Static
+          # tests reject the sample-size and window options. 0.1 is the
+          # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
+          # options positionally across groups, so cls_ratio must pass
+          # --threshold-max-sample-size _ to leave it unset (#2718).
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
@@ -913,6 +951,7 @@ jobs:
             --threshold-measure size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
+            --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
@@ -1299,9 +1338,13 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Build lcov Docker image
-        uses: ./.github/actions/lcov-image
-
+      # The published website report merges both test layers as a plain
+      # union of --require inputs. Both enumerate the same canonical
+      # universe: sanitizeCoverage projects every collected record onto the
+      # coordinates jest's transform emits for the file and drops records
+      # that name no real instrumentable src file, so dev-server generated
+      # modules and compile-variant coordinates can never reach the merge
+      # (#2670).
       - name: Merge Test Coverage (Unit + E2E)
         run: bun run coverage:merge
 
@@ -1766,6 +1809,19 @@ jobs:
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+
+      # Mock connections cannot prove session-scoped MySQL advisory locks.
+      # Run the ignored regression explicitly and add its production-code hits
+      # to the existing unit LCOV report before E2E and the normal coverage merge.
+      - name: Verify article-search advisory lock with MySQL and coverage
+        working-directory: ${{ env.API_DIRECTORY }}
+        env:
+          MYSQL_PWD: test_123
+          ARTICLE_SEARCH_LOCK_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/article_search_lock_test
+        run: |
+          mysql --host=127.0.0.1 --user=root --execute='CREATE DATABASE article_search_lock_test'
+          trap 'mysql --host=127.0.0.1 --user=root --execute="DROP DATABASE article_search_lock_test"' EXIT
+          cargo make coverage-article-search-lock
 
       - name: Setup tests bun, Node.js and dependencies
         id: tests-bun-cache
@@ -2403,15 +2459,21 @@ jobs:
           .venv/bin/python -m unittest -v
           .venv/bin/python publish.py
           .venv/bin/python audit.py
+      - name: Score the mention-annotation pipeline against its golden set
+        run: |
+          python3 -m unittest discover -s data/annotations -p 'test_*.py'
+          python3 data/annotations/golden_eval.py --check
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+      - name: Verify daily bulletin mail infrastructure and assets
+        run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --test deploy/ecr-deploy/resume-image.test.mts
+        run: node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2889,6 +2951,9 @@ jobs:
         determine_baseline_availability,
         determine_docker_image_availability,
         calendar_pdf_artifacts,
+        validate_website_architectures,
+        validate_api_architectures,
+        validate_admin_architectures,
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
@@ -2931,6 +2996,33 @@ jobs:
           if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
             if [ "${{ needs.deploy_verifier.result }}" != "success" ]; then
               echo "CD verifier dependency contract did not pass."
+              exit 1
+            fi
+          fi
+
+          # Match validate_website_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_website_architectures.result }}" != "success" ]; then
+              echo "Website native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          # Match validate_api_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_api_architectures.result }}" != "success" ]; then
+              echo "API native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          # Match validate_admin_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_admin_architectures.result }}" != "success" ]; then
+              echo "Admin native image validation failed or did not run"
               exit 1
             fi
           fi
@@ -3268,7 +3360,7 @@ jobs:
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
           node review-audit/scan-catch.cjs
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/bencher-thresholds.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;
@@ -3563,11 +3655,20 @@ jobs:
     name: Release Data
     needs: [setup_env, determine_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
-    # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
-    # Data CD falls back to the always-present master artifact in that case.
+    # Delivery intent tracks the released payload only: data content, perushim
+    # pipeline inputs, or the data-deploy tooling itself. Shared CI plumbing
+    # (data_ci_changed covers ci.yml, composite actions and the detector) is
+    # never delivery intent — the producer rightly skips those runs, leaving
+    # no current-run SQL artifact to bind (#2730).
+    # When perushim_data is skipped but delivery is intended, the bind step
+    # resolves the trusted master baseline archive instead — pinned by
+    # immutable ID/digest and bound to its producing master CI run and to
+    # identical pipeline inputs (devops/github/release/data-artifact.mjs).
+    # data_ci may be skipped when only perushim inputs changed; cross_module_ci
+    # already forces data_ci success whenever data checks were needed.
     # Schema-only changes require a separately approved, selective migration.
     # Skip this entire job: success would supersede older queued data deployments.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -3579,6 +3680,9 @@ jobs:
         id: sql_source
         env:
           GH_TOKEN: ${{ github.token }}
+          # Skipped producer = generated SQL is unchanged; bind the trusted
+          # master baseline archive produced by an earlier master CI run.
+          SQL_FROM_BASELINE: ${{ needs.perushim_data.result == 'skipped' }}
         run: node devops/github/release/data-artifact.mjs
       - name: Trigger Data CD Workflow
         uses: peter-evans/repository-dispatch@v4

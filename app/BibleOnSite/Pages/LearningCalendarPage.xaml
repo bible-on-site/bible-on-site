@@ -2,42 +2,30 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.LearningCalendarPage"
              x:DataType="viewmodels:LearningCalendarViewModel"
              Title="לוח לימוד יומי"
-             FlowDirection="RightToLeft">
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
-    <!-- Regular page presentation: the page stays on the navigation stack, so
-         device/system Back returns to the previous page (e.g. from the reader). -->
-    <Shell.BackButtonBehavior>
-        <BackButtonBehavior IsVisible="False"/>
-    </Shell.BackButtonBehavior>
-
-    <!-- Shared top bar: hamburger that opens the flyout, like every other page. -->
-    <Shell.TitleView>
-        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
-            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="20"
-                    WidthRequest="40"
-                    HeightRequest="40"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                    SemanticProperties.Description="תפריט"
-                    AutomationId="CalendarMenuButton"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Start"
-                    Clicked="OnMenuButtonClicked"/>
-            <Label Grid.Column="1"
-                   Text="לוח לימוד יומי"
-                   FontSize="20"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource AccentOnDark}}"/>
-        </Grid>
-    </Shell.TitleView>
+    <!-- The shared navigation capsule: hamburger at the far-right edge, Back
+         immediately beside it, then the title pill — the same bar as every
+         other page (#2467). -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="CalendarMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="לוח לימוד יומי"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
 
     <ContentPage.Resources>
         <Style x:Key="CalendarNavButton" TargetType="Button">
@@ -64,7 +52,7 @@
         </Style>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="8">
+    <Grid Grid.Row="1" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="8">
 
         <!-- View toggle: monthly / yearly / full cycle (#2364) -->
         <Grid Grid.Row="0" ColumnDefinitions="*,*,*" ColumnSpacing="4" Margin="0,0,0,4">
@@ -160,6 +148,7 @@
                     Style="{StaticResource CalendarNavButton}"
                     SemanticProperties.Description="הורדת לוח הלימוד כ-PDF"
                     AutomationId="CalendarDownloadPdf"
+                    ToolTipProperties.Text="{Binding PdfAvailabilityText}"
                     Command="{Binding DownloadPdfCommand}"/>
         </Grid>
 
@@ -183,6 +172,7 @@
                     AutomationId="CalendarCyclePicker"/>
             <Label Grid.Column="1"
                    Text="{Binding CycleLabel}"
+                   IsVisible="{Binding IsCycleRangeVisible}"
                    FontSize="12"
                    VerticalOptions="Center"
                    LineBreakMode="WordWrap"
@@ -469,5 +459,6 @@
                HorizontalTextAlignment="Center"
                VerticalOptions="Center"
                Padding="20"/>
+    </Grid>
     </Grid>
 </ContentPage>
