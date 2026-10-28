@@ -15,7 +15,7 @@
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0 0 32px 0;
   text-align: center;
 }
@@ -68,7 +68,7 @@
 
 .videoTitle {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
 }
 
@@ -193,7 +193,7 @@
 
   .pageSubtitle,
   .videoTitle {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .videoCard {

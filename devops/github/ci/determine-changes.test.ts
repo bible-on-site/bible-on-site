@@ -13,6 +13,7 @@ import { describe, test } from "node:test";
 import {
 	baseRevision,
 	detectChanges,
+	isDataDeployChange,
 	isSchemaOnlyDataChange,
 	MODULES,
 	type ModuleKey,
@@ -317,7 +318,6 @@ describe("detectChanges", () => {
 		"web/bible-on-site/playwright-global-setup.js",
 		"web/bible-on-site/playwright-global-teardown-coverage.js",
 		"web/bible-on-site/launch-e2e-server.mts",
-		"web/bible-on-site/get-debug-port.js",
 		// Test env and coverage fixtures.
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/.covignore.mjs",
@@ -523,6 +523,26 @@ describe("isSchemaOnlyDataChange", () => {
 	});
 });
 
+describe("isDataDeployChange", () => {
+	test("data-deploy tooling changes signal delivery intent", () => {
+		assert.equal(isDataDeployChange(["devops/deploy/data-deploy/index.mts"]), true);
+		assert.equal(isDataDeployChange(["devops/deploy/data-deploy/sql-files.json"]), true);
+	});
+
+	test("shared CI plumbing and data content are not delivery intent", () => {
+		// #2730: a shared-CI-only push (ci.yml, composite actions, the detector
+		// itself) skips the perushim producer and must not enter Release Data.
+		for (const files of [
+			SHARED_FILES,
+			["data/mysql/tanah_static_structure.sql"],
+			["devops/deploy/deployer-base.mts"],
+			["devops/deploy/data-deploy-old.mts"],
+			[],
+		])
+			assert.equal(isDataDeployChange(files), false, JSON.stringify(files));
+	});
+});
+
 describe("baseRevision", () => {
 	test("uses the tested PR merge parent even when the event base is stale", () => {
 		assert.deepEqual(
@@ -654,7 +674,7 @@ describe("main", () => {
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 1,
+				Object.keys(MODULES).length * 2 + 2,
 			);
 			return { changes, output };
 		} finally {

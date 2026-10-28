@@ -60,7 +60,7 @@
 .panelHeader button {
 	border: 0;
 	background: transparent;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	font-size: 24px;
 	padding: 0 6px;
 	cursor: pointer;
@@ -79,7 +79,7 @@
 	padding: 9px;
 	background: transparent;
 	border-radius: 8px;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	font: inherit;
 	cursor: pointer;
 }
@@ -122,12 +122,12 @@
 	font-weight: normal;
 }
 .section output {
-	color: #637598;
+	color: var(--muted-text, #637598);
 	font-weight: normal;
 	font-variant-numeric: tabular-nums;
 }
 .section small {
-	color: #637598;
+	color: var(--muted-text, #637598);
 	font-size: 12px;
 	font-weight: normal;
 	line-height: 1.5;
@@ -222,7 +222,7 @@
 	.categories button,
 	.section output,
 	.section small {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.categories {

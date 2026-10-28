@@ -158,7 +158,7 @@ export function UnitSeferBook({
 	const frontCover = (
 		<section
 			key="front-cover"
-			className={`${seferStyles.page} ${seferStyles.cover}`}
+			className={`${seferStyles.page} ${seferStyles.cover} flipbook-page-bounded`}
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
@@ -173,7 +173,7 @@ export function UnitSeferBook({
 	const backCover = (
 		<section
 			key="back-cover"
-			className={`${seferStyles.page} ${seferStyles.cover}`}
+			className={`${seferStyles.page} ${seferStyles.cover} flipbook-page-bounded`}
 			aria-label="עטיפה אחורית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
@@ -184,6 +184,7 @@ export function UnitSeferBook({
 	const tocPage = (
 		<TocPage
 			key="toc"
+			className="flipbook-page-bounded"
 			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
 			totalPages={totalPages}
 			pageSemantics={pageSemantics}
@@ -203,7 +204,7 @@ export function UnitSeferBook({
 
 	const pages = [
 		frontCover,
-		<div key="cover-interior" />,
+		<div key="cover-interior" className="flipbook-page-bounded" />,
 		tocPage,
 		...contentPages,
 		backCover,

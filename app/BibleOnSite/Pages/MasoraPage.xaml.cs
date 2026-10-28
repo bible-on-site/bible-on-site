@@ -39,6 +39,9 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     public MasoraPage()
     {
         InitializeComponent();
+#if IOS
+        ConfigureReaderSafeArea();
+#endif
         _viewModel = new MasoraViewModel();
         BindingContext = _viewModel;
         SubscribeViewModelChanges();
@@ -47,11 +50,15 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
+        WireReaderBackChrome();
     }
 
     public MasoraPage(MasoraViewModel viewModel)
     {
         InitializeComponent();
+#if IOS
+        ConfigureReaderSafeArea();
+#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         SubscribeViewModelChanges();
@@ -60,6 +67,24 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
+        WireReaderBackChrome();
+    }
+
+    /// <summary>
+    /// The capsule Back owns the fullscreen return affordance (#2467): it
+    /// stays enabled while the floating exit control is up — the same
+    /// surface <see cref="TryHandleReaderBack"/> serves.
+    /// </summary>
+    private void WireReaderBackChrome()
+    {
+        NormalNavigationBar.BackStateProvider = () => ExitFullScreenButton.IsVisible;
+        ExitFullScreenButton.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IsVisible))
+            {
+                NormalNavigationBar.RefreshBackState();
+            }
+        };
     }
 
     /// <summary>
@@ -301,6 +326,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 #endif
 #if WINDOWS
         RegisterReaderKeyboardBack();
+#endif
+#if IOS
+        ApplyBottomBarSafeArea();
+        SizeChanged -= OnPageSizeChanged;
+        SizeChanged += OnPageSizeChanged;
 #endif
 
         if (_viewModel.Unit == null && !_isLoading)
@@ -664,4 +694,53 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     }
 
     #endregion
+
+#if IOS
+    /// <summary>
+    /// MAUI pads every Layout inside the device safe area by default
+    /// (SafeAreaEdges = Container), and each Layout pads independently -
+    /// clearing it only on MainGrid just moves the padding to ContentArea,
+    /// which is what produced the empty landscape side bands (#1308).
+    /// Keep the root's top inset so the reader toolbar stays below the status
+    /// bar and notch. Its bottom edge also respects the home indicator, with
+    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
+    /// and descendant layouts unpadded so landscape content spans the width.
+    /// Views inside scroll views (the carousel cells and pasukim lists) never
+    /// apply safe-area padding, so only the direct layout chain needs this.
+    /// </summary>
+    private void ConfigureReaderSafeArea()
+    {
+        ReaderSafeArea.Configure(MainGrid);
+    }
+
+    private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
+
+    private void ApplyBottomBarSafeArea()
+    {
+        double bottom = 0;
+        var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
+            .OfType<UIKit.UIWindowScene>()
+            .FirstOrDefault()?.Windows
+            .FirstOrDefault(w => w.IsKeyWindow);
+        if (window != null)
+        {
+            bottom = window.SafeAreaInsets.Bottom;
+        }
+
+        // Shift the bars down over the home-indicator inset and pull the page
+        // up underneath so no gap shows (tester-confirmed combination).
+        // With no inset (iPad, landscape) the same assignments restore the
+        // layout defaults, so an inset disappearing never leaves stale values.
+        // #2721: without this the fan's satellites stay laid out over the inset
+        // area their accessibility bounds report - taps land on the shifted
+        // geometry instead of the rendered buttons.
+        var totalHeight = Controls.ReaderBottomBar.TotalHeight + bottom;
+        BottomBar.TranslationY = bottom;
+        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+        BottomBar.HeightRequest = totalHeight;
+        FanMenu.SetBottomInset(bottom);
+        this.Padding = new Thickness(0, 0, 0, -bottom);
+        Resources["BottomBarTotalHeight"] = totalHeight;
+    }
+#endif
 }

@@ -220,7 +220,7 @@ export function UnitBlankPageContent({
 
 	return (
 		<section
-			className={seferStyles.pageBlank}
+			className={`${seferStyles.pageBlank} flipbook-page-bounded`}
 			aria-label="עמוד ריק (פירושים ומאמרים)"
 		>
 			<div className={seferStyles.blankPageDate}>{hebrewDateStr}</div>

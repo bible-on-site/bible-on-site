@@ -76,7 +76,7 @@ export const MODULES = {
 		// next.config.mjs, src/, public/, scripts/ (build-time), and
 		// Docker/tsconfig build inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|get-debug-port\.js$|launch-e2e-server\.mts$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$)/,
 	},
 	api: {
 		directory: "web/api",
@@ -167,6 +167,20 @@ export type ModuleChanges = Record<
 
 const isAt = (file: string, path: string) =>
 	file === path || file.startsWith(`${path}/`);
+
+// The data delivery path whose change legitimately re-runs a data deployment
+// with unchanged payload content. `data_ci_changed` additionally covers shared
+// CI plumbing (ci.yml, composite actions, this detector), which must never
+// enter Release Data: the perushim producer correctly skips those runs, so no
+// current-run SQL artifact exists to bind (#2730).
+const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+
+/** Release intent for data delivery tooling, separate from generic CI checks. */
+export function isDataDeployChange(changedFiles: string[]): boolean {
+	return changedFiles.some((file) =>
+		DATA_DEPLOY_PATHS.some((path) => isAt(file, path)),
+	);
+}
 
 /**
  * Route schema-only data changes to the explicitly approved manual migration path.
@@ -292,6 +306,7 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`${key}_ci_changed=${flags.ci_changed}`,
 	]);
 	lines.push(`data_schema_only_changed=${isSchemaOnlyDataChange(files)}`);
+	lines.push(`data_deploy_changed=${isDataDeployChange(files)}`);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;

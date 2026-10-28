@@ -11,9 +11,9 @@
              FlowDirection="RightToLeft"
              Shell.NavBarIsVisible="False">
 
-       <!-- Regular page presentation: no popup chrome or on-screen Back
-            arrow. The page stays on the navigation stack, so the
-            device/system Back still returns to the previous page. -->
+       <!-- Regular page presentation: no popup chrome. The shared capsule
+            Back beside the hamburger rides the same pipeline as device Back
+            (#2467) — the page owns no return affordance of its own. -->
        <Grid RowDefinitions="Auto,Auto,*">
               <!-- The same shared top bar as the על הפרק reader and רבנים:
                    flyout hamburger, a pill in the center slot and a clear

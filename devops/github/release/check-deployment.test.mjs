@@ -461,6 +461,112 @@ test("pinned SQL keeps its original passing attempt when a later rebuild fails",
 	assert.equal(result.runAttempt, 1);
 });
 
+const baselineSha = "d".repeat(40);
+const baselineArtifact = {
+	id: 80,
+	name: "perushim-data-sql.master",
+	expired: false,
+	digest: `sha256:${"a".repeat(64)}`,
+	workflow_run: {
+		id: 7,
+		head_sha: baselineSha,
+		head_branch: "master",
+		repository_id: 1,
+		head_repository_id: 1,
+	},
+};
+const producingRun = {
+	name: "Continuous Integration",
+	event: "push",
+	head_branch: "master",
+	head_sha: baselineSha,
+};
+const baselineInput = {
+	...input,
+	moduleName: "data",
+	artifactId: "80",
+	artifactDigest: `sha256:${"a".repeat(64)}`,
+	sourceRunId: "7",
+	sourceRef: baselineSha,
+};
+function baselineRequest(overrides = {}) {
+	const mock = request();
+	return (url) => {
+		if (url.includes("/actions/runs?")) return { workflow_runs: [] };
+		if (url.endsWith("/artifacts/80"))
+			return overrides.artifact ?? baselineArtifact;
+		if (url.endsWith("/actions/runs/7"))
+			return overrides.producingRun ?? producingRun;
+		if (url.includes("/contents/"))
+			return (
+				overrides.contents?.(url) ?? [
+					{ name: "perushim-view", sha: "e".repeat(40) },
+					{
+						name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+						sha: "e".repeat(40),
+					},
+				]
+			);
+		return mock(url);
+	};
+}
+
+test("a reused master SQL baseline deploys with its producing run bound", () => {
+	const result = checkDeployment(baselineInput, baselineRequest());
+	assert.equal(result.deploy, true);
+	assert.equal(result.artifactId, "80");
+	assert.equal(result.artifactDigest, `sha256:${"a".repeat(64)}`);
+});
+
+test("a reused baseline keeps failing closed on source, trust and input drift", () => {
+	// Declared source disagrees with the archive record.
+	assert.throws(
+		() =>
+			checkDeployment(
+				{ ...baselineInput, sourceRunId: "8" },
+				baselineRequest(),
+			),
+		/not by run 8/,
+	);
+	// A producing run that is not master push CI cannot be trusted.
+	assert.throws(
+		() =>
+			checkDeployment(
+				baselineInput,
+				baselineRequest({
+					producingRun: { ...producingRun, event: "pull_request" },
+				}),
+			),
+		/untrusted run/,
+	);
+	// SQL inputs changed between the producing and delivered revisions.
+	assert.throws(
+		() =>
+			checkDeployment(
+				baselineInput,
+				baselineRequest({
+					contents: (url) =>
+						url.includes(`ref=${baselineSha}`)
+							? [
+									{ name: "perushim-view", sha: "f".repeat(40) },
+									{
+										name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+										sha: "e".repeat(40),
+									},
+								]
+							: [
+									{ name: "perushim-view", sha: "e".repeat(40) },
+									{
+										name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+										sha: "e".repeat(40),
+									},
+								],
+				}),
+			),
+		/differs between/,
+	);
+});
+
 test("a completed SQL dispatch is a no-op even after its archive expires", () => {
 	const result = checkDeployment(
 		{ ...input, moduleName: "data", artifactId: "90" },

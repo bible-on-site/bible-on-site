@@ -36,9 +36,6 @@ public partial class LearningCalendarPage : ContentPage
         await _viewModel.InitializeAsync();
     }
 
-    private void OnMenuButtonClicked(object? sender, EventArgs e) =>
-        Shell.Current.FlyoutIsPresented = true;
-
     private void OnCellTapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is CalendarCellViewModel cell)

@@ -40,6 +40,7 @@ const CALENDAR_PDF_RENDER_INPUT_FILES = [
 	"src/lib/download/calendar-pdf.ts",
 	"src/lib/download/fonts/FrankRuhlLibre-Bold.ttf",
 	"src/lib/download/fonts/FrankRuhlLibre-Regular.ttf",
+	"src/lib/download/logo_header.jpg",
 	"src/lib/download/pdf-fonts.ts",
 ];
 

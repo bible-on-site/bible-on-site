@@ -1,0 +1,302 @@
+{
+  "version": 1,
+  "domain": "pasuk",
+  "description": "Curated held-out golden cases for the mention-decoration pipeline (issue #2516). One case is one pasuk; `mentions` are the decorations a human curator would persist for it. `text` is the normalized surface (diacritics stripped, maqaf as space) of the joined segment values so the case stays readable; a consistency test re-derives it from the canonical dump. `name` is the intended entry unique-name key; `name_alternates` accepts synonym-equivalent keys. `type` is the entity_type a curator would record; `type_alternates` records genuine taxonomy ambiguity (e.g. a land that is also a people). Cases are deliberately adversarial — they concentrate on the categories the issue requires, so the measured numbers describe gap coverage, not unbiased corpus accuracy.",
+  "categories": {
+    "ordinary-nouns": "Pesukim dominated by common words; any decoration is a false positive.",
+    "recall-gap": "Mentions the lexical tier cannot see (e.g. אלהים is not morphhb-tagged as a proper noun).",
+    "ambiguity": "Same spelling, different referent by context (ישראל person vs nation, מצרים person vs land).",
+    "multi-word": "Compound names (בית אל, בת שבע, אור כשדים, אלון מורה) — covered and missed.",
+    "prefixes": "Fused inseparable prefixes (ו/ב/ל/מ/ה/ש, directive ה) on the surface.",
+    "vocalization": "Niqqud/taamim present on the source segments.",
+    "qri-ktiv": "Ktiv/qri pairs — two displayed surfaces of one logical word.",
+    "gentilic": "Gentilic forms typed NATION.",
+    "spelling": "Defective/alternate spellings vs canonical entry name (ירושלם/ירושלים)."
+  },
+  "cases": [
+    {
+      "id": "gen-1-1",
+      "categories": ["ordinary-nouns", "recall-gap"],
+      "sefer": 0,
+      "perek": 1,
+      "pasuk": 1,
+      "note": "בראשית ברא אלהים — אלהים is a real Tanahpedia entry but morphhb tags it as a common noun, so the lexical tier emits nothing. Ordinary nouns around it must stay undecorated.",
+      "mentions": [
+        { "start": 2, "end": 2, "text": "אלהים", "name": "אלהים", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "gen-1-2",
+      "categories": ["ordinary-nouns", "recall-gap"],
+      "sefer": 0,
+      "perek": 1,
+      "pasuk": 2,
+      "note": "ורוח אלהים — same recall gap; the rest of the pasuk is pure common vocabulary.",
+      "mentions": [
+        { "start": 9, "end": 9, "text": "אלהים", "name": "אלהים", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "gen-10-6",
+      "categories": ["ambiguity"],
+      "sefer": 0,
+      "perek": 10,
+      "pasuk": 6,
+      "note": "בני חם genealogy — כוש/מצרים/פוט/כנען are the PERSONS here (contrast מצרים the land in gen-12-10).",
+      "mentions": [
+        { "start": 1, "end": 1, "text": "חם", "name": "חם", "type": "PERSON" },
+        { "start": 2, "end": 2, "text": "כוש", "name": "כוש", "type": "PERSON" },
+        { "start": 3, "end": 3, "text": "ומצרים", "name": "מצרים", "type": "PERSON" },
+        { "start": 4, "end": 4, "text": "ופוט", "name": "פוט", "type": "PERSON" },
+        { "start": 5, "end": 5, "text": "וכנען", "name": "כנען", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "gen-10-18",
+      "categories": ["gentilic"],
+      "sefer": 0,
+      "perek": 10,
+      "pasuk": 18,
+      "note": "Gentilic nation names in the Canaanite genealogy.",
+      "mentions": [
+        { "start": 1, "end": 1, "text": "הארודי", "name": "ארודי", "type": "NATION" },
+        { "start": 3, "end": 3, "text": "הצמרי", "name": "צמרי", "type": "NATION" },
+        { "start": 5, "end": 5, "text": "החמתי", "name": "חמתי", "type": "NATION" },
+        { "start": 9, "end": 9, "text": "הכנעני", "name": "כנעני", "type": "NATION" }
+      ]
+    },
+    {
+      "id": "gen-11-28",
+      "categories": ["multi-word", "ambiguity"],
+      "sefer": 0,
+      "perek": 11,
+      "pasuk": 28,
+      "note": "אור כשדים is one place name; the lemma chain does not join it so the lexical tier emits אור and כשדים separately.",
+      "mentions": [
+        { "start": 1, "end": 1, "text": "הרן", "name": "הרן", "type": "PERSON" },
+        { "start": 4, "end": 4, "text": "תרח", "name": "תרח", "type": "PERSON" },
+        { "start": 8, "end": 9, "text": "באור כשדים", "name": "אור כשדים", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "gen-12-1",
+      "categories": ["ordinary-nouns", "vocalization"],
+      "sefer": 0,
+      "perek": 12,
+      "pasuk": 1,
+      "note": "ויאמר יהוה אל־אברם — ארצך/מולדתך/בית אביך are ordinary words that must stay plain.",
+      "mentions": [
+        { "start": 1, "end": 1, "text": "יהוה", "name": "יהוה", "type": "PERSON" },
+        { "start": 3, "end": 3, "text": "אברם", "name": "אברם", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "gen-12-6",
+      "categories": ["ambiguity", "multi-word", "gentilic"],
+      "sefer": 0,
+      "perek": 12,
+      "pasuk": 6,
+      "note": "שכם the city (baseline types it PERSON); אלון מורה is one place name the lemma chain misses; הכנעני gentilic.",
+      "mentions": [
+        { "start": 1, "end": 1, "text": "אברם", "name": "אברם", "type": "PERSON" },
+        { "start": 5, "end": 5, "text": "שכם", "name": "שכם", "type": "PLACE" },
+        { "start": 7, "end": 8, "text": "אלון מורה", "name": "אלון מורה", "type": "PLACE" },
+        { "start": 9, "end": 9, "text": "והכנעני", "name": "כנעני", "type": "NATION" }
+      ]
+    },
+    {
+      "id": "gen-12-8",
+      "categories": ["multi-word", "prefixes", "ambiguity"],
+      "sefer": 0,
+      "perek": 12,
+      "pasuk": 8,
+      "note": "בית אל twice (once maqaf-joined with ל prefix), העי the city — all places the lexical tier types PERSON.",
+      "mentions": [
+        { "start": 4, "end": 5, "text": "לבית אל", "name": "בית אל", "type": "PLACE" },
+        { "start": 8, "end": 9, "text": "בית אל", "name": "בית אל", "type": "PLACE" },
+        { "start": 11, "end": 11, "text": "והעי", "name": "עי", "type": "PLACE" },
+        { "start": 16, "end": 16, "text": "ליהוה", "name": "יהוה", "type": "PERSON" },
+        { "start": 19, "end": 19, "text": "יהוה", "name": "יהוה", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "gen-12-10",
+      "categories": ["ambiguity", "prefixes"],
+      "sefer": 0,
+      "perek": 12,
+      "pasuk": 10,
+      "note": "וירד אברם מצרימה — מצרים the LAND (contrast the person in gen-10-6); directive ה fused on the surface.",
+      "mentions": [
+        { "start": 4, "end": 4, "text": "אברם", "name": "אברם", "type": "PERSON" },
+        { "start": 5, "end": 5, "text": "מצרימה", "name": "מצרים", "type": "PLACE", "type_alternates": ["NATION"] }
+      ]
+    },
+    {
+      "id": "gen-14-1",
+      "categories": ["ambiguity"],
+      "sefer": 0,
+      "perek": 14,
+      "pasuk": 1,
+      "note": "King list: kings PERSON, their kingdoms (שנער/אלסר/עילם) lands, גוים a nation.",
+      "mentions": [
+        { "start": 2, "end": 2, "text": "אמרפל", "name": "אמרפל", "type": "PERSON" },
+        { "start": 4, "end": 4, "text": "שנער", "name": "שנער", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "start": 5, "end": 5, "text": "אריוך", "name": "אריוך", "type": "PERSON" },
+        { "start": 7, "end": 7, "text": "אלסר", "name": "אלסר", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "start": 8, "end": 8, "text": "כדרלעמר", "name": "כדרלעמר", "type": "PERSON" },
+        { "start": 10, "end": 10, "text": "עילם", "name": "עילם", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "start": 11, "end": 11, "text": "ותדעל", "name": "תדעל", "type": "PERSON" },
+        { "start": 13, "end": 13, "text": "גוים", "name": "גוים", "type": "NATION", "type_alternates": ["PLACE"] }
+      ]
+    },
+    {
+      "id": "gen-14-8",
+      "categories": ["qri-ktiv", "ambiguity"],
+      "sefer": 0,
+      "perek": 14,
+      "pasuk": 8,
+      "note": "City list ending עמק השדים; צביים(ktiv)/צְבוֹיִם(qri) are two displayed surfaces of one word — both are decorated, resolving to the canonical read name צבוים.",
+      "mentions": [
+        { "start": 2, "end": 2, "text": "סדם", "name": "סדם", "type": "PLACE" },
+        { "start": 4, "end": 4, "text": "עמרה", "name": "עמרה", "type": "PLACE" },
+        { "start": 6, "end": 6, "text": "אדמה", "name": "אדמה", "type": "PLACE" },
+        { "start": 8, "end": 8, "text": "צביים", "name": "צבוים", "type": "PLACE", "name_alternates": ["צביים"] },
+        { "start": 9, "end": 9, "text": "צבוים", "name": "צבוים", "type": "PLACE" },
+        { "start": 11, "end": 11, "text": "בלע", "name": "בלע", "type": "PLACE" },
+        { "start": 13, "end": 13, "text": "צער", "name": "צער", "type": "PLACE" },
+        { "start": 18, "end": 18, "text": "השדים", "name": "שדים", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "gen-14-18",
+      "categories": ["multi-word", "ambiguity"],
+      "sefer": 0,
+      "perek": 14,
+      "pasuk": 18,
+      "note": "מלכי צדק is a compound personal name (lemma chain works); שלם is the city Salem typed PLACE.",
+      "mentions": [
+        { "start": 0, "end": 1, "text": "ומלכי צדק", "name": "מלכי צדק", "type": "PERSON" },
+        { "start": 3, "end": 3, "text": "שלם", "name": "שלם", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "gen-21-31",
+      "categories": ["multi-word"],
+      "sefer": 0,
+      "perek": 21,
+      "pasuk": 31,
+      "note": "באר שבע place name (lemma chain works; type does not).",
+      "mentions": [
+        { "start": 5, "end": 6, "text": "באר שבע", "name": "באר שבע", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "gen-35-10",
+      "categories": ["ambiguity"],
+      "sefer": 0,
+      "perek": 35,
+      "pasuk": 10,
+      "note": "The name-giving scene — ישראל is the PERSON here (contrast the nation in gen-46-8).",
+      "mentions": [
+        { "start": 4, "end": 4, "text": "יעקב", "name": "יעקב", "type": "PERSON" },
+        { "start": 9, "end": 9, "text": "יעקב", "name": "יעקב", "type": "PERSON" },
+        { "start": 12, "end": 12, "text": "ישראל", "name": "ישראל", "type": "PERSON" },
+        { "start": 18, "end": 18, "text": "ישראל", "name": "ישראל", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "gen-46-8",
+      "categories": ["ambiguity", "prefixes"],
+      "sefer": 0,
+      "perek": 46,
+      "pasuk": 8,
+      "note": "בני ישראל — ישראל is the NATION; מצרימה the land (directive ה).",
+      "mentions": [
+        { "start": 3, "end": 3, "text": "ישראל", "name": "ישראל", "type": "NATION" },
+        { "start": 5, "end": 5, "text": "מצרימה", "name": "מצרים", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "start": 6, "end": 6, "text": "יעקב", "name": "יעקב", "type": "PERSON" },
+        { "start": 9, "end": 9, "text": "יעקב", "name": "יעקב", "type": "PERSON" },
+        { "start": 10, "end": 10, "text": "ראובן", "name": "ראובן", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "ex-3-1",
+      "categories": ["ambiguity", "prefixes"],
+      "sefer": 1,
+      "perek": 3,
+      "pasuk": 1,
+      "note": "מדין and חרבה are lands; חרבה carries the directive ה.",
+      "mentions": [
+        { "start": 0, "end": 0, "text": "ומשה", "name": "משה", "type": "PERSON" },
+        { "start": 5, "end": 5, "text": "יתרו", "name": "יתרו", "type": "PERSON" },
+        { "start": 8, "end": 8, "text": "מדין", "name": "מדין", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "start": 18, "end": 18, "text": "חרבה", "name": "חרב", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "ruth-1-1",
+      "categories": ["ambiguity", "multi-word"],
+      "sefer": 28,
+      "perek": 1,
+      "pasuk": 1,
+      "note": "בית לחם יהודה — the city plus the tribal territory; שדי מואב the land.",
+      "mentions": [
+        { "start": 9, "end": 10, "text": "מבית לחם", "name": "בית לחם", "type": "PLACE" },
+        { "start": 11, "end": 11, "text": "יהודה", "name": "יהודה", "type": "NATION", "type_alternates": ["PLACE"] },
+        { "start": 14, "end": 14, "text": "מואב", "name": "מואב", "type": "PLACE", "type_alternates": ["NATION"] }
+      ]
+    },
+    {
+      "id": "ruth-1-2",
+      "categories": ["ambiguity", "multi-word", "gentilic"],
+      "sefer": 28,
+      "perek": 1,
+      "pasuk": 2,
+      "note": "Family names plus אפרתים (gentilic clan name) and the same lands as ruth-1-1.",
+      "mentions": [
+        { "start": 2, "end": 2, "text": "אלימלך", "name": "אלימלך", "type": "PERSON" },
+        { "start": 5, "end": 5, "text": "נעמי", "name": "נעמי", "type": "PERSON" },
+        { "start": 9, "end": 9, "text": "מחלון", "name": "מחלון", "type": "PERSON" },
+        { "start": 10, "end": 10, "text": "וכליון", "name": "כליון", "type": "PERSON" },
+        { "start": 11, "end": 11, "text": "אפרתים", "name": "אפרתים", "type": "NATION" },
+        { "start": 12, "end": 13, "text": "מבית לחם", "name": "בית לחם", "type": "PLACE" },
+        { "start": 14, "end": 14, "text": "יהודה", "name": "יהודה", "type": "NATION", "type_alternates": ["PLACE"] },
+        { "start": 17, "end": 17, "text": "מואב", "name": "מואב", "type": "PLACE", "type_alternates": ["NATION"] }
+      ]
+    },
+    {
+      "id": "josh-10-1",
+      "categories": ["ambiguity", "multi-word", "spelling"],
+      "sefer": 5,
+      "perek": 10,
+      "pasuk": 1,
+      "note": "אדני צדק PERSON; the cities ירושלם/עי/יריחו/גבעון PLACE; ירושלם's canonical entry key is ירושלים; ישראל the nation.",
+      "mentions": [
+        { "start": 2, "end": 3, "text": "אדני צדק", "name": "אדני צדק", "type": "PERSON" },
+        { "start": 5, "end": 5, "text": "ירושלם", "name": "ירושלים", "type": "PLACE", "name_alternates": ["ירושלם"] },
+        { "start": 8, "end": 8, "text": "יהושע", "name": "יהושע", "type": "PERSON" },
+        { "start": 10, "end": 10, "text": "העי", "name": "עי", "type": "PLACE" },
+        { "start": 14, "end": 14, "text": "ליריחו", "name": "יריחו", "type": "PLACE" },
+        { "start": 18, "end": 18, "text": "לעי", "name": "עי", "type": "PLACE" },
+        { "start": 23, "end": 23, "text": "גבעון", "name": "גבעון", "type": "PLACE" },
+        { "start": 25, "end": 25, "text": "ישראל", "name": "ישראל", "type": "NATION" }
+      ]
+    },
+    {
+      "id": "2sam-11-3",
+      "categories": ["multi-word", "gentilic"],
+      "sefer": 7,
+      "additional": 1,
+      "perek": 11,
+      "pasuk": 3,
+      "note": "בת שבע is one name over two segments; the lemma chain only catches בַּת־ so the compound is lost. החתי gentilic.",
+      "mentions": [
+        { "start": 1, "end": 1, "text": "דוד", "name": "דוד", "type": "PERSON" },
+        { "start": 7, "end": 8, "text": "בת שבע", "name": "בת שבע", "type": "PERSON" },
+        { "start": 10, "end": 10, "text": "אליעם", "name": "אליעם", "type": "PERSON" },
+        { "start": 12, "end": 12, "text": "אוריה", "name": "אוריה", "type": "PERSON" },
+        { "start": 13, "end": 13, "text": "החתי", "name": "חתי", "type": "NATION" }
+      ]
+    }
+  ]
+}

@@ -49,8 +49,7 @@ public partial class ParashaPage
         // an enabled callback before predictive Back begins to consume them.
         if (_readerBack != null)
         {
-            _readerBack.Enabled = ChapterSearch.IsSearchOpen || SelectionBar.IsVisible
-                || ExitFullScreenButton.IsVisible;
+            _readerBack.Enabled = OwnsReaderReturnSurface();
         }
     }
 

@@ -450,10 +450,42 @@ export function getDateLabel(date: HebrewDate): string {
 	return date.toTraditionalHebrewString();
 }
 
-/** Cycle display text: "מחזור 4" with its date range. */
-export function getCycleLabel(cycle: StudyCycle): string {
+/**
+ * Hebrew numeral for a cycle's display (#2725): a lone letter takes a
+ * trailing ASCII geresh (א', ד', י'), longer values take ASCII gershayim
+ * before the final letter (י"א, ט"ו). Canonical source references keep
+ * plain letters per the formatting rule — this is the cycle-label form.
+ */
+export function getCycleNumeral(cycleNumber: number): string {
+	const letters = toLetters(cycleNumber, { addQuotes: true });
+	return letters.length === 1 ? `${letters}'` : letters;
+}
+
+/**
+ * Short cycle name without the date range — "מחזור ד'" or
+ * "מחזור י\"א (משוער)". The single authority every user-facing cycle
+ * display draws from (#2725): picker options, the download scope caption
+ * and the full label below. Numeric cycle values stay numeric in keys,
+ * selector values and URLs.
+ */
+export function getCycleName(cycle: StudyCycle): string {
 	const projectedSuffix = cycle.projected ? " (משוער)" : "";
-	return `מחזור ${cycle.number}${projectedSuffix}: ${cycle.start.toTraditionalHebrewString()} - ${cycle.end.toTraditionalHebrewString()}`;
+	return `מחזור ${getCycleNumeral(cycle.number)}${projectedSuffix}`;
+}
+
+/** Cycle display text: "מחזור ד'" with its date range. */
+export function getCycleLabel(cycle: StudyCycle): string {
+	return `${getCycleName(cycle)}: ${cycle.start.toTraditionalHebrewString()} - ${cycle.end.toTraditionalHebrewString()}`;
+}
+
+/**
+ * The date-range portion of a cycle label, with the projected marker when
+ * the cycle is derived rather than stored — e.g. a PDF cover subtitle under
+ * a "מחזור N" document title (#2727).
+ */
+export function getCycleRangeLabel(cycle: StudyCycle): string {
+	const projectedSuffix = cycle.projected ? " (משוער)" : "";
+	return `${cycle.start.toTraditionalHebrewString()} - ${cycle.end.toTraditionalHebrewString()}${projectedSuffix}`;
 }
 
 /**

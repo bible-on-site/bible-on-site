@@ -203,7 +203,7 @@ const MasoraSefer = (props: {
 		return [
 			<React.Fragment key={`masora-${unit.unitId}`}>
 				<section
-					className={seferStyles.pageContentPage}
+					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 					data-sefer-unit-text={bookKey}
 				>
 					<div className={seferStyles.pageHeaderRight}>
