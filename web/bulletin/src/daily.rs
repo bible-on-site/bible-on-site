@@ -76,6 +76,98 @@ fn normalize_html_text(html: &str) -> String {
         .collect()
 }
 
+const WEBSITE_ORIGIN: &str = "https://xn--febl3a.co.il";
+const LOGO_URL: &str = "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/logo-header-bfaa157e34c2.jpg";
+
+// The transport replaces this tbody-level slot with the native unsubscribe and
+// public contact row. Keeping it inside the card gives every section one edge.
+const EMAIL_FOOTER_MARKER: &str = "<!--BULLETIN_EMAIL_FOOTER-->";
+
+fn render_email(
+    input: &DailyInput,
+    chapter: &tanach::PerekData,
+    subject: &str,
+    source: &str,
+    hebrew_date: &str,
+    dedications: &[String],
+    articles: &[(String, String, String)],
+) -> String {
+    let escape = ammonia::clean_text;
+    let mut html = format!(
+        r##"<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{subject}</title>
+<style>
+body,table,td,a {{ -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }}
+table {{ border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }}
+.bulletin-article p {{ margin:0 0 12px; }}
+.bulletin-article h1,.bulletin-article h2,.bulletin-article h3,.bulletin-article h4 {{ margin:18px 0 8px; font-size:19px; line-height:1.5; color:#173e52; }}
+.bulletin-article a {{ color:#28758a; text-decoration:underline; }}
+.bulletin-article img {{ max-width:100%; height:auto; }}
+.bulletin-article blockquote {{ margin:12px 0; padding:4px 14px; border-right:3px solid #d8bd82; color:#637780; }}
+@media only screen and (max-width:480px) {{
+.bulletin-padding {{ padding-right:20px !important; padding-left:20px !important; }}
+.bulletin-title {{ font-size:28px !important; }}
+.bulletin-scripture {{ font-size:18px !important; }}
+}}
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f4f1ea;direction:rtl;color:#173e52;font-family:Arial,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">{source} | {hebrew_date}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#f4f1ea">
+<tr><td align="center" style="padding:24px 12px">
+<table role="presentation" dir="rtl" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #dce5e7;border-top:5px solid #28758a">
+<tbody>
+<tr><td class="bulletin-padding" align="right" style="padding:20px 28px;background:#ffffff;border-bottom:1px solid #dce5e7">
+<h1 class="bulletin-title" style="margin:0;color:#173e52;font-size:32px;line-height:1.25"><a href="{website}/" style="text-decoration:none"><img src="{logo}" width="220" height="110" alt="תנ&quot;ך על הפרק" style="display:block;width:220px;max-width:100%;height:auto;border:0"></a></h1>
+<p style="margin:12px 0 0;color:#637780;font-size:15px;line-height:24px"><strong style="color:#173e52;font-size:18px">{source}</strong><span style="padding:0 8px;color:#b4a17c"> | </span>{hebrew_date}</p>
+</td></tr>
+"##,
+        subject = escape(subject),
+        source = escape(source),
+        hebrew_date = escape(hebrew_date),
+        website = WEBSITE_ORIGIN,
+        logo = LOGO_URL,
+    );
+    if !dedications.is_empty() {
+        html.push_str("<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:20px 28px 0\"><div style=\"padding:12px 14px;background:#faf7f0;border-right:3px solid #d8bd82;color:#637780;font-size:14px;line-height:1.6\"><strong style=\"color:#173e52\">הלימוד מוקדש</strong>");
+        for dedication in dedications {
+            html.push_str(&format!(
+                "<p style=\"margin:4px 0 0\">{}</p>",
+                escape(dedication)
+            ));
+        }
+        html.push_str("</div></td></tr>\n");
+    }
+    html.push_str("<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:24px 28px\"><h2 style=\"margin:0 0 12px;font-size:13px;line-height:20px;color:#28758a\">הפרק היומי</h2><p class=\"bulletin-scripture\" dir=\"rtl\" style=\"margin:0;font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.75;text-align:justify;text-align-last:right;color:#233d48\">");
+    for (index, verse) in chapter.pesukim.iter().enumerate() {
+        html.push_str(&format!(
+            "<span class=\"bulletin-verse\"><span style=\"color:#28758a;font-family:Arial,sans-serif;font-size:11px;font-weight:700;vertical-align:super;line-height:0\">{}</span> {}</span> ",
+            tanach::perek_to_hebrew((index + 1) as u32),
+            escape(verse),
+        ));
+    }
+    html.push_str("</p></td></tr>\n");
+    for (title, author, content) in articles {
+        // Share the PDF's complete leading-heading rule so rich article content
+        // keeps its title once, with the author immediately after that title.
+        let (heading, body) = pdf::split_article_header(content);
+        let title = heading.as_deref().unwrap_or(title);
+        html.push_str(&format!(
+            "<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:24px 28px;border-top:1px solid #dce5e7\"><p style=\"margin:0 0 6px;color:#28758a;font-size:13px;line-height:20px\">מאמר על הפרק</p><h2 style=\"margin:0 0 6px;color:#173e52;font-size:23px;line-height:1.4\">{}</h2><p style=\"margin:0 0 18px;color:#637780;font-size:14px;line-height:22px\">{}</p><div class=\"bulletin-article\" dir=\"rtl\" style=\"font-size:16px;line-height:1.75;color:#233d48;text-align:justify;text-align-last:right\">{}</div></td></tr>\n",
+            escape(title), escape(author), body,
+        ));
+    }
+    html.push_str(&format!(
+        "<tr><td class=\"bulletin-padding\" align=\"right\" style=\"padding:0 28px 24px\"><a href=\"{}/929/{}\" style=\"display:inline-block;padding:11px 20px;border:1px solid #28758a;background:#28758a;color:#ffffff;text-decoration:none;font-size:14px;line-height:20px;font-weight:700;border-radius:7px\">להמשך לימוד על הפרק</a></td></tr>\n{}\n</tbody></table></td></tr></table></body></html>",
+        WEBSITE_ORIGIN, input.perek_id, EMAIL_FOOTER_MARKER,
+    ));
+    html
+}
+
 pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
     let date = input.date.parse::<sea_orm::prelude::Date>()?;
     ensure!(
@@ -100,27 +192,6 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
         .iter()
         .map(|s| normalize_authored(s))
         .collect();
-    let escape = ammonia::clean_text;
-    let mut html = format!(
-        "<!doctype html><html lang=\"he\" dir=\"rtl\"><head><meta charset=\"utf-8\"><title>{}</title></head><body style=\"margin:0;background:#def3f9;direction:rtl;font-family:Arial,sans-serif\"><table role=\"presentation\" width=\"100%\"><tr><td align=\"center\"><table role=\"presentation\" width=\"600\" style=\"max-width:100%;background:white;padding:24px;text-align:right\"><tr><td><h1>תנ\"ך על הפרק</h1><p>{}</p><h2>{}</h2>",
-        escape(&subject),
-        escape(&hebrew_date),
-        escape(&source)
-    );
-    if !dedications.is_empty() {
-        html.push_str("<h3>הלימוד מוקדש</h3>");
-        for dedication in &dedications {
-            html.push_str(&format!("<p>{}</p>", escape(dedication)));
-        }
-    }
-    html.push_str("<h3>הפרק</h3>");
-    for (i, verse) in chapter.pesukim.iter().enumerate() {
-        html.push_str(&format!(
-            "<p><strong>{}</strong> {}</p>",
-            tanach::perek_to_hebrew((i + 1) as u32),
-            escape(verse)
-        ));
-    }
     let mut articles = vec![];
     if let Some(article) = &input.article {
         let title = normalize_authored(&article.title);
@@ -135,15 +206,17 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
                 .clean(&article.html)
                 .to_string(),
         );
-        html.push_str(&format!(
-            "<h3>{} / {}</h3>{}",
-            escape(&title),
-            escape(&author),
-            content
-        ));
         articles.push((title, author, content));
     }
-    html.push_str(&format!("<p><a href=\"https://תנך.com/929/{}\">ללימוד הפרק באתר</a></p></td></tr></table></td></tr></table></body></html>", input.perek_id));
+    let html = render_email(
+        input,
+        chapter,
+        &subject,
+        &source,
+        &hebrew_date,
+        &dedications,
+        &articles,
+    );
     let req = pdf::PdfRequest {
         sefer_name: normalize_authored(&chapter.sefer_name),
         perakim: vec![pdf::PdfPerekInput {
@@ -172,6 +245,128 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn layout_input() -> DailyInput {
+        DailyInput {
+            date: "2026-10-28".into(),
+            hebrew_date: "יז חשוון תשפז".into(),
+            perek_id: 502,
+            article: None,
+            dedications: vec![],
+        }
+    }
+
+    #[test]
+    fn email_has_one_branded_header_compact_metadata_and_an_aligned_footer_slot() {
+        let input = layout_input();
+        let chapter = tanach::get_perek(input.perek_id).unwrap();
+        let html = render_email(
+            &input,
+            chapter,
+            "עלון יומי",
+            "הושע ב",
+            &input.hebrew_date,
+            &[],
+            &[],
+        );
+        assert_eq!(html.matches("<h1 ").count(), 1);
+        assert!(
+            !html.contains(">תנ\"ך על הפרק</h1>"),
+            "the real wordmark is the heading, without a repeated visible brand"
+        );
+        assert!(html.contains("alt=\"תנ&quot;ך על הפרק\""));
+        assert!(html.contains(&format!("src=\"{LOGO_URL}\"")));
+        assert!(html.contains("width=\"220\" height=\"110\""));
+        assert!(html.contains("width:220px;max-width:100%;height:auto"));
+        assert!(html.contains("max-width:680px"));
+        assert!(html.contains(&format!(
+            "<strong style=\"color:#173e52;font-size:18px\">{}</strong>",
+            ammonia::clean_text("הושע ב")
+        )));
+        assert!(html.contains(&ammonia::clean_text(&input.hebrew_date)));
+        assert!(html.contains("href=\"https://xn--febl3a.co.il/929/502\""));
+        assert_eq!(html.matches(EMAIL_FOOTER_MARKER).count(), 1);
+        assert!(html.contains(&format!("</td></tr>\n{EMAIL_FOOTER_MARKER}\n</tbody>")));
+        assert!(!html.contains("הלימוד מוקדש"));
+        assert!(!html.contains("מאמר על הפרק"));
+    }
+
+    #[test]
+    fn email_flows_all_verses_in_one_paragraph_without_changing_canonical_text() {
+        let input = layout_input();
+        let chapter = tanach::get_perek(input.perek_id).unwrap();
+        let html = render_email(
+            &input,
+            chapter,
+            "עלון יומי",
+            "הושע ב",
+            &input.hebrew_date,
+            &[],
+            &[],
+        );
+        let scripture = html
+            .split("<p class=\"bulletin-scripture\"")
+            .nth(1)
+            .unwrap()
+            .split("</p>")
+            .next()
+            .unwrap();
+        assert_eq!(html.matches("<p class=\"bulletin-scripture\"").count(), 1);
+        assert_eq!(
+            scripture.matches("class=\"bulletin-verse\"").count(),
+            chapter.pesukim.len()
+        );
+        assert!(!scripture.contains("<p"));
+        assert!(!scripture.contains("<br"));
+        assert!(scripture.contains("text-align:justify;text-align-last:right"));
+        for verse in &chapter.pesukim {
+            assert!(
+                scripture.contains(&ammonia::clean_text(verse)),
+                "canonical verse must retain its taamim and biblical maqaf"
+            );
+        }
+        assert!(scripture.contains('־'));
+        assert!(scripture.contains('֑'));
+    }
+
+    #[test]
+    fn email_keeps_the_complete_article_heading_once_then_author_and_body() {
+        let input = layout_input();
+        let chapter = tanach::get_perek(input.perek_id).unwrap();
+        let articles = vec![(
+            "שם חלופי".into(),
+            "מחבר".into(),
+            "<h1>כותרת ראשונה</h1> <h1>כותרת שנייה</h1><p>תוכן מלא <strong>מודגש</strong></p>"
+                .into(),
+        )];
+        let html = render_email(
+            &input,
+            chapter,
+            "עלון",
+            "הושע ב",
+            &input.hebrew_date,
+            &[],
+            &articles,
+        );
+        let heading = ammonia::clean_text("כותרת ראשונה כותרת שנייה");
+        assert_eq!(html.matches(&heading).count(), 1);
+        assert!(!html.contains("שם חלופי"));
+        assert_eq!(
+            html.matches("<h1 ").count(),
+            1,
+            "article H1s must not compete with the brand header"
+        );
+        assert!(html.find(&heading).unwrap() < html.find("מחבר").unwrap());
+        assert!(html.find("מחבר").unwrap() < html.find("<p>תוכן מלא").unwrap());
+        assert!(html.contains("<strong>מודגש</strong>"));
+        assert!(html.contains(">מאמר על הפרק</p>"));
+        assert!(html.contains(">להמשך לימוד על הפרק</a>"));
+        assert!(html.contains("class=\"bulletin-article\" dir=\"rtl\" style=\"font-size:16px;line-height:1.75;color:#233d48;text-align:justify;text-align-last:right\""));
+        assert!(
+            articles[0].2.starts_with("<h1>כותרת ראשונה</h1>"),
+            "PDF input content must remain intact"
+        );
+    }
 
     #[test]
     fn render_preserves_scripture_and_sanitizes_article_and_dedications() {

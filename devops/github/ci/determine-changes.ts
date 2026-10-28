@@ -42,10 +42,7 @@ const DOCKER_BUILD_CI_PATHS = ["web/.dockerignore"];
 // Deterministic E2E test-selection tooling plus the shared Playwright
 // evidence reporter — consumed by the website, admin and API E2E jobs
 // (the Appium suite already lists the selector under `app`, #2085).
-const E2E_IMPACT_CI_PATHS = [
-	"devops/github/ci/e2e-impact",
-	"web/shared",
-];
+const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
 export const MODULES = {
 	website: {
@@ -147,7 +144,19 @@ export const MODULES = {
 		directory: "data",
 		// Data-deploy tooling changes require checks and normally re-run data CD.
 		// Schema-only changes use a separate manual-deployment routing gate.
-		ciPaths: [...SHARED_CI_PATHS, "devops/deploy/data-deploy"],
+		ciPaths: [
+			...SHARED_CI_PATHS,
+			"devops/deploy/data-deploy",
+			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"devops/daily-bulletin-infra.test.mjs",
+			"web/bulletin/assets/email",
+			"web/bulletin/scripts/prepare-email-assets.mjs",
+			"app/BibleOnSite/Resources/Images/logo_header.jpg",
+			"web/bible-on-site/public/icons/envelope.svg",
+			"web/bible-on-site/public/icons/phone.svg",
+			"web/bible-on-site/public/icons/whatsapp.svg",
+			"web/bible-on-site/public/icons/telegram.svg",
+		],
 	},
 	perushim_pipeline: {
 		directory: "data/sefaria/pipelines/perushim-view",
@@ -189,13 +198,21 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  */
 export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	const bulletinMigration = "data/mysql/tanah_daily_bulletin_upgrade.sql";
+	const hasBulletinMigration = dataFiles.includes(bulletinMigration);
 	return (
 		dataFiles.length > 0 &&
 		!changedFiles.some((file) =>
 			MODULES.perushim_pipeline.extraModulePaths.includes(file),
 		) &&
-		dataFiles.every((file) =>
-			/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file),
+		dataFiles.every(
+			(file) =>
+				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
+				file === bulletinMigration ||
+				// The bootstrap's migration-preservation tests accompany this
+				// additive upgrade; they must not trigger a production data rebuild.
+				(hasBulletinMigration &&
+					file === "data/mysql/db-populator/src/main.rs"),
 		)
 	);
 }

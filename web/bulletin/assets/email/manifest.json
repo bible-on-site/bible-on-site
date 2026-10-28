@@ -1,0 +1,81 @@
+{
+	"schemaVersion": 1,
+	"generatedBy": "web/bulletin/scripts/prepare-email-assets.mjs",
+	"renderer": {
+		"sharp": "0.35.5",
+		"vips": "8.18.7",
+		"rsvg": "2.63.2"
+	},
+	"assets": [
+		{
+			"id": "logo-header",
+			"sourcePath": "app/BibleOnSite/Resources/Images/logo_header.jpg",
+			"sourceSha256": "bfaa157e34c287706db40a446baee13c793fd223fa8758911403f0a5d4f4e4e7",
+			"sha256": "bfaa157e34c287706db40a446baee13c793fd223fa8758911403f0a5d4f4e4e7",
+			"file": "logo-header-bfaa157e34c2.jpg",
+			"s3Key": "branding/daily-bulletin/logo-header-bfaa157e34c2.jpg",
+			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/logo-header-bfaa157e34c2.jpg",
+			"contentType": "image/jpeg",
+			"width": 591,
+			"height": 295,
+			"bytes": 32659,
+			"attribution": "Existing Bible On Site native-app and PDF-header brand artwork; copied without alteration."
+		},
+		{
+			"id": "envelope",
+			"sourcePath": "web/bible-on-site/public/icons/envelope.svg",
+			"sourceSha256": "14d9a4a310b8ccdb21b98c8e377bde01e768bf5fac19a125f44aae2b4265d8d0",
+			"sha256": "12f047cbf921c048e458e75649fc2f5c925f6530943ee183891654e708c2f96c",
+			"file": "envelope-12f047cbf921.png",
+			"s3Key": "branding/daily-bulletin/envelope-12f047cbf921.png",
+			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/envelope-12f047cbf921.png",
+			"contentType": "image/png",
+			"width": 36,
+			"height": 36,
+			"bytes": 397,
+			"attribution": "https://www.svgrepo.com/svg/502645/envelope"
+		},
+		{
+			"id": "phone",
+			"sourcePath": "web/bible-on-site/public/icons/phone.svg",
+			"sourceSha256": "7dce7df8ec5c2be55c4050b94ec4f3f1be24d9ea8bb17c9566f63abefec74e7a",
+			"sha256": "fba2eb24d51188c4d001e806585a84067644dfb85f67265df10bcf064885c943",
+			"file": "phone-fba2eb24d511.png",
+			"s3Key": "branding/daily-bulletin/phone-fba2eb24d511.png",
+			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/phone-fba2eb24d511.png",
+			"contentType": "image/png",
+			"width": 36,
+			"height": 36,
+			"bytes": 414,
+			"attribution": "https://www.svgrepo.com/svg/525375/phone-calling"
+		},
+		{
+			"id": "whatsapp",
+			"sourcePath": "web/bible-on-site/public/icons/whatsapp.svg",
+			"sourceSha256": "b5ccb1e930ce90f610c67cbd1d377141ed19e7ebebb45c27c83a25a4c2a3f9a0",
+			"sha256": "97aa65ad2e4ea7d0b7676bb175208e7a6906cce3acce90a1b439b03fa47a5915",
+			"file": "whatsapp-97aa65ad2e4e.png",
+			"s3Key": "branding/daily-bulletin/whatsapp-97aa65ad2e4e.png",
+			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/whatsapp-97aa65ad2e4e.png",
+			"contentType": "image/png",
+			"width": 36,
+			"height": 36,
+			"bytes": 930,
+			"attribution": "https://www.svgrepo.com/svg/450391/whatsapp"
+		},
+		{
+			"id": "telegram",
+			"sourcePath": "web/bible-on-site/public/icons/telegram.svg",
+			"sourceSha256": "d607cebf946c56c4817bf38df2a0baab57c1548de1f32919c02da506b6ff3e6e",
+			"sha256": "4d1164ab375c4ee5e59794bbc874030e2d837963dbda9c198c0147b88c905470",
+			"file": "telegram-4d1164ab375c.png",
+			"s3Key": "branding/daily-bulletin/telegram-4d1164ab375c.png",
+			"url": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/telegram-4d1164ab375c.png",
+			"contentType": "image/png",
+			"width": 36,
+			"height": 36,
+			"bytes": 685,
+			"attribution": "Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc."
+		}
+	]
+}
