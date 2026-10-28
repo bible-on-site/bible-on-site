@@ -24,9 +24,13 @@ baseline emits — that difference is what the harness measures).
 | `golden/pesukim.json` | 20 pasuk cases keyed by `{sefer, additional?, perek (chapter), pasuk}`; each mention pins `start`/`end` segment indexes + readable `text`, `name`, `type` (+ optional `name_alternates`/`type_alternates`) |
 | `golden/articles.json` | 12 article cases with authored HTML `content`; mentions pin `surface` (+ `occurrence`), `name`, `type`, and `expected: auto\|held` |
 | `golden/metrics-baseline.json` | The recorded deterministic metrics for the pinned baseline revisions — regenerated via `--write`, enforced via `--check` |
+| `golden/encoder-metrics/*.json` | Recorded encoder-comparison reports (one per candidate) — documented artifact, NOT a CI gate; model weights are not fetched in CI |
 | `golden_eval.py` | Loader, gold→source resolution, scorer, report + CLI |
+| `encoders.py` | Encoder adapter: HF token-classification → contract rows, candidate registry with pinned revisions + licenses, `detect` and `retype` (hybrid) modes, comparison CLI |
+| `requirements-encoders.txt` | Optional torch/transformers pins for re-running the comparison |
 | `test_golden_eval.py` | Scoring/resolution unit tests (no corpus needed) |
 | `test_golden_set.py` | Gold-vs-source consistency + recorded-metrics drift check |
+| `test_encoders.py` | Adapter unit tests via injected fake `entities_fn`s (no torch needed) |
 
 ## Commands
 
@@ -37,6 +41,11 @@ python golden_eval.py --out report.json
 python golden_eval.py --check    # diff vs golden/metrics-baseline.json (CI)
 python golden_eval.py --write    # re-record after a deliberate pipeline change
 python -m unittest discover -p 'test_*.py'
+
+# Encoder comparison (needs torch+transformers — see requirements-encoders.txt):
+python encoders.py --list                              # candidates + licenses
+python encoders.py --model dictabert-ner --out golden/encoder-metrics
+python encoders.py --all --out golden/encoder-metrics  # regenerate the artifact
 ```
 
 ## Metrics (per the issue's acceptance list)
@@ -105,6 +114,82 @@ deterministic lookup.
    anchor/script/style exclusion, and homograph suppression
    (`suppression` 1.000 — `מלך`/`אמר`/`שם`/`כבר`/`אכל`… held, never
    linked) all measure clean.
+
+## Measured — encoder candidates (`encoders.py`)
+
+The issue's next increment: plug candidate Hebrew encoders into the
+same scorer and compare against the recorded baseline above. Two modes
+are measured per candidate — `detect` (the encoder's NER output becomes
+decoration rows end-to-end) and `retype` (morphhb detection stays the
+candidate engine; the encoder only re-votes `entity_type`). Full
+per-case/per-category reports live in `golden/encoder-metrics/*.json`,
+recorded on torch 2.14.1+cpu + transformers 5.19.0.
+
+### `detect` mode — encoder end-to-end
+
+| Model | License | Domain | precision | recall | det. recall | type acc | name acc | span exact | suppression |
+| ----- | ------- | ------ | --------- | ------ | ----------- | -------- | -------- | ---------- | ----------- |
+| lexical baseline | — | pasuk | 0.951 | 0.940 | 0.940 | 0.551 | 0.962 | 0.951 | n/a |
+| dictabert-ner (base) | CC-BY-4.0 | pasuk | 0.894 | 0.506 | 0.530 | 0.714 | 0.905 | 0.898 | n/a |
+| dictabert-large-ner | CC-BY-4.0 | pasuk | 0.879 | 0.349 | 0.410 | 0.759 | 0.931 | 0.895 | n/a |
+| alephbert-ner-community | **undeclared** | pasuk | 0.898 | 0.530 | 0.627 | 0.818 | 0.909 | 0.881 | n/a |
+| lexical baseline | — | article | 0.947 | 0.857 | 0.905 | 0.667 | 1.000 | 0.947 | 1.000 |
+| dictabert-ner (base) | CC-BY-4.0 | article | 0.895 | 0.810 | 0.857 | 0.882 | 0.941 | 0.900 | 1.000 |
+| dictabert-large-ner | CC-BY-4.0 | article | 1.000 | 0.810 | 0.810 | 0.882 | 0.941 | 0.944 | 1.000 |
+| alephbert-ner-community | **undeclared** | article | 1.000 | 0.571 | 0.714 | 0.917 | 0.917 | 1.000 | 1.000 |
+
+### `retype` mode — morphhb detection + encoder typing (recommended)
+
+| Model | License | Domain | precision | recall | det. recall | type acc | name acc | span exact | suppression |
+| ----- | ------- | ------ | --------- | ------ | ----------- | -------- | -------- | ---------- | ----------- |
+| dictabert-ner | CC-BY-4.0 | pasuk | 0.951 | 0.940 | 0.940 | **0.654** | 0.962 | 0.951 | n/a |
+| dictabert-large-ner | CC-BY-4.0 | pasuk | 0.951 | 0.940 | 0.940 | 0.641 | 0.962 | 0.951 | n/a |
+| alephbert-ner-community | **undeclared** | pasuk | 0.951 | 0.940 | 0.940 | **0.718** | 0.962 | 0.951 | n/a |
+| dictabert-ner | CC-BY-4.0 | article | 0.947 | 0.857 | 0.905 | **0.889** | 1.000 | 0.947 | 1.000 |
+| dictabert-large-ner | CC-BY-4.0 | article | 0.947 | 0.857 | 0.905 | **0.889** | 1.000 | 0.947 | 1.000 |
+| alephbert-ner-community | **undeclared** | article | 0.947 | 0.857 | 0.905 | 0.833 | 1.000 | 0.947 | 1.000 |
+
+### What the numbers say
+
+1. **Detection is the encoder's weak side, not typing.** Raw NER recall
+   is 0.35–0.53 on pesukim: modern-Hebrew models miss fused-prefix
+   names, gentilics, qri/ktiv variants and the untagged divine names
+   (`fn` concentrated in `ambiguity`, `gentilic`, `prefixes`,
+   `qri-ktiv`, `multi-word` — the same categories the gold set weights
+   by design). morphhb's recall (0.94) is effectively free and
+   systematic — keep it as the candidate engine.
+2. **Typing is exactly the encoder's strength.** `retype` keeps every
+   baseline number identical (same spans, names, acceptance — the
+   scorer confirms p/r/span/name byte-for-byte) while lifting
+   `type_accuracy` from **0.551→0.654** (pasuk) and **0.667→0.889**
+   (article) with the *base* DictaBERT. The large variant adds nothing
+   (0.641/0.889) — base wins on size too (~110M vs ~340M params).
+3. **Recommendation: ship morphhb detection + DictaBERT-NER re-typing
+   (`dictabert-ner`, CC-BY-4.0 — attribution required).** The community
+   AlephBERT head types pasuk better (0.718) but its repo declares **no
+   license — it cannot ship**; it sets an upper bound worth chasing
+   only if a licensed head appears.
+4. **BEREL could not be scored**: `dicta-il/BEREL` is fill-mask only —
+   no published token-classification head. Its license is clean
+   (**Apache-2.0**, better than the CC-BY the design doc expected), so
+   a fine-tune on labeled Tanahpedia data stays a viable future leg.
+5. **What retype does NOT close** (still on record): pasuk `type_acc`
+   0.65 — misses concentrate on `qri-ktiv` (1/8 — ktiv spellings
+   confuse the model) and `spelling`; the `recall-gap` `אלהים` cases
+   stay `fn` (the encoder votes MISC → abstains → lexical PERSON
+   stands, which the gold actually accepts). Residual ambiguity is the
+   documented next-tier question (LLM/fine-tune), per the issue
+   phasing.
+
+### Encoder runtimes (CPU, measured on this workstation)
+
+| Mode | pasuk eval | article eval |
+| ---- | ---------- | ------------ |
+| detect | ~29 s (per-pasuk inference over 20 perakim) | ~1 s |
+| retype | ~38 s (adds the lexical pass) | ~1 s |
+
+Python-traced allocation peak ~0.8 GiB (torch native tensors are
+outside tracemalloc; weights on disk: base ≈0.4 GB, large ≈1.3 GB).
 
 ## Adding a case
 
