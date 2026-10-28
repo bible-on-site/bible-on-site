@@ -1698,7 +1698,9 @@ jobs:
         if: always()
         with:
           name: admin-e2e-html-report-${{ github.run_id }}
+          # The configured report root is hidden; retain only this report tree.
           path: ${{ env.ADMIN_DIRECTORY }}/.playwright-report
+          include-hidden-files: true
           retention-days: 7
           overwrite: true
 
@@ -1999,13 +2001,6 @@ jobs:
           flags: api
           report_type: test_results
 
-      - name: Store API E2E HTML Report
-        uses: actions/upload-artifact@v7
-        with:
-          name: api-e2e-html-report-${{ github.run_id }}
-          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
-          retention-days: 7
-          overwrite: true
 
       - name: Store API Coverage Report (wf)
         uses: actions/upload-artifact@v7
