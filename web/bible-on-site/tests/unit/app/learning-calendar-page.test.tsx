@@ -114,6 +114,195 @@ describe("LearningCalendar", () => {
 		).toBeInTheDocument();
 	});
 
+	it("keeps rapid next/previous navigation while the URL replacement is pending", () => {
+		// Next exposes the old URL until navigation commits; wrapper identity
+		// must not turn that unchanged URL into a new month selection.
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ month: "578703" }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("4");
+		rerender(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("4");
+
+		fireEvent.click(screen.getByRole("button", { name: "חודש קודם" }));
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("3");
+		expect(mockReplace.mock.calls.map(([url]) => url)).toEqual([
+			"?month=578704",
+			"?month=578703",
+		]);
+	});
+
+	it.each([
+		{
+			view: "year",
+			select: "שנתי",
+			next: "שנה הבאה",
+			month: "578612",
+			cycle: null,
+		},
+		{
+			view: "cycle",
+			select: "מחזור מלא",
+			next: "מחזור הבא",
+			month: "578512",
+			cycle: "5",
+		},
+	])(
+		"composes a pending $view view with navigation",
+		({ view, select, next, month, cycle }) => {
+			(useSearchParams as jest.Mock).mockImplementation(
+				() => new URLSearchParams({ month: "578512", campaign: "keep" }),
+			);
+			render(<LearningCalendar {...cycleStartProps} />);
+			fireEvent.click(screen.getByRole("button", { name: select }));
+			fireEvent.click(screen.getByRole("button", { name: next }));
+
+			const params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+			expect(params.get("view")).toBe(view);
+			expect(params.get("month")).toBe(month);
+			expect(params.get("cycle")).toBe(cycle);
+			expect(params.get("campaign")).toBe("keep");
+		},
+	);
+
+	it("composes every pending calendar field without dropping unrelated query keys", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() =>
+				new URLSearchParams({ month: "578512", cycle: "4", campaign: "keep" }),
+		);
+		render(<LearningCalendar {...cycleStartProps} />);
+		for (const name of [
+			"חודש הבא",
+			"שנתי",
+			"שנה הבאה",
+			"מחזור מלא",
+			"מחזור הבא",
+		]) {
+			fireEvent.click(screen.getByRole("button", { name }));
+		}
+
+		const params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+		expect(Object.fromEntries(params)).toEqual({
+			month: "578701",
+			cycle: "5",
+			campaign: "keep",
+			view: "cycle",
+		});
+	});
+
+	it.each(["שנתי", "מחזור מלא"])(
+		"external query changes replace the pending %s view with URL defaults",
+		(view) => {
+			let query = "month=578512&campaign=keep";
+			(useSearchParams as jest.Mock).mockImplementation(
+				() => new URLSearchParams(query),
+			);
+			const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+			fireEvent.click(screen.getByRole("button", { name: view }));
+			if (view === "מחזור מלא") {
+				fireEvent.click(screen.getByRole("button", { name: "מחזור הבא" }));
+				expect(
+					screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+				).toHaveValue("5");
+			}
+
+			query = "month=578601&campaign=external";
+			rerender(<LearningCalendar {...cycleStartProps} />);
+			expect(screen.getByRole("button", { name: "חודשי" })).toHaveAttribute(
+				"aria-pressed",
+				"true",
+			);
+			expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+			expect(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+			).toHaveValue("4");
+			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+			let params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+			expect(Object.fromEntries(params)).toEqual({
+				month: "578602",
+				campaign: "external",
+			});
+
+			query = "month=578512&campaign=keep";
+			rerender(<LearningCalendar {...cycleStartProps} />);
+			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+			params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+			expect(Object.fromEntries(params)).toEqual({
+				month: "578601",
+				campaign: "keep",
+			});
+		},
+	);
+
+	it("an external month restores the implicit cycle while keeping the URL's cycle view", () => {
+		let query = "month=578512&view=cycle";
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams(query),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור הבא" }));
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("5");
+
+		query = "month=578601&view=cycle";
+		rerender(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("button", { name: "מחזור מלא" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("4");
+	});
+
+	it("accepts external URL changes and back/forward navigation after a pending local change", () => {
+		let month = "578703";
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ month }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+
+		for (const target of ["578705", "578703", "578705"]) {
+			month = target;
+			rerender(<LearningCalendar {...cycleStartProps} />);
+			expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue(
+				String(Number(target.slice(4))),
+			);
+		}
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps default-month navigation when search params have no month", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams(),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		rerender(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+		expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5786");
+	});
+
+	it("returns to the current initial month when an external URL removes month", () => {
+		let month: string | null = "578703";
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams(month === null ? {} : { month }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("3");
+
+		month = null;
+		rerender(<LearningCalendar {...cycleStartProps} initialMonth={11} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("11");
+		expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5785");
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
 	it("navigates to the previous month across a leap-year boundary", () => {
 		render(
 			<LearningCalendar

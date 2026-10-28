@@ -2,7 +2,7 @@
 
 import { toLetters } from "gematry";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	buildVisibleCalendarMonth,
 	CALENDAR_PDF_UNAVAILABLE,
@@ -116,42 +116,53 @@ export function LearningCalendar({
 }: LearningCalendarProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
+	const query = searchParams.toString();
+	const pendingQuery = useRef<{ base: string; value: string } | null>(null);
 	const today = useMemo(
 		() => parseNumericalDateToHebcalDate(todayDateNumber),
 		[todayDateNumber],
 	);
 	const window = useMemo(() => getCalendarCycleWindow(today), [today]);
-	const requestedMonth = parseMonthParam(searchParams.get(MONTH_QUERY_PARAM));
-	const monthParam = requestedMonth
-		? clampCalendarMonth(requestedMonth, window)
-		: null;
-	const viewParam = parseViewParam(searchParams.get(VIEW_QUERY_PARAM));
-	const requestedCycle = parseCycleParam(searchParams.get(CYCLE_QUERY_PARAM));
-	const cycleParam =
-		requestedCycle === null
-			? null
-			: Math.min(requestedCycle, window.next.number);
+	const urlSelection = useMemo(() => {
+		const params = new URLSearchParams(query);
+		const month = parseMonthParam(params.get(MONTH_QUERY_PARAM));
+		const cycle = parseCycleParam(params.get(CYCLE_QUERY_PARAM));
+		return {
+			month: clampCalendarMonth(
+				month ?? { year: initialYear, month: initialMonth },
+				window,
+			),
+			view: parseViewParam(params.get(VIEW_QUERY_PARAM)),
+			cycle: cycle === null ? null : Math.min(cycle, window.next.number),
+		};
+	}, [query, window, initialYear, initialMonth]);
 
-	const [viewed, setViewed] = useState<MonthRef>(
-		() =>
-			monthParam ??
-			clampCalendarMonth({ year: initialYear, month: initialMonth }, window),
+	const [viewed, setViewed] = useState<MonthRef>(urlSelection.month);
+	const [viewMode, setViewMode] = useState<ViewMode>(urlSelection.view);
+	const [viewedCycle, setViewedCycle] = useState<number | null>(
+		urlSelection.cycle,
 	);
-	const [viewMode, setViewMode] = useState<ViewMode>(viewParam);
-	const [viewedCycle, setViewedCycle] = useState<number | null>(cycleParam);
-	useEffect(() => setViewMode(viewParam), [viewParam]);
-	useEffect(() => setViewedCycle(cycleParam), [cycleParam]);
 
-	// Keep the viewed month in sync with the URL (back/forward, shared links).
+	// Apply actual URL changes (back/forward, shared links), without replacing
+	// an optimistic selection with the old URL while navigation is pending.
 	useEffect(() => {
-		if (monthParam && compareMonths(monthParam, viewed) !== 0) {
-			setViewed(monthParam);
-		}
-	}, [monthParam, viewed]);
+		if (pendingQuery.current?.base !== query) pendingQuery.current = null;
+		setViewed((current) =>
+			compareMonths(urlSelection.month, current) === 0
+				? current
+				: urlSelection.month,
+		);
+		setViewMode(urlSelection.view);
+		setViewedCycle(urlSelection.cycle);
+	}, [query, urlSelection]);
 
 	const pushParams = useCallback(
 		(updates: { month?: MonthRef; view?: ViewMode; cycle?: number }) => {
-			const params = new URLSearchParams(searchParams.toString());
+			// Compose rapid actions until Next commits a new URL snapshot.
+			const pending = pendingQuery.current;
+			const params = new URLSearchParams(
+				pending?.base === query ? pending.value : query,
+			);
 			if (updates.month) {
 				params.set(MONTH_QUERY_PARAM, formatMonthParam(updates.month));
 			}
@@ -161,9 +172,11 @@ export function LearningCalendar({
 			if (updates.cycle !== undefined) {
 				params.set(CYCLE_QUERY_PARAM, String(updates.cycle));
 			}
-			router.replace(`?${params.toString()}`, { scroll: false });
+			const value = params.toString();
+			pendingQuery.current = { base: query, value };
+			router.replace(`?${value}`, { scroll: false });
 		},
-		[router, searchParams],
+		[router, query],
 	);
 
 	const navigateMonth = useCallback(
