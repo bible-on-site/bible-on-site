@@ -9,16 +9,23 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, test } from "node:test";
+import { describe, type TestContext, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
 	baseRevision,
 	detectChanges,
 	isDataDeployChange,
 	isSchemaOnlyDataChange,
+	listChangedFiles,
 	MODULES,
 	type ModuleKey,
 	main,
 } from "./determine-changes.ts";
+import {
+	DOCSTRING_PYTHON,
+	isPublishDocstringOnlyChange,
+	PUBLISH_SOURCE_PATH,
+} from "./publish-docstring.mts";
 
 const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
@@ -35,7 +42,10 @@ describe("detectChanges", () => {
 			for (const [key, flags] of Object.entries(changes)) {
 				assert.deepEqual(
 					flags,
-					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					{
+						module_changed: false,
+						ci_changed: ["website", "api", "admin"].includes(key),
+					},
 					`${file} -> ${key}`,
 				);
 			}
@@ -924,4 +934,342 @@ describe("main", () => {
 			assert.deepEqual(flags, { module_changed: false, ci_changed: false });
 		}
 	});
+});
+
+const publisherSource = readFileSync(
+	new URL("../../../data/annotations/publish.py", import.meta.url),
+	"utf8",
+).replace(
+	"node devops/export-tanahpedia-articles.mts",
+	"node --import tsx devops/export-tanahpedia-articles.mts",
+);
+const correctedPublisher = publisherSource.replace(
+	"node --import tsx devops/export-tanahpedia-articles.mts",
+	"node devops/export-tanahpedia-articles.mts",
+);
+const publisherDocEnd = publisherSource.indexOf('\n"""') + 4;
+assert.ok(publisherDocEnd > 3);
+const publisherBody = publisherSource.slice(publisherDocEnd);
+
+function astDocProof(before: string, after: string): boolean {
+	const result = execFileSync(
+		DOCSTRING_PYTHON,
+		[
+			"-I",
+			"-S",
+			fileURLToPath(new URL("./publish-docstring-proof.py", import.meta.url)),
+		],
+		{
+			input: JSON.stringify({
+				base: Buffer.from(before).toString("base64"),
+				head: Buffer.from(after).toString("base64"),
+			}),
+			encoding: "utf8",
+		},
+	);
+	return result.trim() === "true";
+}
+
+describe("publisher docstring AST proof", () => {
+	test("actual publisher help documents commands from the repository root", () => {
+		const root = fileURLToPath(new URL("../../../", import.meta.url));
+		const help = execFileSync(
+			DOCSTRING_PYTHON,
+			[
+				fileURLToPath(
+					new URL("../../../data/annotations/publish.py", import.meta.url),
+				),
+				"--help",
+			],
+			{ cwd: root, encoding: "utf8" },
+		);
+		assert.match(help, /Gated production run from the repository root/);
+		assert.match(help, /node devops\/export-tanahpedia-articles\.mts/);
+		assert.match(help, /python data\/annotations\/publish\.py --pasuk-out/);
+		assert.doesNotMatch(help, /--import tsx|python publish\.py/);
+	});
+
+	test("requires the real standard-library interpreter used by CI", () => {
+		assert.match(
+			execFileSync(DOCSTRING_PYTHON, ["-I", "-S", "--version"], {
+				encoding: "utf8",
+			}),
+			/Python 3\./,
+		);
+	});
+	for (const [label, doc] of [
+		[
+			"native Node command",
+			correctedPublisher.slice(0, correctedPublisher.indexOf('\n"""') + 4),
+		],
+		["UTF8 columns", '"""תיעוד יצוא ללא שינוי בקוד"""'],
+		[
+			"CRLF docstring",
+			publisherSource.slice(0, publisherDocEnd).replaceAll("\n", "\r\n"),
+		],
+		[
+			"escaped delimiter",
+			String.raw`"""Text with an escaped delimiter \""" remains documentation.
+"""`,
+		],
+		["implicit literal concatenation", '"""First part""" """second part"""'],
+	]) {
+		test("accepts only the leading documentation change: " + label, () => {
+			assert.equal(astDocProof(publisherSource, doc + publisherBody), true);
+		});
+	}
+	for (const [label, source] of [
+		["missing docstring", publisherBody],
+		["unterminated docstring", '"""not closed'],
+		["computed expression", '"""one""" + """two"""' + publisherBody],
+		["f-string expression", 'f"""not a module docstring"""' + publisherBody],
+		["bytes expression", 'b"""not text"""' + publisherBody],
+		["invalid Python", correctedPublisher + "\nif (\n"],
+		[
+			"body code",
+			correctedPublisher +
+				"\nraise RuntimeError('must never execute source')\n",
+		],
+		[
+			"body comment",
+			correctedPublisher +
+				"\n# Source outside the module docstring stays delivery-affecting.\n",
+		],
+	]) {
+		test("retains delivery for " + label, () =>
+			assert.equal(astDocProof(publisherSource, source), false),
+		);
+	}
+	test("requires the audited body even when both revisions share a new __doc__ consumer", () => {
+		const consumption = "\nPAYLOAD = __doc__\n";
+		assert.equal(
+			astDocProof(
+				publisherSource + consumption,
+				correctedPublisher + consumption,
+			),
+			false,
+		);
+	});
+	test("preserves all source bytes outside the docstring, including line endings", () => {
+		assert.equal(
+			astDocProof(publisherSource, correctedPublisher.replaceAll("\n", "\r\n")),
+			false,
+		);
+	});
+});
+
+function publisherFixture(
+	t: TestContext,
+	{
+		before = publisherSource,
+		after = correctedPublisher,
+		extra = [],
+		modeChange = false,
+		shallow = true,
+	}: {
+		before?: string | null;
+		after?: string | null;
+		extra?: string[];
+		modeChange?: boolean;
+		shallow?: boolean;
+	} = {},
+) {
+	const root = mkdtempSync(join(tmpdir(), "publisher-routing-"));
+	t.after(() => {
+		assert.equal(dirname(root), tmpdir());
+		rmSync(root, { recursive: true, force: true });
+	});
+	const work = join(root, "work"),
+		origin = join(root, "origin.git"),
+		clone = join(root, "clone");
+	const git = (cwd: string, ...args: string[]) =>
+		execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+	const write = (path: string, body: string) => {
+		mkdirSync(dirname(join(work, path)), { recursive: true });
+		writeFileSync(join(work, path), body);
+	};
+	mkdirSync(work);
+	git(work, "init", "--quiet", "--initial-branch=master");
+	git(work, "config", "user.name", "CI fixture");
+	git(work, "config", "user.email", "ci-fixture@example.invalid");
+	git(work, "config", "core.autocrlf", "false");
+	write("README.md", "initial history\n");
+	git(work, "add", ".");
+	git(work, "commit", "--quiet", "-m", "Root history");
+	write("README.md", "source-proof fixture\n");
+	if (before !== null) write(PUBLISH_SOURCE_PATH, before);
+	git(work, "add", ".");
+	git(work, "commit", "--quiet", "-m", "Base source");
+	const baseSha = git(work, "rev-parse", "HEAD");
+	if (after === null) rmSync(join(work, PUBLISH_SOURCE_PATH));
+	else write(PUBLISH_SOURCE_PATH, after);
+	for (const path of extra) write(path, "changed input\n");
+	git(work, "add", ".");
+	if (modeChange) git(work, "update-index", "--chmod=+x", PUBLISH_SOURCE_PATH);
+	git(work, "commit", "--quiet", "--allow-empty", "-m", "Head source");
+	const headSha = git(work, "rev-parse", "HEAD");
+	git(root, "clone", "--quiet", "--no-local", "--bare", work, origin);
+	git(origin, "config", "uploadpack.allowAnySHA1InWant", "true");
+	git(
+		root,
+		"clone",
+		"--quiet",
+		...(shallow ? ["--depth=1"] : []),
+		`file://${origin.replaceAll("\\", "/")}`,
+		clone,
+	);
+	return {
+		root,
+		clone,
+		baseSha,
+		headSha,
+		git: (...args: string[]) => git(clone, ...args),
+		run: () => {
+			const eventPath = join(root, "event.json"),
+				outputPath = join(root, "output.txt");
+			writeFileSync(eventPath, JSON.stringify({ before: baseSha }));
+			const changes = main(
+				{
+					GITHUB_EVENT_NAME: "push",
+					GITHUB_EVENT_PATH: eventPath,
+					GITHUB_OUTPUT: outputPath,
+				},
+				clone,
+			);
+			return { changes, output: readFileSync(outputPath, "utf8") };
+		},
+	};
+}
+
+describe("publisher docstring release routing", () => {
+	test("uses immutable base/head blobs in a shallow checkout and selects checks only", (t) => {
+		const fixture = publisherFixture(t);
+		assert.equal(fixture.git("rev-parse", "--is-shallow-repository"), "true");
+		// Uncommitted code is deliberately unrelated: proof must use the tested Git blobs.
+		writeFileSync(
+			join(fixture.clone, PUBLISH_SOURCE_PATH),
+			"raise RuntimeError('working tree is not the source')\n",
+		);
+		const { changes, output } = fixture.run();
+		assert.deepEqual(changes.data, { module_changed: false, ci_changed: true });
+		assert.match(output, /^data_module_changed=false$/m);
+		assert.match(output, /^data_ci_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_schema_only_changed=false$/m);
+		assert.equal(fixture.git("rev-parse", "--is-shallow-repository"), "true");
+	});
+	for (const [label, options] of [
+		["deleted source", { after: null }],
+		["new source", { before: null }],
+		["file mode change", { modeChange: true }],
+		["changed implementation", { after: correctedPublisher + "\nVALUE = 1\n" }],
+		[
+			"ambiguous expression",
+			{ after: '"""one""" + """two"""' + publisherBody },
+		],
+	] as const) {
+		test("keeps normal delivery for " + label, (t) => {
+			const fixture = publisherFixture(t, options);
+			assert.equal(
+				isPublishDocstringOnlyChange({ ...fixture, cwd: fixture.clone }),
+				false,
+			);
+			assert.deepEqual(fixture.run().changes.data, {
+				module_changed: true,
+				ci_changed: false,
+			});
+		});
+	}
+	test("missing interpreter or unreadable immutable blob cannot prove a safe exclusion", (t) => {
+		const fixture = publisherFixture(t);
+		assert.equal(
+			isPublishDocstringOnlyChange({
+				...fixture,
+				cwd: fixture.clone,
+				python: join(fixture.root, "missing-python"),
+			}),
+			false,
+		);
+		assert.equal(
+			isPublishDocstringOnlyChange({
+				...fixture,
+				cwd: fixture.clone,
+				baseSha: "0".repeat(40),
+			}),
+			false,
+		);
+	});
+	for (const [label, extra, schemaOnly, pipeline] of [
+		[
+			"manual migration",
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			true,
+			false,
+		],
+		[
+			"real SQL payload",
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			false,
+			false,
+		],
+		[
+			"real pipeline source",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			false,
+			true,
+		],
+	] as const) {
+		test("preserves " + label + " alongside a proven docstring change", (t) => {
+			const fixture = publisherFixture(t, { extra: [extra] });
+			const { changes, output } = fixture.run();
+			assert.deepEqual(changes.data, {
+				module_changed: true,
+				ci_changed: true,
+			});
+			assert.equal(changes.perushim_pipeline.module_changed, pipeline);
+			assert.match(
+				output,
+				new RegExp(`^data_schema_only_changed=${schemaOnly}$`, "m"),
+			);
+		});
+	}
+	test("helper and regression edits select the required data checks without delivery", () => {
+		for (const file of [
+			"devops/github/ci/publish-docstring.mts",
+			"devops/github/ci/publish-docstring-proof.py",
+			"devops/github/ci/determine-changes.test.ts",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).data,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
+			assert.equal(isDataDeployChange([file]), false);
+		}
+	});
+});
+
+describe("existing full Git history", () => {
+	for (const kind of ["sha", "parent", "branch"] as const) {
+		test("stays full when resolving " + kind + " event bases", (t) => {
+			const fixture = publisherFixture(t, { shallow: false });
+			const count = fixture.git("rev-list", "--count", "HEAD");
+			assert.equal(
+				fixture.git("rev-parse", "--is-shallow-repository"),
+				"false",
+			);
+			const base =
+				kind === "sha"
+					? { kind, sha: fixture.baseSha }
+					: kind === "branch"
+						? { kind, branch: "master" }
+						: { kind };
+			listChangedFiles(base, fixture.clone);
+			assert.equal(
+				fixture.git("rev-parse", "--is-shallow-repository"),
+				"false",
+			);
+			assert.equal(fixture.git("rev-list", "--count", "HEAD"), count);
+		});
+	}
 });
