@@ -1181,16 +1181,42 @@ SELECT 1";
                 .execute(&mut conn).await?;
             let bulletin_upgrade = base_path.join("../tanah_daily_bulletin_upgrade.sql");
             execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade").await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_settings WHERE id = 1 AND audience = 'test' AND revision = 0 AND next_send_at IS NULL").fetch_one(&mut conn).await?, 1);
             raw_sql("INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content, distributable) VALUES (42, 1, 1, 'Retained article', 1, 'Retained content', TRUE);
                 INSERT INTO tanah_daily_bulletin (bulletin_date, perek_id, input_json, subject, source, email_html, pdf_data, filename)
                     VALUES ('2026-10-08', 1, '{}', 'Retained subject', 'Retained source', 'Retained HTML', 'Retained PDF', 'retained.pdf');
                 INSERT INTO tanah_daily_bulletin_delivery (bulletin_date, channel, status, provider_message_id)
-                    VALUES ('2026-10-08', 'email', 'sent', 'campaign-42');")
+                    VALUES ('2026-10-08', 'email', 'sent', 'campaign-42');
+                UPDATE tanah_daily_bulletin_email_settings SET audience = 'real', revision = 7, next_send_at = '2026-10-08 12:00:01.123' WHERE id = 1;
+                INSERT INTO tanah_daily_bulletin_subscriber (id, email, audience, consent_status, consent_source, consented_at, last_event_at) VALUES
+                    (101, 'test@example.com', 'test', 'confirmed', 'Explicit test consent', '2026-10-08 11:00:00.123', '2026-10-08 11:00:00.123'),
+                    (102, 'test@example.com', 'real', 'confirmed', 'Explicit real consent', '2026-10-08 11:01:00.123', '2026-10-08 11:01:00.123'),
+                    (104, 'unsubscribed@example.com', 'real', 'unsubscribed', 'Legacy consent', '2026-10-08 11:00:00.123', '2026-10-08 12:00:00.123'),
+                    (105, 'bounced@example.com', 'real', 'bounced', 'Legacy consent', '2026-10-08 11:00:00.123', '2026-10-08 12:00:00.123'),
+                    (106, 'complained@example.com', 'real', 'complained', 'Legacy consent', '2026-10-08 11:00:00.123', '2026-10-08 12:00:00.123');
+                INSERT INTO tanah_daily_bulletin_subscriber (id, email, audience) VALUES (103, 'pending@example.com', 'real');
+                INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision, status, last_error) VALUES
+                    ('11111111-1111-4111-8111-111111111111', '2026-10-08', 'test', 'retained-test-request', 6, 'uncertain', 'Check provider before retrying'),
+                    ('22222222-2222-4222-8222-222222222222', '2026-10-08', 'real', 'production', 7, 'failed', 'Recipient complained');
+                INSERT INTO tanah_daily_bulletin_email_recipient (id, job_id, subscriber_id, email, status, attempt_token, message_id, started_at, event_at, last_error) VALUES
+                    (201, '11111111-1111-4111-8111-111111111111', 101, 'test@example.com', 'uncertain', '33333333-3333-4333-8333-333333333333', 'ses-retained-test-message', '2026-10-08 12:00:00.123', '2026-10-08 12:02:03.456', 'Do not resend automatically'),
+                    (202, '22222222-2222-4222-8222-222222222222', 106, 'complained@example.com', 'complained', '44444444-4444-4444-8444-444444444444', 'ses-retained-complaint', '2026-10-08 12:00:00.123', '2026-10-08 12:03:04.567', 'Recipient complained');")
                 .execute(&mut conn).await?;
             execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade-repeat").await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
             assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
+            // Re-running the upgrade must retain the selected audience, explicit consent,
+            // global suppression history, and IDs that prevent an uncertain send retry.
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_settings WHERE id = 1 AND audience = 'real' AND revision = 7 AND next_send_at = '2026-10-08 12:00:01.123'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_settings").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, String>("SELECT GROUP_CONCAT(CONCAT(id, ':', audience, ':', consent_status) ORDER BY id SEPARATOR ',') FROM tanah_daily_bulletin_subscriber").fetch_one(&mut conn).await?, "101:test:confirmed,102:real:confirmed,103:real:pending,104:real:unsubscribed,105:real:bounced,106:real:complained");
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_subscriber WHERE id = 101 AND consent_source = 'Explicit test consent' AND consented_at = '2026-10-08 11:00:00.123' AND last_event_at = '2026-10-08 11:00:00.123'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_subscriber WHERE id = 103 AND consented_at IS NULL AND last_event_at IS NULL").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_job WHERE id = '11111111-1111-4111-8111-111111111111' AND bulletin_date = '2026-10-08' AND audience = 'test' AND idempotency_key = 'retained-test-request' AND settings_revision = 6 AND status = 'uncertain' AND last_error = 'Check provider before retrying'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_job WHERE id = '22222222-2222-4222-8222-222222222222' AND audience = 'real' AND idempotency_key = 'production' AND settings_revision = 7 AND status = 'failed'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_recipient WHERE id = 201 AND job_id = '11111111-1111-4111-8111-111111111111' AND subscriber_id = 101 AND email = 'test@example.com' AND status = 'uncertain' AND attempt_token = '33333333-3333-4333-8333-333333333333' AND message_id = 'ses-retained-test-message' AND started_at = '2026-10-08 12:00:00.123' AND event_at = '2026-10-08 12:02:03.456' AND last_error = 'Do not resend automatically'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_recipient WHERE id = 202 AND subscriber_id = 106 AND status = 'complained' AND message_id = 'ses-retained-complaint' AND event_at = '2026-10-08 12:03:04.567'").fetch_one(&mut conn).await?, 1);
 
             // Simulate the pre-covering-source schema and upgrade it repeatedly.
             raw_sql("DROP TABLE IF EXISTS tanah_article_covering_source;

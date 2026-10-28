@@ -1,0 +1,348 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Daily bulletin SES identity, subscription topics, event queue, and permissions for the existing admin ECS worker.
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Default: Z03490201R24I4MCQHQKG
+    Description: Existing public hosted zone for DomainName. Adds three DKIM CNAME records and a non-enforcing DMARC TXT record.
+  DomainName:
+    Type: String
+    Default: xn--febl3a.co.il
+    AllowedPattern: "[a-z0-9][a-z0-9.-]+[a-z0-9]"
+    MaxLength: 253
+    Description: ASCII or punycode domain identity, without a trailing dot.
+  FromAddress:
+    Type: String
+    Default: bulletin@xn--febl3a.co.il
+    AllowedPattern: "[A-Za-z0-9._%+-]+@[a-z0-9][a-z0-9.-]+[a-z0-9]"
+    MaxLength: 254
+    Description: Exact permitted sender address under DomainName; no display name.
+  AdminTaskRoleName:
+    Type: String
+    Default: adminTaskRole
+    AllowedPattern: "[A-Za-z0-9+=,.@_-]+"
+    MaxLength: 64
+    Description: Existing admin ECS task role, not the ECS execution role.
+  ContactListName:
+    Type: String
+    Default: bible-on-site-daily-bulletin
+    AllowedPattern: "[A-Za-z0-9_-]+"
+    MaxLength: 64
+  ConfigurationSetName:
+    Type: String
+    Default: bible-on-site-daily-bulletin
+    AllowedPattern: "[A-Za-z0-9_-]+"
+    MaxLength: 64
+
+Resources:
+  BulletinConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: !Ref ConfigurationSetName
+      DeliveryOptions:
+        TlsPolicy: REQUIRE
+
+  BulletinEmailIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref DomainName
+      ConfigurationSetAttributes:
+        ConfigurationSetName: !Ref BulletinConfigurationSet
+      DkimAttributes:
+        SigningEnabled: true
+      DkimSigningAttributes:
+        NextSigningKeyLength: RSA_2048_BIT
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Feature
+          Value: daily-bulletin
+
+  # Consume SES-returned values; IL uses a regional DKIM target domain.
+  # Existing apex, www, wildcard, root TXT, and MX records are not managed here.
+  BulletinDkimRecord1:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt BulletinEmailIdentity.DkimDNSTokenName1
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !GetAtt BulletinEmailIdentity.DkimDNSTokenValue1
+  BulletinDkimRecord2:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt BulletinEmailIdentity.DkimDNSTokenName2
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !GetAtt BulletinEmailIdentity.DkimDNSTokenValue2
+  BulletinDkimRecord3:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt BulletinEmailIdentity.DkimDNSTokenName3
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !GetAtt BulletinEmailIdentity.DkimDNSTokenValue3
+
+  # Publish only after confirming that this domain has no existing DMARC record.
+  # p=none never requests rejection or quarantine of existing mail streams.
+  BulletinDmarcRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "_dmarc.${DomainName}"
+      Type: TXT
+      TTL: "300"
+      ResourceRecords:
+        - '"v=DMARC1; p=none; adkim=r; aspf=r"'
+
+  # Protect contact preferences when retiring or replacing an established stack.
+  # A failed initial create can still roll back without orphaning named resources.
+  BulletinContactList:
+    Type: AWS::SES::ContactList
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      ContactListName: !Ref ContactListName
+      Description: Daily bulletin recipients and their topic subscription preferences.
+      Topics:
+        - TopicName: test
+          DisplayName: Daily bulletin test messages
+          Description: Messages sent only to the configured test audience.
+          DefaultSubscriptionStatus: OPT_OUT
+        - TopicName: real
+          DisplayName: Daily bulletin
+          Description: Messages sent to subscribed daily bulletin readers.
+          DefaultSubscriptionStatus: OPT_OUT
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Feature
+          Value: daily-bulletin
+
+  BulletinEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ConfigurationSetName}-events"
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Feature
+          Value: daily-bulletin
+
+  BulletinEventsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref BulletinEventsTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowOnlyThisSesConfigurationSet
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref BulletinEventsTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${BulletinConfigurationSet}"
+
+  BulletinWorkerDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      QueueName: !Sub "${ContactListName}-worker-dlq"
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+      # Build the deterministic source ARN to avoid a queue/DLQ dependency cycle.
+      RedriveAllowPolicy:
+        redrivePermission: byQueue
+        sourceQueueArns:
+          - !Sub "arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${ContactListName}-worker"
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Feature
+          Value: daily-bulletin
+
+  BulletinWorkerQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      QueueName: !Sub "${ContactListName}-worker"
+      SqsManagedSseEnabled: true
+      VisibilityTimeout: 120
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt BulletinWorkerDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Feature
+          Value: daily-bulletin
+
+  BulletinWorkerQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref BulletinWorkerQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowOnlyTrustedSnsTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt BulletinWorkerQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref BulletinEventsTopic
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: sqs:*
+            Resource: !GetAtt BulletinWorkerQueue.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # SQS requires every statement to name only the queue receiving the policy.
+  BulletinWorkerDeadLetterQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref BulletinWorkerDeadLetterQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: sqs:*
+            Resource: !GetAtt BulletinWorkerDeadLetterQueue.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  BulletinEventsSubscription:
+    Type: AWS::SNS::Subscription
+    DependsOn: BulletinWorkerQueuePolicy
+    Properties:
+      TopicArn: !Ref BulletinEventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt BulletinWorkerQueue.Arn
+      RawMessageDelivery: true
+
+  BulletinEventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    DependsOn:
+      - BulletinEventsTopicPolicy
+      - BulletinEventsSubscription
+    Properties:
+      ConfigurationSetName: !Ref BulletinConfigurationSet
+      EventDestination:
+        Name: daily-bulletin-worker
+        Enabled: true
+        MatchingEventTypes:
+          - SEND
+          - DELIVERY
+          - BOUNCE
+          - COMPLAINT
+          - REJECT
+          - RENDERING_FAILURE
+          - SUBSCRIPTION
+        SnsDestination:
+          TopicARN: !Ref BulletinEventsTopic
+
+  BulletinAdminRuntimePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${ContactListName}-runtime"
+      Roles:
+        - !Ref AdminTaskRoleName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ProcessBulletinQueue
+            Effect: Allow
+            # Batch APIs use these same IAM actions, not separate *Batch actions.
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:ChangeMessageVisibility
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt BulletinWorkerQueue.Arn
+          - Sid: SendFromBulletinIdentity
+            Effect: Allow
+            Action: ses:SendEmail
+            Resource:
+              - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${BulletinEmailIdentity}"
+              - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${BulletinConfigurationSet}"
+            Condition:
+              StringEquals:
+                ses:FromAddress: !Ref FromAddress
+          - Sid: MaintainBulletinContacts
+            Effect: Allow
+            Action:
+              - ses:CreateContact
+              - ses:UpdateContact
+              - ses:GetContact
+            Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:contact-list/${BulletinContactList}"
+          - Sid: ReadBulletinIdentityReadiness
+            Effect: Allow
+            Action: ses:GetEmailIdentity
+            Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${BulletinEmailIdentity}"
+          - Sid: ReadSesAccountReadiness
+            Effect: Allow
+            Action: ses:GetAccount
+            Resource: "*"
+
+Outputs:
+  WorkerQueueUrl:
+    Description: Shared queue for internal send jobs and raw SES event objects.
+    Value: !Ref BulletinWorkerQueue
+  WorkerQueueArn:
+    Value: !GetAtt BulletinWorkerQueue.Arn
+  DeadLetterQueueUrl:
+    Value: !Ref BulletinWorkerDeadLetterQueue
+  DeadLetterQueueArn:
+    Value: !GetAtt BulletinWorkerDeadLetterQueue.Arn
+  EventsTopicArn:
+    Value: !Ref BulletinEventsTopic
+  SesRegion:
+    Value: !Ref AWS::Region
+  FromAddress:
+    Value: !Ref FromAddress
+  DomainName:
+    Value: !Ref BulletinEmailIdentity
+  ContactListName:
+    Value: !Ref BulletinContactList
+  ConfigurationSetName:
+    Value: !Ref BulletinConfigurationSet
+  DkimRecordName1:
+    Value: !GetAtt BulletinEmailIdentity.DkimDNSTokenName1
+  DkimRecordValue1:
+    Value: !GetAtt BulletinEmailIdentity.DkimDNSTokenValue1
+  DkimRecordName2:
+    Value: !GetAtt BulletinEmailIdentity.DkimDNSTokenName2
+  DkimRecordValue2:
+    Value: !GetAtt BulletinEmailIdentity.DkimDNSTokenValue2
+  DkimRecordName3:
+    Value: !GetAtt BulletinEmailIdentity.DkimDNSTokenName3
+  DkimRecordValue3:
+    Value: !GetAtt BulletinEmailIdentity.DkimDNSTokenValue3
