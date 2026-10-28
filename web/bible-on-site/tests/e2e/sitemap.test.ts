@@ -76,10 +76,16 @@ test.describe("sitemap.xml", () => {
 		const response = await request.get("/sitemap.xml");
 		const body = decodeURIComponent(await response.text());
 		expect(body).not.toMatch(/\/(?:מסורה|masora)(?:\/|<)/);
-		const parashaUrls = body.match(/<loc>[^<]*\/פרשה(?:\/\d+)?<\/loc>/g) ?? [];
+		// Only canonical Hebrew-name slugs are indexable (issue #2738) —
+		// the hub plus 54 unit URLs; no numeric ids or aliases.
+		const parashaUrls =
+			body.match(/<loc>[^<]*\/פרשה(?:\/[א-ת-]+)?<\/loc>/g) ?? [];
 		expect(parashaUrls).toHaveLength(55);
-		for (let unit = 1; unit <= 54; unit++) {
-			expect(body).toContain(["/פרשה/", unit, "</loc>"].join(""));
+		expect(body).not.toMatch(/\/פרשה\/\d+<\/loc>/);
+		for (const slug of ["בראשית", "לך-לך", "אחרי-מות", "וזאת-הברכה"]) {
+			expect(parashaUrls.some((url) => url.includes(`/פרשה/${slug}`))).toBe(
+				true,
+			);
 		}
 	});
 

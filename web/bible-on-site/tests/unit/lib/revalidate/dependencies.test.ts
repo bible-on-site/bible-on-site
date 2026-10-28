@@ -131,7 +131,7 @@ describe("resolveEntityChanges", () => {
 				"/929/7",
 				"/929/7/12",
 				"/929/authors/slug:רשי",
-				"/parasha/1",
+				"/parasha/בראשית",
 				"/masora/1",
 			]),
 		);
@@ -249,7 +249,7 @@ describe("resolveEntityChanges", () => {
 				"/929/authors/slug:ישן",
 				"/929/5",
 				"/929/5/12",
-				"/parasha/1",
+				"/parasha/בראשית",
 				"/masora/1",
 			]),
 		);
