@@ -81,9 +81,20 @@ function processPid(line) {
 	return line.split(/\s+/)[0];
 }
 
+function validProcessPid(pid) {
+	const text = String(pid);
+	if (!text.length || text.length > 16 || text[0] === "0") return false;
+	for (let index = 0; index < text.length; index += 1) {
+		const digit = text.charCodeAt(index);
+		if (digit < 48 || digit > 57) return false;
+	}
+	const value = Number(pid);
+	return Number.isSafeInteger(value) && value > 1;
+}
+
 /** Linux identity survives argv teardown; start time fences PID reuse. */
 export function linuxProcessIdentity(pid, { read = readFileSync, stat = statSync } = {}) {
-	if (!/^[1-9]\d*$/.test(pid) || !Number.isSafeInteger(Number(pid)) || Number(pid) <= 1)
+	if (!validProcessPid(pid))
 		throw new Error("Invalid emulator process identity.");
 	const state = () => {
 		const text = read("/proc/" + pid + "/stat", "utf8");
@@ -149,8 +160,7 @@ export function readEmulatorOwners(path, avdName, udid) {
 	if (!receipt || receipt.schema !== 1 || receipt.avdName !== avdName || receipt.udid !== udid ||
 		!Array.isArray(receipt.owners) || !receipt.owners.length ||
 		receipt.owners.some((owner) => !owner || typeof owner.pid !== "string" ||
-			!/^[1-9]\d*$/.test(owner.pid) || !Number.isSafeInteger(Number(owner.pid)) ||
-			Number(owner.pid) <= 1 || ["startTime", "device", "inode"].some((key) =>
+			!validProcessPid(owner.pid) || ["startTime", "device", "inode"].some((key) =>
 				typeof owner[key] !== "string" || !/^\d+$/.test(owner[key]))) ||
 		new Set(receipt.owners.map((owner) => owner.pid)).size !== receipt.owners.length)
 		throw new Error("Invalid or mismatched emulator owner receipt.");

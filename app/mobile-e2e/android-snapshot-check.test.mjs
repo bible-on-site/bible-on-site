@@ -504,3 +504,17 @@ test("recorded live PID stays guarded when its displayed argv0 disappears", asyn
 	assert.equal(polls, 2);
 	assert.equal(existsSync(lock), false);
 });
+
+test("PID validation bounds long inputs and preserves canonical safe integer forms", () => {
+	let inspected = 0;
+	const read = () => { inspected += 1; throw new Error("valid PID reached inspection"); };
+	for (const pid of ["2", "42", 42, "9007199254740991"]) {
+		assert.throws(() => linuxProcessIdentity(pid, { read }), /valid PID reached inspection/);
+	}
+	assert.equal(inspected, 4);
+	for (const pid of ["", "0", "1", "01", "-2", "42\n", "4x", "9007199254740992",
+		"1" + "0".repeat(200000), "1" + " ".repeat(200000)]) {
+		assert.throws(() => linuxProcessIdentity(pid, { read }), /Invalid emulator process identity/);
+	}
+	assert.equal(inspected, 4);
+});
