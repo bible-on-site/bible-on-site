@@ -76,7 +76,7 @@ export const MODULES = {
 		// next.config.mjs, src/, public/, scripts/ (build-time), and
 		// Docker/tsconfig build inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|get-debug-port\.js$|launch-e2e-server\.mts$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$)/,
 	},
 	api: {
 		directory: "web/api",
