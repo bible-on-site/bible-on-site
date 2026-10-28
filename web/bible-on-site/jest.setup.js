@@ -30,6 +30,19 @@ jest.mock("isomorphic-dompurify", () => ({
 // Individual tests override this factory with jest.doMock when needed.
 jest.mock("@/data/db/store-metadata-snapshot.generated.json", () => ({}));
 
+// The raw MySQL layer must never reach a real database from unit tests
+// (#2731) — component tests that render dedication-aware pages would
+// otherwise fail with access-denied/connection errors. The stub pool
+// returns no rows; test files that exercise DB-backed logic register
+// their own jest.mock for mysql2 or @/lib/api-client, which overrides
+// this global default.
+jest.mock("mysql2/promise", () => ({
+	createPool: jest.fn().mockReturnValue({
+		execute: jest.fn().mockResolvedValue([[]]),
+		query: jest.fn().mockResolvedValue([[]]),
+	}),
+}));
+
 // Setup for SWC coverage instrumentation
 // The swc-plugin-coverage-instrument stores coverage in the global object
 // We need to ensure it's accessible from the reporter

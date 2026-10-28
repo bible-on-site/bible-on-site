@@ -32,6 +32,11 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
     private readonly Func<int, bool>? _hasPerekAudio;
     private readonly Func<int> _hebrewDateProvider;
+    private readonly IDedicationService _dedicationService;
+
+    /// <summary>Serializes dedication loads so a fast unit swipe cannot show a
+    /// stale parasha's lines — the latest unit always wins (#2731).</summary>
+    private int _dedicationVersion;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -157,6 +162,11 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
     /// <summary>Canonical positions of the selected pesukim — (perekId, pasukNum).</summary>
     [ObservableProperty]
     private List<(int PerekId, int PasukNum)> _selectedPasukim = new();
+
+    /// <summary>Formatted dedication lines applying to the displayed parasha (#2731).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDedications))]
+    private List<string> _dedicationLines = [];
 #pragma warning restore MVVMTK0045
 
     partial void OnIsTikkunKorimEnabledChanged(bool value)
@@ -177,6 +187,48 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
         RefreshRecitationAvailability(newValue);
+        if (newValue is null)
+        {
+            // Invalidate any in-flight dedication load for the previous unit.
+            ++_dedicationVersion;
+            DedicationLines = [];
+        }
+        else if (newValue.UnitId != oldValue?.UnitId)
+        {
+            _ = LoadDedicationsAsync(newValue.UnitId);
+        }
+    }
+
+    /// <summary>
+    /// The weekly parasha's dedication lines (#2731) — whole-parasha scope
+    /// resolved server-side. Best-effort secondary content: a load failure
+    /// shows no lines rather than failing the page.
+    /// </summary>
+    private async Task LoadDedicationsAsync(int unitId)
+    {
+        var version = ++_dedicationVersion;
+        // Clear eagerly — a swiped unit must never inherit its neighbour's lines.
+        DedicationLines = [];
+        try
+        {
+            var dedications = await _dedicationService.GetDedicationsAsync(
+                new DedicationContext { ParashaIds = [unitId] }, CancellationToken.None);
+            if (version != _dedicationVersion || Unit?.UnitId != unitId)
+            {
+                return;
+            }
+            DedicationLines = DedicationFormatter.FormatAll(dedications);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
+        catch (Exception ex) //NOSONAR — dedication lines are best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Dedication load failed for parasha {unitId}: {ex}");
+            if (version == _dedicationVersion)
+            {
+                DedicationLines = [];
+            }
+        }
     }
 
     /// <summary>
@@ -258,6 +310,17 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
         Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider,
         IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, hebrewDateProvider, navigator, fileSystem, share, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share,
+        IDedicationService? dedicationService)
     {
         _parashaService = parashaService;
         _perekService = perekService;
@@ -267,6 +330,7 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         _navigator = navigator ?? ShellAppNavigator.Instance;
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
+        _dedicationService = dedicationService ?? DedicationService.Instance;
         _articlesLoader = articlesLoader;
         _hebrewDateProvider = hebrewDateProvider ?? HebrewDateHelper.GetTodayDateNumber;
 #if MAUI
@@ -282,6 +346,8 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
     }
 
     #region Unit Properties
+
+    public bool HasDedications => DedicationLines.Count > 0;
 
     public int UnitId => Unit?.UnitId ?? 0;
 

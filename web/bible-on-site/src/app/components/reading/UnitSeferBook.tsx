@@ -65,6 +65,11 @@ export interface UnitSeferBookProps {
 	/** Second cover line describing the division's slicing. */
 	coverEdition?: string;
 	/**
+	 * Feature-level dedication lines on the front cover (#2731) — the
+	 * whole-division dedication shown once for the reading context.
+	 */
+	coverDedications?: string[];
+	/**
 	 * Unit-driven content pages, in book order (each unit's text page
 	 * and its blank commentary page). Everything else — covers,
 	 * contents, toolbar, visibility markers — is shared chrome.
@@ -101,6 +106,7 @@ export function UnitSeferBook({
 	seferName,
 	coverSubtitle,
 	coverEdition,
+	coverDedications,
 	contentPages,
 	contentOffset,
 	pageSemantics,
@@ -160,6 +166,7 @@ export function UnitSeferBook({
 				seferName={seferName}
 				subtitle={coverSubtitle}
 				edition={coverEdition}
+				dedications={coverDedications}
 			/>
 		</section>
 	);

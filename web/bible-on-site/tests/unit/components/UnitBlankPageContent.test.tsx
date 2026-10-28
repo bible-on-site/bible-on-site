@@ -286,7 +286,10 @@ describe("UnitBlankPageContent", () => {
 
 	it("opens an article in place and reports its document title", async () => {
 		const article = { id: 7, name: "מאמר ראשון", content: "<p>תוכן</p>" };
-		mockGetArticleForBook.mockResolvedValue(article as never);
+		mockGetArticleForBook.mockResolvedValue({
+			article,
+			dedicationLines: [],
+		} as never);
 		const onNavigate = jest.fn();
 		const onContentTitle = jest.fn();
 		renderPage({ onNavigate, onContentTitle });
@@ -315,8 +318,8 @@ describe("UnitBlankPageContent", () => {
 
 	it("restores an article from its initial slug", async () => {
 		mockGetArticleForBook.mockResolvedValue({
-			id: 9,
-			name: "מאמר שני",
+			article: { id: 9, name: "מאמר שני" },
+			dedicationLines: [],
 		} as never);
 		renderPage({ initialSlug: "9" });
 		await screen.findByTestId("article-full-view");
@@ -325,8 +328,8 @@ describe("UnitBlankPageContent", () => {
 
 	it("responds to a new slug without remounting", async () => {
 		mockGetArticleForBook.mockResolvedValue({
-			id: 7,
-			name: "מאמר ראשון",
+			article: { id: 7, name: "מאמר ראשון" },
+			dedicationLines: [],
 		} as never);
 		const view = renderPage({ initialSlug: "7" });
 		await screen.findByTestId("article-full-view");
@@ -406,7 +409,10 @@ describe("UnitBlankPageContent", () => {
 				reject = onReject;
 			});
 			const currentArticle = { id: 9, name: "Current article" };
-			mockGetArticleForBook.mockResolvedValue(currentArticle as never);
+			mockGetArticleForBook.mockResolvedValue({
+				article: currentArticle,
+				dedicationLines: [],
+			} as never);
 			if (kind === "article") {
 				mockGetArticleForBook.mockReturnValueOnce(pending);
 			} else {

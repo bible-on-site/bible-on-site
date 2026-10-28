@@ -41,6 +41,20 @@
                                FontAttributes="Bold"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
 
+                        <!-- Entry-scoped dedications (#2731) -->
+                        <VerticalStackLayout Spacing="2"
+                                             BindableLayout.ItemsSource="{Binding DedicationLines}"
+                                             IsVisible="{Binding HasDedications}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Label Text="{Binding .}"
+                                           FontSize="13"
+                                           FontAttributes="Italic"
+                                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+
                         <!-- Entity type badges → category pages -->
                         <FlexLayout Wrap="Wrap"
                                     BindableLayout.ItemsSource="{Binding Entities}"

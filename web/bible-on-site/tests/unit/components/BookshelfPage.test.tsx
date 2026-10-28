@@ -3,6 +3,12 @@
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 
+// Bypass unstable_cache — just run the wrapped function directly (#2731:
+// dedication loaders are tag-cached).
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+
 // The real Bookshelf passes todaysPerekId (5) for today's sefer
 jest.mock("@/app/components/Bookshelf", () => ({
 	Bookshelf: ({
@@ -42,20 +48,22 @@ describe("BookshelfPage", () => {
 		mockPush.mockClear();
 	});
 
-	it("renders bookshelf component", () => {
-		render(<BookshelfPage />);
+	// BookshelfPage is an async Server Component (#2731 — it awaits the
+	// dedication read); resolve the JSX before rendering.
+	it("renders bookshelf component", async () => {
+		render(await BookshelfPage());
 		expect(screen.getByTestId("mock-bookshelf")).toBeInTheDocument();
 	});
 
-	it("renders an accessible page heading", () => {
-		render(<BookshelfPage />);
+	it("renders an accessible page heading", async () => {
+		render(await BookshelfPage());
 		expect(
 			screen.getByRole("heading", { level: 1, name: 'ספרי התנ"ך' }),
 		).toBeInTheDocument();
 	});
 
-	it("navigates to today's perek when clicking today's sefer (narrow)", () => {
-		render(<BookshelfPage />);
+	it("navigates to today's perek when clicking today's sefer (narrow)", async () => {
+		render(await BookshelfPage());
 		fireEvent.click(screen.getByTestId("mock-bookshelf"));
 		// Today is perek 5 (בראשית), clicked sefer is בראשית → /929/5
 		expect(mockPush).toHaveBeenCalledWith("/929/5");
