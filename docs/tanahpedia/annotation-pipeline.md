@@ -195,7 +195,20 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   spans inside existing anchors. Covered by unit tests plus e2e
   fixtures (`tanah_mention_test_data.sql`, loaded after the Tanahpedia
   seed chain) proving resolved→link and unresolved→plain.
+- Golden-set harness (`data/annotations/golden_eval.py` +
+  `golden/`): 20 curated pasuk cases + 12 authored article cases
+  covering every category the issue lists, scored for precision,
+  recall, detection recall, type/name/span accuracy and `held`
+  suppression, with per-category breakdowns and a deterministic
+  metrics record (`golden/metrics-baseline.json`) enforced by
+  `--check`. The scorer is predictor-agnostic — the encoder tier
+  plugs in via the same contract row shape. Measured results and the
+  concrete findings (type-skew 0.55/0.67, unchained multi-word
+  fragmentation, untagged divine-name recall, name-form
+  normalization bugs, gazetteer coverage floor, prefixed-compound
+  over-holding) are documented in `data/annotations/GOLDEN.md` —
+  they are the bar the encoder comparison must beat.
 
-Remaining sequence: golden-set harness → encoder classifier
-comparison (BEREL license check first) → production import of the
+Remaining sequence: encoder classifier comparison (BEREL license
+check first) against the golden-set bar → production import of the
 published pasuk + article baseline rows.
