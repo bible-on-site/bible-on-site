@@ -318,6 +318,51 @@ and architecture changes belong to that later qualified step; they are not
 part of this release preparation. Preserve the healthy 0.1.95 full task
 definition and image as rollback, since older images lack this new endpoint.
 
+### Local full-corpus qualification (2026-10-29)
+
+The public API supplied a frozen corpus of 2,681 articles, 68 authors,
+35 books and 929 chapters without database credentials, private content or
+production writes. The isolated test adds one clearly synthetic article and
+author plus dedication/coverage edge rows. Public HTML/name/abstract bytes,
+nulls and reference closure were checked after import. Raw data and operational
+artifacts remain private; these are temporary qualification inputs.
+
+At the existing 0.25 vCPU/512 MiB limit, the original actual API image answered
+liveness in 0.819 seconds but failed the unchanged 30-second readiness gate.
+A separately labeled diagnostic run became ready after 84.240 seconds:
+model construction took about 36 seconds and 2,682 individual document commits
+spent 43.289 seconds in SQL. No other server-wide lock owner was present.
+This failed baseline remains recorded; the deadline was not increased.
+
+The revised LSA projection traverses contiguous output coordinates while
+preserving every scalar accumulation's order, seed, vocabulary, dimensions
+and scaling. Its measured projection fell from 17.994 to 0.789 seconds; full
+basis/model/document embeddings and six query score/ranking sets were bitwise
+identical. Documents, model state and epoch stamps now publish in one SQLx
+transaction on the retained named-lock session. Real MySQL tests prove that
+an error or cancellation during the second document write preserves every
+prior publication byte, releases the session, and leaves a warm reader usable.
+
+The combined actual-Dockerfile image passed the same full-corpus cold gate in
+26.586 seconds. Document SQL took 1.699 seconds, and warm readiness took
+1.519 seconds while a separate test session held the retraining lock. The
+hard limits remained 0.25 vCPU/512 MiB; process high-water RSS was about
+216.45 MiB and there was no OOM. Final normal validation passed 297 unit tests,
+two mandatory MySQL tests and 59 HTTP E2E tests; merged API line coverage was
+13,241/13,392 (98.872%), above the unchanged 97% gate. Local image labels
+explicitly identify the working tree; final native CI must bind published
+images to the committed source. These are local amd64 results, not ARM or
+Fargate performance evidence.
+
+The unexecuted AWS comparison plan uses a separate MySQL server and sequential
+amd64/ARM64 API services at those same limits. It uses an owned temporary
+cluster with Container Insights explicitly disabled: the production cluster's
+Insights setting is enabled and remains untouched. Request `--include SETTINGS`
+when inspecting a cluster; omitted settings do not mean disabled. Existing
+roles, network rules and the strict SSH probe path are reused. Standard ECS
+service metrics report observed sample maxima; they are not continuous peak
+measurements. All temporary resources must be removed after qualification.
+
 ## Isolated candidate design (phase 2 - requires authorized AWS access)
 
 Multi-arch manifests do not select Graviton by themselves. Definitions without

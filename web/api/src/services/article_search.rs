@@ -24,6 +24,7 @@ pub mod store;
 pub mod text;
 
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -33,7 +34,7 @@ use std::time::Duration;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseConnectionType, DbBackend, DbErr, ExecResult,
     QueryResult, RuntimeErr, Statement, Values,
-    sqlx::{self, Executor, MySql, pool::PoolConnection},
+    sqlx::{self, Connection, Executor, MySql, MySqlConnection, pool::PoolConnection},
 };
 use sea_query_sqlx::SqlxValues;
 use tokio::sync::{Mutex, RwLock};
@@ -553,8 +554,10 @@ async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
 /// Named locks belong to physical MySQL sessions, not the connection pool.
 /// Never return a session that might own this lock to the pool, even if an
 /// acquisition response, retrain, or release is interrupted by cancellation.
+struct RetainedSession<C>(Mutex<C>);
+
 enum RetrainLock<'a> {
-    MySql(Mutex<PoolConnection<MySql>>),
+    MySql(RetainedSession<PoolConnection<MySql>>),
     Mock(&'a DatabaseConnection),
 }
 
@@ -585,7 +588,7 @@ impl<'a> RetrainLock<'a> {
                 .await
                 .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))?;
         match acquired {
-            Some(1) => Ok(Some(Self::MySql(Mutex::new(session)))),
+            Some(1) => Ok(Some(Self::MySql(RetainedSession(Mutex::new(session))))),
             Some(0) => Ok(None),
             _ => Err(DbErr::Custom(
                 "MySQL failed to acquire the article-search named lock".into(),
@@ -596,7 +599,7 @@ impl<'a> RetrainLock<'a> {
     async fn release(self) -> Result<(), DbErr> {
         match self {
             Self::MySql(session) => {
-                let mut session = session.into_inner();
+                let mut session = session.0.into_inner();
                 let released: Option<i64> =
                     sqlx::query_scalar("SELECT RELEASE_LOCK('article_search_retrain')")
                         .fetch_one(&mut *session)
@@ -615,6 +618,44 @@ impl<'a> RetrainLock<'a> {
             Self::Mock(conn) => store::release_lock(conn).await,
         }
     }
+
+    async fn publish(
+        &self,
+        dims: usize,
+        model: Vec<u8>,
+        docs: Vec<PreparedDoc>,
+    ) -> Result<(), DbErr> {
+        match self {
+            Self::MySql(session) => {
+                let mut session = session.0.lock().await;
+                // The CPU work is finished before BEGIN. Borrow the exact lock-owning
+                // session; a pooled transaction could use a different connection.
+                let transaction = (**session)
+                    .begin()
+                    .await
+                    .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))?;
+                let transaction = RetainedSession(Mutex::new(transaction));
+                let result = persist_snapshot(&transaction, dims, model, docs).await;
+                let transaction = transaction.0.into_inner();
+                match result {
+                    Ok(()) => transaction
+                        .commit()
+                        .await
+                        .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into()))),
+                    Err(primary) => {
+                        // Await rollback before releasing the named lock. Cancellation
+                        // also rolls back through SQLx's RAII transaction drop, while
+                        // close_on_drop prevents reuse of this physical session.
+                        if let Err(error) = transaction.rollback().await {
+                            warn!(%error, "failed to roll back article-search publication");
+                        }
+                        Err(primary)
+                    }
+                }
+            }
+            Self::Mock(conn) => persist_snapshot(*conn, dims, model, docs).await,
+        }
+    }
 }
 
 // Mirror SeaORM's SQLx binder, preserving its typed parameters and row/result
@@ -627,6 +668,52 @@ fn retrain_query(stmt: &Statement) -> sqlx::query::Query<'_, MySql, SqlxValues> 
 }
 
 #[async_graphql::async_trait::async_trait]
+impl<C> ConnectionTrait for RetainedSession<C>
+where
+    C: DerefMut<Target = MySqlConnection> + Send,
+{
+    fn get_database_backend(&self) -> DbBackend {
+        DbBackend::MySql
+    }
+
+    async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
+        let mut session = self.0.lock().await;
+        retrain_query(&stmt)
+            .execute(&mut **session)
+            .await
+            .map(Into::into)
+            .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))
+    }
+
+    async fn execute_unprepared(&self, sql: &str) -> Result<ExecResult, DbErr> {
+        let mut session = self.0.lock().await;
+        (&mut **session)
+            .execute(sqlx::AssertSqlSafe(sql.to_owned()))
+            .await
+            .map(Into::into)
+            .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))
+    }
+
+    async fn query_one_raw(&self, stmt: Statement) -> Result<Option<QueryResult>, DbErr> {
+        let mut session = self.0.lock().await;
+        retrain_query(&stmt)
+            .fetch_optional(&mut **session)
+            .await
+            .map(|row| row.map(Into::into))
+            .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))
+    }
+
+    async fn query_all_raw(&self, stmt: Statement) -> Result<Vec<QueryResult>, DbErr> {
+        let mut session = self.0.lock().await;
+        retrain_query(&stmt)
+            .fetch_all(&mut **session)
+            .await
+            .map(|rows| rows.into_iter().map(Into::into).collect())
+            .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))
+    }
+}
+
+#[async_graphql::async_trait::async_trait]
 impl ConnectionTrait for RetrainLock<'_> {
     fn get_database_backend(&self) -> DbBackend {
         DbBackend::MySql
@@ -634,56 +721,28 @@ impl ConnectionTrait for RetrainLock<'_> {
 
     async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
         match self {
-            Self::MySql(session) => {
-                let mut session = session.lock().await;
-                retrain_query(&stmt)
-                    .execute(&mut **session)
-                    .await
-                    .map(Into::into)
-                    .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))
-            }
+            Self::MySql(session) => session.execute_raw(stmt).await,
             Self::Mock(conn) => conn.execute_raw(stmt).await,
         }
     }
 
     async fn execute_unprepared(&self, sql: &str) -> Result<ExecResult, DbErr> {
         match self {
-            Self::MySql(session) => {
-                let mut session = session.lock().await;
-                (&mut **session)
-                    .execute(sqlx::AssertSqlSafe(sql.to_owned()))
-                    .await
-                    .map(Into::into)
-                    .map_err(|err| DbErr::Exec(RuntimeErr::SqlxError(err.into())))
-            }
+            Self::MySql(session) => session.execute_unprepared(sql).await,
             Self::Mock(conn) => conn.execute_unprepared(sql).await,
         }
     }
 
     async fn query_one_raw(&self, stmt: Statement) -> Result<Option<QueryResult>, DbErr> {
         match self {
-            Self::MySql(session) => {
-                let mut session = session.lock().await;
-                retrain_query(&stmt)
-                    .fetch_optional(&mut **session)
-                    .await
-                    .map(|row| row.map(Into::into))
-                    .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))
-            }
+            Self::MySql(session) => session.query_one_raw(stmt).await,
             Self::Mock(conn) => conn.query_one_raw(stmt).await,
         }
     }
 
     async fn query_all_raw(&self, stmt: Statement) -> Result<Vec<QueryResult>, DbErr> {
         match self {
-            Self::MySql(session) => {
-                let mut session = session.lock().await;
-                retrain_query(&stmt)
-                    .fetch_all(&mut **session)
-                    .await
-                    .map(|rows| rows.into_iter().map(Into::into).collect())
-                    .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))
-            }
+            Self::MySql(session) => session.query_all_raw(stmt).await,
             Self::Mock(conn) => conn.query_all_raw(stmt).await,
         }
     }
@@ -705,7 +764,7 @@ pub async fn retrain(conn: &DatabaseConnection) -> Result<Option<usize>, DbErr> 
     result.map(Some)
 }
 
-async fn retrain_locked<C: ConnectionTrait>(conn: &C) -> Result<usize, DbErr> {
+async fn retrain_locked(conn: &RetrainLock<'_>) -> Result<usize, DbErr> {
     let rows = conn
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::MySql,
@@ -754,33 +813,55 @@ async fn retrain_locked<C: ConnectionTrait>(conn: &C) -> Result<usize, DbErr> {
         dims = model.dims,
         "article search model retrained"
     );
-    // Persist docs first, then bump the state epoch so readers never load a
-    // half-written index under the new epoch.
+    // Finish embedding/serialization before opening the publication transaction.
+    let mut prepared = Vec::with_capacity(metas.len());
     for (i, (article_id, plain_len)) in metas.iter().enumerate() {
         let vector = model.embed(&sparse[i]);
-        let raw: Vec<(u32, u32)> = counts_per_doc[i]
+        let mut raw: Vec<(u32, u32)> = counts_per_doc[i]
             .iter()
             .filter_map(|(term, count)| model.index.get(term).map(|&tid| (tid, *count)))
-            .collect::<Vec<_>>();
-        let mut raw = raw;
+            .collect();
         raw.sort_by_key(|(tid, _)| *tid);
+        prepared.push(PreparedDoc {
+            article_id: *article_id,
+            plain_len: *plain_len,
+            vector: lsa::serialize_vector(&vector),
+            terms: lsa::serialize_terms(&raw),
+        });
+    }
+    conn.publish(model.dims, lsa::serialize_model(&model), prepared)
+        .await?;
+    Ok(rows.len())
+}
+
+struct PreparedDoc {
+    article_id: i32,
+    plain_len: i32,
+    vector: Vec<u8>,
+    terms: Vec<u8>,
+}
+
+async fn persist_snapshot<C: ConnectionTrait>(
+    conn: &C,
+    dims: usize,
+    model: Vec<u8>,
+    docs: Vec<PreparedDoc>,
+) -> Result<(), DbErr> {
+    let doc_count = docs.len();
+    // One transaction publishes all documents, the state, and matching epochs.
+    // This avoids an fsync for every document and cannot expose a partial model.
+    for doc in docs {
         store::upsert_doc(
             conn,
-            *article_id,
+            doc.article_id,
             0,
-            *plain_len,
-            lsa::serialize_vector(&vector),
-            lsa::serialize_terms(&raw),
+            doc.plain_len,
+            doc.vector,
+            doc.terms,
         )
         .await?;
     }
-    store::save_state(
-        conn,
-        model.dims as i32,
-        rows.len() as i32,
-        lsa::serialize_model(&model),
-    )
-    .await?;
+    store::save_state(conn, dims as i32, doc_count as i32, model).await?;
     // Stamp all rows with the new epoch in one statement.
     conn.execute_raw(sea_orm::Statement::from_string(
         sea_orm::DbBackend::MySql,
@@ -788,7 +869,7 @@ async fn retrain_locked<C: ConnectionTrait>(conn: &C) -> Result<usize, DbErr> {
          SET d.model_epoch = s.model_epoch",
     ))
     .await?;
-    Ok(rows.len())
+    Ok(())
 }
 
 struct WorkerLiveness(Arc<AtomicBool>);
@@ -1738,7 +1819,7 @@ mod tests {
         if let RetrainLock::MySql(session) = &mut lost {
             let _: Option<i64> =
                 sqlx::query_scalar("SELECT RELEASE_LOCK('article_search_retrain')")
-                    .fetch_one(&mut **session.get_mut())
+                    .fetch_one(&mut **session.0.get_mut())
                     .await
                     .expect("simulate lost ownership");
         } else {
@@ -1771,6 +1852,100 @@ mod tests {
             "SELECT COUNT(*) FROM article_search_doc WHERE model_epoch = 1 AND OCTET_LENGTH(vector) > 0 AND OCTET_LENGTH(terms) > 0",
         ).fetch_one(&pool).await.expect("bound document blobs");
         assert_eq!(docs, 2);
+
+        // Publication must commit all docs/state/epochs together. A second-row
+        // error may not leave the first replacement committed or evict a warm
+        // reader's prior consistent snapshot.
+        let prior = publication_bytes(&pool).await;
+        let warm = index_on(conn.clone());
+        warm.load().await.expect("warm pre-publication snapshot");
+        assert!(warm.inner.read().await.initialized);
+        pool.execute("UPDATE tanah_article SET name = CONCAT(name, ' changed'), content = CONCAT(content, ' changed')")
+            .await.expect("change isolated source corpus");
+        pool.execute("CREATE TRIGGER publication_failure BEFORE INSERT ON article_search_doc FOR EACH ROW BEGIN IF NEW.article_id = 2 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'intentional publication failure'; END IF; END")
+            .await.expect("second-write failure trigger");
+        let error = retrain(&conn)
+            .await
+            .expect_err("publication fails mid-write");
+        assert!(
+            error
+                .to_string()
+                .contains("intentional publication failure")
+        );
+        assert_retrain_lock_free(&pool).await;
+        assert_eq!(publication_bytes(&pool).await, prior);
+        warm.load()
+            .await
+            .expect("warm snapshot survives failed publication");
+        assert_eq!(warm.inner.read().await.epoch, 1);
+        pool.execute("DROP TRIGGER publication_failure")
+            .await
+            .expect("remove failure trigger");
+
+        // The first replacement is uncommitted while the second is in flight.
+        // Cancellation must roll back before another named-lock owner proceeds.
+        pool.execute("CREATE TRIGGER publication_delay BEFORE INSERT ON article_search_doc FOR EACH ROW BEGIN IF NEW.article_id = 2 THEN DO SLEEP(0.5); END IF; END")
+            .await.expect("second-write delay trigger");
+        let work_conn = conn.clone();
+        let publication = tokio::spawn(async move { retrain(&work_conn).await });
+        let publication_session = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let session: Option<u64> = sqlx::query_scalar(
+                    "SELECT ID FROM information_schema.PROCESSLIST WHERE ID = IS_USED_LOCK('article_search_retrain') AND STATE = 'User sleep'",
+                ).fetch_optional(&pool).await.expect("observe second publication write");
+                if let Some(session) = session { break session; }
+                tokio::task::yield_now().await;
+            }
+        }).await.expect("second write is actually in flight");
+        assert_eq!(
+            publication_bytes(&pool).await,
+            prior,
+            "uncommitted first doc is invisible"
+        );
+        warm.load()
+            .await
+            .expect("warm reader sees the old coherent publication");
+        assert_eq!(warm.inner.read().await.epoch, 1);
+        publication.abort();
+        assert!(
+            publication
+                .await
+                .expect_err("cancel publication")
+                .is_cancelled()
+        );
+        assert_retrain_lock_free(&pool).await;
+        let next = RetrainLock::acquire(&conn)
+            .await
+            .expect("next publication acquire")
+            .expect("next publication lock");
+        let active: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID = ? AND INFO IS NOT NULL",
+        )
+        .bind(publication_session)
+        .fetch_one(&pool)
+        .await
+        .expect("cancelled publication session ended");
+        assert_eq!(active, 0);
+        assert_eq!(
+            publication_bytes(&pool).await,
+            prior,
+            "cancelled publication rolled back every row"
+        );
+        next.release().await.expect("next publication release");
+        pool.execute("DROP TRIGGER publication_delay")
+            .await
+            .expect("remove delay trigger");
+        assert_eq!(
+            retrain(&conn).await.expect("successful atomic publication"),
+            Some(2)
+        );
+        let committed = publication_bytes(&pool).await;
+        assert_ne!(committed, prior);
+        warm.load()
+            .await
+            .expect("warm reader adopts committed publication");
+        assert_eq!(warm.inner.read().await.epoch, 2);
+        assert_eq!(warm.doc_count().await, 2);
 
         // The adapter runs the body on its retained session, so a one-slot
         // pool is supported rather than requiring spare connection capacity.
@@ -1869,6 +2044,23 @@ mod tests {
         );
         small_pool.close().await;
         pool.close().await;
+    }
+
+    async fn publication_bytes(pool: &sqlx::MySqlPool) -> (Vec<u8>, String, Vec<String>) {
+        // Compare actual persisted bytes and every document field, not only row
+        // counts: a partial replacement can preserve the same cardinality.
+        let state: Vec<u8> =
+            sqlx::query_scalar("SELECT model FROM article_search_state WHERE id = 1")
+                .fetch_one(pool)
+                .await
+                .expect("publication model bytes");
+        let metadata = sqlx::query_scalar(
+            "SELECT CONCAT_WS(':', id, schema_version, model_epoch, dims, doc_count, DATE_FORMAT(rebuilt_at, '%Y-%m-%d %H:%i:%s.%f')) FROM article_search_state WHERE id = 1",
+        ).fetch_one(pool).await.expect("publication state metadata");
+        let docs = sqlx::query_scalar(
+            "SELECT CONCAT_WS(':', article_id, model_epoch, HEX(content_hash), plain_len, HEX(vector), HEX(terms), DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s.%f')) FROM article_search_doc ORDER BY article_id",
+        ).fetch_all(pool).await.expect("publication document bytes");
+        (state, metadata, docs)
     }
 
     async fn assert_retrain_lock_free(pool: &sqlx::MySqlPool) {

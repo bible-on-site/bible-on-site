@@ -272,21 +272,53 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
         .filter(|&j| eigenvalues[j] > max_sigma * max_sigma * 1e-7)
         .take(MAX_DIMS)
         .collect();
-    // V = Bᵀ·U_b·Σ⁻¹ for the kept directions → terms × k.
+    Some(project_basis(
+        &b,
+        n_terms,
+        sketch,
+        &eigenvalues,
+        &eigenvectors,
+        &keep,
+    ))
+}
+
+/// V = Bᵀ·U_b·Σ⁻¹ for the retained directions, stored as terms × dimensions.
+/// Keep each term's output row contiguous so the inner loop updates independent
+/// directions together. Each coordinate still sums sketch rows in ascending
+/// order before applying its scale, preserving the original floating-point result.
+fn project_basis(
+    b: &[f32],
+    n_terms: usize,
+    sketch: usize,
+    eigenvalues: &[f32],
+    eigenvectors: &[f32],
+    keep: &[usize],
+) -> Vec<f32> {
     let k = keep.len();
-    let mut v = vec![0.0f32; n_terms * k];
-    for (col, &j) in keep.iter().enumerate() {
-        let sigma = eigenvalues[j].max(f32::EPSILON).sqrt();
-        let inv_sigma = 1.0 / sigma;
-        for t in 0..n_terms {
-            let mut acc = 0.0f32;
-            for i in 0..sketch {
-                acc += b[i * n_terms + t] * eigenvectors[i * sketch + j];
+    if k == 0 || n_terms == 0 {
+        return Vec::new();
+    }
+    let directions: Vec<f32> = eigenvectors
+        .chunks_exact(sketch)
+        .flat_map(|row| keep.iter().map(|&j| row[j]))
+        .collect();
+    let inverse_scales: Vec<f32> = keep
+        .iter()
+        .map(|&j| 1.0 / eigenvalues[j].max(f32::EPSILON).sqrt())
+        .collect();
+    let mut basis = vec![0.0f32; n_terms * k];
+    for (term, output) in basis.chunks_exact_mut(k).enumerate() {
+        for (i, direction) in directions.chunks_exact(k).enumerate() {
+            let weight = b[i * n_terms + term];
+            for (value, coefficient) in output.iter_mut().zip(direction) {
+                *value += weight * coefficient;
             }
-            v[t * k + col] = acc * inv_sigma;
+        }
+        for (value, inverse_scale) in output.iter_mut().zip(&inverse_scales) {
+            *value *= inverse_scale;
         }
     }
-    Some(v)
+    basis
 }
 
 /// In-place modified Gram–Schmidt (two passes) over a row-major m×n matrix
@@ -571,6 +603,109 @@ mod tests {
 
     fn counts(pairs: &[(&str, u32)]) -> HashMap<String, u32> {
         pairs.iter().map(|(t, c)| (t.to_string(), *c)).collect()
+    }
+
+    // Original scalar projection: preserve the numerical contract while
+    // production changes only the memory traversal of independent coordinates.
+    fn scalar_projection(
+        b: &[f32],
+        n_terms: usize,
+        sketch: usize,
+        eigenvalues: &[f32],
+        eigenvectors: &[f32],
+        keep: &[usize],
+    ) -> Vec<f32> {
+        let k = keep.len();
+        let mut basis = vec![0.0f32; n_terms * k];
+        for (col, &j) in keep.iter().enumerate() {
+            let inverse_scale = 1.0 / eigenvalues[j].max(f32::EPSILON).sqrt();
+            for term in 0..n_terms {
+                let mut value = 0.0f32;
+                for i in 0..sketch {
+                    value += b[i * n_terms + term] * eigenvectors[i * sketch + j];
+                }
+                basis[term * k + col] = value * inverse_scale;
+            }
+        }
+        basis
+    }
+
+    #[test]
+    fn basis_projection_preserves_scalar_results_at_full_and_partial_widths() {
+        for (terms, sketch, dims) in [(1, 4, 1), (37, 144, 128), (65, 19, 7), (4, 3, 3)] {
+            let mut rng = SplitMix64(RNG_SEED);
+            let b: Vec<f32> = (0..terms * sketch).map(|_| rng.next_gaussian()).collect();
+            let eigenvectors: Vec<f32> =
+                (0..sketch * sketch).map(|_| rng.next_gaussian()).collect();
+            let eigenvalues: Vec<f32> = (0..sketch).map(|i| (i + 1) as f32).collect();
+            let keep: Vec<usize> = (0..dims).map(|i| sketch - 1 - i).collect();
+            let expected = scalar_projection(&b, terms, sketch, &eigenvalues, &eigenvectors, &keep);
+            let actual = project_basis(&b, terms, sketch, &eigenvalues, &eigenvectors, &keep);
+            assert_eq!(
+                actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+
+            let vocab: Vec<String> = (0..terms).map(|i| format!("term{i}")).collect();
+            let reference = LsaModel {
+                dims,
+                index: vocab
+                    .iter()
+                    .enumerate()
+                    .map(|(i, term)| (term.clone(), i as u32))
+                    .collect(),
+                vocab,
+                idf: vec![1.0; terms],
+                basis: expected,
+            };
+            let optimized = LsaModel {
+                basis: actual,
+                ..reference.clone()
+            };
+            assert_eq!(serialize_model(&optimized), serialize_model(&reference));
+            let docs: Vec<SparseVector> = (0..8)
+                .map(|doc| {
+                    (0..terms)
+                        .filter(|&term| (term + doc) % 3 == 0 || term == 0)
+                        .map(|term| (term as u32, 1.0 / (term + doc + 1) as f32))
+                        .collect()
+                })
+                .collect();
+            let query = vec![(0, 1.0)];
+            let mut rankings = Vec::new();
+            for model in [&reference, &optimized] {
+                let query = model.embed(&query);
+                let mut scores: Vec<(usize, f32)> = docs
+                    .iter()
+                    .enumerate()
+                    .map(|(id, doc)| {
+                        let embedded = model.embed(doc);
+                        assert_eq!(
+                            serialize_vector(&embedded),
+                            serialize_vector(&reference.embed(doc))
+                        );
+                        (id, cosine(&query, &embedded))
+                    })
+                    .collect();
+                scores.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+                rankings.push(scores);
+            }
+            assert_eq!(rankings[0], rankings[1]);
+        }
+    }
+
+    #[test]
+    fn basis_projection_preserves_cancellation_and_empty_shapes() {
+        // Reassociating this dot product changes 3.0 to 4.0.
+        let b = [100_000_000.0, 1.0, -100_000_000.0, 3.0];
+        let eigenvalues = [1.0; 4];
+        let eigenvectors = [1.0; 16];
+        assert_eq!(
+            project_basis(&b, 1, 4, &eigenvalues, &eigenvectors, &[0]),
+            vec![3.0]
+        );
+        assert!(project_basis(&b, 1, 4, &eigenvalues, &eigenvectors, &[]).is_empty());
+        assert!(project_basis(&[], 0, 4, &eigenvalues, &eigenvectors, &[0]).is_empty());
     }
 
     #[test]
