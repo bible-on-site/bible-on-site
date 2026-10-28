@@ -1533,7 +1533,16 @@ describe("optional Telegram dispatch in the existing worker", () => {
 			return {
 				Messages: [
 					{
-						Body: JSON.stringify(bodies[next]),
+						Body: JSON.stringify(bodies[next], (_key, value: unknown) => {
+							if (!value || typeof value !== "object" || Array.isArray(value))
+								return value;
+							return Object.fromEntries(
+								Object.entries(value).sort(([left], [right]) => {
+									if (left === right) return 0;
+									return left < right ? -1 : 1;
+								}),
+							);
+						}),
 						ReceiptHandle: `receipt-${next++}`,
 					},
 				],
