@@ -1,0 +1,24 @@
+▲ Next.js 16.4.3 (Turbopack)
+✓ Running next.config.mjs took 408ms
+- Experiments (use with caution):
+  · cssChunking: "graph"
+  ✓ externalDir
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 28.3s
+  Running TypeScript ...
+  Finished TypeScript in 1781ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 526ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /_not-found
+└ ○ /calendar
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)  prerendered as static content
+

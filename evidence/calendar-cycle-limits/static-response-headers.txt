@@ -1,0 +1,22 @@
+HTTP/1.1 308 Permanent Redirect
+location: /%D7%9C%D7%95%D7%97
+Refresh: 0;url=/%D7%9C%D7%95%D7%97
+Date: Wed, 28 Oct 2026 12:09:41 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+HTTP/1.1 200 OK
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+x-nextjs-cache: HIT
+x-nextjs-prerender: 1
+x-nextjs-prerender: 1
+x-nextjs-stale-time: 300
+X-Powered-By: Next.js
+Cache-Control: s-maxage=31536000
+ETag: "16qpllfm84imn"
+Content-Type: text/html; charset=utf-8
+Content-Length: 25113
+Date: Wed, 28 Oct 2026 12:09:41 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+

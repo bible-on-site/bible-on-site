@@ -618,23 +618,25 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
-    public async Task YearView_NavigateBeyondListedYears_AddsYearOption()
+    public async Task YearView_NavigationStopsAtTheLastVisibleYear()
     {
-        // #2455: option lists rebuild only when their inputs change; a year
-        // outside the confirmed-cycle range is appended to the picker.
+        // The last year belongs to the next cycle. Navigation must never add
+        // another cycle's years to the picker.
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
         var vm = fixture.ViewModel;
         await vm.InitializeAsync();
         vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
         var maxListed = vm.YearOptions.Max(o => o.Value);
 
-        while (vm.SelectedYear?.Value <= maxListed)
+        while (vm.NextMonthCommand.CanExecute(null))
         {
             vm.NextMonthCommand.Execute(null);
         }
 
         vm.SelectedYear.Should().NotBeNull();
-        vm.SelectedYear!.Value.Should().BeGreaterThan(maxListed);
+        vm.SelectedYear!.Value.Should().Be(maxListed);
+        vm.NextMonthCommand.Execute(null);
+        vm.SelectedYear!.Value.Should().Be(maxListed);
         vm.YearOptions.Select(o => o.Value).Should().Contain(vm.SelectedYear.Value);
         vm.MonthGroups.Should().NotBeEmpty();
     }
@@ -715,6 +717,124 @@ public class LearningCalendarViewModelTests
 
     private static readonly Uri PublishedAsset =
         new("https://assets.example/generated/calendar-pdf/objects/deadbeef.pdf");
+
+    [Theory]
+    [InlineData(57880708, false)]
+    [InlineData(57880709, true)]
+    [InlineData(57880710, true)]
+    public async Task CalendarPolicy_NextCycleOpensAtTheHebrewAnniversary(int today, bool expected)
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        await fixture.Schedule.LoadAsync();
+        var policy = new LearningCalendarPolicy(fixture.Schedule, today);
+        policy.Current!.Number.Should().Be(4);
+        policy.Next.Number.Should().Be(5);
+        policy.CanExport("cycle", 0, 0, 5).Should().Be(expected);
+        foreach (var year in new[] { 5790, 5791, 5792 })
+        {
+            policy.CanExport("year", year, 1, 0).Should().Be(expected);
+        }
+        policy.CanExport("year", 5789, 1, 0).Should().Be(expected);
+        policy.CanExport("year", 5793, 1, 0).Should().BeFalse();
+        policy.CanExport("cycle", 0, 0, 4).Should().BeTrue();
+        policy.CanExport("cycle", 0, 0, 3).Should().BeFalse();
+        policy.CanExport("cycle", 0, 0, 6).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(57841330, 57830629)]
+    [InlineData(57841405, 57830605)]
+    [InlineData(57850605, 57841405)]
+    public void CalendarPolicy_AnniversaryPreservesHebrewMonthNames(int start, int expected)
+    {
+        var cycle = new PerekScheduleService.StudyCycle(1, start, start, true);
+        LearningCalendarPolicy.ExportOpens(cycle).Should().Be(HebrewDateHelper.ToGregorianDate(expected));
+    }
+
+    [Fact]
+    public async Task CalendarPolicy_ClampsMonthsAndHidesDaysAfterNextCycle()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        await fixture.Schedule.LoadAsync();
+        var policy = new LearningCalendarPolicy(fixture.Schedule, 57870217);
+        policy.ClampMonth(5774, 1).Should().Be(policy.MinMonth);
+        policy.ClampMonth(5900, 1).Should().Be(policy.MaxMonth);
+        policy.ClampMonth(5775, 1).Should().Be(policy.MinMonth);
+        policy.ClampMonth(5793, 12).Should().Be(policy.MaxMonth);
+        policy.ClampMonth(5787, 2).Should().Be((5787, 2));
+        policy.Months(5775).Should().StartWith(1);
+        policy.Months(5793).Should().Equal(1, 2);
+        policy.CanExport("month", 5787, 2, 0).Should().BeTrue();
+        policy.CanExport("year", 5787, 1, 0).Should().BeTrue();
+        foreach (var year in new[] { 5774, 5784, 5785, 5789, 5790, 5793, 5900 })
+        {
+            policy.CanExport("year", year, 1, 0).Should().BeFalse();
+        }
+        policy.CanExport("month", 5785, 13, 0).Should().BeFalse();
+        policy.CanExport("month", 5789, 8, 0).Should().BeFalse();
+        policy.CanExport("month", 5785, 12, 0).Should().BeFalse();
+        var beyond = policy.BuildMonth(5793, 2).Select(c => c.Day)
+            .Where(d => d is not null && HebrewDateHelper.ToGregorianDate(d.DateNumber) > HebrewDateHelper.ToGregorianDate(policy.Next.EndDate));
+        beyond.Should().NotBeEmpty();
+        beyond.Should().OnlyContain(d => d!.PerekId == null && d.Cycle == null && d.Status == PerekScheduleService.DayStatus.None);
+    }
+
+    [Fact]
+    public async Task CalendarPolicy_HandlesBeforeProgrammeAndInterCycleGaps()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        await fixture.Schedule.LoadAsync();
+        var first = fixture.Schedule.GetCycle(1);
+        var early = new LearningCalendarPolicy(fixture.Schedule, HebrewDateHelper.AddDays(first.StartDate, -800));
+        early.Current.Should().BeNull();
+        early.Next.Number.Should().Be(1);
+        early.CanExport("year", 5775, 1, 0).Should().BeFalse();
+        new LearningCalendarPolicy(fixture.Schedule, first.StartDate).CanExport("year", 5775, 1, 0).Should().BeTrue();
+        for (var offset = 1; offset <= 3; offset++)
+        {
+            var policy = new LearningCalendarPolicy(fixture.Schedule, HebrewDateHelper.AddDays(fixture.Schedule.GetCycle(4).EndDate, offset));
+            policy.Current.Should().BeNull();
+            policy.Next.Number.Should().Be(5);
+            policy.CanExport("cycle", 0, 0, 5).Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task NavigationAndPdfCommands_RespectTheLiveCycleWindow()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var assets = new StubPdfAssets(_ => Task.FromResult<Uri?>(PublishedAsset));
+        var launcher = LauncherCapturing(out var opened);
+        var vm = new LearningCalendarViewModel(fixture.Schedule, fixture.PerekData, fixture.Navigator.Object,
+            assets, launcher.Object, () => 57870217);
+        await vm.InitializeAsync();
+        vm.CycleOptions.Select(o => o.Value).Should().Equal(1, 2, 3, 4, 5);
+        vm.YearOptions.Last().Value.Should().Be(5793);
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.SelectedCycle = Option(vm.CycleOptions, 5);
+        vm.NextMonthCommand.CanExecute(null).Should().BeFalse();
+        vm.NextMonthCommand.Execute(null);
+        vm.SelectedCycle!.Value.Should().Be(5);
+        vm.DownloadPdfCommand.CanExecute(null).Should().BeFalse();
+        vm.PdfAvailabilityText.Should().Be(LearningCalendarPolicy.PdfUnavailable);
+        await vm.DownloadPdfCommand.ExecuteAsync(null);
+        assets.Keys.Should().BeEmpty();
+        opened().Should().BeNull();
+        vm.SelectedCycle = Option(vm.CycleOptions, 3);
+        vm.DownloadPdfCommand.CanExecute(null).Should().BeFalse();
+        vm.TodayCommand.Execute(null);
+        vm.SelectedCycle!.Value.Should().Be(4);
+        vm.DownloadPdfCommand.CanExecute(null).Should().BeTrue();
+        vm.PdfAvailabilityText.Should().BeEmpty();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Month);
+        vm.SelectedYear = Option(vm.YearOptions, 5793);
+        vm.SelectedMonth!.Value.Should().Be(2);
+        vm.MonthOptions.Select(o => o.Value).Should().Equal(1, 2);
+        vm.NextMonthCommand.CanExecute(null).Should().BeFalse();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        vm.MonthGroups.Should().HaveCount(2);
+        vm.NextMonthCommand.CanExecute(null).Should().BeFalse();
+    }
 
     private static Mock<ILauncher> LauncherCapturing(out Func<Uri?> opened)
     {
