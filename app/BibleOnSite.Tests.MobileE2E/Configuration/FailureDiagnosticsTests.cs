@@ -183,7 +183,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
         public override void WriteLine(string? value)
         {
             FailedWrites++;
-            throw new IOException("console error unavailable");
+            throw new IOException($"console error unavailable: {value}");
         }
     }
     private sealed class ListOutput(List<string> lines, Action<string>? beforeWrite = null) : ITestOutputHelper
