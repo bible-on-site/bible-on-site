@@ -11,7 +11,7 @@
 // the kill, and finally confirms the snapshot payload reached the AVD
 // directory before any cache save is allowed to capture it.
 import { execFile } from "node:child_process";
-import { appendFileSync, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -54,7 +54,7 @@ export function missingAvdEntries(
 	return missing;
 }
 
-export function emulatorProcesses(processList, avdName, udid) {
+export function emulatorProcesses(processList, avdName, udid, knownPids = new Set()) {
 	return processList
 		.split("\n")
 		.map((line) => line.trim())
@@ -63,7 +63,7 @@ export function emulatorProcesses(processList, avdName, udid) {
 			const match = /^(\d+)\s+(\S+)(?:\s+(.*))?$/.exec(line);
 			if (!match) throw new Error(`Unreadable process record: ${line}`);
 			const executable = basename(match[2]);
-			if (executable !== "emulator" && !executable.startsWith("qemu-system-")) return false;
+			if (executable !== "emulator" && !executable.startsWith("qemu-system-") && !knownPids.has(match[1])) return false;
 			if (!avdName) return true;
 			const args = (match[3] ?? "").split(/\s+/);
 			const sameAvd = args.includes(`@${avdName}`) ||
@@ -74,6 +74,98 @@ export function emulatorProcesses(processList, avdName, udid) {
 				args.includes("-ports") ? args[args.indexOf("-ports") + 1]?.split(",")[0] : "5554";
 			return `emulator-${port}` === udid;
 		});
+}
+
+
+function processPid(line) {
+	return line.split(/\s+/)[0];
+}
+
+/** Linux identity survives argv teardown; start time fences PID reuse. */
+export function linuxProcessIdentity(pid, { read = readFileSync, stat = statSync } = {}) {
+	if (!/^[1-9]\d*$/.test(pid) || !Number.isSafeInteger(Number(pid)) || Number(pid) <= 1)
+		throw new Error("Invalid emulator process identity.");
+	const state = () => {
+		const text = read("/proc/" + pid + "/stat", "utf8");
+		const end = text.lastIndexOf(")");
+		const fields = text.slice(end + 2).trim().split(/\s+/);
+		if (!text.startsWith(pid + " (") || end < 0 ||
+			!/^[A-Za-z]$/.test(fields[0] ?? "") || !/^\d+$/.test(fields[19] ?? ""))
+			throw new Error("Unreadable emulator process identity.");
+		return { pid, state: fields[0], startTime: fields[19] };
+	};
+	const absent = (error) => {
+		if (error.code !== "ENOENT") throw error;
+		// Missing /proc itself is an inspection failure, not proof of exit.
+		read("/proc/self/stat", "utf8");
+		return { pid, exited: true };
+	};
+	let before;
+	try { before = state(); } catch (error) { return absent(error); }
+	if (["Z", "X", "x"].includes(before.state)) return { ...before, exited: true };
+	let executable;
+	try { executable = stat("/proc/" + pid + "/exe", { bigint: true }); }
+	catch (error) {
+		if (error.code !== "ENOENT") throw error;
+		let after;
+		try { after = state(); } catch (missing) { return absent(missing); }
+		if (["Z", "X", "x"].includes(after.state)) return { ...after, exited: true };
+		throw new Error("Cannot inspect the live emulator executable.", { cause: error });
+	}
+	let command;
+	try { command = read("/proc/" + pid + "/cmdline", "utf8").split("\0").filter(Boolean).join(" "); }
+	catch (error) { return absent(error); }
+	let after;
+	try { after = state(); } catch (error) { return absent(error); }
+	if (before.startTime !== after.startTime) throw new Error("Emulator PID changed during inspection.");
+	if (["Z", "X", "x"].includes(after.state)) return { ...after, exited: true };
+	return { ...after, device: executable.dev.toString(), inode: executable.ino.toString(), command };
+}
+
+export async function captureEmulatorOwners({
+	avdName, udid, execute = promisify(execFile), inspectProcess = linuxProcessIdentity,
+}) {
+	if (!/^[A-Za-z0-9_-]+$/.test(avdName) || !/^emulator-\d+$/.test(udid))
+		throw new Error("Require an explicit AVD and emulator serial.");
+	const running = await runningEmulators(execute);
+	const owned = emulatorProcesses(running.join("\n"), avdName, udid);
+	if (!owned.length || owned.length !== running.length)
+		throw new Error("Cannot record unverified emulator ownership.");
+	const owners = owned.map((line) => {
+		const identity = inspectProcess(processPid(line));
+		if (identity.exited) throw new Error("Emulator exited before owner handoff.");
+		const command = identity.pid + " " + identity.command;
+		if (emulatorProcesses(command, avdName, udid).length !== 1)
+			throw new Error("Cannot record current emulator ownership.");
+		return { ...identity, command };
+	});
+	return { schema: 1, avdName, udid, capturedAt: new Date().toISOString(), owners };
+}
+
+export function readEmulatorOwners(path, avdName, udid) {
+	let receipt;
+	try { receipt = JSON.parse(readFileSync(path, "utf8")); }
+	catch (error) { if (error.code === "ENOENT") return []; throw error; }
+	if (!receipt || receipt.schema !== 1 || receipt.avdName !== avdName || receipt.udid !== udid ||
+		!Array.isArray(receipt.owners) || !receipt.owners.length ||
+		receipt.owners.some((owner) => !owner || typeof owner.pid !== "string" ||
+			!/^[1-9]\d*$/.test(owner.pid) || !Number.isSafeInteger(Number(owner.pid)) ||
+			Number(owner.pid) <= 1 || ["startTime", "device", "inode"].some((key) =>
+				typeof owner[key] !== "string" || !/^\d+$/.test(owner[key]))) ||
+		new Set(receipt.owners.map((owner) => owner.pid)).size !== receipt.owners.length)
+		throw new Error("Invalid or mismatched emulator owner receipt.");
+	return receipt.owners;
+}
+
+function receiptTargetMatches(line, avdName, udid) {
+	const args = line.split(/\s+/).slice(2);
+	const avds = args.filter((arg) => arg.startsWith("@"));
+	if (avds.some((arg) => arg !== "@" + avdName)) return false;
+	const avdFlags = args.flatMap((arg, index) => arg === "-avd" ? [index] : []);
+	if (avdFlags.length > 1 || avdFlags.some((index) => args[index + 1] !== avdName)) return false;
+	const ports = args.flatMap((arg, index) => ["-port", "-ports"].includes(arg) ? [index] : []);
+	return ports.length <= 1 && ports.every((index) =>
+		"emulator-" + args[index + 1]?.split(",")[0] === udid);
 }
 
 function avdPaths(avdHome, avdName) {
@@ -101,10 +193,10 @@ function avdPaths(avdHome, avdName) {
 	return { home, avdDir, ini };
 }
 
-async function runningEmulators(execute) {
+async function runningEmulators(execute, knownPids = []) {
 	const { stdout } = await execute("ps", ["-ww", "-eo", "pid=,args="], { timeout: 10000 });
 	if (!stdout.trim()) throw new Error("Empty process table; emulator ownership is unknown.");
-	return emulatorProcesses(stdout);
+	return emulatorProcesses(stdout, undefined, undefined, new Set(knownPids));
 }
 
 async function devicePresent(execute, adb, udid) {
@@ -170,6 +262,8 @@ export async function confirmSaved({
 	now = Date.now,
 	list = readdirSync,
 	observe = () => {},
+	owners = [],
+	inspectProcess = linuxProcessIdentity,
 }) {
 	const paths = avdPaths(avdHome, avdName);
 	if (!/^emulator-\d+$/.test(udid)) throw new Error("Require an explicit emulator serial.");
@@ -179,7 +273,7 @@ export async function confirmSaved({
 	while (now() - started < timeout) {
 		let running;
 		try {
-			running = await runningEmulators(execute);
+			running = await runningEmulators(execute, owners.map((owner) => owner.pid));
 		} catch (error) {
 			observe({ note: "Cannot confirm emulator ownership", error: String(error) });
 			throw new Error("Cannot prove the emulator stopped; refusing the next launch.", { cause: error });
@@ -203,9 +297,30 @@ export async function confirmSaved({
 			return saved;
 		}
 		const owned = emulatorProcesses(running.join("\n"), avdName, udid);
+		let exiting = false;
+		for (const line of running) {
+			const owner = owners.find((item) => item.pid === processPid(line));
+			if (!owner) continue;
+			observe({ process: line, recordedOwner: owner });
+			const identity = inspectProcess(owner.pid);
+			observe({ owner: identity, process: line });
+			if (identity.startTime !== undefined && identity.startTime !== owner.startTime)
+				throw new Error("Emulator PID was reused; refusing termination and the next launch.");
+			if (identity.exited) { exiting = true; if (!owned.includes(line)) owned.push(line); continue; }
+			if (identity.device !== owner.device || identity.inode !== owner.inode ||
+				!receiptTargetMatches(line, avdName, udid) ||
+				!receiptTargetMatches(identity.pid + " " + identity.command, avdName, udid))
+				throw new Error("Emulator owner identity changed; refusing termination and the next launch.");
+			if (!owned.includes(line)) owned.push(line);
+		}
 		if (owned.length !== running.length) {
-			observe({ note: "Another emulator has active or unknown AVD ownership", saved: false });
+			observe({ note: "Another emulator has active or unknown AVD ownership", processes: running, saved: false });
 			throw new Error("Emulator AVD/port ownership is unknown; refusing termination and the next launch.");
+		}
+		if (exiting) {
+			// A stale PS row is not absence: require the next PS + ADB proof.
+			await sleep(POLL_INTERVAL_MS);
+			continue;
 		}
 		observe({ running: running.length, elapsedMs: now() - started });
 		const elapsed = now() - started;
@@ -267,13 +382,25 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 		output("usable", String(usable));
 	} else if (command === "confirm-saved") {
 		if (!udid) throw new Error("Set MOBILE_UDID to the emulator identifier.");
+		const artifacts = env.MOBILE_E2E_ARTIFACTS ?? resolve(dirname(fileURLToPath(import.meta.url)), "../.artifacts/mobile-e2e/android");
+		mkdirSync(artifacts, { recursive: true });
+		const evidence = join(artifacts, "snapshot-ownership.jsonl");
+		writeFileSync(evidence, "");
+		const owners = process.platform === "linux" ? readEmulatorOwners(join(artifacts, "avd-owners.json"), avdName, udid) : [];
 		const saved = await confirmSaved({
+			owners,
 			adb,
 			udid,
 			avdHome,
 			avdName,
-			observe: (observation) =>
-				console.log(JSON.stringify(observation)),
+			observe: (observation) => {
+				appendFileSync(evidence, JSON.stringify(observation) + "\n");
+				const summary = { ...observation };
+				delete summary.processes;
+				delete summary.process;
+				delete summary.recordedOwner;
+				console.log(JSON.stringify(summary));
+			},
 		});
 		if (!saved) {
 			console.log(

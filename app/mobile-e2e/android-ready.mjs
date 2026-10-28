@@ -4,10 +4,11 @@
 // action's teardown saves on exit too, but confirming the explicit save here
 // keeps a slow shutdown from racing the cache step.
 import { execFile } from "node:child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { captureEmulatorOwners } from "./android-snapshot-check.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 
 const execute = promisify(execFile);
@@ -30,6 +31,13 @@ await waitForAndroidDevice({
 	observe: (observation) =>
 		appendFileSync(readinessLog, `${JSON.stringify(observation)}\n`),
 });
+if (process.platform === "linux") {
+	const receipt = await captureEmulatorOwners({ avdName: process.env.AVD_NAME ?? "mobile_e2e", udid, execute });
+	const destination = resolve(artifacts, "avd-owners.json");
+	const temporary = destination + "." + process.pid + ".tmp";
+	writeFileSync(temporary, JSON.stringify(receipt), { flag: "wx", mode: 0o600 });
+	renameSync(temporary, destination);
+}
 try {
 	const result = await execute(
 		adb,
