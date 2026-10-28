@@ -299,8 +299,8 @@ jobs:
     outputs:
       website_module_changed: ${{ steps.determine.outputs.website_module_changed }}
       website_ci_changed: ${{ steps.determine.outputs.website_ci_changed }}
-      api_module_changed: ${{ steps.determine.outputs.api_module_changed }}
-      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed }}
+      api_module_changed: ${{ steps.determine.outputs.api_module_changed == 'true' || steps.pending-api.outputs.api_release_pending == 'true' }}
+      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed == 'true' || steps.pending-api.outputs.api_release_pending == 'true' }}
       app_module_changed: ${{ steps.determine.outputs.app_module_changed }}
       app_ci_changed: ${{ steps.determine.outputs.app_ci_changed }}
       admin_module_changed: ${{ steps.determine.outputs.admin_module_changed }}
@@ -324,6 +324,16 @@ jobs:
       - name: Determine module changes
         id: determine
         run: node devops/github/ci/determine-changes.ts
+      - name: Verify pending API release reconciliation
+        run: node --test devops/github/ci/pending-api-release.test.mjs
+      - name: Reconcile previously blocked API release
+        id: pending-api
+        # Ordinary API changes keep their existing release/version-bump path.
+        # Recovery only selects real API code left unpublished by an older run.
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.determine.outputs.api_module_changed != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/ci/pending-api-release.mjs
 
   # Fixed ~30-second verification of the pre-generated calendar-PDF artifact
   # cache (#2608). Full (re)generation and S3 publication live in

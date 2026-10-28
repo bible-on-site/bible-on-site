@@ -91,6 +91,8 @@ export const MODULES = {
 		directory: "web/api",
 		ciPaths: [
 			...NATIVE_IMAGE_CI_PATHS,
+			"devops/github/ci/pending-api-release.mjs",
+			"devops/github/ci/pending-api-release.test.mjs",
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,

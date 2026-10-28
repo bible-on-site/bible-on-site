@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
+import { compareVersions, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
 
 test("loads the locked iOS simulator driver with its ESM-only export before booting a device", async () => {
   const driver = await loadIosSimulatorDriver();
@@ -46,4 +46,13 @@ test("keeps the selected device's runtime identifier", () => {
     "com.apple.CoreSimulator.SimRuntime.iOS-26-5": [{ name: "iPhone 17 Pro", udid: "device", isAvailable: true }],
   }, "26.5");
   assert.equal(selected.runtime, "com.apple.CoreSimulator.SimRuntime.iOS-26-5");
+});
+
+
+test("compares numeric runtime versions with omitted zero components", () => {
+  assert.equal(compareVersions("27.0", "27"), 0);
+  assert.equal(compareVersions("27.0.0", "27.0"), 0);
+  assert.ok(compareVersions("26.10", "26.9") > 0);
+  assert.ok(compareVersions("26.5.1", "27.0") < 0);
+  assert.ok(compareVersions("27.0.1", "27.0") > 0);
 });

@@ -468,6 +468,18 @@ describe("detectChanges", () => {
 		);
 	});
 
+	test("pending API release tooling selects API checks without unrelated delivery", () => {
+		for (const file of [
+			"devops/github/ci/pending-api-release.mjs",
+			"devops/github/ci/pending-api-release.test.mjs",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(flags, { module_changed: false, ci_changed: key === "api" }, `${file} -> ${key}`);
+			}
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+	});
 	test("module directories match path segments, not prefixes", () => {
 		const changes = detectChanges(["web/api-docs/readme.md", "appendix.md"]);
 		assert.equal(changes.api.module_changed, false);
