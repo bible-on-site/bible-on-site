@@ -11,7 +11,9 @@ public enum BackExitAction
 
 	/// <summary>
 	/// Defer to the native layer. An open flyout is closed by the drawer
-	/// layout's own back callback, so the press must keep propagating.
+	/// layout's own back callback, and a native gesture probe (the iOS
+	/// interactive-pop consultation) owns its pop outcome — the press must
+	/// keep propagating.
 	/// </summary>
 	DeferToNative,
 
@@ -45,14 +47,25 @@ public static class BackExitPlan
 	/// pop once allowed — so an unhandled press only means "would leave the
 	/// app" when no pushed page remains.
 	/// </param>
+	/// <param name="rootBackMayExit">
+	/// Whether an unhandled Back press at the navigation root can leave the
+	/// app (Android's system Back). iOS/MacCatalyst have no root Back source —
+	/// the only consult reaching the hook there is UIKit's interactive-pop
+	/// recognizer, which can stay enabled a beat after the stack already
+	/// settled to the root. Treating that stale probe as an exit intent covers
+	/// the page under the exit-confirmation dialog and cancels a harmless
+	/// gesture, so it defers instead (#2701).
+	/// </param>
 	public static BackExitAction Evaluate(bool navigationInFlight, Func<bool> shellBack, bool flyoutPresented,
-		bool hasInAppHistory)
+		bool hasInAppHistory, bool rootBackMayExit)
 	{
 		if (navigationInFlight || shellBack())
 		{
 			return BackExitAction.Consume;
 		}
 
-		return hasInAppHistory || flyoutPresented ? BackExitAction.DeferToNative : BackExitAction.ConfirmExit;
+		return hasInAppHistory || flyoutPresented || !rootBackMayExit
+			? BackExitAction.DeferToNative
+			: BackExitAction.ConfirmExit;
 	}
 }
