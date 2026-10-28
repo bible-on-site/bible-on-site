@@ -36,6 +36,7 @@ import {
 	perekArticlesTag,
 	perekDedicationsTag,
 	seferDedicationsTag,
+	seferPerekDedicationsTag,
 } from "@/lib/revalidate/tags";
 
 /**
@@ -618,6 +619,7 @@ async function resolveDedication(
 	// Every route of an intersected sefer renders its whole spread map.
 	// Expand each book once, including when the ranges overlap or repeat.
 	for (const seferId of affectedSefarim) {
+		addTag(sink, seferPerekDedicationsTag(seferId));
 		for (const mateId of seferPerekIds(seferId)) {
 			addPath(sink, `/929/${mateId}`);
 		}

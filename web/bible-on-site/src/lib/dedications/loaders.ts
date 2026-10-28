@@ -17,6 +17,7 @@ import {
 	parashaDedicationsTag,
 	perekDedicationsTag,
 	seferDedicationsTag,
+	seferPerekDedicationsTag,
 } from "@/lib/revalidate/tags";
 import {
 	HELEK_NAME_BY_ID,
@@ -90,15 +91,15 @@ export const getSeferDedications = cachedPerKey(
  * whole perek range replaces a per-perek fan-out; each dedication's line
  * attaches to exactly the perakim its matched PEREK scopes cover (the
  * resolver already returns only scopes applicable to the requested range),
- * so perek-range changes expire the entry through the same
- * `perek:{id}:dedications` tags the flat heading consumes.
+ * so perek-range changes expire the entry through one aggregate sefer tag.
+ * This keeps even תהילים (150 perakim) below Next's 128-tag limit.
  */
 export const getSeferPerekDedicationLines = cachedPerKey(
 	"sefer-perek-dedication-lines",
 	(seferId: number) => String(seferId),
 	(key) => [
 		COLLECTION_TAGS.dedications,
-		...seferPerekIds(Number(key)).map(perekDedicationsTag),
+		seferPerekDedicationsTag(Number(key)),
 	],
 	async (seferId: number): Promise<Record<number, string[]>> => {
 		const perekIds = seferPerekIds(seferId);
