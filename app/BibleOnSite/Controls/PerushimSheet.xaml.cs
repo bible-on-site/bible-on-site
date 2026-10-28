@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -13,7 +14,7 @@ namespace BibleOnSite.Controls;
 /// ambient BindingContext (Perushim, CheckedPerushim, PerushimSelectionStatus…).
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
-public partial class PerushimSheet : Border
+public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
 #pragma warning restore S2333
 {
     private bool _isExpanded;
