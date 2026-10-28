@@ -5,6 +5,14 @@ public interface IAppNavigator
 {
     Task GoToAsync(string route);
     Task GoToAsync(string route, bool animate, IDictionary<string, object>? parameters);
+
+    /// <summary>
+    /// Dependent/programmatic navigation (app links): queues behind a
+    /// transition still in flight instead of being deduplicated like a
+    /// second user tap, so the request cannot vanish mid-sequence.
+    /// </summary>
+    Task GoToQueuedAsync(string route);
+
     Task DisplayAlertAsync(string title, string message, string cancel);
 
     /// <summary>
@@ -43,6 +51,9 @@ public sealed class ShellAppNavigator : IAppNavigator
 
     public Task GoToAsync(string route, bool animate, IDictionary<string, object>? parameters) =>
         Gate.RunAsync(() => NavigateAndSettleAsync(route, animate, parameters));
+
+    public Task GoToQueuedAsync(string route) =>
+        Gate.RunQueuedAsync(() => NavigateAndSettleAsync(route));
 
     private static Task NavigateAndSettleAsync(string route) =>
         NavigateAndSettleAsync(route, true, null);

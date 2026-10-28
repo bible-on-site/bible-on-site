@@ -1,4 +1,5 @@
 #if WINDOWS
+using BibleOnSite.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
@@ -90,7 +91,9 @@ public partial class ParashaPage
         args.Handled = true;
         try
         {
-            await Shell.Current.GoToAsync("..", false);
+            // Through the shared navigator so Alt+Left cannot overlap a
+            // transition the gate still owns (deduped like any second tap).
+            await ShellAppNavigator.Instance.GoToAsync("..", false, null);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: reader Back navigation failure is log-only
         catch (Exception exception) //NOSONAR — reader Back navigation failure is log-only.
