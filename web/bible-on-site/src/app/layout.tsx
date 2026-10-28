@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
+import { SITE_A11Y_BOOTSTRAP } from "@/lib/site-a11y-settings";
 import {
 	buildGraph,
 	organizationNode,
@@ -51,6 +52,9 @@ export default function RootLayout({
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>
+				{/* Site-wide accessibility preferences (contrast/links) — same
+				    pre-paint contract for the root data attributes (#2767). */}
+				<script>{SITE_A11Y_BOOTSTRAP}</script>
 				<AhrefsAnalytics />
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />

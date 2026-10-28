@@ -37,7 +37,7 @@
 }
 
 .source a {
-	color: #1a73e8;
+	color: var(--link-accent, #1a73e8);
 	text-decoration: none;
 }
 
@@ -46,7 +46,7 @@
 }
 
 .citation {
-	color: #6b7280;
+	color: var(--muted-text, #6b7280);
 }
 
 .occurrence {
@@ -81,7 +81,7 @@
 	}
 
 	.citation {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.occurrence {

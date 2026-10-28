@@ -18,7 +18,7 @@
 .breadcrumb li:not(:last-child)::after {
   content: ">";
   margin: 0 8px;
-  color: #999;
+  color: var(--muted-text, #999);
   font-weight: normal;
 }
 
@@ -31,8 +31,10 @@
   text-decoration: underline;
 }
 
+/* #9a92d1 measured 2.84:1 on white — below AA even for large text; the
+   deeper indigo keeps the accent identity at a passing ratio (#2767). */
 .breadcrumb li.active {
-  color: #9a92d1;
+  color: var(--hc-accent, #6f63b8);
   font-weight: 600;
 }
 
@@ -58,7 +60,7 @@
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
 }
 
@@ -112,7 +114,7 @@
   align-items: center;
   justify-content: center;
   font-size: 32px;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
 }
 
 .authorInfo {
@@ -130,7 +132,7 @@
 
 .authorDetails {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
   line-height: 1.5;
   display: -webkit-box;
@@ -143,7 +145,7 @@
 .emptyState {
   text-align: center;
   padding: 64px 24px;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   font-size: 1rem;
 }
 
@@ -169,7 +171,7 @@
   }
 
   .breadcrumb li:not(:last-child)::after {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .breadcrumb li a,
@@ -184,7 +186,7 @@
 
   .pageSubtitle,
   .authorDetails {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .authorCard {
@@ -202,6 +204,6 @@
   }
 
   .authorPlaceholder {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 }

@@ -5,7 +5,7 @@
   padding-top: calc(1vw + 5em); /* Extra padding to account for overlap */
   margin-top: -2em; /* Overlap with contact section divider */
   text-align: center;
-  color: #8b97ad;
+  color: var(--hc-on-inverse, #8b97ad);
 }
 
 .footerNav {
@@ -29,7 +29,7 @@
 }
 
 .separator {
-  color: #8b97ad;
+  color: var(--hc-on-inverse, #8b97ad);
   font-size: 0.9rem;
 }
 
@@ -42,7 +42,7 @@
 
 .copyright {
   font-size: 0.8rem;
-  color: #8b97ad;
+  color: var(--hc-on-inverse, #8b97ad);
   direction: rtl;
 }
 
