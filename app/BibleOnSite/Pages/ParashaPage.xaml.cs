@@ -83,7 +83,13 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
         InitializeSearchHeader();
-        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
+        // The capsule Back owns return affordances now (#2467, same contract
+        // as the perek reader): it stays enabled while a transient surface
+        // would consume Back. The hamburger is never repurposed into a close
+        // control.
+        NormalNavigationBar.BackStateProvider = OwnsReaderReturnSurface;
+        ReaderMenuOverlay.PropertyChanged += OnReaderSurfaceVisibilityChanged;
+        ExitFullScreenButton.PropertyChanged += OnReaderSurfaceVisibilityChanged;
 #if ANDROID || IOS
         if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
         {
@@ -772,21 +778,30 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     #region Navigation & Picker
 
-    /// <summary>
-    /// On iOS/Mac the focused-pasuk overlay has no system Back affordance, so
-    /// the shared top bar's navigation slot doubles as its close control — the
-    /// interceptor consumes the tap as "close" instead of opening the flyout
-    /// (#2467, same contract as the perek reader).
-    /// </summary>
-    private bool OnFocusedPasukNavigationIntercepted()
+    private void OnReaderSurfaceVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
+        if (e.PropertyName == nameof(IsVisible))
         {
-            return false;
+            NormalNavigationBar.RefreshBackState();
+#if ANDROID
+            UpdateReaderBack();
+#endif
         }
-        ClearAllSelections();
-        return true;
     }
+
+    /// <summary>
+    /// Whether a transient reader surface would consume Back — mirrors
+    /// <see cref="TryHandleReaderBack"/>'s ordering without acting on it, so
+    /// the capsule's enabled state reflects the same surfaces the shared
+    /// back pipeline serves (#2467).
+    /// </summary>
+    private bool OwnsReaderReturnSurface() =>
+        ExitFullScreenButton.IsVisible
+        || ReaderMenuOverlay.IsOpen
+        || ChapterSearch.IsSearchOpen
+        || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, _focusedPasuk != null,
+            _recitationCursor.PlayingKey != null);
 
     private void OnUnitPickerClicked(object? sender, EventArgs e)
     {

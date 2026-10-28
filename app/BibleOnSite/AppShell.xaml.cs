@@ -96,6 +96,12 @@ public partial class AppShell : Shell
 		var reader = new PerekPage();
 		ReaderContent.ContentTemplate = null;
 		ReaderContent.Content = reader;
+
+		// The content swap never passes through OnNavigated, so the startup
+		// reader would otherwise keep the capsule's platform default until the
+		// first navigation — the persisted Back preference must hold from the
+		// first frame (#2467). Loaded waits for the swapped visual tree.
+		reader.Loaded += (_, _) => BackChrome.Apply(reader);
 	}
 
 #if IOS || MACCATALYST
