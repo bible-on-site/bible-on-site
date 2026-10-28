@@ -125,7 +125,9 @@ const nextConfig = {
 		// Dependency-graph CSS chunking: routes download close to only the CSS
 		// they import instead of one large shared chunk (~94% unused CSS on
 		// perek pages before; #2735). Turbopack-only; webpack ignores it.
-		cssChunking: "graph",
+		// Next.js supports graph chunking only under Turbopack; keep the
+		// documented dev-webpack command usable too.
+		cssChunking: process.env.TURBOPACK ? "graph" : true,
 		esmExternals: true,
 		externalDir: true,
 		turbopackFileSystemCacheForDev: true,
