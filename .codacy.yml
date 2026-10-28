@@ -81,3 +81,11 @@ exclude_paths:
   # taint pattern is a systemic false positive for a URL-diffing tool — the
   # repo's own codacy-gate/precommit still lint this file.
   - "devops/edge-compat-check.mjs"
+  # Coverage-universe builder: its whole job is walking the website's src/
+  # tree and reading each file to build the canonical instrument map, so
+  # non-literal-fs-filename is the same systemic false positive as the
+  # local-dev helpers above — and PMD's ECMA parser predates the file's
+  # object-spread/??/default-param syntax, so its "Unnecessary block"
+  # findings are parse artifacts, not lone blocks. Still linted by the
+  # repo's own biome/precommit.
+  - "web/bible-on-site/tests/util/coverage/coverage-universe.js"

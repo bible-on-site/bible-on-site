@@ -1291,9 +1291,13 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Build lcov Docker image
-        uses: ./.github/actions/lcov-image
-
+      # The published website report merges both test layers as a plain
+      # union of --require inputs. Both enumerate the same canonical
+      # universe: sanitizeCoverage projects every collected record onto the
+      # coordinates jest's transform emits for the file and drops records
+      # that name no real instrumentable src file, so dev-server generated
+      # modules and compile-variant coordinates can never reach the merge
+      # (#2670).
       - name: Merge Test Coverage (Unit + E2E)
         run: bun run coverage:merge
 
