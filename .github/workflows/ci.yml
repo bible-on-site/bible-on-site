@@ -1476,7 +1476,9 @@ jobs:
 
       - name: Unit Test with Coverage
         id: bun-unit-test
-        run: bun run coverage:unit
+        run: >-
+          bun run coverage:unit --reporter=default --reporter=github-actions
+          --reporter=junit --outputFile.junit=.junit-report/unit-results.xml
 
       - name: Build
         id: bun-build
