@@ -112,8 +112,10 @@ public class WindowPlacementPlanTests
     [InlineData("1,2,3,4")]
     [InlineData("1,2,3,4|2")]
     [InlineData("a,b,c,d|0")]
+    [InlineData("1,2,3|0")]
     [InlineData("1,2,0,4|0")]
     [InlineData("1,2,-4,4|0")]
+    [InlineData("1,2,4,0|0")]
     [InlineData("1,2,4,4|0|extra")]
     [InlineData("1,2,NaN,4|0")]
     public void TryParse_Malformed_ReturnsFalse(string? value)

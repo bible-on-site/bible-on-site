@@ -15,6 +15,10 @@ public class FlyoutMenuRowTests
     {
         var row = new FlyoutMenuRow { Icon = "\uE000", Title = "כותרת", Subtitle = "כותרת משנה" };
 
+        row.Icon.Should().Be("\uE000");
+        row.Title.Should().Be("כותרת");
+        row.Subtitle.Should().Be("כותרת משנה");
+
         var grid = row.Content.Should().BeOfType<Grid>().Subject;
         grid.ColumnDefinitions.Should().HaveCount(3);
         var icon = grid.Children.OfType<Label>().First();
@@ -77,5 +81,17 @@ public class FlyoutMenuRowTests
         subtitle.IsVisible.Should().BeFalse();
         row.Subtitle = "כותרת משנה";
         subtitle.IsVisible.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ClearedSubtitle_HidesTheSubtitleLabelAgain()
+    {
+        var row = new FlyoutMenuRow { Title = "כותרת", Subtitle = "כותרת משנה" };
+        var textColumn = ((Grid)row.Content!).Children.OfType<VerticalStackLayout>().Single();
+        var subtitle = textColumn.Children.OfType<Label>().ElementAt(1);
+
+        row.Subtitle = "";
+
+        subtitle.IsVisible.Should().BeFalse();
     }
 }
