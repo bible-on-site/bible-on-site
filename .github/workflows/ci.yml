@@ -2369,6 +2369,10 @@ jobs:
           .venv/bin/python -m unittest -v
           .venv/bin/python publish.py
           .venv/bin/python audit.py
+      - name: Score the mention-annotation pipeline against its golden set
+        run: |
+          python3 -m unittest discover -s data/annotations -p 'test_*.py'
+          python3 data/annotations/golden_eval.py --check
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
