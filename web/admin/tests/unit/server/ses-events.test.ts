@@ -199,6 +199,56 @@ describe("SES event normalization", () => {
 		});
 	});
 
+	it.each([
+		["U+0000", "\u0000"],
+		["U+001F", "\u001f"],
+		["U+007F", "\u007f"],
+		["U+0080", "\u0080"],
+		["U+009F", "\u009f"],
+	])("rejects Unicode Cc boundary %s in event text", (_label, character) => {
+		expect(
+			parseSesEvent(
+				{
+					eventType: "Reject",
+					mail: mail(),
+					reject: { reason: `Before${character}after` },
+				},
+				expected,
+			),
+		).toBeNull();
+	});
+
+	it.each([
+		["U+00A0 internal nonbreaking space", "Before\u00a0after"],
+		["U+00A1 after the C1 range", "Before\u00a1after"],
+		["U+200B format character", "\u200bBefore\u200bafter\u200b"],
+		["U+200D format character", "Before\u200dafter"],
+		["surrogate-pair Unicode", "Before😀after"],
+	])("preserves non-Cc Unicode text: %s", (_label, reason) => {
+		expect(
+			parseSesEvent(
+				{ eventType: "Reject", mail: mail(), reject: { reason } },
+				expected,
+			),
+		).toEqual({
+			...common,
+			type: "reject",
+			timestamp: sentAt,
+		});
+	});
+
+	it.each([" Before", "After ", "\u00a0Before", "After\u00a0"])(
+		"preserves the original trimming restriction for text %j",
+		(reason) => {
+			expect(
+				parseSesEvent(
+					{ eventType: "Reject", mail: mail(), reject: { reason } },
+					expected,
+				),
+			).toBeNull();
+		},
+	);
+
 	it.each([null, undefined, [], {}, "{}", 7, true])(
 		"ignores non-SES payload %j",
 		(payload) => expect(parseSesEvent(payload, expected)).toBeNull(),
