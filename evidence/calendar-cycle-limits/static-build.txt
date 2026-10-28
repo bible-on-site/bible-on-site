@@ -21,4 +21,3 @@ Route (app)
 ƒ Proxy (Middleware)
 
 ○  (Static)  prerendered as static content
-
