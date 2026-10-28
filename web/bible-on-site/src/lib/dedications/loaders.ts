@@ -30,17 +30,17 @@ import {
 import { formatDedication, type Dedication } from "./types";
 
 /**
- * Dedication expiry is clock-driven: the admin server arms a wake-up at
- * every stored `expires_at` instant (web/admin server/dedications.ts),
- * but a down or unreachable admin leaves only the event-driven tag
- * invalidations — an expired line would sit on rendered pages forever.
- * A modest time bound guarantees every dedication cache — and every
- * prerendered route that collected it — refreshes within an hour even
- * without the wake-up; tag invalidation still governs immediately
- * (#2731).
+ * Dedication expiry is clock-driven, but these entries deliberately carry
+ * no time bound: every consumer is a fully static route, and a positive
+ * `unstable_cache` `revalidate` propagates to the route's
+ * `initialRevalidateSeconds`, converting the whole reading surface to ISR
+ * (route-rendering.test.ts asserts `/parasha/*` stays
+ * `initialRevalidateSeconds: false`). Freshness is event-driven instead —
+ * the admin server arms a wake-up at every stored `expires_at` instant,
+ * re-scans on startup, and POSTs `/api/revalidate` so `revalidateTag`
+ * rebuilds exactly the rendered output that collected these tags
+ * (web/admin server/dedications.ts) (#2731).
  */
-const DEDICATION_CACHE_MAX_AGE_S = 60 * 60;
-const TIME_BOUND = { revalidate: DEDICATION_CACHE_MAX_AGE_S };
 
 /** Every cache tag a perek resolution consumes: its own plus the sefer and
  * helek ancestors whose scopes it inherits — an ancestor-scope change must
@@ -74,7 +74,6 @@ export const getPerekDedications = cachedPerKey(
 	(perekId: number) => String(perekId),
 	(key) => perekContextTags(Number(key)),
 	(perekId: number) => resolveDedications({ perekIds: [perekId] }),
-	TIME_BOUND,
 );
 
 /** Active dedications for one sefer (direct + helek ancestor). */
@@ -83,7 +82,6 @@ export const getSeferDedications = cachedPerKey(
 	(seferId: number) => String(seferId),
 	(key) => seferContextTags(Number(key)),
 	(seferId: number) => resolveDedications({ seferIds: [seferId] }),
-	TIME_BOUND,
 );
 
 /**
@@ -133,7 +131,6 @@ export const getSeferPerekDedicationLines = cachedPerKey(
 		}
 		return lines;
 	},
-	TIME_BOUND,
 );
 
 /** Active dedications for one helek. */
@@ -142,7 +139,6 @@ export const getHelekDedications = cachedPerKey(
 	(helekId: number) => String(helekId),
 	(key) => [COLLECTION_TAGS.dedications, helekDedicationsTag(Number(key))],
 	(helekId: number) => resolveDedications({ helekIds: [helekId] }),
-	TIME_BOUND,
 );
 
 /** Active dedications for one weekly parasha unit. */
@@ -151,7 +147,6 @@ export const getParashaDedications = cachedPerKey(
 	(unitId: number) => String(unitId),
 	(key) => [COLLECTION_TAGS.dedications, parashaDedicationsTag(Number(key))],
 	(unitId: number) => resolveDedications({ parashaIds: [unitId] }),
-	TIME_BOUND,
 );
 
 /** Active dedications for one article (the preserved legacy scope). */
@@ -160,7 +155,6 @@ export const getArticleDedications = cachedPerKey(
 	(articleId: number) => String(articleId),
 	(key) => [COLLECTION_TAGS.dedications, articleDedicationsTag(Number(key))],
 	(articleId: number) => resolveDedications({ articleIds: [articleId] }),
-	TIME_BOUND,
 );
 
 /** Active dedications for one Tanahpedia entry (canonical entry id). */
@@ -169,7 +163,6 @@ export const getEntryDedications = cachedPerKey(
 	(entryId: string) => entryId,
 	(key) => [COLLECTION_TAGS.dedications, entryDedicationsTag(key)],
 	(entryId: string) => resolveDedications({ entryIds: [entryId] }),
-	TIME_BOUND,
 );
 
 /**
@@ -181,7 +174,7 @@ export const getMasoraDedications = unstable_cache(
 	["masora-dedications"],
 	{
 		tags: [COLLECTION_TAGS.dedications, masoraDedicationsTag],
-		revalidate: DEDICATION_CACHE_MAX_AGE_S,
+		revalidate: false,
 	},
 );
 
@@ -228,7 +221,7 @@ export const getBookshelfDedications = unstable_cache(
 	["bookshelf-dedications"],
 	{
 		tags: [COLLECTION_TAGS.dedications, bookshelfDedicationsTag],
-		revalidate: DEDICATION_CACHE_MAX_AGE_S,
+		revalidate: false,
 	},
 );
 

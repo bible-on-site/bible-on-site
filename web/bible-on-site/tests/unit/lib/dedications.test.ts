@@ -407,7 +407,7 @@ describe("cached loader tag contracts", () => {
 		expect(tags.filter((t) => t.startsWith("perek:"))).toHaveLength(50);
 	});
 
-	it("bounds every dedication entry by the expiry backstop", async () => {
+	it("stamps no time bound so consuming routes stay fully static", async () => {
 		// Module-load stamps (masora/bookshelf) are recorded once per
 		// module registry; an isolated re-import lets this assertion see
 		// them without clearing the shared module state other tests use.
@@ -423,13 +423,14 @@ describe("cached loader tag contracts", () => {
 		await loaders.getPerekDedications(BERESHIT_FIRST_PEREK);
 		await loaders.getMasoraDedications();
 		await loaders.getBookshelfDedications();
-		// Clock-driven expiry needs a time bound underneath the tag
-		// invalidation — a permanent entry could serve a retired
-		// dedication forever (#2731). The admin wake-up narrows the
-		// visible lag; this keeps the worst case at one hour.
-		expect(stampedOpts("perek-dedications", "1")?.revalidate).toBe(3600);
-		expect(stampedOpts("masora-dedications")?.revalidate).toBe(3600);
-		expect(stampedOpts("bookshelf-dedications")?.revalidate).toBe(3600);
+		// A positive `revalidate` propagates to every consuming route's
+		// `initialRevalidateSeconds`, converting the fully-SSG reading
+		// surface to ISR (route-rendering.test.ts). Clock-driven expiry is
+		// instead invalidated by the admin wake-up + startup rescan via
+		// `revalidateTag` (#2731).
+		expect(stampedOpts("perek-dedications", "1")?.revalidate).toBe(false);
+		expect(stampedOpts("masora-dedications")?.revalidate).toBe(false);
+		expect(stampedOpts("bookshelf-dedications")?.revalidate).toBe(false);
 	});
 });
 
