@@ -336,11 +336,12 @@ a shard's assigned case manifest (#2263), and for local experiments.
 
 The `shell-quote` override replaces the non-bundled copy pinned by Appium support
 with 1.12.0, which fixes command injection involving a line terminator after a
-comment token. The pinned Android 8.7.0 and iOS 12.17.3 drivers still contain bundled shell-quote 1.10.0;
-Android also bundles other vulnerable packages. npm overrides do not replace
-those bundled files. Keep their alerts visible and follow
-[#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
-upstream distributions. Verify nested copies after every driver upgrade.
+comment token. Driver tarballs bundle their own dependency trees, which overrides
+cannot replace; the pinned Android 8.7.3 and iOS 12.22.3 releases ship patched
+bundles (axios ≥1.20.0, brace-expansion ≥5.0.12, morgan ≥1.12.1,
+proxy-addr ≥2.0.8, sharp ≥0.35.5, shell-quote 1.12.0), closing
+[#1995](https://github.com/bible-on-site/bible-on-site/issues/1995). Verify every
+nested copy after every driver upgrade.
 
 On iOS, a command pending for 25 seconds records `native-hang-command.txt`
 and requests one CoreSimulator frame in `native-interaction.png`, with the

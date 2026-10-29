@@ -115,20 +115,6 @@
 			"enabled": false
 		},
 		{
-			"description": "Driver tarballs bundle copies bun overrides cannot replace. iOS 12.17.3 bundles only shell-quote 1.10.0; Android 8.7.0 additionally bundles axios 1.19.0, brace-expansion 5.0.9, morgan 1.11.0, proxy-addr 2.0.7, sharp 0.35.4 — uiautomator2 9.0.0-beta.1 fixes all but shell-quote, so hold Android for the stable 9.x. See https://github.com/bible-on-site/bible-on-site/issues/1995",
-			"matchManagers": [
-				"npm",
-				"bun"
-			],
-			"matchFileNames": [
-				"app/mobile-e2e/package.json"
-			],
-			"matchPackageNames": [
-				"appium-uiautomator2-driver",
-				"appium-xcuitest-driver"
-			]
-		},
-		{
 			"description": "sprintf-js was removed via the scoped js-yaml@5.4.3 override under @istanbuljs/load-nyc-config (#1996). Keep that override until upstream load-nyc-config drops the js-yaml@3 chain.",
 			"matchManagers": [
 				"npm",

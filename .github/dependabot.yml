@@ -27,20 +27,6 @@ updates:
     labels:
       - "dependencies"
       - "security"
-    ignore:
-      # These packages exist in this manifest only as copies bundled inside
-      # the published Appium driver tarballs (inBundle in the lockfile), so no
-      # lockfile edit can patch them — they must be fixed by upstream driver
-      # releases. Tracked by
-      # https://github.com/bible-on-site/bible-on-site/issues/1995 and the hold
-      # in renovate.json. Ignoring them prevents security-update jobs from
-      # repeatedly attempting and failing on advisories no update can satisfy.
-      - dependency-name: "axios"
-      - dependency-name: "brace-expansion"
-      - dependency-name: "morgan"
-      - dependency-name: "proxy-addr"
-      - dependency-name: "sharp"
-      - dependency-name: "shell-quote"
 
   - package-ecosystem: "cargo"
     directories:
