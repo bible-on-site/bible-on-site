@@ -312,8 +312,10 @@ jobs:
           node --test app/mobile-e2e/release-smoke.test.mjs 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
 
       - name: Start iPhone simulator boot
+        id: ios-boot
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
-        run: bun run --cwd app/mobile-e2e ios:boot:start
+        shell: bash
+        run: bun run --cwd app/mobile-e2e ios:boot:start 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-start.log"
 
       # The boot kicked above is still in flight; the wait also warms Appium's
       # CoreSimulator bridge and exports MOBILE_UDID plus MOBILE_OS_VERSION —
@@ -325,7 +327,13 @@ jobs:
         id: simulator
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         background: true
-        run: bun run --cwd app/mobile-e2e ios:boot:wait
+        env:
+          # Keep the exact device selected by start; listing all devices again
+          # can stall CoreSimulator while that device is already booting.
+          MOBILE_UDID: ${{ steps.ios-boot.outputs.udid }}
+          MOBILE_OS_VERSION: ${{ steps.ios-boot.outputs.version }}
+        shell: bash
+        run: bun run --cwd app/mobile-e2e ios:boot:wait 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-wait.log"
 
       # WebDriverAgent preparation only needs node_modules and the selected
       # Xcode, so it runs in the background too, overlapping
@@ -623,6 +631,8 @@ jobs:
       - name: Validate restored AVD snapshot
         if: inputs.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
         id: avd-check
+        env:
+          MOBILE_UDID: emulator-5554
         run: node app/mobile-e2e/android-snapshot-check.mjs validate-restored
 
       # Two-stage snapshot pattern: on a cache miss the action creates the AVD,
