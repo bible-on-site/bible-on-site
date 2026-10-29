@@ -1,0 +1,58 @@
+name: Inspect obsolete merge groups
+on:
+  pull_request:
+    paths:
+      - .github/workflows/reap-obsolete-merge-groups.yml
+      - devops/github/ci/reap-obsolete-merge-groups.mjs
+      - devops/github/ci/reap-obsolete-merge-groups.test.mjs
+      - .nvmrc
+  workflow_run:
+    workflows: [Continuous Integration]
+    types: [requested, completed]
+  delete:
+permissions:
+  contents: read
+concurrency:
+  group: obsolete-merge-group-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'control' }}
+  cancel-in-progress: false
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: node --test devops/github/ci/reap-obsolete-merge-groups.test.mjs
+  inspect:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group') ||
+      (github.event_name == 'delete' && github.event.ref_type == 'branch' &&
+       startsWith(github.event.ref, 'gh-readonly-queue/master/pr-'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # These events run trusted default-branch code, never candidate code/artifacts.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Inspect only; cancellation requires a separately validated rollout
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node devops/github/ci/reap-obsolete-merge-groups.mjs --dry-run
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: obsolete-merge-group-proof-${{ github.run_id }}
+          path: .artifacts/obsolete-merge-groups/
+          if-no-files-found: error
