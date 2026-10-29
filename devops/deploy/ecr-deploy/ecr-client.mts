@@ -4,12 +4,12 @@ import {
 	DescribeRepositoriesCommand,
 	ECRClient,
 	GetAuthorizationTokenCommand,
-	type ImageDetail,
 } from "@aws-sdk/client-ecr";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import { fromEnv, fromSSO } from "@aws-sdk/credential-providers";
 import type { AwsCredentialIdentityProvider } from "@smithy/types";
 import * as dotenv from "dotenv";
+import * as semver from "semver";
 
 dotenv.config({
 	path: "./deploy/ecr-deploy/.env",
@@ -275,32 +275,35 @@ export async function getRemoteImageTags(
 	repositoryName: string,
 ): Promise<string[]> {
 	try {
-		const command = new DescribeImagesCommand({
-			repositoryName,
-		});
-		const response = await withRetry(
-			() => client.send(command),
-			{},
-			"ECR DescribeImages",
-		);
-
-		if (!response.imageDetails) {
-			return [];
-		}
-
-		const tags = response.imageDetails
-			.flatMap((img: ImageDetail) => img.imageTags ?? [])
-			.filter((tag: string) => tag !== "latest");
-
-		// Sort by semantic version
-		return tags.sort((a: string, b: string) => {
-			const semverA = a.replace(/^v/, "");
-			const semverB = b.replace(/^v/, "");
-			return semverA.localeCompare(semverB, undefined, {
-				numeric: true,
-				sensitivity: "base",
+		const tags = new Set<string>();
+		let nextToken: string | undefined;
+		do {
+			const command = new DescribeImagesCommand({
+				repositoryName,
+				nextToken,
 			});
-		});
+			const response = await withRetry(
+				() => client.send(command),
+				{},
+				"ECR DescribeImages",
+			);
+
+			for (const image of response.imageDetails ?? []) {
+				for (const tag of image.imageTags ?? []) {
+					// Publishing uses v<major>.<minor>.<patch>. Cache, candidate and
+					// per-architecture tags must never become the remote release.
+					if (
+						/^v\d+\.\d+\.\d+$/.test(tag) &&
+						semver.valid(tag) === tag.slice(1)
+					) {
+						tags.add(tag);
+					}
+				}
+			}
+			nextToken = response.nextToken;
+		} while (nextToken);
+
+		return [...tags].sort((a, b) => semver.compare(a, b));
 	} catch (error: unknown) {
 		if ((error as { name?: string }).name === "RepositoryNotFoundException") {
 			return [];

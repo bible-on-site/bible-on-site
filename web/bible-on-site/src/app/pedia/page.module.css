@@ -28,7 +28,7 @@
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0 0 32px 0;
   text-align: center;
 }
@@ -76,13 +76,13 @@
 
 .breadcrumb {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin-bottom: 12px;
   text-align: center;
 }
 
 .breadcrumbLink {
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   text-decoration: none;
 }
 
@@ -170,7 +170,7 @@
   border-radius: 8px;
   text-decoration: none;
   color: inherit;
-  border-right: 3px solid #1a73e8;
+  border-right: 3px solid var(--link-accent, #1a73e8);
   transition: background 0.15s ease;
 }
 
@@ -195,7 +195,7 @@
 
 .subcategoryCount {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
 }
 
 .categoryName {
@@ -207,13 +207,13 @@
 
 .categoryCount {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
 }
 
 .categoryCardEmpty .categoryName,
 .subcategoryCardEmpty .subcategoryName {
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
 }
 
 .recentList {
@@ -230,7 +230,7 @@
   display: inline-block;
   padding: 8px 16px;
   text-decoration: none;
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   font-size: 1rem;
   border-radius: 8px;
   transition: background 0.15s ease;
@@ -283,7 +283,7 @@
 }
 
 .entityEntryLink {
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   text-decoration: none;
   font-weight: 600;
 }
@@ -301,7 +301,7 @@
 .noEntryBadge {
   display: inline-block;
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   margin-right: 8px;
 }
 
@@ -311,7 +311,7 @@
   text-align: center;
   border-radius: 12px;
   margin-bottom: 32px;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   font-size: 1rem;
 }
 
@@ -330,7 +330,7 @@
   background: #f8fafc;
   border: 1px dashed #c7d2fe;
   border-radius: 12px;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   font-size: 0.95rem;
   font-family: inherit;
 }
@@ -338,7 +338,7 @@
 .mapFootnote {
   font-size: 0.82rem;
   line-height: 1.5;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 12px 0 0;
   text-align: center;
 }
@@ -347,6 +347,27 @@
 .entryContent {
   line-height: 1.8;
   font-size: 1.1rem;
+}
+
+/* Inline links inside DB-authored entry/homepage prose need a persistent
+   non-color cue (WCAG 1.4.1) — the global `a { text-decoration: none }`
+   reset would otherwise hide them (#2767). The footnote sup markers and
+   the .footnote-backref arrow keep their own affordances through higher
+   specificity. */
+.entryContent a,
+.homepageContent a {
+  color: var(--link-accent, #1a73e8);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
+/* Footnote marker tokens shared by the inline reference sup and the
+   note-list generated letter, so both resolve to the same style and cannot
+   drift apart (#2723). */
+.entryContent,
+.homepageContent {
+  --footnote-marker-color: var(--link-accent, #1a73e8);
+  --footnote-marker-size: 11px;
 }
 
 /* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
@@ -361,10 +382,10 @@
 
 .entryContent sup,
 .homepageContent sup {
-  font-size: 11px;
+  font-size: var(--footnote-marker-size);
   vertical-align: super;
   line-height: 0;
-  color: #1a73e8;
+  color: var(--footnote-marker-color);
   font-weight: normal;
 }
 
@@ -398,21 +419,40 @@
   border-top: 1px solid #dadce0;
   font-size: 0.95rem;
   color: #3c4043;
+  /* Gutter shared by the hanging indent and the generated marker box. A rem
+     value keeps both aligned no matter the marker's own font-size (#2723). */
+  --footnote-marker-indent: 1.7rem;
 }
 
 .entryContent ol:global(.footnotes) li,
 .homepageContent ol:global(.footnotes) li {
-  position: relative;
   margin: 0.35em 0;
-  padding-inline-start: 1.8em;
+  padding-inline-start: var(--footnote-marker-indent);
+  /* Hanging indent: the first line (marker + note text) reaches the item
+     edge while wrapped lines stay indented beside the marker. */
+  text-indent: calc(-1 * var(--footnote-marker-indent));
+}
+
+/* Note bodies may wrap their text in <p> — the first paragraph flows inline
+   so the generated marker shares the item's first line. */
+.entryContent ol:global(.footnotes) li > p:first-child,
+.homepageContent ol:global(.footnotes) li > p:first-child {
+  display: inline;
 }
 
 .entryContent ol:global(.footnotes) li::before,
 .homepageContent ol:global(.footnotes) li::before {
   content: attr(data-marker);
-  position: absolute;
-  inset-inline-start: 0;
-  color: #5f6368;
+  /* The marker is a real in-flow inline box — vertical-align: super is
+     ignored on absolutely positioned pseudo-elements. */
+  display: inline-block;
+  inline-size: var(--footnote-marker-indent);
+  text-indent: 0;
+  font-size: var(--footnote-marker-size);
+  line-height: 0;
+  vertical-align: super;
+  color: var(--footnote-marker-color);
+  font-weight: normal;
 }
 
 /* כותרת המקטע נוצרת גם היא — אחידה לכל דורות הסימון */
@@ -434,7 +474,7 @@
 .homepageContent a:global(.footnote-backref) {
   margin-inline-start: 0.4em;
   text-decoration: none;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
 }
 
 .entryContent a:global(.footnote-backref)::before,
@@ -466,7 +506,7 @@
   border-radius: 12px;
   font-size: 0.85rem;
   text-decoration: none;
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   transition: background 0.15s ease;
 }
 
@@ -508,7 +548,7 @@
 }
 
 .emptyContent {
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   font-size: 1rem;
 }
 
@@ -575,7 +615,8 @@
 
 .todayDate {
   font-size: 0.9rem;
-  color: #6366f1;
+  /* #6366f1 measured ~4.35:1 — below AA at 0.9rem; indigo-600 passes. */
+  color: var(--hc-accent, #4f46e5);
   font-weight: 500;
   background: rgba(99, 102, 241, 0.1);
   padding: 2px 10px;
@@ -603,7 +644,7 @@
 }
 
 .todayBullet {
-  color: #6366f1;
+  color: var(--hc-accent, #4f46e5);
   font-size: 0.5rem;
   margin-top: 8px;
   flex-shrink: 0;
@@ -646,7 +687,7 @@
   .categoryCount,
   .mapFootnote,
   .mapPlaceholder {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .dbLoadWarning {
@@ -687,7 +728,7 @@
 
   .comingSoonBadge {
     background: #2d3548;
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .subcategoryCard {
@@ -732,7 +773,7 @@
   .mapLoading {
     background: #12151c;
     border-color: #3b4370;
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .entryContent ol:global(.footnotes),
@@ -740,14 +781,9 @@
     color: #d7dae0;
   }
 
-  .entryContent ol:global(.footnotes) li::before,
-  .homepageContent ol:global(.footnotes) li::before {
-    color: #9aa0a6;
-  }
-
   .entryContent a:global(.footnote-backref),
   .homepageContent a:global(.footnote-backref) {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .entryContent ol:global(.footnotes) li:target,
@@ -776,7 +812,7 @@
   }
 
   .emptyContent {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .todaySection {

@@ -907,7 +907,7 @@ public partial class ParashaPage
     private bool TryHandleReaderBack()
     {
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
+        { _chrome.ExitFullScreen(); return true; }
         if (ReaderMenuOverlay.IsOpen)
         { ReaderMenuOverlay.Close(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }

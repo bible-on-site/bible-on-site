@@ -51,8 +51,8 @@ public class ParashaDataServiceTests
 
         await db.ExecuteAsync("INSERT INTO tanah_reading_division VALUES ('parasha',1,'/פרשה','פרשה על הפרק')");
         await db.ExecuteAsync("INSERT INTO tanah_reading_unit VALUES " +
-            "('parasha',1,'1',1,1,'בראשית',NULL)," +
-            "('parasha',2,'2',1,2,'נח',NULL)");
+            "('parasha',1,'בראשית',1,1,'בראשית',NULL)," +
+            "('parasha',2,'נח',1,2,'נח',NULL)");
         // Unit 1: primary Torah range בראשית א ב - ג ד.
         await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
             "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
@@ -179,7 +179,7 @@ public class ParashaDataServiceTests
         first.Heading.Should().Be("בראשית");
         first.SeferId.Should().Be(1);
         first.Order.Should().Be(1);
-        first.Slug.Should().Be("1");
+        first.Slug.Should().Be("בראשית");
         first.TorahRange.StartPerekId.Should().Be(1);
         first.TorahRange.StartPasuk.Should().Be(2);
         first.TorahRange.EndPerekId.Should().Be(3);

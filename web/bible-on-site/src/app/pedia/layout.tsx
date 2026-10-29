@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { geistSans } from "./family-tree-font";
 import "./layout.css";
 
 export default function TanahpediaLayout({
@@ -6,5 +7,7 @@ export default function TanahpediaLayout({
 }: {
 	children: ReactNode;
 }) {
-	return <div className="tanahpedia-layout">{children}</div>;
+	return (
+		<div className={`tanahpedia-layout ${geistSans.variable}`}>{children}</div>
+	);
 }

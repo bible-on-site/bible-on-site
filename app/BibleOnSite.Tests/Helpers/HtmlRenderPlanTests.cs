@@ -115,6 +115,41 @@ public class HtmlRenderPlanTests
         }
 
         [Fact]
+        public void footnote_marker_carries_the_accent_span()
+        {
+            /* #2723: the generated note-list letter flattens into a styled
+               span — raised, compact and accent-colored like the inline
+               reference, but NOT a link — so the platform handler paints it
+               with the link color without inventing a link target. */
+            var plan = HtmlRenderPlan.Build(
+                "<ol class=\"footnotes\"><li data-marker=\"א\"><p>גוף ההערה</p></li></ol>",
+                rtl: false, 1, 1, 1);
+            var span = plan.Spans.Should().ContainSingle().Subject;
+            plan.Text[span.Start..span.End].Should().Be("א ");
+            span.Accent.Should().BeTrue();
+            span.BaselineShift.Should().Be(1);
+            span.Scale.Should().BeLessThan(1.0);
+            span.Link.Should().BeNull();
+        }
+
+        [Fact]
+        public void footnote_marker_span_matches_the_inline_reference_span()
+        {
+            /* The two marker kinds must resolve identically — only the link
+               differs. */
+            var plan = HtmlRenderPlan.Build(
+                "<p>טקסט<sup id=\"fnref:1\"><a href=\"#fn:1\">א</a></sup></p>" +
+                "<ol class=\"footnotes\"><li id=\"fn:1\" data-marker=\"א\"><p>הערה</p></li></ol>",
+                rtl: false, 1, 1, 1);
+            var marker = plan.Spans.Should()
+                .ContainSingle(s => s.Accent).Subject;
+            var reference = plan.Spans.Should()
+                .ContainSingle(s => plan.Text.Substring(s.Start, s.End - s.Start) == "א").Subject;
+            marker.BaselineShift.Should().Be(reference.BaselineShift);
+            marker.Scale.Should().Be(reference.Scale);
+        }
+
+        [Fact]
         public void adjacent_same_style_runs_share_one_span()
         {
             var plan = HtmlRenderPlan.Build("<b>א<i>ב</i>ג</b>", rtl: false, 1, 1, 1);

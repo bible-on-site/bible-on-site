@@ -63,6 +63,8 @@ const MasoraSefer = (props: {
 	/** Current unit's SSG carousel data (other units load lazily). */
 	articles: ArticleSummary[];
 	perushim: RangePerushSummary[];
+	/** Feature-level מסורה על הפרק dedication lines — once, on the cover (#2731). */
+	coverDedications?: string[];
 	initialBookPage: BookPage | null;
 	initialContent?: {
 		scope: "torah";
@@ -201,7 +203,7 @@ const MasoraSefer = (props: {
 		return [
 			<React.Fragment key={`masora-${unit.unitId}`}>
 				<section
-					className={seferStyles.pageContentPage}
+					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 					data-sefer-unit-text={bookKey}
 				>
 					<div className={seferStyles.pageHeaderRight}>
@@ -296,6 +298,7 @@ const MasoraSefer = (props: {
 			seferName={seferName}
 			coverSubtitle="מסורה על הפרק"
 			coverEdition="פרשיות פתוחות וסתומות"
+			coverDedications={props.coverDedications}
 			contentPages={contentPages}
 			contentOffset={MASORA_CONTENT_OFFSET}
 			pageSemantics={pageSemantics}

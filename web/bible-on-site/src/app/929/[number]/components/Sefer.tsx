@@ -168,6 +168,10 @@ const Sefer = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	imagesByPerek?: Record<number, PerekIllustration[]>;
+	/** Sefer-scoped dedication lines for the front cover (#2731). */
+	seferDedications?: string[];
+	/** Perek-scoped dedication lines by canonical perek id (#2731). */
+	perekDedications?: Record<number, string[]>;
 	initialSlug?: string;
 	initialBookPage?: BookPage | null;
 	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
@@ -197,7 +201,6 @@ const Sefer = (props: {
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
-	const toolbarEndRef = useRef<HTMLDivElement>(null);
 	const [downloadError, setDownloadError] = useState<string | null>(null);
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
@@ -421,7 +424,7 @@ const Sefer = (props: {
 	const frontCover = (
 		<section
 			key="front-cover"
-			className={`${styles.page} ${styles.cover}`}
+			className={`${styles.page} ${styles.cover} flipbook-page-bounded`}
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
@@ -429,13 +432,14 @@ const Sefer = (props: {
 				seferName={perekObj.sefer}
 				subtitle={SEFER_COVER_SUBTITLE}
 				edition={SEFER_COVER_EDITION}
+				dedications={props.seferDedications}
 			/>
 		</section>
 	);
 	const backCover = (
 		<section
 			key="back-cover"
-			className={`${styles.page} ${styles.cover}`}
+			className={`${styles.page} ${styles.cover} flipbook-page-bounded`}
 			aria-label="עטיפה אחורית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
@@ -490,7 +494,7 @@ const Sefer = (props: {
 					hasRecording={Boolean(perek.recitation)}
 				>
 					<section
-						className={styles.pageContentPage}
+						className={`${styles.pageContentPage} flipbook-page-bounded`}
 						data-sefer-perek={pagePerekId}
 					>
 						<div className={styles.pageHeaderRight}>
@@ -510,6 +514,16 @@ const Sefer = (props: {
 									className={styles.pageHeaderMetric}
 								/>
 							</div>
+							{(props.perekDedications?.[pagePerekId ?? 0] ?? []).map(
+								(line, index) => (
+									// The perek's dedication sits at its reading heading —
+									// sefer/helek scopes live on the cover and shelf (#2731).
+									// biome-ignore lint/suspicious/noArrayIndexKey: content is the identity
+									<p key={index} className={styles.perekDedication}>
+										{line}
+									</p>
+								),
+							)}
 							<RecitationHeader title={perek.header} />
 						</div>
 						<div className={styles.perekTextScrollWrapper}>
@@ -648,6 +662,7 @@ const Sefer = (props: {
 	const tocPage = (
 		<TocPage
 			key="toc"
+			className="flipbook-page-bounded"
 			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
 			totalPages={totalPages}
 			pageSemantics={hePageSemantics}
@@ -667,7 +682,7 @@ const Sefer = (props: {
 
 	const pages = [
 		frontCover,
-		<div key="cover-interior" />,
+		<div key="cover-interior" className="flipbook-page-bounded" />,
 		tocPage,
 		...contentPages,
 		backCover,
@@ -766,14 +781,15 @@ const Sefer = (props: {
 						<NextButton />
 						<LastPageButton />
 					</div>
-					<div className="flipbook-toolbar-end" ref={toolbarEndRef}>
+					<div className="flipbook-toolbar-end">
 						{downloadError && (
 							<p role="alert" className={styles.downloadError}>
 								{downloadError}
 							</p>
 						)}
-						<DownloadDropdown ariaLabel="הורדה" />
-						<DownloadMaskingHint toolbarRef={toolbarEndRef} />
+						<DownloadDropdown ariaLabel="הורדה">
+							<DownloadMaskingHint />
+						</DownloadDropdown>
 					</div>
 				</Toolbar>
 			</div>

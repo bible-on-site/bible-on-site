@@ -3,41 +3,31 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.ParashaListPage"
              x:DataType="viewmodels:ParashaListViewModel"
              Title="פרשה על הפרק"
-             FlowDirection="RightToLeft">
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
-    <Shell.BackButtonBehavior>
-        <BackButtonBehavior IsVisible="False"/>
-    </Shell.BackButtonBehavior>
+    <!-- The shared navigation capsule: hamburger at the far-right edge, Back
+         immediately beside it, then the title pill (#2467). -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="ParashaMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="פרשה על הפרק"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
 
-    <Shell.TitleView>
-        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
-            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="20"
-                    WidthRequest="40"
-                    HeightRequest="40"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                    SemanticProperties.Description="תפריט"
-                    AutomationId="ParashaMenuButton"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Start"
-                    Clicked="OnMenuButtonClicked"/>
-            <Label Grid.Column="1"
-                   Text="פרשה על הפרק"
-                   FontSize="20"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource AccentOnDark}}"/>
-        </Grid>
-    </Shell.TitleView>
-
-    <Grid RowDefinitions="*">
+    <Grid Grid.Row="1" RowDefinitions="*">
         <!-- The 54 weekly parashiot grouped by their Torah sefer. Each
              unit keeps its own identity — joined pairs stay separate. -->
         <CollectionView ItemsSource="{Binding Groups}"
@@ -86,5 +76,6 @@
                            IsRunning="{Binding IsLoading}"
                            VerticalOptions="Center"
                            HorizontalOptions="Center"/>
+    </Grid>
     </Grid>
 </ContentPage>

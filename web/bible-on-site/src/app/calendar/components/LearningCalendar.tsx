@@ -4,13 +4,20 @@ import { toLetters } from "gematry";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-	buildMonth,
+	buildVisibleCalendarMonth,
+	CALENDAR_PDF_UNAVAILABLE,
+	canExportCalendarPeriod,
+	clampCalendarMonth,
+	getCalendarCycleWindow,
+	visibleCalendarMonths,
+} from "@/data/learning-calendar-policy";
+import {
 	type CalendarDay,
 	compareMonths,
-	getConfirmedCycleCount,
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getCycleName,
 	getCycleStartMonth,
 	getDateLabel,
 	getMonthLabel,
@@ -109,15 +116,31 @@ export function LearningCalendar({
 }: LearningCalendarProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const monthParam = parseMonthParam(searchParams.get(MONTH_QUERY_PARAM));
+	const today = useMemo(
+		() => parseNumericalDateToHebcalDate(todayDateNumber),
+		[todayDateNumber],
+	);
+	const window = useMemo(() => getCalendarCycleWindow(today), [today]);
+	const requestedMonth = parseMonthParam(searchParams.get(MONTH_QUERY_PARAM));
+	const monthParam = requestedMonth
+		? clampCalendarMonth(requestedMonth, window)
+		: null;
 	const viewParam = parseViewParam(searchParams.get(VIEW_QUERY_PARAM));
-	const cycleParam = parseCycleParam(searchParams.get(CYCLE_QUERY_PARAM));
+	const requestedCycle = parseCycleParam(searchParams.get(CYCLE_QUERY_PARAM));
+	const cycleParam =
+		requestedCycle === null
+			? null
+			: Math.min(requestedCycle, window.next.number);
 
 	const [viewed, setViewed] = useState<MonthRef>(
-		() => monthParam ?? { year: initialYear, month: initialMonth },
+		() =>
+			monthParam ??
+			clampCalendarMonth({ year: initialYear, month: initialMonth }, window),
 	);
 	const [viewMode, setViewMode] = useState<ViewMode>(viewParam);
 	const [viewedCycle, setViewedCycle] = useState<number | null>(cycleParam);
+	useEffect(() => setViewMode(viewParam), [viewParam]);
+	useEffect(() => setViewedCycle(cycleParam), [cycleParam]);
 
 	// Keep the viewed month in sync with the URL (back/forward, shared links).
 	useEffect(() => {
@@ -145,10 +168,11 @@ export function LearningCalendar({
 
 	const navigateMonth = useCallback(
 		(target: MonthRef) => {
-			setViewed(target);
-			pushParams({ month: target });
+			const bounded = clampCalendarMonth(target, window);
+			setViewed(bounded);
+			pushParams({ month: bounded });
 		},
-		[pushParams],
+		[pushParams, window],
 	);
 
 	const selectView = useCallback(
@@ -161,13 +185,17 @@ export function LearningCalendar({
 
 	const selectCycle = useCallback(
 		(cycleNumber: number) => {
-			setViewedCycle(cycleNumber);
-			pushParams({ cycle: cycleNumber });
+			const bounded = Math.max(1, Math.min(cycleNumber, window.next.number));
+			setViewedCycle(bounded);
+			pushParams({ cycle: bounded });
 		},
-		[pushParams],
+		[pushParams, window.next.number],
 	);
 
-	const cells = useMemo(() => buildMonth(viewed.year, viewed.month), [viewed]);
+	const cells = useMemo(
+		() => buildVisibleCalendarMonth(viewed.year, viewed.month, window),
+		[viewed, window],
+	);
 
 	// The cycle owning most of the visible month: the cycle of the first
 	// scheduled day, else of the last scheduled day (inter-cycle gap months).
@@ -179,29 +207,22 @@ export function LearningCalendar({
 		return anchor?.cycle !== undefined ? getCycle(anchor.cycle) : null;
 	}, [cells]);
 
-	const cycleOptions = useMemo(() => {
-		const confirmedCount = getConfirmedCycleCount();
-		const max =
-			displayedCycle && displayedCycle.number > confirmedCount
-				? displayedCycle.number
-				: confirmedCount;
-		return Array.from({ length: max }, (_, i) => getCycle(i + 1));
-	}, [displayedCycle]);
+	const cycleOptions = useMemo(
+		() => Array.from({ length: window.next.number }, (_, i) => getCycle(i + 1)),
+		[window.next.number],
+	);
 
 	const yearOptions = useMemo(() => {
-		const confirmedCount = getConfirmedCycleCount();
 		const years = new Set<number>();
-		const lastConfirmed = getCycle(confirmedCount);
 		for (
-			let year = getCycle(1).start.year;
-			year <= lastConfirmed.end.year;
+			let year = window.minMonth.year;
+			year <= window.maxMonth.year;
 			year += 1
 		) {
 			years.add(year);
 		}
-		years.add(viewed.year);
 		return [...years].sort((a, b) => a - b);
-	}, [viewed.year]);
+	}, [window]);
 
 	const onCycleSelected = useCallback(
 		(cycleNumber: number) => {
@@ -227,9 +248,15 @@ export function LearningCalendar({
 	);
 
 	const backToToday = useCallback(() => {
-		const today = parseNumericalDateToHebcalDate(todayDateNumber);
-		navigateMonth({ year: today.year, month: today.getUniformMonth() });
-	}, [navigateMonth, todayDateNumber]);
+		const cycle = window.current?.number ?? window.next.number;
+		setViewedCycle(cycle);
+		const month = clampCalendarMonth(
+			{ year: today.year, month: today.getUniformMonth() },
+			window,
+		);
+		setViewed(month);
+		pushParams({ month, cycle });
+	}, [pushParams, today, window]);
 
 	const openPerek = useCallback(
 		(perekId: number) => {
@@ -263,13 +290,22 @@ export function LearningCalendar({
 		);
 	}, [cells, todayDateNumber]);
 
-	const resolvedCycle = viewedCycle ?? contextualCycle;
+	const resolvedCycle = Math.min(
+		viewedCycle ?? contextualCycle,
+		window.next.number,
+	);
+	const canExport = canExportCalendarPeriod(
+		viewMode === "cycle"
+			? { view: "cycle", cycle: resolvedCycle }
+			: { view: viewMode, ...viewed },
+		today,
+	);
 
 	// The PDF request captures this label+URL at click time (#2621) — a
 	// pending download always keeps the period it was started for.
 	const pdfScopeLabel =
 		viewMode === "cycle"
-			? `מחזור ${resolvedCycle}`
+			? getCycleName(getCycle(resolvedCycle))
 			: viewMode === "year"
 				? `שנת ${getYearLabel(viewed.year)}`
 				: getMonthLabel(viewed);
@@ -297,11 +333,11 @@ export function LearningCalendar({
 	const yearMonths = useMemo(
 		() =>
 			viewMode === "year"
-				? getMonthOrder(viewed.year).map((month) =>
-						buildMonth(viewed.year, month),
+				? visibleCalendarMonths(viewed.year, window).map((month) =>
+						buildVisibleCalendarMonth(viewed.year, month, window),
 					)
 				: [],
-		[viewMode, viewed.year],
+		[viewMode, viewed.year, window],
 	);
 
 	const cycleMonths = useMemo(() => {
@@ -320,11 +356,11 @@ export function LearningCalendar({
 			guard < 50 && compareMonths(ref, endRef) <= 0;
 			guard += 1
 		) {
-			months.push(buildMonth(ref.year, ref.month));
+			months.push(buildVisibleCalendarMonth(ref.year, ref.month, window));
 			ref = nextMonth(ref);
 		}
 		return months;
-	}, [viewMode, resolvedCycle]);
+	}, [viewMode, resolvedCycle, window]);
 
 	const dayAriaLabel = (day: CalendarDay): string => {
 		const dateLabel = getDateLabel(day.date);
@@ -400,7 +436,13 @@ export function LearningCalendar({
 								? "שנה קודמת"
 								: "חודש קודם"
 					}
-					disabled={viewMode === "cycle" && resolvedCycle <= 1}
+					disabled={
+						viewMode === "cycle"
+							? resolvedCycle <= 1
+							: viewMode === "year"
+								? viewed.year <= window.minMonth.year
+								: compareMonths(viewed, window.minMonth) <= 0
+					}
 				>
 					‹
 				</button>
@@ -428,6 +470,13 @@ export function LearningCalendar({
 								? "שנה הבאה"
 								: "חודש הבא"
 					}
+					disabled={
+						viewMode === "cycle"
+							? resolvedCycle >= window.next.number
+							: viewMode === "year"
+								? viewed.year >= window.maxMonth.year
+								: compareMonths(viewed, window.maxMonth) >= 0
+					}
 				>
 					›
 				</button>
@@ -444,7 +493,7 @@ export function LearningCalendar({
 								})
 							}
 						>
-							{getMonthOrder(viewed.year).map((month) => (
+							{visibleCalendarMonths(viewed.year, window).map((month) => (
 								<option key={month} value={month}>
 									{getMonthName(viewed.year, month)}
 								</option>
@@ -470,7 +519,11 @@ export function LearningCalendar({
 						</select>
 					</label>
 				)}
-				<CalendarPdfDownload request={pdfRequest} scopeLabel={pdfScopeLabel} />
+				<CalendarPdfDownload
+					request={pdfRequest}
+					scopeLabel={pdfScopeLabel}
+					unavailableReason={canExport ? undefined : CALENDAR_PDF_UNAVAILABLE}
+				/>
 			</div>
 
 			<h2 className={styles.monthTitle}>
@@ -497,13 +550,17 @@ export function LearningCalendar({
 						{displayedCycle === null && <option value="">-</option>}
 						{cycleOptions.map((cycle) => (
 							<option key={cycle.number} value={cycle.number}>
-								מחזור {cycle.number}
-								{cycle.projected ? " (משוער)" : ""}
+								{getCycleName(cycle)}
 							</option>
 						))}
 					</select>
 				</label>
-				{displayedCycle && (
+				{/* Month/year views keep the contextual cycle's range beside the
+				    picker; in מחזור מלא the h2 already carries the selected
+				    cycle's full label, so repeating it here would duplicate —
+				    and displayedCycle describes the viewed month, not the
+				    chosen cycle (#2725). */}
+				{displayedCycle && viewMode !== "cycle" && (
 					<span className={styles.cycleRange}>
 						{getCycleLabel(displayedCycle)}
 					</span>
@@ -512,7 +569,7 @@ export function LearningCalendar({
 
 			{viewMode === "year" && (
 				<div className={styles.yearGrid}>
-					{getMonthOrder(viewed.year).map((month, index) => (
+					{visibleCalendarMonths(viewed.year, window).map((month, index) => (
 						<MiniMonth
 							key={month}
 							title={getMonthName(viewed.year, month)}
