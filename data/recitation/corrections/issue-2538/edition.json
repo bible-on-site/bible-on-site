@@ -1,0 +1,60 @@
+{
+  "issue": 2538,
+  "perekId": 231,
+  "reference": "שופטים כ מ",
+  "sefer": "שופטים",
+  "perek": 20,
+  "pasuk": 40,
+  "defect": {
+    "kind": "spoken-source error",
+    "canonical": "הֵחֵ֛לָּה",
+    "spoken": "הֵחֵלּוּ (final syllable heard as closed -lu, not -lāh)",
+    "wordSpanSec": [439.01, 439.71],
+    "defectiveSyllableSec": [439.22, 439.47],
+    "note": "Human-reported and independently verified on the hash-bound original: the word's final syllable is heard as -לוּ (isolated-syllable listening: 'lu', not 'ah'). הֵחֵלָּה is the only occurrence of this word form in the Tanakh, so no same-word donor exists."
+  },
+  "original": {
+    "file": "231_record.mp3",
+    "sha256": "ef7c09fed09bbcb0f509972b359c3b08fa37aa42b05f435747af287999effe62",
+    "publishedUrl": "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings/231_record.mp3",
+    "durationSec": 533.394,
+    "preserved": "archival original and hash unchanged; the edition is a separate artifact"
+  },
+  "edition": {
+    "file": "231_record_corrected.mp3",
+    "sha256": "0b2078b160e695386e8c6eb0b5935c11d6705492417776a7d8080618ffbf770b",
+    "durationSec": 533.374,
+    "encoder": "libmp3lame, 48 kbps, mono, 44100 Hz (same parameters as the original)",
+    "createdUtc": "2026-10-29",
+    "note": "Full-length corrected edition derived from the verified original. One additional MP3 encode generation applies to the whole file; the archival original is untouched and remains the source of record."
+  },
+  "edits": [
+    {
+      "type": "donor-splice",
+      "target": {
+        "removedSec": [439.22, 439.47],
+        "content": "the defective final syllable -לּוּ of הֵחֵלּוּ (הֵחֵ- onset preserved)"
+      },
+      "donor": {
+        "insertedSec": [444.28, 444.54],
+        "word": "-לָה",
+        "context": "עָלָה in the same verse (pasuk 40: וְהִנֵּה עָלָה כְלִיל־הָעִיר); same voice, same vowel, same recording",
+        "sourceSha256": "ef7c09fed09bbcb0f509972b359c3b08fa37aa42b05f435747af287999effe62"
+      },
+      "method": "PCM-domain splice at 44100 Hz with 15 ms raised-cosine crossfades at both joints, then a single re-encode at the original bitrate"
+    }
+  ],
+  "verification": [
+    "Edition SHA-256 bound above; original SHA-256 verified against the published S3 object before editing.",
+    "Isolated donor syllable listened to directly before splicing: heard as -לָה ('ah'); isolated original syllable heard as -לוּ ('oo').",
+    "Isolated corrected syllable after splicing: heard as -לָה.",
+    "Whole pasuk 40 of the edition listened to end to end: 'וְהַמַּשְׂאֵת הֵחֵלָּה לַעֲלוֹת מִן־הָעִיר עַמּוּד עָשָׁן וַיִּפֶן בִּנְיָמִן אַחֲרָיו וְהִנֵּה עָלָה כְלִיל־הָעִיר הַשָּׁמָיְמָה' — canonical, no remnant of -לוּ, no audible splice artifact.",
+    "Spectral check: the defective syllable's second formant sat ~1000-1200 Hz; the replacement carries the donor's clear 'a' vowel (F2 ~1300 Hz).",
+    "Joint-continuity measured: peak/RMS across both splice joints matches surrounding speech (no clicks)."
+  ],
+  "remaining": [
+    "Rerun the unchanged full-quality original-MP3 alignment pipeline (Whisper FP32 + forced alignment) against the edition's own source hash — requires the maintainer's alignment worker.",
+    "Complete canonical/timing validation, then normal website/native source, playback and packaging verification before publication.",
+    "Upload the edition to the recordings bucket under its edition name only after acceptance; do not overwrite the archival object."
+  ]
+}
