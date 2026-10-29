@@ -27,23 +27,11 @@ public class NavigationFailureBoundaryTests
     }
 
     private static PerushimNotesService CreateNotesService() =>
-        PerushimNotesService.CreateForTesting(new StubPadDeliveryService(),
+        PerushimNotesService.CreateForTesting(new Mock<IPadDeliveryService>().Object,
             Path.Join(Path.GetTempPath(), Path.GetRandomFileName()));
 
     private static RecitationService CreateRecitationService() =>
         new(new Mock<IFileSystem>().Object, new Mock<IPadDeliveryService>().Object);
-
-    private sealed class StubPadDeliveryService : IPadDeliveryService
-    {
-        public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken) =>
-            Task.FromResult<string?>(null);
-
-        public Task<bool> FetchAsync(string packName, IProgress<double>? progress, CancellationToken cancellationToken) =>
-            Task.FromResult(true);
-
-        public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName) =>
-            Task.FromResult(new List<string>());
-    }
 
     [Fact]
     public async Task PreferencesViewModel_CategoryCommands_SwallowNavigationFailure()
