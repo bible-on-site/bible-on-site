@@ -226,6 +226,62 @@
                                VerticalOptions="Center"/>
                     </Grid>
 
+                    <!-- עלון יומי — join carousel (#2806), with the website's
+                         nested קבוצת ווטסאפ entry deep-linking that card -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnDailyBulletinTapped"/>
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0"
+                               Text="{x:Static fonts:FluentUI.news_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="עלון יומי"
+                                   FontSize="16"
+                                   AutomationId="FlyoutDailyBulletin"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Text="במייל, בטלגרם ובווטסאפ"
+                                   FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
+                    <!-- קבוצת ווטסאפ — nested under עלון יומי like the website nav -->
+                    <Grid Padding="48,12,16,12" ColumnDefinitions="Auto,*,Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnWhatsAppGroupTapped"/>
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0"
+                               Text="{x:Static fonts:FluentUI.chat_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="קבוצת ווטסאפ"
+                                   FontSize="14"
+                                   AutomationId="FlyoutWhatsAppGroup"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="18"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+
                     <!-- תנאי שימוש -->
                     <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
                         <Grid.GestureRecognizers>

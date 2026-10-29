@@ -34,3 +34,15 @@ The local source artifacts are `.outputs/ses-email-before.html` and `.outputs/se
 ```powershell
 node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '900,1100' --full-page --wait-for-selector .bulletin-verse-number file:///ABSOLUTE_WORKTREE_PATH/.outputs/ses-email-react-footer-complete.html docs/daily-bulletin/screenshots/email-after.png
 ```
+
+## App join carousel evidence (#2806)
+
+Real captures from the Android emulator (`1080 x 2400`) running the native עלון יומי join carousel.
+
+- [Flyout before](app-bulletin-flyout-before.png): the app menu without a bulletin entry.
+- [Flyout after](app-bulletin-flyout-after.png): עלון יומי and its nested קבוצת ווטסאפ entry, mirroring the website navigation.
+- [Telegram card](app-bulletin-card-telegram.png): the first carousel card; הצטרפות opens the verified public channel `https://t.me/alhaperek`.
+- [WhatsApp card](app-bulletin-card-whatsapp.png): the second card, also reached by the קבוצת ווטסאפ deep link (`?channel=whatsapp`); הצטרפות opens the published `wa.me` join number with a prefilled join request.
+- [Email card](app-bulletin-card-email.png): the third card; הצטרפות opens the published subscription address with a join subject until the shared public signup API ships (see "Restore public email signup and channel/group join links" in `docs/daily-bulletin/daily-bulletin.md`).
+
+The carousel is RTL, shows the shared top bar, peeks the adjacent card on narrow screens and exposes `BulletinJoin{Telegram|Whatsapp|Email}` automation identifiers with Hebrew semantic descriptions on each join button. No private test groups, destination IDs or provider credentials appear in the captures.

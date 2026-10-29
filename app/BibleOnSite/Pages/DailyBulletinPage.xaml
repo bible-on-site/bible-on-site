@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             x:Class="BibleOnSite.Pages.DailyBulletinPage"
+             x:DataType="viewmodels:DailyBulletinViewModel"
+             Title="עלון יומי"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
+
+    <!-- The shared navigation capsule (#2467): hamburger far right, Back
+         beside it (disabled at this root destination), title pill. -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="DailyBulletinMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="עלון יומי"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+        <!-- Join carousel (#2806): three channel-branded cards mirroring the
+             website's עלון יומי surface — Telegram, WhatsApp and email, in
+             that order. Peek insets reveal the next card on narrow screens;
+             the dots show position for non-swipe navigation cues. -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto" Padding="0,12,0,16">
+            <Label Grid.Row="0"
+                   Text="לימוד הפרק היומי במייל, בטלגרם ובווטסאפ"
+                   FontSize="16"
+                   HorizontalTextAlignment="Center"
+                   Padding="24,4"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+
+            <CarouselView Grid.Row="1"
+                          x:Name="BulletinCarousel"
+                          ItemsSource="{Binding Cards}"
+                          Position="{Binding Position, Mode=TwoWay}"
+                          Loop="False"
+                          PeekAreaInsets="32"
+                          Margin="0,4">
+                <CarouselView.ItemTemplate>
+                    <DataTemplate x:DataType="models:BulletinJoinCard">
+                        <Border StrokeShape="RoundRectangle 12"
+                                Stroke="{StaticResource Gray200}"
+                                StrokeThickness="1"
+                                BackgroundColor="White"
+                                Margin="4,0"
+                                Padding="0"
+                                MaximumWidthRequest="420"
+                                HorizontalOptions="Center">
+                            <Border.Shadow>
+                                <Shadow Brush="Black" Offset="0,2" Radius="8" Opacity="0.12"/>
+                            </Border.Shadow>
+                            <Grid RowDefinitions="Auto,*,Auto">
+                                <!-- Channel-branded band -->
+                                <Border Grid.Row="0"
+                                        StrokeShape="RoundRectangle 12,12,0,0"
+                                        BackgroundColor="{Binding BrandColor}"
+                                        Padding="20"
+                                        HeightRequest="120">
+                                    <Image Source="{Binding Icon}"
+                                           HeightRequest="64"
+                                           WidthRequest="64"
+                                           Aspect="AspectFit"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"/>
+                                </Border>
+                                <VerticalStackLayout Grid.Row="1"
+                                                     Padding="20"
+                                                     Spacing="8"
+                                                     VerticalOptions="Start">
+                                    <Label Text="{Binding Title}"
+                                           FontSize="20"
+                                           FontAttributes="Bold"
+                                           HorizontalTextAlignment="Center"
+                                           TextColor="#303030"/>
+                                    <Label Text="{Binding Description}"
+                                           FontSize="15"
+                                           HorizontalTextAlignment="Center"
+                                           LineBreakMode="WordWrap"
+                                           TextColor="{StaticResource Gray600}"/>
+                                </VerticalStackLayout>
+                                <Button Grid.Row="2"
+                                        Text="{Binding JoinLabel}"
+                                        Command="{Binding BindingContext.JoinCommand, Source={x:Reference BulletinCarousel}}"
+                                        CommandParameter="{Binding .}"
+                                        AutomationId="{Binding AutomationId}"
+                                        SemanticProperties.Description="{Binding SemanticDescription}"
+                                        BackgroundColor="{Binding BrandColor}"
+                                        TextColor="White"
+                                        FontSize="16"
+                                        FontAttributes="Bold"
+                                        CornerRadius="8"
+                                        HeightRequest="48"
+                                        Margin="20,0,20,20"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CarouselView.ItemTemplate>
+            </CarouselView>
+
+            <IndicatorView Grid.Row="2"
+                           ItemsSource="{Binding Cards}"
+                           Position="{Binding Position, Mode=TwoWay}"
+                           IndicatorsShape="Circle"
+                           IndicatorSize="9"
+                           IndicatorColor="{StaticResource Gray300}"
+                           SelectedIndicatorColor="{StaticResource Primary}"
+                           HorizontalOptions="Center"
+                           Margin="0,8,0,0"/>
+        </Grid>
+    </Grid>
+</ContentPage>
