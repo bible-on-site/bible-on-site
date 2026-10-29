@@ -39,13 +39,17 @@ const RELEASE_CI_PATHS = [
 ];
 // Shared build context of every web/ release Docker image (#2292).
 const DOCKER_BUILD_CI_PATHS = ["web/.dockerignore"];
+// Native validation uses the same service Dockerfiles without publishing.
+const NATIVE_IMAGE_CI_PATHS = [
+	".github/workflows/architecture-validation.yml",
+	"devops/github/ci/verify-native-image.mjs",
+	"devops/github/ci/verify-native-image.test.mjs",
+	"devops/github/ci/verify-website-native.mjs",
+];
 // Deterministic E2E test-selection tooling plus the shared Playwright
 // evidence reporter — consumed by the website, admin and API E2E jobs
 // (the Appium suite already lists the selector under `app`, #2085).
-const E2E_IMPACT_CI_PATHS = [
-	"devops/github/ci/e2e-impact",
-	"web/shared",
-];
+const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
 export const MODULES = {
 	website: {
@@ -56,6 +60,8 @@ export const MODULES = {
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
 		ciPaths: [
+			...NATIVE_IMAGE_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			"devops/github/ci/bencher-comparison.mjs",
@@ -76,11 +82,12 @@ export const MODULES = {
 		// next.config.mjs, src/, public/, scripts/ (build-time), and
 		// Docker/tsconfig build inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|get-debug-port\.js$|launch-e2e-server\.mts$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$)/,
 	},
 	api: {
 		directory: "web/api",
 		ciPaths: [
+			...NATIVE_IMAGE_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
@@ -123,6 +130,7 @@ export const MODULES = {
 	admin: {
 		directory: "web/admin",
 		ciPaths: [
+			...NATIVE_IMAGE_CI_PATHS,
 			...SHARED_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
@@ -146,8 +154,22 @@ export const MODULES = {
 	data: {
 		directory: "data",
 		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
-		ciPaths: [...SHARED_CI_PATHS, "devops/deploy/data-deploy"],
+		ciPaths: [
+			...SHARED_CI_PATHS,
+			"devops/deploy/data-deploy",
+			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"devops/daily-bulletin-infra.test.mjs",
+			"web/bulletin/assets/email",
+			"web/bulletin/scripts/prepare-email-assets.mjs",
+			"app/BibleOnSite/Resources/Images/logo_header.jpg",
+			"web/bible-on-site/public/icons/envelope.svg",
+			"web/bible-on-site/public/icons/phone.svg",
+			"web/bible-on-site/public/icons/whatsapp.svg",
+			"web/bible-on-site/public/icons/telegram.svg",
+			"devops/deploy/ecr-deploy",
+		],
 	},
 	perushim_pipeline: {
 		directory: "data/sefaria/pipelines/perushim-view",
@@ -168,6 +190,20 @@ export type ModuleChanges = Record<
 const isAt = (file: string, path: string) =>
 	file === path || file.startsWith(`${path}/`);
 
+// The data delivery path whose change legitimately re-runs a data deployment
+// with unchanged payload content. `data_ci_changed` additionally covers shared
+// CI plumbing (ci.yml, composite actions, this detector), which must never
+// enter Release Data: the perushim producer correctly skips those runs, so no
+// current-run SQL artifact exists to bind (#2730).
+const DATA_DEPLOY_PATHS = ["devops/deploy/data-deploy"];
+
+/** Release intent for data delivery tooling, separate from generic CI checks. */
+export function isDataDeployChange(changedFiles: string[]): boolean {
+	return changedFiles.some((file) =>
+		DATA_DEPLOY_PATHS.some((path) => isAt(file, path)),
+	);
+}
+
 /**
  * Route schema-only data changes to the explicitly approved manual migration path.
  * This path check does not certify SQL safety or existence: deleted migrations
@@ -175,13 +211,21 @@ const isAt = (file: string, path: string) =>
  */
 export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	const bulletinMigration = "data/mysql/tanah_daily_bulletin_upgrade.sql";
+	const hasBulletinMigration = dataFiles.includes(bulletinMigration);
 	return (
 		dataFiles.length > 0 &&
 		!changedFiles.some((file) =>
 			MODULES.perushim_pipeline.extraModulePaths.includes(file),
 		) &&
-		dataFiles.every((file) =>
-			/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file),
+		dataFiles.every(
+			(file) =>
+				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
+				file === bulletinMigration ||
+				// The bootstrap's migration-preservation tests accompany this
+				// additive upgrade; they must not trigger a production data rebuild.
+				(hasBulletinMigration &&
+					file === "data/mysql/db-populator/src/main.rs"),
 		)
 	);
 }
@@ -292,6 +336,7 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`${key}_ci_changed=${flags.ci_changed}`,
 	]);
 	lines.push(`data_schema_only_changed=${isSchemaOnlyDataChange(files)}`);
+	lines.push(`data_deploy_changed=${isDataDeployChange(files)}`);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;

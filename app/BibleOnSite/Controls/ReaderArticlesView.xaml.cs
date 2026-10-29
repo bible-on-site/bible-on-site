@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 
 namespace BibleOnSite.Controls;
@@ -10,7 +11,7 @@ namespace BibleOnSite.Controls;
 /// owns navigation and view-model bookkeeping.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
-public partial class ReaderArticlesView : CollectionView
+public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
 #pragma warning restore S2333
 {
     /// <summary>Raised when an article card is tapped (selection self-clears).</summary>

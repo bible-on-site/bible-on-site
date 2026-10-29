@@ -383,7 +383,10 @@ describe("deep links", () => {
 	});
 
 	it("opens a deep-linked article in the מאמרים panel", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		await screen.findByText("חזרה למאמרים →");
 		expect(
@@ -417,7 +420,10 @@ describe("deep links", () => {
 
 describe("article fullscreen", () => {
 	it("opens the article fullscreen overlay and closes on Escape", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		const toggle = await screen.findByRole("button", { name: "מסך מלא" });
 		fireEvent.click(toggle);
@@ -428,7 +434,10 @@ describe("article fullscreen", () => {
 	});
 
 	it("ignores non-Escape keys and closes on the overlay's own control", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
 		await screen.findByRole("dialog");
@@ -665,12 +674,18 @@ describe("pending commentary regression", () => {
 		expect(screen.queryByText("פרק ישן")).toBeNull();
 	});
 	it("opens the full article body when clicking its abstract, including with parent navigation", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		// The article's own dedication scope reaches the in-book view too
+		// (#2731) — the standalone route renders the same lines.
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: ["מוקדש לבדיקה"],
+		});
 		const onNavigate = jest.fn();
 		await renderPanel(<SeferPanel {...PROPS} onNavigate={onNavigate} />);
 		fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
 		fireEvent.click(screen.getByText("תקציר"));
 		expect(await screen.findByText("תוכן")).toBeTruthy();
+		expect(await screen.findByText("מוקדש לבדיקה")).toBeTruthy();
 		expect(onNavigate).toHaveBeenCalledWith("7");
 		expect(mockGetArticleForBook).toHaveBeenCalledWith(7);
 	});
@@ -678,7 +693,10 @@ describe("pending commentary regression", () => {
 
 describe("reading metrics", () => {
 	it("warns but keeps the article when progress-unit loading fails", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		mockGetArticleProgressUnits.mockRejectedValue(new Error("metric down"));
 		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 		try {
@@ -789,7 +807,10 @@ describe("reading metrics", () => {
 	});
 
 	it("drops article progress units that resolve after unmount", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		let finishUnits!: (units: never[]) => void;
 		mockGetArticleProgressUnits.mockImplementation(
 			() =>

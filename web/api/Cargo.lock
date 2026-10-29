@@ -707,7 +707,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.93"
+version = "0.1.96"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -720,6 +720,7 @@ dependencies = [
  "dotenvy",
  "entities",
  "sea-orm",
+ "sea-query-sqlx",
  "serde",
  "tokio",
  "tracing",
@@ -3233,9 +3234,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",

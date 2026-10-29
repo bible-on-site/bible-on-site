@@ -85,9 +85,9 @@ describe("TopNav", () => {
 		"/מסורה/1",
 		"/masora/1",
 		"/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1",
-		"/פרשה/3",
-		"/parasha/3",
-		"/%D7%A4%D7%A8%D7%A9%D7%94/3",
+		"/פרשה/לך-לך",
+		"/parasha/לך-לך",
+		"/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9C%D7%9A-%D7%9C%D7%9A",
 	])(
 		"omits the search button entirely on reader pages (%s)",
 		(pathname) => {

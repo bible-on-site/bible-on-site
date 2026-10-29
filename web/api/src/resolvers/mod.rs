@@ -1,9 +1,10 @@
 pub mod articles_resolver;
 pub mod authors_resolver;
+pub mod dedications_resolver;
 pub mod perakim_resolver;
 pub mod sefarim_resolver;
 pub mod starter_resolver;
-pub mod tanahpedia_entries_resolver;
 pub mod tanahpedia_entity_resolver;
+pub mod tanahpedia_entries_resolver;
 pub mod tanahpedia_family_resolver;
 pub mod tanahpedia_revisions_resolver;

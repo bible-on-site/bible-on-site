@@ -13,6 +13,16 @@ import {
 	perekPerushimTag,
 } from "../../../lib/revalidate/tags";
 import {
+	getPerekDedications,
+	getSeferDedications,
+	getSeferPerekDedicationLines,
+} from "../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../lib/dedications/service";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../components/dedications/DedicationLines";
+import {
 	getPerekMetric,
 	getPerekProgressUnits,
 	metricOrFallback,
@@ -157,6 +167,21 @@ export default async function Perek({
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 	const { prev: prevPerek, next: nextPerek } = getAdjacentPereks(perekId);
 
+	// Dedications (#2731): the flat page renders the perek's whole
+	// applicable set — direct perek scopes plus sefer/helek ancestors —
+	// while the book keeps the sefer+helek set on its cover and only
+	// perek-scoped lines on each spread header. The spread map resolves
+	// the sefer's whole perek range in one cached loader call rather than
+	// a per-perek fan-out; `perek:{id}:dedications`/`sefer:{id}:dedications`
+	// tags still map the page to exactly the scopes it renders.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const flatPageLines = dedicationLines(await getPerekDedications(perekId));
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
+
 	return (
 		<>
 			<JsonLd
@@ -177,6 +202,8 @@ export default async function Perek({
 					imagesByPerek={seferImages}
 					perekPasukUnits={perekProgressUnits}
 					perekMetric={perekMetric}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
@@ -188,6 +215,7 @@ export default async function Perek({
 				/>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
+				<DedicationLines lines={flatPageLines} />
 				<ReadingTime
 					estimatedSeconds={perekMetric?.estimatedSeconds}
 					className={styles.readingTime}

@@ -148,7 +148,7 @@ public partial class ParashaPage
         // The permanent navigation control stays available during loading and
         // search landing. Animate only the decorative introduction above it.
         NormalNavigationTitle.Opacity = 1;
-        var sourceWidth = NormalNavigationBar.Width - 2 * NormalNavigationBar.NavigationButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
+        var sourceWidth = NormalNavigationBar.Width - NormalNavigationBar.EdgeChromeWidth - NormalNavigationTitle.Margin.HorizontalThickness;
         var introductionWidth = Math.Min(ReaderToolbar.Width - 8, sourceWidth * 1.06);
         if (sourceWidth <= 0 || introductionWidth <= 0)
         {

@@ -12,6 +12,12 @@ jest.mock("next/navigation", () => ({
 	},
 }));
 
+// Bypass unstable_cache — just run the wrapped function directly (#2731:
+// dedication loaders are tag-cached).
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+
 const params = (section?: string) =>
 	Promise.resolve(section === undefined ? {} : { section });
 

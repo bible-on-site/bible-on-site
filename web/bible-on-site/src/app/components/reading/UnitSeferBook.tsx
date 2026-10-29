@@ -65,6 +65,11 @@ export interface UnitSeferBookProps {
 	/** Second cover line describing the division's slicing. */
 	coverEdition?: string;
 	/**
+	 * Feature-level dedication lines on the front cover (#2731) — the
+	 * whole-division dedication shown once for the reading context.
+	 */
+	coverDedications?: string[];
+	/**
 	 * Unit-driven content pages, in book order (each unit's text page
 	 * and its blank commentary page). Everything else — covers,
 	 * contents, toolbar, visibility markers — is shared chrome.
@@ -101,6 +106,7 @@ export function UnitSeferBook({
 	seferName,
 	coverSubtitle,
 	coverEdition,
+	coverDedications,
 	contentPages,
 	contentOffset,
 	pageSemantics,
@@ -152,7 +158,7 @@ export function UnitSeferBook({
 	const frontCover = (
 		<section
 			key="front-cover"
-			className={`${seferStyles.page} ${seferStyles.cover}`}
+			className={`${seferStyles.page} ${seferStyles.cover} flipbook-page-bounded`}
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
@@ -160,13 +166,14 @@ export function UnitSeferBook({
 				seferName={seferName}
 				subtitle={coverSubtitle}
 				edition={coverEdition}
+				dedications={coverDedications}
 			/>
 		</section>
 	);
 	const backCover = (
 		<section
 			key="back-cover"
-			className={`${seferStyles.page} ${seferStyles.cover}`}
+			className={`${seferStyles.page} ${seferStyles.cover} flipbook-page-bounded`}
 			aria-label="עטיפה אחורית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
@@ -177,6 +184,7 @@ export function UnitSeferBook({
 	const tocPage = (
 		<TocPage
 			key="toc"
+			className="flipbook-page-bounded"
 			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
 			totalPages={totalPages}
 			pageSemantics={pageSemantics}
@@ -196,7 +204,7 @@ export function UnitSeferBook({
 
 	const pages = [
 		frontCover,
-		<div key="cover-interior" />,
+		<div key="cover-interior" className="flipbook-page-bounded" />,
 		tocPage,
 		...contentPages,
 		backCover,
