@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PHASE_PRODUCTION_BUILD } from "next/constants.js";
+import { getBuildWorkerCount } from "./scripts/build-worker-budget.mjs";
 
 const KB = 1024;
 const MB = KB * KB;
@@ -264,4 +267,18 @@ const nextConfig = {
 	},
 };
 
-export default nextConfig;
+export default (phase, { defaultConfig }) => {
+	if (phase !== PHASE_PRODUCTION_BUILD) return nextConfig;
+	return {
+		...nextConfig,
+		experimental: {
+			...nextConfig.experimental,
+			cpus: getBuildWorkerCount({
+				defaultCpuLimit: defaultConfig.experimental.cpus,
+				parallelism: availableParallelism(),
+				availableBytes: process.availableMemory(),
+				constrainedBytes: process.constrainedMemory(),
+			}),
+		},
+	};
+};
