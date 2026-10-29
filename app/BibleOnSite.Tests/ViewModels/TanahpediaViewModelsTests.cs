@@ -1358,6 +1358,32 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
+    public async Task Share_AfterSynonymRedirect_UsesTheResolvedCanonicalSlug()
+    {
+        // A synonym that resolves to one entry displays the canonical entry
+        // — the share route must name that canonical slug, not the
+        // requested alias (#2786, review follow-up).
+        var share = new Mock<IShare>();
+        var vm = new TanahpediaEntryViewModel(_service.Object, _navigator.Object,
+            EmptyPerekData(), StubDedicationService.Instance, share.Object);
+        _service.Setup(s => s.GetEntryDetailAsync("שמשון-הגיבור", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("שמשון-הגיבור", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaSynonymTarget { UniqueName = "שמשון", Title = "שמשון" }]);
+        _service.Setup(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail { UniqueName = "שמשון", Title = "שמשון הגיבור" });
+
+        vm.UniqueName = "שמשון-הגיבור";
+        await vm.LoadAsync();
+        await vm.ShareAsync();
+
+        share.Verify(s => s.RequestAsync(It.Is<ShareTextRequest>(r =>
+            r.Uri == $"https://תנך.co.il/pedia/{Uri.EscapeDataString("שמשון")}" &&
+            r.Text == "שמשון הגיבור")), Times.Once,
+            "an alias-resolved entry shares the canonical slug, not the requested synonym");
+    }
+
+    [Fact]
     public async Task Share_WithoutEntry_IsANoOp()
     {
         var share = new Mock<IShare>();

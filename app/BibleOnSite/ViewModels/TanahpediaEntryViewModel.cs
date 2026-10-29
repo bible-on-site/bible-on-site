@@ -42,6 +42,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private CancellationTokenSource? _loadCts;
     private int _loadVersion;
 
+    /// <summary>The canonical unique_name of the displayed entry — differs
+    /// from the requested <see cref="UniqueName"/> when a synonym resolved
+    /// to a canonical entry; the share route must name the canonical slug,
+    /// not the requested alias (#2786).</summary>
+    private string _canonicalName = string.Empty;
+
     /// <summary>True while a family-tree trail is pending above the entry
     /// the page was opened with.</summary>
     public bool HasEntryHistory => _entryHistory.Count > 0;
@@ -178,6 +184,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         ErrorMessage = null;
         IsNotFound = false;
         IsDisambiguation = false;
+        // Cleared with each request: until a canonical entry lands, the
+        // share route falls back to the requested name (which resolves
+        // server-side to the same chooser or entry).
+        _canonicalName = string.Empty;
 
         try
         {
@@ -295,6 +305,9 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
         DedicationLines = [];
 
+        // The displayed entry's slug may differ from the requested name
+        // (synonym redirect) — sharing targets the canonical slug (#2786).
+        _canonicalName = detail.UniqueName.Length > 0 ? detail.UniqueName : UniqueName;
         Title = detail.Title;
         Content = TanahpediaFootnotes.Normalize(detail.Content);
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
@@ -517,15 +530,18 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [RelayCommand]
     public async Task ShareAsync()
     {
-        if (UniqueName.Length == 0)
+        // Prefer the resolved entry's slug so synonym requests share the
+        // canonical URL the website redirects to, not the alias (#2786).
+        var slug = _canonicalName.Length > 0 ? _canonicalName : UniqueName;
+        if (slug.Length == 0)
         {
             return;
         }
 
         await _share.RequestAsync(new ShareTextRequest
         {
-            Text = Title.Length > 0 ? Title : UniqueName,
-            Uri = $"https://תנך.co.il/pedia/{Uri.EscapeDataString(UniqueName)}",
+            Text = Title.Length > 0 ? Title : slug,
+            Uri = $"https://תנך.co.il/pedia/{Uri.EscapeDataString(slug)}",
             Title = "שתף ערך"
         });
     }
