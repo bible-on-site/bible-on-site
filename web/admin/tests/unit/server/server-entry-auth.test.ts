@@ -27,6 +27,14 @@ vi.mock("@tanstack/react-start/server-entry", () => ({
 	}) => opts,
 }));
 
+// Startup integration tests cover these effects; auth tests isolate dispatch.
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/email-worker-runtime.server", () => ({
+	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("~/server/auth", () => ({
 	buildClearSessionCookie: vi.fn(),
 	buildSessionCookie: vi.fn(),

@@ -9,6 +9,14 @@ vi.mock("@tanstack/react-start/server-entry", () => ({
 	createServerEntry: (entry: { fetch: (request: Request) => unknown }) => entry,
 }));
 
+// Startup effects have their own integration tests; this suite isolates the drain.
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/email-worker-runtime.server", () => ({
+	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("~/server/auth", () => ({
 	buildClearSessionCookie: vi.fn(),
 	buildSessionCookie: vi.fn(),
@@ -28,7 +36,7 @@ async function loadServer() {
 describe("/api/dev/coverage", () => {
 	beforeEach(() => {
 		appFetchMock.mockReset();
-		appFetchMock.mockReturnValue(new Response("app"));
+		appFetchMock.mockImplementation(() => new Response("app"));
 		vi.stubEnv("SKIP_AUTH", "true");
 	});
 
