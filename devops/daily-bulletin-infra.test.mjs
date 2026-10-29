@@ -255,7 +255,7 @@ test("the study-day schedule starts disabled, uses Jerusalem 10AM and only the e
 	// CloudFormation's Arn reader loses the custom GroupName after creation.
 	assert.equal(
 		schedule.Outputs.ScheduleArn.Value,
-		"arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${ScheduleGroup}/${Schedule}",
+		`arn:\${AWS::Partition}:scheduler:\${AWS::Region}:\${AWS::AccountId}:schedule/\${ScheduleGroup}/\${Schedule}`,
 	);
 	assert.equal(properties.FlexibleTimeWindow.Mode, "OFF");
 	assert.deepEqual(JSON.parse(properties.Target.Input), {
