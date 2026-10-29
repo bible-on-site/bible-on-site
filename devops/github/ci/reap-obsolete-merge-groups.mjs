@@ -73,15 +73,20 @@ function fullQueue(response) {
   for (const [index, node] of entries.nodes.entries()) {
     requireValue(node && states.has(node.state) && node.position === index + 1
       && positive(node.pullRequest?.number) && hex(node.pullRequest.headRefOid)
-      && !prs.has(node.pullRequest.number) && hex(node.baseCommit?.oid), "QUEUE_TOPOLOGY");
+      && !prs.has(node.pullRequest.number), "QUEUE_TOPOLOGY");
     prs.add(node.pullRequest.number);
-    bases.push(node.baseCommit.oid);
-    if (node.headCommit === null) {
-      requireValue(node.state === "UNMERGEABLE", "UNKNOWN_QUEUE_HEAD");
-    } else {
-      requireValue(hex(node.headCommit?.oid), "UNKNOWN_QUEUE_HEAD");
-      heads.push(node.headCommit.oid);
+    const head = node.headCommit?.oid ?? null;
+    const base = node.baseCommit?.oid ?? null;
+    // Entries not yet folded into a merge group carry no commits at all;
+    // grouped entries always carry both. A lone null is unknown topology.
+    requireValue((head === null) === (base === null), "QUEUE_TOPOLOGY");
+    if (head === null) {
+      requireValue(node.state === "QUEUED" || node.state === "UNMERGEABLE", "UNKNOWN_QUEUE_HEAD");
+      continue;
     }
+    requireValue(hex(head) && hex(base), "UNKNOWN_QUEUE_HEAD");
+    heads.push(head);
+    bases.push(base);
   }
   return { heads, bases };
 }
