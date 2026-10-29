@@ -183,9 +183,9 @@ Current chain (`shared-dockerize.yml`, `package_admin` in `ci.yml`,
 `shared-release.yml`, `cd-aws.yml`, `devops/deploy/ecr-deploy`):
 
 ```
-docker buildx build --load (amd64) â†’ docker save â†’ <image>-v<ver>.tar.gz
-â†’ GH release asset â†’ cd-aws: crane push â†’ ECR :v<ver> and :latest
-â†’ EventBridge rule on "latest" PUSH â†’ ECS forceNewDeployment
+docker buildx build --load (amd64) → docker save → <image>-v<ver>.tar.gz
+→ GH release asset → cd-aws: crane push → ECR :v<ver> and :latest
+→ EventBridge rule on "latest" PUSH → ECS forceNewDeployment
 ```
 
 Three properties constrain the design:
@@ -710,8 +710,9 @@ but still reported `IN_PROGRESS`. That rolling-completion gate remains failed,
 including after adding the readiness signal. It is not evidence that simply
 adding a health check fixes the control-plane completion delay. No observation
 budget was extended. All owned tasks from this trial were confirmed stopped.
-The proposed readiness check and any longer deployment-state observation
-require their applicable approval before another trial or production change.
+A longer deployment-state observation requires the repository performance-rule
+exception; applying the readiness check to production requires specific AWS
+change approval.
 
 Canonical publication and platform pulls, a fully qualified current x86
 rollback definition, ECS readiness/circuit-breaker behavior, normal release
