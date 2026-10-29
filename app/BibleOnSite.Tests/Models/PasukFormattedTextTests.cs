@@ -164,15 +164,7 @@ public class PasukFormattedTextTests
             var weak = CreateFormattedWeakReference(pasuk);
             // The bounded MRU keeps the freshest entries rooted (#2309); binding
             // enough newer pesukim evicts this pasuk's entry again.
-            foreach (var i in Enumerable.Range(0, 200))
-            {
-                var newer = new Pasuk
-                {
-                    PasukNum = i + 2, Text = "",
-                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
-                };
-                _ = newer.FormattedText;
-            }
+            PushNewPesukimThroughFormattedMru(200);
 
             GarbageCollection.CollectCycles();
 
@@ -183,6 +175,20 @@ public class PasukFormattedTextTests
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static WeakReference<FormattedString> CreateFormattedWeakReference(Pasuk pasuk)
             => new(pasuk.FormattedText);
+
+        // Binds `count` fresh pesukim so the FormattedText MRU evicts older
+        // entries; the loop's side effect is the point, not the built pesukim.
+        private static void PushNewPesukimThroughFormattedMru(int count)
+        {
+            foreach (var pasukNum in Enumerable.Range(2, count))
+            {
+                _ = new Pasuk
+                {
+                    PasukNum = pasukNum, Text = "",
+                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
+                }.FormattedText;
+            }
+        }
 
         [Fact]
         public void returns_empty_string_when_segments_is_empty()
@@ -239,15 +245,7 @@ public class PasukFormattedTextTests
             };
             var firstFormatted = first.FormattedText;
             // Push the first pasuk past the MRU capacity of 128 entries.
-            foreach (var i in Enumerable.Range(0, 200))
-            {
-                var other = new Pasuk
-                {
-                    PasukNum = i + 2, Text = "",
-                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
-                };
-                _ = other.FormattedText;
-            }
+            PushNewPesukimThroughFormattedMru(200);
 
             first.FormattedText.Should().NotBeSameAs(firstFormatted);
             first.FormattedText.Should().BeSameAs(first.FormattedText);
