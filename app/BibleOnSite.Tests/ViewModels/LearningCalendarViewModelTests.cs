@@ -1065,6 +1065,23 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
+    public async Task OpenPerek_WhenNavigationFails_SwallowAndLog()
+    {
+        await using var fixture = await CreateFixtureAsync(CycleOneAndTwo);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        fixture.Navigator.Setup(n => n.GoToAsync(It.IsAny<string>()))
+            .ThrowsAsync(new IOException("route unavailable"));
+        var tappable = vm.Cells.First(c => c.PerekId is not null);
+
+        await vm.OpenPerekCommand.ExecuteAsync(tappable);
+
+        fixture.Navigator.Verify(
+            n => n.GoToAsync($"{AppRoutes.CalendarReader}?perekId={tappable.PerekId}"),
+            Times.Once);
+    }
+
+    [Fact]
     public void AppRoutes_CalendarRoutes_AreDistinctReaderAndFlyoutTargets()
     {
         // The calendar page is a flyout destination while the reader route is

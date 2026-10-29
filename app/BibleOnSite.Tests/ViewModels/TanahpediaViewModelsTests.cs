@@ -164,6 +164,18 @@ public class TanahpediaViewModelTests
 
         _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
     }
+
+    [Fact]
+    public async Task OpenCommands_WhenNavigationFails_SwallowAndLog()
+    {
+        _navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var vm = Create();
+
+        await vm.OpenCategoryAsync(new TanahpediaCategoryItem { Category = TanahpediaTaxonomy.Find("KING")! });
+        await vm.OpenEntryAsync("שמשון");
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(2));
+    }
 }
 
 public class TanahpediaEntityTypeViewModelTests
@@ -392,6 +404,16 @@ public class TanahpediaEntityTypeViewModelTests
         vm.HasMap.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task OpenEntry_WhenNavigationFails_SwallowAndLog()
+    {
+        _navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var vm = Create();
+
+        await vm.OpenEntryAsync("ירושלים");
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Once);
+    }
 }
 
 public class TanahpediaEntryViewModelTests
@@ -1327,5 +1349,17 @@ public class TanahpediaEntryViewModelTests
         vm.SynonymTargets.Should().HaveCount(2);
         vm.HasFamily.Should().BeFalse();
         vm.HasEntities.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task OpenEntityCategoryAndGoBack_WhenNavigationFails_SwallowAndLog()
+    {
+        _navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var vm = Create();
+
+        await vm.OpenEntityCategoryAsync(new TanahpediaLinkedEntity { EntityType = "KING", EntityName = "דוד" });
+        await vm.GoBackCommand.ExecuteAsync(null);
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(2));
     }
 }

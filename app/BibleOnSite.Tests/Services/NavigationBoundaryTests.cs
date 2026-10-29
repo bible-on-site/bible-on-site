@@ -165,6 +165,30 @@ public class NavigationBoundaryTests
             Application.Current = previous;
         }
     }
+    [Fact]
+    public async Task Navigation_ParameterizedAndQueuedRoutes_ReachShell()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = "home", Content = new ContentPage() });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+
+            await ShellAppNavigator.Instance.GoToAsync("//home", false,
+                new Dictionary<string, object> { ["section"] = "packs" });
+            await ShellAppNavigator.Instance.GoToQueuedAsync("//home");
+
+            shell.CurrentState.Location.OriginalString.Should().Contain("home");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
     public sealed class ContextualPreferencesPage : ContentPage, IQueryAttributable
     {
         public string? Section { get; private set; }

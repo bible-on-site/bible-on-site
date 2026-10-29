@@ -139,4 +139,42 @@ public class AsyncCommandsTests
         await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task ArticleDetail_WhenShareAndNavigationFail_SwallowAndLog()
+    {
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var share = new Mock<IShare>();
+        share.Setup(s => s.RequestAsync(It.IsAny<ShareTextRequest>())).ThrowsAsync(new IOException("share unavailable"));
+        var vm = new ArticleDetailViewModel(navigator.Object, share.Object);
+        vm.SetArticle(new Article
+        {
+            Id = 7, PerekId = 2, Name = "מאמר", Abstract = "תקציר",
+            Author = new Author { Id = 9, Name = "משה", Details = "" }
+        });
+
+        await vm.ShareCommand.ExecuteAsync(null);
+        await vm.GoBackCommand.ExecuteAsync(null);
+        await vm.GoToAuthorCommand.ExecuteAsync(null);
+
+        share.Verify(s => s.RequestAsync(It.IsAny<ShareTextRequest>()), Times.Once);
+        navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Articles_WhenArticleNavigationFails_SwallowAndLog()
+    {
+        await using var storage = new TestStorage();
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var vm = new ArticlesViewModel(
+            new StarterService(new GraphQLTransport().Client, storage.FileSystem.Object),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            navigator.Object);
+
+        await vm.OpenArticleCommand.ExecuteAsync(new Article { Id = 7, PerekId = 2, Name = "מאמר", Abstract = "" });
+
+        navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Once);
+    }
 }

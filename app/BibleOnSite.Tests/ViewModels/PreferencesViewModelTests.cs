@@ -1359,4 +1359,39 @@ public class DivineNameOptionToggleTests : IDisposable
         _viewModel.IsMaskShaddaiCustom = true;
         _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Custom);
     }
+
+    [Fact]
+    public async Task CategoryCommands_WhenNavigationFails_SwallowAndLog()
+    {
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var tempDir = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
+        var notes = PerushimNotesService.CreateForTesting(new Mock<IPadDeliveryService>().Object, tempDir);
+        var recitation = new RecitationService(new Mock<IFileSystem>().Object, new Mock<IPadDeliveryService>().Object);
+        var viewModel = new PreferencesViewModel(_service, notes, recitation, navigator.Object);
+
+        await viewModel.OpenDisplayCommand.ExecuteAsync(null);
+        await viewModel.OpenPerekCommand.ExecuteAsync(null);
+        await viewModel.OpenExtensionPacksCommand.ExecuteAsync(null);
+        await viewModel.OpenRecitationCommand.ExecuteAsync(null);
+        await viewModel.OpenSoundCommand.ExecuteAsync(null);
+        await viewModel.OpenSupportCommand.ExecuteAsync(null);
+
+        navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(6));
+    }
+
+    [Fact]
+    public async Task RecitationCommands_WhenNavigationFails_SwallowAndLog()
+    {
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).ThrowsAsync(new IOException("route unavailable"));
+        var viewModel = new RecitationPreferencesViewModel(
+            new RecitationService(new Mock<IFileSystem>().Object, new Mock<IPadDeliveryService>().Object),
+            _service, navigator.Object);
+
+        await viewModel.OpenSoundCommand.ExecuteAsync(null);
+        await viewModel.OpenExtensionPacksCommand.ExecuteAsync(null);
+
+        navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(2));
+    }
 }
