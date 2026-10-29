@@ -120,7 +120,8 @@ jobs:
       - uses: taiki-e/install-action@v2
         if: ${{ env.IS_CARGO == 'true' }}
         with:
-          tool: cargo-make, tomato-toml, semver-bump
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, tomato-toml, semver-bump
 
       - name: Get Module Version
         id: get_module_version

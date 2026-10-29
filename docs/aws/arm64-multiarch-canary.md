@@ -583,6 +583,34 @@ must establish a fully qualified current amd64 image and complete rollback
 definition. Current committed native builds, release provenance, isolated AWS
 comparison and final review remain gates; production is still x86.
 
+### Combined dependency cleanup and runtime equivalence (2026-10-29)
+
+The same release incorporates the validated dependency cleanup from
+[#2828](https://github.com/bible-on-site/bible-on-site/pull/2828): the API no
+longer declares the unused cargo-make CLI as a Rust dev-dependency, removing
+103 orphan lockfile packages. No retained package versions are changed.
+Normal/build package and feature graphs are identical for Linux amd64,
+Linux ARM64 and Windows. CI still installs the explicitly pinned CLI;
+its upstream ZIP compatibility limitation and Renovate tracking remain
+recorded in [#2826](https://github.com/bible-on-site/bible-on-site/issues/2826).
+This removes the unused API dependency graph; it does not claim the external
+CLI is universally patched.
+
+The combined actual Dockerfile image is
+`4c7b8f28c204b6641ef65bbcddbb87ade30e9e211bdc222f3ccf94c54acdc5bf`,
+bound to 132 production inputs with source hash
+`b79154cc6c4a8f36d3e8115996dc2b0b7645ef4786cd728a8a000ef1c96f97f6`.
+The rebuilt server is byte-identical to the qualified image above. Its 520
+runtime filesystem entries (content, types, permissions, ownership, links
+and extended attributes) and runtime configuration are also identical;
+the comparison excludes Docker-injected host files, build timestamps and
+provenance labels. This supports reusing the preceding local runtime
+observations, rather than claiming they were repeated on a new binary.
+The combined graph passes all 311 unit tests, strict all-target Clippy and
+formatting. The preceding coverage and real-MySQL/HTTP results apply to
+unchanged Rust/test sources. Current-head CI/native release verification
+and isolated AWS qualification remain required.
+
 ## Isolated candidate design (phase 2 - requires authorized AWS access)
 
 Multi-arch manifests do not select Graviton by themselves. Definitions without
