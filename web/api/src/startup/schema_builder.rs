@@ -13,6 +13,7 @@ use crate::resolvers::dedications_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
+use crate::resolvers::tanahpedia_aliases_resolver;
 use crate::resolvers::tanahpedia_entity_resolver;
 use crate::resolvers::tanahpedia_entries_resolver;
 use crate::resolvers::tanahpedia_family_resolver;
@@ -27,6 +28,7 @@ pub struct QueryRoot(
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
     starter_resolver::StarterQuery,
+    tanahpedia_aliases_resolver::TanahpediaAliasesQuery,
     tanahpedia_entries_resolver::TanahpediaEntriesQuery,
     tanahpedia_entity_resolver::TanahpediaEntityQuery,
     tanahpedia_family_resolver::TanahpediaFamilyQuery,
@@ -36,6 +38,7 @@ pub struct QueryRoot(
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
     dedications_resolver::DedicationsMutation,
+    tanahpedia_aliases_resolver::TanahpediaAliasesMutation,
     tanahpedia_family_resolver::TanahpediaFamilyMutation,
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
 );
@@ -1028,5 +1031,138 @@ mod tests {
         assert_eq!(dedications[0]["id"], 42);
         assert_eq!(dedications[0]["subject"], "מרדכי בן זאב");
         assert_eq!(dedications[0]["scopes"][0]["kind"], "SEFER");
+    }
+    #[tokio::test]
+    async fn schema_rejects_alias_operations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let operations = [
+            r#"{ tanahpediaNameStatus(name: "משה") { kind } }"#,
+            r#"{ tanahpediaEntryAliases(entryId: "e1") { name } }"#,
+            r#"mutation { saveTanahpediaAlias(input: { name: "משה", targets: [{ entryId: "e1" }], expectedTargets: [] }) { name } }"#,
+            r#"mutation { removeTanahpediaEntryFromAlias(name: "משה", entryId: "e1") { name } }"#,
+            r#"mutation { deleteTanahpediaAlias(name: "משה") { name } }"#,
+        ];
+
+        for operation in operations {
+            let response = schema
+                .execute(Request::new(operation).data(crate::common::auth::ApiAuth::new(None)))
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert_eq!(response.errors[0].message, "Revision API is not configured");
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_alias_queries_and_mutation() {
+        use entities::tanahpedia::entry;
+
+        let target_row = |entry_id: &str| {
+            [
+                ("entry_id", Value::from(entry_id.to_string())),
+                ("unique_name", Value::from("משה-רבנו".to_string())),
+                ("title", Value::from("משה רבנו".to_string())),
+                ("label", Value::String(None)),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect::<BTreeMap<String, Value>>()
+        };
+        let now = chrono::Utc::now().naive_utc();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // tanahpediaNameStatus → alias: holder none, then target rows.
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![target_row("e1")],
+                ])
+                // tanahpediaEntryAliases → names, then per-name targets + holder.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![[("name", Value::from("משה".to_string()))]
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect::<BTreeMap<String, Value>>()],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![target_row("e1")],
+                ])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                // saveTanahpediaAlias → lock, holder none, current empty,
+                // existing unique_name, then delete + insert execs.
+                .append_query_results::<entities::tanahpedia::entry_synonym::Model, Vec<entities::tanahpedia::entry_synonym::Model>, _>([
+                    vec![],
+                ])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![[("unique_name", Value::from("משה-רבנו".to_string()))]
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect::<BTreeMap<String, Value>>()],
+                ])
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let auth = || {
+            crate::common::auth::ApiAuth::with_revision_api_key(
+                Some("alias-test-key".to_string()),
+                Some("alias-test-key".to_string()),
+            )
+        };
+
+        let status = schema
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaNameStatus(name: "משה") { kind name aliasTargets { entryId title label } } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(status.errors.is_empty(), "{:?}", status.errors);
+        let status_json = status.data.into_json().unwrap()["tanahpediaNameStatus"].clone();
+        assert_eq!(status_json["kind"], "alias");
+        assert_eq!(status_json["aliasTargets"][0]["entryId"], "e1");
+
+        let aliases = schema
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaEntryAliases(entryId: "e1") { name kind targets { entryId } isSelfMain reservedCategory shadowedByCanonical { id } } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(aliases.errors.is_empty(), "{:?}", aliases.errors);
+        let alias_json = aliases.data.into_json().unwrap()["tanahpediaEntryAliases"].clone();
+        assert_eq!(alias_json[0]["name"], "משה");
+        assert_eq!(alias_json[0]["kind"], "alias");
+        assert_eq!(alias_json[0]["isSelfMain"], false);
+
+        let saved = schema
+            .execute(
+                Request::new(
+                    r#"mutation { saveTanahpediaAlias(input: { name: "משה", targets: [{ entryId: "e1" }], expectedTargets: [] }) { name kind targetCount revalidation } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(saved.errors.is_empty(), "{:?}", saved.errors);
+        let saved_json = saved.data.into_json().unwrap()["saveTanahpediaAlias"].clone();
+        assert_eq!(saved_json["kind"], "alias");
+        assert_eq!(saved_json["targetCount"], 1);
+        // No WEBSITE_URL/REVALIDATE_SECRET on the test box → documented no-op.
+        assert_eq!(saved_json["revalidation"], "SKIPPED");
     }
 }
