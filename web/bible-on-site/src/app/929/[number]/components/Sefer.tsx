@@ -3,7 +3,6 @@ import type {
 	Bookmark,
 	BookmarkContext,
 	BookmarkProvider,
-	CoverConfig,
 	FlipBookHandle,
 	HistoryMapper,
 	PageSemantics,
@@ -13,7 +12,6 @@ import {
 	ActionButton,
 	BookmarkToggleButton,
 	BookshelfIcon,
-	type DownloadConfig,
 	DownloadDropdown,
 	FirstPageButton,
 	FullscreenButton,
@@ -25,7 +23,6 @@ import {
 	TocButton,
 	Toolbar,
 } from "html-flip-book-react/toolbar";
-import dynamic from "next/dynamic";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React, {
@@ -43,6 +40,7 @@ import {
 	type PerekSummaries,
 } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
+import { FlipBook } from "@/app/components/reading/FlipBook";
 import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
 import type { SefarimItem } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
@@ -101,6 +99,7 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	downloadErrorMessage,
 	runDownload,
 	toHebrewChapterNumber,
 } from "./sefer-page-utils";
@@ -109,50 +108,10 @@ import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
-/** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
-type FlipBookProps = {
-	handlers?: { onPageFlipping?: () => void; onPageFlipped?: () => void };
-	className: string;
-	pages: React.ReactNode[];
-	pageSemantics?: PageSemantics;
-	direction?: "rtl" | "ltr";
-	/** Leaves to keep visible before/after current for performance */
-	leavesBuffer?: number;
-	/** Override total-page display in toolbar (e.g. Hebrew chapter count) */
-	of?: string | number;
-	/** Cover configuration */
-	coverConfig?: CoverConfig;
-	/** History integration: URL ↔ page */
-	historyMapper?: HistoryMapper;
-	/** Initial turned leaves (from URL on load) – array of leaf indices */
-	initialTurnedLeaves?: number[];
-	/** Download configuration: entire book and page-range handlers plus filename hints */
-	downloadConfig?: DownloadConfig;
-	/** Enable/disable page shadow effect during flip */
-	pageShadow?: boolean;
-	/** Aggressive containment during flip animations for reduced jank */
-	snapshotDuringFlip?: boolean;
-	/** Table of contents page index (book-level). Default: 4. */
-	tocPageIndex?: number;
-	/** Remember the flipbook's mouse interaction mode. */
-	mouseModeStorageKey?: string;
-	/** Enable the native chapter-tab bookmark layer (requires bookmarkProvider). */
-	enableBookmarks?: boolean;
-	/** Supplies the chapter tabs: getBookmarks context, compact/expanded renderers. */
-	bookmarkProvider?: BookmarkProvider;
-};
-
 /**
  * Pasuk number in a book content page — see ./SeferPasukNumber (recitation,
  * perush navigation, or a pasuk-selection toggle during selection mode).
  */
-
-/** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
-const FlipBook = dynamic<
-	FlipBookProps & { ref?: React.RefObject<FlipBookHandle | null> }
->(() => import("html-flip-book-react").then((mod) => mod.FlipBook), {
-	ssr: false,
-});
 
 const Sefer = (props: {
 	perekObj: PerekObj;
@@ -189,7 +148,6 @@ const Sefer = (props: {
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
-	const [downloadError, setDownloadError] = useState<string | null>(null);
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
@@ -692,28 +650,28 @@ const Sefer = (props: {
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,
 							downloadContext: { seferName: perekObj.sefer },
+							// The library's error surface keeps the menu open with a
+							// retry path; onDownloadError supplies the app's Hebrew
+							// text for it (#2778).
+							onDownloadError: downloadErrorMessage,
 							// Masking is read at click time so a just-changed setting applies.
 							onDownloadSefer: () =>
-								runDownload(
-									() =>
-										downloadSefer({
-											seferName: perekObj.sefer,
-											perekIds:
-												perekIds && perekIds.length > 0
-													? perekIds
-													: [perekObj.perekId],
-											divineNameMasking: getDivineNameMaskingSettings(),
-										}),
-									setDownloadError,
+								runDownload(() =>
+									downloadSefer({
+										seferName: perekObj.sefer,
+										perekIds:
+											perekIds && perekIds.length > 0
+												? perekIds
+												: [perekObj.perekId],
+										divineNameMasking: getDivineNameMaskingSettings(),
+									}),
 								),
 							onDownloadPageRange: (pages, semanticPages, context) =>
-								runDownload(
-									() =>
-										downloadPageRanges(pages, semanticPages, {
-											...context,
-											divineNameMasking: getDivineNameMaskingSettings(),
-										}),
-									setDownloadError,
+								runDownload(() =>
+									downloadPageRanges(pages, semanticPages, {
+										...context,
+										divineNameMasking: getDivineNameMaskingSettings(),
+									}),
 								),
 						}}
 					/>
@@ -749,11 +707,6 @@ const Sefer = (props: {
 						<LastPageButton />
 					</div>
 					<div className="flipbook-toolbar-end">
-						{downloadError && (
-							<p role="alert" className={styles.downloadError}>
-								{downloadError}
-							</p>
-						)}
 						<DownloadDropdown ariaLabel="הורדה">
 							<DownloadMaskingHint />
 						</DownloadDropdown>

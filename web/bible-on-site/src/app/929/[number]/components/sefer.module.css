@@ -571,15 +571,6 @@
 	cursor: pointer;
 }
 
-.downloadError {
-	margin: 0;
-	padding: 4px 10px;
-	border-radius: 6px;
-	background: #7f1d1d;
-	color: #fff;
-	font-size: 13px;
-}
-
 .perekText [data-sefer-pasuk][data-pasuk-highlight="fading"],
 .perekText [id^="pasuk-"][data-pasuk-highlight="fading"] {
 	background: transparent;
