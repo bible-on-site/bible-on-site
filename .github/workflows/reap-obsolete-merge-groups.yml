@@ -13,7 +13,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: obsolete-merge-group-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'control' }}
+  # Unrelated PR/master CI events must not replace a queued controller run.
+  group: >-
+    obsolete-merge-group-${{ github.event_name == 'pull_request' && github.event.pull_request.number ||
+      ((github.event_name == 'workflow_run' && github.event.workflow_run.event == 'merge_group') ||
+       (github.event_name == 'delete' && github.event.ref_type == 'branch' &&
+        startsWith(github.event.ref, 'gh-readonly-queue/master/pr-'))) && 'control' || github.run_id }}
   cancel-in-progress: false
 jobs:
   test:
