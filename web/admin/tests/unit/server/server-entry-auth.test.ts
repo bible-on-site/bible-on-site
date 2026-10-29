@@ -27,6 +27,15 @@ vi.mock("@tanstack/react-start/server-entry", () => ({
 	}) => opts,
 }));
 
+// Worker startup and dedication scheduling have their own integration suites.
+// Authentication/coverage assertions must not load their DB/provider graph.
+vi.mock("~/server/email-worker-runtime.server", () => ({
+	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("~/server/auth", () => ({
 	buildClearSessionCookie: vi.fn(),
 	buildSessionCookie: vi.fn(),

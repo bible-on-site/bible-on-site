@@ -118,11 +118,23 @@ public class MasoraInputWiringTests
         // so satellite layout bounds match the rendered positions. Masora
         // skipped the call, leaving satellites laid out against the shifted
         // canvas - the bounds-vs-render mismatch behind the dead taps.
+        // #2573: the geometry now lives in the shared platform chrome, so
+        // parity holds as long as Masora hands its fan and root to it.
         var source = File.ReadAllText(Path.Join(AppRoot, "Pages", "MasoraPage.xaml.cs"));
-        source.Should().Contain("ReaderSafeArea.Configure(MainGrid)",
-            "the reader grid opts out of per-layout safe-area padding like the sibling readers");
-        source.Should().Contain("FanMenu.SetBottomInset(",
-            "the fan geometry must clear the same bottom inset the bottom bar covers");
+        // The constructor's call site precedes the definition — match the
+        // signature so the assertion reads the method body, not the call.
+        var setup = BodyOf(source, "void SetupPlatformChrome");
+        setup.Should().Contain("Root = MainGrid",
+            "the reader grid is the coordinator's safe-area target like the sibling readers");
+        setup.Should().Contain("FanMenu = FanMenu",
+            "the fan must reach the shared inset geometry the bottom bar covers");
+
+        var chrome = File.ReadAllText(Path.Join(AppRoot, "Helpers", "ReaderPlatformChrome.cs"));
+        chrome.Should().Contain("ReaderSafeArea.Configure(_ui.Root)",
+            "the shared safe-area chain is what clears per-layout padding on the readers");
+        var safeArea = File.ReadAllText(Path.Join(AppRoot, "Helpers", "ReaderSafeArea.cs"));
+        safeArea.Should().Contain("fanMenu.SetBottomInset(",
+            "ApplyBottomBarInset keeps floating the fan above the gesture-bar inset");
     }
 
     /// <summary>Returns the statements of a handler for targeted assertions.</summary>

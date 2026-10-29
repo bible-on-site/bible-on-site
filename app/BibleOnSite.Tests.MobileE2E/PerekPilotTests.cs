@@ -35,8 +35,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var sourceTop = source.Frame.Location.Y;
         var sourceBottom = sourceTop + source.Frame.Size.Height;
         Page.Tap("PerekSource");
-        var headerInput = Page.RenderedElements("PerekSearchInput").First();
-        Assert.InRange(headerInput.Frame.Location.Y + headerInput.Frame.Size.Height / 2, sourceTop, sourceBottom);
+        // The search bar slides in over several layout passes; a one-shot
+        // snapshot can land before the input exists or measure it mid-motion.
+        var (inputLocation, inputSize) = Page.WaitForStableFrame("PerekSearchInput");
+        Assert.InRange(inputLocation.Y + inputSize.Height / 2, sourceTop, sourceBottom);
         Page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
         Page.WaitFor("RecentSearches");
         Assert.Empty(Page.RenderedElements("PerekHeader"));
@@ -63,14 +65,13 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var navigation = Page.RenderedElements("SearchNavigationButton").First();
         Assert.True(clear.Frame.Location.X + clear.Frame.Size.Width <= input.Frame.Location.X, "The single clear button follows the text field in RTL.");
         Assert.True(input.Frame.Location.X + input.Frame.Size.Width <= navigation.Frame.Location.X, "Back belongs at the right edge in RTL.");
-        Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        AssertRegularReader();
+        OpenPerekResult("בראשית א", "בראשיט 1");
         Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
         Page.Tap("ClearSearchButton");
         Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
         Platform.Tap(Driver!, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
-        Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
+        WaitForSettledRow(text => text == "בראשית א", "'בראשית א'", TimeSpan.FromSeconds(45));
         SaveDiagnostics("RecentSearchRestoredResults", "passed");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
@@ -92,26 +93,22 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         SaveDiagnostics("FloatingSearchChapterResults", "passed");
-        Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
-        AssertRegularReader();
+        OpenPerekResult("בראשית א", "בראשיט 1");
         Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
-        Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
+        WaitForSettledRow(text => text == "בראשית א", "'בראשית א'", TimeSpan.FromSeconds(45));
 
         SearchFor("ויעש אלהים את הרקיע", "בראשית א ז");
         Page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
         SaveDiagnostics("FloatingSearchVerseResults", "passed");
-        // One snapshot read carries every result's text — the previous
-        // FindElements + per-element Displayed/Text reads cost 2N+1 WDA calls.
-        var result = Page.RenderedElements("SearchResultTitle")
-            .First(element => element.Text == "בראשית א ז");
-        Platform.Tap(Driver!, result.Element);
-        AssertRegularReader();
-        Page.WaitFor("PasukText", element => element.Text.StartsWith("ז "));
+        // A one-shot snapshot read can miss the row during publish churn —
+        // settle and verify the jump through the shared helper (#2701).
+        OpenSearchResult(
+            text => text == "בראשית א ז", "'בראשית א ז'", "ויעש אלהים את הרקיע",
+            (_, timeout) => Page.WaitFor("PasukText", element => element.Text.StartsWith("ז "), timeout));
         Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
-        Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
+        WaitForSettledRow(text => text == "בראשית א ז", "'בראשית א ז'", TimeSpan.FromSeconds(45));
         SaveDiagnostics("FloatingSearchVerseReturn", "passed");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
@@ -154,17 +151,18 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         AssertRegularReader();
         Platform.GoBack(driver);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
-        var restored = Page.WaitFor("SearchResultTitle", element => element.Text == title);
-        Assert.Equal(position, restored.Location);
-        var alternative = Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א א");
-        Platform.Tap(driver, alternative);
-        AssertRegularReader();
+        var (_, restoredFrame) = WaitForSettledRow(text => text == title, $"'{title}'", TimeSpan.FromSeconds(45));
+        Assert.Equal(position, restoredFrame.Location);
+        OpenSearchResult(
+            text => text == "בראשית א א", "'בראשית א א'", "בראשית ברא אלהים",
+            (_, timeout) => Page.WaitFor("PerekSource", element => element.Text == "בראשית א", timeout));
         Platform.GoBack(driver);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
         if (Configuration.KeepAppForReview)
         {
-            Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
-            AssertRegularReader();
+            OpenSearchResult(
+                text => text == title, $"'{title}'", "בראשית ברא אלהים",
+                (_, timeout) => Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, timeout));
             Page.ScrollBackTo("InlinePerushName", commentaryName);
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
@@ -191,42 +189,68 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
-        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+        // A bare presence wait can end while the row still moves across result
+        // waves — and it never sees a rendered row whose center sits below the
+        // viewport. Wait for the settled row instead (#2701).
+        WaitForSettledRow(text => text == expectedTitle, $"'{expectedTitle}'", TimeSpan.FromSeconds(45));
     }
 
-    // Commentary matches arrive on the slowest results wave, and a later
-    // publish can still move rows between resolving the element and the
-    // coordinate tap dispatching — a stray touch lands on a sibling row and
-    // opens no perush. Settle the row's frame, tap, and if no commentary
-    // reader appeared go back to the retained search page and tap once more.
-    private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase)
+    // Result rows publish in waves and can still move between resolving the
+    // element and the coordinate tap dispatching — a stray touch lands on a
+    // sibling row or on no row at all. Settle the row's frame, tap, and if the
+    // expected destination did not appear go back to the retained search page
+    // (only when the touch actually left it) and tap once more (#2701).
+    private (string Title, System.Drawing.Point Position) OpenSearchResult(
+        Func<string, bool> matches, string description, string searchPhrase,
+        Action<string, TimeSpan> verifyLanded)
     {
-        // The shipped index serves the first search. A missed coordinate tap
-        // gets one retry, within the same ordinary interaction deadline.
+        // A missed coordinate tap gets one retry, within the same ordinary
+        // interaction deadline.
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var (commentary, _) = WaitForSettledRow(rowSuffix, TimeSpan.FromSeconds(45));
-            var title = commentary.Text;
-            var position = commentary.Location;
-            Platform.Tap(Driver!, commentary);
-            AssertRegularReader();
-            var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
+            var (row, frame) = WaitForSettledRow(matches, description, TimeSpan.FromSeconds(45));
+            var title = row.Text;
+            var position = frame.Location;
+            Platform.Tap(Driver!, row);
             try
             {
-                var perushTimeout = attempt == 0 ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(45);
-                Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, perushTimeout);
+                var verifyTimeout = attempt == 0 ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(45);
+                Page.WaitFor("PerekSource", element => !string.IsNullOrEmpty(element.Text), verifyTimeout);
+                verifyLanded(title, verifyTimeout);
+                AssertRegularReader();
                 return (title, position);
             }
             catch (WebDriverTimeoutException) when (attempt == 0)
             {
-                Platform.GoBack(Driver!);
+                // A stray touch that opened a sibling's reader needs the
+                // trip back; one that never left the search page does not.
+                if (!Driver!.FindElements(Platform.AutomationId("PerekSearchInput")).Any(element => element.Displayed))
+                {
+                    Platform.GoBack(Driver!);
+                }
                 Page.WaitFor("PerekSearchInput", element => element.Text == searchPhrase);
             }
         }
-        throw new InvalidOperationException("The commentary tap retry loop exited without returning a result.");
+        throw new InvalidOperationException("The search-result tap retry loop exited without returning a result.");
     }
 
-    private (AppiumElement Element, System.Drawing.Rectangle Frame) WaitForSettledRow(string suffix, TimeSpan timeout)
+    // A perek result lands on the perek reader showing the row's own title as
+    // the source; a missed tap re-runs once through the shared settle/retry.
+    private void OpenPerekResult(string expectedTitle, string searchPhrase) =>
+        OpenSearchResult(
+            text => text == expectedTitle, $"'{expectedTitle}'", searchPhrase,
+            (title, timeout) => Page.WaitFor("PerekSource", element => element.Text == title, timeout));
+
+    // Commentary matches arrive on the slowest results wave; the landing check
+    // waits for the opened commentary heading named by the row's prefix.
+    private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase) =>
+        OpenSearchResult(
+            text => text.Contains(rowSuffix, StringComparison.Ordinal), $"'{rowSuffix}'", searchPhrase,
+            (title, timeout) => Page.WaitFor("InlinePerushName",
+                element => element.Text == title.Split(" - ", StringSplitOptions.None)[0], timeout));
+
+    private (AppiumElement Element, System.Drawing.Rectangle Frame) WaitForSettledRow(
+        Func<string, bool> matches, string description, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         var frame = System.Drawing.Rectangle.Empty;
@@ -234,7 +258,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             // Read cached row geometry without extra requests to the device.
             var row = Page.RenderedElements("SearchResultTitle")
-                .FirstOrDefault(element => element.Text.Contains(suffix, StringComparison.Ordinal));
+                .FirstOrDefault(element => matches(element.Text));
             if (row.Element != null)
             {
                 var current = new System.Drawing.Rectangle(row.Frame.Location, row.Frame.Size);
@@ -250,7 +274,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             }
             Thread.Sleep(250);
         }
-        throw new WebDriverTimeoutException($"No settled SearchResultTitle row containing '{suffix}' within {timeout.TotalSeconds} seconds.");
+        throw new WebDriverTimeoutException($"No settled SearchResultTitle row matching {description} within {timeout.TotalSeconds} seconds.");
     }
 
     private void AssertBookGroupColumns()

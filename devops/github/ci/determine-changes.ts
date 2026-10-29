@@ -10,6 +10,10 @@
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
+import {
+	isPublishDocstringOnlyChange,
+	PUBLISH_SOURCE_PATH,
+} from "./publish-docstring.mts";
 
 interface ModuleRule {
 	directory: string;
@@ -51,6 +55,10 @@ const NATIVE_IMAGE_CI_PATHS = [
 // (the Appium suite already lists the selector under `app`, #2085).
 const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
+// This evaluation guide is documentation, not an annotation or SQL input.
+// Keep the exception exact: other Markdown paths may be pipeline inputs.
+const DATA_DOCUMENTATION_PATTERN = /^data\/annotations\/GOLDEN\.md$/;
+
 export const MODULES = {
 	website: {
 		directory: "web/bible-on-site",
@@ -78,16 +86,18 @@ export const MODULES = {
 		// site, so they must not package, release, or bump the version (#2132):
 		// the tests/ tree, colocated *.test.*/​*.spec.* files (including
 		// .test.env), the root jest*/playwright* harness and the e2e-only
-		// helpers it imports, and coverage fixtures. package*.json,
-		// next.config.mjs, src/, public/, scripts/ (build-time), and
-		// Docker/tsconfig build inputs stay release-affecting.
+		// helpers it imports, coverage fixtures and the coverage-report CLI.
+		// package*.json, next.config.mjs, src/, public/, other build-time
+		// scripts/, and Docker/tsconfig inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$|scripts\/coverage-gaps\.mjs$)/,
 	},
 	api: {
 		directory: "web/api",
 		ciPaths: [
 			...NATIVE_IMAGE_CI_PATHS,
+			"devops/github/ci/pending-api-release.mjs",
+			"devops/github/ci/pending-api-release.test.mjs",
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
@@ -153,6 +163,7 @@ export const MODULES = {
 	},
 	data: {
 		directory: "data",
+		ciOnlyPattern: DATA_DOCUMENTATION_PATTERN,
 		// Data-deploy tooling changes require checks and normally re-run data CD.
 		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
@@ -160,6 +171,8 @@ export const MODULES = {
 			...SHARED_CI_PATHS,
 			"devops/deploy/data-deploy",
 			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
+			"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
 			"devops/daily-bulletin-infra.test.mjs",
 			"web/bulletin/assets/email",
 			"web/bulletin/scripts/prepare-email-assets.mjs",
@@ -169,6 +182,9 @@ export const MODULES = {
 			"web/bible-on-site/public/icons/whatsapp.svg",
 			"web/bible-on-site/public/icons/telegram.svg",
 			"devops/deploy/ecr-deploy",
+			"devops/github/ci/determine-changes.test.ts",
+			"devops/github/ci/publish-docstring.mts",
+			"devops/github/ci/publish-docstring-proof.py",
 		],
 	},
 	perushim_pipeline: {
@@ -209,10 +225,19 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  * This path check does not certify SQL safety or existence: deleted migrations
  * also stay manual rather than triggering a full production bootstrap.
  */
-export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
+export function isSchemaOnlyDataChange(files: string[]): boolean {
+	const changedFiles = files.filter(
+		(file) => !DATA_DOCUMENTATION_PATTERN.test(file),
+	);
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
-	const bulletinMigration = "data/mysql/tanah_daily_bulletin_upgrade.sql";
-	const hasBulletinMigration = dataFiles.includes(bulletinMigration);
+	const bulletinMigrations = new Set([
+		"data/mysql/tanah_daily_bulletin_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+	]);
+	const hasBulletinMigration = dataFiles.some((file) =>
+		bulletinMigrations.has(file),
+	);
 	return (
 		dataFiles.length > 0 &&
 		!changedFiles.some((file) =>
@@ -221,7 +246,7 @@ export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
-				file === bulletinMigration ||
+				bulletinMigrations.has(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.
 				(hasBulletinMigration &&
@@ -286,7 +311,9 @@ export function baseRevision(
 				: { kind: "sha", sha: before };
 		}
 		case "merge_group":
-			// Exclude changes of PRs queued ahead; master lacks them.
+			// Keep the immediate queue delta for diagnostics only. HEADGREEN can
+			// merge entries ahead using this group's checks, so main validates
+			// every module in the combined head rather than trusting this delta.
 			return {
 				kind: "sha",
 				sha: required(event.merge_group?.base_sha, "merge_group.base_sha"),
@@ -296,28 +323,52 @@ export function baseRevision(
 	}
 }
 
-export function listChangedFiles(base: BaseRevision, cwd?: string): string[] {
+interface ChangeContext {
+	baseSha: string;
+	headSha: string;
+	files: string[];
+}
+
+function changedFilesContext(base: BaseRevision, cwd?: string): ChangeContext {
 	const git = (...args: string[]) =>
 		execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+	const headSha = git("rev-parse", "HEAD");
+	const shallow = git("rev-parse", "--is-shallow-repository") === "true";
+	// CI's shallow clone still needs bounded ancestry. Never make an existing
+	// full repository shallow merely to resolve an event base.
+	const fetch = (depth: number, ref: string) =>
+		git(
+			"fetch",
+			"--no-tags",
+			...(shallow ? ["--depth=" + depth] : []),
+			"origin",
+			ref,
+		);
 	let baseSha: string;
 	if (base.kind === "sha") {
-		git("fetch", "--no-tags", "--depth=1", "origin", base.sha);
+		fetch(1, base.sha);
 		baseSha = base.sha;
 	} else if (base.kind === "parent" || base.kind === "merge-parent") {
-		git("fetch", "--no-tags", "--depth=2", "origin", git("rev-parse", "HEAD"));
+		fetch(2, headSha);
 		if (base.kind === "merge-parent") {
 			// Fail rather than accidentally counting master changes if checkout
 			// stops using the synthetic PR merge commit.
-			git("rev-parse", "--verify", "HEAD^2");
+			git("rev-parse", "--verify", headSha + "^2");
 		}
-		baseSha = git("rev-parse", "HEAD^");
+		baseSha = git("rev-parse", headSha + "^");
 	} else {
-		git("fetch", "--no-tags", "--depth=1", "origin", base.branch);
+		fetch(1, base.branch);
 		baseSha = git("rev-parse", "FETCH_HEAD");
 	}
-	console.log(`BASE_SHA: ${baseSha}`);
-	const diff = git("diff", "--name-only", baseSha, "HEAD");
-	return diff ? diff.split("\n") : [];
+	baseSha = git("rev-parse", "--verify", baseSha + "^{commit}");
+	console.log("BASE_SHA: " + baseSha);
+	console.log("HEAD_SHA: " + headSha);
+	const diff = git("diff", "--name-only", baseSha, headSha);
+	return { baseSha, headSha, files: diff ? diff.split("\n") : [] };
+}
+
+export function listChangedFiles(base: BaseRevision, cwd?: string): string[] {
+	return changedFilesContext(base, cwd).files;
 }
 
 export function main(env = process.env, cwd?: string): ModuleChanges {
@@ -328,15 +379,42 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		);
 	}
 	const event = JSON.parse(readFileSync(GITHUB_EVENT_PATH, "utf8"));
-	const files = listChangedFiles(baseRevision(GITHUB_EVENT_NAME, event), cwd);
+	const context = changedFilesContext(
+		baseRevision(GITHUB_EVENT_NAME, event),
+		cwd,
+	);
+	const { files } = context;
 	console.log(`Changed files:\n${files.join("\n")}`);
-	const changes = detectChanges(files);
+	const docOnly =
+		files.includes(PUBLISH_SOURCE_PATH) &&
+		isPublishDocstringOnlyChange({ ...context, cwd });
+	const deliveryFiles = docOnly
+		? files.filter((file) => file !== PUBLISH_SOURCE_PATH)
+		: files;
+	const changes = detectChanges(deliveryFiles);
+	if (docOnly) {
+		changes.data.ci_changed = true;
+		console.log(
+			"Audited publisher docstring-only change: data checks required, no delivery.",
+		);
+	}
+	const mergeGroup = GITHUB_EVENT_NAME === "merge_group";
+	if (mergeGroup) {
+		// A preceding queue entry may still have unfinished checks. Validate
+		// the combined head conservatively, without any release intent.
+		for (const flags of Object.values(changes)) {
+			flags.module_changed = false;
+			flags.ci_changed = true;
+		}
+	}
 	const lines = Object.entries(changes).flatMap(([key, flags]) => [
 		`${key}_module_changed=${flags.module_changed}`,
 		`${key}_ci_changed=${flags.ci_changed}`,
 	]);
-	lines.push(`data_schema_only_changed=${isSchemaOnlyDataChange(files)}`);
-	lines.push(`data_deploy_changed=${isDataDeployChange(files)}`);
+	lines.push(
+		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
+	);
+	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;
