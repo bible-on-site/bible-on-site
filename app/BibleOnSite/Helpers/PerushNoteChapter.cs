@@ -74,17 +74,16 @@ internal sealed class PerushNoteChapter
         {
             return slice.Notes.Value.GetValueOrDefault(perushId) ?? [];
         }
-        catch //NOSONAR — the failure rethrows; the handler only evicts the poisoned slice so retries rescan.
+        catch //NOSONAR — the failure rethrows; the handler only evicts the pasuk's slice so retries rescan.
         {
-            // A failed scan must not stay cached: evict the slice so the next
-            // caller retries (e.g. a transient OOM under scroll pressure).
+            // A failed scan must not stay cached: evict the pasuk so the next
+            // caller retries (e.g. a transient OOM under scroll pressure). In
+            // the rare case a concurrent retry already cached a fresher slice,
+            // dropping it only costs one extra scan.
             lock (_cacheLock)
             {
-                if (ReferenceEquals(_pasukCache.GetValueOrDefault(pasuk), slice))
-                {
-                    _pasukCache.Remove(pasuk);
-                    _lruPesukim.Remove(slice.Node);
-                }
+                _pasukCache.Remove(pasuk);
+                _lruPesukim.Remove(pasuk);
             }
             throw;
         }
