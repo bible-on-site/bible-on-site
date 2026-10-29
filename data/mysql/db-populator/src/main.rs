@@ -564,6 +564,10 @@ async fn apply_daily_bulletin_upgrades(conn: &mut MySqlConnection, base_path: &P
     for (filename, label) in [
         ("tanah_daily_bulletin_upgrade.sql", "daily-bulletin-upgrade"),
         (
+            "tanah_daily_bulletin_telegram_upgrade.sql",
+            "daily-bulletin-telegram-upgrade",
+        ),
+        (
             "tanah_daily_bulletin_whatsapp_upgrade.sql",
             "daily-bulletin-whatsapp-upgrade",
         ),
@@ -1254,6 +1258,34 @@ SELECT 1";
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_job WHERE id = '22222222-2222-4222-8222-222222222222' AND audience = 'real' AND idempotency_key = 'production' AND settings_revision = 7 AND status = 'failed'").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_recipient WHERE id = 201 AND job_id = '11111111-1111-4111-8111-111111111111' AND subscriber_id = 101 AND email = 'test@example.com' AND status = 'uncertain' AND attempt_token = '33333333-3333-4333-8333-333333333333' AND message_id = 'ses-retained-test-message' AND started_at = '2026-10-08 12:00:00.123' AND event_at = '2026-10-08 12:02:03.456' AND last_error = 'Do not resend automatically'").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_recipient WHERE id = 202 AND subscriber_id = 106 AND status = 'complained' AND message_id = 'ses-retained-complaint' AND event_at = '2026-10-08 12:03:04.567'").fetch_one(&mut conn).await?, 1);
+
+            // A new Telegram migration must not reset either channel's history.
+            let telegram_upgrade = base_path.join("../tanah_daily_bulletin_telegram_upgrade.sql");
+            execute_script(&mut conn, &telegram_upgrade, "test-telegram-upgrade").await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_telegram_settings WHERE id = 1 AND audience = 'test' AND revision = 0 AND next_send_at IS NULL").fetch_one(&mut conn).await?, 1);
+            raw_sql("UPDATE tanah_daily_bulletin_telegram_settings SET audience = 'real', revision = 9, next_send_at = '2026-10-08 12:00:02.345' WHERE id = 1;
+                INSERT INTO tanah_daily_bulletin_telegram_job
+                    (id, bulletin_date, audience, idempotency_key, settings_revision, bot_id, target_chat_id, pdf_sha256, filename, caption, status, attempt_token, started_at, provider_message_id, provider_file_id, last_error, sent_at) VALUES
+                    ('55555555-5555-4555-8555-555555555555', '2026-10-08', 'test', 'retained-telegram-test', 8, 987654321, -1001234567890, REPEAT('a', 64), 'retained-test.pdf', 'Retained test caption', 'uncertain', '77777777-7777-4777-8777-777777777777', '2026-10-08 12:01:02.345', NULL, NULL, 'Do not repost automatically', NULL),
+                    ('66666666-6666-4666-8666-666666666666', '2026-10-08', 'real', 'production', 9, 987654321, -1009876543210, REPEAT('b', 64), 'retained-real.pdf', 'Retained real caption', 'sent', '88888888-8888-4888-8888-888888888888', '2026-10-08 12:02:03.456', 123456, 'telegram-retained-file', NULL, '2026-10-08 12:02:04.567');")
+                .execute(&mut conn).await?;
+            execute_script(&mut conn, &telegram_upgrade, "test-telegram-upgrade-repeat").await?;
+            apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
+            execute_script(&mut conn, &telegram_upgrade, "test-telegram-upgrade-third").await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_telegram_settings").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_telegram_settings WHERE id = 1 AND audience = 'real' AND revision = 9 AND next_send_at = '2026-10-08 12:00:02.345'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_telegram_job WHERE id = '55555555-5555-4555-8555-555555555555' AND bulletin_date = '2026-10-08' AND audience = 'test' AND idempotency_key = 'retained-telegram-test' AND settings_revision = 8 AND bot_id = 987654321 AND target_chat_id = -1001234567890 AND pdf_sha256 = REPEAT('a', 64) AND filename = 'retained-test.pdf' AND caption = 'Retained test caption' AND status = 'uncertain' AND attempt_token = '77777777-7777-4777-8777-777777777777' AND started_at = '2026-10-08 12:01:02.345' AND provider_message_id IS NULL AND provider_file_id IS NULL AND last_error = 'Do not repost automatically' AND sent_at IS NULL").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_telegram_job WHERE id = '66666666-6666-4666-8666-666666666666' AND audience = 'real' AND idempotency_key = 'production' AND settings_revision = 9 AND bot_id = 987654321 AND target_chat_id = -1009876543210 AND pdf_sha256 = REPEAT('b', 64) AND filename = 'retained-real.pdf' AND caption = 'Retained real caption' AND status = 'sent' AND attempt_token = '88888888-8888-4888-8888-888888888888' AND provider_message_id = 123456 AND provider_file_id = 'telegram-retained-file' AND sent_at = '2026-10-08 12:02:04.567'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_settings WHERE id = 1 AND audience = 'real' AND revision = 7 AND next_send_at = '2026-10-08 12:00:01.123'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_recipient WHERE id = 201 AND status = 'uncertain' AND message_id = 'ses-retained-test-message'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_recipient WHERE id = 202 AND status = 'complained' AND message_id = 'ses-retained-complaint'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
+            assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND channel = 'email'").fetch_one(&mut conn).await?, "campaign-42");
+            let duplicate_real = raw_sql("INSERT INTO tanah_daily_bulletin_telegram_job (id, bulletin_date, audience, idempotency_key, settings_revision, bot_id, target_chat_id, pdf_sha256, filename, caption) VALUES ('99999999-9999-4999-8999-999999999999', '2026-10-08', 'real', 'production', 9, 987654321, -1009876543210, REPEAT('b', 64), 'duplicate.pdf', 'Duplicate')").execute(&mut conn).await;
+            assert!(duplicate_real.is_err(), "one real job per date must survive migration");
+            let duplicate_message = raw_sql("INSERT INTO tanah_daily_bulletin_telegram_job (id, bulletin_date, audience, idempotency_key, settings_revision, bot_id, target_chat_id, pdf_sha256, filename, caption, provider_message_id) VALUES ('99999999-9999-4999-8999-999999999999', '2026-10-08', 'test', 'different-request', 9, 987654321, -1009876543210, REPEAT('b', 64), 'duplicate.pdf', 'Duplicate', 123456)").execute(&mut conn).await;
+            assert!(duplicate_message.is_err(), "a provider message cannot bind to two jobs");
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_telegram_job").fetch_one(&mut conn).await?, 2);
 
             // Simulate the pre-covering-source schema and upgrade it repeatedly.
             raw_sql("DROP TABLE IF EXISTS tanah_article_covering_source;
