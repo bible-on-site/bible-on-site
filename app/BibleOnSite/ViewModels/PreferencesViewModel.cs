@@ -195,42 +195,96 @@ public partial class PreferencesViewModel : DivineNamePreferencesViewModel
     [RelayCommand]
     public async Task OpenDisplayAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.DisplayPreferences);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.DisplayPreferences);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     /// <summary>Opens על הפרק settings.</summary>
     [RelayCommand]
     public async Task OpenPerekAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.PerekPreferences);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.PerekPreferences);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     /// <summary>Opens חבילות הרחבה management.</summary>
     [RelayCommand]
     public async Task OpenExtensionPacksAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.ExtensionPacks);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.ExtensionPacks);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     /// <summary>Opens קריינות playback settings.</summary>
     [RelayCommand]
     public async Task OpenRecitationAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.RecitationPreferences);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.RecitationPreferences);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     /// <summary>Opens שמע volume settings.</summary>
     [RelayCommand]
     public async Task OpenSoundAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.SoundPreferences);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.SoundPreferences);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     /// <summary>Opens תמיכה settings.</summary>
     [RelayCommand]
     public async Task OpenSupportAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.SupportPreferences);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.SupportPreferences);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     private void NotifyPreferenceState()
