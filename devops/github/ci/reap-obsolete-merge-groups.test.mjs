@@ -103,3 +103,8 @@ test("HTTP body and per-run request budgets are bounded",async()=>{
 test("workflow starts read-only and never checks out candidate code",async()=>{
  const text=await readFile(new URL("../../../.github/workflows/reap-obsolete-merge-groups.yml",import.meta.url),"utf8");assert.match(text,/actions: read/);assert.doesNotMatch(text,/actions: write|BOT_PAT|force-cancel|workflow_run\.head_sha/);assert.match(text,/ref: \$\{\{ github.sha \}\}/);assert.match(text,/--dry-run/);
 });
+
+test("repository identity uses GitHub's canonical endpoint without a trailing slash",async()=>{
+ const paths=[];const api=new GitHubApi("test-token",async url=>{paths.push(url.pathname);return Response.json(repo());});
+ assert.equal((await api.getRepository()).id,POLICY.repositoryId);assert.deepEqual(paths,["/repos/"+POLICY.repository]);
+});

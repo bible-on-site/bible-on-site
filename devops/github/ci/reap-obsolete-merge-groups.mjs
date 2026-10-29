@@ -224,11 +224,11 @@ export class GitHubApi {
   }
   async request(path, { method = "GET", data, missing = false } = {}) {
     requireValue(++this.requests <= POLICY.maxRequests, "REQUEST_BUDGET_EXHAUSTED");
-    requireValue(path.startsWith("/repos/" + POLICY.repository + "/") || path === "/graphql",
+    requireValue(path === "/repos/" + POLICY.repository || path.startsWith("/repos/" + POLICY.repository + "/") || path === "/graphql",
       "API_PATH");
     const url = new URL(path, "https://api.github.com");
     requireValue(url.origin === "https://api.github.com", "API_ORIGIN");
-    requireValue(!url.hash && (url.pathname.startsWith("/repos/" + POLICY.repository + "/")
+    requireValue(!url.hash && (url.pathname === "/repos/" + POLICY.repository || url.pathname.startsWith("/repos/" + POLICY.repository + "/")
       || url.pathname === "/graphql"), "API_PATH");
     const response = await this.fetcher(url, {
       method, redirect: "error", signal: AbortSignal.timeout(POLICY.requestTimeoutMs),
@@ -262,7 +262,7 @@ export class GitHubApi {
     return { status: response.status, data: text ? JSON.parse(text) : null,
       hasNextPage: Boolean(response.headers.get("link")) };
   }
-  async getRepository() { return (await this.request("/repos/" + POLICY.repository + "/")).data; }
+  async getRepository() { return (await this.request("/repos/" + POLICY.repository)).data; }
   async getWorkflow() {
     return (await this.request("/repos/" + POLICY.repository + "/actions/workflows/ci.yml")).data;
   }
