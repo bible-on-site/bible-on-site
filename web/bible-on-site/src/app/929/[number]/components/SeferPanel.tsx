@@ -233,6 +233,83 @@ export function SeferPanel({
 		return () => document.removeEventListener("keydown", onKey);
 	}, [articleFullscreen]);
 
+	const embeddedArticleRef = useRef<HTMLDivElement>(null);
+	const articleDialogRef = useRef<HTMLDivElement>(null);
+	const restoreFocusRef = useRef<Element | null>(null);
+
+	// The article fullscreen is a modal surface (#2786): focus moves inside
+	// and wraps within it, the background goes inert, the page stops
+	// scrolling, and exiting restores the embedded article's reading
+	// position plus the control that opened the surface.
+	useEffect(() => {
+		if (!articleFullscreen) return;
+		const dialog = articleDialogRef.current;
+		if (!dialog) return;
+		const embeddedScroller = embeddedArticleRef.current?.querySelector<HTMLElement>(
+			"[data-article-body-scroll]",
+		);
+		const dialogScroller = dialog.querySelector<HTMLElement>(
+			"[data-article-body-scroll]",
+		);
+		// Hand the embedded reading position to the fullscreen scroller.
+		if (embeddedScroller && dialogScroller)
+			dialogScroller.scrollTop = embeddedScroller.scrollTop;
+
+		restoreFocusRef.current = document.activeElement;
+		dialog.focus();
+		const inerted: Element[] = [];
+		for (const child of Array.from(document.body.children)) {
+			if (child === dialog || child.contains(dialog)) continue;
+			if (!child.hasAttribute("inert")) {
+				child.setAttribute("inert", "");
+				inerted.push(child);
+			}
+		}
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		return () => {
+			if (dialogScroller && embeddedScroller)
+				embeddedScroller.scrollTop = dialogScroller.scrollTop;
+			for (const el of inerted) el.removeAttribute("inert");
+			document.body.style.overflow = previousOverflow;
+			const restore = restoreFocusRef.current;
+			if (restore instanceof HTMLElement && document.contains(restore))
+				restore.focus();
+			restoreFocusRef.current = null;
+		};
+	}, [articleFullscreen]);
+
+	// Tab wraps inside the article dialog; Escape closes only this
+	// topmost surface without reaching background Escape handlers.
+	const onArticleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+		if (event.key === "Escape") {
+			event.stopPropagation();
+			setArticleFullscreen(false);
+			return;
+		}
+		if (event.key !== "Tab" || !articleDialogRef.current) return;
+		const focusables = articleDialogRef.current.querySelectorAll<HTMLElement>(
+			'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+		);
+		if (focusables.length === 0) return;
+		const first = focusables[0];
+		const last = focusables[focusables.length - 1];
+		const active = document.activeElement;
+		if (
+			event.shiftKey &&
+			(active === first || active === articleDialogRef.current)
+		) {
+			event.preventDefault();
+			last.focus();
+		} else if (
+			!event.shiftKey &&
+			(active === last || active === articleDialogRef.current)
+		) {
+			event.preventDefault();
+			first.focus();
+		}
+	};
+
 	/* ─── Perush selection (global default / sefer override) ─── */
 	// Read directly (the panel lives in the client-only flipbook) and re-read
 	// on the module's change event — resolveSeferPerushSelection returns a
@@ -397,6 +474,18 @@ export function SeferPanel({
 		},
 		[onNavigate, perekId],
 	);
+
+	// "חזרה למאמרים" always lands on the articles grid — from fullscreen it
+	// closes the surface AND returns to the grid, then restores focus to
+	// the originating card (#2786). The card stays mounted under the
+	// overlay, so it is focusable synchronously.
+	const backToArticles = useCallback(() => {
+		const articleId = selectedArticle?.id;
+		setArticleFullscreen(false);
+		navigate();
+		if (articleId != null)
+			document.getElementById(`article-${articleId}`)?.focus();
+	}, [selectedArticle?.id, navigate]);
 
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
@@ -708,11 +797,11 @@ export function SeferPanel({
 					</div>
 
 					{selectedArticle && (
-						<div className={styles.panelArticleOverlay}>
+						<div className={styles.panelArticleOverlay} ref={embeddedArticleRef}>
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => navigate()}
+								onBack={backToArticles}
 								fullPage
 								fullscreen={articleFullscreen}
 								onToggleFullscreen={() => setArticleFullscreen((prev) => !prev)}
@@ -726,16 +815,19 @@ export function SeferPanel({
 				selectedArticle &&
 				createPortal(
 					<div
+						ref={articleDialogRef}
 						className={styles.articleFullscreen}
 						role="dialog"
 						aria-modal="true"
 						aria-label={selectedArticle.name}
+						tabIndex={-1}
+						onKeyDown={onArticleDialogKeyDown}
 					>
 						<div className={styles.articleFullscreenBody}>
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => setArticleFullscreen(false)}
+								onBack={backToArticles}
 								fullPage
 								fullscreen
 								onToggleFullscreen={() => setArticleFullscreen(false)}

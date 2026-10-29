@@ -25,7 +25,7 @@ jest.mock("@/lib/authors/url-utils", () => ({
 	authorNameToSlug: (name: string) => encodeURIComponent(name),
 }));
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ArticleFullView } from "../../../src/app/929/[number]/components/ArticleFullView";
 import type { Article } from "../../../src/lib/articles";
 
@@ -82,7 +82,7 @@ describe("ArticleFullView", () => {
 		const onBack = jest.fn();
 		render(<ArticleFullView article={baseArticle} onBack={onBack} />);
 
-		fireEvent.click(screen.getByText("חזרה למאמרים →"));
+		fireEvent.click(screen.getByRole("button", { name: "חזרה למאמרים" }));
 
 		expect(onBack).toHaveBeenCalledTimes(1);
 	});
@@ -133,8 +133,10 @@ describe("ArticleFullView", () => {
 			screen.getByRole("heading", { name: "מאמר לדוגמא" }).className,
 		).toContain("articleTitleInBook");
 
-		const backRow = screen.getByText("חזרה למאמרים →").parentElement;
-		expect(backRow?.className).toContain("backToPerekInBook");
+		// The unified command row sits at the top; the old footer row is gone.
+		const backRow = screen.getByRole("group", { name: "פעולות מאמר" });
+		expect(backRow.className).toContain("articleActions");
+		expect(container.querySelector("[class*='backToPerek']")).toBeNull();
 
 		// The body keeps its inner-scroll wrapper in book mode.
 		expect(
@@ -171,5 +173,65 @@ describe("ArticleFullView", () => {
 		const authorLink = screen.getByRole("link", { name: "הרב לדוגמא" });
 		expect(authorLink.className).not.toContain("InBook");
 		expect(container.querySelector("[class*='InBook']")).toBeNull();
+	});
+
+	describe("unified article command row (#2786)", () => {
+		it("groups return, share and fullscreen commands in one labelled row", () => {
+			const { container } = render(
+				<ArticleFullView
+					article={baseArticle}
+					onBack={jest.fn()}
+					fullPage
+					onToggleFullscreen={jest.fn()}
+				/>,
+			);
+
+			const bar = screen.getByRole("group", { name: "פעולות מאמר" });
+			expect(bar).toHaveAttribute("data-flipbook-no-flip");
+			expect(
+				within(bar).getByRole("button", { name: "חזרה למאמרים" }),
+			).toBeTruthy();
+			const shareLink = within(bar).getByRole("link", { name: "שיתוף" });
+			expect(shareLink).toHaveAttribute("href", "/929/1/1");
+			expect(shareLink).toHaveTextContent("שתף");
+			expect(
+				within(bar).getByRole("button", { name: "מסך מלא" }),
+			).toBeTruthy();
+			// The command row is the first thing in the view; the old footer
+			// back row is gone.
+			expect(container.firstElementChild?.firstElementChild).toBe(bar);
+			expect(
+				container.querySelectorAll("[class*='backToPerek']"),
+			).toHaveLength(0);
+		});
+
+		it("swaps the fullscreen command to an exit label without aria-pressed", () => {
+			const onToggle = jest.fn();
+			render(
+				<ArticleFullView
+					article={baseArticle}
+					onBack={jest.fn()}
+					fullscreen
+					onToggleFullscreen={onToggle}
+				/>,
+			);
+
+			const exit = screen.getByRole("button", { name: "יציאה ממסך מלא" });
+			expect(exit.getAttribute("aria-pressed")).toBeNull();
+			fireEvent.click(exit);
+			expect(onToggle).toHaveBeenCalledTimes(1);
+		});
+
+		it("omits the fullscreen command when the caller has no fullscreen surface", () => {
+			render(<ArticleFullView article={baseArticle} onBack={jest.fn()} />);
+
+			expect(screen.queryByRole("button", { name: /מסך מלא/ })).toBeNull();
+			// Share stays aligned with the return command regardless.
+			const bar = screen.getByRole("group", { name: "פעולות מאמר" });
+			expect(within(bar).getByRole("link", { name: "שיתוף" })).toBeTruthy();
+			expect(
+				within(bar).getByRole("button", { name: "חזרה למאמרים" }),
+			).toBeTruthy();
+		});
 	});
 });

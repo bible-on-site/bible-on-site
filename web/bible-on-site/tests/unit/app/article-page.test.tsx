@@ -637,7 +637,14 @@ describe("[slug] page", () => {
 
 			expect(screen.getByText("מאמר לדוגמא")).toBeTruthy();
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
-			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+			expect(
+				screen.getByRole("link", { name: "חזרה לפרק" }),
+			).toHaveAttribute("href", "/929/5");
+			// The unified command row carries Share beside the return link (#2786).
+			const bar = screen.getByRole("group", { name: "פעולות מאמר" });
+			expect(
+				within(bar).getByRole("link", { name: "שיתוף" }),
+			).toHaveAttribute("href", "/929/5/42");
 			expect(container.querySelector("#article-view h1")?.textContent).toBe(
 				"מאמר לדוגמא",
 			);
