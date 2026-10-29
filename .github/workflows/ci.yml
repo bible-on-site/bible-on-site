@@ -1359,6 +1359,13 @@ jobs:
       # modules and compile-variant coordinates can never reach the merge
       # (#2670).
       - name: Merge Test Coverage (Unit + E2E)
+        id: coverage-merge
+        # Run when the e2e step executed at all (success or failure): jest and
+        # monocart write their lcov even for failing tests, so the report can
+        # still be produced. Skip only when e2e never ran (e.g. unit failure)
+        # because the --require inputs would be absent and the merge could
+        # never produce a report anyway.
+        if: ${{ !cancelled() && steps.bun-e2e-test.outcome != 'skipped' }}
         run: bun run coverage:merge
 
       - name: Store Coverage Debug Snippets
@@ -1372,6 +1379,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Store Website Coverage Report (wf)
+        # Upload the report whenever the merge step produced one — including
+        # failed test runs, which still carry the coverage they collected.
+        if: ${{ !cancelled() && steps.coverage-merge.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
