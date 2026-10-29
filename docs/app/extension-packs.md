@@ -111,10 +111,15 @@ The mechanism, end to end:
    checksums of the live (newest `COMPLETE`) version plus anything in flight.
    Reuse requires *all* of: live version exists, its checksum (or a prior
    receipt's version+content tie) matches this pack, and its internal beta
-   release is `READY_FOR_TESTING`. Anything else — missing pack, different or
-   unknown checksum, wrong platform, processing, rejected, ambiguous metadata —
-   uploads a fresh version; a version without a resource id blocks the publish
-   before any upload.
+   release is `READY_FOR_TESTING`. Proven differences — missing pack, a receipt
+   tying the live version to other content, wrong platform — upload a fresh
+   version. Remote bytes that are *unverifiable* (checksum differs or is absent
+   with no receipt tie) upload only when receipt evidence is complete: a
+   finished empty search is the explicit bootstrap path, but a discovery
+   failure (spawn/`ENOBUFS`, `gh` error, incomplete history, malformed
+   receipt) blocks the publish instead of justifying uploads on missing
+   evidence. A version without a resource id blocks the publish before any
+   upload.
 3. **Idempotent reconciliation**: a `PROCESSING` version already carrying our
    bytes is waited out and reconciled, never duplicated — interrupted runs
    converge on the next attempt (a stranded `AWAITING_UPLOAD` reservation has
@@ -129,7 +134,13 @@ The mechanism, end to end:
    version ids/numbers, all three channel release linkages, the action taken,
    and `producedBy`/`consumedBy` provenance — so a reused pack's original
    producer release stays visible and a later deploy can prove reuse even when
-   Apple exposes no checksum for a version.
+   Apple exposes no checksum for a version. Discovery scans release pages via
+   `gh api --jq` (bounded output regardless of payload size — #2842 ENOBUFS),
+   distinguishes *no receipt exists* (bootstrap) from *receipt unreadable*
+   (blocked), and never synthesizes a receipt after a failed read. Read-only
+   App Store Connect lookups retry transient timeout/network and
+   throttling/5xx answers inside a bounded budget; permanent 4xx or malformed
+   answers fail immediately.
 
 Release-side consequences that must keep holding:
 
