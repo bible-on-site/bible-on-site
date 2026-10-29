@@ -1287,8 +1287,10 @@ describe("merge-group workflow contract", () => {
 			failedJob?: string,
 			ciChanged = true,
 			baselineAvailable = true,
+			versions = { amd64: "0.1.96", arm64: "0.1.96" },
+			prerequisiteSource = prerequisites,
 		) => {
-			const script = prerequisites.replace(
+			const script = prerequisiteSource.replace(
 				/\$\{\{ ([^}]+) \}\}/g,
 				(_match, expression: string) => {
 					if (expression === "github.event_name") return event;
@@ -1297,6 +1299,10 @@ describe("merge-group workflow contract", () => {
 							? "skipped"
 							: "success";
 					}
+					if (expression === "needs.package_api.outputs.module_version")
+						return versions.amd64;
+					if (expression === "needs.package_api_arm64.outputs.module_version")
+						return versions.arm64;
 					if (expression.includes("_ci_changed")) return String(ciChanged);
 					if (expression.includes("_module_changed")) return "false";
 					if (expression.includes(".outputs.is_"))
@@ -1309,6 +1315,32 @@ describe("merge-group workflow contract", () => {
 				encoding: "utf8",
 			});
 		};
+		// Paired-image guards may arrive independently of the queue fixture.
+		// Keep output substitution strict and exercise missing/mismatched versions.
+		const versionGate = prerequisites + `
+if [ -z "\${{ needs.package_api.outputs.module_version }}" ] ||
+   [ "\${{ needs.package_api.outputs.module_version }}" != "\${{ needs.package_api_arm64.outputs.module_version }}" ]; then
+  exit 1
+fi
+`;
+		for (const [amd64, arm64] of [
+			["0.1.96", "0.1.96"],
+			["0.1.96", "0.1.95"],
+			["", ""],
+			["", "0.1.96"],
+			["0.1.96", ""],
+		] as const) {
+			const result = evaluate("merge_group", undefined, true, true,
+				{ amd64, arm64 }, versionGate);
+			assert.ifError(result.error);
+			assert.equal(result.status, amd64 !== "" && amd64 === arm64 ? 0 : 1,
+				result.stdout + result.stderr);
+		}
+		assert.throws(
+			() => evaluate("merge_group", undefined, true, true, undefined,
+				prerequisites + "\n${{ needs.unknown.outputs.module_version }}"),
+			/Unexpected prerequisite expression/,
+		);
 		const passing = evaluate("merge_group");
 		assert.ifError(passing.error);
 		assert.equal(passing.status, 0, passing.stdout + passing.stderr);
