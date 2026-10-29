@@ -63,6 +63,62 @@ test.describe("Article page", () => {
 		await expect(page).toHaveURL(/\/929\/1$/);
 	});
 
+	test("aligns article-route controls in the unified command row (#2786)", async ({
+		page,
+	}) => {
+		await page.goto("/929/1/1");
+
+		const articleView = page.locator("#article-view");
+		const commandRow = articleView.getByRole("group", {
+			name: "פעולות מאמר",
+		});
+		await expect(commandRow).toBeVisible();
+
+		// The row leads the article — above the author/title header.
+		const ordering = await articleView.evaluate((article) => {
+			const [first] = Array.from(article.children);
+			const row = article.querySelector('[data-flipbook-no-flip]');
+			const header = article.querySelector("header");
+			return {
+				rowFirst: first === row,
+				rowBeforeHeader:
+					row != null &&
+					header != null &&
+					!!(row.compareDocumentPosition(header) &
+						Node.DOCUMENT_POSITION_FOLLOWING),
+			};
+		});
+		expect(ordering).toEqual({ rowFirst: true, rowBeforeHeader: true });
+
+		// Return is a real link to the perek route; share is a command button.
+		await expect(
+			commandRow.getByRole("link", { name: "חזרה לפרק" }),
+		).toHaveAttribute("href", "/929/1");
+		const share = commandRow.getByRole("button", { name: "שתף" });
+		await expect(share).toBeVisible();
+		// Both commands share the one base control treatment.
+		const treatment = await commandRow.evaluate((row) =>
+			Array.from(row.querySelectorAll("[data-article-action]")).map((el) => {
+				const computed = getComputedStyle(el);
+				return {
+					height: el.getBoundingClientRect().height,
+					radius: computed.borderRadius,
+					background: computed.backgroundColor,
+					border: computed.borderColor,
+				};
+			}),
+		);
+		expect(treatment.length).toBe(2);
+		expect(treatment[1]).toEqual(treatment[0]);
+
+		// No fullscreen command on a route that already is a full page, and
+		// the old bottom-only back row is gone.
+		await expect(
+			commandRow.getByRole("button", { name: "מסך מלא" }),
+		).toHaveCount(0);
+		await expect(articleView.getByText("חזרה לפרק →")).toHaveCount(0);
+	});
+
 	test("opening article from carousel shows same article content", async ({
 		page,
 	}) => {

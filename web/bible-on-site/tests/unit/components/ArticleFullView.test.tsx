@@ -25,7 +25,7 @@ jest.mock("@/lib/authors/url-utils", () => ({
 	authorNameToSlug: (name: string) => encodeURIComponent(name),
 }));
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ArticleFullView } from "../../../src/app/929/[number]/components/ArticleFullView";
 import type { Article } from "../../../src/lib/articles";
 
@@ -78,11 +78,11 @@ describe("ArticleFullView", () => {
 		expect(container.querySelector("[class*='articleBody']")).toBeNull();
 	});
 
-	it("calls onBack when back button is clicked", () => {
+	it("calls onBack when the return command is clicked", () => {
 		const onBack = jest.fn();
 		render(<ArticleFullView article={baseArticle} onBack={onBack} />);
 
-		fireEvent.click(screen.getByText("חזרה למאמרים →"));
+		fireEvent.click(screen.getByRole("button", { name: "חזרה למאמרים" }));
 
 		expect(onBack).toHaveBeenCalledTimes(1);
 	});
@@ -97,12 +97,104 @@ describe("ArticleFullView", () => {
 		expect(authorLink?.getAttribute("href")).toContain("/929/authors/");
 	});
 
-	it("renders share button with canonical href", () => {
+	it("groups all article commands in one labelled top row (#2786)", () => {
+		const { container } = render(
+			<ArticleFullView
+				article={baseArticle}
+				onBack={jest.fn()}
+				fullPage
+				onToggleFullscreen={jest.fn()}
+			/>,
+		);
+
+		const group = screen.getByRole("group", { name: "פעולות מאמר" });
+		// The row leads the article — it sits ahead of the metadata header.
+		const header = container.querySelector("header");
+		expect(header).not.toBeNull();
+		expect(
+			// biome-ignore lint/style/noNonNullAssertion: header asserted above
+			group.compareDocumentPosition(header!) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+
+		// All three commands share the same base control class.
+		const back = within(group).getByRole("button", {
+			name: "חזרה למאמרים",
+		});
+		const share = within(group).getByRole("button", { name: "שתף" });
+		const fullscreen = within(group).getByRole("button", {
+			name: "מסך מלא",
+		});
+		for (const command of [back, share, fullscreen]) {
+			expect(command.className).toContain("action");
+		}
+
+		// The old bottom-only back row is gone.
+		expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+		expect(container.querySelector("[class*='backToPerek']")).toBeNull();
+	});
+
+	it("renders share as a command button, not the legacy emoji link", () => {
 		render(<ArticleFullView article={baseArticle} onBack={jest.fn()} />);
 
-		const shareLink = screen.getByLabelText("שיתוף");
-		expect(shareLink).toBeTruthy();
-		expect(shareLink.getAttribute("href")).toBe("/929/1/1");
+		const share = screen.getByRole("button", { name: "שתף" });
+		expect(share.tagName).toBe("BUTTON");
+		expect(share.textContent).not.toContain("🔗");
+	});
+
+	it("renders a styled fullscreen command, not bare text (#2786)", () => {
+		render(
+			<ArticleFullView
+				article={baseArticle}
+				onBack={jest.fn()}
+				onToggleFullscreen={jest.fn()}
+			/>,
+		);
+
+		const toggle = screen.getByRole("button", { name: "מסך מלא" });
+		// The command carries the shared control class — the old code pointed
+		// at a CSS-module key that did not exist and rendered unstyled text.
+		expect(toggle.className).toContain("action");
+		expect(toggle.querySelector("svg")).not.toBeNull();
+	});
+
+	it("labels the fullscreen command מסך מלא / יציאה ממסך מלא without toggle semantics", () => {
+		const onToggleFullscreen = jest.fn();
+		const { rerender } = render(
+			<ArticleFullView
+				article={baseArticle}
+				onBack={jest.fn()}
+				fullscreen={false}
+				onToggleFullscreen={onToggleFullscreen}
+			/>,
+		);
+
+		const enter = screen.getByRole("button", { name: "מסך מלא" });
+		expect(enter.getAttribute("aria-pressed")).toBeNull();
+		fireEvent.click(enter);
+		expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
+
+		rerender(
+			<ArticleFullView
+				article={baseArticle}
+				onBack={jest.fn()}
+				fullscreen
+				onToggleFullscreen={onToggleFullscreen}
+			/>,
+		);
+		expect(
+			screen.getByRole("button", { name: "יציאה ממסך מלא" }),
+		).toBeTruthy();
+	});
+
+	it("omits the fullscreen command when no toggle is provided", () => {
+		render(<ArticleFullView article={baseArticle} onBack={jest.fn()} />);
+
+		expect(screen.queryByRole("button", { name: "מסך מלא" })).toBeNull();
+		expect(
+			screen.getByRole("button", { name: "חזרה למאמרים" }),
+		).toBeTruthy();
+		expect(screen.getByRole("button", { name: "שתף" })).toBeTruthy();
 	});
 
 	it("applies fullPage class when fullPage prop is true", () => {
@@ -115,7 +207,7 @@ describe("ArticleFullView", () => {
 		expect(root?.className).toBeTruthy();
 	});
 
-	it("compacts header metadata and footer in book mode to enlarge the body (#2406)", () => {
+	it("compacts header metadata in book mode to enlarge the body (#2406)", () => {
 		const { container } = render(
 			<ArticleFullView article={baseArticle} onBack={jest.fn()} fullPage />,
 		);
@@ -132,9 +224,6 @@ describe("ArticleFullView", () => {
 		expect(
 			screen.getByRole("heading", { name: "מאמר לדוגמא" }).className,
 		).toContain("articleTitleInBook");
-
-		const backRow = screen.getByText("חזרה למאמרים →").parentElement;
-		expect(backRow?.className).toContain("backToPerekInBook");
 
 		// The body keeps its inner-scroll wrapper in book mode.
 		expect(
