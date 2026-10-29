@@ -33,7 +33,13 @@ import { reportBenchmark } from "../util/benchmark";
 const PEREK_ID = 125; // Bamidbar 8 — mid-size sefer
 const FLIPS = 6; // number of rapid forward-flips per run
 const DRAGS = 2; // pointer drag-turns per run
-const RUNS = 3; // repeat to reduce noise
+/**
+ * Repeat runs to reduce noise.  Each run reloads both routes (~3s each),
+ * so the local 20s-per-test deadline only fits two runs; CI's 60s
+ * deadline keeps three.  Min-of-runs still isolates the least-contended
+ * batch in both cases.
+ */
+const RUNS = process.env.CI ? 3 : 2;
 /** Maximum allowed ratio of 929-time / dev-time before we flag a regression. */
 const MAX_RATIO = 1.35;
 
@@ -95,8 +101,9 @@ async function cpuSpeedFactor(page: Page): Promise<number> {
 /** Wait for the FlipBook toolbar to appear (signals the book has mounted). */
 async function waitForFlipBook(page: Page): Promise<void> {
 	await page.waitForSelector(".flipbook-toolbar", { timeout: 30_000 });
-	// Extra settle time for leaves-buffer rendering
-	await page.waitForTimeout(1_000);
+	// Settle for leaves-buffer mounting and listener attachment; the
+	// workload's own click-spacing adds more before the first flip lands.
+	await page.waitForTimeout(600);
 }
 
 /**
@@ -290,7 +297,11 @@ async function measureRoutes(
 			["dev", `http://localhost:3001/dev/sefer/${PEREK_ID}`],
 			["seo", `http://localhost:3001/929/${PEREK_ID}?book`],
 		] as const) {
-			await page.goto(url, { waitUntil: "networkidle" });
+			// `load` is sufficient and ~1s cheaper than `networkidle`:
+			// `.flipbook-toolbar` is rendered by React itself, so its
+			// presence already proves hydration reached the book, and the
+			// post-mount settle covers listener attachment.
+			await page.goto(url, { waitUntil: "load" });
 			await waitForFlipBook(page);
 			await startFrameProbe(page);
 			const elapsed = await workload(page);
@@ -343,9 +354,7 @@ test.describe("Sefer flip performance", () => {
 		const cpuFactor = await cpuSpeedFactor(page);
 		const bounds = scaledBounds(cpuFactor);
 
-		const { dev, seo } = await measureRoutes(page, (p) =>
-			rapidFlips(p, FLIPS),
-		);
+		const { dev, seo } = await measureRoutes(page, (p) => rapidFlips(p, FLIPS));
 
 		const devAvg = trimmedMean(dev.times);
 		const seoAvg = trimmedMean(seo.times);
@@ -408,9 +417,7 @@ test.describe("Sefer flip performance", () => {
 		const cpuFactor = await cpuSpeedFactor(page);
 		const bounds = scaledBounds(cpuFactor);
 
-		const { dev, seo } = await measureRoutes(page, (p) =>
-			dragTurns(p, DRAGS),
-		);
+		const { dev, seo } = await measureRoutes(page, (p) => dragTurns(p, DRAGS));
 
 		const devDrag = minMetrics(dev.batches);
 		const seoDrag = minMetrics(seo.batches);
