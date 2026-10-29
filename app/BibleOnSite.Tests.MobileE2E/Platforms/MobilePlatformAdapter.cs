@@ -201,10 +201,21 @@ public abstract class MobilePlatformAdapter
         {
             options.PlatformVersion = configuration.PlatformVersion;
         }
-        options.AddAdditionalAppiumOption("noReset", configuration.KeepAppForReview);
+        // run.mjs installs the Android package itself with --no-incremental;
+        // UiAutomator2 must reuse it under noReset — a driver-initiated
+        // reinstall has no incremental opt-out and would reintroduce the
+        // libmonodroid open_from_bundles SIGSEGV (#2773).
+        var reuseInstalledApp = configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
+        options.AddAdditionalAppiumOption("noReset", reuseInstalledApp);
         // Android fully uninstalls the app. iOS resets and reinstalls it through
         // noReset=false and enforceAppInstall=true while the device stays booted.
-        options.AddAdditionalAppiumOption("fullReset", android && !configuration.KeepAppForReview);
+        options.AddAdditionalAppiumOption("fullReset", android && !reuseInstalledApp);
+        // noReset keeps a leftover app process alive across sessions, and
+        // UiAutomator2's session-start short-circuits the launch when the
+        // package already runs — a prior class's mid-navigation screen would
+        // then leak into the next session. forceAppLaunch keeps every session
+        // start on the deterministic fresh launch the suite relies on.
+        options.AddAdditionalAppiumOption("forceAppLaunch", android && reuseInstalledApp);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {
