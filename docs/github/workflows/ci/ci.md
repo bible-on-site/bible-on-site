@@ -174,6 +174,35 @@ Performance builds the same Next.js app pre-merge.
   master (`[skip ci]`), with collision-retry publication when a tag exists
   elsewhere. See [version-verification.md](../../version-verification.md).
 
+#### Pending API recovery
+
+A failed master run can leave real API changes unpublished. A later CI-only
+repair has no API files in its push diff, so event-diff selection alone would
+never rebuild that pending release. On master pushes where API content was not
+already selected, [`pending-api-release.mjs`](../../../../devops/github/ci/pending-api-release.mjs)
+compares the checked-out API tree with the immutable tag commit of the latest
+published canonical API release. Drafts, prereleases and bare tags are not a
+published baseline. Delivery metadata must agree with the tag when present.
+
+Only the API package's own manifest and source-less lockfile version are
+normalized. Dependencies, source, build inputs, file modes, additions and
+deletions remain meaningful; an automatic version-only bump cannot trigger a
+new release. Real unpublished changes with a newer API version select fresh API
+checks and packaging. Other module flags stay unchanged, and all existing
+Cross Module CI, release and CD provenance guards still apply. Nothing promotes
+an artifact from a failed source run.
+
+Available pinned commits are reused. A missing commit is fetched without
+changing repository history depth; depth-limited fetches are restricted to
+checkouts that were already shallow.
+
+The lookup is read-only and fails the selection job on metadata, provenance,
+fetch or version ambiguity. It runs only as a fallback on master pushes;
+ordinary API-change pushes retain their existing version-collision path.
+Removing the reconciliation step and its API output ORs disables this recovery
+without changing the ordinary release path. Its regression suite runs in the
+selection job on every CI event.
+
 ## Native E2E (`app-mobile-e2e.yml` + `app-mobile-e2e-runner.yml`)
 
 The reusable orchestrator composes one orchestration layer over reusable legs:

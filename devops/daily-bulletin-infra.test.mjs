@@ -146,3 +146,84 @@ test("email images preserve their original sources and published content hashes"
 		}
 	}
 });
+
+const whatsappTemplate = YAML.parse(
+	readFileSync(
+		new URL(
+			"../docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	),
+);
+
+test("optional WhatsApp policy grants only exact token injection to the existing execution role", () => {
+	assert.deepEqual(Object.keys(whatsappTemplate.Resources), [
+		"WhatsAppTokenInjectionPolicy",
+	]);
+	const resource = whatsappTemplate.Resources.WhatsAppTokenInjectionPolicy;
+	assert.equal(resource.Type, "AWS::IAM::Policy");
+	assert.deepEqual(resource.Properties.Roles, ["AdminExecutionRoleName"]);
+	assert.equal(
+		whatsappTemplate.Parameters.AdminExecutionRoleName.Default,
+		"ecsTaskExecutionRole",
+	);
+	assert.equal(resource.Properties.PolicyDocument.Statement.length, 1);
+	const statement = resource.Properties.PolicyDocument.Statement[0];
+	assert.equal(statement.Effect, "Allow");
+	assert.deepEqual(statement.Action, ["ssm:GetParameters"]);
+	assert.equal(
+		statement.Resource,
+		`arn:\${AWS::Partition}:ssm:\${AWS::Region}:\${AWS::AccountId}:parameter/bible-on-site-whatsapp-api-token`,
+	);
+	assert.equal(
+		whatsappTemplate.Outputs.ApiTokenParameterArn.Value,
+		statement.Resource,
+	);
+	assert.equal(
+		whatsappTemplate.Outputs.ApiTokenContainerVariable.Value,
+		"BULLETIN_WHATSAPP_API_TOKEN",
+	);
+});
+
+const telegramTemplate = YAML.parse(
+	readFileSync(
+		new URL(
+			"../docs/aws/cloudformation/daily-bulletin-telegram.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	),
+);
+
+test("Telegram grants only one parameter read to the existing execution role", () => {
+	assert.deepEqual(Object.keys(telegramTemplate.Parameters), [
+		"AdminExecutionRoleName",
+	]);
+	assert.equal(
+		telegramTemplate.Parameters.AdminExecutionRoleName.Default,
+		"ecsTaskExecutionRole",
+	);
+	const resources = Object.values(telegramTemplate.Resources);
+	assert.equal(resources.length, 1, "no token, task, role or queue creation");
+	const [policy] = resources;
+	assert.equal(policy.Type, "AWS::IAM::Policy");
+	assert.deepEqual(policy.Properties.Roles, ["AdminExecutionRoleName"]);
+	const statements = policy.Properties.PolicyDocument.Statement;
+	assert.equal(statements.length, 1);
+	assert.equal(statements[0].Effect, "Allow");
+	assert.deepEqual(statements[0].Action, ["ssm:GetParameters"]);
+	assert.equal(
+		statements[0].Resource,
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: CloudFormation resolves this !Sub expression.
+		"arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-telegram-bot-token",
+	);
+	assert.equal(
+		telegramTemplate.Outputs.BotTokenParameterArn.Value,
+		statements[0].Resource,
+	);
+	assert.equal(
+		telegramTemplate.Outputs.BotTokenContainerVariable.Value,
+		"BULLETIN_TELEGRAM_BOT_TOKEN",
+	);
+});
