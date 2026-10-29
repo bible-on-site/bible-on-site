@@ -56,13 +56,13 @@ test("installAppUnderTest replaces the package on the deterministic path", async
   const { calls, execute } = adbProbe({
     "version": binaryVersion("34.0.1"),
     "features": "abb_exec",
-    "shell pm path com.tanah.daily929": "package:/data/app/~~abc==/com.tanah.daily929-xyz==/base.apk\n",
+    "shell pm list packages com.tanah.daily929": "package:com.tanah.daily929\n",
     "uninstall com.tanah.daily929": "Success\n",
     "install --no-incremental -g /out/app.apk": "Performing Streamed Install\nSuccess\n",
   });
   const result = await installAppUnderTest({ ...device, execute });
   assert.deepEqual(calls.map(commandLine), [
-    "shell pm path com.tanah.daily929",
+    "shell pm list packages com.tanah.daily929",
     "uninstall com.tanah.daily929",
     "version",
     "features",
@@ -75,10 +75,20 @@ test("installAppUnderTest skips uninstall when the package is absent", async () 
   const { calls, execute } = adbProbe({
     "version": binaryVersion("34.0.1"),
     "features": "abb_exec",
+    // A fresh emulator: the package list exits 0 with no matching line,
+    // while `pm path` would exit 1 here and break the install.
+    "shell pm list packages com.tanah.daily929": "",
     "install --no-incremental -g /out/app.apk": "Success\n",
   });
   await installAppUnderTest({ ...device, execute });
   assert.equal(calls.some((args) => args.includes("uninstall")), false);
+});
+
+test("installAppUnderTest fails the run when the package probe itself fails", async () => {
+  const { execute } = adbProbe({
+    "shell pm list packages com.tanah.daily929": new Error("device offline"),
+  });
+  await assert.rejects(installAppUnderTest({ ...device, execute }), /device offline/);
 });
 
 test("installAppUnderTest keeps review data with -r", async () => {

@@ -37,10 +37,13 @@ export async function installAppUnderTest({ adb, udid, appPath, packageId, keepD
   const device = (args, options = {}) =>
     execute(adb, ["-s", udid, ...args], { timeout: installTimeoutMs, ...options });
   if (!keepData) {
-    // `adb uninstall` exits nonzero on a package that is not installed; the
-    // path probe distinguishes that expected case from a genuine failure.
-    const { stdout: paths } = await device(["shell", "pm", "path", packageId], { timeout: 30000 });
-    if (paths.trim()) await device(["uninstall", packageId]);
+    // `adb uninstall` and `pm path` both exit nonzero on a package that is
+    // not installed; `pm list packages` exits 0 either way, so an exact
+    // line match answers "installed?" without masking real failures.
+    const { stdout: packages } = await device(["shell", "pm", "list", "packages", packageId],
+      { timeout: 30000 });
+    const installed = packages.split("\n").some((line) => line.trim() === `package:${packageId}`);
+    if (installed) await device(["uninstall", packageId]);
   }
   const args = ["install"];
   if (keepData) args.push("-r");
