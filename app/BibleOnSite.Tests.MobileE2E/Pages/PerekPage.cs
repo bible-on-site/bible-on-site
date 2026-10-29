@@ -44,10 +44,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
-                // A proxied command cut at the driver timeout is one failed
-                // poll, not a dead session — the next lookup retries fresh.
+                // An observation timeout can retry within this deadline.
+                // Appium's session-ending proxy timeout must reach recovery.
             }
             Thread.Sleep(200);
         }
@@ -82,10 +82,9 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
-                // A proxied command cut at the driver timeout is one failed
-                // poll, not a dead session — the next lookup retries fresh.
+                // Only observation timeouts retry; dead sessions escape.
             }
             Thread.Sleep(200);
         }
@@ -116,7 +115,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 }
                 frame = current;
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
                 // A straggler lookup or frame read retries within the budget.
             }
@@ -181,7 +180,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 reader = null;
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
                 // A straggler command during scroll churn retries the whole
                 // iteration instead of ending the return budget early.
@@ -297,10 +296,9 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
-                // A proxied command cut at the driver timeout is one failed
-                // poll, not a dead session — the next lookup retries fresh.
+                // Only observation timeouts retry; dead sessions escape.
             }
             Thread.Sleep(200);
         }
