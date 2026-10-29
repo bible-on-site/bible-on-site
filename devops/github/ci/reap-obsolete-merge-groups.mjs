@@ -16,6 +16,7 @@ export const POLICY = Object.freeze({
   requestTimeoutMs: 10_000,
 });
 const active = new Set(["queued", "in_progress"]);
+const completedWithoutCancellation = new Set(["success", "failure", "neutral", "skipped", "timed_out", "action_required", "stale", "startup_failure"]);
 const states = new Set(["AWAITING_CHECKS", "LOCKED", "MERGEABLE", "QUEUED", "UNMERGEABLE"]);
 class ReaperError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -207,6 +208,10 @@ export async function reap({ eventName, payload, api, dryRun = true, journal }) 
       await journal({ kind: "cancel-observed", runId: listed.id, head: listed.head_sha, status: after.status, conclusion: after.conclusion, requestAccepted: !requestError });
       if (after.status === "completed" && after.conclusion === "cancelled") {
         action.outcome = "cancelled"; report.mutationConfirmed++;
+      } else if (after.status === "completed" && completedWithoutCancellation.has(after.conclusion)) {
+        // The run can finish between the final proof and the normal cancel POST.
+        // Its exact immutable identity is already checked; no cancellation is credited.
+        action.outcome = "completed-without-cancellation";
       } else if (requestError) {
         throw new ReaperError("CANCEL_OUTCOME_UNCONFIRMED");
       }
