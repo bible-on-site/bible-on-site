@@ -1579,6 +1579,20 @@ describe("EntryEditPage", () => {
 			expect(screen.queryByPlaceholderText("כותרת הערך")).toBeNull();
 		});
 
+		it("retries the load from the failure state's retry action", async () => {
+			getEntryMock.mockRejectedValueOnce(new Error("boom"));
+
+			renderPage();
+
+			fireEvent.click(
+				await screen.findByRole("button", { name: "נסה שוב" }),
+			);
+
+			expect(
+				await screen.findByText(/עריכת ערך: משה רבנו/),
+			).toBeInTheDocument();
+		});
+
 		it("reports a rejected load with a missing entry as not found", async () => {
 			getEntryMock
 				.mockReset()

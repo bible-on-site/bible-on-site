@@ -676,8 +676,7 @@ function EntryEditPage() {
 	// a readable state until the load succeeds (#2764).
 	if (!isNew && (entryError || !entry)) {
 		const notFound =
-			!entryError ||
-			/entry not found/i.test(String(entryError.message ?? entryError));
+			!entryError || /entry not found/i.test(String(entryError));
 		return (
 			<div className="space-y-4">
 				<Link
