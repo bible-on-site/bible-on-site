@@ -170,18 +170,22 @@ export async function reap({ eventName, payload, api, dryRun = true, journal }) 
     }
     // Validate global queue visibility/completeness before the first mutation.
     fullQueue(await api.getQueue());
+    let plannedCancellations = 0;
     for (const listed of [...candidates.values()].sort((a, b) => a.id - b.id)) {
       const action = { runId: listed.id, head: listed.head_sha, proofs: [] };
       report.actions.push(action);
       const number = Number(listed.head_branch.split("/")[2].split("-")[1]);
       if (merged.has(number)) { action.outcome = "skipped"; action.reason = "merged-production-validation"; continue; }
-      if (report.cancelRequests.length >= POLICY.maxCancellations) { action.outcome = "skipped"; action.reason = "per-run-cancellation-limit"; continue; }
+      if (plannedCancellations >= POLICY.maxCancellations) { action.outcome = "skipped"; action.reason = "per-run-cancellation-limit"; continue; }
       for (let fence = 0; fence < 2; fence++) {
         const proof = await freshProof(api, listed);
         action.proofs.push(proof);
         if (!proof.safe) { action.outcome = "skipped"; action.reason = proof.reason; break; }
       }
       if (action.outcome === "skipped") continue;
+      // Dry-run must model the same bounded work as apply, including its cap.
+      // Otherwise a backlog consumes the request budget after enough safe plans.
+      plannedCancellations++;
       if (dryRun) { action.outcome = "would-cancel"; continue; }
       requireValue(typeof journal === "function", "DURABLE_JOURNAL_REQUIRED");
       await journal({ kind: "cancel-intent", runId: listed.id, head: listed.head_sha, ref: listed.head_branch, proofs: action.proofs });
