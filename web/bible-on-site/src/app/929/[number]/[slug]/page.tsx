@@ -54,6 +54,7 @@ import {
 } from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
 import { ReadingTime } from "@/app/components/ReadingTime";
+import { ArticleActions } from "../components/ArticleActions";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerekHeading } from "../components/PerekHeading";
@@ -324,6 +325,14 @@ export default async function ArticlePage({
 					<ScrollToArticleMatch />
 				</Suspense>
 				<section id="article-view" className={styles.expandedArticle}>
+					{/* The unified article command row (#2786): return to the perek
+					 * route at the leading edge, share at the trailing edge. */}
+					<ArticleActions
+						backLabel="חזרה לפרק"
+						backHref={`/929/${perekId}`}
+						canonicalPath={`/929/${perekId}/${article.id}`}
+						shareTitle={`${article.name} - ${article.authorName}`}
+					/>
 					<header className={styles.articleHeader}>
 						<Link
 							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
@@ -357,12 +366,6 @@ export default async function ArticlePage({
 							}}
 						/>
 					)}
-
-					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
-					</div>
 				</section>
 				<Suspense>
 					<SeferComposite

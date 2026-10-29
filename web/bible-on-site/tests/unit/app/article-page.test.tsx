@@ -637,7 +637,9 @@ describe("[slug] page", () => {
 
 			expect(screen.getByText("מאמר לדוגמא")).toBeTruthy();
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
-			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+			// The unified command row (#2786): a real link back to the perek route.
+			const back = screen.getByRole("link", { name: "חזרה לפרק" });
+			expect(back.getAttribute("href")).toBe("/929/5");
 			expect(container.querySelector("#article-view h1")?.textContent).toBe(
 				"מאמר לדוגמא",
 			);
@@ -669,6 +671,36 @@ describe("[slug] page", () => {
 			expect(screen.getByTestId("stuma")).toBeTruthy();
 			// maqaf trailing character: "מלה־" — should not add space after it
 			expect(screen.getByText("מלה־")).toBeTruthy();
+		});
+
+		it("renders the unified command row with return and share (#2786)", async () => {
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			const { container } = render(jsx);
+
+			const articleView = container.querySelector("#article-view");
+			expect(articleView).not.toBeNull();
+			// The command row leads the article, ahead of the metadata header.
+			expect(articleView?.firstElementChild?.tagName).toBe("FIELDSET");
+			const group = within(articleView as HTMLElement).getByRole("group", {
+				name: "פעולות מאמר",
+			});
+			expect(articleView?.firstElementChild).toBe(group);
+			expect(
+				within(group)
+					.getByRole("link", { name: "חזרה לפרק" })
+					.getAttribute("href"),
+			).toBe("/929/5");
+			expect(within(group).getByRole("button", { name: "שתף" })).toBeTruthy();
+			// No fullscreen command on a route that is already a full page.
+			expect(
+				within(group).queryByRole("button", { name: "מסך מלא" }),
+			).toBeNull();
+			// The obsolete bottom-only back row is gone.
+			expect(
+				within(articleView as HTMLElement).queryByText("חזרה לפרק →"),
+			).toBeNull();
 		});
 
 		it("calls notFound when perekId is NaN", async () => {
