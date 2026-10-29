@@ -532,6 +532,57 @@ native builds, canonical release verification and paired isolated AWS trial.
 The original 30-second readiness gate, 15-second tick, lock timeout and task
 resource limits remain unchanged.
 
+### Cold lock wake-up and current local qualification (2026-10-29)
+
+The cold-held failure included a released lock sitting idle until the next
+15-second worker tick. After the root cause and connection tradeoff were
+presented, Dorad explicitly authorized a one-time first-cold-start server
+lock wait of up to 15 seconds. The 30-second readiness deadline, worker tick,
+0.25 vCPU/512 MiB limits and pool size remain unchanged. Warm starts, manual
+retraining and later cold-recovery attempts retain immediate lock probes.
+
+The ordinary loader still takes its reload mutex before a pool checkout.
+Cold initialization uses that same order and reloads through the physical
+lock-owning session, so a one-connection pool cannot deadlock. After obtaining
+the lock, it first adopts a compatible publication from the preceding owner
+instead of training it twice. Failure preserves the existing fresh-connection
+reload after releasing the session and mutex. Cancellation protection is set
+before issuing GET_LOCK, including a grant whose response never reaches the
+cancelled client.
+
+The actual Dockerfile image is
+`1b9043703b5275a2edafacaf44ef384f2999a0d8607ed71021c23bb2246996ad`,
+with 132 production inputs bound to source hash
+`d37499849f1d44d457478236e89ea719bcb725a4bfb9d66a8d45991b740f5e96`.
+It uses honest working-tree labels and is not a canonical release artifact.
+On the original immutable invocation clock, the exact fresh API session was
+positively waiting on the named lock, readiness was 503, and the independent
+holder was released at +2.308 seconds. Readiness succeeded at +11.408 seconds,
+inside the unchanged 30-second gate. All 2,682 stored documents and the model
+matched the scalar baseline, including 871,549 valid term pairs; no epoch or
+vector errors, OOM, evidence loss or cleanup errors occurred.
+
+Two separately invoked ordinary cold cases passed at 9.190 and 9.289 seconds.
+Warm readiness while another session retained the lock passed at 0.906 seconds.
+The largest article hash, all 929 chapter labels, timestamp mapping, all seven
+dedication scopes/expiry cases, 132 bounded HTTP requests and the existing
+worker queue deadline passed. The queued synthetic update was visible in
+11.926 seconds. Local checks passed 311 unit tests, five explicitly selected
+real MySQL 8.4.9 regressions, strict all-target Clippy and formatting. All
+59 normal HTTP tests passed without skips or retries. The combined API report
+covers 14,255/14,419 lines (98.86261%), above the unchanged 97% gate; every
+mandatory MySQL test has positive recorded coverage hits.
+
+These are local amd64 observations, not ARM/Fargate evidence. The prior failed
+gates remain retained. An additional canonical 0.1.95 warm-compatibility check
+proved positive search and unchanged data/state hashes, but its larger public
+query failed the original two-second request limit, with a 2.188-second pool
+acquisition. Its complete compatibility gate remains failed; the root cause
+of that delay was not established. Before ARM cutover, the normal x86 phase
+must establish a fully qualified current amd64 image and complete rollback
+definition. Current committed native builds, release provenance, isolated AWS
+comparison and final review remain gates; production is still x86.
+
 ## Isolated candidate design (phase 2 - requires authorized AWS access)
 
 Multi-arch manifests do not select Graviton by themselves. Definitions without

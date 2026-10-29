@@ -277,7 +277,13 @@ impl ArticleSearchIndex {
     /// it in. Called on boot and whenever the persisted epoch advances.
     pub async fn load(&self) -> Result<(), DbErr> {
         let _guard = self.reload_lock.lock().await;
-        let Some(state) = store::load_state(self.conn()).await? else {
+        self.load_from_locked(self.conn()).await
+    }
+
+    // The caller owns reload_lock. A cold initializer must read through its
+    // retained named-lock session, without checking out a second pool slot.
+    async fn load_from_locked<C: ConnectionTrait>(&self, conn: &C) -> Result<(), DbErr> {
+        let Some(state) = store::load_state(conn).await? else {
             return Ok(());
         };
         if state.schema_version != store::SCHEMA_VERSION {
@@ -292,7 +298,7 @@ impl ArticleSearchIndex {
             warn!("article search model blob failed to decode; waiting for retrain");
             return Ok(());
         };
-        let rows = store::load_docs(self.conn()).await?;
+        let rows = store::load_docs(conn).await?;
         // Retrain writes epoch-zero docs before publishing and stamping its
         // new model. Never combine rows from that window with another basis.
         if rows.iter().any(|row| row.model_epoch != state.model_epoch) {
@@ -561,10 +567,50 @@ enum RetrainLock<'a> {
     Mock(&'a DatabaseConnection),
 }
 
+#[derive(Clone, Copy)]
+enum RetrainWait {
+    Immediate,
+    FirstCold,
+}
+
+impl RetrainWait {
+    fn seconds(self) -> u64 {
+        match self {
+            Self::Immediate => 0,
+            // The first cold boot may wait once within the existing tick window.
+            // Warm loads, maintenance retrains, and subsequent ticks never wait.
+            Self::FirstCold => TICK_SECS,
+        }
+    }
+}
+
 impl<'a> RetrainLock<'a> {
     async fn acquire(conn: &'a DatabaseConnection) -> Result<Option<Self>, DbErr> {
+        Self::acquire_with_wait(conn, RetrainWait::Immediate).await
+    }
+
+    async fn acquire_with_wait(
+        conn: &'a DatabaseConnection,
+        wait: RetrainWait,
+    ) -> Result<Option<Self>, DbErr> {
         if conn.is_mock_connection() {
-            return Ok(store::try_lock(conn).await?.then_some(Self::Mock(conn)));
+            let acquired = match wait {
+                RetrainWait::Immediate => store::try_lock(conn).await?,
+                RetrainWait::FirstCold => {
+                    let row = conn
+                        .query_one_raw(Statement::from_sql_and_values(
+                            DbBackend::MySql,
+                            "SELECT GET_LOCK('article_search_retrain', ?) AS acquired",
+                            [wait.seconds().into()],
+                        ))
+                        .await?;
+                    matches!(
+                        row.and_then(|row| row.try_get::<i64>("", "acquired").ok()),
+                        Some(1)
+                    )
+                }
+            };
+            return Ok(acquired.then_some(Self::Mock(conn)));
         }
         if !matches!(
             conn.inner,
@@ -583,7 +629,8 @@ impl<'a> RetrainLock<'a> {
         // prevents the response from reaching this future.
         session.close_on_drop();
         let acquired: Option<i64> =
-            sqlx::query_scalar("SELECT GET_LOCK('article_search_retrain', 0)")
+            sqlx::query_scalar("SELECT GET_LOCK('article_search_retrain', ?)")
+                .bind(wait.seconds())
                 .fetch_one(&mut *session)
                 .await
                 .map_err(|err| DbErr::Query(RuntimeErr::SqlxError(err.into())))?;
@@ -879,23 +926,58 @@ impl Drop for WorkerLiveness {
     }
 }
 
-async fn initialize(index: &ArticleSearchIndex) {
+async fn initialize(index: &ArticleSearchIndex, wait: RetrainWait) {
     if let Err(err) = index.load().await {
         warn!(error = %err, "article search initial load failed");
     }
     // A compatible persisted snapshot (including a trained empty corpus) can
     // serve immediately. Do not contend with an existing retrain on rolling boot.
-    let initialized = index.inner.read().await.initialized;
-    if !initialized {
-        match retrain(index.conn()).await {
-            Ok(Some(n)) => info!(docs = n, "article search index built"),
-            Ok(None) => {}
-            Err(err) => warn!(error = %err, "initial article index build failed"),
-        }
-        if let Err(err) = index.load().await {
-            warn!(error = %err, "article search reload failed");
-        }
+    if index.inner.read().await.initialized {
+        return;
     }
+
+    // Preserve the ordinary loader's reload_lock -> pool order. In particular,
+    // a one-slot pool must never wait for a loader holding this mutex while a
+    // cold initializer holds that pool's sole physical session.
+    let reload = index.reload_lock.lock().await;
+    if index.inner.read().await.initialized {
+        return;
+    }
+    match RetrainLock::acquire_with_wait(index.conn(), wait).await {
+        Ok(Some(lock)) => {
+            let result = initialize_locked(index, &lock).await;
+            if let Err(err) = lock.release().await {
+                warn!(error = %err, "failed to release article-search retrain lock");
+            }
+            match result {
+                Ok(()) => return,
+                Err(err) => warn!(error = %err, "initial article index build failed"),
+            }
+        }
+        Ok(None) => {}
+        Err(err) => warn!(error = %err, "initial article index lock failed"),
+    }
+    // An owner may publish even when acquisition misses or is interrupted by
+    // a database error. Drop the mutex before the ordinary fallback loader.
+    drop(reload);
+    if let Err(err) = index.load().await {
+        warn!(error = %err, "article search reload failed");
+    }
+}
+
+async fn initialize_locked(
+    index: &ArticleSearchIndex,
+    lock: &RetrainLock<'_>,
+) -> Result<(), DbErr> {
+    // A preceding owner may have published while this first cold boot waited.
+    // Reuse its compatible model instead of training the same corpus twice.
+    index.load_from_locked(lock).await?;
+    if !index.inner.read().await.initialized {
+        let n = retrain_locked(lock).await?;
+        info!(docs = n, "article search index built");
+        index.load_from_locked(lock).await?;
+    }
+    Ok(())
 }
 
 /// Boot-time ensure + the background worker: drain the queue every
@@ -909,7 +991,7 @@ pub async fn run_worker(index: ArticleSearchIndex) {
         warn!(error = %err, "article search schema setup failed; worker exiting");
         return;
     }
-    initialize(&index).await;
+    initialize(&index, RetrainWait::FirstCold).await;
     let mut tick: u32 = 0;
     loop {
         tokio::time::sleep(Duration::from_secs(TICK_SECS)).await;
@@ -917,7 +999,7 @@ pub async fn run_worker(index: ArticleSearchIndex) {
         // Recover on the existing tick without blocking that owner or claiming ready.
         let initialized = index.inner.read().await.initialized;
         if !initialized {
-            initialize(&index).await;
+            initialize(&index, RetrainWait::Immediate).await;
             continue;
         }
         tick = tick.wrapping_add(1);
@@ -1646,6 +1728,334 @@ mod tests {
         assert!(error.to_string().contains("retrain source read failed"));
     }
 
+    async fn pending_retrain_wait(pool: &sqlx::MySqlPool, expected: Option<u64>) -> u64 {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let waiting: Vec<u64> = sqlx::query_scalar(
+                    "SELECT ID FROM information_schema.PROCESSLIST WHERE STATE = 'User lock' AND INFO LIKE 'SELECT GET_LOCK%'",
+                ).fetch_all(pool).await.expect("observe a real pending named-lock query");
+                if let Some(id) = waiting.into_iter().find(|id| expected.is_none_or(|wanted| wanted == *id)) {
+                    return id;
+                }
+                tokio::task::yield_now().await;
+            }
+        }).await.expect("the positive server-side wait must actually be pending")
+    }
+
+    async fn retrain_session_gone(pool: &sqlx::MySqlPool, id: u64) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let count: i64 = sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID = ?",
+                )
+                .bind(id)
+                .fetch_one(pool)
+                .await
+                .expect("inspect cancelled session");
+                if count == 0 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("a cancelled lock session may not return to its pool or continue SQL");
+    }
+
+    // Opaque end-to-end TLS proxy: delay the server reply only after the real
+    // TLS login/CONNECTION_ID query. A client EOF always closes the upstream,
+    // even while the server->client direction is deliberately gated.
+    async fn delayed_lock_reply_proxy(
+        options: &sqlx::mysql::MySqlConnectOptions,
+    ) -> (u16, Arc<AtomicBool>, tokio::task::JoinHandle<()>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::{TcpListener, TcpStream};
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("private reply proxy");
+        let port = listener.local_addr().expect("proxy address").port();
+        let host = options.get_host().to_owned();
+        let upstream_port = options.get_port();
+        let paused = Arc::new(AtomicBool::new(false));
+        let gate = paused.clone();
+        let handle = tokio::spawn(async move {
+            let (client, _) = listener.accept().await.expect("one private client");
+            let upstream = TcpStream::connect((host.as_str(), upstream_port))
+                .await
+                .expect("private fixture upstream");
+            let (mut client_read, mut client_write) = client.into_split();
+            let (mut upstream_read, mut upstream_write) = upstream.into_split();
+            let outbound = tokio::io::copy(&mut client_read, &mut upstream_write);
+            let inbound = async {
+                let mut bytes = [0_u8; 8192];
+                loop {
+                    let count = upstream_read.read(&mut bytes).await?;
+                    if count == 0 {
+                        return Ok::<(), std::io::Error>(());
+                    }
+                    if gate.load(Ordering::Acquire) {
+                        // The test never resumes this direction: cancellation
+                        // must close the client/upstream without reading a grant.
+                        std::future::pending::<()>().await;
+                    }
+                    client_write.write_all(&bytes[..count]).await?;
+                }
+            };
+            tokio::select! {
+                result = outbound => { result.expect("client forwarding"); }
+                result = inbound => { result.expect("server forwarding"); }
+            }
+        });
+        (port, paused, handle)
+    }
+
+    /// Required by the normal API coverage entrypoint, sequentially with every
+    /// other isolated-MySQL regression. No 15s wait is hidden behind a sleep:
+    /// each release/cancel is driven by an observed MySQL pending/granted lock.
+    #[tokio::test]
+    #[ignore = "requires isolated MySQL and ARTICLE_SEARCH_LOCK_TEST_DB_URL; API coverage CI runs it"]
+    async fn mysql_cold_start_wait_is_session_scoped_and_cancellable() {
+        use sea_orm::{
+            SqlxMySqlConnector,
+            sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions},
+        };
+        let url = std::env::var("ARTICLE_SEARCH_LOCK_TEST_DB_URL").expect("isolated fixture URL");
+        let options: MySqlConnectOptions = url.parse().expect("valid fixture URL");
+        assert_eq!(options.get_database(), Some("article_search_lock_test"));
+        let pool = MySqlPoolOptions::new()
+            .max_connections(4)
+            .connect_with(options.clone())
+            .await
+            .expect("isolated observer pool");
+        let version: String = sqlx::query_scalar("SELECT VERSION()")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(version.starts_with("8.4."));
+        let cipher: String = sqlx::query_scalar(
+            "SELECT VARIABLE_VALUE FROM performance_schema.session_status WHERE VARIABLE_NAME = 'Ssl_cipher'",
+        ).fetch_one(&pool).await.unwrap();
+        assert!(!cipher.is_empty(), "real fixture connections must use TLS");
+        let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
+        pool.execute("DROP TABLE IF EXISTS tanah_article, article_search_doc, article_search_state, article_search_queue")
+            .await.expect("reset owned disposable database");
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL)")
+            .await.expect("tiny public-shaped source table");
+        pool.execute("INSERT INTO tanah_article VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1)")
+            .await.expect("tiny test-only corpus");
+        store::ensure_schema(&conn)
+            .await
+            .expect("fixture derived schema");
+        assert_eq!(retrain(&conn).await.unwrap(), Some(2));
+
+        // A warm snapshot, even a trained-empty model below, must bypass a
+        // foreign retrain owner. Manual maintenance also remains nonblocking.
+        let holder = RetrainLock::acquire(&conn).await.unwrap().unwrap();
+        let warm = index_on(conn.clone());
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            initialize(&warm, RetrainWait::FirstCold),
+        )
+        .await
+        .expect("warm boot never waits on the named lock");
+        assert_eq!(warm.doc_count().await, 2);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(3), retrain(&conn))
+                .await
+                .unwrap()
+                .unwrap(),
+            None
+        );
+
+        pool.execute("DELETE FROM article_search_doc")
+            .await
+            .unwrap();
+        pool.execute("DELETE FROM article_search_state")
+            .await
+            .unwrap();
+        let later = index_on(conn.clone());
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            initialize(&later, RetrainWait::Immediate),
+        )
+        .await
+        .expect("later cold recovery retains GET_LOCK(0)");
+        assert!(!later.inner.read().await.initialized);
+
+        // The one-slot loader queues behind reload_lock rather than owning a
+        // pool connection while the initializer waits. A preceding owner then
+        // publishes once; the cold initializer must adopt epoch1, not retrain2.
+        let small_pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options.clone())
+            .await
+            .expect("one-slot pool");
+        let small = SqlxMySqlConnector::from_sqlx_mysql_pool(small_pool.clone());
+        let cold = index_on(small.clone());
+        let work = cold.clone();
+        let initializing =
+            tokio::spawn(async move { initialize(&work, RetrainWait::FirstCold).await });
+        let pending = pending_retrain_wait(&pool, None).await;
+        let reader = cold.clone();
+        let ordinary_load = tokio::spawn(async move { reader.load().await });
+        assert_eq!(retrain_locked(&holder).await.unwrap(), 2);
+        let published = publication_bytes(&pool).await;
+        holder.release().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), initializing)
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), ordinary_load)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(cold.inner.read().await.epoch, 1);
+        assert_eq!(cold.doc_count().await, 2);
+        assert_eq!(
+            publication_bytes(&pool).await,
+            published,
+            "no duplicate train/state/epoch write after the wait"
+        );
+        retrain_session_gone(&pool, pending).await;
+        eprintln!("COLD_WAIT published snapshot reused; single-slot concurrent loader completed");
+
+        // No preceding publication: train/load on that same sole slot once.
+        pool.execute("DELETE FROM article_search_doc")
+            .await
+            .unwrap();
+        pool.execute("DELETE FROM article_search_state")
+            .await
+            .unwrap();
+        let unbuilt = index_on(small.clone());
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            initialize(&unbuilt, RetrainWait::FirstCold),
+        )
+        .await
+        .expect("cold train/reload may not require a second connection");
+        assert!(unbuilt.inner.read().await.initialized);
+        assert_eq!(unbuilt.inner.read().await.epoch, 1);
+        assert_eq!(unbuilt.doc_count().await, 2);
+        assert_retrain_lock_free(&pool).await;
+
+        pool.execute("DELETE FROM tanah_article").await.unwrap();
+        assert_eq!(retrain(&conn).await.unwrap(), Some(0));
+        let holder = RetrainLock::acquire(&conn).await.unwrap().unwrap();
+        let empty = index_on(small.clone());
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            initialize(&empty, RetrainWait::FirstCold),
+        )
+        .await
+        .expect("a compatible empty publication is warm");
+        assert!(empty.inner.read().await.initialized);
+        assert_eq!(empty.doc_count().await, 0);
+        holder.release().await.unwrap();
+
+        // Cancellation while actually pending releases both reload_lock and
+        // the physical SQL session. No lock session may return to its pool.
+        pool.execute("DELETE FROM article_search_state")
+            .await
+            .unwrap();
+        let holder = RetrainLock::acquire(&conn).await.unwrap().unwrap();
+        let cancelled = index_on(small.clone());
+        let work = cancelled.clone();
+        let waiting = tokio::spawn(async move { initialize(&work, RetrainWait::FirstCold).await });
+        let waiting_id = pending_retrain_wait(&pool, None).await;
+        waiting.abort();
+        assert!(waiting.await.unwrap_err().is_cancelled());
+        holder.release().await.unwrap();
+        retrain_session_gone(&pool, waiting_id).await;
+        assert_retrain_lock_free(&pool).await;
+        tokio::time::timeout(Duration::from_secs(3), cancelled.load())
+            .await
+            .unwrap()
+            .unwrap();
+        let reused_id: u64 = sqlx::query_scalar("SELECT CONNECTION_ID()")
+            .fetch_one(&small_pool)
+            .await
+            .unwrap();
+        assert_ne!(
+            reused_id, waiting_id,
+            "cancelled physical session must never be reused"
+        );
+        eprintln!(
+            "COLD_WAIT pending acquisition cancellation closed its SQL session and unlocked the loader"
+        );
+
+        // Force the harder race: MySQL grants the positive wait, but the TLS
+        // response is withheld. Abort BEFORE acquire_with_wait can build its
+        // guard; close_on_drop must already protect this granted session.
+        let (port, gate, proxy) = delayed_lock_reply_proxy(&options).await;
+        let proxy_options = options.clone().host("127.0.0.1").port(port);
+        let proxy_pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            // Avoid an unrelated checkout ping consuming the gated response.
+            .test_before_acquire(false)
+            .connect_with(proxy_options)
+            .await
+            .expect("TLS through opaque proxy");
+        let granted_id: u64 = sqlx::query_scalar("SELECT CONNECTION_ID()")
+            .fetch_one(&proxy_pool)
+            .await
+            .unwrap();
+        let proxy_conn = SqlxMySqlConnector::from_sqlx_mysql_pool(proxy_pool.clone());
+        let holder = RetrainLock::acquire(&conn).await.unwrap().unwrap();
+        let acquiring = tokio::spawn(async move {
+            RetrainLock::acquire_with_wait(&proxy_conn, RetrainWait::FirstCold)
+                .await
+                .expect("late grant query")
+                .expect("late grant guard")
+                .release()
+                .await
+        });
+        assert_eq!(
+            pending_retrain_wait(&pool, Some(granted_id)).await,
+            granted_id
+        );
+        // Allow checkout/preparation replies before the positive wait. With
+        // the exact foreign holder still owning the name, no grant can arrive
+        // before this gate is set; then withhold the grant response itself.
+        gate.store(true, Ordering::Release);
+        holder.release().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let owner: Option<u64> =
+                    sqlx::query_scalar("SELECT IS_USED_LOCK('article_search_retrain')")
+                        .fetch_one(&pool)
+                        .await
+                        .unwrap();
+                if owner == Some(granted_id) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("server granted the lock while its response remains withheld");
+        assert!(
+            !acquiring.is_finished(),
+            "the client must not have observed the grant"
+        );
+        acquiring.abort();
+        assert!(acquiring.await.unwrap_err().is_cancelled());
+        retrain_session_gone(&pool, granted_id).await;
+        assert_retrain_lock_free(&pool).await;
+        tokio::time::timeout(Duration::from_secs(3), proxy)
+            .await
+            .unwrap()
+            .unwrap();
+        proxy_pool.close().await;
+        let replacement = RetrainLock::acquire(&small).await.unwrap().unwrap();
+        replacement.release().await.unwrap();
+        eprintln!(
+            "COLD_WAIT late grant cancellation closed the unreturned session before another worker acquired"
+        );
+        small_pool.close().await;
+        pool.close().await;
+    }
+
     /// The API coverage CI job explicitly invokes this real-database regression.
     #[tokio::test]
     #[ignore = "requires isolated MySQL and ARTICLE_SEARCH_LOCK_TEST_DB_URL; API coverage CI runs it"]
@@ -2148,10 +2558,154 @@ mod tests {
         let index = index_on(conn);
         let _liveness = WorkerLiveness(index.worker_running.clone());
         index.worker_running.store(true, Ordering::Release);
-        initialize(&index).await;
+        initialize(&index, RetrainWait::Immediate).await;
         assert!(!index.is_ready().await);
-        initialize(&index).await;
+        initialize(&index, RetrainWait::Immediate).await;
         assert!(index.is_ready().await);
+    }
+
+    fn stored_empty_model(epoch: i32) -> BTreeMap<String, Value> {
+        mock_row([
+            ("schema_version", store::SCHEMA_VERSION.into()),
+            ("doc_count", 0_i32.into()),
+            ("model_epoch", epoch.into()),
+            ("model", serialize_model(&toy_model()).into()),
+        ])
+    }
+
+    #[tokio::test]
+    async fn only_the_first_cold_initialization_requests_the_existing_tick_wait() {
+        for (wait, expected) in [
+            (RetrainWait::FirstCold, TICK_SECS),
+            (RetrainWait::Immediate, 0),
+        ] {
+            let conn = mock_conn()
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                    vec![mock_row([("acquired", 0_i64.into())])],
+                    vec![],
+                ])
+                .into_connection();
+            let index = index_on(conn);
+            initialize(&index, wait).await;
+            assert!(!index.inner.read().await.initialized);
+            let log = index.conn().clone().into_transaction_log();
+            let statement = &log[1].statements()[0];
+            if expected == 0 {
+                assert_eq!(
+                    statement.sql,
+                    "SELECT GET_LOCK('article_search_retrain', 0) AS acquired"
+                );
+            } else {
+                assert_eq!(
+                    statement.sql,
+                    "SELECT GET_LOCK('article_search_retrain', ?) AS acquired"
+                );
+                assert_eq!(statement.values, Some(Values(vec![expected.into()])));
+            }
+        }
+        assert_eq!(RetrainWait::Immediate.seconds(), 0);
+        assert_eq!(RetrainWait::FirstCold.seconds(), 15);
+    }
+
+    #[tokio::test]
+    async fn cold_lock_errors_release_the_reload_mutex_before_fallback() {
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .append_query_errors([DbErr::Custom("initial lock unavailable".into())])
+            .append_query_results([vec![stored_empty_model(8)], vec![]])
+            .into_connection();
+        let index = index_on(conn);
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            initialize(&index, RetrainWait::FirstCold),
+        )
+        .await
+        .expect("fallback must not re-lock its own mutex");
+        assert!(index.inner.read().await.initialized);
+        assert_eq!(index.inner.read().await.epoch, 8);
+    }
+
+    #[tokio::test]
+    async fn retained_load_and_release_errors_still_attempt_the_existing_fresh_fallback() {
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+                vec![mock_row([("acquired", 1_i64.into())])],
+            ])
+            .append_query_errors([DbErr::Custom("retained session load failed".into())])
+            .append_query_results([vec![stored_empty_model(11)], vec![]])
+            .append_exec_errors([DbErr::Custom("release also failed".into())])
+            .into_connection();
+        let index = index_on(conn);
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            initialize(&index, RetrainWait::FirstCold),
+        )
+        .await
+        .expect("fresh fallback may not retain the reload mutex");
+        assert!(index.inner.read().await.initialized);
+        assert_eq!(index.inner.read().await.epoch, 11);
+        let log = index.conn().clone().into_transaction_log();
+        assert_eq!(log.len(), 6);
+        assert!(log[3].statements()[0].sql.contains("RELEASE_LOCK"));
+        assert!(log[4].statements()[0].sql.contains("article_search_state"));
+    }
+
+    #[tokio::test]
+    async fn initial_lock_recheck_uses_the_supplied_session_and_skips_retraining() {
+        let poisoned = mock_conn()
+            .append_query_errors([DbErr::Custom("must not check out the ordinary pool".into())])
+            .into_connection();
+        let index = index_on(poisoned);
+        let session = mock_conn()
+            .append_query_results([vec![stored_empty_model(9)], vec![]])
+            .into_connection();
+        let lock = RetrainLock::Mock(&session);
+        let reload = index.reload_lock.lock().await;
+        initialize_locked(&index, &lock)
+            .await
+            .expect("reuse published empty model");
+        drop(reload);
+        assert_eq!(index.inner.read().await.epoch, 9);
+        assert!(index.inner.read().await.initialized);
+        assert_eq!(session.clone().into_transaction_log().len(), 2);
+        assert!(
+            index
+                .load()
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("ordinary pool")
+        );
+        assert!(
+            index.inner.read().await.initialized,
+            "a later load error retains the warm model"
+        );
+    }
+
+    #[tokio::test]
+    async fn first_warm_initialization_never_requests_a_named_lock() {
+        let conn = mock_conn()
+            .append_query_results([vec![stored_empty_model(4)], vec![]])
+            .into_connection();
+        let index = index_on(conn);
+        initialize(&index, RetrainWait::FirstCold).await;
+        assert!(index.inner.read().await.initialized);
+        let log = index.conn().clone().into_transaction_log();
+        assert_eq!(
+            log.len(),
+            2,
+            "state and docs only; no acquisition or retrain"
+        );
+        assert!(log.iter().all(|entry| {
+            entry
+                .statements()
+                .iter()
+                .all(|stmt| !stmt.sql.contains("GET_LOCK"))
+        }));
     }
 
     #[tokio::test]
