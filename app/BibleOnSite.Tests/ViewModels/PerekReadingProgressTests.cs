@@ -115,6 +115,59 @@ public class PerekReadingProgressTests
 	}
 
 	[Fact]
+	public void UpdateReadingProgress_NoPerek_StaysHidden()
+	{
+		var vm = CreateViewModel();
+		// vm.Perek is null — the anchor is still captured for a later perek.
+		vm.UpdateReadingProgress(2, contentEndVisible: false);
+
+		vm.ReadingProgress.Should().Be(0);
+	}
+
+	[Fact]
+	public void UpdateReadingProgress_EmptyUnits_StaysHidden()
+	{
+		var vm = CreateViewModel();
+		var perek = CreatePerek();
+		perek.ProgressUnits = [];
+		perek.ReadingMetric = Metric;
+		vm.Perek = perek;
+
+		vm.UpdateReadingProgress(1, contentEndVisible: false);
+
+		vm.ReadingProgress.Should().Be(0);
+	}
+
+	[Fact]
+	public void UpdateReadingProgress_ZeroWordCountMetric_StaysHidden()
+	{
+		var vm = CreateViewModel();
+		var perek = CreatePerek();
+		perek.ProgressUnits = Units;
+		perek.ReadingMetric = new ReadingMetric { WordCount = 0 };
+		vm.Perek = perek;
+
+		vm.UpdateReadingProgress(1, contentEndVisible: false);
+
+		vm.ReadingProgress.Should().Be(0);
+	}
+
+	[Fact]
+	public void UpdateReadingProgress_AnchorOutsideUnits_StaysHidden()
+	{
+		var vm = CreateViewModel();
+		var perek = CreatePerek();
+		perek.ProgressUnits = Units;
+		perek.ReadingMetric = Metric;
+		vm.Perek = perek;
+
+		// Pasuk 42 has no stored unit — the anchor can't be word-weighted.
+		vm.UpdateReadingProgress(42, contentEndVisible: false);
+
+		vm.ReadingProgress.Should().Be(0);
+	}
+
+	[Fact]
 	public async Task UpdateReadingProgress_ScrollBeforeMetricAttach_ReplaysAnchor()
 	{
 		var fake = new FakePerekDataService { StoredUnits = Units };

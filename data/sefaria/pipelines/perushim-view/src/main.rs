@@ -423,6 +423,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn run_note_metrics_requires_input() {
+        let err = run(cli_from(&["--format", "note-metrics"])).await;
+
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("--input <v2 notes.sqlite> is required")
+        );
+    }
+
+    #[tokio::test]
+    async fn run_note_metrics_executes_end_to_end() {
+        let dir = tempfile::Builder::new()
+            .prefix("perushim_main_note_metrics_")
+            .tempdir()
+            .unwrap()
+            .keep();
+        let input = dir.join("notes.sqlite");
+        let conn = rusqlite::Connection::open(&input).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE note_blob (perek_id INTEGER PRIMARY KEY, data BLOB NOT NULL);
+             INSERT INTO _metadata VALUES ('schema_version','2');",
+        )
+        .unwrap();
+        let note = data::extract::Note {
+            perush_id: 1,
+            perek_id: 1,
+            pasuk: 1,
+            note_idx: 0,
+            note_content: "בראשית - בשביל התורה".into(),
+        };
+        let blob = commands::note_blob::encode_perek_blob(&[&note]).unwrap();
+        conn.execute(
+            "INSERT INTO note_blob VALUES (1, ?1)",
+            rusqlite::params![blob],
+        )
+        .unwrap();
+        conn.close().unwrap();
+
+        run(cli_from(&[
+            "--format",
+            "note-metrics",
+            "--input",
+            input.to_str().unwrap(),
+        ]))
+        .await
+        .unwrap();
+
+        let decorated = rusqlite::Connection::open(&input).unwrap();
+        let rows: i64 = decorated
+            .query_row("SELECT COUNT(*) FROM tanah_perush_metric", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "the dispatch must backfill the metric tables");
+        decorated.close().unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
     async fn run_without_format_fails_before_mongodb() {
         let err = run(cli_from(&[])).await.unwrap_err();
         assert!(err.to_string().contains("--format is required"));

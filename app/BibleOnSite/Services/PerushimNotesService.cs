@@ -1125,7 +1125,7 @@ public class PerushimNotesService
     /// #2607) — the sheet's badge source. Empty when the pack predates the
     /// metric tables.
     /// </summary>
-    public async Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
+    public virtual async Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
     {
         await InitializeAsync();
         if (_connection == null)
