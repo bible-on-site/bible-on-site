@@ -291,8 +291,8 @@ public partial class AppShell : Shell
 	/// edge touches before the shared flyout pan — every root destination
 	/// (calendar, Masora, Tanahpedia, ...) would lose the right-edge drawer
 	/// swipe to a dead history gesture (#2432). Gate it on real history for
-	/// every Shell page; the reader additionally wires carousel priority in
-	/// ConfigureIosReaderHistory.
+	/// every Shell page; the readers additionally wire carousel priority via
+	/// <see cref="Helpers.ReaderPlatformChrome"/>.
 	/// </summary>
 	private void GateIosInteractiveBack()
 	{

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
 import type {
 	BulletinEmailState,
 	EmailAudience,
@@ -17,6 +18,7 @@ import {
 	getDailyBulletin,
 	prepareDailyBulletin,
 } from "~/server/daily-bulletins";
+import { BulletinWhatsAppControls } from "./BulletinWhatsAppControls";
 
 const CHANNEL_NAMES: Record<string, string> = {
 	email: 'דוא"ל',
@@ -50,6 +52,8 @@ type QueueRequest = {
 
 export function DailyBulletinPage() {
 	const [date, setDate] = useState(todayInJerusalem);
+	const [telegramBusy, setTelegramBusy] = useState(false);
+	const [whatsappPending, setWhatsAppPending] = useState(false);
 	const [requestedAudience, setRequestedAudience] =
 		useState<EmailAudience | null>(null);
 	const [confirmReal, setConfirmReal] = useState(false);
@@ -111,8 +115,17 @@ export function DailyBulletinPage() {
 		onError: () =>
 			queryClient.invalidateQueries({ queryKey: ["bulletin-email"] }),
 	});
-	const busy =
+	const emailOrPreparationBusy =
 		prepare.isPending || queueEmail.isPending || changeAudience.isPending;
+	const busy = emailOrPreparationBusy || telegramBusy || whatsappPending;
+	const whatsappControls = (
+		<BulletinWhatsAppControls
+			date={date}
+			prepared={!!saved?.pdfBase64}
+			disabled={emailOrPreparationBusy || telegramBusy}
+			onBusyChange={setWhatsAppPending}
+		/>
+	);
 	const state = email.data;
 	const settings = state?.settings;
 	const selectedAudience = requestedAudience ?? settings?.audience ?? "test";
@@ -213,6 +226,7 @@ export function DailyBulletinPage() {
 				</p>
 			)}
 			{bulletin.isLoading && <p role="status">טוען עלון...</p>}
+			{!saved && whatsappControls}
 			{saved && (
 				<>
 					<section className="rounded-xl border border-gray-200 bg-white p-6 space-y-3">
@@ -430,6 +444,12 @@ export function DailyBulletinPage() {
 									: "שליחת ניסיון בלבד"}
 						</button>
 					</section>
+					<BulletinTelegramControls
+						date={date}
+						disabled={emailOrPreparationBusy || whatsappPending}
+						onBusyChange={setTelegramBusy}
+					/>
+					{whatsappControls}
 					<section className="rounded-xl border border-gray-200 bg-white p-4">
 						<h2 className="mb-3 text-xl font-semibold">תצוגת דוא"ל</h2>
 						<iframe

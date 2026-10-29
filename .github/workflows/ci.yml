@@ -304,8 +304,8 @@ jobs:
     outputs:
       website_module_changed: ${{ steps.determine.outputs.website_module_changed }}
       website_ci_changed: ${{ steps.determine.outputs.website_ci_changed }}
-      api_module_changed: ${{ steps.determine.outputs.api_module_changed }}
-      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed }}
+      api_module_changed: ${{ steps.determine.outputs.api_module_changed == 'true' || steps.pending-api.outputs.api_release_pending == 'true' }}
+      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed == 'true' || steps.pending-api.outputs.api_release_pending == 'true' }}
       app_module_changed: ${{ steps.determine.outputs.app_module_changed }}
       app_ci_changed: ${{ steps.determine.outputs.app_ci_changed }}
       admin_module_changed: ${{ steps.determine.outputs.admin_module_changed }}
@@ -329,6 +329,16 @@ jobs:
       - name: Determine module changes
         id: determine
         run: node devops/github/ci/determine-changes.ts
+      - name: Verify pending API release reconciliation
+        run: node --test devops/github/ci/pending-api-release.test.mjs
+      - name: Reconcile previously blocked API release
+        id: pending-api
+        # Ordinary API changes keep their existing release/version-bump path.
+        # Recovery only selects real API code left unpublished by an older run.
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.determine.outputs.api_module_changed != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/ci/pending-api-release.mjs
 
   # Fixed ~30-second verification of the pre-generated calendar-PDF artifact
   # cache (#2608). Full (re)generation and S3 publication live in
@@ -1520,6 +1530,13 @@ jobs:
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+
+      # A fresh random schema exercises real locks, quota reservations and the
+      # additive deployment parser without altering the E2E database.
+      - name: Verify WhatsApp migration and concurrent claims with MySQL
+        env:
+          BULLETIN_MYSQL_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/
+        run: bun run test:mysql
 
       - name: Wait for RustFS and S3 buckets
         wait: rustfs
@@ -3354,6 +3371,7 @@ jobs:
         run: |
           bun run test:version
           bun run test:review-audit
+          bun run test:coverage-gaps
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
           node review-audit/scan-catch.cjs
@@ -3610,6 +3628,7 @@ jobs:
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.aar", "label": "iOS asset packs (.aar — Apple-hosted Background Assets)", "cd_key": "ios_assetpacks_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/asset-packs.json", "label": "iOS asset-pack plan (verified pack manifest for release-time reuse)", "cd_key": "ios_packplan_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "payloads/*", "label": "iOS pack payloads (HTTPS delivery below iOS 26)", "cd_key": "ios_payloads_artifact_name"}
         ]
       cd_event_type: deploy-app

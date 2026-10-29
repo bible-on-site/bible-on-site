@@ -362,7 +362,7 @@
 
 	<!-- Desktop reliability fixes for navigation layout, focus and keyboard input. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
 	</ItemGroup>
 
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
