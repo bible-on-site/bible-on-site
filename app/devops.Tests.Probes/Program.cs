@@ -44,10 +44,10 @@ internal static class Program
         {
             released.Set();
             listener.Stop();
-            if (server.IsAlive && !server.Join(1000))
-            {
-                throw new InvalidOperationException("Coverage listener did not stop");
-            }
+        }
+        if (server.IsAlive && !server.Join(1000))
+        {
+            throw new InvalidOperationException("Coverage listener did not stop");
         }
     }
 }
