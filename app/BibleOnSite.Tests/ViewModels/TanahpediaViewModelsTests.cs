@@ -692,17 +692,20 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
-    public async Task OpenEntry_FailedNavigation_PropagatesAndAllowsRetry()
+    public async Task OpenEntry_FailedNavigation_IsAbsorbedAndAllowsRetry()
     {
-        // A failed Shell navigation surfaces to the caller's failure boundary
-        // (the page logs it) and a later tap navigates again - a faulted
-        // navigation is recoverable, not a dead end (#2640).
+        // The command owns the failure boundary: a faulted Shell navigation
+        // must never escape into ICommand.Execute, which rethrows it on the
+        // main synchronization context - an unhandled fault there is a
+        // SIGABRT. A later tap navigates again - a faulted navigation is
+        // recoverable, not a dead end.
         var fail = true;
         _navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).Returns<string>(_ =>
             fail ? Task.FromException(new InvalidOperationException("route failed")) : Task.CompletedTask);
 
         var vm = Create();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.OpenEntryAsync("שמשון"));
+        var act = () => vm.OpenEntryAsync("שמשון");
+        await act.Should().NotThrowAsync("a navigation fault reaching ICommand.Execute crashes the app");
 
         fail = false;
         await vm.OpenEntryCommand.ExecuteAsync("דלילה");

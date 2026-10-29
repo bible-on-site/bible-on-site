@@ -94,14 +94,6 @@ const MasoraSefer = (props: {
 		initialContent,
 	);
 
-	const pasukCount = (perekId: number) =>
-		perekById.get(perekId)?.pesukim.length ?? 1;
-	const resolvePerek = (perekId: number) => {
-		const perek = perekById.get(perekId);
-		if (!perek) return undefined;
-		return { pesukim: perek.pesukim, source: perekSources[perekId] ?? "" };
-	};
-
 	const pageSemantics: PageSemantics = useMemo(
 		() => buildMasoraPageSemantics(units),
 		[units],
@@ -148,17 +140,13 @@ const MasoraSefer = (props: {
 	const backCoverPageIndex = MASORA_CONTENT_OFFSET + units.length * 2;
 	const documentTitleResolver = useMemo(
 		() =>
-			buildMasoraDocumentTitleResolver(
-				seferName,
-				units,
-				backCoverPageIndex,
-			),
+			buildMasoraDocumentTitleResolver(seferName, units, backCoverPageIndex),
 		[seferName, units, backCoverPageIndex],
 	);
 	const [bookPageTitle, setBookPageTitle] = useState<string | null>(null);
-	const [inBookContentTitle, setInBookContentTitle] = useState<
-		string | null
-	>(null);
+	const [inBookContentTitle, setInBookContentTitle] = useState<string | null>(
+		null,
+	);
 	const flatPageTitle = masoraUnitDocumentTitle(
 		units.find((unit) => unit.unitId === currentUnitId)?.heading ?? "",
 	);
@@ -193,105 +181,131 @@ const MasoraSefer = (props: {
 			: `${MASORA_ROOT}/${currentUnitId}?book`,
 	);
 
-	const contentPages = units.flatMap((unit) => {
-		const bookKey = unitBookKey(unit.unitId, "torah");
-		const summaries =
-			unit.unitId === currentUnitId
-				? { articles, perushim }
-				: batchSummaries[String(unit.unitId)];
-		const unitPath = `${MASORA_ROOT}/${unit.unitId}`;
-		return [
-			<React.Fragment key={`masora-${unit.unitId}`}>
-				<section
-					className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
-					data-sefer-unit-text={bookKey}
-				>
-					<div className={seferStyles.pageHeaderRight}>
-						<div className={seferStyles.pageHeaderRow}>
-							<span className={seferStyles.pageHeaderSefer}>
-								{seferName}
-							</span>
-							<span className={seferStyles.pageHeaderPerek}>
-								{toLetters(unit.order)}
-							</span>
-						</div>
-					</div>
-					<div className={seferStyles.pageHeaderLeft}>
-						<span>{unit.heading}</span>
-						{unit.closingBreak && (
-							<span className={unitPageStyles.closingBreak}>
-								{unit.closingBreak === "ptuha"
-									? "פרשה פתוחה"
-									: "פרשה סתומה"}
-							</span>
-						)}
-					</div>
-					{/* Pasuk-numeral clicks navigate the facing open perush;
+	// The page tree must stay referentially stable across renders: every
+	// committed flip updates the document-title state, and rebuilding this
+	// flatMap then re-rendered every mounted reader page mid-animation
+	// (#2805).
+	const contentPages = useMemo(
+		() =>
+			units.flatMap((unit) => {
+				const pasukCount = (perekId: number) =>
+					perekById.get(perekId)?.pesukim.length ?? 1;
+				const resolvePerek = (perekId: number) => {
+					const perek = perekById.get(perekId);
+					if (!perek) return undefined;
+					return {
+						pesukim: perek.pesukim,
+						source: perekSources[perekId] ?? "",
+					};
+				};
+				const bookKey = unitBookKey(unit.unitId, "torah");
+				const summaries =
+					unit.unitId === currentUnitId
+						? { articles, perushim }
+						: batchSummaries[String(unit.unitId)];
+				const unitPath = `${MASORA_ROOT}/${unit.unitId}`;
+				return [
+					<React.Fragment key={`masora-${unit.unitId}`}>
+						<section
+							className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
+							data-sefer-unit-text={bookKey}
+						>
+							<div className={seferStyles.pageHeaderRight}>
+								<div className={seferStyles.pageHeaderRow}>
+									<span className={seferStyles.pageHeaderSefer}>
+										{seferName}
+									</span>
+									<span className={seferStyles.pageHeaderPerek}>
+										{toLetters(unit.order)}
+									</span>
+								</div>
+							</div>
+							<div className={seferStyles.pageHeaderLeft}>
+								<span>{unit.heading}</span>
+								{unit.closingBreak && (
+									<span className={unitPageStyles.closingBreak}>
+										{unit.closingBreak === "ptuha"
+											? "פרשה פתוחה"
+											: "פרשה סתומה"}
+									</span>
+								)}
+							</div>
+							{/* Pasuk-numeral clicks navigate the facing open perush;
 						the delegated handler no-ops everywhere else. */}
-					{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
-					<div
-						className={seferStyles.perekTextScrollWrapper}
-						onClick={(event) =>
-							handleUnitTextPasukClick(bookKey, event.target)
-						}
-					>
-						<article className={seferStyles.perekText}>
-							<UnitTextBody
-								ranges={unit.ranges}
-								entityRefsByPerek={entityRefsByPerek}
-								pasukCount={pasukCount}
-								resolvePerek={resolvePerek}
-								/* Book-side anchors carry a unit-unique scope so they
-								 * never duplicate the flat page's canonical
-								 * pasuk-{perek}-{pasuk} ids — a mounted book
-								 * must not shadow the flat anchors' getElementById
-								 * resolution (boundary pesukim appear in two
-								 * adjacent units, so the unit id scopes them). */
-								anchorScope={`book-${unit.unitId}`}
-							/>
-						</article>
-					</div>
-				</section>
-			</React.Fragment>,
-			<React.Fragment key={`blank-${unit.unitId}`}>
-				<UnitBlankPageContent
-					division="masora"
-					unitId={unit.unitId}
-					scope="torah"
-					unitPath={unitPath}
-					articles={summaries?.articles ?? []}
-					perushim={summaries?.perushim ?? []}
-					perekSources={perekSources}
-					hebrewDateStr={hebrewDateStr}
-					initialSlug={unitBookContentSlug(
-						contentNavigation.content,
-						unit.unitId,
-						"torah",
-					)}
-					onNavigate={(kind, slug) =>
-						contentNavigation.navigate(
-							unit.unitId,
-							"torah",
-							kind,
-							slug,
-						)
-					}
-					fallbackPerekId={unit.ranges[0]?.start.perekId ?? 0}
-					titles={{
-						perushim: "פרשנים על הפרשה",
-						articles: "מאמרים על הפרשה",
-						perushEmpty: "אין פרשנות לפרשה זו",
-						articleEmpty: "אין מאמרים לפרשה זו",
-					}}
-					scrollStorageKey={`masora-${unit.unitId}`}
-					perushTitle={(name) =>
-						masoraPerushDocumentTitle(name, unit.heading)
-					}
-					onContentTitle={setInBookContentTitle}
-				/>
-			</React.Fragment>,
-		];
-	});
+							{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
+							<div
+								className={seferStyles.perekTextScrollWrapper}
+								onClick={(event) =>
+									handleUnitTextPasukClick(bookKey, event.target)
+								}
+							>
+								<article className={seferStyles.perekText}>
+									<UnitTextBody
+										ranges={unit.ranges}
+										entityRefsByPerek={entityRefsByPerek}
+										pasukCount={pasukCount}
+										resolvePerek={resolvePerek}
+										/* Book-side anchors carry a unit-unique scope so they
+										 * never duplicate the flat page's canonical
+										 * pasuk-{perek}-{pasuk} ids — a mounted book
+										 * must not shadow the flat anchors' getElementById
+										 * resolution (boundary pesukim appear in two
+										 * adjacent units, so the unit id scopes them). */
+										anchorScope={`book-${unit.unitId}`}
+									/>
+								</article>
+							</div>
+						</section>
+					</React.Fragment>,
+					<React.Fragment key={`blank-${unit.unitId}`}>
+						<UnitBlankPageContent
+							division="masora"
+							unitId={unit.unitId}
+							scope="torah"
+							unitPath={unitPath}
+							articles={summaries?.articles ?? []}
+							perushim={summaries?.perushim ?? []}
+							perekSources={perekSources}
+							hebrewDateStr={hebrewDateStr}
+							initialSlug={unitBookContentSlug(
+								contentNavigation.content,
+								unit.unitId,
+								"torah",
+							)}
+							onNavigate={(kind, slug) =>
+								contentNavigation.navigate(unit.unitId, "torah", kind, slug)
+							}
+							fallbackPerekId={unit.ranges[0]?.start.perekId ?? 0}
+							titles={{
+								perushim: "פרשנים על הפרשה",
+								articles: "מאמרים על הפרשה",
+								perushEmpty: "אין פרשנות לפרשה זו",
+								articleEmpty: "אין מאמרים לפרשה זו",
+							}}
+							scrollStorageKey={`masora-${unit.unitId}`}
+							perushTitle={(name) =>
+								masoraPerushDocumentTitle(name, unit.heading)
+							}
+							onContentTitle={setInBookContentTitle}
+						/>
+					</React.Fragment>,
+				];
+			}),
+		[
+			units,
+			seferName,
+			perekSources,
+			hebrewDateStr,
+			entityRefsByPerek,
+			currentUnitId,
+			articles,
+			perushim,
+			batchSummaries,
+			contentNavigation.content,
+			contentNavigation.navigate,
+			perekById,
+		],
+	);
 
 	return (
 		<UnitSeferBook
