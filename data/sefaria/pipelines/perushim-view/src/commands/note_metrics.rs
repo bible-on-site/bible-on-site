@@ -104,3 +104,144 @@ pub fn apply(input: &Path) -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::fixtures::{temp_dir, v2_notes_db};
+
+    fn note(perush_id: i64, perek_id: i64, pasuk: i64, note_idx: i64, content: &str) -> Note {
+        Note {
+            perush_id,
+            perek_id,
+            pasuk,
+            note_idx,
+            note_content: content.to_string(),
+        }
+    }
+
+    fn metric_counts(conn: &Connection) -> (i64, i64) {
+        (
+            conn.query_row("SELECT COUNT(*) FROM tanah_note_metric", [], |r| r.get(0))
+                .unwrap(),
+            conn.query_row("SELECT COUNT(*) FROM tanah_perush_metric", [], |r| r.get(0))
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn apply_backfills_metrics_from_the_packs_own_blobs() {
+        let dir = temp_dir("note_metrics_apply");
+        let path = dir.join("notes.sqlite");
+        // A pre-#2607 pack: blobs + metadata but no metric tables.
+        v2_notes_db(
+            &path,
+            Some(note_blob::SCHEMA_VERSION),
+            None,
+            &[
+                (
+                    1,
+                    vec![
+                        note(1, 1, 1, 0, "בראשית - בשביל התורה"),
+                        note(1, 1, 2, 0, "והארץ היתה תהו"),
+                        note(2, 1, 1, 0, "בראשית ברא - הפועל"),
+                    ],
+                ),
+                (2, vec![note(1, 2, 1, 0, "next perek note")]),
+            ],
+            &[],
+        );
+
+        apply(&path).unwrap();
+
+        let conn = Connection::open(&path).unwrap();
+        // Same contract create_notes_db emits: 3 words per fixture note,
+        // cumulative inside each (perush, perek) scope.
+        let note_metrics: Vec<(i64, i64, i64)> = conn
+            .prepare(
+                "SELECT pasuk, word_count, cumulative_words FROM tanah_note_metric
+                 WHERE perush_id = 1 AND perek_id = 1 ORDER BY pasuk, note_idx",
+            )
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(note_metrics, vec![(1, 3, 3), (2, 3, 6)]);
+        let perush_metric: (i64, i64) = conn
+            .query_row(
+                "SELECT word_count, estimated_seconds FROM tanah_perush_metric
+                 WHERE perush_id = 1 AND perek_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(perush_metric, (6, 2));
+        assert_eq!(metric_counts(&conn), (4, 3));
+        conn.close().unwrap();
+
+        // Rerunning drops and rewrites the same rows — the backfill is
+        // idempotent rather than duplicating.
+        apply(&path).unwrap();
+        let conn = Connection::open(&path).unwrap();
+        assert_eq!(metric_counts(&conn), (4, 3));
+        conn.close().unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn apply_fails_when_the_input_cannot_be_opened() {
+        let dir = temp_dir("note_metrics_missing");
+        let missing = dir.join("nope/notes.sqlite");
+
+        let err = apply(&missing).unwrap_err();
+
+        assert!(err.to_string().contains("open notes sqlite"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn apply_rejects_a_pack_without_schema_version() {
+        let dir = temp_dir("note_metrics_no_version");
+        let path = dir.join("notes.sqlite");
+        v2_notes_db(&path, None, None, &[], &[]);
+
+        let err = apply(&path).unwrap_err();
+
+        assert!(err.to_string().contains("not a v2 notes sqlite"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn apply_rejects_a_mismatched_schema_version() {
+        let dir = temp_dir("note_metrics_bad_version");
+        let path = dir.join("notes.sqlite");
+        v2_notes_db(&path, Some("99"), None, &[], &[]);
+
+        let err = apply(&path).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("unsupported notes schema_version '99'"),
+            "{err}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn apply_fails_when_a_blob_cannot_be_decoded() {
+        let dir = temp_dir("note_metrics_corrupt");
+        let path = dir.join("notes.sqlite");
+        // A corrupt blob must fail the backfill, not write half metrics.
+        v2_notes_db(
+            &path,
+            Some(note_blob::SCHEMA_VERSION),
+            None,
+            &[],
+            &[(1, b"not-a-blob".to_vec())],
+        );
+
+        assert!(apply(&path).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
