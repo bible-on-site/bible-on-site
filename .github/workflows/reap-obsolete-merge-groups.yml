@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      actions: read
+      actions: write
     steps:
       # These events run trusted default-branch code, never candidate code/artifacts.
       - uses: actions/checkout@v7
@@ -51,10 +51,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-      - name: Inspect only; cancellation requires a separately validated rollout
+      - name: Cancel only obsolete merge-group runs after two fresh proofs
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node devops/github/ci/reap-obsolete-merge-groups.mjs --dry-run
+        run: node devops/github/ci/reap-obsolete-merge-groups.mjs --apply
       - uses: actions/upload-artifact@v7
         if: always()
         with:
