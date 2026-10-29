@@ -35,7 +35,10 @@ describe("detectChanges", () => {
 			for (const [key, flags] of Object.entries(changes)) {
 				assert.deepEqual(
 					flags,
-					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					{
+						module_changed: false,
+						ci_changed: ["website", "api", "admin"].includes(key),
+					},
 					`${file} -> ${key}`,
 				);
 			}
@@ -550,6 +553,30 @@ describe("isSchemaOnlyDataChange", () => {
 			true,
 		],
 		[
+			"WhatsApp upgrade and bootstrap preservation stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"devops/deploy/data-deploy/sql-files.json",
+				"web/admin/src/server/whatsapp-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"WhatsApp upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			true,
+		],
+		[
+			"WhatsApp upgrade cannot hide content changes",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_dedication_data.sql",
+			],
+			false,
+		],
+		[
 			"bootstrap changes alone retain normal deployment behavior",
 			["data/mysql/db-populator/src/main.rs"],
 			false,
@@ -641,9 +668,10 @@ describe("isSchemaOnlyDataChange", () => {
 	});
 });
 
-test("SES infrastructure changes select data checks without releasing content", () => {
+test("bulletin infrastructure changes select data checks without releasing content", () => {
 	for (const file of [
 		"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+		"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",

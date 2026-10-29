@@ -273,12 +273,7 @@ async fn main() -> Result<()> {
         let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
         execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
 
-        execute_script(
-            &mut conn,
-            &base_path.join("../tanah_daily_bulletin_upgrade.sql"),
-            "daily-bulletin-upgrade",
-        )
-        .await?;
+        apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
 
         apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
@@ -561,6 +556,21 @@ async fn apply_perek_pasuk_count_upgrade(
         "perek-pasuk-count-upgrade",
     )
     .await
+}
+
+/// Bulletin channel tables depend on the immutable bulletin snapshot table.
+/// Keep both additive upgrades together for fresh and repeated bootstrap runs.
+async fn apply_daily_bulletin_upgrades(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    for (filename, label) in [
+        ("tanah_daily_bulletin_upgrade.sql", "daily-bulletin-upgrade"),
+        (
+            "tanah_daily_bulletin_whatsapp_upgrade.sql",
+            "daily-bulletin-whatsapp-upgrade",
+        ),
+    ] {
+        execute_script(conn, &base_path.join("..").join(filename), label).await?;
+    }
+    Ok(())
 }
 
 /// Applies the dedication expansion upgrade (#2731): expiry columns on the
@@ -1179,9 +1189,9 @@ SELECT 1";
             // Simulate the pre-bulletin dynamic schema and upgrade it repeatedly.
             raw_sql("ALTER TABLE tanah_article DROP COLUMN distributable")
                 .execute(&mut conn).await?;
-            let bulletin_upgrade = base_path.join("../tanah_daily_bulletin_upgrade.sql");
-            execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade").await?;
+            apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_settings WHERE id = 1 AND audience = 'test' AND revision = 0 AND next_send_at IS NULL").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_settings WHERE id = 1 AND audience = 'test' AND revision = 0 AND group_lookup_token IS NULL AND next_group_lookup_at IS NULL AND message_checks_used = 0").fetch_one(&mut conn).await?, 1);
             raw_sql("INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content, distributable) VALUES (42, 1, 1, 'Retained article', 1, 'Retained content', TRUE);
                 INSERT INTO tanah_daily_bulletin (bulletin_date, perek_id, input_json, subject, source, email_html, pdf_data, filename)
                     VALUES ('2026-10-08', 1, '{}', 'Retained subject', 'Retained source', 'Retained HTML', 'Retained PDF', 'retained.pdf');
@@ -1202,10 +1212,37 @@ SELECT 1";
                     (201, '11111111-1111-4111-8111-111111111111', 101, 'test@example.com', 'uncertain', '33333333-3333-4333-8333-333333333333', 'ses-retained-test-message', '2026-10-08 12:00:00.123', '2026-10-08 12:02:03.456', 'Do not resend automatically'),
                     (202, '22222222-2222-4222-8222-222222222222', 106, 'complained@example.com', 'complained', '44444444-4444-4444-8444-444444444444', 'ses-retained-complaint', '2026-10-08 12:00:00.123', '2026-10-08 12:03:04.567', 'Recipient complained');")
                 .execute(&mut conn).await?;
-            execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade-repeat").await?;
+            raw_sql("UPDATE tanah_daily_bulletin_whatsapp_settings SET audience = 'real', revision = 8,
+                    group_lookup_token = '55555555-5555-4555-8555-555555555555', group_lookup_until = '2026-10-08 12:00:20.123',
+                    next_group_lookup_at = '2026-10-08 12:00:01.123', message_check_month = '2026-10', message_checks_used = 1000,
+                    next_message_check_at = '2026-10-08 12:00:02.123' WHERE id = 1;
+                INSERT INTO tanah_daily_bulletin_whatsapp_verification
+                    (audience, config_sha256, verified, connection_state, group_id, title, member_count, sender_id, sender_phone, participant_digest, checked_at, expires_at)
+                    VALUES ('test', REPEAT('a', 64), TRUE, 'authorized', '111111111111111111@g.us', 'Retained test target', 2,
+                        '222222222222222@lid', '15550000001', CONCAT('sha256:', REPEAT('b', 64)), '2026-10-08 12:00:00.123', '2026-10-08 12:10:00.123');
+                INSERT INTO tanah_daily_bulletin_whatsapp_job
+                    (id, bulletin_date, audience, idempotency_key, settings_revision, instance_id, target_group_id, sender_id, sender_phone,
+                     participant_digest, config_sha256, pdf_sha256, filename, caption, status, attempt_token, started_at, upload_started_at,
+                     provider_message_id, provider_status, reconcile_attempts, reconcile_token, reconcile_until, next_reconcile_at, last_error)
+                    VALUES ('66666666-6666-4666-8666-666666666666', '2026-10-08', 'test', 'retained-whatsapp-request', 7,
+                        '111111111111', '111111111111111111@g.us', '222222222222222@lid', '15550000001', CONCAT('sha256:', REPEAT('b',64)),
+                        REPEAT('a',64), REPEAT('c',64), 'retained.pdf', 'Retained caption', 'accepted', '77777777-7777-4777-8777-777777777777',
+                        '2026-10-08 12:00:00.123', '2026-10-08 12:00:01.123', 'retained-whatsapp-message', 'pending', 2,
+                        '88888888-8888-4888-8888-888888888888', '2026-10-08 12:05:30.123', '2026-10-08 12:05:00.123', 'Retain acknowledgement');
+                INSERT INTO tanah_daily_bulletin_delivery (bulletin_date, channel, status, attempt_count, provider_message_id, sent_at)
+                    VALUES ('2026-10-08', 'whatsapp', 'sent', 1, 'legacy-whatsapp-message', '2026-10-08 11:00:00');")
+                .execute(&mut conn).await?;
+            apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
+            apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
-            assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
+            assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND channel = 'email' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_settings WHERE id = 1 AND audience = 'real' AND revision = 8 AND group_lookup_token = '55555555-5555-4555-8555-555555555555' AND group_lookup_until = '2026-10-08 12:00:20.123' AND next_group_lookup_at = '2026-10-08 12:00:01.123' AND message_check_month = '2026-10' AND message_checks_used = 1000 AND next_message_check_at = '2026-10-08 12:00:02.123'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_settings").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_verification WHERE audience = 'test' AND config_sha256 = REPEAT('a',64) AND verified = TRUE AND connection_state = 'authorized' AND group_id = '111111111111111111@g.us' AND title = 'Retained test target' AND member_count = 2 AND sender_id = '222222222222222@lid' AND sender_phone = '15550000001' AND participant_digest = CONCAT('sha256:',REPEAT('b',64)) AND checked_at = '2026-10-08 12:00:00.123' AND expires_at = '2026-10-08 12:10:00.123'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_job WHERE id = '66666666-6666-4666-8666-666666666666' AND bulletin_date = '2026-10-08' AND audience = 'test' AND idempotency_key = 'retained-whatsapp-request' AND settings_revision = 7 AND instance_id = '111111111111' AND target_group_id = '111111111111111111@g.us' AND sender_id = '222222222222222@lid' AND sender_phone = '15550000001' AND participant_digest = CONCAT('sha256:',REPEAT('b',64)) AND config_sha256 = REPEAT('a',64) AND pdf_sha256 = REPEAT('c',64) AND filename = 'retained.pdf' AND caption = 'Retained caption' AND status = 'accepted' AND attempt_token = '77777777-7777-4777-8777-777777777777' AND started_at = '2026-10-08 12:00:00.123' AND upload_started_at = '2026-10-08 12:00:01.123' AND provider_message_id = 'retained-whatsapp-message' AND provider_status = 'pending' AND reconcile_attempts = 2 AND reconcile_token = '88888888-8888-4888-8888-888888888888' AND reconcile_until = '2026-10-08 12:05:30.123' AND next_reconcile_at = '2026-10-08 12:05:00.123' AND last_error = 'Retain acknowledgement'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND channel = 'whatsapp' AND status = 'sent' AND attempt_count = 1 AND provider_message_id = 'legacy-whatsapp-message' AND sent_at = '2026-10-08 11:00:00'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, Vec<u8>>("SELECT pdf_data FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, b"Retained PDF");
             // Re-running the upgrade must retain the selected audience, explicit consent,
             // global suppression history, and IDs that prevent an uncertain send retry.
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_settings WHERE id = 1 AND audience = 'real' AND revision = 7 AND next_send_at = '2026-10-08 12:00:01.123'").fetch_one(&mut conn).await?, 1);
