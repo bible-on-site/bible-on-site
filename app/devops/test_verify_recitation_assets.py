@@ -205,6 +205,42 @@ class ReleaseArtifactTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "checksum or format mismatch"):
                 verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
 
+    def test_ios_verification_emits_the_verified_pack_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, catalog = self.book(opus=True)
+            package, packs, aars, payloads, extract = self._write_ios_fixture(
+                root, audio, root / "catalog.json", catalog)
+            verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+            plan = json.loads((aars / verify_module.PACK_MANIFEST).read_text(encoding="utf-8"))
+            self.assertEqual(plan["version"], 1)
+            self.assertEqual({pack["id"] for pack in plan["packs"]},
+                             {"recitation-1", "perushim-notes"})
+            for pack in plan["packs"]:
+                pack_dir = packs / pack["id"]
+                manifest_bytes = (pack_dir / "Manifest.json").read_bytes()
+                expected_files = [(item.name, hashlib.sha256(item.read_bytes()).hexdigest(),
+                                   item.stat().st_size)
+                                  for item in pack_dir.iterdir()
+                                  if item.is_file() and item.name != "Manifest.json"]
+                self.assertEqual(pack["files"],
+                                 [{"name": name, "sha256": sha, "bytes": size}
+                                  for name, sha, size in sorted(expected_files)])
+                self.assertEqual(pack["contentSha256"],
+                                 verify_module.content_fingerprint(manifest_bytes, expected_files))
+                self.assertEqual(pack["archive"], f'{pack["id"]}.aar')
+                self.assertEqual(pack["archiveSha256"],
+                                 hashlib.sha256((aars / pack["archive"]).read_bytes()).hexdigest())
+                self.assertEqual(pack["manifest"]["assetPackID"], pack["id"])
+            self.assertTrue(all(pack["archiveBytes"] > 0 for pack in plan["packs"]))
+
+    def test_content_fingerprint_changes_on_manifest_or_payload_bytes_only(self):
+        payloads = [("a.zip", "f" * 64, 10), ("b.zip", "e" * 64, 20)]
+        base = verify_module.content_fingerprint(b'{"assetPackID":"p"}', payloads)
+        self.assertEqual(base, verify_module.content_fingerprint(b'{"assetPackID":"p"}', payloads[::-1]))
+        self.assertNotEqual(base, verify_module.content_fingerprint(b'{"assetPackID":"q"}', payloads))
+        self.assertNotEqual(base, verify_module.content_fingerprint(b'{"assetPackID":"p"}', payloads[1:]))
+
 
 if __name__ == "__main__":
     unittest.main()
