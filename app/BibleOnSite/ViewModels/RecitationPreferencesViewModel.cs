@@ -74,14 +74,32 @@ public partial class RecitationPreferencesViewModel : ObservableObject
     [RelayCommand]
     public async Task OpenSoundAsync()
     {
-        await _navigator.GoToAsync($"{AppRoutes.SoundPreferences}?focus=recitation");
+        try
+        {
+            await _navigator.GoToAsync($"{AppRoutes.SoundPreferences}?focus=recitation");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     /// <summary>Opens חבילות הרחבה where recitation recordings are installed and removed.</summary>
     [RelayCommand]
     public async Task OpenExtensionPacksAsync()
     {
-        await _navigator.GoToAsync(AppRoutes.ExtensionPacks);
+        try
+        {
+            await _navigator.GoToAsync(AppRoutes.ExtensionPacks);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Navigation failed: {ex}");
+        }
     }
 
     private void OnPreferencesChanged(object? sender, EventArgs e)

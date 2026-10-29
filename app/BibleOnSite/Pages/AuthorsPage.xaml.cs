@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
@@ -43,8 +44,17 @@ public partial class AuthorsPage : ContentPage
         if (e.Parameter is Author author)
         {
             // Navigate to author's articles page
-            var encodedName = Uri.EscapeDataString(author.Name);
-            await Shell.Current.GoToAsync($"ArticlesPage?authorId={author.Id}&authorName={encodedName}");
+            try
+            {
+                var encodedName = Uri.EscapeDataString(author.Name);
+                await ShellAppNavigator.Instance.GoToAsync($"ArticlesPage?authorId={author.Id}&authorName={encodedName}");
+            }
+            #pragma warning disable S2221 // Deliberate failure boundary: navigation failure is log-only
+            catch (Exception ex) //NOSONAR — navigation failure is log-only.
+            {
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"Author navigation failed for {author.Id}: {ex}");
+            }
         }
     }
 }
