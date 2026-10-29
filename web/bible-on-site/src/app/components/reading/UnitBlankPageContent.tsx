@@ -29,6 +29,10 @@ interface SelectedPerush {
 	notes: RangedPerushNote[];
 }
 
+/** Stable empty list — effect resets must reuse one reference or the
+ * `articles ?? []`-style unstable deps loop the render (#2731). */
+const NO_LINES: string[] = [];
+
 interface UnitBlankPageContentProps {
 	/** Alternative division this blank page belongs to. */
 	division: DivisionId;
@@ -90,6 +94,8 @@ export function UnitBlankPageContent({
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(
 		null,
 	);
+	const [articleDedicationLines, setArticleDedicationLines] =
+		useState(NO_LINES);
 	const [articleLoading, setArticleLoading] = useState(false);
 	const [selectedPerush, setSelectedPerush] = useState<SelectedPerush | null>(
 		null,
@@ -105,6 +111,7 @@ export function UnitBlankPageContent({
 	useEffect(() => {
 		let cancelled = false;
 		setSelectedArticle(null);
+		setArticleDedicationLines(NO_LINES);
 		setSelectedPerush(null);
 		setArticleLoading(false);
 		setPerushLoading(false);
@@ -115,7 +122,8 @@ export function UnitBlankPageContent({
 			getArticleForBook(article.id)
 				.then((full) => {
 					if (!cancelled) {
-						setSelectedArticle(full);
+						setSelectedArticle(full?.article ?? null);
+						setArticleDedicationLines(full?.dedicationLines ?? NO_LINES);
 						if (!full) setSlug(undefined);
 					}
 				})
@@ -212,7 +220,7 @@ export function UnitBlankPageContent({
 
 	return (
 		<section
-			className={seferStyles.pageBlank}
+			className={`${seferStyles.pageBlank} flipbook-page-bounded`}
 			aria-label="עמוד ריק (פירושים ומאמרים)"
 		>
 			<div className={seferStyles.blankPageDate}>{hebrewDateStr}</div>
@@ -244,6 +252,7 @@ export function UnitBlankPageContent({
 					<div className={seferStyles.blankPageArticleFullWrapper}>
 						<ArticleFullView
 							article={selectedArticle}
+							dedicationLines={articleDedicationLines}
 							onBack={() => navigate()}
 							fullPage
 						/>

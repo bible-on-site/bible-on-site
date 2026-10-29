@@ -61,6 +61,6 @@
   }
 
   .pasukTooltipNote {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 }

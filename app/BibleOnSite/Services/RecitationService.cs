@@ -245,7 +245,8 @@ public sealed class RecitationService
                 var missing = new List<RecitationTrack>();
                 foreach (var track in tracks)
                 {
-                    if (!await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken))
+                    var matches = await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken);
+                    if (!matches)
                     {
                         missing.Add(track);
                     }

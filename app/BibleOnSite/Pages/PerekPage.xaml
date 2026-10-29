@@ -84,8 +84,7 @@
         <!-- Exit Full Screen Button (floating, draggable, hidden by default) -->
         <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton" Grid.Row="1"
                 Margin="16,16,16,100"
-                ZIndex="100"
-                ExitRequested="OnExitFullScreenClicked"/>
+                ZIndex="100"/>
 
         <!-- Word-weighted reading position over the stored pasuk metrics
              (issue #2607): a hairline at the top of the reader viewport. -->
@@ -135,39 +134,56 @@
                         <Grid RowDefinitions="Auto,*"
                               AutomationProperties.ExcludedWithChildren="{Binding IsOffscreenCarouselPage}">
                             <!-- Perek Header (Row 0) with קריינות play button -->
-                            <Grid Grid.Row="0" RowDefinitions="Auto,Auto">
-                                <Label AutomationId="PerekHeader"
-                                       Text="{Binding Header}"
-                                       FontSize="22"
-                                       FontAttributes="Bold"
-                                       HorizontalTextAlignment="Center"
-                                       Padding="16,12"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
-                                    <Label.Triggers>
-                                        <!-- Keep wrapped header text clear of the floating play button -->
-                                        <DataTrigger TargetType="Label"
-                                                     Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
-                                                     Value="True">
-                                            <Setter Property="Padding" Value="56,12"/>
-                                        </DataTrigger>
-                                    </Label.Triggers>
-                                    <Label.GestureRecognizers>
-                                        <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
-                                    </Label.GestureRecognizers>
-                                    <Label.Behaviors>
-                                        <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
-                                    </Label.Behaviors>
-                                </Label>
-                                <!-- Reading-time badge over the whole chapter (issue #2607);
-                                     hidden when the stored metric is unknown or empty. -->
-                                <Label Grid.Row="1"
-                                       AutomationId="PerekReadingTimeBadge"
-                                       Text="{Binding ReadingTimeBadge}"
-                                       IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
-                                       FontSize="12"
-                                       HorizontalTextAlignment="Center"
-                                       Padding="16,0,16,6"
-                                       TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+                            <Grid Grid.Row="0">
+                                <VerticalStackLayout>
+                                    <Label AutomationId="PerekHeader"
+                                           Text="{Binding Header}"
+                                           FontSize="22"
+                                           FontAttributes="Bold"
+                                           HorizontalTextAlignment="Center"
+                                           Padding="16,12"
+                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
+                                        <Label.Triggers>
+                                            <!-- Keep wrapped header text clear of the floating play button -->
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
+                                                         Value="True">
+                                                <Setter Property="Padding" Value="56,12"/>
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                        <Label.GestureRecognizers>
+                                            <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
+                                        </Label.GestureRecognizers>
+                                        <Label.Behaviors>
+                                            <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                                        </Label.Behaviors>
+                                    </Label>
+                                    <!-- Reading-time badge over the whole chapter (issue #2607);
+                                         hidden when the stored metric is unknown or empty. -->
+                                    <Label AutomationId="PerekReadingTimeBadge"
+                                           Text="{Binding ReadingTimeBadge}"
+                                           IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
+                                           FontSize="12"
+                                           HorizontalTextAlignment="Center"
+                                           Padding="16,0,16,6"
+                                           TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+                                    <!-- Perek/sefer/helek dedications (#2731) — bound to the page's
+                                         view model, which tracks the displayed perek -->
+                                    <VerticalStackLayout Spacing="0"
+                                                         Padding="16,0,16,8"
+                                                         BindableLayout.ItemsSource="{Binding BindingContext.DedicationLines, Source={x:Reference PerekPageRoot}}"
+                                                         IsVisible="{Binding BindingContext.HasDedications, Source={x:Reference PerekPageRoot}}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Label Text="{Binding .}"
+                                                       FontSize="13"
+                                                       FontAttributes="Italic"
+                                                       HorizontalTextAlignment="Center"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
                                 <!-- קריינות: plays the whole perek; shown when the global
                                      קריינות preference is on and this perek has audio -->
                                 <Button x:Name="HeaderPlayButton"
@@ -360,13 +376,11 @@
             <controls:ReaderArticlesView Grid.Row="2"
                             x:Name="ArticlesCollection"
                             EmptyText="אין מאמרים לפרק זה"
-                            SelectedArticleId="{Binding SelectedArticleId}"
-                            ArticleSelected="OnArticleSelected"/>
+                            SelectedArticleId="{Binding SelectedArticleId}"/>
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"
-                                IsOpenChanged="OnPerushimSheetOpenChanged"/>
+        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"/>
 
         <!-- Reader options menu - dropdown anchored under the ⋮ button -->
         <controls:ReaderMenuPanel x:Name="ReaderMenuOverlay" Grid.Row="1" ZIndex="160"
@@ -376,15 +390,10 @@
 
         <!-- Bottom Navigation Bar - OVERLAY floating at bottom -->
         <controls:ReaderBottomBar x:Name="BottomBar" Grid.Row="1"
-              ZIndex="100"
-              PerushimToggleRequested="OnPerushimChevronClicked"
-              TextModeRequested="OnTextButtonClicked"
-              ArticlesRequested="OnArticlesButtonClicked"
-              FullScreenRequested="OnFullScreenClicked"/>
+              ZIndex="100"/>
 
         <!-- Circular navigation fan - shared layer (scrim + satellites + FAB) -->
-        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150"
-                                Opening="OnFanMenuOpening">
+        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150">
             <controls:ReaderFanMenu.Satellites>
                 <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="PrevPerekButton"

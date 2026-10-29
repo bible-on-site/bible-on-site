@@ -47,6 +47,10 @@ import { writeSeferContentHistory } from "./useSeferContentNavigation";
 
 type PanelTab = "perushim" | "articles";
 
+/** Stable empty list — the effect reset must reuse one reference or a
+ * new `[]` identity re-triggers the render loop (#2731). */
+const NO_LINES: string[] = [];
+
 interface SeferPanelProps {
 	articles?: ArticleSummary[];
 	perushim?: PerushSummary[];
@@ -188,6 +192,8 @@ export function SeferPanel({
 
 	/* ─── Article full view (unchanged contract) ─── */
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+	const [articleDedicationLines, setArticleDedicationLines] =
+		useState(NO_LINES);
 	const [articleLoading, setArticleLoading] = useState(false);
 	const [articleFullscreen, setArticleFullscreen] = useState(false);
 	const [articleProgressUnits, setArticleProgressUnits] = useState<
@@ -198,6 +204,7 @@ export function SeferPanel({
 		let cancelled = false;
 		setSelectedArticle(null);
 		setArticleProgressUnits([]);
+		setArticleDedicationLines(NO_LINES);
 		setArticleLoading(false);
 		setArticleFullscreen(false);
 		if (deepArticleSummary) {
@@ -205,7 +212,8 @@ export function SeferPanel({
 			getArticleForBook(deepArticleSummary.id)
 				.then((full) => {
 					if (!cancelled) {
-						setSelectedArticle(full);
+						setSelectedArticle(full?.article ?? null);
+						setArticleDedicationLines(full?.dedicationLines ?? NO_LINES);
 						if (!full) setSlug(undefined);
 					}
 				})
@@ -460,7 +468,7 @@ export function SeferPanel({
 
 	return (
 		<section
-			className={`${seferStyles.pageBlank} ${styles.panelRoot}`}
+			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
 		>
 			{/* tablist header: פרשנים - date - מאמרים (RTL order) */}
@@ -797,6 +805,7 @@ export function SeferPanel({
 						<div className={styles.panelArticleOverlay}>
 							<ArticleFullView
 								article={selectedArticle}
+								dedicationLines={articleDedicationLines}
 								onBack={() => navigate()}
 								fullPage
 								fullscreen={articleFullscreen}
@@ -820,6 +829,7 @@ export function SeferPanel({
 						<div className={styles.articleFullscreenBody}>
 							<ArticleFullView
 								article={selectedArticle}
+								dedicationLines={articleDedicationLines}
 								onBack={() => setArticleFullscreen(false)}
 								fullPage
 								fullscreen

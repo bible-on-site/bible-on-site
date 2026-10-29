@@ -36,6 +36,7 @@ import {
 	perekArticlesTag,
 	perekPerushimTag,
 	perushDetailTag,
+	seferPerekDedicationsTag,
 } from "../../../../src/lib/revalidate/tags";
 
 describe("tag builders", () => {
@@ -54,6 +55,7 @@ describe("tag builders", () => {
 		expect(masoraPerushimTag(1)).toBe("masora:1:perushim");
 		expect(entityRefsTag(9)).toBe("perek:9:entity-refs");
 		expect(mentionRefsTag(9)).toBe("perek:9:mention-refs");
+		expect(seferPerekDedicationsTag(25)).toBe("sefer:25:perek-dedications");
 	});
 
 	it("keeps collection tags as the broad escape hatch", () => {

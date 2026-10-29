@@ -142,6 +142,25 @@ describe("ArticleFullView", () => {
 		).not.toBeNull();
 	});
 
+	it("renders the article's own dedication lines under the header (#2731)", () => {
+		render(
+			<ArticleFullView
+				article={baseArticle}
+				dedicationLines={['מוקדש לראובן (לע"נ)']}
+				onBack={jest.fn()}
+				fullPage
+			/>,
+		);
+		expect(screen.getByText('מוקדש לראובן (לע"נ)')).toBeTruthy();
+	});
+
+	it("renders nothing extra when no dedication lines apply", () => {
+		const { container } = render(
+			<ArticleFullView article={baseArticle} onBack={jest.fn()} />,
+		);
+		expect(container.querySelector("[class*='headerLine']")).toBeNull();
+	});
+
 	it("keeps the standalone article layout unmodified", () => {
 		const { container } = render(
 			<ArticleFullView article={baseArticle} onBack={jest.fn()} />,

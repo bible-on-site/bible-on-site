@@ -29,6 +29,12 @@ jest.mock("@/app/components/Bookshelf/bookshelf-modal.module.css", () => ({
 }));
 
 const mockPush = jest.fn();
+// Bypass unstable_cache — just run the wrapped function directly (#2731:
+// dedication loaders are tag-cached).
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+
 jest.mock("next/navigation", () => ({
 	useRouter: () => ({ push: mockPush }),
 }));

@@ -48,6 +48,16 @@ public static class BackChromePolicy
 	}
 
 	/// <summary>
+	/// Whether the <see cref="Controls.SharedTopBar"/> capsule reserves its
+	/// Back slot. Same visibility rule as the in-app control, except Windows:
+	/// Windows Back lives exclusively in the window title bar (plus Alt+Left),
+	/// so an in-content capsule button would be a second Windows Back (#2467).
+	/// </summary>
+	public static bool ShowCapsuleBack(BackChromePlatform platform,
+		InAppBackButtonPreference preference) =>
+		platform != BackChromePlatform.Windows && ShowInAppBack(platform, preference);
+
+	/// <summary>
 	/// Whether the Shell nav-bar Back/Up arrow is shown. Up is navigation
 	/// history only: at a root destination there is no in-app arrow at all,
 	/// so it can never become an app-exit button.

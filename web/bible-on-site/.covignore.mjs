@@ -5,6 +5,7 @@ export const covIgnoreList = [
 	"**/src/app/layout.tsx",
 	// Next.js requires direct module-level font calls; coverage must not wrap them.
 	"**/src/app/929/**/hebrew-font.ts",
+	"**/src/app/pedia/**/family-tree-font.ts",
 	"__nextjs-internal-proxy.mjs",
 	"app/geistmono*.js",
 	"app/geistsans*.js",

@@ -95,6 +95,7 @@ const seferWithAdditionals = (
 /** A parasha whose Haftarah reaches ישעיהו (perekIds 335–400). */
 const unitWithHaftara: ParashaBookUnit = {
 	unitId: 1,
+	slug: "בראשית",
 	name: "בראשית",
 	order: 1,
 	refSpan: "בראשית א א - ו ח",
@@ -267,7 +268,7 @@ describe("ParashaLoadedSefer", () => {
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 		try {
-			history.replaceState(null, "", "/פרשה/1?book&bookPage=5");
+			history.replaceState(null, "", "/פרשה/בראשית?book&bookPage=5");
 			mockLoad.mockRejectedValueOnce(new BookRequestError(404));
 			render(<ParashaLoadedSefer {...baseProps([torahOnlyUnit])} />);
 			await screen.findByRole("alert");
@@ -275,7 +276,7 @@ describe("ParashaLoadedSefer", () => {
 				screen
 					.getByRole("link", { name: "רענן את הדף" })
 					.getAttribute("href") ?? "";
-			expect(decodeURIComponent(href)).toBe("/פרשה/1?book&bookPage=5");
+			expect(decodeURIComponent(href)).toBe("/פרשה/בראשית?book&bookPage=5");
 			expect(
 				screen.queryByRole("button", { name: "נסה שוב" }),
 			).not.toBeInTheDocument();

@@ -106,7 +106,7 @@
 .panelDate {
 	align-self: center;
 	font-size: clamp(0.75rem, 1.1vw, 0.95rem);
-	color: #637598;
+	color: var(--muted-text, #637598);
 	text-align: center;
 	white-space: nowrap;
 	direction: rtl;
@@ -223,11 +223,11 @@
 }
 
 .perushTag:hover {
-	border-color: #8b7355;
+	border-color: var(--hc-muted, #8b7355);
 }
 
 .perushTag:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -240,7 +240,7 @@
 	gap: 8px;
 	margin-top: 8px;
 	font-size: 0.78rem;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 }
 
 /* Reading-time estimate for a single displayed perush (#2607). */
@@ -266,7 +266,7 @@
 }
 
 .scopeToggle:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -296,7 +296,7 @@
 
 .deepParshan {
 	font-size: 0.75rem;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 }
 
 /* Reading-time estimate on the deep-linked perush header (#2607). */
@@ -361,7 +361,7 @@
 	display: inline-block;
 	font-size: 0.85rem;
 	font-weight: 700;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 	margin-bottom: 6px;
 }
 
@@ -371,7 +371,7 @@
 }
 
 .commentaryPasuk:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -387,7 +387,7 @@
 .commentaryPerushName {
 	font-size: 0.8rem;
 	font-weight: 700;
-	color: #8b7355;
+	color: var(--hc-muted, #8b7355);
 	margin-bottom: 4px;
 }
 
@@ -429,6 +429,14 @@
 	margin-block: 1.67em;
 }
 
+/* Same baseline cue as the flat commentary view: links inside DB-authored
+   notes need a persistent non-color marker (WCAG 1.4.1, #2767). */
+.noteContent a {
+	color: var(--link-accent, #1552ac);
+	text-decoration: underline;
+	text-underline-offset: 0.1em;
+}
+
 .noteContent + .noteContent {
 	margin-top: 8px;
 	padding-top: 8px;
@@ -456,7 +464,7 @@
 .emptyState {
 	margin: 0;
 	padding: 16px;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 	font-size: 0.9rem;
 	text-align: center;
 }
@@ -495,12 +503,12 @@
 }
 
 .articleCard:hover {
-	border-color: #8b7355;
+	border-color: var(--hc-muted, #8b7355);
 	box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
 }
 
 .articleCard:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -518,7 +526,7 @@
 
 .articleCardAuthorName {
 	font-size: 0.75rem;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 }
 
 .articleCardTitle {
@@ -596,7 +604,7 @@
 }
 
 .fullscreenToggle:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -605,7 +613,7 @@
 		--tab-fill: #2a241a;
 		--tab-active-fill: #1f1a12;
 		--tab-border: #4a4030;
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.panelTab:hover {
@@ -618,7 +626,7 @@
 	}
 
 	.panelDate {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.panelStage {
@@ -647,7 +655,7 @@
 	.perushTag {
 		background: #1f1a12;
 		border-color: #4a4030;
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.perushTagCheck {
@@ -655,13 +663,13 @@
 	}
 
 	.perushTag:hover {
-		border-color: #8b7355;
+		border-color: var(--hc-muted, #8b7355);
 	}
 
 	.perushTagItem[data-selected] .perushTagCheck,
 	.perushTagItem[data-selected] .perushTag {
 		background: #cbb98c;
-		border-color: #cbb98c;
+		border-color: var(--hc-muted, #cbb98c);
 		color: #1f1a12;
 	}
 
@@ -671,7 +679,7 @@
 	.articleCardAuthorName,
 	.articleCardAbstract,
 	.emptyState {
-		color: #b8a578;
+		color: var(--hc-muted, #b8a578);
 	}
 
 	.scopeToggle,
@@ -680,7 +688,7 @@
 	.fullscreenToggle {
 		border-color: #4a4030;
 		background: #2a241a;
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.scopeToggle:hover,
@@ -692,7 +700,7 @@
 
 	.deepName,
 	.articleCardTitle {
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.commentaryGroup {
@@ -707,11 +715,11 @@
 	}
 
 	.commentaryPasuk {
-		color: #b8a578;
+		color: var(--hc-muted, #b8a578);
 	}
 
 	.commentaryPasuk:hover {
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.articleCard {
@@ -720,7 +728,7 @@
 	}
 
 	.articleCard:hover {
-		border-color: #8b7355;
+		border-color: var(--hc-muted, #8b7355);
 	}
 
 	.panelArticleOverlay {

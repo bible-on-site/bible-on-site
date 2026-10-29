@@ -17,9 +17,14 @@ internal static class HtmlAttributedStringFactory
     /// Converts HTML to an attributed string using the managed HtmlRuns parser.
     /// Empty markup produces an empty attributed string. Returns null on a
     /// conversion failure so callers can fall back to plain text.
+    /// Runs carry their own ForegroundColor: <paramref name="textColor"/> for
+    /// ordinary text, <paramref name="accentColor"/> for runs flagged
+    /// <see cref="HtmlRun.Accent"/> — the generated note-list markers share the
+    /// inline reference's link color without a link target (#2723).
     /// </summary>
     public static NSMutableAttributedString? FromHtml(
-        string html, double fontSize, double h1Scale, double h2Scale, double h3Scale)
+        string html, double fontSize, double h1Scale, double h2Scale, double h3Scale,
+        UIColor textColor, UIColor accentColor)
     {
         try
         {
@@ -37,8 +42,16 @@ internal static class HtmlAttributedStringFactory
                 var size = (NFloat)(fontSize * run.FontScale * headingScale);
                 var font = ResolveFont(size, run.Bold, run.Italic);
 
-                var keys = new List<NSString> { UIStringAttributeKey.Font };
-                var values = new List<NSObject> { font };
+                var keys = new List<NSString>
+                {
+                    UIStringAttributeKey.Font,
+                    UIStringAttributeKey.ForegroundColor
+                };
+                var values = new List<NSObject>
+                {
+                    font,
+                    run.Accent ? accentColor : textColor
+                };
 
                 if (run.BaselineShift > 0)
                 {

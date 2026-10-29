@@ -34,6 +34,13 @@ jest.mock("next/cache", () => ({
 jest.mock("../../../src/lib/tanahpedia/article-mention-refs", () => ({
 	decorateArticleContent: jest.fn(async (article: unknown) => article),
 }));
+jest.mock("../../../src/lib/dedications/loaders", () => ({
+	getArticleDedications: jest.fn(async () => []),
+	getBookshelfDedicationLines: jest.fn(async () => ({
+		byHelek: {},
+		bySefer: {},
+	})),
+}));
 
 import {
 	downloadPageRanges,
@@ -52,6 +59,7 @@ import {
 	getArticleSummariesByPerekId,
 } from "../../../src/lib/articles";
 import { decorateArticleContent } from "../../../src/lib/tanahpedia/article-mention-refs";
+import { getArticleDedications } from "../../../src/lib/dedications/loaders";
 import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
@@ -70,6 +78,9 @@ import {
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
+>;
+const mockGetArticleDedications = getArticleDedications as jest.MockedFunction<
+	typeof getArticleDedications
 >;
 const mockGetPerushNotes = getPerushNotes as jest.MockedFunction<
 	typeof getPerushNotes
@@ -129,9 +140,27 @@ describe("getArticleForBook", () => {
 
 		const result = await getArticleForBook(1);
 
-		expect(result).toEqual(article);
+		expect(result).toEqual({ article, dedicationLines: [] });
 		expect(mockGetArticleById).toHaveBeenCalledWith(1);
 		expect(decorateArticleContent).toHaveBeenCalledWith(article);
+		expect(mockGetArticleDedications).toHaveBeenCalledWith(1);
+	});
+
+	it("formats the article's own dedication scope for the in-book view (#2731)", async () => {
+		mockGetArticleById.mockResolvedValue({ id: 2 } as never);
+		mockGetArticleDedications.mockResolvedValue([
+			{
+				id: 9,
+				subject: "ראובן",
+				purposes: ['לע"נ'],
+				expiresAt: null,
+				scopes: [],
+			},
+		]);
+
+		const result = await getArticleForBook(2);
+
+		expect(result?.dedicationLines).toEqual(['מוקדש לראובן (לע"נ)']);
 	});
 
 	it("returns null when article not found", async () => {

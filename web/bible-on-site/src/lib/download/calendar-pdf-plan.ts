@@ -117,13 +117,21 @@ function serializeCell(
 	};
 }
 
-/** Canonical JSON of everything the renderer consumes for one artifact. */
+/**
+ * Canonical JSON of everything the renderer consumes for one artifact:
+ * scope/layout, the branded title, link origin, each month's structured
+ * identity (range headings) and drawn cells — field order fixed.
+ */
 export function serializeCalendarPdfInput(input: CalendarPdfInput): string {
 	return JSON.stringify({
 		t: input.title,
 		s: input.subtitle ?? null,
+		sc: input.scope,
+		lb: input.linkBase ?? null,
 		m: input.months.map((month) => ({
 			t: month.title,
+			y: month.year,
+			mo: month.month,
 			c: month.cells.map((cell) => serializeCell(cell, input)),
 		})),
 	});

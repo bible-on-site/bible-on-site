@@ -11,6 +11,7 @@ import {
   launcherComponent,
   readerReady,
   startReleaseLog,
+  waitForProcessTeardown,
 } from "./release-smoke.mjs";
 
 test("retains startup analytics and crash evidence after the device's rolling log loses it", async () => {
@@ -161,6 +162,41 @@ describe("appComponentFocused", () => {
     assert.equal(appComponentFocused(
       "  mCurrentFocus=Window{222 u0 Application Error: com.tanah.daily929}",
       "com.tanah.daily929"), false);
+  });
+});
+
+describe("waitForProcessTeardown", () => {
+  // Mirrors the script's POLL_MS cadence: each poll gap and the trailing
+  // window-teardown grace use the same interval.
+  const POLL_MS = 750;
+  const recorder = () => {
+    const sleeps = [];
+    return { sleeps, sleep: async (ms) => { sleeps.push(ms); } };
+  };
+
+  test("graces once when the process is already gone", async () => {
+    const { sleeps, sleep } = recorder();
+    let probes = 0;
+    await waitForProcessTeardown(async () => (++probes, false), sleep);
+    assert.equal(probes, 1, "nothing to wait for when the kill already landed");
+    assert.deepEqual(sleeps, [POLL_MS], "one grace poll for the WIN DEATH post");
+  });
+
+  test("polls until the process dies, then graces for the WIN DEATH post", async () => {
+    const { sleeps, sleep } = recorder();
+    const alive = [true, true, false];
+    let probes = 0;
+    await waitForProcessTeardown(async () => alive[probes++], sleep);
+    assert.equal(probes, 3);
+    assert.deepEqual(sleeps, [POLL_MS, POLL_MS, POLL_MS]);
+  });
+
+  test("gives up polling at the deadline but still graces", async () => {
+    const { sleeps, sleep } = recorder();
+    let probes = 0;
+    await waitForProcessTeardown(async () => (++probes, true), sleep, 0);
+    assert.equal(probes, 1, "an elapsed deadline must not hang the smoke");
+    assert.deepEqual(sleeps, [POLL_MS]);
   });
 });
 

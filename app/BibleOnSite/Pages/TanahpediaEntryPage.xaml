@@ -12,28 +12,22 @@
              Shell.NavBarIsVisible="False">
 
     <Grid RowDefinitions="Auto,*">
-        <!-- Toolbar with back button and entry title -->
-        <Grid Grid.Row="0"
-              Padding="8,8,8,4"
-              ColumnDefinitions="Auto,*,Auto"
-              BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-            <Button Grid.Column="0"
-                    x:Name="BackButton"
-                    Text="→"
-                    FontSize="24"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
-                    Command="{Binding GoBackCommand}"
-                    SemanticProperties.Description="חזור"/>
-            <Label Grid.Column="1"
-                   Text="{Binding Title}"
-                   FontSize="16"
-                   FontAttributes="Bold"
-                   VerticalTextAlignment="Center"
-                   LineBreakMode="TailTruncation"
-                   MaxLines="1"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-        </Grid>
+        <!-- The shared navigation capsule (#2467): hamburger at the far-right
+             edge, Back immediately beside it — the press rides the shared
+             pipeline which steps the in-place entry trail first — then the
+             entry title pill. -->
+        <controls:SharedTopBar x:Name="TopBar" Grid.Row="0" NavigationAutomationId="TanahpediaEntryMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="{Binding Title}"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
 
         <Grid Grid.Row="1">
             <!-- Entry content -->
@@ -54,6 +48,20 @@
                                FontSize="13"
                                AutomationId="TanahpediaReadingTimeBadge"
                                TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+
+                        <!-- Entry-scoped dedications (#2731) -->
+                        <VerticalStackLayout Spacing="2"
+                                             BindableLayout.ItemsSource="{Binding DedicationLines}"
+                                             IsVisible="{Binding HasDedications}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Label Text="{Binding .}"
+                                           FontSize="13"
+                                           FontAttributes="Italic"
+                                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
 
                         <!-- Entity type badges → category pages -->
                         <FlexLayout Wrap="Wrap"
@@ -135,7 +143,9 @@
                                                    FontAttributes="Bold"
                                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                    TextDecorations="Underline"/>
-                                            <Label Grid.Column="1"
+                                            <!-- Verse citation — scripture glyphs get the shared
+                                                 Taamey D face via PasukTextLabel (#2623). -->
+                                            <controls:PasukTextLabel Grid.Column="1"
                                                    FormattedText="{Binding VerseFormatted}"
                                                    FontSize="13"
                                                    MaxLines="3"

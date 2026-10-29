@@ -58,11 +58,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.217</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.224</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000217</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">217</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000224</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">224</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -170,6 +170,9 @@
 
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
+		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
+		     attribution inside the package too (#2623). -->
+		<MauiAsset Include="Resources\Fonts\TaameyD-license.txt" LogicalName="TaameyD-license.txt" />
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />

@@ -13,11 +13,162 @@ import {
 } from "../../../../src/lib/revalidate/contract";
 
 describe("parseEntityChanges", () => {
+	describe("dedication changes", () => {
+		it("preserves every old and new scope in one validated event", () => {
+			const change = {
+				kind: "dedication",
+				id: 7,
+				perekRanges: [
+					{ low: 49, high: 51 },
+					{ low: 929, high: 929 },
+				],
+				seferIds: [1, 2],
+				helekIds: [1, 3],
+				parashaIds: [4],
+				articleIds: [12],
+				entryIds: ["persons#abraham"],
+				masora: true,
+			};
+			expect(parseEntityChanges({ changes: [change] })).toEqual([change]);
+		});
+
+		it.each([undefined, null])(
+			"accepts absent optional scopes (%s)",
+			(value) => {
+				const [change] = parseEntityChanges({
+					changes: [
+						{
+							kind: "dedication",
+							id: 1,
+							perekRanges: value,
+							seferIds: value,
+							helekIds: value,
+							parashaIds: value,
+							articleIds: value,
+							entryIds: value,
+							masora: value,
+						},
+					],
+				});
+				expect(change).toEqual({
+					kind: "dedication",
+					id: 1,
+					perekRanges: undefined,
+					seferIds: undefined,
+					helekIds: undefined,
+					parashaIds: undefined,
+					articleIds: undefined,
+					entryIds: undefined,
+					masora: undefined,
+				});
+			},
+		);
+
+		it("accepts empty scope lists and an explicit false masora flag", () => {
+			const change = {
+				kind: "dedication",
+				id: 1,
+				perekRanges: [],
+				seferIds: [],
+				helekIds: [],
+				parashaIds: [],
+				articleIds: [],
+				entryIds: [],
+				masora: false,
+			};
+			expect(parseEntityChanges({ changes: [change] })).toEqual([change]);
+		});
+
+		it("accepts the maximum range-list size", () => {
+			const perekRanges = Array.from({ length: 512 }, (_, i) => ({
+				low: i + 1,
+				high: i + 1,
+			}));
+			expect(
+				parseEntityChanges({
+					changes: [{ kind: "dedication", id: 1, perekRanges }],
+				})[0],
+			).toMatchObject({ perekRanges });
+		});
+
+		it("accepts the full canonical corpus without changing legacy range semantics", () => {
+			const change = {
+				kind: "dedication",
+				id: 1,
+				perekRanges: [{ low: 1, high: 929 }],
+			};
+			expect(parseEntityChanges({ changes: [change] })).toEqual([
+				expect.objectContaining(change),
+			]);
+		});
+
+		it.each([
+			[{ low: 930, high: 930 }, "low"],
+			[{ low: 1, high: 930 }, "high"],
+			[{ low: 1, high: 1_000_000_000 }, "high"],
+			[{ low: Number.MAX_SAFE_INTEGER, high: Number.MAX_SAFE_INTEGER }, "low"],
+		])(
+			"rejects an out-of-corpus range %j before expanding its members",
+			(range, field) => {
+				expect(() =>
+					parseEntityChanges({
+						changes: [{ kind: "dedication", id: 1, perekRanges: [range] }],
+					}),
+				).toThrow(
+					`changes[0].perekRanges[0].${field}: expected perek id 1..929`,
+				);
+			},
+		);
+
+		it.each([
+			["id", 0, "changes[0].id: expected positive integer"],
+			["perekRanges", {}, "changes[0].perekRanges: expected an array"],
+			[
+				"perekRanges",
+				Array.from({ length: 513 }, () => ({ low: 1, high: 1 })),
+				"changes[0].perekRanges: expected an array",
+			],
+			["perekRanges", [null], "changes[0].perekRanges[0]: expected object"],
+			[
+				"perekRanges",
+				[{ low: 0, high: 1 }],
+				"changes[0].perekRanges[0].low: expected positive integer",
+			],
+			[
+				"perekRanges",
+				[{ low: 1, high: 1.5 }],
+				"changes[0].perekRanges[0].high: expected positive integer",
+			],
+			[
+				"perekRanges",
+				[{ low: 3, high: 2 }],
+				"changes[0].perekRanges[0]: high before low",
+			],
+			["seferIds", ["1"], "changes[0].seferIds[0]: expected positive integer"],
+			["helekIds", [-1], "changes[0].helekIds[0]: expected positive integer"],
+			["parashaIds", false, "changes[0].parashaIds: expected an array"],
+			[
+				"articleIds",
+				[null],
+				"changes[0].articleIds[0]: expected positive integer",
+			],
+			["entryIds", [""], "changes[0].entryIds[0]: expected non-empty string"],
+			["masora", "true", "changes[0].masora: expected boolean"],
+		])("rejects invalid %s with its payload path", (field, value, message) => {
+			expect(() =>
+				parseEntityChanges({
+					changes: [
+						{ kind: "dedication", id: 1, [field as string]: value },
+						{ kind: "dedication", id: 2, masora: true },
+					],
+				}),
+			).toThrow(message as string);
+		});
+	});
+
 	it("rejects non-object bodies", () => {
 		for (const body of [null, 42, "x", []]) {
-			expect(() => parseEntityChanges(body)).toThrow(
-				ChangeValidationError,
-			);
+			expect(() => parseEntityChanges(body)).toThrow(ChangeValidationError);
 		}
 	});
 
@@ -32,19 +183,20 @@ describe("parseEntityChanges", () => {
 		expect(() => parseEntityChanges({ changes: [] })).toThrow(
 			ChangeValidationError,
 		);
-		const changes = Array.from(
-			{ length: MAX_CHANGES_PER_REQUEST + 1 },
-			() => ({ kind: "author", id: 1, name: "x" }),
-		);
+		const changes = Array.from({ length: MAX_CHANGES_PER_REQUEST + 1 }, () => ({
+			kind: "author",
+			id: 1,
+			name: "x",
+		}));
 		expect(() => parseEntityChanges({ changes })).toThrow(
 			ChangeValidationError,
 		);
 	});
 
 	it("rejects an unknown change kind", () => {
-		expect(() =>
-			parseEntityChanges({ changes: [{ kind: "bogus" }] }),
-		).toThrow(ChangeValidationError);
+		expect(() => parseEntityChanges({ changes: [{ kind: "bogus" }] })).toThrow(
+			ChangeValidationError,
+		);
 	});
 
 	it("parses an article change with covering spans", () => {
@@ -56,9 +208,7 @@ describe("parseEntityChanges", () => {
 						id: 12,
 						perekIds: [5, 7],
 						authorIds: [3],
-						coveringSpans: [
-							{ perekId: 9, pasukFrom: 2, pasukTo: 4 },
-						],
+						coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
 					},
 				],
 			}),
@@ -99,9 +249,7 @@ describe("parseEntityChanges", () => {
 						kind: "article",
 						id: 1,
 						perekIds: [1],
-						coveringSpans: [
-							{ perekId: 9, pasukFrom: 5, pasukTo: 2 },
-						],
+						coveringSpans: [{ perekId: 9, pasukFrom: 5, pasukTo: 2 }],
 					},
 				],
 			}),
@@ -209,9 +357,9 @@ describe("parseEntityChanges", () => {
 			{ kind: "pedia-entries", uniqueNames: [""] },
 		];
 		for (const change of bad) {
-			expect(() =>
-				parseEntityChanges({ changes: [change] }),
-			).toThrow(ChangeValidationError);
+			expect(() => parseEntityChanges({ changes: [change] })).toThrow(
+				ChangeValidationError,
+			);
 		}
 	});
 
