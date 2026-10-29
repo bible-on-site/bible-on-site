@@ -146,3 +146,42 @@ test("email images preserve their original sources and published content hashes"
 		}
 	}
 });
+
+const whatsappTemplate = YAML.parse(
+	readFileSync(
+		new URL(
+			"../docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	),
+);
+
+test("optional WhatsApp policy grants only exact token injection to the existing execution role", () => {
+	assert.deepEqual(Object.keys(whatsappTemplate.Resources), [
+		"WhatsAppTokenInjectionPolicy",
+	]);
+	const resource = whatsappTemplate.Resources.WhatsAppTokenInjectionPolicy;
+	assert.equal(resource.Type, "AWS::IAM::Policy");
+	assert.deepEqual(resource.Properties.Roles, ["AdminExecutionRoleName"]);
+	assert.equal(
+		whatsappTemplate.Parameters.AdminExecutionRoleName.Default,
+		"ecsTaskExecutionRole",
+	);
+	assert.equal(resource.Properties.PolicyDocument.Statement.length, 1);
+	const statement = resource.Properties.PolicyDocument.Statement[0];
+	assert.equal(statement.Effect, "Allow");
+	assert.deepEqual(statement.Action, ["ssm:GetParameters"]);
+	assert.equal(
+		statement.Resource,
+		`arn:\${AWS::Partition}:ssm:\${AWS::Region}:\${AWS::AccountId}:parameter/bible-on-site-whatsapp-api-token`,
+	);
+	assert.equal(
+		whatsappTemplate.Outputs.ApiTokenParameterArn.Value,
+		statement.Resource,
+	);
+	assert.equal(
+		whatsappTemplate.Outputs.ApiTokenContainerVariable.Value,
+		"BULLETIN_WHATSAPP_API_TOKEN",
+	);
+});
