@@ -8,13 +8,22 @@ interface ShareButtonProps {
 	canonicalPath: string;
 	/** Optional title for the share dialog. */
 	title?: string;
+	/** Command-row styling; the default keeps the legacy perush-section look. */
+	className?: string;
+	/** Row content; the default is the legacy emoji label. */
+	children?: React.ReactNode;
 }
 
 /**
  * Share button that uses the Web Share API when available, falling back to clipboard copy.
  * The href attribute on the wrapping anchor makes the canonical URL crawlable.
  */
-export function ShareButton({ canonicalPath, title }: ShareButtonProps) {
+export function ShareButton({
+	canonicalPath,
+	title,
+	className,
+	children,
+}: ShareButtonProps) {
 	const [copied, setCopied] = useState(false);
 
 	const handleClick = useCallback(
@@ -46,11 +55,11 @@ export function ShareButton({ canonicalPath, title }: ShareButtonProps) {
 		<a
 			href={canonicalPath}
 			onClick={handleClick}
-			className={styles.shareButton}
+			className={className ?? styles.shareButton}
 			aria-label="שיתוף"
 			title="שיתוף"
 		>
-			{copied ? "הועתק!" : "🔗 שתף"}
+			{copied ? "הועתק!" : (children ?? "🔗 שתף")}
 		</a>
 	);
 }

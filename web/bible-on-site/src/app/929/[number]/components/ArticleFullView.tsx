@@ -8,7 +8,7 @@ import { authorNameToSlug } from "@/lib/authors/url-utils";
 import { DedicationLines } from "@/app/components/dedications/DedicationLines";
 import { demoteHeadings } from "@/lib/html-headings";
 import articleStyles from "../[slug]/page.module.css";
-import { ShareButton } from "./ShareButton";
+import { ArticleActionsBar } from "./ArticleActionsBar";
 import styles from "./sefer.module.css";
 
 interface ArticleFullViewProps {
@@ -19,9 +19,9 @@ interface ArticleFullViewProps {
 	onBack: () => void;
 	/** When true, layout fills container: header fixed, body scrolls (flipbook blank page). */
 	fullPage?: boolean;
-	/** Article-only fullscreen is active (the caller renders the overlay). */
+	/** Article-only fullscreen is active — the row shows the exit command. */
 	fullscreen?: boolean;
-	/** Toggles the article's own fullscreen overlay (#2544 item 7). */
+	/** Toggles the article's own fullscreen overlay (#2544 item 7, #2786). */
 	onToggleFullscreen?: () => void;
 }
 
@@ -50,6 +50,16 @@ export function ArticleFullView({
 
 	return (
 		<div className={rootClass}>
+			{/* The unified command row: return at the leading edge, Share +
+			 * Fullscreen grouped at the trailing edge (#2786). */}
+			<ArticleActionsBar
+				backLabel="חזרה למאמרים"
+				onBack={onBack}
+				sharePath={canonicalPath}
+				shareTitle={`${article.name} - ${article.authorName}`}
+				fullscreen={fullscreen}
+				onToggleFullscreen={onToggleFullscreen}
+			/>
 			<header
 				className={`${articleStyles.articleHeader}${compact(styles.articleHeaderInBook)}`}
 			>
@@ -75,20 +85,6 @@ export function ArticleFullView({
 				>
 					{article.name}
 				</h2>
-				<ShareButton
-					canonicalPath={canonicalPath}
-					title={`${article.name} - ${article.authorName}`}
-				/>
-				{onToggleFullscreen && (
-					<button
-						type="button"
-						className={styles.fullscreenToggle}
-						onClick={onToggleFullscreen}
-						aria-pressed={fullscreen}
-					>
-						{fullscreen ? "צמצם" : "מסך מלא"}
-					</button>
-				)}
 			</header>
 
 			{/* The article's own dedication scope under its title — same slot
@@ -96,7 +92,10 @@ export function ArticleFullView({
 			<DedicationLines lines={dedicationLines} compact />
 
 			{article.content && (
-				<div className={fullPage ? styles.articleBodyWrapper : undefined}>
+				<div
+					className={fullPage ? styles.articleBodyWrapper : undefined}
+					data-article-body-scroll
+				>
 					<div
 						className={articleStyles.articleBody}
 						// nosemgrep -- DOMPurify-sanitized article HTML
@@ -107,18 +106,6 @@ export function ArticleFullView({
 					/>
 				</div>
 			)}
-
-			<div
-				className={`${articleStyles.backToPerek}${compact(styles.backToPerekInBook)}`}
-			>
-				<button
-					type="button"
-					onClick={onBack}
-					className={articleStyles.backLink}
-				>
-					חזרה למאמרים →
-				</button>
-			</div>
 		</div>
 	);
 }

@@ -211,16 +211,20 @@ test.describe("Sefer left-page panel", () => {
 		await fullscreenButton.click();
 		const dialog = page.getByRole("dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByRole("button", { name: "צמצם" })).toBeVisible();
+		await expect(dialog.getByRole("button", {
+			name: "יציאה ממסך מלא",
+		})).toBeVisible();
 		await test.info().attach("article-fullscreen-dialog", {
 			body: await page.screenshot(),
 			contentType: "image/png",
 		});
-		await dialog.getByRole("button", { name: "צמצם" }).click();
+		await dialog.getByRole("button", {
+			name: "יציאה ממסך מלא",
+		}).click();
 		await expect(dialog).toBeHidden();
 
 		// Back returns to the grid on the מאמרים tab.
-		await blank.getByRole("button", { name: "חזרה למאמרים →" }).click();
+		await blank.getByRole("button", { name: "חזרה למאמרים" }).click();
 		await expect(blank.locator("a#article-1")).toBeVisible();
 		await expect(blank.getByRole("tab", { name: "מאמרים" })).toHaveAttribute(
 			"aria-selected",

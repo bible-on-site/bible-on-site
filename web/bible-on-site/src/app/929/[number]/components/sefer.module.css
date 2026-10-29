@@ -216,11 +216,6 @@
 	line-height: 1.3;
 }
 
-.backToPerekInBook.backToPerekInBook {
-	margin-top: 8px;
-	padding-top: 8px;
-}
-
 /* Perush full view in book: fill container, header fixed, notes scroll.
    Doubled selector for specificity over .perushimSection from perushim-section.module.css */
 .perushFullViewInBook.perushFullViewInBook {

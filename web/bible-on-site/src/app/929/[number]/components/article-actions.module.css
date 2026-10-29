@@ -1,0 +1,113 @@
+/* Unified article command row (issue #2786): the return command sits at
+   the logical leading edge (right in RTL) while Share and Fullscreen stay
+   grouped at the logical trailing edge. Tokens default to the parchment
+   book surface; .variantPage re-maps them for the standalone article
+   route card. */
+.articleActions {
+	--action-bg: #f0ead8;
+	--action-border: #d4c9a8;
+	--action-text: #5a4a2e;
+	--action-bg-hover: #e8e0cc;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	padding: 4px 0;
+}
+
+.articleActions.variantPage {
+	--action-bg: #ffffff;
+	--action-border: #e5e7eb;
+	--action-text: #1c2c5d;
+	--action-bg-hover: #f3f4f6;
+}
+
+/* The standalone route has no inner scroller, so the row pins under the
+   top nav while the article itself scrolls past. */
+.sticky {
+	position: sticky;
+	top: 80px;
+	z-index: 5;
+	padding: 6px 8px;
+	margin: -6px -8px 4px;
+	border-radius: 8px;
+	background: var(--surface-elevated, #ffffff);
+	border: 1px solid var(--action-border);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.actionsGroup {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-inline-start: auto;
+}
+
+.action {
+	appearance: none;
+	font: inherit;
+	font-family: inherit;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 4px 12px;
+	border: 1px solid var(--action-border);
+	border-radius: 6px;
+	background: var(--action-bg);
+	color: var(--action-text);
+	font-size: 0.8rem;
+	line-height: 1.2;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.action:hover {
+	background: var(--action-bg-hover);
+}
+
+.action:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
+	outline-offset: 2px;
+}
+
+.action svg {
+	flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.articleActions {
+		--action-bg: #2a241a;
+		--action-border: #4a4030;
+		--action-text: #cbb98c;
+		--action-bg-hover: #342c1e;
+	}
+
+	.articleActions.variantPage {
+		--action-bg: #1a1f2e;
+		--action-border: #2d3548;
+		--action-text: #a8b9ff;
+		--action-bg-hover: #232a45;
+	}
+}
+
+/* Narrow panels keep every command discoverable as icon-only chips; the
+   labels clip visually but stay in the accessibility tree. Queries the
+   article container's inline size, not the viewport (issue #2786). */
+@container (max-width: 430px) {
+	.action {
+		padding: 4px 8px;
+	}
+
+	.actionText {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}

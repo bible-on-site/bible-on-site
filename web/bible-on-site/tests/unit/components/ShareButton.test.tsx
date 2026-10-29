@@ -63,6 +63,19 @@ describe("ShareButton", () => {
 		expect(screen.getByText("הועתק!")).toBeTruthy();
 	});
 
+	it("renders custom row content with the command-row class (#2786)", () => {
+		render(
+			<ShareButton canonicalPath="/929/1/1" className="articleAction">
+				<span>שתף</span>
+			</ShareButton>,
+		);
+
+		const link = screen.getByRole("link", { name: "שיתוף" });
+		expect(link.className).toBe("articleAction");
+		expect(screen.getByText("שתף")).toBeTruthy();
+		expect(screen.queryByText(/🔗/)).toBeNull();
+	});
+
 	it("uses Web Share API when available", async () => {
 		const shareFn = jest.fn().mockResolvedValue(undefined);
 		Object.assign(navigator, { share: shareFn });

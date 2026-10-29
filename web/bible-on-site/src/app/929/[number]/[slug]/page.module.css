@@ -7,8 +7,10 @@
 }
 
 /* Expanded article section within perek page. It opens the route in normal
-   flow, so clear the 72px top nav at rest and when ScrollToSlug scrolls to it. */
+   flow, so clear the 72px top nav at rest and when ScrollToSlug scrolls to it.
+   Also the inline-size container the article command row queries (#2786). */
 .expandedArticle {
+  container-type: inline-size;
   margin: calc(72px + 24px) 16px 24px;
   scroll-margin-top: calc(72px + 24px);
   padding: 24px;

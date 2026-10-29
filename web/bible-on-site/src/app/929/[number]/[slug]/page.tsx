@@ -60,6 +60,7 @@ import { PerekHeading } from "../components/PerekHeading";
 import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
 import SeferComposite from "../components/SeferComposite";
+import { ArticleActionsBar } from "../components/ArticleActionsBar";
 import { ShareButton } from "../components/ShareButton";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
@@ -324,6 +325,16 @@ export default async function ArticlePage({
 					<ScrollToArticleMatch />
 				</Suspense>
 				<section id="article-view" className={styles.expandedArticle}>
+					{/* The same unified command row the book panel uses (#2786) —
+					 * pinned while the article body scrolls. */}
+					<ArticleActionsBar
+						backHref={`/929/${perekId}`}
+						backLabel="חזרה לפרק"
+						sharePath={articlePath(perekId, article.id)}
+						shareTitle={`${article.name} - ${article.authorName}`}
+						variant="page"
+						sticky
+					/>
 					<header className={styles.articleHeader}>
 						<Link
 							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
@@ -358,11 +369,6 @@ export default async function ArticlePage({
 						/>
 					)}
 
-					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
-					</div>
 				</section>
 				<Suspense>
 					<SeferComposite
