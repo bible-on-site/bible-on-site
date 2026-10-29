@@ -183,9 +183,9 @@ Current chain (`shared-dockerize.yml`, `package_admin` in `ci.yml`,
 `shared-release.yml`, `cd-aws.yml`, `devops/deploy/ecr-deploy`):
 
 ```
-docker buildx build --load (amd64) → docker save → <image>-v<ver>.tar.gz
-→ GH release asset → cd-aws: crane push → ECR :v<ver> and :latest
-→ EventBridge rule on "latest" PUSH → ECS forceNewDeployment
+docker buildx build --load (amd64) â†’ docker save â†’ <image>-v<ver>.tar.gz
+â†’ GH release asset â†’ cd-aws: crane push â†’ ECR :v<ver> and :latest
+â†’ EventBridge rule on "latest" PUSH â†’ ECS forceNewDeployment
 ```
 
 Three properties constrain the design:
@@ -610,6 +610,116 @@ The combined graph passes all 311 unit tests, strict all-target Clippy and
 formatting. The preceding coverage and real-MySQL/HTTP results apply to
 unchanged Rust/test sources. Current-head CI/native release verification
 and isolated AWS qualification remain required.
+
+### Native Fargate paired qualification (2026-10-29)
+
+Both native API candidates were executed in an owned, isolated Fargate cluster
+in `il-central-1b`, using the same frozen public corpus and MySQL 8.4.9 seed.
+The API stayed at 256 CPU units/512 MiB and the separate fixture database at
+1024 CPU units/2048 MiB. Container Insights was disabled on this temporary
+cluster. No production service, database, route, DNS, IAM or existing security
+group was changed. Production API/admin/website still use x86 task definitions.
+
+The native candidate payloads bind all 132 production API inputs to the
+qualified scalar implementation. They are research images in a separate ECR
+repository, excluded from production deployment events; they do not establish
+canonical release provenance or qualify a production cutover by themselves.
+
+| Runtime case | x86 | ARM64 |
+| --- | --- | --- |
+| Fresh database TLS/corpus readiness | 17.372 s | 16.738 s |
+| Cold API with independently held search lock | 15.926 s | 17.177 s |
+| Exact holder released after positive pending-wait/503 proof | 1.447 s | 1.998 s |
+| Ordinary cold API with derived tables absent | 15.139 s | 9.910 s |
+| Warm API while another session retained the lock | 1.603 s | 1.756 s |
+| Reuse of the other architecture's persisted snapshot | 1.514 s | 2.027 s |
+
+The model and all 2,682 document content/vector/term fingerprints match the
+original scalar baseline exactly on both architectures. Each cross-architecture
+warm start preserved the model and document bytes. An early harness assumption
+rejected the synthetic article's valid empty sparse-term list; its exact
+baseline length and hash prove that zero terms is correct. The original failed
+harness record remains retained. Startup anchors use AWS response timestamps,
+including timestamp quantization and request time, mapped conservatively to a
+monotonic clock. A detected laptop clock offset is excluded from the verdict.
+No startup clock was reset and the readiness deadline stayed 30 seconds.
+
+Each architecture then ran the identical recorded probe: five independent
+functional projections once each, 12 warmups, six minutes at one request per
+second with concurrency one, and 24 burst requests at concurrency four. All
+402 traced HTTP requests per leg returned 200; each retained its two-second
+limit. Article HTML/hash, all chapter labels, search IDs/scores, starter counts,
+and dedication timestamp/scope/expiry responses matched exactly between legs.
+The largest article contained 561,258 UTF-8 bytes.
+
+| Observation from the paired trial | x86 | ARM64 |
+| --- | --- | --- |
+| Standard ECS average CPU utilization | 2.530% | 1.392% |
+| Largest standard one-minute CPU datapoint | 11.185% | 1.506% |
+| Standard ECS average memory utilization | 10.812% | 10.716% |
+| Largest standard one-minute memory datapoint | 11.914% | 11.719% |
+| Steady article request p95 | 126.803 ms | 91.809 ms |
+| Steady search request p95, Shabbat | 23.075 ms | 22.352 ms |
+| Steady search request p95, Bereshit | 25.725 ms | 22.253 ms |
+| Steady dedication request p95 | 71.486 ms | 28.457 ms |
+
+These are five complete standard one-minute metric buckets per architecture,
+aligned to the actual server-side request trace. Their maxima are observed
+one-minute datapoints, not continuous peaks. This is one sequential paired
+trial, not an SLA, peak-load capacity claim or proof of a general speedup.
+
+The functional collector originally combined five root projections into one
+parallel GraphQL request before load. On a fresh x86 process, opening extra
+SQL pool connections produced a 2.210-second server response, failing its
+original two-second limit. The paired protocol instead performs the planned
+independent projections sequentially; it does not retry a data request, prime
+GraphQL before the contract check, change the pool, or relax any deadline.
+The original compound-query failure remains a recorded limitation. The final
+four-concurrent burst still exercises cold extra pool connections and passes
+on both architectures. The exact old and final probe sources and failed
+outcomes are retained privately.
+
+An ARM synthetic-only queued update became searchable in 11.061 seconds,
+within the existing 30-second worker check. All 2,681 public article hashes
+were unchanged, the queue drained, and document content/model epochs agreed.
+A replacement ARM task became ready in 2.010 seconds while 31 observed old-task
+readiness checks remained 200; it reused the updated persisted model. The old
+task subsequently stopped normally, but the original no-container-healthcheck
+service did not report ECS `COMPLETED` within the unchanged 90-second deployment
+observation. That overall trial remains failed. ECS readiness signaling and a
+complete steady deployment remain a separate gate; task `RUNNING` or HTTP
+readiness alone does not satisfy it.
+
+A separate fresh ARM outage trial passed: after stopping only its disposable
+database, the same API task kept liveness 200 and returned readiness 503 within
+0.412 seconds. Its preceding cold start passed in 15.294 seconds with the
+same exact model/document fingerprints. All tasks from those completed trials
+were confirmed stopped. Nonrunning resource journals and candidate images are
+retained until qualification ends.
+
+A second isolated trial added an ECS container check against the actual
+`/health/ready` endpoint, using the existing BusyBox executable (no image or
+server-command change). The exact command returned exit 0 for HTTP 200 and
+exit 1 for HTTP 503 in the qualified Alpine runtime. ECS on native ARM then
+positively reported `HEALTHY`; initial API readiness was 16.248 seconds and
+the initial deployment reached `COMPLETED`. Its rolling replacement was ready
+in 2.492 seconds, ECS reported it healthy, and the old task stopped normally
+with exit 0. At the last observation, 89.094 seconds after replacement
+readiness, the service had desired/running 1, pending 0 and no failed tasks,
+but still reported `IN_PROGRESS`. That rolling-completion gate remains failed,
+including after adding the readiness signal. It is not evidence that simply
+adding a health check fixes the control-plane completion delay. No observation
+budget was extended. All owned tasks from this trial were confirmed stopped.
+The proposed readiness check and any longer deployment-state observation
+require their applicable approval before another trial or production change.
+
+Canonical publication and platform pulls, a fully qualified current x86
+rollback definition, ECS readiness/circuit-breaker behavior, normal release
+continuity, and current-head CI/coverage/all review channels still gate a
+production ARM change. Website/admin require their own remaining checks. The
+observed API headroom supports continuing qualification; it does not mean that
+any production service has migrated or that the small published-rate saving
+outweighs an unresolved compatibility gate.
 
 ## Isolated candidate design (phase 2 - requires authorized AWS access)
 
