@@ -12,10 +12,13 @@
              Shell.NavBarIsVisible="False">
 
     <Grid RowDefinitions="Auto,*">
-        <!-- The shared navigation capsule (#2467): hamburger at the far-right
-             edge, Back immediately beside it — the press rides the shared
-             pipeline which steps the in-place entry trail first — then the
-             entry title pill. -->
+        <!-- The shared navigation capsule (#2467) plus the unified article
+             command group (#2786): hamburger and the capsule Back own the
+             return affordance at the leading edge — the press rides the
+             shared pipeline which steps the in-place entry trail first —
+             the entry title pill sits in the center slot, and the actions
+             pill (share + fullscreen) owns the trailing edge — the same
+             command surface the readers run. -->
         <controls:SharedTopBar x:Name="TopBar" Grid.Row="0" NavigationAutomationId="TanahpediaEntryMenuButton">
             <controls:SharedTopBar.CenterContent>
                 <controls:ToolbarPill>
@@ -27,6 +30,10 @@
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
                 </controls:ToolbarPill>
             </controls:SharedTopBar.CenterContent>
+            <controls:SharedTopBar.TrailingContent>
+                <controls:ArticleActionsBar x:Name="ArticleActions"
+                                            ShareCommand="{Binding ShareCommand}"/>
+            </controls:SharedTopBar.TrailingContent>
         </controls:SharedTopBar>
 
         <Grid Grid.Row="1">
@@ -241,6 +248,12 @@
                         TextColor="White"
                         HorizontalOptions="Center"/>
             </VerticalStackLayout>
+
+            <!-- The shared floating exit control — the same draggable button
+                 the readers show while fullscreen (#2786). -->
+            <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton"
+                    Margin="16"
+                    ZIndex="100"/>
         </Grid>
     </Grid>
 </ContentPage>

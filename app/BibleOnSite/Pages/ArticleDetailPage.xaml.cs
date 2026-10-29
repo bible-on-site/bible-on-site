@@ -19,6 +19,10 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
     // interrupt external music merely for opening the article (#2642).
     private readonly List<DeferredMediaElement> _mediaElements = [];
 
+    /// <summary>The shared article chrome coordinator — the same fullscreen
+    /// surface state machine every article view runs (#2786).</summary>
+    private ArticleChrome _chrome = null!;
+
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
 
@@ -42,7 +46,35 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
         _viewModel = new ArticleDetailViewModel();
         BindingContext = _viewModel;
         SetupFontSizeResources();
+        SetupArticleChrome();
     }
+
+    /// <summary>
+    /// Wires the unified article command surface (#2786): the actions pill's
+    /// fullscreen command and the floating exit control run through the same
+    /// coordinator every article view uses. Fullscreen is a page-owned
+    /// transient return surface — it keeps the capsule Back enabled (the same
+    /// surface <see cref="OnBackButtonPressed"/> serves first).
+    /// </summary>
+    private void SetupArticleChrome()
+    {
+        _chrome = new ArticleChrome(
+            new ArticleChromeSurfaces
+            {
+                Toolbar = TopBar,
+                Actions = ArticleActions,
+                ExitFullscreenButton = ExitFullScreenButton,
+            })
+        {
+            FullscreenStateChanged = _ => TopBar.RefreshBackState(),
+        };
+        TopBar.BackStateProvider = () => _chrome.IsFullScreen;
+    }
+
+    /// <summary>System Back releases the fullscreen surface before any
+    /// navigation — the shared-pipeline ordering the readers keep.</summary>
+    protected override bool OnBackButtonPressed() =>
+        _chrome.HandleBack() || base.OnBackButtonPressed();
 
     private void SetupFontSizeResources()
     {

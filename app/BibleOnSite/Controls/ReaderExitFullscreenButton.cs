@@ -38,7 +38,11 @@ public class ReaderExitFullscreenButton : Border
         {
             BackgroundColor = primaryColor;
         }
-        Content = new Label
+        // The button carries the accessible name so a screen reader announces
+        // the command rather than the raw icon-font code point — the glyph
+        // label stays decorative and out of the a11y tree.
+        SemanticProperties.SetDescription(this, "יציאה ממסך מלא");
+        var glyph = new Label
         {
             Text = Fonts.FluentUI.full_screen_minimize_24_regular,
             FontFamily = "FluentIcons",
@@ -49,6 +53,8 @@ public class ReaderExitFullscreenButton : Border
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center
         };
+        AutomationProperties.SetIsInAccessibleTree(glyph, false);
+        Content = glyph;
         SetupGestureHandlers();
     }
 

@@ -35,9 +35,12 @@ public class SharedTopBarTests : IDisposable
 
         var band = container.Children.OfType<Grid>().Single();
         band.HeightRequest.Should().Be(56);
-        band.ColumnDefinitions.Select(column => column.Width.Value)
-            .Should().Equal(new[] { GridLength.Auto.Value, GridLength.Star.Value, 48.0 },
-                "the capsule sizes to its content so the group width stays stable");
+        band.ColumnDefinitions.Select(column => column.Width.GridUnitType)
+            .Should().Equal(new[] { GridUnitType.Auto, GridUnitType.Star, GridUnitType.Auto },
+                "both edge groups size to content so their widths stay stable");
+        var trailingHost = band.Children.OfType<ContentView>().Single(c => Grid.GetColumn(c) == 2);
+        trailingHost.MinimumWidthRequest.Should().Be(SharedTopBar.EdgeWidth,
+            "an empty trailing slot still reserves the 48px edge — a wider command pill grows past it");
 
         var separator = container.Children.OfType<BoxView>().Single();
         separator.HeightRequest.Should().Be(1);
