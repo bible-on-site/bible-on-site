@@ -9,12 +9,13 @@ vi.mock("@tanstack/react-start/server-entry", () => ({
 	createServerEntry: (entry: { fetch: (request: Request) => unknown }) => entry,
 }));
 
-// Startup effects have their own integration tests; this suite isolates the drain.
-vi.mock("~/server/dedication-expiry", () => ({
-	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
-}));
+// Worker startup and dedication scheduling have their own integration suites.
+// Authentication/coverage assertions must not load their DB/provider graph.
 vi.mock("~/server/email-worker-runtime.server", () => ({
 	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("~/server/auth", () => ({
