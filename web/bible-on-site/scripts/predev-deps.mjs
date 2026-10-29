@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
 	existsSync,
+	lstatSync,
 	mkdtempSync,
 	readFileSync,
 	renameSync,
@@ -45,11 +46,14 @@ export function prepareDevDependencies(
 	);
 	const restoreRegistry =
 		!local &&
-		existsSync(installedPackage) &&
-		(existsSync(
-			path.join(path.dirname(installedPackage), ".local-flip-book"),
-		) ||
-			JSON.parse(readFileSync(installedPackage, "utf8")).version !== dep);
+		(lstatSync(path.dirname(installedPackage), {
+			throwIfNoEntry: false,
+		})?.isSymbolicLink() ||
+			(existsSync(installedPackage) &&
+				(existsSync(
+					path.join(path.dirname(installedPackage), ".local-flip-book"),
+				) ||
+					JSON.parse(readFileSync(installedPackage, "utf8")).version !== dep)));
 	const installed =
 		!restoreRegistry &&
 		existsSync(installedPackage) &&

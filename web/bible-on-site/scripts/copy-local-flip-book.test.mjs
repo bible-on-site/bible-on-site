@@ -8,10 +8,18 @@ import {
 	resolveLocalFlipBook,
 } from "./copy-local-flip-book.mjs";
 import { prepareDevDependencies } from "./predev-deps.mjs";
+import {
+	NPM_VERSION,
+	toggleFlipBookDependency,
+} from "./toggle-flip-book-dep.mjs";
 
 function fixture(
 	t,
-	{ localVersion = "0.0.0-alpha.94", folderNames = ["react", "base"] } = {},
+	{
+		localVersion = "0.0.0-alpha.94",
+		publishedVersion = "0.0.0-alpha.93",
+		folderNames = ["react", "base"],
+	} = {},
 ) {
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "flip-book-dev-"));
 	t.after(() => {
@@ -77,7 +85,7 @@ function fixture(
 		write(file, JSON.stringify(content));
 	}
 	json(path.join(project, "package.json"), {
-		dependencies: { "html-flip-book-react": "0.0.0-alpha.93" },
+		dependencies: { "html-flip-book-react": publishedVersion },
 	});
 	write(path.join(project, "bun.lock"), "website lock");
 	json(path.join(repo, "package.json"), { version: localVersion });
@@ -101,7 +109,7 @@ function fixture(
 		commands.push({ command, ...options });
 		if (options.cwd === project) {
 			mkdir(path.join(project, "node_modules", ".bin"));
-			json(path.join(target, "package.json"), { version: "0.0.0-alpha.93" });
+			json(path.join(target, "package.json"), { version: publishedVersion });
 			write(path.join(target, "dist", "flip-book.js"), "published build");
 		} else if (command === "bun run build") {
 			for (const [source, main] of [
@@ -357,6 +365,105 @@ test("replacing a file dependency junction preserves the sibling build", (t) => 
 		run: f.run,
 	});
 	assert.equal(f.isLink(f.target), false);
+	assert.equal(
+		f.read(path.join(f.react, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+});
+
+test("npm mode restores a same-version copied override despite inherited local opt-in", (t) => {
+	const f = fixture(t, {
+		localVersion: NPM_VERSION,
+		publishedVersion: NPM_VERSION,
+	});
+	prepareDevDependencies(f.project, {
+		env: { USE_LOCAL_FLIP_BOOK: "1" },
+		run: f.run,
+	});
+	f.commands.length = 0;
+	toggleFlipBookDependency("npm", {
+		projectRoot: f.project,
+		env: { USE_LOCAL_FLIP_BOOK: "1" },
+		run: f.run,
+	});
+	assert.deepEqual(
+		f.commands.map((call) => call.command),
+		["bun install --prefer-offline"],
+	);
+	assert.equal(f.commands[0].env.USE_LOCAL_FLIP_BOOK, "0");
+	assert.equal(
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
+	assert.ok(!f.exists(path.join(f.target, ".local-flip-book")));
+	assert.equal(
+		f.read(path.join(f.react, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+});
+
+test("npm mode rolls back a same-version copied override when restoration fails", (t) => {
+	const f = fixture(t, {
+		localVersion: NPM_VERSION,
+		publishedVersion: NPM_VERSION,
+	});
+	prepareDevDependencies(f.project, {
+		env: { USE_LOCAL_FLIP_BOOK: "1" },
+		run: f.run,
+	});
+	assert.throws(
+		() =>
+			toggleFlipBookDependency("npm", {
+				projectRoot: f.project,
+				env: {},
+				run: (command, options) => {
+					f.run(command, options);
+					throw new Error("registry unavailable");
+				},
+			}),
+		/registry unavailable/,
+	);
+	assert.equal(
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+	assert.ok(f.exists(path.join(f.target, ".local-flip-book")));
+});
+
+test("npm mode restores same-version legacy junctions and rolls back without altering their source", (t) => {
+	const f = fixture(t, {
+		localVersion: NPM_VERSION,
+		publishedVersion: NPM_VERSION,
+	});
+	f.run("bun run build", { cwd: f.repo });
+	f.mkdir(path.dirname(f.target));
+	f.junction(f.react, f.target);
+	assert.throws(
+		() =>
+			toggleFlipBookDependency("npm", {
+				projectRoot: f.project,
+				env: {},
+				run: () => {
+					throw new Error("offline");
+				},
+			}),
+		/offline/,
+	);
+	assert.equal(f.isLink(f.target), true);
+	assert.equal(
+		f.read(path.join(f.react, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+	toggleFlipBookDependency("npm", {
+		projectRoot: f.project,
+		env: {},
+		run: f.run,
+	});
+	assert.equal(f.isLink(f.target), false);
+	assert.equal(
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
 	assert.equal(
 		f.read(path.join(f.react, "dist", "flip-book.js"), "utf8"),
 		"fresh source",

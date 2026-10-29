@@ -1,24 +1,18 @@
-/**
- * Toggles html-flip-book-react dependency between local file and npm version.
- * Usage:
- *   node scripts/toggle-flip-book-dep.mjs local   # Switch to file:../../../html-flip-book/react
- *   node scripts/toggle-flip-book-dep.mjs npm     # Switch to npm version
- *   node scripts/toggle-flip-book-dep.mjs check   # Exit 1 if local, 0 if npm (for pre-commit)
- */
+/** Toggle the flip-book dependency, safely restoring registry files for npm mode. */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { prepareDevDependencies } from "./predev-deps.mjs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pkgPath = path.resolve(__dirname, "..", "package.json");
-const repoRoot = path.resolve(__dirname, "..", "..", "..");
-
-// The sibling html-flip-book repo renamed its package folders after the
-// alpha.46 layout (react/, base/) to coherent names — accept both.
+const projectDirectory = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"..",
+);
 const LOCAL_REACT_DIRS = ["react", "html-flip-book-react"];
-const NPM_VERSION = "0.0.0-alpha.95"; // Update this when upgrading
+export const NPM_VERSION = "0.0.0-alpha.95"; // Update this when upgrading
 
-function localReactRef() {
+function localReactRef(projectRoot) {
+	const repoRoot = path.resolve(projectRoot, "..", "..");
 	for (const dir of LOCAL_REACT_DIRS) {
 		const pkgJson = path.join(
 			repoRoot,
@@ -28,67 +22,58 @@ function localReactRef() {
 			"package.json",
 		);
 		// nosemgrep -- fixed local directory list, no user input
-		if (fs.existsSync(pkgJson)) {
-			return `file:../../../html-flip-book/${dir}`;
-		}
+		if (fs.existsSync(pkgJson)) return `file:../../../html-flip-book/${dir}`;
 	}
-	// Fall back to the alpha.46 layout so the ref matches the consumed version.
 	return `file:../../../html-flip-book/${LOCAL_REACT_DIRS[0]}`;
 }
 
-const mode = process.argv[2];
-
-if (!["local", "npm", "check"].includes(mode)) {
-	console.error("Usage: node toggle-flip-book-dep.mjs <local|npm|check>");
-	process.exit(1);
-}
-
-const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-const current = pkg.dependencies?.["html-flip-book-react"];
-const isLocal = current?.startsWith("file:");
-
-if (mode === "check") {
-	if (isLocal) {
-		console.error(
-			"❌ html-flip-book-react is set to local. Run: bun run flip-book:npm",
-		);
-		process.exit(1);
+export function toggleFlipBookDependency(
+	mode,
+	{ projectRoot = projectDirectory, env = process.env, run } = {},
+) {
+	if (!["local", "npm", "check"].includes(mode)) {
+		throw new Error("Usage: node toggle-flip-book-dep.mjs <local|npm|check>");
 	}
-	process.exit(0);
-}
-
-const target = mode === "local" ? localReactRef() : NPM_VERSION;
-
-if (current === target) {
-	console.log(`html-flip-book-react already set to ${mode} (${target})`);
-	process.exit(0);
-}
-
-pkg.dependencies["html-flip-book-react"] = target;
-fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, "\t")}\n`);
-
-if (mode === "npm") {
-	const nodeModulesLink = path.resolve(
-		__dirname,
-		"..",
-		"node_modules",
-		"html-flip-book-react",
-	);
-	try {
-		const stat = fs.lstatSync(nodeModulesLink);
-		if (stat.isSymbolicLink()) {
-			fs.unlinkSync(nodeModulesLink);
+	const pkgPath = path.join(projectRoot, "package.json");
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+	const current = pkg.dependencies?.["html-flip-book-react"];
+	if (mode === "check") {
+		if (current?.startsWith("file:")) {
+			throw new Error(
+				"❌ html-flip-book-react is set to local. Run: bun run flip-book:npm",
+			);
 		}
-	} catch {
-		// doesn't exist — fine
+		return;
 	}
-
-	// bun install reconciles the lockfile's importer entries from
-	// package.json, so the stale file: link is dropped automatically.
+	const target = mode === "local" ? localReactRef(projectRoot) : NPM_VERSION;
+	if (current !== target) {
+		pkg.dependencies["html-flip-book-react"] = target;
+		fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, "\t")}\n`);
+		console.log(`html-flip-book-react switched to ${mode}: ${target}`);
+	} else {
+		console.log(`html-flip-book-react already set to ${mode} (${target})`);
+	}
+	if (mode === "npm") {
+		// A local copied build deliberately leaves package.json pinned to npm.
+		// Restore its files even when that pin/version has not changed, and
+		// override an inherited local opt-in for the install's postinstall hook.
+		prepareDevDependencies(projectRoot, {
+			env: { ...env, USE_LOCAL_FLIP_BOOK: "0" },
+			run,
+		});
+	} else if (current !== target) {
+		console.log("Run: bun install");
+	}
 }
 
-console.log(`html-flip-book-react switched to ${mode}: ${target}`);
-
-if (mode === "local") {
-	console.log("Run: bun install");
+if (
+	process.argv[1] &&
+	path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+	try {
+		toggleFlipBookDependency(process.argv[2]);
+	} catch (error) {
+		console.error(error.message);
+		process.exitCode = 1;
+	}
 }
