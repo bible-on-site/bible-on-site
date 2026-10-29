@@ -145,6 +145,50 @@ public class CommentaryMemoryTests
     }
 
     [Fact]
+    public async Task ConcurrentMissesForTheSamePasukShareOneScan()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([
+            new(1, 1, 0, "a1"), new(2, 1, 0, "b1")]));
+        List<Perush> sources = [new() { Id = 1, Name = "A" }, new() { Id = 2, Name = "B" }];
+        var displays = chapter.GetDisplays(1, sources, new HashSet<int> { 1, 2 });
+        var contents = await Task.WhenAll(displays.Select(d => d.ContentLoader!()));
+        contents.Should().AllSatisfy(c => c.Should().NotBeEmpty());
+        chapter.DecodeScans.Should().Be(1, "concurrent cells of the same pasuk share one blob scan");
+    }
+
+    [Fact]
+    public async Task ConcurrentMissesForDifferentPesukimAllDecode()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode(
+            Enumerable.Range(1, 10).Select(p => new PerushNoteBlob.Note(1, p, 0, $"note {p}")).ToList()));
+        List<Perush> sources = [new() { Id = 1, Name = "A" }];
+        var loaders = Enumerable.Range(1, 10)
+            .Select(p => chapter.GetDisplays(p, sources, new HashSet<int> { 1 })[0].ContentLoader!)
+            .ToList();
+        var contents = await Task.WhenAll(loaders.Select(l => l()));
+        for (var i = 0; i < contents.Length; i++)
+        {
+            contents[i].Should().Equal($"note {i + 1}");
+        }
+        chapter.DecodeScans.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task AFailedScanIsEvictedAndRetriedOnTheNextRead()
+    {
+        var blob = PerushNoteBlob.Encode([new(1, 1, 0, "a1")]);
+        var chapter = new PerushNoteChapter(blob);
+        var pristine = (byte[])blob.Clone();
+        Array.Fill(blob, (byte)0xFF, blob.Length - 3, 3);
+        List<Perush> sources = [new() { Id = 1, Name = "A" }];
+        Func<Task<List<string>>> act = () => chapter.GetDisplays(1, sources)[0].ContentLoader!();
+        await act.Should().ThrowAsync<Exception>("the corrupted blob must fail its scan");
+        pristine.CopyTo(blob, 0);
+        (await act()).Should().Equal("a1");
+        chapter.DecodeScans.Should().Be(1, "the failed scan was evicted so the retry rescanned");
+    }
+
+    [Fact]
     public void AddingACommentaryPreservesExistingDisplayObjects()
     {
         var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([new(1, 1, 0, "A"), new(2, 1, 0, "B")]));
