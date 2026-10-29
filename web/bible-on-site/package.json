@@ -57,7 +57,7 @@
 		"@pdf-lib/fontkit": "1.1.1",
 		"bidi-js": "1.1.0",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.92",
+		"html-flip-book-react": "0.0.0-alpha.93",
 		"isomorphic-dompurify": "4.6.0",
 		"jsdom": "30.1.3",
 		"leaflet": "1.9.4",

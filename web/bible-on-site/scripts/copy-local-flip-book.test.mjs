@@ -1,0 +1,291 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { test } from "node:test";
+import {
+	copyLocalFlipBook,
+	resolveLocalFlipBook,
+} from "./copy-local-flip-book.mjs";
+import { prepareDevDependencies } from "./predev-deps.mjs";
+
+function fixture(
+	t,
+	{ localVersion = "0.0.0-alpha.94", folderNames = ["react", "base"] } = {},
+) {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "flip-book-dev-"));
+	t.after(() => {
+		assert.equal(path.dirname(directory), os.tmpdir());
+		assert.ok(path.basename(directory).startsWith("flip-book-dev-"));
+		fs.rmSync(directory, { recursive: true, force: true });
+	});
+	const project = path.join(directory, "bible-on-site", "web", "bible-on-site");
+	const repo = path.join(directory, "html-flip-book");
+	const react = path.join(repo, folderNames[0]);
+	const base = path.join(repo, folderNames[1]);
+	const target = path.join(project, "node_modules", "html-flip-book-react");
+	function write(file, content) {
+		fs.mkdirSync(path.dirname(file), { recursive: true });
+		fs.writeFileSync(file, content);
+	}
+	function json(file, content) {
+		write(file, JSON.stringify(content));
+	}
+	json(path.join(project, "package.json"), {
+		dependencies: { "html-flip-book-react": "0.0.0-alpha.93" },
+	});
+	write(path.join(project, "bun.lock"), "website lock");
+	json(path.join(repo, "package.json"), { version: localVersion });
+	write(path.join(repo, "bun.lock"), "library lock");
+	write(path.join(repo, "vite.config.ts"), "initial config");
+	for (const [source, main] of [
+		[react, "flip-book.js"],
+		[base, "flipbook.js"],
+	]) {
+		json(path.join(source, "package.json"), {
+			version: localVersion,
+			main: `./dist/${main}`,
+			types: "./dist/index.d.ts",
+			exports: { ".": `./dist/${main}`, "./styles.css": "./dist/style.css" },
+			dependencies: { hammerjs: "2.0.8" },
+		});
+		write(path.join(source, "src", "index.ts"), "fresh source");
+	}
+	const commands = [];
+	function run(command, options) {
+		commands.push({ command, ...options });
+		if (options.cwd === project) {
+			if (command.includes("--force") && fs.existsSync(target)) {
+				assert.ok(target.startsWith(`${directory}${path.sep}`));
+				fs.rmSync(target, { recursive: true, force: true });
+			}
+			fs.mkdirSync(path.join(project, "node_modules", ".bin"), {
+				recursive: true,
+			});
+			json(path.join(target, "package.json"), { version: "0.0.0-alpha.93" });
+			write(path.join(target, "dist", "flip-book.js"), "published build");
+		} else if (command === "bun run build") {
+			for (const [source, main] of [
+				[react, "flip-book.js"],
+				[base, "flipbook.js"],
+			]) {
+				write(
+					path.join(source, "dist", main),
+					fs.readFileSync(path.join(source, "src", "index.ts")),
+				);
+				write(path.join(source, "dist", "index.d.ts"), "declarations");
+				write(path.join(source, "dist", "style.css"), "styles");
+			}
+		} else {
+			write(
+				path.join(options.cwd, "node_modules", "hammerjs", "index.js"),
+				"dependency",
+			);
+		}
+	}
+	return { project, repo, react, base, target, write, json, run, commands };
+}
+
+test("automatic local override keeps the published fix when a stale sibling is older", (t) => {
+	const f = fixture(t, { localVersion: "0.0.0-alpha.51" });
+	t.mock.method(console, "warn", () => {});
+	assert.equal(resolveLocalFlipBook(f.project, {}, true), null);
+	prepareDevDependencies(f.project, { env: {}, run: f.run });
+	assert.deepEqual(
+		f.commands.map((call) => call.command),
+		["bun install --prefer-offline"],
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
+	assert.match(console.warn.mock.calls[0].arguments[0], /local 0.0.0-alpha.51/);
+});
+
+test("explicit opt-in allows older branches, and renamed package folders work in a sibling worktree", (t) => {
+	const f = fixture(t, {
+		localVersion: "0.0.0-alpha.51",
+		folderNames: ["html-flip-book-react", "html-flip-book-base"],
+	});
+	const local = resolveLocalFlipBook(f.project, { USE_LOCAL_FLIP_BOOK: "1" });
+	assert.equal(local.reactSrc, f.react);
+	assert.equal(copyLocalFlipBook(f.project, { local, run: f.run }), true);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+});
+
+test("unchanged startup skips installs and builds; source, config, lock and dist changes rebuild", (t) => {
+	const f = fixture(t);
+	const options = { env: {}, run: f.run };
+	prepareDevDependencies(f.project, options);
+	assert.equal(f.commands[0].env.USE_LOCAL_FLIP_BOOK, "0");
+	assert.deepEqual(
+		f.commands.map((call) => call.command),
+		[
+			"bun install --prefer-offline",
+			"bun run build",
+			"bun install --production",
+		],
+	);
+	f.commands.length = 0;
+	prepareDevDependencies(f.project, options);
+	assert.deepEqual(f.commands, []);
+	for (const file of [
+		path.join(f.react, "src", "index.ts"),
+		path.join(f.repo, "vite.config.ts"),
+		path.join(f.repo, "bun.lock"),
+		path.join(f.base, "dist", "flipbook.js"),
+	]) {
+		f.write(file, "changed build input or artifact");
+		prepareDevDependencies(f.project, options);
+	}
+	assert.deepEqual(
+		f.commands.map((call) => call.command),
+		Array(4).fill("bun run build"),
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"changed build input or artifact",
+	);
+});
+
+test("build and nested install failures preserve the previously installed package", (t) => {
+	const f = fixture(t);
+	f.run("bun install --prefer-offline", { cwd: f.project });
+	const local = resolveLocalFlipBook(f.project, {}, true);
+	assert.throws(
+		() =>
+			copyLocalFlipBook(f.project, {
+				local,
+				run: () => {
+					throw new Error("build failed");
+				},
+			}),
+		/build failed/,
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
+	assert.throws(
+		() =>
+			copyLocalFlipBook(f.project, {
+				local,
+				run: (command, options) => {
+					if (command === "bun install --production")
+						throw new Error("install failed");
+					f.run(command, options);
+				},
+			}),
+		/install failed/,
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
+	assert.ok(
+		!fs
+			.readdirSync(path.join(f.project, "node_modules"))
+			.some((name) => name.startsWith(".flip-book-local-")),
+	);
+});
+
+test("incomplete output fails before the installed package is replaced", (t) => {
+	const f = fixture(t);
+	f.run("bun install --prefer-offline", { cwd: f.project });
+	assert.throws(
+		() =>
+			copyLocalFlipBook(f.project, {
+				local: resolveLocalFlipBook(f.project, {}, true),
+				run: () => {},
+			}),
+		/build is incomplete/,
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
+});
+
+test("disabling a copied local build restores the registry even when dependency inputs did not change", (t) => {
+	const f = fixture(t);
+	prepareDevDependencies(f.project, { env: {}, run: f.run });
+	f.commands.length = 0;
+	prepareDevDependencies(f.project, {
+		env: { USE_LOCAL_FLIP_BOOK: "0" },
+		run: f.run,
+	});
+	assert.deepEqual(
+		f.commands.map((call) => call.command),
+		["bun install --prefer-offline"],
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"published build",
+	);
+	assert.ok(!fs.existsSync(path.join(f.target, ".local-flip-book")));
+});
+
+test("postinstall is inactive by default and file dependencies resolve their actual checkout", (t) => {
+	const f = fixture(t);
+	assert.equal(copyLocalFlipBook(f.project, { env: {}, run: f.run }), false);
+	f.json(path.join(f.project, "package.json"), {
+		dependencies: {
+			"html-flip-book-react": `file:${path.relative(f.project, f.react).split(path.sep).join("/")}`,
+		},
+	});
+	assert.equal(resolveLocalFlipBook(f.project, {}).reactSrc, f.react);
+	assert.equal(copyLocalFlipBook(f.project, { env: {}, run: f.run }), true);
+});
+
+test("explicit missing repo fails; unknown prereleases require opt-in", (t) => {
+	const f = fixture(t, { localVersion: "0.0.0-experimental.1" });
+	t.mock.method(console, "warn", () => {});
+	assert.equal(resolveLocalFlipBook(f.project, {}, true), null);
+	f.json(path.join(f.project, "package.json"), {
+		dependencies: { "html-flip-book-react": "file:missing" },
+	});
+	assert.throws(
+		() => resolveLocalFlipBook(f.project, {}),
+		/package is missing/,
+	);
+});
+
+test("failed registry restoration rolls back the working local copy", (t) => {
+	const f = fixture(t);
+	prepareDevDependencies(f.project, { env: {}, run: f.run });
+	assert.throws(
+		() =>
+			prepareDevDependencies(f.project, {
+				env: { USE_LOCAL_FLIP_BOOK: "0" },
+				run: (command, options) => {
+					f.run(command, options);
+					throw new Error("registry unavailable");
+				},
+			}),
+		/registry unavailable/,
+	);
+	assert.equal(
+		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+	assert.ok(fs.existsSync(path.join(f.target, ".local-flip-book")));
+});
+
+test("replacing a file dependency junction preserves the sibling build", (t) => {
+	const f = fixture(t);
+	f.run("bun run build", { cwd: f.repo });
+	fs.mkdirSync(path.dirname(f.target), { recursive: true });
+	fs.symlinkSync(f.react, f.target, "junction");
+	copyLocalFlipBook(f.project, {
+		local: resolveLocalFlipBook(f.project, {}, true),
+		run: f.run,
+	});
+	assert.equal(fs.lstatSync(f.target).isSymbolicLink(), false);
+	assert.equal(
+		fs.readFileSync(path.join(f.react, "dist", "flip-book.js"), "utf8"),
+		"fresh source",
+	);
+});
