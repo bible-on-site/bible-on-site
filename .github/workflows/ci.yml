@@ -3371,6 +3371,7 @@ jobs:
         run: |
           bun run test:version
           bun run test:review-audit
+          bun run test:coverage-gaps
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
           node review-audit/scan-catch.cjs
