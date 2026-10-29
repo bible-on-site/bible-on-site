@@ -59,11 +59,7 @@ export function scheduledBulletinDate(
 	value: unknown,
 	now: Date,
 ): string | null {
-	if (
-		typeof value !== "string" ||
-		!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)
-	)
-		return null;
+	if (typeof value !== "string" || value.length !== 20) return null;
 	const instant = new Date(value);
 	if (
 		!Number.isFinite(instant.valueOf()) ||

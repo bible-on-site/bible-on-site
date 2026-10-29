@@ -87,6 +87,9 @@ describe("AWS scheduled timestamp", () => {
 			scheduledBulletinDate(value, new Date("2026-10-29T08:05:00Z")),
 		).toBeNull();
 	});
+	it("rejects oversized timestamp input before parsing", () => {
+		expect(scheduledBulletinDate("9".repeat(1_000_000), new Date())).toBeNull();
+	});
 	it("rejects an invalid clock", () => {
 		expect(
 			scheduledBulletinDate("2026-10-29T08:00:00Z", new Date(Number.NaN)),
