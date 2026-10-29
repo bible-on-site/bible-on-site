@@ -108,3 +108,23 @@ test("repository identity uses GitHub's canonical endpoint without a trailing sl
  const paths=[];const api=new GitHubApi("test-token",async url=>{paths.push(url.pathname);return Response.json(repo());});
  assert.equal((await api.getRepository()).id,POLICY.repositoryId);assert.deepEqual(paths,["/repos/"+POLICY.repository]);
 });
+
+
+test("dry-run models the apply cap within the unchanged request budget on a backlog", async () => {
+ for (const dryRun of [true, false]) {
+  const f = fixture(Array.from({length: 30}, (_, i) => run(i + 1)));
+  let reads = 0;
+  for (const [name, original] of Object.entries(f.api)) {
+   f.api[name] = async (...args) => {
+    assert.ok(++reads <= POLICY.maxRequests, "Backlog must not exhaust the API budget");
+    return original(...args);
+   };
+  }
+  const result = await call(f, {dryRun});
+  assert.equal(result.complete, true);
+  assert.equal(result.actions.filter(a => ["would-cancel", "cancelled"].includes(a.outcome)).length, POLICY.maxCancellations);
+  assert.equal(result.actions.filter(a => a.reason === "per-run-cancellation-limit").length, 28);
+  assert.equal(f.state.cancels.length, dryRun ? 0 : POLICY.maxCancellations);
+  assert.equal(result.cancelRequests.length, dryRun ? 0 : POLICY.maxCancellations);
+ }
+});
