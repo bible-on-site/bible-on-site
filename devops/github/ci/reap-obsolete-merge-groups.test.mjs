@@ -100,8 +100,8 @@ test("HTTP body and per-run request budgets are bounded",async()=>{
  const api=new GitHubApi("test-token",async()=>new Response(new Uint8Array(POLICY.maxBodyBytes+1)));await assert.rejects(api.getRun(1),/BODY_LIMIT/);
  let count=0;const limited=new GitHubApi("test-token",async()=>{count++;return Response.json({id:1});});for(let i=0;i<POLICY.maxRequests;i++)await limited.getRun(1);await assert.rejects(limited.getRun(1),/REQUEST_BUDGET_EXHAUSTED/);assert.equal(count,POLICY.maxRequests);
 });
-test("workflow starts read-only and never checks out candidate code",async()=>{
- const text=await readFile(new URL("../../../.github/workflows/reap-obsolete-merge-groups.yml",import.meta.url),"utf8");assert.match(text,/actions: read/);assert.doesNotMatch(text,/actions: write|BOT_PAT|force-cancel|workflow_run\.head_sha/);assert.match(text,/ref: \$\{\{ github.sha \}\}/);assert.match(text,/--dry-run/);
+test("apply is scoped to trusted metadata events and never checks out candidate code",async()=>{
+ const text=await readFile(new URL("../../../.github/workflows/reap-obsolete-merge-groups.yml",import.meta.url),"utf8");assert.match(text,/inspect:[\s\S]*permissions:[\s\S]*contents: read\s+actions: write/);assert.doesNotMatch(text,/BOT_PAT|force-cancel|workflow_run\.head_sha/);assert.match(text,/ref: \$\{\{ github.sha \}\}/);assert.match(text,/--apply/);assert.match(text,/workflow_run\.event == 'merge_group'/);assert.match(text,/cancel-in-progress: false/);
 });
 
 test("repository identity uses GitHub's canonical endpoint without a trailing slash",async()=>{
@@ -127,4 +127,50 @@ test("dry-run models the apply cap within the unchanged request budget on a back
   assert.equal(f.state.cancels.length, dryRun ? 0 : POLICY.maxCancellations);
   assert.equal(result.cancelRequests.length, dryRun ? 0 : POLICY.maxCancellations);
  }
+});
+
+
+test("a run completing between proof and cancellation retires without a false cancellation", async () => {
+ for (const conclusion of ["success", "failure", "neutral", "skipped", "timed_out", "action_required", "stale", "startup_failure"]) {
+  for (const accepted of [true, false]) {
+   const f = fixture();
+   f.api.cancelRun = async id => {
+    f.state.cancels.push(id);
+    Object.assign(f.state.runs[0], {status: "completed", conclusion});
+    if (!accepted) throw new Error("Run completed before cancellation");
+    return 202;
+   };
+   const result = await call(f, {dryRun: false});
+   assert.equal(result.complete, true);
+   assert.equal(result.actions[0].outcome, "completed-without-cancellation");
+   assert.equal(result.actions[0].observedConclusion, conclusion);
+   assert.equal(result.mutationConfirmed, 0);
+   assert.deepEqual(f.state.cancels, [1]);
+   assert.equal(f.state.journal[1].requestAccepted, accepted);
+  }
+ }
+});
+
+test("unrecognized completed outcomes remain unconfirmed and never retry the POST", async () => {
+ for (const conclusion of [null, "", "unknown-new-conclusion"]) {
+  const f = fixture();
+  f.api.cancelRun = async id => {
+   f.state.cancels.push(id);Object.assign(f.state.runs[0], {status: "completed", conclusion});
+   throw new Error("Unknown outcome");
+  };
+  await assert.rejects(call(f, {dryRun: false}), /CANCEL_OUTCOME_UNCONFIRMED/);
+  assert.deepEqual(f.state.cancels, [1]);
+ }
+});
+
+test("normally completed cancellation races still consume the two-request cap", async () => {
+ const f = fixture([run(1), run(2), run(3)]);
+ f.api.cancelRun = async id => {
+  f.state.cancels.push(id);Object.assign(f.state.runs.find(r => r.id === id), {status: "completed", conclusion: "success"});
+  throw new Error("Completed during cancellation");
+ };
+ const result = await call(f, {dryRun: false});
+ assert.equal(result.complete, true);assert.equal(result.mutationConfirmed, 0);
+ assert.deepEqual(f.state.cancels, [1, 2]);
+ assert.equal(result.actions[2].reason, "per-run-cancellation-limit");
 });
