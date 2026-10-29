@@ -23,13 +23,13 @@ const T = {
 	words: "מילים",
 } as const;
 
-const rect = (top: number, height: number): DOMRect =>
+const rect = (top: number, height: number, width = 100): DOMRect =>
 	({
 		top,
 		bottom: top + height,
 		left: 0,
-		right: 100,
-		width: 100,
+		right: width,
+		width,
 		height,
 		x: 0,
 		y: top,
@@ -69,7 +69,10 @@ const setScroller = (
 };
 
 /** Rects each range resolves to, keyed by its commonAncestorContainer. */
-let rangeLines = new Map<Node, { top: number; height: number }[]>();
+let rangeLines = new Map<
+	Node,
+	{ top: number; height: number; width?: number }[]
+>();
 let rangeRect = new Map<Node, { top: number; height: number }>();
 
 const rangeHost = (range: Range): Element | null =>
@@ -152,7 +155,7 @@ beforeEach(() => {
 		const lines = rangeLines.get(this.commonAncestorContainer) ?? [];
 		const shift = scrollShift(rangeHost(this));
 		return lines.map((l) =>
-			rect(l.top - shift, l.height),
+			rect(l.top - shift, l.height, l.width ?? 100),
 		) as unknown as DOMRectList;
 	};
 });
@@ -198,8 +201,15 @@ describe("ReadingProgress", () => {
 		setRect(a, 0, 100);
 		setRect(b, 100, 100);
 		// A zero-size line rect is skipped by the line filter.
-		rangeLines.set(a, [{ top: 0, height: 50 }, { top: 50, height: 50 }, { top: 0, height: 0 }]);
-		rangeLines.set(b, [{ top: 100, height: 50 }, { top: 150, height: 50 }]);
+		rangeLines.set(a, [
+			{ top: 0, height: 50 },
+			{ top: 50, height: 50 },
+			{ top: 0, height: 0 },
+		]);
+		rangeLines.set(b, [
+			{ top: 100, height: 50 },
+			{ top: 150, height: 50 },
+		]);
 		setScroller(scroller);
 		await remeasure();
 
@@ -248,6 +258,95 @@ describe("ReadingProgress", () => {
 		const fill = container.querySelector(
 			'[role="progressbar"] > div',
 		) as HTMLElement;
+		expect(fill.style.width).toBe("50%");
+	});
+
+	it("treats a keyed unit with a null key as a zero-height unit", async () => {
+		// Positional rows carry `key: null`; if such a unit ever reaches the
+		// keyed lookup it must resolve to an empty selector, not crash or
+		// match an unrelated element.
+		const units = [unit(null, 50), unit("b", 50)];
+		const { container } = renderInScroller(
+			<ReadingProgress
+				units={units}
+				scroller=".scroll"
+				content=".content"
+				unitSelector='[data-u="{key}"]'
+			/>,
+		);
+		const scroller = container.querySelector(".scroll") as Element;
+		const content = container.querySelector(".content") as Element;
+		const b = container.querySelector('[data-u="b"]') as Element;
+		setRect(content, 0, 100);
+		setRect(b, 50, 50);
+		rangeLines.set(b, [{ top: 50, height: 50 }]);
+		setScroller(scroller);
+		await remeasure();
+		// Same anchoring contract as a missing element: the null-keyed unit
+		// sits at the content top and counts as passed at rest.
+		const fill = container.querySelector(
+			'[role="progressbar"] > div',
+		) as HTMLElement;
+		expect(fill.style.width).toBe("50%");
+	});
+
+	it("resolves an empty {k2} part for colon-less unit keys", async () => {
+		const { container } = render(
+			<div className="scroll">
+				<ReadingProgress
+					units={[unit("7", 10)]}
+					scroller=".scroll"
+					content=".content"
+					unitSelector='[data-pasuk="{k1}"][data-note="{k2}"]'
+				/>
+				<div className="content">
+					<div data-pasuk="7">{T.words}</div>
+				</div>
+			</div>,
+		);
+		const scroller = container.querySelector(".scroll") as Element;
+		const content = container.querySelector(".content") as Element;
+		setRect(content, 0, 100);
+		setScroller(scroller);
+		await remeasure();
+		// `[data-note=""]` matches nothing — the pasuk-only unit degrades to
+		// a zero-height unit anchored at the content top.
+		const fill = container.querySelector(
+			'[role="progressbar"] > div',
+		) as HTMLElement;
+		expect(fill.style.width).toBe("100%");
+	});
+
+	it("skips degenerate line rects by width as well as height", async () => {
+		const { container } = renderInScroller(
+			<ReadingProgress
+				units={[unit("a", 10)]}
+				scroller=".scroll"
+				content=".content"
+				unitSelector='[data-u="{key}"]'
+			/>,
+		);
+		const scroller = container.querySelector(".scroll") as Element;
+		const content = container.querySelector(".content") as Element;
+		const a = container.querySelector('[data-u="a"]') as Element;
+		setRect(content, 0, 100);
+		setRect(a, 0, 100);
+		// A zero-width line (collapsed inline fragment) and a zero-height
+		// line both drop out; the 50px line keeps the unit's extent.
+		rangeLines.set(a, [
+			{ top: 0, height: 50, width: 0 },
+			{ top: 50, height: 0 },
+			{ top: 0, height: 50 },
+		]);
+		setScroller(scroller);
+		await remeasure();
+		const fill = container.querySelector(
+			'[role="progressbar"] > div',
+		) as HTMLElement;
+		expect(fill.style.width).toBe("0%");
+		// scrollTop 200 of range 800 → anchor 25 = the surviving line's
+		// midpoint → half the unit's 10 words.
+		await scroll(scroller, 200);
 		expect(fill.style.width).toBe("50%");
 	});
 
@@ -332,7 +431,10 @@ describe("ReadingProgress", () => {
 		const scroller = container.querySelector(".scroll") as Element;
 		const content = container.querySelector(".content") as Element;
 		setRect(content, 0, 200);
-		rangeLines.set(content, [{ top: 0, height: 100 }, { top: 100, height: 100 }]);
+		rangeLines.set(content, [
+			{ top: 0, height: 100 },
+			{ top: 100, height: 100 },
+		]);
 		setScroller(scroller);
 		await remeasure();
 		await scroll(scroller, 200);
@@ -402,9 +504,7 @@ describe("ReadingProgress", () => {
 		rangeLines.set(p, [{ top: 0, height: 100 }]);
 		setScroller(scroller);
 		await remeasure();
-		expect(
-			container.querySelector('[role="progressbar"]'),
-		).not.toBeNull();
+		expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
 	});
 
 	it("reads the document scroller when no scroller selector is given", async () => {
@@ -663,9 +763,7 @@ describe("ReadingProgress", () => {
 	});
 
 	it("re-runs the effect when the units change", async () => {
-		const view = (
-			units: ReadingProgressUnit[],
-		): React.ReactElement => (
+		const view = (units: ReadingProgressUnit[]): React.ReactElement => (
 			<div className="scroll">
 				<ReadingProgress
 					units={units}

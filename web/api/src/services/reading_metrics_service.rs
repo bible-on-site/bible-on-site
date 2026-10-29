@@ -298,4 +298,125 @@ mod tests {
 
         assert!(units.is_empty());
     }
+
+    #[tokio::test]
+    async fn metrics_by_perek_ids_propagates_genuine_errors() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .into_connection(),
+        );
+
+        let result = metrics_by_perek_ids(&db, &[1]).await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
+
+    #[tokio::test]
+    async fn metric_by_entry_id_propagates_genuine_errors() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .into_connection(),
+        );
+
+        let result = metric_by_entry_id(&db, "entry-x").await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
+
+    #[tokio::test]
+    async fn pasuk_units_by_perek_id_degrades_on_missing_table() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom(
+                    "Query Error: Table 'tanah.tanah_perek_pasuk_metric' doesn't exist (1146)"
+                        .to_string(),
+                )])
+                .into_connection(),
+        );
+
+        let units = pasuk_units_by_perek_id(&db, 1).await.unwrap();
+
+        assert!(units.is_empty());
+    }
+
+    #[tokio::test]
+    async fn pasuk_units_by_perek_id_propagates_genuine_errors() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .into_connection(),
+        );
+
+        let result = pasuk_units_by_perek_id(&db, 1).await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
+
+    #[tokio::test]
+    async fn block_units_by_article_id_degrades_on_missing_table() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom(
+                    "Query Error: Table 'tanah.tanah_article_metric_block' doesn't exist (1146)"
+                        .to_string(),
+                )])
+                .into_connection(),
+        );
+
+        let units = block_units_by_article_id(&db, 1).await.unwrap();
+
+        assert!(units.is_empty());
+    }
+
+    #[tokio::test]
+    async fn block_units_by_article_id_propagates_genuine_errors() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .into_connection(),
+        );
+
+        let result = block_units_by_article_id(&db, 1).await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
+
+    #[tokio::test]
+    async fn block_units_by_entry_id_returns_ordered_rows() {
+        let unit = |block_idx, cumulative| entry_metric_block::Model {
+            entry_id: "entry-x".to_string(),
+            block_idx,
+            word_count: 10,
+            cumulative_words: cumulative,
+            calc_version: 1,
+        };
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_results::<entry_metric_block::Model, Vec<_>, _>([vec![
+                    unit(0, 10),
+                    unit(1, 20),
+                ]])
+                .into_connection(),
+        );
+
+        let units = block_units_by_entry_id(&db, "entry-x").await.unwrap();
+
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[1].cumulative_words, 20);
+    }
+
+    #[tokio::test]
+    async fn block_units_by_entry_id_propagates_genuine_errors() {
+        let db = Database::from_connection(
+            mock_db()
+                .append_query_errors([DbErr::Custom("Connection lost".to_string())])
+                .into_connection(),
+        );
+
+        let result = block_units_by_entry_id(&db, "entry-x").await;
+
+        assert!(matches!(result, Err(ServiceError::InternalServerError(_))));
+    }
 }

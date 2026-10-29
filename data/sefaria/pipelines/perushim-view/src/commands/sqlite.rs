@@ -956,6 +956,82 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// The metric-table DDL the notes schema ships — needed by the
+    /// constraint-collision tests that reach `insert_note_metrics`'s `?`
+    /// propagations.
+    const NOTE_METRICS_DDL: &str = r#"
+CREATE TABLE tanah_note_metric (
+  perush_id INTEGER NOT NULL,
+  perek_id INTEGER NOT NULL,
+  pasuk INTEGER NOT NULL,
+  note_idx INTEGER NOT NULL,
+  word_count INTEGER NOT NULL,
+  cumulative_words INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  PRIMARY KEY (perush_id, perek_id, pasuk, note_idx)
+);
+CREATE TABLE tanah_perush_metric (
+  perush_id INTEGER NOT NULL,
+  perek_id INTEGER NOT NULL,
+  word_count INTEGER,
+  estimated_seconds INTEGER,
+  words_per_minute INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (perush_id, perek_id)
+);
+"#;
+
+    fn metric_note() -> Note {
+        Note {
+            perush_id: 1,
+            perek_id: 1,
+            pasuk: 1,
+            note_idx: 0,
+            note_content: "בראשית - בשביל התורה".into(),
+        }
+    }
+
+    #[test]
+    fn insert_note_metrics_propagates_a_note_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(NOTE_METRICS_DDL).unwrap();
+        // A row the computed insert collides with on the note PK.
+        conn.execute(
+            "INSERT INTO tanah_note_metric
+             (perush_id, perek_id, pasuk, note_idx, word_count, cumulative_words, calc_version, source_hash)
+             VALUES (1, 1, 1, 0, 3, 3, 1, 'preexisting')",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_note_metrics(&tx, &[metric_note()]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
+    }
+
+    #[test]
+    fn insert_note_metrics_propagates_a_perush_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(NOTE_METRICS_DDL).unwrap();
+        // The note row lands cleanly; only the group row collides.
+        conn.execute(
+            "INSERT INTO tanah_perush_metric
+             (perush_id, perek_id, words_per_minute, calc_version, source_hash)
+             VALUES (1, 1, 220, 1, 'preexisting')",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_note_metrics(&tx, &[metric_note()]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
+    }
+
     #[test]
     fn notes_db_overwrite_replaces_old_data() {
         let dir = temp_dir("overwrite");

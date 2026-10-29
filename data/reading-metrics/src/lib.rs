@@ -672,4 +672,27 @@ mod tests {
         ];
         assert_eq!(pasuk_counted_text(segments.into_iter()), "א");
     }
+
+    #[test]
+    fn strip_scripts_and_styles_keeps_the_earliest_block_boundary() {
+        // A <style> opening after a <script> must not move the cut backwards.
+        assert_eq!(
+            strip_scripts_and_styles("a<script>x</script>b<style>y</style>c"),
+            "abc"
+        );
+    }
+
+    #[test]
+    fn strip_scripts_and_styles_dangling_open_swallows_the_tail() {
+        // "<script" at EOF has no close to find — the tail is the block.
+        assert_eq!(strip_scripts_and_styles("keep me<script"), "keep me");
+    }
+
+    #[test]
+    fn decode_entities_keeps_surrogate_code_points_verbatim() {
+        // UTF-16 surrogates parse numerically but are not chars — the entity
+        // passes through undecoded rather than vanishing from the text.
+        assert_eq!(decode_entities("&#xD800;"), "&#xD800;");
+        assert_eq!(decode_entities("&#55296;"), "&#55296;");
+    }
 }
