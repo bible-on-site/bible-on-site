@@ -107,7 +107,8 @@ env:
   # every other run stays in shadow mode (diagnostics only). The selector
   # itself honors FORCE_FULL_SUITE.
   E2E_SELECTION_MODE: ${{ inputs.e2e_selection_mode || vars.E2E_SELECTION_MODE || 'shadow' }}
-  FORCE_FULL_SUITE: ${{ inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
+  # Queue checks cover every entry in the combined head, not just its last delta.
+  FORCE_FULL_SUITE: ${{ github.event_name == 'merge_group' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
   IS_MASTER_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
   TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
@@ -272,8 +273,8 @@ jobs:
     outputs:
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
       sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
-      # Fork PR tokens are read-only, so their rebuilt image travels as a workflow artifact instead.
-      can_publish_sefaria_mongo: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      # Queue validation and read-only fork PRs use a workflow artifact instead of publishing.
+      can_publish_sefaria_mongo: ${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - name: Check Sefaria MongoDB image availability
         id: check_sefaria_mongo
@@ -326,6 +327,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+      - name: Test module change routing
+        run: node --test devops/github/ci/determine-changes.test.ts
       - name: Determine module changes
         id: determine
         run: node devops/github/ci/determine-changes.ts
@@ -2298,14 +2301,15 @@ jobs:
       actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
     with:
+      force_full_suite: ${{ github.event_name == 'merge_group' }}
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
-    # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
-    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # PR and combined queue heads need native audio precision as well as the signed build.
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
     steps:
@@ -2754,6 +2758,7 @@ jobs:
     if: >-
       ${{ always() && !cancelled() && !failure() && (
         needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
+        (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
         needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
       ) }}
@@ -3108,8 +3113,8 @@ jobs:
               exit 1
             fi
             APP_IOS_RESULT="${{ needs.app_ios_ci.result }}"
-            # Native audio precision runs on PRs; mobile E2E runs on every relevant CI event.
-            if [ "$APP_IOS_RESULT" != "success" ] && [ "$APP_IOS_RESULT" != "skipped" ]; then
+            # Match app_ios_ci: a triggered PR or queue precision suite must succeed.
+            if { [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "merge_group" ]; } && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; } && [ "$APP_IOS_RESULT" != "success" ]; then
               echo "App iOS CI failed"
               echo "Overall status: failure"
               exit 1
@@ -3162,10 +3167,11 @@ jobs:
             fi
           fi
 
+          PERUSHIM_PIPELINE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           PERUSHIM_PIPELINE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           PERUSHIM_DATA_SQL_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ] && echo "true" || echo "false") # Generated
           PERUSHIM_NOTES_SQLITE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
+          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || { [ "${{ github.event_name }}" = "merge_group" ] && [ "$PERUSHIM_PIPELINE_CI_CHANGED" = "true" ]; } || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
             PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
