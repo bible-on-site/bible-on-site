@@ -834,6 +834,7 @@ async fn retrain_locked(conn: &RetrainLock<'_>) -> Result<usize, DbErr> {
     Ok(rows.len())
 }
 
+#[derive(Clone)]
 struct PreparedDoc {
     article_id: i32,
     plain_len: i32,
@@ -850,17 +851,15 @@ async fn persist_snapshot<C: ConnectionTrait>(
     let doc_count = docs.len();
     // One transaction publishes all documents, the state, and matching epochs.
     // This avoids an fsync for every document and cannot expose a partial model.
-    for doc in docs {
-        store::upsert_doc(
-            conn,
-            doc.article_id,
-            0,
-            doc.plain_len,
-            doc.vector,
-            doc.terms,
-        )
-        .await?;
-    }
+    // A full snapshot replaces the complete derived document set, including
+    // deleted/out-of-scope articles and an empty corpus. Readers keep the old
+    // committed snapshot until all rows/model/epochs commit together.
+    conn.execute_raw(sea_orm::Statement::from_string(
+        sea_orm::DbBackend::MySql,
+        "DELETE FROM article_search_doc",
+    ))
+    .await?;
+    store::upsert_docs(conn, 0, docs).await?;
     store::save_state(conn, dims as i32, doc_count as i32, model).await?;
     // Stamp all rows with the new epoch in one statement.
     conn.execute_raw(sea_orm::Statement::from_string(
@@ -2323,5 +2322,298 @@ mod tests {
         let big: Vec<FixtureDoc> = (100..200).map(|id| (id, vec![(0, 1)], 10)).collect();
         *index.inner.write().await = make_snapshot(toy_model(), big);
         worker_tick(&index, 4).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires isolated MySQL and ARTICLE_SEARCH_LOCK_TEST_DB_URL; API coverage CI runs it"]
+    async fn mysql_full_retrain_prunes_removed_and_out_of_scope_documents() {
+        use sea_orm::{
+            SqlxMySqlConnector,
+            sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions},
+        };
+        let url = std::env::var("ARTICLE_SEARCH_LOCK_TEST_DB_URL").expect("isolated fixture URL");
+        let options: MySqlConnectOptions = url.parse().expect("valid URL");
+        assert_eq!(options.get_database(), Some("article_search_lock_test"));
+        let pool = MySqlPoolOptions::new()
+            .max_connections(4)
+            .connect_with(options)
+            .await
+            .expect("isolated pool");
+        let version: String = sqlx::query_scalar("SELECT VERSION()")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(version.starts_with("8.4."));
+        let cipher: String = sqlx::query_scalar("SELECT VARIABLE_VALUE FROM performance_schema.session_status WHERE VARIABLE_NAME = 'Ssl_cipher'").fetch_one(&pool).await.unwrap();
+        assert!(!cipher.is_empty(), "the fixture connection must use TLS");
+        let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
+        for table in [
+            "article_search_doc",
+            "article_search_state",
+            "article_search_queue",
+            "tanah_article",
+        ] {
+            pool.execute(sqlx::AssertSqlSafe(format!("DROP TABLE IF EXISTS {table}")))
+                .await
+                .unwrap();
+        }
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL)").await.unwrap();
+        pool.execute("INSERT INTO tanah_article VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1),(3,'delta epsilon',NULL,'delta alpha',1,1)").await.unwrap();
+        store::ensure_schema(&conn).await.unwrap();
+        let mut observed = Vec::new();
+        for action in [
+            "SELECT 1",
+            "DELETE FROM tanah_article WHERE id=3",
+            "UPDATE tanah_article SET perek_id=930 WHERE id=2",
+            "DELETE FROM tanah_article",
+        ] {
+            pool.execute(action).await.unwrap();
+            let trained = retrain(&conn).await.unwrap().unwrap();
+            let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM article_search_doc")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            let stale_stamped: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM article_search_doc d JOIN article_search_state s ON s.id=1 LEFT JOIN tanah_article a ON a.id=d.article_id AND a.perek_id BETWEEN 1 AND 929 WHERE a.id IS NULL AND d.model_epoch=s.model_epoch").fetch_one(&pool).await.unwrap();
+            observed.push((trained, stored, stale_stamped));
+        }
+        assert_retrain_lock_free(&pool).await;
+        eprintln!("PRIVATE_FULL_RETRAIN_SHRINK {observed:?}");
+        assert_eq!(
+            observed,
+            vec![(3, 3, 0), (2, 2, 0), (1, 1, 0), (0, 0, 0)],
+            "a complete snapshot must not restamp stale rows into its new basis"
+        );
+        pool.close().await;
+    }
+
+    async fn private_batch_publish(
+        conn: &DatabaseConnection,
+        docs: Vec<PreparedDoc>,
+    ) -> Result<(), DbErr> {
+        let lock = RetrainLock::acquire(conn)
+            .await?
+            .expect("uncontended private lock");
+        let result = lock.publish(128, vec![1, 0, 255, 128, 0, 7], docs).await;
+        lock.release()
+            .await
+            .expect("private publication releases lock");
+        result
+    }
+
+    async fn private_scalar_publish(conn: &DatabaseConnection, docs: Vec<PreparedDoc>) {
+        let mut lock = RetrainLock::acquire(conn).await.unwrap().unwrap();
+        {
+            let RetrainLock::MySql(session) = &mut lock else {
+                panic!("real MySQL required")
+            };
+            let transaction = (**session.0.get_mut()).begin().await.unwrap();
+            let transaction = RetainedSession(Mutex::new(transaction));
+            let count = docs.len();
+            // The original scalar publication, inside the exact lock-owning session.
+            for doc in docs {
+                store::upsert_doc(
+                    &transaction,
+                    doc.article_id,
+                    0,
+                    doc.plain_len,
+                    doc.vector,
+                    doc.terms,
+                )
+                .await
+                .unwrap();
+            }
+            store::save_state(&transaction, 128, count as i32, vec![1, 0, 255, 128, 0, 7])
+                .await
+                .unwrap();
+            transaction.execute_unprepared("UPDATE article_search_doc d JOIN article_search_state s ON s.id=1 SET d.model_epoch=s.model_epoch").await.unwrap();
+            transaction.0.into_inner().commit().await.unwrap();
+        }
+        lock.release().await.unwrap();
+    }
+
+    async fn private_content_bytes(pool: &sqlx::MySqlPool) -> (String, Vec<String>, Vec<i32>) {
+        let state=sqlx::query_scalar("SELECT CONCAT_WS(':',id,schema_version,model_epoch,dims,doc_count,HEX(model)) FROM article_search_state WHERE id=1").fetch_one(pool).await.unwrap();
+        let docs=sqlx::query_scalar("SELECT CONCAT_WS(':',article_id,model_epoch,HEX(content_hash),plain_len,HEX(vector),HEX(terms)) FROM article_search_doc ORDER BY article_id").fetch_all(pool).await.unwrap();
+        let order = sqlx::query_scalar("SELECT article_id FROM publication_order ORDER BY seq")
+            .fetch_all(pool)
+            .await
+            .unwrap();
+        (state, docs, order)
+    }
+
+    #[tokio::test]
+    #[ignore = "requires isolated MySQL and ARTICLE_SEARCH_LOCK_TEST_DB_URL; API coverage CI runs it"]
+    async fn mysql_batched_publication_matches_scalar_and_rolls_back() {
+        use sea_orm::{
+            SqlxMySqlConnector,
+            sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions},
+        };
+        let url = std::env::var("ARTICLE_SEARCH_LOCK_TEST_DB_URL").expect("private fixture URL");
+        let options: MySqlConnectOptions = url.parse().unwrap();
+        assert_eq!(options.get_database(), Some("article_search_lock_test"));
+        let pool = MySqlPoolOptions::new()
+            .max_connections(4)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let version: String = sqlx::query_scalar("SELECT VERSION()")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(version.starts_with("8.4."));
+        let cipher:String=sqlx::query_scalar("SELECT VARIABLE_VALUE FROM performance_schema.session_status WHERE VARIABLE_NAME='Ssl_cipher'").fetch_one(&pool).await.unwrap();
+        assert!(!cipher.is_empty());
+        let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
+        for table in [
+            "article_search_doc",
+            "article_search_state",
+            "article_search_queue",
+            "tanah_article",
+            "publication_order",
+        ] {
+            pool.execute(sqlx::AssertSqlSafe(format!("DROP TABLE IF EXISTS {table}")))
+                .await
+                .unwrap();
+        }
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY,name TEXT NOT NULL,abstract TEXT NULL,content TEXT NULL,perek_id INT NOT NULL,author_id INT NOT NULL)").await.unwrap();
+        for id in 1..=130 {
+            sqlx::query("INSERT INTO tanah_article VALUES (?,CONCAT('article ',?),NULL,'server source hash',?,1)").bind(id).bind(id).bind(if id==130 {930} else {1}).execute(&pool).await.unwrap();
+        }
+        pool.execute("INSERT INTO tanah_article VALUES (133,'oversized binary terms',NULL,'server source hash',1,1)").await.unwrap();
+        store::ensure_schema(&conn).await.unwrap();
+        pool.execute("CREATE TABLE publication_order (seq INT AUTO_INCREMENT PRIMARY KEY,article_id INT NOT NULL)").await.unwrap();
+        pool.execute("CREATE TRIGGER publication_record AFTER INSERT ON article_search_doc FOR EACH ROW INSERT INTO publication_order(article_id) VALUES(NEW.article_id)").await.unwrap();
+        let mut docs: Vec<PreparedDoc> = (1..=131)
+            .map(|id| PreparedDoc {
+                article_id: id,
+                plain_len: id,
+                vector: if id % 3 == 0 {
+                    vec![]
+                } else if id % 3 == 1 {
+                    vec![0, 255, 128, 0]
+                } else {
+                    vec![id as u8; 512]
+                },
+                terms: if id % 2 == 0 {
+                    vec![]
+                } else {
+                    vec![255, 0, 128, id as u8]
+                },
+            })
+            .collect();
+        // A repeated id in the same batch proves explicit input order, while
+        // id130 is out of range and id131 disappeared from authoritative data.
+        docs.insert(
+            10,
+            PreparedDoc {
+                article_id: 1,
+                plain_len: 999,
+                vector: vec![255, 0, 255],
+                terms: vec![],
+            },
+        );
+        docs.push(PreparedDoc {
+            article_id: 133,
+            plain_len: 133,
+            vector: vec![0, 255, 128, 0],
+            terms: [0, 255, 128].repeat(100_000),
+        });
+        private_scalar_publish(&conn, docs.clone()).await;
+        let scalar = private_content_bytes(&pool).await;
+        assert_eq!(scalar.1.len(), 130);
+        let expected_order: Vec<i32> = docs
+            .iter()
+            .filter(|d| d.article_id < 130 || d.article_id == 133)
+            .map(|d| d.article_id)
+            .collect();
+        assert_eq!(scalar.2, expected_order);
+        pool.execute("DELETE FROM article_search_doc")
+            .await
+            .unwrap();
+        pool.execute("DELETE FROM article_search_state")
+            .await
+            .unwrap();
+        pool.execute("TRUNCATE TABLE publication_order")
+            .await
+            .unwrap();
+        private_batch_publish(&conn, docs.clone()).await.unwrap();
+        assert_eq!(
+            private_content_bytes(&pool).await,
+            scalar,
+            "scalar and bounded batches preserve every model/content byte, fresh hash, omission and order"
+        );
+        assert_retrain_lock_free(&pool).await;
+
+        let prior = publication_bytes(&pool).await;
+        let prior_order: Vec<i32> =
+            sqlx::query_scalar("SELECT article_id FROM publication_order ORDER BY seq")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        pool.execute("CREATE TRIGGER batch_failure BEFORE INSERT ON article_search_doc FOR EACH ROW BEGIN IF NEW.article_id=65 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='private second batch failure'; END IF; END").await.unwrap();
+        let error = private_batch_publish(&conn, docs.clone())
+            .await
+            .expect_err("second batch must fail");
+        assert!(error.to_string().contains("private second batch failure"));
+        assert_retrain_lock_free(&pool).await;
+        assert_eq!(
+            publication_bytes(&pool).await,
+            prior,
+            "DELETE, first batch and state remain rolled back byte-for-byte including timestamps"
+        );
+        let order: Vec<i32> =
+            sqlx::query_scalar("SELECT article_id FROM publication_order ORDER BY seq")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(order, prior_order);
+        pool.execute("DROP TRIGGER batch_failure").await.unwrap();
+
+        pool.execute("CREATE TRIGGER batch_delay BEFORE INSERT ON article_search_doc FOR EACH ROW BEGIN IF NEW.article_id=65 THEN DO SLEEP(0.5); END IF; END").await.unwrap();
+        let work_conn = conn.clone();
+        let work_docs = docs.clone();
+        let work = tokio::spawn(async move { private_batch_publish(&work_conn, work_docs).await });
+        let old_session=tokio::time::timeout(Duration::from_secs(3),async{
+            loop {
+                let id:Option<u64>=sqlx::query_scalar("SELECT ID FROM information_schema.PROCESSLIST WHERE ID=IS_USED_LOCK('article_search_retrain') AND STATE='User sleep'").fetch_optional(&pool).await.unwrap();
+                if let Some(id)=id {break id;}
+                tokio::task::yield_now().await;
+            }
+        }).await.expect("second batch must actually be in flight");
+        assert_eq!(
+            publication_bytes(&pool).await,
+            prior,
+            "uncommitted replacement remains invisible"
+        );
+        work.abort();
+        assert!(work.await.unwrap_err().is_cancelled());
+        assert_retrain_lock_free(&pool).await;
+        let active: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID=? AND INFO IS NOT NULL",
+        )
+        .bind(old_session)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            active, 0,
+            "no old SQL remains when a new lock owner may proceed"
+        );
+        assert_eq!(
+            publication_bytes(&pool).await,
+            prior,
+            "cancelled batch restores every prior byte and timestamp"
+        );
+        let order: Vec<i32> =
+            sqlx::query_scalar("SELECT article_id FROM publication_order ORDER BY seq")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(order, prior_order);
+        pool.execute("DROP TRIGGER batch_delay").await.unwrap();
+        eprintln!(
+            "PRIVATE_BATCH_PARITY source_rows=131 eligible_rows=130 inputs=133 bounded_batches_plus_oversized_scalar=4 TLS={cipher} version={version} second_batch_failure=rollback cancellation=rollback"
+        );
+        pool.close().await;
     }
 }

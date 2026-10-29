@@ -239,18 +239,7 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
     // B = Qᵀ·A — sketch × terms
     let b = compressed_matrix(docs, &q, n_terms, sketch);
     // Eigen-decompose B·Bᵀ (sketch × sketch) → U_b and σ².
-    let mut bbt = vec![0.0f32; sketch * sketch];
-    for i in 0..sketch {
-        for j in i..sketch {
-            let mut acc = 0.0f64;
-            for t in 0..n_terms {
-                acc += (b[i * n_terms + t] as f64) * (b[j * n_terms + t] as f64);
-            }
-            let v = acc as f32;
-            bbt[i * sketch + j] = v;
-            bbt[j * sketch + i] = v;
-        }
-    }
+    let bbt = gram_matrix(&b, n_terms, sketch);
     let (eigenvalues, eigenvectors) = jacobi_eigendecomposition(&bbt, sketch);
     // Order directions by descending eigenvalue; keep numerically non-zero ones.
     let mut order: Vec<usize> = (0..sketch).collect();
@@ -273,6 +262,49 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
         &eigenvectors,
         &keep,
     ))
+}
+
+/// Four independent Gram cells share the same ascending term scan.
+/// Each accumulator retains the scalar f64 addition order; no partial sums.
+fn gram_matrix(b: &[f32], n_terms: usize, sketch: usize) -> Vec<f32> {
+    let mut gram = vec![0.0f32; sketch * sketch];
+    for i in 0..sketch {
+        let row = &b[i * n_terms..(i + 1) * n_terms];
+        let mut j = i;
+        while j + 4 <= sketch {
+            let row0 = &b[j * n_terms..(j + 1) * n_terms];
+            let row1 = &b[(j + 1) * n_terms..(j + 2) * n_terms];
+            let row2 = &b[(j + 2) * n_terms..(j + 3) * n_terms];
+            let row3 = &b[(j + 3) * n_terms..(j + 4) * n_terms];
+            let (mut acc0, mut acc1, mut acc2, mut acc3) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+            for t in 0..n_terms {
+                let value = row[t] as f64;
+                acc0 += value * (row0[t] as f64);
+                acc1 += value * (row1[t] as f64);
+                acc2 += value * (row2[t] as f64);
+                acc3 += value * (row3[t] as f64);
+            }
+            for (offset, value) in [acc0 as f32, acc1 as f32, acc2 as f32, acc3 as f32]
+                .into_iter()
+                .enumerate()
+            {
+                gram[i * sketch + j + offset] = value;
+                gram[(j + offset) * sketch + i] = value;
+            }
+            j += 4;
+        }
+        // Keep the scalar path for the partial output block.
+        for j in j..sketch {
+            let mut acc = 0.0f64;
+            for t in 0..n_terms {
+                acc += (row[t] as f64) * (b[j * n_terms + t] as f64);
+            }
+            let value = acc as f32;
+            gram[i * sketch + j] = value;
+            gram[j * sketch + i] = value;
+        }
+    }
+    gram
 }
 
 /// Accumulate each term contiguously, then transpose without arithmetic.
@@ -342,32 +374,45 @@ fn project_basis(
 
 /// In-place modified Gram–Schmidt (two passes) over a row-major m×n matrix
 /// treated as n column vectors. Columns that lose all norm are zeroed.
+/// Contiguous scratch columns preserve each row-order reduction and both passes.
 fn orthonormalize(q: &mut [f32], rows: usize, cols: usize) {
+    let mut columns = vec![0.0f32; rows * cols];
+    for r in 0..rows {
+        for col in 0..cols {
+            columns[col * rows + r] = q[r * cols + col];
+        }
+    }
     for col in 0..cols {
+        let (previous, tail) = columns.split_at_mut(col * rows);
+        let current = &mut tail[..rows];
         for _ in 0..2 {
             for prev in 0..col {
+                let previous = &previous[prev * rows..(prev + 1) * rows];
                 let mut dot = 0.0f64;
                 for r in 0..rows {
-                    dot += (q[r * cols + col] as f64) * (q[r * cols + prev] as f64);
+                    dot += (current[r] as f64) * (previous[r] as f64);
                 }
                 for r in 0..rows {
-                    q[r * cols + col] -= (dot as f32) * q[r * cols + prev];
+                    current[r] -= (dot as f32) * previous[r];
                 }
             }
         }
         let mut norm = 0.0f64;
-        for r in 0..rows {
-            norm += (q[r * cols + col] as f64) * (q[r * cols + col] as f64);
+        for value in current.iter() {
+            norm += (*value as f64) * (*value as f64);
         }
         let norm = norm.sqrt() as f32;
         if norm > f32::EPSILON {
-            for r in 0..rows {
-                q[r * cols + col] /= norm;
+            for value in current.iter_mut() {
+                *value /= norm;
             }
         } else {
-            for r in 0..rows {
-                q[r * cols + col] = 0.0;
-            }
+            current.fill(0.0);
+        }
+    }
+    for r in 0..rows {
+        for col in 0..cols {
+            q[r * cols + col] = columns[col * rows + r];
         }
     }
 }
@@ -966,6 +1011,144 @@ mod tests {
         if model.dims > 0 {
             let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
             assert!(norm - 1.0 < 1e-4 || norm == 0.0 || model.dims == 0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod gram_ortho_parity {
+    use super::*;
+
+    fn scalar_gram(b: &[f32], n_terms: usize, sketch: usize) -> Vec<f32> {
+        let mut bbt = vec![0.0f32; sketch * sketch];
+        for i in 0..sketch {
+            for j in i..sketch {
+                let mut acc = 0.0f64;
+                for t in 0..n_terms {
+                    acc += (b[i * n_terms + t] as f64) * (b[j * n_terms + t] as f64);
+                }
+                let v = acc as f32;
+                bbt[i * sketch + j] = v;
+                bbt[j * sketch + i] = v;
+            }
+        }
+        bbt
+    }
+    fn scalar_orthonormalize(q: &mut [f32], rows: usize, cols: usize) {
+        for col in 0..cols {
+            for _ in 0..2 {
+                for prev in 0..col {
+                    let mut dot = 0.0f64;
+                    for r in 0..rows {
+                        dot += (q[r * cols + col] as f64) * (q[r * cols + prev] as f64);
+                    }
+                    for r in 0..rows {
+                        q[r * cols + col] -= (dot as f32) * q[r * cols + prev];
+                    }
+                }
+            }
+            let mut norm = 0.0f64;
+            for r in 0..rows {
+                norm += (q[r * cols + col] as f64) * (q[r * cols + col] as f64);
+            }
+            let norm = norm.sqrt() as f32;
+            if norm > f32::EPSILON {
+                for r in 0..rows {
+                    q[r * cols + col] /= norm;
+                }
+            } else {
+                for r in 0..rows {
+                    q[r * cols + col] = 0.0;
+                }
+            }
+        }
+    }
+
+    fn assert_bits(actual: &[f32], expected: &[f32], shape: (usize, usize), mode: usize) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            assert_eq!(
+                actual.to_bits(),
+                expected.to_bits(),
+                "shape={shape:?} mode={mode} index={index}"
+            );
+        }
+    }
+
+    fn matrix(rows: usize, cols: usize, mode: usize) -> Vec<f32> {
+        let mut random = SplitMix64(RNG_SEED ^ 0x4752414d);
+        (0..rows)
+            .flat_map(|r| (0..cols).map(move |c| (r, c)))
+            .map(|(r, c)| match mode {
+                0 => random.next_gaussian(),
+                1 => {
+                    ((r % 11) as f32 - 5.0) * ((c % 5 + 1) as f32)
+                        + ((r % 3) as f32) * f32::EPSILON * ((c + 1) as f32)
+                }
+                2 => {
+                    if (r + c) % 2 == 0 {
+                        0.0
+                    } else {
+                        -0.0
+                    }
+                }
+                3 => match (r + c) % 4 {
+                    0 => 1.0e20,
+                    1 => -1.0e20,
+                    2 => 1.0e-20,
+                    _ => -1.0e-20,
+                },
+                _ => unreachable!(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gram_four_cells_preserve_scalar_term_order_full_and_tail_blocks() {
+        for (terms, sketch) in [
+            (0, 0),
+            (0, 7),
+            (1, 1),
+            (3, 3),
+            (5, 4),
+            (11, 5),
+            (17, 7),
+            (31, 15),
+            (37, 17),
+            (41, 144),
+        ] {
+            for mode in 0..4 {
+                let b = matrix(sketch, terms, mode);
+                assert_bits(
+                    &gram_matrix(&b, terms, sketch),
+                    &scalar_gram(&b, terms, sketch),
+                    (terms, sketch),
+                    mode,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn column_storage_preserves_two_pass_scalar_orthonormalization() {
+        for (rows, cols) in [
+            (0, 0),
+            (0, 7),
+            (1, 1),
+            (3, 2),
+            (5, 4),
+            (5, 7),
+            (17, 5),
+            (37, 17),
+            (193, 144),
+        ] {
+            for mode in 0..3 {
+                let mut expected = matrix(rows, cols, mode);
+                let mut actual = expected.clone();
+                scalar_orthonormalize(&mut expected, rows, cols);
+                orthonormalize(&mut actual, rows, cols);
+                assert_bits(&actual, &expected, (rows, cols), mode);
+            }
         }
     }
 }

@@ -302,9 +302,9 @@ export async function verifyApiRuntime({
 		docker(["rm", "--force", warmName]);
 		containers.delete(warmName);
 
-		// Model publication is not atomic across its state/doc statements.
-		// New processes must defer mixed/empty derived rows; existing warm
-		// processes must keep the prior internally consistent snapshot.
+		// Legacy or external writes can expose mixed/empty derived rows.
+		// Current publication is transactional; new processes must still defer
+		// incoherent snapshots while warm processes retain their prior snapshot.
 		fixture.sql(
 			"CREATE TABLE native_fixture_saved_docs AS SELECT * FROM article_search_doc;",
 		);
