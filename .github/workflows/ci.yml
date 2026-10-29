@@ -3403,6 +3403,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs
           bun run test:review-audit
           bun run test:coverage-gaps
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
