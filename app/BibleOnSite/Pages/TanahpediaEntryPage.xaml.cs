@@ -18,6 +18,10 @@ public partial class TanahpediaEntryPage : ContentPage
 {
     private readonly TanahpediaEntryViewModel _viewModel;
 
+    /// <summary>The shared article chrome coordinator — the same fullscreen
+    /// surface state machine every article view runs (#2786).</summary>
+    private ArticleChrome _chrome = null!;
+
     /// <summary>A second tap during the in-flight transition must not stack
     /// another absolute-route navigation on top of it (#2640).</summary>
     private readonly NavigationGate _backToPediaGate = new();
@@ -31,9 +35,11 @@ public partial class TanahpediaEntryPage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         EntryHtml.LinkTapped += OnEntryLinkTapped;
-        // The in-place person trail is a page-owned Back surface: it keeps
-        // the capsule Back enabled even at root stack depth (#2467).
-        TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
+        SetupArticleChrome();
+        // The in-place person trail and fullscreen are page-owned Back
+        // surfaces: they keep the capsule Back enabled even at root stack
+        // depth (#2467) — the same surfaces OnBackButtonPressed serves first.
+        TopBar.BackStateProvider = () => _viewModel.HasEntryHistory || _chrome.IsFullScreen;
         // Person hops rebind this page in place - return to the top of the
         // destination entry instead of keeping the scrolled family section.
         _viewModel.PropertyChanged += (_, e) =>
@@ -46,6 +52,26 @@ public partial class TanahpediaEntryPage : ContentPage
             {
                 MainThread.BeginInvokeOnMainThread(() => TopBar.RefreshBackState());
             }
+        };
+    }
+
+    /// <summary>
+    /// Wires the unified article command surface (#2786): the actions pill's
+    /// fullscreen command and the floating exit control run through the same
+    /// coordinator every article view uses, and the capsule Back repaints on
+    /// each transition.
+    /// </summary>
+    private void SetupArticleChrome()
+    {
+        _chrome = new ArticleChrome(
+            new ArticleChromeSurfaces
+            {
+                Toolbar = TopBar,
+                Actions = ArticleActions,
+                ExitFullscreenButton = ExitFullScreenButton,
+            })
+        {
+            FullscreenStateChanged = _ => TopBar.RefreshBackState(),
         };
     }
 
@@ -67,11 +93,17 @@ public partial class TanahpediaEntryPage : ContentPage
     }
 
     /// <summary>
-    /// Hardware/system Back steps through the in-place person trail first
-    /// (the same logical history pushed pages used to give), then leaves.
+    /// Hardware/system Back releases the fullscreen surface first (the same
+    /// transient-surface ordering the readers keep), then steps through the
+    /// in-place person trail, then leaves.
     /// </summary>
     protected override bool OnBackButtonPressed()
     {
+        if (_chrome.HandleBack())
+        {
+            return true;
+        }
+
         if (_viewModel.HasEntryHistory)
         {
             _viewModel.GoBackCommand.Execute(null);

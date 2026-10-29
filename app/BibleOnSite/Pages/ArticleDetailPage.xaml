@@ -3,7 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.ArticleDetailPage"
              x:DataType="viewmodels:ArticleDetailViewModel"
              Title="{Binding ArticleName}"
@@ -11,10 +10,12 @@
              Shell.NavBarIsVisible="False">
 
     <Grid RowDefinitions="Auto,*">
-        <!-- The shared navigation capsule (#2467): hamburger at the far-right
-             edge, Back immediately beside it, title pill, and the article's
-             share action in the trailing slot. -->
-        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="ArticleDetailMenuButton">
+        <!-- The shared navigation capsule (#2467) plus the unified article
+             command group (#2786): hamburger and the capsule Back own the
+             return affordance at the leading edge, the title pill sits in
+             the center slot, and the actions pill (share + fullscreen) owns
+             the trailing edge — the same command surface the readers run. -->
+        <controls:SharedTopBar x:Name="TopBar" Grid.Row="0" NavigationAutomationId="ArticleDetailMenuButton">
             <controls:SharedTopBar.CenterContent>
                 <controls:ToolbarPill>
                     <Label Text="{Binding ArticleName}"
@@ -26,16 +27,8 @@
                 </controls:ToolbarPill>
             </controls:SharedTopBar.CenterContent>
             <controls:SharedTopBar.TrailingContent>
-                <Button Text="{x:Static fonts:FluentUI.share_android_24_regular}"
-                        FontFamily="FluentIcons"
-                        FontSize="22"
-                        WidthRequest="40"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
-                        Command="{Binding ShareCommand}"
-                        VerticalOptions="Center"
-                        SemanticProperties.Description="שתף"/>
+                <controls:ArticleActionsBar x:Name="ArticleActions"
+                                            ShareCommand="{Binding ShareCommand}"/>
             </controls:SharedTopBar.TrailingContent>
         </controls:SharedTopBar>
 
@@ -103,5 +96,11 @@
                        FontSize="14"/>
             </VerticalStackLayout>
         </ScrollView>
+
+        <!-- The shared floating exit control — the same draggable button the
+             readers show while fullscreen (#2786). -->
+        <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton" Grid.Row="1"
+                Margin="16"
+                ZIndex="100"/>
     </Grid>
 </ContentPage>

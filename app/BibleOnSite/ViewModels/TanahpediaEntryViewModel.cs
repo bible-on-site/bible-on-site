@@ -23,6 +23,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private readonly IAppNavigator _navigator;
     private readonly PerekDataService _perekData;
     private readonly IDedicationService _dedicationService;
+    private readonly IShare _share;
 
     /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid link or
     /// badge taps must not stack duplicate pushed pages (#2640).</summary>
@@ -60,11 +61,18 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     public TanahpediaEntryViewModel(ITanahpediaService service, IAppNavigator navigator,
         PerekDataService perekData, IDedicationService dedicationService)
+        : this(service, navigator, perekData, dedicationService, Share.Default)
+    {
+    }
+
+    public TanahpediaEntryViewModel(ITanahpediaService service, IAppNavigator navigator,
+        PerekDataService perekData, IDedicationService dedicationService, IShare share)
     {
         _service = service;
         _navigator = navigator;
         _perekData = perekData;
         _dedicationService = dedicationService;
+        _share = share;
     }
 
 #pragma warning disable MVVMTK0045
@@ -500,6 +508,26 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
         await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+    }
+
+    /// <summary>
+    /// Shares the entry's canonical URL — the same /pedia/{uniqueName} route
+    /// the website serves, never transient page state (#2786).
+    /// </summary>
+    [RelayCommand]
+    public async Task ShareAsync()
+    {
+        if (UniqueName.Length == 0)
+        {
+            return;
+        }
+
+        await _share.RequestAsync(new ShareTextRequest
+        {
+            Text = Title.Length > 0 ? Title : UniqueName,
+            Uri = $"https://תנך.co.il/pedia/{Uri.EscapeDataString(UniqueName)}",
+            Title = "שתף ערך"
+        });
     }
 
     /// <summary>

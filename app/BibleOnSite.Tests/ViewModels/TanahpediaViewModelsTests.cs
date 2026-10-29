@@ -2,6 +2,7 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Moq;
 
 namespace BibleOnSite.Tests.ViewModels;
@@ -1324,5 +1325,48 @@ public class TanahpediaEntryViewModelTests
         vm.SynonymTargets.Should().HaveCount(2);
         vm.HasFamily.Should().BeFalse();
         vm.HasEntities.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Share_SendsTheCanonicalEntryUrl()
+    {
+        // The shared surface binds ShareCommand on every article view — the
+        // request carries the /pedia/{uniqueName} route the website serves,
+        // never transient page state (#2786).
+        var share = new Mock<IShare>();
+        var vm = new TanahpediaEntryViewModel(_service.Object, _navigator.Object,
+            EmptyPerekData(), StubDedicationService.Instance, share.Object);
+        _service.Setup(s => s.GetEntryDetailAsync("אבשלום", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail { UniqueName = "אבשלום", Title = "אבשלום בן דוד" });
+
+        vm.UniqueName = "אבשלום";
+        await vm.ShareCommand.ExecuteAsync(null);
+
+        share.Verify(s => s.RequestAsync(It.Is<ShareTextRequest>(r =>
+            r.Uri == $"https://תנך.co.il/pedia/{Uri.EscapeDataString("אבשלום")}" &&
+            r.Text == "אבשלום")), Times.Once,
+            "before the entry loads the requested name is the share text");
+
+        await vm.LoadAsync();
+        await vm.ShareAsync();
+
+        share.Verify(s => s.RequestAsync(It.Is<ShareTextRequest>(r =>
+            r.Uri == $"https://תנך.co.il/pedia/{Uri.EscapeDataString("אבשלום")}" &&
+            r.Text == "אבשלום בן דוד" &&
+            r.Title == "שתף ערך")), Times.Once,
+            "a loaded entry shares its title and canonical route");
+    }
+
+    [Fact]
+    public async Task Share_WithoutEntry_IsANoOp()
+    {
+        var share = new Mock<IShare>();
+        var vm = new TanahpediaEntryViewModel(_service.Object, _navigator.Object,
+            EmptyPerekData(), StubDedicationService.Instance, share.Object);
+
+        await vm.ShareCommand.ExecuteAsync(null);
+
+        share.Verify(s => s.RequestAsync(It.IsAny<ShareTextRequest>()), Times.Never,
+            "an empty unique name has no canonical URL to share");
     }
 }

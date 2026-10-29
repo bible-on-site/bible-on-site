@@ -47,7 +47,10 @@ public class SharedTopBar : ContentView
     private readonly Border _capsuleBorder;
     private readonly HorizontalStackLayout _capsule;
     private readonly ContentView _centerHost = new();
-    private readonly ContentView _trailingHost = new();
+    // The trailing slot never narrows under the reserved edge width, but a
+    // wider command group (the article actions pill, #2786) lets its column
+    // grow into the star-sized center instead of clipping.
+    private readonly ContentView _trailingHost = new() { MinimumWidthRequest = EdgeWidth };
 
     /// <summary>The hamburger inside the capsule; always opens the Shell flyout.</summary>
     public Button NavigationButton { get; }
@@ -212,7 +215,7 @@ public class SharedTopBar : ContentView
             [
                 new ColumnDefinition(GridLength.Auto),
                 new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(EdgeWidth),
+                new ColumnDefinition(GridLength.Auto),
             ],
             HeightRequest = BarHeight,
         };
