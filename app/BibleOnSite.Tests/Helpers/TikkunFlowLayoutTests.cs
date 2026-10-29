@@ -325,6 +325,210 @@ public class TikkunFlowLayoutTests
         }
     }
 
+    // #2839: a rendered line holds at most MaxLineLetters Hebrew base letters.
+    // A word that would push the line over the budget wraps to the next line
+    // even when room remains in the column; words are never split.
+    public class LetterBudget
+    {
+        // Generous column so only the letter budget can trigger a wrap.
+        private const float Wide = 4000f;
+
+        private static string W(int letters) => new('א', letters);
+
+        [Fact]
+        public void fits_exactly_the_letter_budget_on_one_line()
+        {
+            var result = TikkunFlowLayout.Layout(Words(W(17), W(17)),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(1);
+            result.Words.Should().HaveCount(2);
+        }
+
+        [Fact]
+        public void wraps_the_word_that_would_pass_the_budget_even_when_width_permits()
+        {
+            var result = TikkunFlowLayout.Layout(Words(W(17), W(17), W(2)),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 0).Select(w => w.Text).Should().Equal(W(17), W(17));
+            LineWords(result, 1).Select(w => w.Text).Should().Equal(W(2));
+            // A complete line ended by the budget justifies like a width wrap.
+            LineWords(result, 0).Min(w => w.X).Should().BeApproximately(0, 0.01f);
+            LineWords(result, 0).Max(RightEdge).Should().BeApproximately(Wide, 0.01f);
+        }
+
+        [Fact]
+        public void pointed_and_unpointed_text_count_the_same_letters()
+        {
+            // Six base letters each, pointed or not: five fit the budget and
+            // the sixth wraps (36 > 34). Only the letter count drives the split.
+            var pointed = TikkunFlowLayout.Layout(
+                Words("בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית",
+                      "בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית"),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+            var unpointed = TikkunFlowLayout.Layout(
+                Words("בראשית", "בראשית", "בראשית", "בראשית", "בראשית", "בראשית"),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            pointed.LineCount.Should().Be(2);
+            LineWords(pointed, 0).Should().HaveCount(5);
+            LineWords(pointed, 1).Should().HaveCount(1);
+            unpointed.LineCount.Should().Be(pointed.LineCount);
+            LineWords(unpointed, 0).Should().HaveCount(LineWords(pointed, 0).Count);
+            LineWords(unpointed, 1).Should().HaveCount(LineWords(pointed, 1).Count);
+        }
+
+        [Fact]
+        public void marks_punctuation_spaces_maqaf_and_digits_add_nothing_to_the_count()
+        {
+            // 5×6 letters (pointed, with taam and sof pasuq) + maqaf pair (2)
+            // + digit-bearing word (2) lands exactly on 34; one more letter wraps.
+            var words = Words("בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית",
+                "בְּרֵאשִׁ֖ית", "בְּרֵאשִׁ֖ית׃", "א־ב", "א1ב", "א");
+            var result = TikkunFlowLayout.Layout(words,
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            var first = LineWords(result, 0);
+            first.Should().HaveCount(7);
+            first.Sum(w => TikkunFlowLayout.CountHebrewLetters(w.Text))
+                .Should().Be(TikkunFlowLayout.MaxLineLetters);
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("א");
+        }
+
+        [Fact]
+        public void pasuk_marker_and_qri_note_letters_count_toward_the_budget()
+        {
+            // Inline reader chrome is rendered text too: the "יא" marker (2),
+            // the "(קְרִי:" note label (3) and the qri value's glued ")" all
+            // take part in the line's letter budget.
+            var result = TikkunFlowLayout.Layout(
+                Words("יא", "(קְרִי:", W(6), ")", W(23), "א"),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            // 2 + 3 + 6 + 0 + 23 = 34 exactly — the extra letter wraps.
+            LineWords(result, 0).Select(w => w.Text)
+                .Should().Equal("יא", "(קְרִי:", W(6), ")", W(23));
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("א");
+        }
+
+        [Fact]
+        public void the_budget_runs_across_pasuk_and_copy_boundaries()
+        {
+            // שניים מקרא flattens marker + copy + copy into the word stream —
+            // the count never resets between pesukim or repeated copies.
+            var result = TikkunFlowLayout.Layout(
+                Words("א", W(16), W(16), "ב", W(2)),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            // 1 + 16 + 16 + 1 = 34: the next pasuk's marker fills the line.
+            LineWords(result, 0).Select(w => w.Text)
+                .Should().Equal("א", W(16), W(16), "ב");
+            LineWords(result, 1).Select(w => w.Text).Should().Equal(W(2));
+        }
+
+        [Fact]
+        public void a_ptuha_resets_the_budget_for_the_next_line()
+        {
+            var words = Words(W(20), W(30), W(4));
+            words.Insert(1, TikkunWord.PtuhaBreak);
+
+            var result = TikkunFlowLayout.Layout(words,
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 0).Select(w => w.Text).Should().Equal(W(20));
+            // After the break the count starts at zero: 30 + 4 fits exactly.
+            LineWords(result, 1).Select(w => w.Text).Should().Equal(W(30), W(4));
+        }
+
+        [Fact]
+        public void an_inline_stuma_gap_adds_zero_letters_and_does_not_reset_the_budget()
+        {
+            var words = Words(W(20), W(10), W(5));
+            words.Insert(1, TikkunWord.StumaGap);
+
+            var result = TikkunFlowLayout.Layout(words,
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            // The {ס} gap contributes no letters: 20 + 10 = 30 stays on one
+            // line; 30 + 5 = 35 ends it. The gap itself adds nothing either way.
+            LineWords(result, 0).Select(w => w.Text).Should().Equal(W(20), W(10));
+            LineWords(result, 1).Select(w => w.Text).Should().Equal(W(5));
+        }
+
+        [Fact]
+        public void a_budget_wrapped_stuma_continuation_stays_indented()
+        {
+            var words = Words(W(30), W(5));
+            words.Insert(1, TikkunWord.StumaGap);
+
+            var result = TikkunFlowLayout.Layout(words,
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            // 30 + 5 = 35 > 34: the {ס} continuation wraps to the next line and
+            // keeps its nine-letter indent, like the width-driven fallback.
+            var after = LineWords(result, 1);
+            after.Should().ContainSingle();
+            RightEdge(after[0]).Should().BeApproximately(Wide - StumaGap, 0.01f);
+        }
+
+        [Fact]
+        public void an_unbreakable_word_over_the_budget_keeps_its_own_line_intact()
+        {
+            // Defensive case only — no canonical word reaches the budget (the
+            // longest maqaf chain in the bundled tanach is 16 letters). The
+            // contract still holds: never split, never drop.
+            var result = TikkunFlowLayout.Layout(Words(W(36), W(2)),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            result.Words.Should().HaveCount(2);
+            LineWords(result, 0).Select(w => w.Text).Should().Equal(W(36));
+            LineWords(result, 1).Select(w => w.Text).Should().Equal(W(2));
+            RightEdge(result.Words[0]).Should().BeApproximately(Wide, 0.01f);
+        }
+
+        [Fact]
+        public void narrow_width_still_wraps_lines_short_of_the_budget()
+        {
+            // Width binds first when the column is narrow: each 2-letter word
+            // measures 20, so three words (6 letters ≪ 34) plus spaces fill the
+            // 100-wide line — lines may always contain fewer letters.
+            var result = TikkunFlowLayout.Layout(
+                Words("אב", "אב", "אב", "אב", "אב", "אב", "אב", "אב", "אב", "אב"),
+                Measure, BaseFontSize, maxWidth: 100, LineHeightFactor);
+
+            result.LineCount.Should().Be(4);
+            LineWords(result, 0).Should().HaveCount(3);
+            LineWords(result, 1).Should().HaveCount(3);
+            LineWords(result, 2).Should().HaveCount(3);
+            LineWords(result, 3).Should().HaveCount(1);
+        }
+
+        [Fact]
+        public void budget_wrapping_preserves_every_word_in_order_without_loops()
+        {
+            // 40 single-letter words: the budget emits lines of 34 and 6 —
+            // no empty lines, drops or duplicates, order fully preserved.
+            var texts = Enumerable.Range(0, 40)
+                .Select(i => ((char)('א' + i % 22)).ToString()).ToArray();
+            var result = TikkunFlowLayout.Layout(Words(texts),
+                Measure, BaseFontSize, maxWidth: Wide, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            result.Words.Select(w => w.Text).Should().Equal(texts);
+            LineWords(result, 0).Should().HaveCount(TikkunFlowLayout.MaxLineLetters);
+            LineWords(result, 1).Should().HaveCount(40 - TikkunFlowLayout.MaxLineLetters);
+        }
+    }
+
     public class MixedSections
     {
         [Fact]

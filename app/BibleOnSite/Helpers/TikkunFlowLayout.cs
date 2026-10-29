@@ -9,6 +9,16 @@ namespace BibleOnSite.Helpers;
 /// fill the text column like a printed tikkun. Positions are computed
 /// right-to-left: the first word of a line sits at the right edge.
 ///
+/// A line holds at most <see cref="MaxLineLetters"/> Hebrew base letters (#2839):
+/// a word that would push the rendered line over the budget wraps to the next
+/// line even when room remains in the column, keeping the dense reading flow
+/// legible. Only letters count — niqqud, taamim, maqaf, spaces, punctuation
+/// and numerals add zero — and the budget spans every drawable word on the
+/// line (pasuk markers, qri-note text and שניים מקרא copies alike). A single
+/// unbreakable word longer than the budget is preserved intact rather than
+/// split or dropped; no canonical word reaches that length, so the exception
+/// is defensive only.
+///
 /// Section markers are first-class layout instructions, never drawn text:
 /// <list type="bullet">
 /// <item>{פ} (פתוחה) ends the current line — it stays naturally aligned (right
@@ -39,7 +49,19 @@ public static class TikkunFlowLayout
     /// </summary>
     public static string StumaProbe { get; } = "אשר אשר אשר";
 
+    /// <summary>Maximum Hebrew base letters allowed on one rendered line.</summary>
+    public static int MaxLineLetters { get; } = 34;
+
     private const float Epsilon = 0.01f;
+
+    /// <summary>
+    /// Counts the rendered Hebrew base letters in a word — U+05D0–U+05EA,
+    /// including final forms (םןףץך). Niqqud, taamim, maqaf, spaces,
+    /// punctuation and numerals do not count, so a pointed word counts the
+    /// same as its unpointed equivalent.
+    /// </summary>
+    public static int CountHebrewLetters(string text) =>
+        text.Count(c => c is >= 'א' and <= 'ת');
 
     /// <summary>A word with its drawing position, measured width and resolved style.</summary>
     public sealed record PlacedWord(string Text, float X, float Y, float Width, float FontSize,
@@ -75,6 +97,7 @@ public static class TikkunFlowLayout
         var placed = new List<PlacedWord>(words.Count);
         var line = new List<LineItem>();
         var lineWidth = 0f;
+        var lineLetters = 0;
         var y = 0f;
         var lineCount = 0;
         var pendingStuma = false;
@@ -110,6 +133,7 @@ public static class TikkunFlowLayout
             y += lineHeight;
             line.Clear();
             lineWidth = 0f;
+            lineLetters = 0;
         }
 
         foreach (var word in words)
@@ -168,13 +192,17 @@ public static class TikkunFlowLayout
                             stretchable = !pendingStuma;
                         }
 
+                        var wordLetters = CountHebrewLetters(word.Text);
                         var needed = lineWidth + slot + width;
-                        if (line.Count > 0 && needed > maxWidth + Epsilon)
+                        if (line.Count > 0 &&
+                            (needed > maxWidth + Epsilon || lineLetters + wordLetters > MaxLineLetters))
                         {
                             // Wrap: an ordinary overflow justifies the completed
                             // line; a {ס} that has no room for gap + word ends it
                             // naturally and the continuation starts indented by
-                            // the gap (indented-continuation form).
+                            // the gap (indented-continuation form). The letter
+                            // budget ends the line the same way — words never
+                            // split — so a lone overlong word keeps its own line.
                             FlushLine(justify: !pendingStuma);
                             slot = pendingStuma ? stumaGap : 0f;
                             stretchable = false;
@@ -184,11 +212,13 @@ public static class TikkunFlowLayout
                             }
                             line.Add(new LineItem(word, width, slot, stretchable));
                             lineWidth = slot + width;
+                            lineLetters = wordLetters;
                         }
                         else
                         {
                             line.Add(new LineItem(word, width, slot, stretchable));
                             lineWidth += slot + width;
+                            lineLetters += wordLetters;
                         }
                         pendingStuma = false;
                         break;

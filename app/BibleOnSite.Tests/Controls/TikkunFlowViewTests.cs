@@ -310,6 +310,40 @@ public class TikkunFlowViewTests
         });
     }
 
+    // #2839: the letter budget lives in the shared layout, so the canvas draw
+    // honors it too — here width would fit ~93 words, so only the 34-letter
+    // budget can end the first rendered line.
+    [Fact]
+    public void draw_caps_each_rendered_line_at_the_hebrew_letter_budget()
+    {
+        WithInlineDispatcher(() =>
+        {
+            // Distinct two-letter words so per-line text dedup only removes
+            // the bold marker's faux-bold strike, never a real word.
+            var text = string.Join(' ', Enumerable.Range(0, 40)
+                .Select(i => new string([(char)('א' + i % 22), (char)('א' + i / 22)])));
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, text)] };
+            var canvas = MeasuringCanvas(widthFactor: 0.1);
+            var draws = new List<(string Text, float Y)>();
+            canvas.Setup(c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
+                    It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                    It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>(), It.IsAny<float>()))
+                .Callback((string t, float _, float y, float _, float _,
+                           HorizontalAlignment _, VerticalAlignment _, TextFlow _, float _) =>
+                    draws.Add((t, y)));
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            // Marker "א" + 16 words = 33 letters, then 17 (34), then the last 7
+            // copies (14). Bold marker words strike twice — count distinct text.
+            var lines = draws.GroupBy(d => d.Y).OrderBy(g => g.Key).ToList();
+            lines.Should().HaveCount(3);
+            lines.Select(line => line.Select(d => d.Text).Distinct()
+                    .Sum(TikkunFlowLayout.CountHebrewLetters))
+                .Should().Equal(33, 34, 14);
+        });
+    }
+
     [Fact]
     public void draw_in_dark_theme_paints_with_the_dark_default_color()
     {

@@ -249,5 +249,32 @@ public class TikkunKorimTextBuilderTests
             var valueWord = words.Should().ContainSingle(w => w.Text == "ב)").Which;
             valueWord.TextColor.Should().Be(Color.FromArgb("#1c427b"));
         }
+
+        [Fact]
+        public void built_words_feed_the_layout_letter_budget_through_the_real_pipeline()
+        {
+            // #2839: marker (1 letter) + 2 copies of 20 two-letter words through
+            // שניים מקרא = 81 letters. The shared layout caps every rendered
+            // line at MaxLineLetters while keeping all words whole.
+            var pasuk = PasukOf(1, new PasukSegment
+            {
+                Type = SegmentType.Ktiv,
+                Value = string.Join(' ', Enumerable.Repeat("אב", 20))
+            });
+
+            var words = TikkunKorimTextBuilder.BuildWords([pasuk], repeatEachPasuk: true, hideMarks: false);
+            var result = TikkunFlowLayout.Layout(words,
+                (text, _, _) => text.Length * 10f, 18f, 4000f, 1.4f);
+
+            result.Words.Should().HaveCount(41);
+            var lines = result.Words.GroupBy(w => w.Y).OrderBy(g => g.Key).ToList();
+            lines.Should().HaveCount(3);
+            lines.Should().OnlyContain(line =>
+                line.Sum(w => TikkunFlowLayout.CountHebrewLetters(w.Text))
+                    <= TikkunFlowLayout.MaxLineLetters);
+            // Marker + 16 words = 33, then 17 and the last 7 copies.
+            lines.Select(line => line.Sum(w => TikkunFlowLayout.CountHebrewLetters(w.Text)))
+                .Should().Equal(33, 34, 14);
+        }
     }
 }
