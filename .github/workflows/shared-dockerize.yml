@@ -64,7 +64,8 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          # The action's bulk package list includes Chrome, absent on ARM runners.
+          large-packages: ${{ runner.arch == 'X64' }}
           docker-images: true
           swap-storage: true
 
