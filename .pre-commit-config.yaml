@@ -30,7 +30,7 @@ repos:
         priority: 10
       - id: check-added-large-files
         priority: 10
-        exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz|web/bulletin/data/.*\.json)$
+        exclude: ^(data/mysql/.*_data\.sql|data/recitation/corrections/.*\.mp3|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz|web/bulletin/data/.*\.json)$
       - id: check-xml
         priority: 10
       - id: check-case-conflict
