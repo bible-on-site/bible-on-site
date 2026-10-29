@@ -52,10 +52,31 @@ test(
 			},
 		];
 		const plan = planStudyCalendarRepair(rows);
+		// Only these fixed fixture operations or the validated planner can supply SQL.
+		const commands = Object.freeze({
+			bootstrap:
+				"CREATE TABLE tanah_perek_date (perek_id INT,cycle TINYINT,date DATE,hebdate VARCHAR(20),star_rise TIME,PRIMARY KEY(perek_id,cycle)) ENGINE=InnoDB; CREATE TABLE unrelated_content(id INT PRIMARY KEY, article TEXT, consent VARCHAR(20), provider_id VARCHAR(80)); INSERT INTO unrelated_content VALUES(1,'immutable article/PDF snapshot','unsubscribed','retained-provider-id'); INSERT INTO tanah_perek_date VALUES(1,1,'2014-03-28','57750329','17:16:00'),(2,1,'2014-03-28','57750330','17:17:00');",
+			reset:
+				"DELETE FROM tanah_perek_date; INSERT INTO tanah_perek_date VALUES(1,1,'2014-03-28','57750329','17:16:00'),(2,1,'2014-03-28','57750330','17:17:00');",
+			drift0: "UPDATE tanah_perek_date SET date='2015-01-01' WHERE perek_id=1",
+			drift1: "UPDATE tanah_perek_date SET hebdate='57750330' WHERE perek_id=1",
+			drift2:
+				"UPDATE tanah_perek_date SET star_rise='18:00:00' WHERE perek_id=1",
+			drift3:
+				"INSERT INTO tanah_perek_date VALUES(3,1,'2014-03-28','57750401','17:16:00')",
+			drift4: "DELETE FROM tanah_perek_date WHERE perek_id=2",
+			repair: calendarRepairSql(plan),
+			rollback: calendarRepairSql(plan, true),
+		});
 		async function connect() {
 			return mysql.createConnection({ ...config, database: db });
 		}
-		async function execute(sql) {
+		async function execute(operation) {
+			assert.ok(
+				Object.hasOwn(commands, operation),
+				"Unknown fixture operation",
+			);
+			const sql = commands[operation];
 			const c = await connect();
 			try {
 				await c.query(sql);
@@ -83,11 +104,9 @@ test(
 		try {
 			await root.query(`CREATE DATABASE ${db}`);
 			created = true;
-			await execute(
-				"CREATE TABLE tanah_perek_date (perek_id INT,cycle TINYINT,date DATE,hebdate VARCHAR(20),star_rise TIME,PRIMARY KEY(perek_id,cycle)) ENGINE=InnoDB; CREATE TABLE unrelated_content(id INT PRIMARY KEY, article TEXT, consent VARCHAR(20), provider_id VARCHAR(80)); INSERT INTO unrelated_content VALUES(1,'immutable article/PDF snapshot','unsubscribed','retained-provider-id'); INSERT INTO tanah_perek_date VALUES(1,1,'2014-03-28','57750329','17:16:00'),(2,1,'2014-03-28','57750330','17:17:00');",
-			);
+			await execute("bootstrap");
 			const before = await read();
-			await execute(calendarRepairSql(plan));
+			await execute("repair");
 			const after = await read();
 			assert.deepEqual(
 				after.dates,
@@ -97,21 +116,15 @@ test(
 				})),
 			);
 			assert.deepEqual(after.content, before.content);
-			await execute(calendarRepairSql(plan));
+			await execute("repair");
 			assert.deepEqual(await read(), after);
-			await execute(calendarRepairSql(plan, true));
+			await execute("rollback");
 			assert.deepEqual(await read(), before);
-			for (const mutate of [
-				"UPDATE tanah_perek_date SET date='2015-01-01' WHERE perek_id=1",
-				"UPDATE tanah_perek_date SET hebdate='57750330' WHERE perek_id=1",
-				"UPDATE tanah_perek_date SET star_rise='18:00:00' WHERE perek_id=1",
-				"INSERT INTO tanah_perek_date VALUES(3,1,'2014-03-28','57750401','17:16:00')",
-				"DELETE FROM tanah_perek_date WHERE perek_id=2",
-			]) {
+			for (const mutate of ["drift0", "drift1", "drift2", "drift3", "drift4"]) {
 				await execute(mutate);
 				const drifted = await read();
 				await assert.rejects(
-					execute(calendarRepairSql(plan)),
+					execute("repair"),
 					(error) => error.code === "ER_CHECK_CONSTRAINT_VIOLATED",
 				);
 				assert.deepEqual(
@@ -119,9 +132,7 @@ test(
 					drifted,
 					"rejected repair must not write any persistent value",
 				);
-				await execute(
-					"DELETE FROM tanah_perek_date; INSERT INTO tanah_perek_date VALUES(1,1,'2014-03-28','57750329','17:16:00'),(2,1,'2014-03-28','57750330','17:17:00');",
-				);
+				await execute("reset");
 			}
 		} finally {
 			if (created) await root.query(`DROP DATABASE ${db}`);

@@ -424,8 +424,10 @@ mod tests {
 
     #[test]
     fn invalid_hebrew_date_does_not_replace_an_existing_export() {
-        let dir = std::env::temp_dir().join(format!("tanah_invalid_mysql_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        fs::create_dir_all(&parent).unwrap();
+        let dir = parent.join(format!("invalid_calendar_{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
         let path = dir.join("tanah.sql");
         fs::write(&path, "previous verified export").unwrap();
         let mut sefarim = sample_sefarim();
