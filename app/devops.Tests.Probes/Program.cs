@@ -11,7 +11,7 @@ internal static class Program
     {
         using var released = new ManualResetEventSlim();
         using var blocked = new ManualResetEventSlim();
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var server = new Thread(() => CoverageEndpoint.ServeConnections(listener)) { IsBackground = true };
         try
