@@ -365,7 +365,7 @@ public class TikkunFlowLayoutTests
         [Fact]
         public void ignores_niqqud_and_taamim_while_counting()
         {
-            // "בְּרֵאשִׁ֖ית" — 6 base letters wrapped in niqqud + a taam;
+            // בְּרֵאשִׁ֖ית carries 6 base letters wrapped in niqqud + a taam;
             // 28 + 6 = 34 fits exactly (had marks counted, 35+ would wrap).
             var pointed = "בְּרֵאשִׁ֖ית";
             pointed.Length.Should().BeGreaterThan(6);
