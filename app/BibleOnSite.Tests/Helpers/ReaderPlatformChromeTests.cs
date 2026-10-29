@@ -42,10 +42,13 @@ public class ReaderPlatformChromeTests : IDisposable
             remove => _isOpenChanged -= value;
         }
 
+#pragma warning disable S1172 // Fake satisfies the interface contract; toggle arguments unused.
         public Task ToggleAsync(double hostHeight, double maxExpandedHeight) => Task.CompletedTask;
+#pragma warning restore S1172
 
         public void CloseImmediate()
         {
+            // Fake no-op — tests drive open state through RaiseOpenChanged.
         }
 
         public void RaiseOpenChanged(bool isOpen) => _isOpenChanged?.Invoke(this, isOpen);

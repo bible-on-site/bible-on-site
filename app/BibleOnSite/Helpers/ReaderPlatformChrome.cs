@@ -166,7 +166,11 @@ public sealed class ReaderPlatformChrome
         // The perushim sheet reports open/close on its own event rather than
         // an IsVisible flip — feed it the same capsule + native refresh an
         // overlay gets so a swipe-opened sheet still owns Back (#2766).
-        _ui.PerushimSheet.IsOpenChanged += OnPerushimSheetOpenChanged;
+        _ui.PerushimSheet.IsOpenChanged += (_, _) =>
+        {
+            _ui.NavigationBar.RefreshBackState();
+            RefreshNativeBack();
+        };
     }
 
     /// <summary>
@@ -273,16 +277,6 @@ public sealed class ReaderPlatformChrome
         {
             RefreshNativeBack();
         }
-    }
-
-    /// <summary>
-    /// The sheet's own open notification — feeds the same capsule + Android
-    /// refresh as an overlay's IsVisible flip (#2766).
-    /// </summary>
-    private void OnPerushimSheetOpenChanged(object? sender, bool isOpen)
-    {
-        _ui.NavigationBar.RefreshBackState();
-        RefreshNativeBack();
     }
 
     /// <summary>
