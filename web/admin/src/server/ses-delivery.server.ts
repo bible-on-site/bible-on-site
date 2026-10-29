@@ -775,6 +775,21 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 									signal,
 								);
 						}
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						(payload.kind === "bulletin.schedule" ||
+							payload.kind === "bulletin.generate")
+					) {
+						const { processScheduledBulletin } = await import(
+							"./scheduled-bulletin.server"
+						);
+						if (signal.aborted) break;
+						handled = await processScheduledBulletin(payload, signal, {
+							client,
+							url: runtime.queueUrl,
+						});
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
