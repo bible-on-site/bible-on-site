@@ -85,6 +85,26 @@ public sealed class PerekReadingMetricTests
     }
 
     [Fact]
+    public async Task ReadingMetric_DefaultsSourceHash_WhenTheStoredValueIsNull()
+    {
+        await using var storage = new TestStorage();
+        // A pack generation whose source_hash column is nullable can persist
+        // NULL — the model falls back to empty rather than surfacing null.
+        var schema = MetricSchema
+            .Select(s => s.Replace("source_hash TEXT NOT NULL", "source_hash TEXT"))
+            .ToArray();
+        var db = await storage.CreateDatabaseAsync(DbName, schema);
+        await db.ExecuteAsync(
+            "INSERT INTO tanah_perek_metric (perek_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash) " +
+            "VALUES (1, 361, 99, 220, 1, NULL)");
+
+        var metric = await NewService(storage).GetReadingMetricAsync(1);
+
+        metric.Should().NotBeNull();
+        metric!.SourceHash.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task PasukProgressUnits_ReturnOrderedWordCounts()
     {
         await using var storage = new TestStorage();

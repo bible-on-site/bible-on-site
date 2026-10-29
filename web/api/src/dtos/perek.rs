@@ -358,4 +358,43 @@ mod tests {
                 .is_some_and(|s| s.starts_with("Book "))
         );
     }
+
+    /// A perek row without a canonical perek_id (a null join arm) has no
+    /// stored units — the resolver must answer empty without touching the DB.
+    #[tokio::test]
+    async fn progress_units_returns_empty_when_perek_id_is_absent() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn perek(&self) -> Perek {
+                Perek {
+                    id: 7,
+                    perek_id: None,
+                    sefer_id: None,
+                    additional: None,
+                    perek: None,
+                    date: None,
+                    hebdate: None,
+                    compiled_hebdate: None,
+                    tseit: None,
+                    header: None,
+                    compiled_source: None,
+                    pasuk_count: None,
+                    reading_metric: None,
+                }
+            }
+        }
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+
+        let res = schema.execute("{ perek { progressUnits { key } } }").await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let units = res.data.into_json().unwrap()["perek"]["progressUnits"].clone();
+        assert!(units.as_array().unwrap().is_empty());
+    }
 }

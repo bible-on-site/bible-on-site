@@ -147,3 +147,62 @@ pub struct TanahpediaSearchHit {
     /// names) at ×2 weight over body content.
     pub score: i32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+    use entities::tanahpedia::entry_metric_block;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    /// Detail DTO for the resolver-shape test — the complex `progress_units`
+    /// field must resolve through the real schema machinery (issue #2607).
+    struct Query;
+    #[Object]
+    impl Query {
+        async fn entry(&self) -> TanahpediaEntryDetail {
+            TanahpediaEntryDetail {
+                id: "entry-x".to_string(),
+                unique_name: "entry-x".to_string(),
+                title: "Entry".to_string(),
+                content: Some("<p>body</p>".to_string()),
+                updated_at: "2026-01-01".to_string(),
+                entities: vec![],
+                occurrences: vec![],
+                reading_metric: None,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn progress_units_maps_the_stored_block_rows() {
+        let unit = |block_idx, cumulative| entry_metric_block::Model {
+            entry_id: "entry-x".to_string(),
+            block_idx,
+            word_count: 10,
+            cumulative_words: cumulative,
+            calc_version: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_metric_block::Model, Vec<_>, _>([vec![
+                    unit(0, 10),
+                    unit(1, 20),
+                ]])
+                .into_connection(),
+        );
+        let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .data(db)
+            .finish();
+
+        let res = schema
+            .execute("{ entry { progressUnits { key wordCount cumulativeWords } } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let units = res.data.into_json().unwrap()["entry"]["progressUnits"].clone();
+        assert_eq!(units[0]["key"], "0");
+        assert_eq!(units[0]["wordCount"], 10);
+        assert_eq!(units[1]["cumulativeWords"], 20);
+    }
+}

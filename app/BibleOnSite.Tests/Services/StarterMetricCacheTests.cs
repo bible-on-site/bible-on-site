@@ -47,4 +47,18 @@ public sealed class StarterMetricCacheTests
 
         model.Should().BeNull();
     }
+
+    [Fact]
+    public void ReadingMetricData_ToModel_defaults_a_missing_source_hash()
+    {
+        // A cache snapshot predating hash persistence deserializes with a
+        // null hash — the model guards it rather than surfacing null.
+        var data = new StarterService.ReadingMetricData(361, 99, 220, 1, null);
+
+        var metric = data.ToModel();
+
+        metric.WordCount.Should().Be(361);
+        metric.EstimatedSeconds.Should().Be(99);
+        metric.SourceHash.Should().BeEmpty();
+    }
 }

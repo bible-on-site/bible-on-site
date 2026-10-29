@@ -700,4 +700,64 @@ mod tests {
 
         fs::remove_dir_all(&dir).ok();
     }
+
+    /// The metric-table DDL the tanah_view schema ships — needed by the
+    /// constraint-collision tests that reach `insert_perek_metrics`'s `?`
+    /// propagations.
+    const PEREK_METRICS_DDL: &str = r#"
+CREATE TABLE tanah_perek_metric (
+  perek_id INTEGER NOT NULL,
+  word_count INTEGER,
+  estimated_seconds INTEGER,
+  words_per_minute INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (perek_id)
+);
+CREATE TABLE tanah_perek_pasuk_metric (
+  perek_id INTEGER NOT NULL,
+  pasuk INTEGER NOT NULL,
+  word_count INTEGER NOT NULL,
+  cumulative_words INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  PRIMARY KEY (perek_id, pasuk)
+);
+"#;
+
+    #[test]
+    fn insert_perek_metrics_propagates_a_pasuk_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PEREK_METRICS_DDL).unwrap();
+        // A row the computed pasuk insert collides with on (perek_id, pasuk).
+        conn.execute(
+            "INSERT INTO tanah_perek_pasuk_metric VALUES (7, 1, 1, 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_perek_metrics(&tx, &[perek(7, vec!["05:30"])]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
+    }
+
+    #[test]
+    fn insert_perek_metrics_propagates_a_perek_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PEREK_METRICS_DDL).unwrap();
+        // The pasuk rows land cleanly; only the whole-perek row collides.
+        conn.execute(
+            "INSERT INTO tanah_perek_metric
+             (perek_id, words_per_minute, calc_version, source_hash)
+             VALUES (7, 220, 1, 'preexisting')",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_perek_metrics(&tx, &[perek(7, vec!["05:30"])]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
+    }
 }

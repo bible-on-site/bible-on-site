@@ -53,7 +53,7 @@ public sealed class TestStorage : IAsyncDisposable
             throw new ArgumentException("A package database must have a plain file name.", nameof(name));
         }
         var connection = await CreateDatabaseAsync(fileName, statements);
-        await connection.CloseAsync();
+        await ClosePooledSafelyAsync(connection);
         PackageFiles[fileName] = await File.ReadAllBytesAsync(Path.Join(Root, fileName));
         File.Delete(Path.Join(Root, fileName));
     }
@@ -69,19 +69,68 @@ public sealed class TestStorage : IAsyncDisposable
     /// <inheritdoc cref="CloseDatabaseFileAsync(string)"/>
     public async Task CloseDatabaseFileAsync(string name, SQLiteOpenFlags flags)
     {
-        await new SQLiteAsyncConnection(Path.Join(Root, name), flags).CloseAsync();
+        await ClosePooledSafelyAsync(new SQLiteAsyncConnection(Path.Join(Root, name), flags));
+    }
+
+    /// <summary>
+    /// Closes the shared pool entry behind <paramref name="connection"/> without
+    /// racing an in-flight query. <c>SQLiteAsyncConnection.CloseAsync()</c> frees
+    /// the native handle without taking the pooled connection's <c>Lock()</c> —
+    /// closing a file a fire-and-forget service read is still using crashes the
+    /// process on a freed <c>sqlite3*</c>. Holding the lock through the close
+    /// waits out any read already executing and makes later reads hit a cleanly
+    /// <c>NullHandle</c> (a managed SQLiteException, not a native fault).
+    /// Runs on a dedicated thread: <c>Lock()</c> uses <see cref="Monitor"/>,
+    /// which must exit on the thread that entered — an await-resumed scope
+    /// throws <see cref="SynchronizationLockException"/>.
+    /// </summary>
+    private static Task ClosePooledSafelyAsync(SQLiteAsyncConnection connection)
+    {
+        SQLiteConnectionWithLock pooled;
+        try
+        {
+            pooled = connection.GetConnection();
+        }
+        catch (SQLiteException)
+        {
+            // The file can't be opened (e.g. already deleted): no live pool
+            // entry can hold a handle on it, so a plain close only clears a
+            // stale entry and never races a read.
+            return connection.CloseAsync();
+        }
+        return Task.Run(() =>
+        {
+            using (pooled.Lock())
+            {
+                connection.CloseAsync().GetAwaiter().GetResult();
+            }
+        });
     }
 
     public async ValueTask DisposeAsync()
     {
         foreach (var connection in _connections)
         {
-            await connection.CloseAsync();
+            await ClosePooledSafelyAsync(connection);
         }
         foreach (var stream in _packageStreams)
         {
             stream.Dispose();
         }
-        Directory.Delete(Root, true);
+        try
+        {
+            Directory.Delete(Root, true);
+        }
+        catch (IOException)
+        {
+            // A service handle outside this storage's tracking (e.g. a cached
+            // connection member) can still hold a file under Root — Windows
+            // then refuses the delete. A residue dir beats an unsafe close;
+            // the OS reaps it on process exit anyway.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Same residual-handle case, surfaced by locked read-only files.
+        }
     }
 }

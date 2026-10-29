@@ -1327,6 +1327,38 @@ public sealed class PerushimNotesServiceTests : IDisposable
         units.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task MetricReads_WhenNoNotesDb_ReturnEmptyWithoutOpening()
+    {
+        // No notes file anywhere — each metric API must degrade to its empty
+        // result without ever opening a connection.
+        var dataDir = Path.Join(_tempRoot, nameof(MetricReads_WhenNoNotesDb_ReturnEmptyWithoutOpening));
+        Directory.CreateDirectory(dataDir);
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        (await service.GetPerushReadingMetricAsync(5, 2)).Should().BeNull();
+        (await service.GetNoteProgressUnitsAsync(5, 2)).Should().BeEmpty();
+        (await service.GetPerushMetricsForPerekAsync(2)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPerushReadingMetricAsync_ReturnsNull_WhenPerushHasNoStoredRow()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(GetPerushReadingMetricAsync_ReturnsNull_WhenPerushHasNoStoredRow));
+        Directory.CreateDirectory(dataDir);
+        // The metric tables exist but carry no row for this (perush, perek).
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((5, 2, 3, 0, "note")),
+                .. MetricDdl,
+                "INSERT INTO tanah_perush_metric VALUES (7, 2, 40, 11, 220, 1, 'h7', '')"]);
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        var metric = await service.GetPerushReadingMetricAsync(5, 2);
+
+        metric.Should().BeNull();
+    }
+
     /// <summary>The notes-pack metric DDL the pipeline ships (issue #2607) —
     /// one statement per element: sqlite-net executes a single statement per call.</summary>
     private static readonly string[] MetricDdl =

@@ -352,4 +352,24 @@ public class ArticleServiceTests
 
         page.Should().BeNull();
     }
+
+    [Fact]
+    public void ReadingMetricDto_ToModel_defaults_a_missing_source_hash()
+    {
+        // The API contract declares sourceHash non-null, but the model guards
+        // a sparse payload — an absent hash must not poison the metric.
+        var dto = new ArticleService.ReadingMetricDto
+        {
+            WordCount = 361,
+            EstimatedSeconds = 99,
+            WordsPerMinute = 220,
+            CalcVersion = 1,
+            SourceHash = null,
+        };
+
+        var metric = dto.ToModel();
+
+        metric.WordCount.Should().Be(361);
+        metric.SourceHash.Should().BeEmpty();
+    }
 }
