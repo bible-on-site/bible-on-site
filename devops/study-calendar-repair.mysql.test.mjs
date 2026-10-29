@@ -72,11 +72,38 @@ test(
 			return mysql.createConnection({ ...config, database: db });
 		}
 		async function execute(operation) {
-			assert.ok(
-				Object.hasOwn(commands, operation),
-				"Unknown fixture operation",
-			);
-			const sql = commands[operation];
+			let sql;
+			switch (operation) {
+				case "bootstrap":
+					sql = commands.bootstrap;
+					break;
+				case "reset":
+					sql = commands.reset;
+					break;
+				case "drift0":
+					sql = commands.drift0;
+					break;
+				case "drift1":
+					sql = commands.drift1;
+					break;
+				case "drift2":
+					sql = commands.drift2;
+					break;
+				case "drift3":
+					sql = commands.drift3;
+					break;
+				case "drift4":
+					sql = commands.drift4;
+					break;
+				case "repair":
+					sql = commands.repair;
+					break;
+				case "rollback":
+					sql = commands.rollback;
+					break;
+				default:
+					throw new Error("Unknown fixture operation");
+			}
 			const c = await connect();
 			try {
 				await c.query(sql);
@@ -106,6 +133,10 @@ test(
 			created = true;
 			await execute("bootstrap");
 			const before = await read();
+			await assert.rejects(
+				execute("DROP DATABASE mysql"),
+				/Unknown fixture operation/,
+			);
 			await execute("repair");
 			const after = await read();
 			assert.deepEqual(
