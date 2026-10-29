@@ -1521,6 +1521,13 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      # A fresh random schema exercises real locks, quota reservations and the
+      # additive deployment parser without altering the E2E database.
+      - name: Verify WhatsApp migration and concurrent claims with MySQL
+        env:
+          BULLETIN_MYSQL_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/
+        run: bun run test:mysql
+
       - name: Wait for RustFS and S3 buckets
         wait: rustfs
 
