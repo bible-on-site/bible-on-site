@@ -167,7 +167,12 @@ function EntryEditPage() {
 	});
 	const llmEnabled = llmStatus?.enabled === true;
 
-	const { data: entry, isLoading } = useQuery({
+	const {
+		data: entry,
+		isLoading,
+		error: entryError,
+		refetch: refetchEntry,
+	} = useQuery({
 		queryKey: ["tanahpedia-entry", id],
 		queryFn: () => getEntry({ data: id }),
 		enabled: !isNew,
@@ -662,6 +667,50 @@ function EntryEditPage() {
 		return (
 			<div className="flex items-center justify-center h-64">
 				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+			</div>
+		);
+	}
+
+	// A failed or unresolved entry load must not render the editor: empty
+	// fields over a saveable form look like a valid blank entry. Block with
+	// a readable state until the load succeeds (#2764).
+	if (!isNew && (entryError || !entry)) {
+		const notFound =
+			!entryError ||
+			/entry not found/i.test(String(entryError.message ?? entryError));
+		return (
+			<div className="space-y-4">
+				<Link
+					to="/tanahpedia"
+					className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+				>
+					<span>→</span>
+					<span>חזרה לתנכפדיה</span>
+				</Link>
+				<div className="rounded-lg border border-red-300 bg-red-50 p-8 text-center space-y-3">
+					<h1 className="text-xl font-bold text-red-900">
+						{notFound ? "הערך לא נמצא" : "טעינת הערך נכשלה"}
+					</h1>
+					<p className="text-sm text-red-800">
+						{notFound
+							? "ייתכן שהערך נמחק או שהקישור ששימש לפתיחה אינו נכון."
+							: "לא ניתן לערוך ערך שלא נטען במלואו - הטופס נשאר נעול עד לטעינה מוצלחת."}
+					</p>
+					{entryError && !notFound && (
+						<p className="text-xs text-red-700 font-mono break-all">
+							{entryError.message}
+						</p>
+					)}
+					{!notFound && (
+						<button
+							type="button"
+							onClick={() => void refetchEntry()}
+							className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+						>
+							נסה שוב
+						</button>
+					)}
+				</div>
 			</div>
 		);
 	}
