@@ -32,6 +32,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("AuthorsPage", typeof(AuthorsPage));
 		Routing.RegisterRoute("articleDetail", typeof(ArticleDetailPage));
 		Routing.RegisterRoute("ContactPage", typeof(ContactPage));
+		Routing.RegisterRoute("DailyBulletinPage", typeof(DailyBulletinPage));
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
@@ -339,6 +340,18 @@ public partial class AppShell : Shell
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage", CurrentState.Location.OriginalString));
+	}
+
+	private async void OnDailyBulletinTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage("DailyBulletinPage", CurrentState.Location.OriginalString));
+	}
+
+	private async void OnWhatsAppGroupTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage("DailyBulletinPage?channel=whatsapp", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnTermsTapped(object? sender, TappedEventArgs e)
