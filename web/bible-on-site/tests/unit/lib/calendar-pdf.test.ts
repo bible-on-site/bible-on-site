@@ -1,18 +1,18 @@
 /**
  * @jest-environment node
  *
- * Visual bidi regression for the learning-calendar PDF (issue #2620).
+ * Visual bidi regression for the learning-calendar PDF (issue #2620) plus the
+ * branded layout contract (issue #2727).
  *
- * Generates a real PDF with the production Frank Ruhl fonts and inspects
- * the emitted content stream: every text-show op's glyph codes are decoded
- * back to Unicode through the embedded ToUnicode CMap. The decoded sequence
- * is the visual order a renderer paints — it must equal the bidi-reordered
+ * Generates real PDFs with the production Frank Ruhl fonts and inspects the
+ * emitted content stream: every text-show op's glyph codes are decoded back
+ * to Unicode through the embedded ToUnicode CMap. The decoded sequence is
+ * the visual order a renderer paints — it must equal the bidi-reordered
  * (UAX #9) form of the logical string, which for pure Hebrew is a plain
  * character reversal.
  *
- * Before the fix, `reverseGraphemes` pre-reversed text while fontkit also
- * reverses RTL glyph runs during layout, so the stream held logical order —
- * every label painted backwards.
+ * Link coverage inspects the page Annots array directly: URI targets and
+ * rectangles over the final drawn label positions.
  */
 
 import bidiFactory from "bidi-js";
@@ -22,7 +22,10 @@ import {
 	PDFDict,
 	PDFDocument,
 	PDFName,
+	PDFNumber,
 	PDFRawStream,
+	PDFStream,
+	PDFString,
 } from "pdf-lib";
 import {
 	buildMonth,
@@ -30,9 +33,12 @@ import {
 	getCycle,
 	getCycleLabel,
 	getMonthLabel,
+	getMonthOrder,
 	getPerekSource,
 	type MonthCell,
+	type MonthRef,
 } from "@/data/learning-schedule";
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 import {
 	type CalendarPdfInput,
 	type CalendarPdfMonth,
@@ -94,6 +100,54 @@ function parseToUnicodeCMap(cmap: string): Map<number, string> {
 function lookupDict(doc: PDFDocument, obj: unknown): PDFDict | undefined {
 	const resolved = doc.context.lookup(obj as never);
 	return resolved instanceof PDFDict ? resolved : undefined;
+}
+
+/** A Link/URI annotation as written on a page. */
+interface LinkAnnot {
+	uri: string;
+	rect: number[];
+}
+
+/** Every page's Link annotations — URI target and bounds. */
+async function extractLinkAnnots(pdf: Uint8Array): Promise<LinkAnnot[][]> {
+	const doc = await PDFDocument.load(pdf);
+	return doc.getPages().map((page) => {
+		const annots = page.node.lookupMaybe(PDFName.of("Annots"), PDFArray);
+		if (annots === undefined) return [];
+		return annots.asArray().map((ref) => {
+			const dict = doc.context.lookup(ref, PDFDict);
+			const rect = doc.context
+				.lookup(dict.get(PDFName.of("Rect")), PDFArray)
+				.asArray()
+				.map((n) => doc.context.lookup(n, PDFNumber).asNumber());
+			const action = doc.context.lookup(
+				dict.get(PDFName.of("A")),
+				PDFDict,
+			);
+			const uri = doc.context
+				.lookup(action.get(PDFName.of("URI")), PDFString)
+				.decodeText();
+			return { uri, rect };
+		});
+	});
+}
+
+/** Whether a page draws an embedded image (the brand logo). */
+async function pageDrawsImage(pdf: Uint8Array, pageIndex: number): Promise<boolean> {
+	const doc = await PDFDocument.load(pdf);
+	const page = doc.getPages()[pageIndex];
+	const xobjects = lookupDict(
+		doc,
+		page.node.Resources()?.lookup(PDFName.of("XObject")),
+	);
+	for (const [, ref] of xobjects?.entries() ?? []) {
+		const resolved = doc.context.lookup(ref as never);
+		const dict = resolved instanceof PDFStream ? resolved.dict : undefined;
+		if (dict?.lookup(PDFName.of("Subtype"))?.toString() === "/Image") {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**
@@ -195,6 +249,31 @@ function cellsForDays(days: CalendarDay[]): MonthCell[] {
 	return days.map((day) => ({ day }));
 }
 
+/**
+ * A fixture month carrying the structured identity the renderer needs for
+ * per-page range headings (#2727) — defaults to Elul 5785.
+ */
+function fakeMonth(
+	title: string,
+	cells: MonthCell[],
+	ref: MonthRef = { year: 5785, month: 12 },
+): CalendarPdfMonth {
+	return { title, year: ref.year, month: ref.month, cells };
+}
+
+function fakeInput(
+	months: CalendarPdfMonth[],
+	overrides: Partial<CalendarPdfInput> = {},
+): CalendarPdfInput {
+	return {
+		scope: months.length === 1 ? "month" : "year",
+		title: "לוח לימוד יומי",
+		months,
+		dayLabel: () => "",
+		...overrides,
+	};
+}
+
 const STUDY = scheduleDay({ day: 1, perekId: 1 });
 const REVIEW = scheduleDay({
 	day: 2,
@@ -214,22 +293,18 @@ async function generateAndExtract(
 
 describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
 	it("draws the document title in visual RTL glyph order", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח לימוד יומי",
-			months: [{ title: "אלול ה'תשפה", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => "",
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול ה'תשפה", cellsForDays([STUDY]))]),
+		);
 		const texts = pages[0].map((o) => o.text);
 		// Visual order of "לוח לימוד יומי" is "ימוי דומיל חול".
 		expect(texts).toContain("ימוי דומיל חול");
 	});
 
 	it("draws weekday labels in visual order, not logical order", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => "",
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))]),
+		);
 		const texts = pages[0].map((o) => o.text);
 		expect(texts).toContain("ישילש"); // שלישי
 		expect(texts).toContain("ןושאר"); // ראשון
@@ -238,25 +313,23 @@ describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
 	});
 
 	it("draws multi-letter Hebrew day numbers in visual order", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays([UNNUMBERED]) }],
-			dayLabel: () => "",
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([UNNUMBERED]))]),
+		);
 		const texts = pages[0].map((o) => o.text);
 		// Day 14 → toLetters(14, addQuotes) = 'י"ד' → visual 'ד"י'.
 		expect(texts).toContain('ד"י');
 	});
 
 	it("draws perek sources and review ranges in visual order", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
-			dayLabel: (day) =>
-				day.status === "review" && day.reviewPerekIds
-					? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
-					: getPerekSource(day.perekId ?? 1),
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY, REVIEW]))], {
+				dayLabel: (day) =>
+					day.status === "review" && day.reviewPerekIds
+						? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
+						: getPerekSource(day.perekId ?? 1),
+			}),
+		);
 		const texts = pages[0].map((o) => o.text).join("");
 		// "בראשית א" → visual "א תישארב".
 		expect(texts).toContain("א תישארב");
@@ -266,12 +339,9 @@ describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
 
 	it("keeps digits and Latin tokens un-reversed inside RTL text", async () => {
 		const subtitle = "מחזור 12: שלב א (בדיקה) end";
-		const pages = await generateAndExtract({
-			title: "לוח",
-			subtitle,
-			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => "",
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], { subtitle }),
+		);
 		const texts = pages[0].map((o) => o.text).join("");
 		expect(texts).toContain("12");
 		expect(texts).not.toContain("21");
@@ -283,12 +353,9 @@ describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
 
 	it("positions subtitle runs in exact UAX #9 visual order", async () => {
 		const subtitle = "מחזור 4: כ״ה אדר ה'תשפ״ה - כ״ד אדר ה'תשצ״ו";
-		const pages = await generateAndExtract({
-			title: "לוח לימוד יומי",
-			subtitle,
-			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => "",
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], { subtitle }),
+		);
 		// Find the subtitle baseline: the op containing the cycle digits.
 		const digitOp = pages[0].find((o) => o.text === "4");
 		expect(digitOp).toBeDefined();
@@ -301,15 +368,18 @@ describe("generateCalendarPdf bidi rendering (issue #2620)", () => {
 
 	it("renders a real full-cycle page with correct visual order", async () => {
 		const month = getCycleStartMonthLabel();
-		const pages = await generateAndExtract({
-			title: "לוח לימוד יומי",
-			subtitle: getCycleLabel(getCycle(4)),
-			months: [month],
-			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
-		});
-		const texts = pages[0].map((o) => o.text).join("");
-		expect(texts).toContain("ימוי דומיל חול");
-		expect(texts).toContain(visualOrder(month.title));
+		const pages = await generateAndExtract(
+			fakeInput([month, month], {
+				scope: "cycle",
+				subtitle: getCycleLabel(getCycle(4)),
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
+		// Cover page carries the document title; first data page the month.
+		const coverTexts = pages[0].map((o) => o.text).join("");
+		const dataTexts = pages[1].map((o) => o.text).join("");
+		expect(coverTexts).toContain("ימוי דומיל חול");
+		expect(dataTexts).toContain(visualOrder(month.title));
 	});
 });
 
@@ -319,7 +389,7 @@ function getCycleStartMonthLabel(): CalendarPdfMonth {
 		year: cycle.start.year,
 		month: cycle.start.getUniformMonth(),
 	};
-	return { title: getMonthLabel(ref), cells: buildMonth(ref.year, ref.month) };
+	return fakeMonth(getMonthLabel(ref), buildMonth(ref.year, ref.month), ref);
 }
 
 describe("merged Friday-Shabbat review block (issue #2365)", () => {
@@ -344,11 +414,11 @@ describe("merged Friday-Shabbat review block (issue #2365)", () => {
 	];
 
 	it("draws one block with both day numbers instead of two cells", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays(pair) }],
-			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays(pair))], {
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
 		const texts = pages[0].map((o) => o.text).join("");
 		// י"ב - י"ג in visual order.
 		expect(texts).toContain(visualOrder('י"ב - י"ג'));
@@ -363,12 +433,11 @@ describe("merged Friday-Shabbat review block (issue #2365)", () => {
 	it("dims the block only when both days dim", async () => {
 		const input = (
 			dimmed: (day: CalendarDay) => boolean,
-		): CalendarPdfInput => ({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays(pair) }],
-			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
-			dimmed,
-		});
+		): CalendarPdfInput =>
+			fakeInput([fakeMonth("אלול", cellsForDays(pair))], {
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+				dimmed,
+			});
 		const source = visualOrder(getPerekSource(7));
 
 		// Friday alone dimmed: the shared block stays an active review cell.
@@ -399,11 +468,11 @@ describe("merged Friday-Shabbat review block (issue #2365)", () => {
 				cycle: 4,
 			}),
 		];
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays(mismatched) }],
-			dayLabel: (day) => getPerekSource(day.perekId ?? 1),
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays(mismatched))], {
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
 		const texts = pages[0].map((o) => o.text).join("");
 		expect(texts).toContain(visualOrder('י"ב'));
 		expect(texts).toContain(visualOrder('י"ג'));
@@ -411,46 +480,276 @@ describe("merged Friday-Shabbat review block (issue #2365)", () => {
 	});
 });
 
-describe("fitText truncation and page overflow", () => {
+describe("fitText truncation", () => {
 	it("truncates an over-wide day label to the longest fitting prefix", async () => {
 		// A pure-Hebrew label renders as its own reversal, so the drawn op is
 		// a repeated letter either way; truncation only shortens it.
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => "ץ".repeat(120),
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], {
+				dayLabel: () => "ץ".repeat(120),
+			}),
+		);
 		const labelOps = pages[0].map((o) => o.text).filter((t) => /^ץ+$/.test(t));
 		expect(labelOps).toHaveLength(1);
 		expect(labelOps[0].length).toBeGreaterThan(0);
 		expect(labelOps[0].length).toBeLessThan(120);
 	});
+});
 
-	it("moves a month that does not fit onto a new page", async () => {
-		// 119 cells = 17 rows; one row over the page budget forces need() to
-		// break before the month is drawn.
-		const tallMonth = (title: string): CalendarPdfMonth => ({
-			title,
-			cells: Array.from({ length: 7 * 17 }, () => ({})),
+describe("branded layout (issue #2727)", () => {
+	const monthCells = cellsForDays([STUDY]);
+
+	it("renders a month export as exactly one page", async () => {
+		const pdf = await generateCalendarPdf(
+			fakeInput([fakeMonth("אלול ה'תשפה", monthCells)], {
+				title: "לוח לימוד יומי - אלול ה'תשפה - תנ\"ך על הפרק",
+			}),
+		);
+		const pages = await extractTextOps(pdf);
+		expect(pages).toHaveLength(1);
+		// Logo above the calendar.
+		expect(await pageDrawsImage(pdf, 0)).toBe(true);
+		// Footer carries the document title and page number.
+		const footer = opsAtY(pages[0], 11)
+			.map((o) => o.text)
+			.join("");
+		expect(footer).toContain("1");
+		const texts = pages[0].map((o) => o.text).join("");
+		expect(texts).toContain(visualOrder('לוח לימוד יומי - אלול ה\'תשפה - תנ"ך על הפרק'));
+	});
+
+	it("renders a 12-month year as cover plus six two-month pages", async () => {
+		const months = getMonthOrderForYear().map((ref) =>
+			fakeMonth(getMonthLabel(ref), monthCells, ref),
+		);
+		const pdf = await generateCalendarPdf(
+			fakeInput(months, { scope: "year", title: "year-doc" }),
+		);
+		const pages = await extractTextOps(pdf);
+		expect(pages).toHaveLength(7);
+		// Cover: logo + title, no calendar grids.
+		expect(await pageDrawsImage(pdf, 0)).toBe(true);
+		expect(
+			pages[0].map((o) => o.text).filter((t) => t === "ןושאר"),
+		).toHaveLength(0);
+		// Data pages: exactly two monthly calendars (two weekday rows).
+		for (let i = 1; i < pages.length; i++) {
+			expect(
+				pages[i].map((o) => o.text).filter((t) => t === "ןושאר"),
+			).toHaveLength(2);
+		}
+	});
+
+	it("leaves the odd final month alone on the last page", async () => {
+		const months = getMonthOrderForYear(5784).map((ref) =>
+			fakeMonth(getMonthLabel(ref), monthCells, ref),
+		);
+		// 5784 is a leap year — 13 uniform months.
+		expect(months).toHaveLength(13);
+		const pdf = await generateCalendarPdf(
+			fakeInput(months, { scope: "year", title: "year-doc" }),
+		);
+		const pages = await extractTextOps(pdf);
+		expect(pages).toHaveLength(8);
+		for (let i = 1; i < pages.length - 1; i++) {
+			expect(
+				pages[i].map((o) => o.text).filter((t) => t === "ןושאר"),
+			).toHaveLength(2);
+		}
+		// Odd final month alone — exactly one weekday row.
+		expect(
+			pages[7].map((o) => o.text).filter((t) => t === "ןושאר"),
+		).toHaveLength(1);
+	});
+
+	it("renders a cycle as cover plus paired month pages", async () => {
+		const months = [
+			getCycleStartMonthLabel(),
+			fakeMonth("כסלו", monthCells, { year: 5786, month: 3 }),
+			fakeMonth("טבת", monthCells, { year: 5786, month: 4 }),
+		];
+		const pdf = await generateCalendarPdf(
+			fakeInput(months, {
+				scope: "cycle",
+				title: "לוח לימוד יומי - מחזור 4 - תנ\"ך על הפרק",
+				subtitle: "כ״ה אדר ה'תשפ״ה - כ״ד אדר ה'תשצ״ו",
+			}),
+		);
+		const pages = await extractTextOps(pdf);
+		expect(pages).toHaveLength(3); // cover + pair + single
+		expect(await pageDrawsImage(pdf, 0)).toBe(true);
+	});
+
+	it("numbers every page inside the footer band", async () => {
+		const months = getMonthOrderForYear()
+			.slice(0, 4)
+			.map((ref) => fakeMonth(getMonthLabel(ref), monthCells, ref));
+		const pdf = await generateCalendarPdf(
+			fakeInput(months, { scope: "year", title: "year-doc" }),
+		);
+		const pages = await extractTextOps(pdf);
+		expect(pages).toHaveLength(3); // cover + 2 data pages
+		for (let i = 0; i < pages.length; i++) {
+			const footer = opsAtY(pages[i], 11).map((o) => o.text);
+			expect(footer).toContain(String(i + 1));
+		}
+	});
+});
+
+/** Uniform month refs for a year (defaults to the common 12-month year). */
+function getMonthOrderForYear(year = 5785): MonthRef[] {
+	return getMonthOrder(year).map((month) => ({ year, month }));
+}
+
+describe("per-page range headings (#2727)", () => {
+	const monthCells = cellsForDays([STUDY]);
+
+	async function dataPageHeading(months: CalendarPdfMonth[]): Promise<string> {
+		const pdf = await generateCalendarPdf(
+			fakeInput(months, { scope: "year", title: "doc" }),
+		);
+		const pages = await extractTextOps(pdf);
+		// The range heading is the bold line between the header rule and the
+		// first month title — baseline y=752 in the data-page layout.
+		return opsAtY(pages[1], 752)
+			.map((o) => o.text)
+			.join("");
+	}
+
+	it("joins same-year months once followed by the year", async () => {
+		const months = [
+			fakeMonth("חשוון", monthCells, { year: 5785, month: 2 }),
+			fakeMonth("כסלו", monthCells, { year: 5785, month: 3 }),
+		];
+		const heading = await dataPageHeading(months);
+		expect(heading).toBe(visualOrder("חשוון-כסלו ה'תשפ\"ה"));
+	});
+
+	it("spells both years on an אלול to תשרי crossing", async () => {
+		const months = [
+			fakeMonth("אלול", monthCells, { year: 5785, month: 12 }),
+			fakeMonth("תשרי", monthCells, { year: 5786, month: 1 }),
+		];
+		const heading = await dataPageHeading(months);
+		expect(heading).toBe(visualOrder("אלול ה'תשפ\"ה - תשרי ה'תשפ\"ו"));
+	});
+
+	it("labels a leap-year אדר א / אדר ב pair", async () => {
+		const months = [
+			fakeMonth("אדר א", monthCells, { year: 5784, month: 13 }),
+			fakeMonth("אדר ב", monthCells, { year: 5784, month: 14 }),
+		];
+		const heading = await dataPageHeading(months);
+		expect(heading).toBe(visualOrder("אדר א'-אדר ב' ה'תשפ\"ד"));
+	});
+
+	it("uses the lone month's own label on the final single-month page", async () => {
+		const months = [
+			fakeMonth("חשוון", monthCells, { year: 5785, month: 2 }),
+			fakeMonth("כסלו", monthCells, { year: 5785, month: 3 }),
+			fakeMonth("טבת", monthCells, { year: 5785, month: 4 }),
+		];
+		const pdf = await generateCalendarPdf(
+			fakeInput(months, { scope: "year", title: "doc" }),
+		);
+		const pages = await extractTextOps(pdf);
+		const lastPage = pages[2].map((o) => o.text).join("");
+		expect(lastPage).toContain(visualOrder("טבת ה'תשפ\"ה"));
+	});
+});
+
+describe("chapter link annotations (#2727)", () => {
+	const LINK_BASE = `${SITE_ORIGIN}/929`;
+
+	async function linksFor(input: CalendarPdfInput): Promise<LinkAnnot[][]> {
+		return extractLinkAnnots(await generateCalendarPdf(input));
+	}
+
+	it("links a scheduled study-day source to its canonical perek page", async () => {
+		const study = scheduleDay({ day: 10, perekId: 45, dayOfWeek: 1 });
+		const pages = await linksFor(
+			fakeInput([fakeMonth("אלול", cellsForDays([study]))], {
+				linkBase: LINK_BASE,
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
+		expect(pages).toHaveLength(1);
+		expect(pages[0]).toHaveLength(1);
+		expect(pages[0][0].uri).toBe(`${LINK_BASE}/45`);
+		// Rect sits inside the page over the label area.
+		expect(pages[0][0].rect[0]).toBeGreaterThan(0);
+		expect(pages[0][0].rect[2]).toBeLessThan(595);
+		expect(pages[0][0].rect[1]).toBeLessThan(pages[0][0].rect[3]);
+	});
+
+	it("adds no link to review, blank or unscheduled cells", async () => {
+		const review = scheduleDay({
+			day: 5,
+			status: "review",
+			perekId: 7,
+			reviewPerekIds: [5, 6, 7],
 		});
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [tallMonth("אלול")],
-			dayLabel: () => "",
-		});
-		expect(pages).toHaveLength(2);
-		expect(pages[1].map((o) => o.text).join("")).toContain(visualOrder("אלול"));
+		const pages = await linksFor(
+			fakeInput([fakeMonth("אלול", cellsForDays([review, UNNUMBERED]))], {
+				linkBase: LINK_BASE,
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
+		expect(pages[0]).toHaveLength(0);
+	});
+
+	it("adds no link to a dimmed study day", async () => {
+		const study = scheduleDay({ day: 10, perekId: 45 });
+		const pages = await linksFor(
+			fakeInput([fakeMonth("אלול", cellsForDays([study]))], {
+				linkBase: LINK_BASE,
+				dimmed: () => true,
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
+		expect(pages[0]).toHaveLength(0);
+	});
+
+	it("renders without annotations when linkBase is omitted", async () => {
+		const study = scheduleDay({ day: 10, perekId: 45 });
+		const pages = await linksFor(
+			fakeInput([fakeMonth("אלול", cellsForDays([study]))], {
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
+		expect(pages[0]).toHaveLength(0);
+	});
+
+	it("bounds each link to its own label across a two-month page", async () => {
+		const studyA = scheduleDay({ day: 3, perekId: 10, dayOfWeek: 1 });
+		const studyB = scheduleDay({ day: 4, perekId: 20, dayOfWeek: 2 });
+		const months = [
+			fakeMonth("חשוון", cellsForDays([studyA]), { year: 5785, month: 2 }),
+			fakeMonth("כסלו", cellsForDays([studyB]), { year: 5785, month: 3 }),
+		];
+		const pages = await linksFor(
+			fakeInput(months, {
+				scope: "year",
+				linkBase: LINK_BASE,
+				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+			}),
+		);
+		expect(pages[1]).toHaveLength(2);
+		const uris = pages[1].map((a) => a.uri).sort();
+		expect(uris).toEqual([`${LINK_BASE}/10`, `${LINK_BASE}/20`]);
+		// The two rects sit at different positions — each over its own cell.
+		const [a, b] = pages[1].map((l) => l.rect[1]);
+		expect(Math.abs(a - b)).toBeGreaterThan(20);
 	});
 });
 
 describe("calendar PDF text stays searchable", () => {
 	it("maps every drawn glyph to Unicode via ToUnicode CMaps", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח לימוד יומי",
-			subtitle: "מחזור 4",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => "",
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], {
+				subtitle: "מחזור 4",
+			}),
+		);
 		const ops = pages[0].filter((o) => o.codes.length > 0);
 		expect(ops.length).toBeGreaterThan(0);
 		for (const op of ops) {
@@ -469,11 +768,11 @@ describe("layout edge cases (#2608)", () => {
 	it("truncates an over-wide day label to the cell width", async () => {
 		// fitText keeps the longest prefix that still fits CELL_W - 6.
 		const longLabel = "בראשית א ב ג ד ה ו ז ח ט י יא יב יג יד טו טז";
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY]) }],
-			dayLabel: () => longLabel,
-		});
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], {
+				dayLabel: () => longLabel,
+			}),
+		);
 		const full = visualOrder(longLabel);
 		const texts = pages[0].map((o) => o.text);
 		expect(texts).not.toContain(full);
@@ -486,33 +785,16 @@ describe("layout edge cases (#2608)", () => {
 		).toBe(true);
 	});
 
-	it("starts a new page when the next month grid does not fit", async () => {
-		const month: CalendarPdfMonth = {
-			title: "אלול",
-			cells: Array.from({ length: 42 }, () => ({})),
-		};
-		const pages = await extractTextOps(
-			await generateCalendarPdf({
-				title: "לוח",
-				months: Array.from({ length: 6 }, () => month),
-				dayLabel: () => "",
+	it("dims days flagged by the dimmed predicate and skips their labels", async () => {
+		const pages = await generateAndExtract(
+			fakeInput([fakeMonth("אלול", cellsForDays([STUDY, REVIEW]))], {
+				dimmed: (day) => day.day === 2,
+				dayLabel: (day) =>
+					day.status === "review" && day.reviewPerekIds
+						? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
+						: getPerekSource(day.perekId ?? 1),
 			}),
 		);
-		expect(pages.length).toBeGreaterThan(1);
-		// The footer pass numbers every produced page.
-		expect(pages[1].map((o) => o.text)).toContain("2");
-	});
-
-	it("dims days flagged by the dimmed predicate and skips their labels", async () => {
-		const pages = await generateAndExtract({
-			title: "לוח",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
-			dimmed: (day) => day.day === 2,
-			dayLabel: (day) =>
-				day.status === "review" && day.reviewPerekIds
-					? `${getPerekSource(day.reviewPerekIds[0])} - ${getPerekSource(day.reviewPerekIds[day.reviewPerekIds.length - 1])}`
-					: getPerekSource(day.perekId ?? 1),
-		});
 		const texts = pages[0].map((o) => o.text).join("");
 		// The study day's perek label still renders…
 		expect(texts).toContain("א תישארב");
@@ -529,12 +811,14 @@ describe("deterministic output (#2608)", () => {
 	it("produces byte-identical PDFs regardless of wall-clock time", async () => {
 		// The artifact pipeline content-addresses objects by sha256 — the
 		// render must not embed CreationDate/ModDate or any other timestamp.
-		const input: CalendarPdfInput = {
-			title: "לוח לימוד יומי",
-			subtitle: "מחזור 4",
-			months: [{ title: "אלול", cells: cellsForDays([STUDY, REVIEW]) }],
-			dayLabel: () => "א",
-		};
+		const input: CalendarPdfInput = fakeInput(
+			[fakeMonth("אלול", cellsForDays([STUDY, REVIEW]))],
+			{
+				subtitle: "מחזור 4",
+				linkBase: `${SITE_ORIGIN}/929`,
+				dayLabel: () => "א",
+			},
+		);
 		jest.useFakeTimers().setSystemTime(new Date("2026-01-01T00:00:00Z"));
 		const first = await generateCalendarPdf(input);
 		jest.setSystemTime(new Date("2031-06-15T12:34:56Z"));

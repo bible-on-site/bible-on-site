@@ -150,7 +150,7 @@ fn h1_open_at(lower: &str, i: usize) -> bool {
 /// header rather than sit between its lines (#2336, #2409).
 /// Returns the joined plain text (if any) and the remaining HTML with those
 /// headings removed, so each is printed once.
-fn split_article_header(html: &str) -> (Option<String>, String) {
+pub(crate) fn split_article_header(html: &str) -> (Option<String>, String) {
     let lower = html.to_ascii_lowercase();
     let Some(open) = lower
         .match_indices("<h1")

@@ -439,7 +439,10 @@ public partial class FloatingSearchBar : ContentView
             VerticalOptions = LayoutOptions.Center
         };
         reason.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#52647C"), Color.FromArgb("#B2C2D8"));
-        var checkBox = new CheckBox { IsChecked = _viewModel.IsFilterEnabled(filter), AutomationId = $"SearchKind{filter}", WidthRequest = 32, HeightRequest = 44 };
+        // Start anchors the square to the title slot (both 44 tall from the row
+        // top), so a visible reason under the label can't drift the square past
+        // the primary label (#2724).
+        var checkBox = new CenteredCheckBox { IsChecked = _viewModel.IsFilterEnabled(filter), AutomationId = $"SearchKind{filter}", VerticalOptions = LayoutOptions.Start };
         _filterChecks[$"SearchKind{filter}"] = checkBox;
         checkBox.CheckedChanged += (_, e) =>
         {
@@ -453,7 +456,14 @@ public partial class FloatingSearchBar : ContentView
             UpdateFilterSummaries();
             ScheduleSearch();
         };
-        var labels = new VerticalStackLayout { title, reason };
+        // The title slot matches the checkbox's hit-target height, so the
+        // square stays aligned with the primary label whether the supporting
+        // reason is shown or hidden (#2724).
+        var labels = new VerticalStackLayout
+        {
+            new Grid { HeightRequest = TriStateCheckBox.RowHeight, Children = { title } },
+            reason
+        };
         var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
         row.Add(checkBox);
         row.Add(labels, 1);
@@ -571,7 +581,7 @@ public partial class FloatingSearchBar : ContentView
 
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
     {
-        var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
+        var checkBox = new CenteredCheckBox { IsChecked = enabled, AutomationId = automationId };
         _filterChecks[automationId] = checkBox;
         SemanticProperties.SetDescription(checkBox, title);
         checkBox.CheckedChanged += (_, e) =>

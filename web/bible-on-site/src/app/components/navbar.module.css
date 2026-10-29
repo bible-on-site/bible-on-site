@@ -128,6 +128,10 @@
 .menuItem {
   display: flex;
   flex-wrap: wrap;
+  /* Keep each icon centered on its label's text line: the img has a fixed
+     16px height, so the default stretch can't size it to the taller label
+     line and it would stay pinned to the row's top edge. */
+  align-items: center;
   width: 100%;
 }
 
@@ -216,7 +220,7 @@
   border-top: 1px solid rgba(136, 139, 239, 0.29);
   padding: 8px 0 8px 0;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   font-size: 0.875rem;
   direction: ltr;
   width: 100%;

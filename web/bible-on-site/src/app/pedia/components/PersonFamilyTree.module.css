@@ -166,7 +166,7 @@
 .cardCitationLine {
   font-size: 0.68rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   line-height: 1.4;
 }
 
@@ -268,7 +268,7 @@
   text-align: center;
   font-size: 0.72rem;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
 }
 
 .relationRibbonMain {
@@ -278,7 +278,7 @@
 
 .relationRibbonSep {
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--muted-text, #94a3b8);
 }
 
 .relationRibbonSubRow {
@@ -317,7 +317,7 @@
 .relationRibbonMeta {
   font-size: 0.68rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   line-height: 1.4;
 }
 
@@ -911,7 +911,7 @@
 .marriageColumnLooseTitle {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   letter-spacing: 0.04em;
 }
 
@@ -1289,7 +1289,7 @@
   .relationRibbon,
   .relationRibbonMeta,
   .marriageColumnLooseTitle {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .sexMark {
@@ -1324,7 +1324,7 @@
   }
 
   .relationRibbonSep {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .citationTanachLink {

@@ -21,15 +21,13 @@ fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
 }
 
 /// First linked entry's canonical slug for an entity (display name link).
-const SQL_FIRST_ENTRY_UNIQUE_NAME: &str =
-    "(SELECT ent.unique_name FROM tanahpedia_entry_entity ee2
+const SQL_FIRST_ENTRY_UNIQUE_NAME: &str = "(SELECT ent.unique_name FROM tanahpedia_entry_entity ee2
       INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
       WHERE ee2.entity_id = REL.ALIAS.id
       ORDER BY ent.title LIMIT 1)";
 
 /// First linked entry's title for an entity.
-const SQL_FIRST_ENTRY_TITLE: &str =
-    "(SELECT ent.title FROM tanahpedia_entry_entity ee2
+const SQL_FIRST_ENTRY_TITLE: &str = "(SELECT ent.title FROM tanahpedia_entry_entity ee2
       INNER JOIN tanahpedia_entry ent ON ent.id = ee2.entry_id
       WHERE ee2.entity_id = REL.ALIAS.id
       ORDER BY ent.title LIMIT 1)";
@@ -392,13 +390,16 @@ fn dedupe_children(rows: Vec<ChildEdgeRow>) -> Vec<TanahpediaFamilyChildEdge> {
                 order.push(key.clone());
                 by_key.insert(key, edge);
             }
-            Some(prev) if prev.co_parent_entity_id.is_none() && edge.co_parent_entity_id.is_some() => {
+            Some(prev)
+                if prev.co_parent_entity_id.is_none() && edge.co_parent_entity_id.is_some() =>
+            {
                 by_key.insert(key, edge);
             }
             _ => {}
         }
     }
-    order.into_iter()
+    order
+        .into_iter()
         .filter_map(|key| by_key.remove(&key))
         .collect()
 }
@@ -707,10 +708,7 @@ mod tests {
         );
         assert_eq!(family.spouses.len(), 1);
         assert_eq!(family.spouses[0].union_type, "MARRIAGE");
-        assert_eq!(
-            family.spouses[0].union_end_reason.as_deref(),
-            Some("DEATH")
-        );
+        assert_eq!(family.spouses[0].union_end_reason.as_deref(), Some("DEATH"));
         assert_eq!(family.siblings.len(), 1);
         assert_eq!(family.siblings[0].related.display_name, "עשו");
         assert_eq!(
@@ -900,10 +898,7 @@ mod tests {
         assert_eq!(markers[0].place_name, "ירושלים");
         assert_eq!(markers[0].modern_name.as_deref(), Some("Jerusalem"));
         assert_eq!(markers[0].lat, 31.778);
-        assert_eq!(
-            markers[0].entry_unique_name.as_deref(),
-            Some("ירושלים")
-        );
+        assert_eq!(markers[0].entry_unique_name.as_deref(), Some("ירושלים"));
     }
 
     #[tokio::test]

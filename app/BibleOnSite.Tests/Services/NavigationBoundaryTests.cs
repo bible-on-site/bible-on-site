@@ -220,8 +220,10 @@ public class NavigationBoundaryTests
     }
 
     [Fact]
-    public async Task PreferencesChromeBackCommand_PopsItsSingleHistoryEntry()
+    public async Task PreferencesChromeBack_PopsItsSingleHistoryEntry()
     {
+        // The capsule Back in the preferences template rides the shared
+        // pipeline (IWindow.BackButtonClicked) — one pop per press (#2467).
         var previous = Application.Current;
         var dispatcher = new Mock<IDispatcher>();
         dispatcher.SetupGet(d => d.IsDispatchRequired).Returns(false);
@@ -237,11 +239,11 @@ public class NavigationBoundaryTests
             shell.Items.Add(new ShellContent { Route = "reader", Content = reader });
             var application = new TestApplication(shell);
             Application.Current = application;
-            ((IApplication)application).CreateWindow(null!);
+            var window = ((IApplication)application).CreateWindow(null!);
             await shell.GoToAsync("//reader");
             await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
 
-            PreferencesNavigation.BackCommand.Execute(null);
+            ((IWindow)window).BackButtonClicked().Should().BeTrue();
             await Task.Yield();
 
             shell.CurrentPage.Should().BeSameAs(reader);

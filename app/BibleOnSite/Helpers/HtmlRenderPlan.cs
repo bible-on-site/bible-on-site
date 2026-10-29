@@ -11,12 +11,12 @@ namespace BibleOnSite.Helpers;
 public readonly record struct HtmlRenderSpan(
     int Start, int End,
     bool Bold, bool Italic, bool Underline, bool Strikethrough,
-    int BaselineShift, double Scale, string? Link)
+    int BaselineShift, double Scale, string? Link, bool Accent)
 {
     /// <summary>A span carrying no styling needs no native span at all.</summary>
     public bool IsPlain =>
         !Bold && !Italic && !Underline && !Strikethrough &&
-        BaselineShift == 0 && Math.Abs(Scale - 1.0) < 0.0001 && Link is null;
+        BaselineShift == 0 && Math.Abs(Scale - 1.0) < 0.0001 && Link is null && !Accent;
 }
 
 /// <summary>
@@ -57,7 +57,7 @@ public sealed record HtmlRenderPlan(string Text, IReadOnlyList<HtmlRenderSpan> S
             text.Append(run.Text);
             var scale = run.FontScale * HeadingScale(run.HeadingLevel, h1Scale, h2Scale, h3Scale);
             var span = new HtmlRenderSpan(start, text.Length, run.Bold, run.Italic,
-                run.Underline, run.Strikethrough, run.BaselineShift, scale, run.Link);
+                run.Underline, run.Strikethrough, run.BaselineShift, scale, run.Link, run.Accent);
             if (!span.IsPlain)
             {
                 spans.Add(span);

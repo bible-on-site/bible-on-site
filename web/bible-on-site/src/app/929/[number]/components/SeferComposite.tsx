@@ -64,6 +64,10 @@ const ClientWrapper = (props: {
 	perekPasukUnits?: ReadingProgressUnit[];
 	/** Stored perek metric for the current perek's page badge (#2607). */
 	perekMetric?: ReadingMetric | null;
+	/** Sefer-scoped dedication lines for the book cover (#2731). */
+	seferDedications?: string[];
+	/** Perek-scoped dedication lines by canonical perek id (#2731). */
+	perekDedications?: Record<number, string[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -223,6 +227,8 @@ const ClientWrapper = (props: {
 						perekIds={props.perekIds}
 						entityRefsByPerek={props.entityRefsByPerek}
 						imagesByPerek={props.imagesByPerek}
+						seferDedications={props.seferDedications}
+						perekDedications={props.perekDedications}
 						initialSlug={props.initialSlug}
 						initialBookPage={initialBookPage}
 						perekPasukUnits={props.perekPasukUnits}

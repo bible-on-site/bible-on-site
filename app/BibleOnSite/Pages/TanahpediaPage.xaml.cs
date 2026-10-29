@@ -48,14 +48,6 @@ public partial class TanahpediaPage : ContentPage
         }
     }
 
-    private void OnMenuButtonClicked(object sender, EventArgs e)
-    {
-        if (Shell.Current is AppShell shell)
-        {
-            shell.FlyoutIsPresented = true;
-        }
-    }
-
     private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
