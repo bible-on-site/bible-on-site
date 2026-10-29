@@ -24,9 +24,54 @@ function fixture(
 	const react = path.join(repo, folderNames[0]);
 	const base = path.join(repo, folderNames[1]);
 	const target = path.join(project, "node_modules", "html-flip-book-react");
+	function within(file) {
+		const resolved = path.resolve(file);
+		const relative = path.relative(directory, resolved);
+		assert.ok(
+			relative &&
+				relative !== ".." &&
+				!relative.startsWith(`..${path.sep}`) &&
+				!path.isAbsolute(relative),
+			"Fixture path must stay inside its temporary root",
+		);
+		return resolved;
+	}
+	function mkdir(file) {
+		const resolved = within(file);
+		// nosemgrep -- asserted inside this fixture's fresh mkdtemp root; fixed test paths only.
+		fs.mkdirSync(resolved, { recursive: true });
+	}
 	function write(file, content) {
-		fs.mkdirSync(path.dirname(file), { recursive: true });
-		fs.writeFileSync(file, content);
+		const resolved = within(file);
+		mkdir(path.dirname(resolved));
+		// nosemgrep -- resolved is contained in the fresh fixture root; content is test data.
+		fs.writeFileSync(resolved, content);
+	}
+	function read(file, encoding) {
+		const resolved = within(file);
+		// nosemgrep -- contained fixture path, never a path from external input.
+		return fs.readFileSync(resolved, encoding);
+	}
+	function exists(file) {
+		const resolved = within(file);
+		// nosemgrep -- existence check is confined to this test's temporary root.
+		return fs.existsSync(resolved);
+	}
+	function entries(file) {
+		const resolved = within(file);
+		// nosemgrep -- enumerates only the contained fixture's node_modules directory.
+		return fs.readdirSync(resolved);
+	}
+	function junction(source, destination) {
+		const from = within(source);
+		const to = within(destination);
+		// nosemgrep -- both junction ends are asserted inside the same fresh fixture root.
+		fs.symlinkSync(from, to, "junction");
+	}
+	function isLink(file) {
+		const resolved = within(file);
+		// nosemgrep -- inspects the fixture junction itself at a contained path.
+		return fs.lstatSync(resolved).isSymbolicLink();
 	}
 	function json(file, content) {
 		write(file, JSON.stringify(content));
@@ -55,13 +100,7 @@ function fixture(
 	function run(command, options) {
 		commands.push({ command, ...options });
 		if (options.cwd === project) {
-			if (command.includes("--force") && fs.existsSync(target)) {
-				assert.ok(target.startsWith(`${directory}${path.sep}`));
-				fs.rmSync(target, { recursive: true, force: true });
-			}
-			fs.mkdirSync(path.join(project, "node_modules", ".bin"), {
-				recursive: true,
-			});
+			mkdir(path.join(project, "node_modules", ".bin"));
 			json(path.join(target, "package.json"), { version: "0.0.0-alpha.93" });
 			write(path.join(target, "dist", "flip-book.js"), "published build");
 		} else if (command === "bun run build") {
@@ -71,7 +110,7 @@ function fixture(
 			]) {
 				write(
 					path.join(source, "dist", main),
-					fs.readFileSync(path.join(source, "src", "index.ts")),
+					read(path.join(source, "src", "index.ts")),
 				);
 				write(path.join(source, "dist", "index.d.ts"), "declarations");
 				write(path.join(source, "dist", "style.css"), "styles");
@@ -83,8 +122,42 @@ function fixture(
 			);
 		}
 	}
-	return { project, repo, react, base, target, write, json, run, commands };
+	return {
+		project,
+		repo,
+		react,
+		base,
+		target,
+		write,
+		read,
+		exists,
+		entries,
+		mkdir,
+		junction,
+		isLink,
+		json,
+		run,
+		commands,
+	};
 }
+
+test("fixture filesystem helpers reject paths outside their temporary root", (t) => {
+	const f = fixture(t);
+	const outside = path.resolve(
+		f.project,
+		"..",
+		"..",
+		"..",
+		"..",
+		"outside-fixture.js",
+	);
+	assert.throws(
+		() => f.write(outside, "must not be written"),
+		/must stay inside/,
+	);
+	assert.throws(() => f.read(outside), /must stay inside/);
+	assert.throws(() => f.junction(f.react, outside), /must stay inside/);
+});
 
 test("automatic local override keeps the published fix when a stale sibling is older", (t) => {
 	const f = fixture(t, { localVersion: "0.0.0-alpha.51" });
@@ -96,7 +169,7 @@ test("automatic local override keeps the published fix when a stale sibling is o
 		["bun install --prefer-offline"],
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"published build",
 	);
 	assert.match(console.warn.mock.calls[0].arguments[0], /local 0.0.0-alpha.51/);
@@ -111,7 +184,7 @@ test("explicit opt-in allows older branches, and renamed package folders work in
 	assert.equal(local.reactSrc, f.react);
 	assert.equal(copyLocalFlipBook(f.project, { local, run: f.run }), true);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"fresh source",
 	);
 });
@@ -146,7 +219,7 @@ test("unchanged startup skips installs and builds; source, config, lock and dist
 		Array(4).fill("bun run build"),
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"changed build input or artifact",
 	);
 });
@@ -166,7 +239,7 @@ test("build and nested install failures preserve the previously installed packag
 		/build failed/,
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"published build",
 	);
 	assert.throws(
@@ -182,12 +255,12 @@ test("build and nested install failures preserve the previously installed packag
 		/install failed/,
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"published build",
 	);
 	assert.ok(
-		!fs
-			.readdirSync(path.join(f.project, "node_modules"))
+		!f
+			.entries(path.join(f.project, "node_modules"))
 			.some((name) => name.startsWith(".flip-book-local-")),
 	);
 });
@@ -204,7 +277,7 @@ test("incomplete output fails before the installed package is replaced", (t) => 
 		/build is incomplete/,
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"published build",
 	);
 });
@@ -222,10 +295,10 @@ test("disabling a copied local build restores the registry even when dependency 
 		["bun install --prefer-offline"],
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"published build",
 	);
-	assert.ok(!fs.existsSync(path.join(f.target, ".local-flip-book")));
+	assert.ok(!f.exists(path.join(f.target, ".local-flip-book")));
 });
 
 test("postinstall is inactive by default and file dependencies resolve their actual checkout", (t) => {
@@ -268,24 +341,24 @@ test("failed registry restoration rolls back the working local copy", (t) => {
 		/registry unavailable/,
 	);
 	assert.equal(
-		fs.readFileSync(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
 		"fresh source",
 	);
-	assert.ok(fs.existsSync(path.join(f.target, ".local-flip-book")));
+	assert.ok(f.exists(path.join(f.target, ".local-flip-book")));
 });
 
 test("replacing a file dependency junction preserves the sibling build", (t) => {
 	const f = fixture(t);
 	f.run("bun run build", { cwd: f.repo });
-	fs.mkdirSync(path.dirname(f.target), { recursive: true });
-	fs.symlinkSync(f.react, f.target, "junction");
+	f.mkdir(path.dirname(f.target));
+	f.junction(f.react, f.target);
 	copyLocalFlipBook(f.project, {
 		local: resolveLocalFlipBook(f.project, {}, true),
 		run: f.run,
 	});
-	assert.equal(fs.lstatSync(f.target).isSymbolicLink(), false);
+	assert.equal(f.isLink(f.target), false);
 	assert.equal(
-		fs.readFileSync(path.join(f.react, "dist", "flip-book.js"), "utf8"),
+		f.read(path.join(f.react, "dist", "flip-book.js"), "utf8"),
 		"fresh source",
 	);
 });
