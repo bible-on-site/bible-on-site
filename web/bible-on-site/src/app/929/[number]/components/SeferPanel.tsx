@@ -222,20 +222,36 @@ export function SeferPanel({
 		};
 	}, [deepArticleSummary, perekId]);
 
+	const embeddedArticleRef = useRef<HTMLDivElement>(null);
+	const articleDialogRef = useRef<HTMLDivElement>(null);
+	const restoreFocusRef = useRef<Element | null>(null);
+	const closingScrollRef = useRef<number | null>(null);
+	const pendingCardFocusRef = useRef<number | null>(null);
+
+	// Snapshot the dialog's reading position before React detaches it — in
+	// the modal effect's cleanup below the dialog subtree is already
+	// unmounted, so its scrollTop reads 0 (#2786). Optionally records a
+	// card to focus once the cleanup lifts inert (a synchronous focus()
+	// races it).
+	const closeArticleFullscreen = useCallback((focusArticleId?: number) => {
+		const scroller = articleDialogRef.current?.querySelector<HTMLElement>(
+			"[data-article-body-scroll]",
+		);
+		closingScrollRef.current = scroller ? scroller.scrollTop : null;
+		if (focusArticleId != null) pendingCardFocusRef.current = focusArticleId;
+		setArticleFullscreen(false);
+	}, []);
+
 	// Escape exits the article fullscreen (browser fullscreen stays the
 	// book's own concern — this overlay is the article's, #2544 item 7).
 	useEffect(() => {
 		if (!articleFullscreen) return;
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape") setArticleFullscreen(false);
+			if (event.key === "Escape") closeArticleFullscreen();
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
-	}, [articleFullscreen]);
-
-	const embeddedArticleRef = useRef<HTMLDivElement>(null);
-	const articleDialogRef = useRef<HTMLDivElement>(null);
-	const restoreFocusRef = useRef<Element | null>(null);
+	}, [articleFullscreen, closeArticleFullscreen]);
 
 	// The article fullscreen is a modal surface (#2786): focus moves inside
 	// and wraps within it, the background goes inert, the page stops
@@ -268,13 +284,24 @@ export function SeferPanel({
 		const previousOverflow = document.body.style.overflow;
 		document.body.style.overflow = "hidden";
 		return () => {
-			if (dialogScroller && embeddedScroller)
-				embeddedScroller.scrollTop = dialogScroller.scrollTop;
 			for (const el of inerted) el.removeAttribute("inert");
 			document.body.style.overflow = previousOverflow;
-			const restore = restoreFocusRef.current;
-			if (restore instanceof HTMLElement && document.contains(restore))
-				restore.focus();
+			if (embeddedScroller && closingScrollRef.current != null)
+				embeddedScroller.scrollTop = closingScrollRef.current;
+			closingScrollRef.current = null;
+			const cardId = pendingCardFocusRef.current;
+			pendingCardFocusRef.current = null;
+			const card =
+				cardId != null
+					? document.getElementById(`article-${cardId}`)
+					: null;
+			const restore =
+				card ??
+				(restoreFocusRef.current instanceof HTMLElement &&
+				document.contains(restoreFocusRef.current)
+					? restoreFocusRef.current
+					: null);
+			restore?.focus();
 			restoreFocusRef.current = null;
 		};
 	}, [articleFullscreen]);
@@ -284,7 +311,7 @@ export function SeferPanel({
 	const onArticleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
 		if (event.key === "Escape") {
 			event.stopPropagation();
-			setArticleFullscreen(false);
+			closeArticleFullscreen();
 			return;
 		}
 		if (event.key !== "Tab" || !articleDialogRef.current) return;
@@ -477,15 +504,15 @@ export function SeferPanel({
 
 	// "חזרה למאמרים" always lands on the articles grid — from fullscreen it
 	// closes the surface AND returns to the grid, then restores focus to
-	// the originating card (#2786). The card stays mounted under the
-	// overlay, so it is focusable synchronously.
+	// the originating card (#2786). While fullscreen the grid is still
+	// inert, so the card focus is deferred to the modal effect's cleanup.
 	const backToArticles = useCallback(() => {
 		const articleId = selectedArticle?.id;
-		setArticleFullscreen(false);
+		if (articleFullscreen) closeArticleFullscreen(articleId ?? undefined);
 		navigate();
-		if (articleId != null)
+		if (!articleFullscreen && articleId != null)
 			document.getElementById(`article-${articleId}`)?.focus();
-	}, [selectedArticle?.id, navigate]);
+	}, [articleFullscreen, selectedArticle?.id, navigate, closeArticleFullscreen]);
 
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
@@ -804,7 +831,11 @@ export function SeferPanel({
 								onBack={backToArticles}
 								fullPage
 								fullscreen={articleFullscreen}
-								onToggleFullscreen={() => setArticleFullscreen((prev) => !prev)}
+								onToggleFullscreen={() =>
+								articleFullscreen
+									? closeArticleFullscreen()
+									: setArticleFullscreen(true)
+							}
 							/>
 						</div>
 					)}
@@ -830,7 +861,7 @@ export function SeferPanel({
 								onBack={backToArticles}
 								fullPage
 								fullscreen
-								onToggleFullscreen={() => setArticleFullscreen(false)}
+								onToggleFullscreen={() => closeArticleFullscreen()}
 							/>
 						</div>
 					</div>,
