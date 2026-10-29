@@ -3,6 +3,7 @@ import {
 	getAllParashaUnits,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
+import { parashaCanonicalSlug } from "@/data/parasha/parasha-slugs";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug, normalizeAuthorName } from "@/lib/authors";
 import {
@@ -296,7 +297,9 @@ function addUnitDeps(sink: Sink, unit: UnitRef) {
 		/* istanbul ignore next -- every parasha index entry sets scope explicitly */
 		const scope = unit.scope ?? "torah";
 		addTag(sink, parashaArticlesTag(unit.unitId, scope));
-		addPath(sink, `/parasha/${unit.unitId}`);
+		// The route-dir path carries the canonical Hebrew slug — its
+		// dynamic param is the slug, not the unitId (issue #2738).
+		addPath(sink, `/parasha/${parashaCanonicalSlug(unit.unitId)}`);
 	} else {
 		addTag(sink, masoraArticlesTag(unit.unitId));
 		addPath(sink, `/masora/${unit.unitId}`);

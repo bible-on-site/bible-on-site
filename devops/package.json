@@ -12,6 +12,7 @@
 		"backend": "node ./local-backend.mjs",
 		"coverage:merge": "node ./merge-lcov.mts --out ../.coverage/lcov.info --require ../web/bible-on-site/.coverage/merged/lcov.info --require ../web/api/.coverage/merged/lcov.info --optional ../web/admin/.coverage/merged/lcov.info --optional ../app/.coverage/merged/lcov.info --optional ../data/.coverage/merged/lcov.info --optional ../.coverage/devops/lcov.info --rm-input-dirs",
 		"coverage:gaps": "node ./coverage-gaps.mjs",
+		"test:coverage-gaps": "node --test coverage-gaps.test.mjs",
 		"dev": "node ./dev-all.mts",
 		"setup_dev_env": "node ./setup-dev-env.mts",
 		"tanahpedia:apply": "node ./tanahpedia-apply.mjs",

@@ -51,7 +51,7 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 									<li key={s.name}>
 										{target ? (
 											<Link
-												href={`${PARASHA_DIVISION.rootPath}/${target.unitId}`}
+												href={`${PARASHA_DIVISION.rootPath}/${target.slug}`}
 											>
 												{s.name}
 											</Link>
@@ -75,7 +75,7 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 									<li key={s.name}>
 										{target ? (
 											<Link
-												href={`${PARASHA_DIVISION.rootPath}/${target.unitId}`}
+												href={`${PARASHA_DIVISION.rootPath}/${target.slug}`}
 											>
 												{s.name}
 											</Link>
@@ -97,7 +97,7 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 							{seferUnits.map((seferUnit) => (
 								<li key={seferUnit.unitId}>
 									<Link
-										href={`${PARASHA_DIVISION.rootPath}/${seferUnit.unitId}`}
+										href={`${PARASHA_DIVISION.rootPath}/${seferUnit.slug}`}
 									>
 										פרשת {seferUnit.heading}
 									</Link>

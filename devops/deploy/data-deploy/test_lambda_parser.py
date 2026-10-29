@@ -132,6 +132,22 @@ class LambdaParserSafetyTests(unittest.TestCase):
         # new or preserved dedication table is built inside a string.
         self.assertNotIn("CREATE TABLE", processed.upper().replace("CREATE ', 'TABLE", ""))
 
+    def test_telegram_upgrade_is_additive_and_follows_saved_bulletin_schema(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        migration = "tanah_daily_bulletin_telegram_upgrade.sql"
+        self.assertIn(migration, manifest)
+        self.assertLess(manifest.index("tanah_daily_bulletin_upgrade.sql"), manifest.index(migration))
+        path = ROOT / "data/mysql" / migration
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        # Two session settings, two four-statement DDL blocks, one INSERT IGNORE.
+        self.assertEqual(len(LAMBDA.parse_statements(processed)), 11)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
+        self.assertNotIn("CREATE TABLE", processed.upper().replace("CREATE ', 'TABLE", ""))
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+        self.assertIn("INSERT IGNORE INTO tanah_daily_bulletin_telegram_settings (id) VALUES (1)", source)
+
     def test_dedication_seed_data_is_in_manifest_and_idempotent(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         self.assertIn("tanah_dedication_data.sql", manifest)
@@ -162,6 +178,34 @@ class LambdaParserSafetyTests(unittest.TestCase):
         self.assertRegex(processed, r"CREATE TABLE IF NOT EXISTS `tanahpedia_mention_decoration`")
         self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
         self.assertEqual(VALIDATOR.preprocess_sql(path.read_text(encoding="utf-8")), processed)
+
+    def test_both_channel_upgrades_follow_the_shared_schema_once(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        base = manifest.index("tanah_daily_bulletin_upgrade.sql")
+        for name in ("tanah_daily_bulletin_telegram_upgrade.sql", "tanah_daily_bulletin_whatsapp_upgrade.sql"):
+            with self.subTest(migration=name):
+                self.assertEqual(manifest.count(name), 1)
+                self.assertLess(base, manifest.index(name))
+
+    def test_whatsapp_upgrade_is_additive_and_all_prepared_blocks_survive_parser(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        filename = "tanah_daily_bulletin_whatsapp_upgrade.sql"
+        self.assertIn(filename, manifest)
+        self.assertLess(manifest.index("tanah_daily_bulletin_upgrade.sql"), manifest.index(filename))
+        path = ROOT / "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        statements = LAMBDA.parse_statements(processed)
+        # Two session settings, three complete prepared DDL groups, one default.
+        self.assertEqual(len(statements), 15)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|REPLACE)\b")
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+        self.assertEqual(VALIDATOR.parse_statements(processed), statements)
+        for operation in ("PREPARE whatsappUpgrade", "EXECUTE whatsappUpgrade", "DEALLOCATE PREPARE whatsappUpgrade"):
+            self.assertEqual(sum(statement.startswith(operation) for statement in statements), 3)
+        self.assertEqual(sum("INSERT IGNORE INTO tanah_daily_bulletin_whatsapp_settings" in statement for statement in statements), 1)
+        self.assertIn("DEFAULT ''test''", processed)
 
 
 if __name__ == "__main__":

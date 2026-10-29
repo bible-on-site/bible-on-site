@@ -117,7 +117,6 @@ async function main() {
 		// Get AWS configuration (async - validates SSO credentials)
 		const config = await getECRConfig();
 		console.info(`Using AWS region: ${config.region}`);
-		console.info(`Using AWS account: ${config.accountId}`);
 
 		// Create ECR client
 		const client = createECRClient(config);

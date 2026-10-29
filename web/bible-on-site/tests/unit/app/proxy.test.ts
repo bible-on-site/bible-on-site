@@ -11,24 +11,101 @@ function makeRequest(pathname: string, opts?: { ua?: string }): NextRequest {
 }
 
 describe("proxy", () => {
+	describe("parasha canonical slugs (issue #2738)", () => {
+		it.each([
+			// Legacy numeric unit ids.
+			["/פרשה/1", "/פרשה/בראשית"],
+			["/פרשה/54", "/פרשה/וזאת-הברכה"],
+			// The ASCII route dir consolidates to the public Hebrew root.
+			["/parasha", "/פרשה"],
+			["/parasha/1", "/פרשה/בראשית"],
+			["/parasha/לך-לך", "/פרשה/לך-לך"],
+			// Researched aliases and shared 'פרשת {name}' forms.
+			["/פרשה/תצווה", "/פרשה/תצוה"],
+			["/פרשה/שלח לך", "/פרשה/שלח"],
+			["/פרשה/פרשת לך לך", "/פרשה/לך-לך"],
+			["/פרשה/פרשת-וזאת-הברכה", "/פרשה/וזאת-הברכה"],
+			// Maqaf, niqqud, and space variants normalize to the slug.
+			["/פרשה/לך־לך", "/פרשה/לך-לך"],
+			["/פרשה/לֶךְ־לֵךְ", "/פרשה/לך-לך"],
+			["/פרשה/חיי שרה", "/פרשה/חיי-שרה"],
+		])("redirects %s permanently to its canonical slug", async (path, slug) => {
+			const result = await proxy(makeRequest(path));
+			expect(result?.status).toBe(308);
+			expect(decodeURIComponent(result?.headers.get("location") ?? "")).toBe(
+				`https://localhost${slug}`,
+			);
+		});
+
+		it("preserves reader and tracking params on the redirect", async () => {
+			const result = await proxy(
+				makeRequest("/פרשה/1?perush=Rashi&utm_source=test"),
+			);
+			expect(result?.status).toBe(308);
+			const location = result?.headers.get("location") ?? "";
+			expect(decodeURIComponent(location.split("?")[0])).toBe(
+				"https://localhost/פרשה/בראשית",
+			);
+			expect(location).toContain("perush=Rashi");
+			expect(location).toContain("utm_source=test");
+		});
+
+		it("consolidates unresolvable ASCII-root paths under the Hebrew root", async () => {
+			const result = await proxy(makeRequest("/parasha/not-a-unit"));
+			expect(result?.status).toBe(308);
+			expect(decodeURIComponent(result?.headers.get("location") ?? "")).toBe(
+				"https://localhost/פרשה/not-a-unit",
+			);
+		});
+
+		it("consolidates deeper ASCII-root paths verbatim under the Hebrew root", async () => {
+			// Book-chrome depth paths keep their remaining segments — the
+			// Hebrew root's own chrome handling (noindex / 404) applies
+			// after the redirect.
+			const result = await proxy(makeRequest("/parasha/בראשית/כריכה"));
+			expect(result?.status).toBe(308);
+			expect(decodeURIComponent(result?.headers.get("location") ?? "")).toBe(
+				"https://localhost/פרשה/בראשית/כריכה",
+			);
+		});
+
+		it.each([
+			"/פרשה",
+			"/פרשה/בראשית",
+			"/פרשה/לך-לך",
+			"/פרשה/וזאת-הברכה",
+			// Unknown and out-of-range segments fall through to the router's
+			// 404 — the proxy never redirects to a dead end.
+			"/פרשה/55",
+			"/פרשה/not-a-unit",
+			"/פרשה/1garbage",
+			// Three-segment paths skip unit canonicalization entirely
+			// (book chrome gets its own noindex handling above).
+			"/פרשה/בראשית/not-a-cover",
+			"/929/153",
+			"/other/1",
+			"/%invalid/1",
+		])("leaves canonical, unknown, and non-unit %s untouched", async (path) => {
+			expect(await proxy(makeRequest(path))).toBeUndefined();
+		});
+	});
+
 	describe("parasha search exclusion", () => {
 		it.each([
 			"/פרשה?book",
-			"/פרשה/1?perush=Rashi",
-			"/פרשה/1?article=123",
-			"/פרשה/54?haftaraPerush=Rashi",
-			"/פרשה/54?haftaraArticle=123",
-			"/פרשה/1?bookPage=front",
-			"/פרשה/1?toc",
-			"/פרשה/1?haftara",
-			"/פרשה/1?reading=weekday&scheme=default",
-			"/פרשה/1?scheme=default",
-			"/פרשה/1?variant=chabad",
-			"/פרשה/1?perush=",
+			"/פרשה/בראשית?perush=Rashi",
+			"/פרשה/בראשית?article=123",
+			"/פרשה/וזאת-הברכה?haftaraPerush=Rashi",
+			"/פרשה/וזאת-הברכה?haftaraArticle=123",
+			"/פרשה/בראשית?bookPage=front",
+			"/פרשה/בראשית?toc",
+			"/פרשה/לך-לך?haftara",
+			"/פרשה/בראשית?reading=weekday&scheme=default",
+			"/פרשה/בראשית?scheme=default",
+			"/פרשה/בראשית?variant=chabad",
+			"/פרשה/בראשית?perush=",
 			"/פרשה/בראשית/כריכה",
 			"/פרשה/דברים/גב",
-			"/parasha/1?book&article=123",
-			`/${encodeURIComponent("פרשה").toLowerCase()}/1?book`,
 		])("keeps the reader usable but excludes %s", async (path) => {
 			const response = await proxy(makeRequest(path, { ua: "Googlebot/2.1" }));
 			expect(response?.status).toBe(200);
@@ -38,11 +115,9 @@ describe("proxy", () => {
 
 		it.each([
 			"/פרשה",
-			"/פרשה/1",
-			"/פרשה/54",
-			"/parasha",
-			"/parasha/1",
-			"/פרשה/1?utm_source=test",
+			"/פרשה/בראשית",
+			"/פרשה/וזאת-הברכה",
+			"/פרשה/בראשית?utm_source=test",
 			"/פרשה/not-a-book/כריכה",
 			"/פרשה/בראשית/not-a-book-page",
 			"/929/153",
@@ -57,7 +132,7 @@ describe("proxy", () => {
 
 		it("does not carry a variant's exclusion into later base requests", async () => {
 			for (const suffix of ["", "?perush=Rashi", "", "?book", ""]) {
-				const response = await proxy(makeRequest(`/פרשה/1${suffix}`));
+				const response = await proxy(makeRequest(`/פרשה/בראשית${suffix}`));
 				expect(response?.headers.get("x-robots-tag")).toBe(
 					suffix ? "noindex, follow" : undefined,
 				);

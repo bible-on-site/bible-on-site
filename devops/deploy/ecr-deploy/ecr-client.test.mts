@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { type TestContext, test } from "node:test";
 import {
 	DescribeImagesCommand,
 	type DescribeImagesCommandOutput,
 	type ECRClient,
 } from "@aws-sdk/client-ecr";
-import { getRemoteImageTags } from "./ecr-client.mts";
+import {
+	GetCallerIdentityCommand,
+	type GetCallerIdentityCommandOutput,
+	STSClient,
+} from "@aws-sdk/client-sts";
+import { getECRConfig, getRemoteImageTags } from "./ecr-client.mts";
 import { ECRDeployerBase } from "./ecr-deployer-base.mts";
 
 function paginatedClient(pages: DescribeImagesCommandOutput[]) {
@@ -175,4 +180,141 @@ test("cache and architecture tags cannot hide a newer published release from the
 		{ region: "il-central-1", accountId: "test", useEnvCredentials: true },
 	);
 	await assert.rejects(deployer.checkVersion(), /Local version is not newer/);
+});
+
+const DEPLOY_ENV_KEYS = [
+	"AWS_REGION",
+	"AWS_ACCOUNT_ID",
+	"AWS_PROFILE",
+	"AWS_ACCESS_KEY_ID",
+	"AWS_SECRET_ACCESS_KEY",
+	"AWS_SESSION_TOKEN",
+	"CI",
+] as const;
+
+function stubEnvironment(
+	t: TestContext,
+	vars: Partial<Record<(typeof DEPLOY_ENV_KEYS)[number], string>>,
+): void {
+	const saved = new Map<string, string | undefined>();
+	for (const key of DEPLOY_ENV_KEYS) {
+		saved.set(key, process.env[key]);
+		const value = vars[key];
+		if (value === undefined) {
+			delete process.env[key];
+		} else {
+			process.env[key] = value;
+		}
+	}
+	t.after(() => {
+		for (const [key, value] of saved) {
+			if (value === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = value;
+			}
+		}
+	});
+}
+
+function capturedInfo(t: TestContext): string[] {
+	const messages: string[] = [];
+	t.mock.method(console, "info", (message: unknown) => {
+		messages.push(String(message));
+	});
+	return messages;
+}
+
+function stubCallerIdentity(
+	t: TestContext,
+	output: () => Promise<Partial<GetCallerIdentityCommandOutput>>,
+) {
+	const send = t.mock.method(
+		STSClient.prototype,
+		"send",
+		output as unknown as STSClient["send"],
+	);
+	return send;
+}
+
+test("getECRConfig returns the configured account without logging its raw value", async (t) => {
+	const accountId = "123456789012";
+	stubEnvironment(t, {
+		AWS_REGION: "il-central-1",
+		AWS_ACCOUNT_ID: accountId,
+		AWS_ACCESS_KEY_ID: "test-access-key",
+		AWS_SECRET_ACCESS_KEY: "test-secret-key",
+		CI: "true",
+	});
+	const messages = capturedInfo(t);
+
+	const config = await getECRConfig();
+
+	assert.equal(config.accountId, accountId);
+	assert.equal(config.region, "il-central-1");
+	assert.equal(config.useEnvCredentials, true);
+	assert.ok(
+		messages.some((message) => message.includes("environment credentials")),
+		"the credential-source diagnostic should remain",
+	);
+	assert.ok(
+		!messages.some((message) => message.includes(accountId)),
+		`raw AWS account ID must not be logged: ${messages.join(" | ")}`,
+	);
+});
+
+test("getECRConfig resolves the account from STS without logging its raw value", async (t) => {
+	const accountId = "210987654321";
+	stubEnvironment(t, {
+		AWS_REGION: "il-central-1",
+		AWS_PROFILE: "test-sso-profile",
+	});
+	const messages = capturedInfo(t);
+	const send = stubCallerIdentity(t, async () => ({
+		Account: accountId,
+		$metadata: {},
+	}));
+
+	const config = await getECRConfig();
+
+	assert.equal(config.accountId, accountId);
+	assert.equal(config.profile, "test-sso-profile");
+	assert.equal(config.useEnvCredentials, false);
+	assert.equal(send.mock.callCount(), 1);
+	assert.ok(
+		send.mock.calls[0].arguments[0] instanceof GetCallerIdentityCommand,
+	);
+	assert.ok(
+		messages.some((message) => message.includes("resolved from STS")),
+		"a static STS-resolution diagnostic should remain",
+	);
+	assert.ok(
+		!messages.some((message) => message.includes(accountId)),
+		`raw AWS account ID must not be logged: ${messages.join(" | ")}`,
+	);
+});
+
+test("getECRConfig rejects when STS returns no caller account", async (t) => {
+	stubEnvironment(t, {
+		AWS_REGION: "il-central-1",
+		AWS_PROFILE: "test-sso-profile",
+	});
+	stubCallerIdentity(t, async () => ({ $metadata: {} }));
+
+	await assert.rejects(
+		getECRConfig(),
+		/Failed to get AWS Account ID from STS/,
+	);
+});
+
+test("getECRConfig propagates non-retryable STS identity failures", async (t) => {
+	stubEnvironment(t, {
+		AWS_REGION: "il-central-1",
+		AWS_PROFILE: "test-sso-profile",
+	});
+	stubCallerIdentity(t, async () => {
+		throw new Error("SSO token expired");
+	});
+
+	await assert.rejects(getECRConfig(), /SSO token expired/);
 });

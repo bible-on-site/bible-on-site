@@ -204,8 +204,15 @@ deleted locally and rebuilt cold, then heals after natural eviction or a recipe
 bump. `android-sdk-install.mjs` removes corrupt package directories before
 bounded sdkmanager retries and forces a clean reinstall when `emulator
 -version` fails despite installed metadata; `android-snapshot-check.mjs`
-validates restored AVD structure and confirms the emulator process exited
-before any snapshot save. When manifest resolution fails, both keys degrade to
+validates restored AVD structure. Before reuse and cache publication it requires
+successful process-table and ADB device-list inspections proving the selected
+AVD is stopped. Only then does it log and remove that AVD's root-level `*.lock`
+entries, including `snapshot.lock.lock`; snapshot payload and configuration stay
+intact. These locks contain host-local ownership state, so importing a PID from
+another runner can prevent a valid snapshot from booting. Active or unknown
+ownership blocks cleanup and cache publication. Shutdown keeps its existing
+deadlines and signals only validated emulator PIDs. When manifest resolution
+fails, both keys degrade to
 `unresolved`, which always misses and never saves — the run falls back to the
 original download path. Maintenance: bump `AVD_SNAPSHOT_RECIPE` when boot
 options, device profile, readiness flow or the runner-action version change;
@@ -258,12 +265,17 @@ Set `MOBILE_UDID` to a running device's identifier, then run `bun run test` here
 On macOS, `bun run ios:boot` selects an available iPhone runtime no newer than
 the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
 Set both for local iOS runs; CI exports them automatically. In CI,
-`ios:boot:start` kicks the asynchronous boot right after Xcode selection —
-it touches no `node_modules`, so it can run before `bun install --frozen-lockfile` — and
-`ios:boot:wait` then runs as a `background: true` step once dependencies are
-installed, overlapping the readiness monitor and Appium bridge preflight with
-the MAUI workload install and the app build. A `wait` step before the tests is
-the gate that surfaces the finished boot and the exported variables. The
+`ios:boot:start` runs after helper validation and kicks the asynchronous boot,
+then emits the selected device's `udid` and runtime `version` as step outputs.
+`ios:boot:wait` receives that exact identity through `MOBILE_UDID` and
+`MOBILE_OS_VERSION`, validates the handoff against the selected Xcode SDK, and
+monitors that device without listing or selecting simulators again. Its
+`background: true` step overlaps readiness and Appium bridge preflight with
+remaining build transfer and setup. A `wait` step before the tests surfaces the
+finished boot and exported variables. Standalone wait without a handoff still
+selects a real available device; a partial or invalid handoff fails. Both boot
+steps retain their output in `ios-boot-start.log` and `ios-boot-wait.log` so
+setup failures are included in the diagnostic artifact. The
 coverage-tree baseline download and test selection also run as one background
 step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
 stalls `bun install --frozen-lockfile`, the boot or the build; each pilot waits on the manifest
