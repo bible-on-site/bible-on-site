@@ -152,10 +152,15 @@ const Sefer = (props: {
 		perekObj.perekId,
 		initialSlug,
 	);
-	const perakim =
-		"perakim" in sefer
-			? sefer.perakim
-			: sefer.additionals.flatMap((additional) => additional.perakim);
+	// Memoized so the contentPages memo below keeps its identity across
+	// per-flip re-renders (additionals flatMap would otherwise rebuild it).
+	const perakim = useMemo(
+		() =>
+			"perakim" in sefer
+				? sefer.perakim
+				: sefer.additionals.flatMap((additional) => additional.perakim),
+		[sefer],
+	);
 
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
@@ -367,30 +372,36 @@ const Sefer = (props: {
 		};
 	}, [isVisible]);
 
-	const frontCover = (
-		<section
-			key="front-cover"
-			className={`${styles.page} ${styles.cover} flipbook-page-bounded`}
-			aria-label="עטיפה קדמית"
-			style={{ "--cover-color": seferColor } as React.CSSProperties}
-		>
-			<SeferCoverContent
-				seferName={perekObj.sefer}
-				subtitle={SEFER_COVER_SUBTITLE}
-				edition={SEFER_COVER_EDITION}
-				dedications={props.seferDedications}
-			/>
-		</section>
+	const frontCover = useMemo(
+		() => (
+			<section
+				key="front-cover"
+				className={`${styles.page} ${styles.cover} flipbook-page-bounded`}
+				aria-label="עטיפה קדמית"
+				style={{ "--cover-color": seferColor } as React.CSSProperties}
+			>
+				<SeferCoverContent
+					seferName={perekObj.sefer}
+					subtitle={SEFER_COVER_SUBTITLE}
+					edition={SEFER_COVER_EDITION}
+					dedications={props.seferDedications}
+				/>
+			</section>
+		),
+		[seferColor, perekObj.sefer, props.seferDedications],
 	);
-	const backCover = (
-		<section
-			key="back-cover"
-			className={`${styles.page} ${styles.cover} flipbook-page-bounded`}
-			aria-label="עטיפה אחורית"
-			style={{ "--cover-color": seferColor } as React.CSSProperties}
-		>
-			<div className={styles.coverInner} />
-		</section>
+	const backCover = useMemo(
+		() => (
+			<section
+				key="back-cover"
+				className={`${styles.page} ${styles.cover} flipbook-page-bounded`}
+				aria-label="עטיפה אחורית"
+				style={{ "--cover-color": seferColor } as React.CSSProperties}
+			>
+				<div className={styles.coverInner} />
+			</section>
+		),
+		[seferColor],
 	);
 
 	const hebrewDateStr = useMemo(
@@ -423,195 +434,229 @@ const Sefer = (props: {
 			});
 	}, [perekIds, perekObj.perekId, perekObj.sefer]);
 
-	const contentPages = perakim.flatMap((perek, perekIdx) => {
-		const pagePerekId = perekIds?.[perekIdx];
-		// Prefer a stable perek id for keys; fall back to index only when the id
-		// isn't available, so React state stays attached to the right page even
-		// if the perakim order ever changes.
-		const perekKeyBase = pagePerekId ?? `idx-${perekIdx + 1}`;
-		const perekKey = `perek-${perekKeyBase}`;
-		const blankKey = `blank-${perekKeyBase}`;
-		const illustrations = imagesByPerek?.[perekIds?.[perekIdx] ?? -1] ?? [];
-		return [
-			<React.Fragment key={perekKey}>
-				<RecitationPlayer
-					perekId={pagePerekId ?? 0}
-					pesukim={perek.pesukim}
-					hasRecording={Boolean(perek.recitation)}
-				>
-					<section
-						className={`${styles.pageContentPage} flipbook-page-bounded`}
-						data-sefer-perek={pagePerekId}
-					>
-						<div className={styles.pageHeaderRight}>
-							<div className={styles.pageHeaderRow}>
-								<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
-								<span className={styles.pageHeaderPerek}>
-									{toHebrewChapterNumber(perekIdx + 1)}
-								</span>
-							</div>
-							{(props.perekDedications?.[pagePerekId ?? 0] ?? []).map(
-								(line, index) => (
-									// The perek's dedication sits at its reading heading —
-									// sefer/helek scopes live on the cover and shelf (#2731).
-									// biome-ignore lint/suspicious/noArrayIndexKey: content is the identity
-									<p key={index} className={styles.perekDedication}>
-										{line}
-									</p>
-								),
-							)}
-							<RecitationHeader title={perek.header} />
-						</div>
-						<div className={styles.perekTextScrollWrapper}>
-							{illustrations.map((illustration) => (
-								<figure
-									key={illustration.id}
-									className={styles.perekIllustrationFigure}
-								>
-									<picture>
-										{illustration.avifSrcSet && (
-											<source
-												type="image/avif"
-												srcSet={illustration.avifSrcSet}
-												sizes="(max-width: 768px) 100vw, 420px"
-											/>
-										)}
-										<Image
-											src={illustration.src}
-											alt={illustration.alt}
-											width={illustration.width}
-											height={illustration.height}
-											sizes="(max-width: 768px) 100vw, 420px"
-											loading="lazy"
-											unoptimized
-											className={styles.perekIllustration}
-										/>
-									</picture>
-									<figcaption>
-										<ImageCaption image={illustration} />
-									</figcaption>
-								</figure>
-							))}
-							<article className={styles.perekText}>
-								{perek.pesukim.map((pasuk, pasukIdx) => {
-									const pasukKey = pasukIdx + 1;
-									const pasukNumElement = (
-										<SeferPasukNumber
-											perekId={pagePerekId ?? 0}
-											pasuk={pasukKey}
-										/>
-									);
-									const perekLookup =
-										entityRefLookupsByPerekIdx[perekIdx] ??
-										buildEntityRefLookup([]);
-									const pasukElement = renderPasukWithEntityRefs(
-										pasuk.segments,
-										pasukIdx,
-										perekLookup,
-										Ptuah,
-										Stuma,
-										styles.qri,
-										(entryUniqueName, children, key) => (
-											<RecitationLink
-												key={key}
-												link={
-													<TanahpediaLink
+	// The page tree must stay referentially stable across renders: every
+	// committed flip updates the document-title state, and without this memo
+	// the flatMap rebuilt ~30k elements — a full re-render of every mounted
+	// reader page mid-animation (#2805).
+	const contentPages = useMemo(
+		() =>
+			perakim.flatMap((perek, perekIdx) => {
+				const pagePerekId = perekIds?.[perekIdx];
+				// Prefer a stable perek id for keys; fall back to index only when the id
+				// isn't available, so React state stays attached to the right page even
+				// if the perakim order ever changes.
+				const perekKeyBase = pagePerekId ?? `idx-${perekIdx + 1}`;
+				const perekKey = `perek-${perekKeyBase}`;
+				const blankKey = `blank-${perekKeyBase}`;
+				const illustrations = imagesByPerek?.[perekIds?.[perekIdx] ?? -1] ?? [];
+				return [
+					<React.Fragment key={perekKey}>
+						<RecitationPlayer
+							perekId={pagePerekId ?? 0}
+							pesukim={perek.pesukim}
+							hasRecording={Boolean(perek.recitation)}
+						>
+							<section
+								className={`${styles.pageContentPage} flipbook-page-bounded`}
+								data-sefer-perek={pagePerekId}
+							>
+								<div className={styles.pageHeaderRight}>
+									<div className={styles.pageHeaderRow}>
+										<span className={styles.pageHeaderSefer}>
+											{perekObj.sefer}
+										</span>
+										<span className={styles.pageHeaderPerek}>
+											{toHebrewChapterNumber(perekIdx + 1)}
+										</span>
+									</div>
+									{(props.perekDedications?.[pagePerekId ?? 0] ?? []).map(
+										(line, index) => (
+											// The perek's dedication sits at its reading heading —
+											// sefer/helek scopes live on the cover and shelf (#2731).
+											// biome-ignore lint/suspicious/noArrayIndexKey: content is the identity
+											<p key={index} className={styles.perekDedication}>
+												{line}
+											</p>
+										),
+									)}
+									<RecitationHeader title={perek.header} />
+								</div>
+								<div className={styles.perekTextScrollWrapper}>
+									{illustrations.map((illustration) => (
+										<figure
+											key={illustration.id}
+											className={styles.perekIllustrationFigure}
+										>
+											<picture>
+												{illustration.avifSrcSet && (
+													<source
+														type="image/avif"
+														srcSet={illustration.avifSrcSet}
+														sizes="(max-width: 768px) 100vw, 420px"
+													/>
+												)}
+												<Image
+													src={illustration.src}
+													alt={illustration.alt}
+													width={illustration.width}
+													height={illustration.height}
+													sizes="(max-width: 768px) 100vw, 420px"
+													loading="lazy"
+													unoptimized
+													className={styles.perekIllustration}
+												/>
+											</picture>
+											<figcaption>
+												<ImageCaption image={illustration} />
+											</figcaption>
+										</figure>
+									))}
+									<article className={styles.perekText}>
+										{perek.pesukim.map((pasuk, pasukIdx) => {
+											const pasukKey = pasukIdx + 1;
+											const pasukNumElement = (
+												<SeferPasukNumber
+													perekId={pagePerekId ?? 0}
+													pasuk={pasukKey}
+												/>
+											);
+											const perekLookup =
+												entityRefLookupsByPerekIdx[perekIdx] ??
+												buildEntityRefLookup([]);
+											const pasukElement = renderPasukWithEntityRefs(
+												pasuk.segments,
+												pasukIdx,
+												perekLookup,
+												Ptuah,
+												Stuma,
+												styles.qri,
+												(entryUniqueName, children, key) => (
+													<RecitationLink
 														key={key}
-														entryUniqueName={entryUniqueName}
-														className={styles.tanahpediaLink}
+														link={
+															<TanahpediaLink
+																key={key}
+																entryUniqueName={entryUniqueName}
+																className={styles.tanahpediaLink}
+															>
+																{children}
+															</TanahpediaLink>
+														}
 													>
 														{children}
-													</TanahpediaLink>
-												}
-											>
-												{children}
-											</RecitationLink>
-										),
-										(pasuk, segment, text) => (
-											<RecitationWordControl pasuk={pasuk} segment={segment}>
-												{text}
-											</RecitationWordControl>
-										),
-									);
-									return (
-										<RecitationVerse key={pasukKey} pasuk={pasukKey}>
-											{pasukNumElement}
-											<span> </span>
-											{pasukElement}
-											<span> </span>
-										</RecitationVerse>
-									);
-								})}
-							</article>
-						</div>
-						<SeferPasukSelectionBar perekId={pagePerekId ?? 0} />
-					</section>
-				</RecitationPlayer>
-			</React.Fragment>,
-			<React.Fragment key={blankKey}>
-				<SeferPanel
-					articles={
-						perekIdx === currentPerekIdx
-							? articles
-							: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles
-					}
-					perushim={
-						perekIdx === currentPerekIdx
-							? perushim
-							: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim
-					}
-					perekId={perekIds?.[perekIdx] ?? 0}
-					seferName={perekObj.sefer}
-					hebrewDateStr={hebrewDateStr}
-					initialSlug={
-						contentNavigation.content &&
-						pagePerekId === contentNavigation.content.perekId
-							? contentNavigation.content.slug
-							: undefined
-					}
-					onNavigate={
-						pagePerekId == null
-							? undefined
-							: (slug) => contentNavigation.navigate(pagePerekId, slug)
-					}
-					perekTitleParts={seferPerekTitles[perekIdx]}
-					onContentTitle={setInBookContentTitle}
-				/>
-			</React.Fragment>,
-		];
-	});
+													</RecitationLink>
+												),
+												(pasuk, segment, text) => (
+													<RecitationWordControl
+														pasuk={pasuk}
+														segment={segment}
+													>
+														{text}
+													</RecitationWordControl>
+												),
+											);
+											return (
+												<RecitationVerse key={pasukKey} pasuk={pasukKey}>
+													{pasukNumElement}
+													<span> </span>
+													{pasukElement}
+													<span> </span>
+												</RecitationVerse>
+											);
+										})}
+									</article>
+								</div>
+								<SeferPasukSelectionBar perekId={pagePerekId ?? 0} />
+							</section>
+						</RecitationPlayer>
+					</React.Fragment>,
+					<React.Fragment key={blankKey}>
+						<SeferPanel
+							articles={
+								perekIdx === currentPerekIdx
+									? articles
+									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles
+							}
+							perushim={
+								perekIdx === currentPerekIdx
+									? perushim
+									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim
+							}
+							perekId={perekIds?.[perekIdx] ?? 0}
+							seferName={perekObj.sefer}
+							hebrewDateStr={hebrewDateStr}
+							initialSlug={
+								contentNavigation.content &&
+								pagePerekId === contentNavigation.content.perekId
+									? contentNavigation.content.slug
+									: undefined
+							}
+							onNavigate={
+								pagePerekId == null
+									? undefined
+									: (slug) => contentNavigation.navigate(pagePerekId, slug)
+							}
+							perekTitleParts={seferPerekTitles[perekIdx]}
+							onContentTitle={setInBookContentTitle}
+						/>
+					</React.Fragment>,
+				];
+			}),
+		[
+			perakim,
+			perekIds,
+			imagesByPerek,
+			entityRefLookupsByPerekIdx,
+			perekObj.sefer,
+			props.perekDedications,
+			currentPerekIdx,
+			articles,
+			perushim,
+			batchSummaries,
+			hebrewDateStr,
+			seferPerekTitles,
+			contentNavigation.content,
+			contentNavigation.navigate,
+		],
+	);
 
 	// Total pages: cover + cover-interior + TOC + (perakim * 2) + backCover
 	const totalPages = 3 + perakim.length * 2 + 1;
 
-	const tocPage = (
-		<TocPage
-			key="toc"
-			className="flipbook-page-bounded"
-			onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
-			totalPages={totalPages}
-			pageSemantics={hePageSemantics}
-			getHref={(entry) =>
-				historyMapper?.pageToRoute(entry.pageIndex, {
-					semanticName: entry.semanticName,
-					title: entry.title,
-				})
-			}
-			heading="תוכן העניינים"
-			direction="rtl"
-			filter={(entry) =>
-				entry.pageIndex >= CONTENT_OFFSET && entry.title.length > 0
-			}
-		/>
+	const tocPage = useMemo(
+		() => (
+			<TocPage
+				key="toc"
+				className="flipbook-page-bounded"
+				onNavigate={(pageIndex) => flipBookRef.current?.jumpToPage(pageIndex)}
+				totalPages={totalPages}
+				pageSemantics={hePageSemantics}
+				getHref={(entry) =>
+					historyMapper?.pageToRoute(entry.pageIndex, {
+						semanticName: entry.semanticName,
+						title: entry.title,
+					})
+				}
+				heading="תוכן העניינים"
+				direction="rtl"
+				filter={(entry) =>
+					entry.pageIndex >= CONTENT_OFFSET && entry.title.length > 0
+				}
+			/>
+		),
+		[historyMapper, hePageSemantics, totalPages],
 	);
 
-	const pages = [
-		frontCover,
-		<div key="cover-interior" className="flipbook-page-bounded" />,
-		tocPage,
-		...contentPages,
-		backCover,
-	];
+	const pages = useMemo(
+		() => [
+			frontCover,
+			<div key="cover-interior" className="flipbook-page-bounded" />,
+			tocPage,
+			...contentPages,
+			backCover,
+		],
+		[frontCover, tocPage, contentPages, backCover],
+	);
 
 	return (
 		<>
@@ -689,9 +734,7 @@ const Sefer = (props: {
 							enabled={bookmarkSettings.enabled}
 							onChange={toggleBookmarks}
 							ariaLabel={
-								bookmarkSettings.enabled
-									? "הסתרת סימניות"
-									: "הצגת סימניות"
+								bookmarkSettings.enabled ? "הסתרת סימניות" : "הצגת סימניות"
 							}
 						/>
 						<MouseModeButton />
