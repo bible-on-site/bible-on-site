@@ -31,6 +31,85 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+
+	describe("documentation preserves every migration routing decision", () => {
+		for (const migrations of [
+			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+			],
+		]) {
+			test(migrations.join(" + "), () => {
+				const files = ["data/annotations/GOLDEN.md", ...migrations];
+				assert.deepEqual(detectChanges(files).data, {
+					module_changed: true,
+					ci_changed: true,
+				});
+				assert.equal(
+					isSchemaOnlyDataChange(files),
+					isSchemaOnlyDataChange(migrations),
+				);
+				assert.equal(isDataDeployChange(files), false);
+			});
+		}
+	});
+	test("the annotation evaluation guide selects data checks without delivery", () => {
+		const files = ["data/annotations/GOLDEN.md"];
+		const changes = detectChanges(files);
+		assert.deepEqual(changes.data, { module_changed: false, ci_changed: true });
+		for (const [key, flags] of Object.entries(changes)) {
+			if (key !== "data")
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: false },
+					key,
+				);
+		}
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isSchemaOnlyDataChange(files), false);
+	});
+
+	test("the guide exception preserves real annotation inputs and exact path boundaries", () => {
+		for (const file of [
+			"data/annotations/publish.py",
+			"data/annotations/golden/metrics-baseline.json",
+			"data/annotations/GOLDEN.md.bak",
+			"data/annotations/nested/GOLDEN.md",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).data,
+				{ module_changed: true, ci_changed: false },
+				file,
+			);
+			assert.deepEqual(
+				detectChanges(["data/annotations/GOLDEN.md", file]).data,
+				{ module_changed: true, ci_changed: true },
+				file,
+			);
+		}
+	});
+
+	test("the guide does not turn a manual migration into a full data deployment", () => {
+		const files = [
+			"data/annotations/GOLDEN.md",
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+		];
+		assert.deepEqual(detectChanges(files).data, {
+			module_changed: true,
+			ci_changed: true,
+		});
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			]),
+			false,
+		);
+	});
+
 	test("native image validation changes select all three services without a release", () => {
 		for (const file of [
 			".github/workflows/architecture-validation.yml",
@@ -937,6 +1016,28 @@ describe("main", () => {
 		assert.match(output, /^admin_module_changed=false$/m);
 		assert.match(output, /^bulletin_module_changed=false$/m);
 	});
+
+	for (const changeKind of ["write", "delete"] as const) {
+		test(
+			"an annotation guide " + changeKind + " emits CI-only data outputs",
+			() => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"data/annotations/GOLDEN.md",
+					changeKind,
+				);
+				assert.deepEqual(changes.data, {
+					module_changed: false,
+					ci_changed: true,
+				});
+				assert.match(output, /^data_module_changed=false$/m);
+				assert.match(output, /^data_ci_changed=true$/m);
+				assert.match(output, /^data_deploy_changed=false$/m);
+				assert.match(output, /^data_schema_only_changed=false$/m);
+			},
+		);
+	}
 
 	test("a timing-only master push schedules native packaging with unchanged app version", () => {
 		const { changes, output } = run(

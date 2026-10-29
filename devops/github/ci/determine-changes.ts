@@ -55,6 +55,10 @@ const NATIVE_IMAGE_CI_PATHS = [
 // (the Appium suite already lists the selector under `app`, #2085).
 const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
+// This evaluation guide is documentation, not an annotation or SQL input.
+// Keep the exception exact: other Markdown paths may be pipeline inputs.
+const DATA_DOCUMENTATION_PATTERN = /^data\/annotations\/GOLDEN\.md$/;
+
 export const MODULES = {
 	website: {
 		directory: "web/bible-on-site",
@@ -159,6 +163,7 @@ export const MODULES = {
 	},
 	data: {
 		directory: "data",
+		ciOnlyPattern: DATA_DOCUMENTATION_PATTERN,
 		// Data-deploy tooling changes require checks and normally re-run data CD.
 		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
@@ -220,7 +225,10 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  * This path check does not certify SQL safety or existence: deleted migrations
  * also stay manual rather than triggering a full production bootstrap.
  */
-export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
+export function isSchemaOnlyDataChange(files: string[]): boolean {
+	const changedFiles = files.filter(
+		(file) => !DATA_DOCUMENTATION_PATTERN.test(file),
+	);
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
 	const bulletinMigrations = new Set([
 		"data/mysql/tanah_daily_bulletin_upgrade.sql",
