@@ -3,9 +3,12 @@ body:has(.perek-layout) .top-nav {
   background-color: #1552ac;
 }
 
-/* Contain horizontal overflow (issue #1270) so the page does not scroll horizontally */
+/* Contain horizontal overflow (issue #1270) so the page does not scroll horizontally.
+   `clip` rather than `hidden`: both clip visually, but `hidden` makes this
+   element the scrollport so `position: sticky` descendants (the article
+   command row, #2786) can never pin against the viewport. */
 .perek-layout {
-  overflow-x: hidden;
+  overflow-x: clip;
   width: 100%;
   max-width: 100%;
 }
