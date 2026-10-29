@@ -201,10 +201,11 @@ public abstract class MobilePlatformAdapter
         {
             options.PlatformVersion = configuration.PlatformVersion;
         }
-        // run.mjs installs the Android package itself with --no-incremental;
-        // UiAutomator2 must reuse it under noReset — a driver-initiated
-        // reinstall has no incremental opt-out and would reintroduce the
-        // libmonodroid open_from_bundles SIGSEGV (#2773).
+        // The harness installs the Android package itself (see run.mjs)
+        // with --no-incremental before the session starts, so UiAutomator2
+        // must reuse it under noReset — a driver-initiated reinstall has
+        // no incremental opt-out and would reintroduce the libmonodroid
+        // open_from_bundles SIGSEGV (#2773).
         var reuseInstalledApp = configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
         options.AddAdditionalAppiumOption("noReset", reuseInstalledApp);
         // Android fully uninstalls the app. iOS resets and reinstalls it through
