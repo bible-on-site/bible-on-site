@@ -25,6 +25,9 @@ import { reportBenchmark } from "../util/benchmark";
  * work shows up as longtasks.  The bound is generous — CI runners vary —
  * so it trips on catastrophic regressions while the reported metrics let
  * Bencher catch gradual drift.
+ *
+ * Click and drag workloads run as separate tests so each stays inside
+ * the suite deadline, which itself remains a regression check.
  */
 
 const PEREK_ID = 125; // Bamidbar 8 — mid-size sefer
@@ -58,8 +61,9 @@ declare global {
 		__flipProbe?: {
 			frames: number[];
 			longtaskMs: number;
+			raf: number;
+			observer: PerformanceObserver | null;
 		};
-		__flipProbeInstalled?: boolean;
 	}
 }
 
@@ -95,49 +99,64 @@ async function waitForFlipBook(page: Page): Promise<void> {
 	await page.waitForTimeout(1_000);
 }
 
-/** Install a fresh rAF-gap + longtask probe on the page. */
+/**
+ * Install a fresh rAF-gap + longtask probe on the page.  Any live probe
+ * is cancelled first so instrumentation never overlaps a measurement
+ * window; stale callbacks also self-terminate on the identity check.
+ */
 async function startFrameProbe(page: Page): Promise<void> {
 	await page.evaluate(() => {
-		const probe = { frames: [] as number[], longtaskMs: 0 };
+		if (window.__flipProbe) {
+			cancelAnimationFrame(window.__flipProbe.raf);
+			window.__flipProbe.observer?.disconnect();
+		}
+		const probe = {
+			frames: [] as number[],
+			longtaskMs: 0,
+			raf: 0,
+			observer: null as PerformanceObserver | null,
+		};
 		window.__flipProbe = probe;
-		if (window.__flipProbeInstalled) return;
-		window.__flipProbeInstalled = true;
 		let last = -1;
 		const tick = (t: number) => {
-			const sink = window.__flipProbe;
-			if (sink && last >= 0) sink.frames.push(t - last);
+			if (window.__flipProbe !== probe) return;
+			if (last >= 0) probe.frames.push(t - last);
 			last = t;
-			requestAnimationFrame(tick);
+			probe.raf = requestAnimationFrame(tick);
 		};
-		requestAnimationFrame(tick);
+		probe.raf = requestAnimationFrame(tick);
 		try {
-			new PerformanceObserver((list) => {
-				const sink = window.__flipProbe;
-				if (!sink) return;
+			probe.observer = new PerformanceObserver((list) => {
+				if (window.__flipProbe !== probe) return;
 				for (const entry of list.getEntries())
-					sink.longtaskMs += entry.duration;
-			}).observe({ type: "longtask", buffered: false });
+					probe.longtaskMs += entry.duration;
+			});
+			probe.observer.observe({ type: "longtask", buffered: false });
 		} catch {
 			/* longtask unsupported — frame gaps still measured */
 		}
 	});
 }
 
-/** Read and reduce the probe: blocked time and long-frame count. */
-async function readFrameMetrics(page: Page): Promise<FrameMetrics> {
+/** Stop the probe and reduce its samples into metrics. */
+async function stopFrameProbe(page: Page): Promise<FrameMetrics> {
 	return page.evaluate((budgetMs) => {
-		const probe = window.__flipProbe ?? { frames: [], longtaskMs: 0 };
-		const frames = probe.frames;
+		const probe = window.__flipProbe;
+		window.__flipProbe = undefined;
+		if (!probe)
+			return { frames: 0, blockedMs: 0, longFrames: 0, longtaskMs: 0 };
+		cancelAnimationFrame(probe.raf);
+		probe.observer?.disconnect();
 		let blockedMs = 0;
 		let longFrames = 0;
-		for (const gap of frames) {
+		for (const gap of probe.frames) {
 			if (gap > budgetMs) {
 				blockedMs += gap - budgetMs;
 				if (gap > 50) longFrames += 1;
 			}
 		}
 		return {
-			frames: frames.length,
+			frames: probe.frames.length,
 			blockedMs,
 			longFrames,
 			longtaskMs: probe.longtaskMs,
@@ -247,6 +266,70 @@ function minMetrics(runs: FrameMetrics[]): FrameMetrics {
 	);
 }
 
+interface RouteSamples {
+	/** Wall-clock ms per batch — click workloads only. */
+	times: number[];
+	batches: FrameMetrics[];
+}
+
+/**
+ * Run `workload` RUNS times against each route under the frame probe.
+ * Routes alternate run-by-run so warmup and transient CPU contention
+ * land on both sides of the comparison.
+ */
+async function measureRoutes(
+	page: Page,
+	workload: (page: Page) => Promise<unknown>,
+): Promise<{ dev: RouteSamples; seo: RouteSamples }> {
+	const results: { dev: RouteSamples; seo: RouteSamples } = {
+		dev: { times: [], batches: [] },
+		seo: { times: [], batches: [] },
+	};
+	for (let run = 0; run < RUNS; run++) {
+		for (const [key, url] of [
+			["dev", `http://localhost:3001/dev/sefer/${PEREK_ID}`],
+			["seo", `http://localhost:3001/929/${PEREK_ID}?book`],
+		] as const) {
+			await page.goto(url, { waitUntil: "networkidle" });
+			await waitForFlipBook(page);
+			await startFrameProbe(page);
+			const elapsed = await workload(page);
+			if (typeof elapsed === "number") results[key].times.push(elapsed);
+			results[key].batches.push(await stopFrameProbe(page));
+		}
+	}
+	return results;
+}
+
+/** CPU-scaled main-thread budgets for one workload batch. */
+function scaledBounds(cpuFactor: number) {
+	return {
+		blockedMs: MAX_BLOCKED_MS_PER_BATCH * cpuFactor,
+		longtaskMs: MAX_LONGTASK_MS_PER_BATCH * cpuFactor,
+	};
+}
+
+/** Assert one least-contended batch stayed inside the scaled budgets. */
+function expectWithinBudget(
+	label: string,
+	metrics: FrameMetrics,
+	bounds: { blockedMs: number; longtaskMs: number },
+	cpuFactor: number,
+): void {
+	expect(
+		metrics.blockedMs,
+		`${label} batch blocked the main thread ${metrics.blockedMs.toFixed(0)}ms ` +
+			`(${metrics.longFrames} frames >50ms) — over the ` +
+			`${bounds.blockedMs.toFixed(0)}ms budget (cpu×${cpuFactor.toFixed(2)})`,
+	).toBeLessThanOrEqual(bounds.blockedMs);
+	expect(
+		metrics.longtaskMs,
+		`${label} batch spent ${metrics.longtaskMs.toFixed(0)}ms in longtasks ` +
+			`— over the ${bounds.longtaskMs.toFixed(0)}ms budget ` +
+			`(cpu×${cpuFactor.toFixed(2)})`,
+	).toBeLessThanOrEqual(bounds.longtaskMs);
+}
+
 test.describe("Sefer flip performance", () => {
 	// Sefer view requires tablet+ viewport
 	test.beforeEach(async ({ page }) => {
@@ -257,60 +340,19 @@ test.describe("Sefer flip performance", () => {
 	test("929 route flips must not be significantly slower than dev route", async ({
 		page,
 	}) => {
-		// Six page loads + click and drag workloads legitimately exceed the
-		// 20s default; the harness budget is not the performance assertion.
-		test.setTimeout(180_000);
-		await page.goto(`http://localhost:3001/dev/sefer/${PEREK_ID}`, {
-			waitUntil: "networkidle",
-		});
 		const cpuFactor = await cpuSpeedFactor(page);
-		const blockedBound = MAX_BLOCKED_MS_PER_BATCH * cpuFactor;
-		const longtaskBound = MAX_LONGTASK_MS_PER_BATCH * cpuFactor;
+		const bounds = scaledBounds(cpuFactor);
 
-		// Routes alternate run-by-run so warmup and transient CPU
-		// contention land on both sides of the comparison.
-		const devTimes: number[] = [];
-		const seoTimes: number[] = [];
-		const devClickMetrics: FrameMetrics[] = [];
-		const seoClickMetrics: FrameMetrics[] = [];
-		const devDragMetrics: FrameMetrics[] = [];
-		const seoDragMetrics: FrameMetrics[] = [];
-		const routes = [
-			{
-				url: `http://localhost:3001/dev/sefer/${PEREK_ID}`,
-				times: devTimes,
-				clicks: devClickMetrics,
-				drags: devDragMetrics,
-			},
-			{
-				url: `http://localhost:3001/929/${PEREK_ID}?book`,
-				times: seoTimes,
-				clicks: seoClickMetrics,
-				drags: seoDragMetrics,
-			},
-		] as const;
-		for (let run = 0; run < RUNS; run++) {
-			for (const route of routes) {
-				await page.goto(route.url, { waitUntil: "networkidle" });
-				await waitForFlipBook(page);
-				await startFrameProbe(page);
-				route.times.push(await rapidFlips(page, FLIPS));
-				route.clicks.push(await readFrameMetrics(page));
+		const { dev, seo } = await measureRoutes(page, (p) =>
+			rapidFlips(p, FLIPS),
+		);
 
-				await startFrameProbe(page);
-				await dragTurns(page, DRAGS);
-				route.drags.push(await readFrameMetrics(page));
-			}
-		}
-
-		const devAvg = trimmedMean(devTimes);
-		const seoAvg = trimmedMean(seoTimes);
+		const devAvg = trimmedMean(dev.times);
+		const seoAvg = trimmedMean(seo.times);
 		// Assertions run on the least-contended batch (per-field minimum);
 		// reported metrics keep the totals across runs.
-		const devClick = minMetrics(devClickMetrics);
-		const seoClick = minMetrics(seoClickMetrics);
-		const devDrag = minMetrics(devDragMetrics);
-		const seoDrag = minMetrics(seoDragMetrics);
+		const devClick = minMetrics(dev.batches);
+		const seoClick = minMetrics(seo.batches);
 
 		const ratio = seoAvg / devAvg;
 
@@ -337,31 +379,18 @@ test.describe("Sefer flip performance", () => {
 			name: "sefer-flip/dev-click-blocked",
 			measure: "time_ms",
 			value: devClick.blockedMs,
-			upperValue: blockedBound,
+			upperValue: bounds.blockedMs,
 		});
 		reportBenchmark({
 			name: "sefer-flip/929-click-blocked",
 			measure: "time_ms",
 			value: seoClick.blockedMs,
-			upperValue: blockedBound,
-		});
-		reportBenchmark({
-			name: "sefer-flip/dev-drag-blocked",
-			measure: "time_ms",
-			value: devDrag.blockedMs,
-			upperValue: blockedBound,
-		});
-		reportBenchmark({
-			name: "sefer-flip/929-drag-blocked",
-			measure: "time_ms",
-			value: seoDrag.blockedMs,
-			upperValue: blockedBound,
+			upperValue: bounds.blockedMs,
 		});
 
 		console.log(
 			`\n📊 Flip perf — dev: ${devAvg.toFixed(0)}ms | 929: ${seoAvg.toFixed(0)}ms | ratio: ${ratio.toFixed(2)}x | cpu×${cpuFactor.toFixed(2)} (min-of-runs below)\n` +
-				`   click blocked — dev: ${devClick.blockedMs.toFixed(0)}ms/${devClick.longFrames} long frames (${devClick.longtaskMs.toFixed(0)}ms longtasks) | 929: ${seoClick.blockedMs.toFixed(0)}ms/${seoClick.longFrames} long frames (${seoClick.longtaskMs.toFixed(0)}ms longtasks)\n` +
-				`   drag blocked — dev: ${devDrag.blockedMs.toFixed(0)}ms/${devDrag.longFrames} long frames | 929: ${seoDrag.blockedMs.toFixed(0)}ms/${seoDrag.longFrames} long frames\n`,
+				`   click blocked — dev: ${devClick.blockedMs.toFixed(0)}ms/${devClick.longFrames} long frames (${devClick.longtaskMs.toFixed(0)}ms longtasks) | 929: ${seoClick.blockedMs.toFixed(0)}ms/${seoClick.longFrames} long frames (${seoClick.longtaskMs.toFixed(0)}ms longtasks)\n`,
 		);
 
 		expect(
@@ -371,24 +400,40 @@ test.describe("Sefer flip performance", () => {
 		).toBeLessThanOrEqual(MAX_RATIO);
 
 		// Common-mode budget: catastrophic blocking fails on BOTH routes.
-		for (const [label, metrics] of [
-			["dev click", devClick],
-			["929 click", seoClick],
-			["dev drag", devDrag],
-			["929 drag", seoDrag],
-		] as const) {
-			expect(
-				metrics.blockedMs,
-				`${label} batch blocked the main thread ${metrics.blockedMs.toFixed(0)}ms ` +
-					`(${metrics.longFrames} frames >50ms) — over the ` +
-					`${blockedBound.toFixed(0)}ms budget (cpu×${cpuFactor.toFixed(2)})`,
-			).toBeLessThanOrEqual(blockedBound);
-			expect(
-				metrics.longtaskMs,
-				`${label} batch spent ${metrics.longtaskMs.toFixed(0)}ms in longtasks ` +
-					`— over the ${longtaskBound.toFixed(0)}ms budget ` +
-					`(cpu×${cpuFactor.toFixed(2)})`,
-			).toBeLessThanOrEqual(longtaskBound);
-		}
+		expectWithinBudget("dev click", devClick, bounds, cpuFactor);
+		expectWithinBudget("929 click", seoClick, bounds, cpuFactor);
+	});
+
+	test("drag turns must not block the main thread", async ({ page }) => {
+		const cpuFactor = await cpuSpeedFactor(page);
+		const bounds = scaledBounds(cpuFactor);
+
+		const { dev, seo } = await measureRoutes(page, (p) =>
+			dragTurns(p, DRAGS),
+		);
+
+		const devDrag = minMetrics(dev.batches);
+		const seoDrag = minMetrics(seo.batches);
+
+		reportBenchmark({
+			name: "sefer-flip/dev-drag-blocked",
+			measure: "time_ms",
+			value: devDrag.blockedMs,
+			upperValue: bounds.blockedMs,
+		});
+		reportBenchmark({
+			name: "sefer-flip/929-drag-blocked",
+			measure: "time_ms",
+			value: seoDrag.blockedMs,
+			upperValue: bounds.blockedMs,
+		});
+
+		console.log(
+			`\n📊 Drag perf | cpu×${cpuFactor.toFixed(2)} (min-of-runs below)\n` +
+				`   drag blocked — dev: ${devDrag.blockedMs.toFixed(0)}ms/${devDrag.longFrames} long frames (${devDrag.longtaskMs.toFixed(0)}ms longtasks) | 929: ${seoDrag.blockedMs.toFixed(0)}ms/${seoDrag.longFrames} long frames (${seoDrag.longtaskMs.toFixed(0)}ms longtasks)\n`,
+		);
+
+		expectWithinBudget("dev drag", devDrag, bounds, cpuFactor);
+		expectWithinBudget("929 drag", seoDrag, bounds, cpuFactor);
 	});
 });
