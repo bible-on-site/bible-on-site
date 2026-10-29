@@ -10,6 +10,8 @@ use std::path::Path;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use typst_as_lib::TypstEngine;
 
+mod daily;
+
 /// Lightweight request types for PDF generation — decoupled from HTTP models.
 /// The binary's `models` module converts into these.
 #[derive(Debug, Clone)]
@@ -640,13 +642,6 @@ fn pasuk_markup(segments: &[PdfSegment]) -> String {
 
 /// Generate Typst markup string from the request data.
 fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
-    generate_typst_markup_with_intro(req, None)
-}
-
-fn generate_typst_markup_with_intro(
-    req: &PdfRequest,
-    intro: Option<(&str, &[String])>,
-) -> (String, TypstFiles) {
     let mut markup = String::with_capacity(16 * 1024);
     let mut files: TypstFiles = Vec::new();
 
@@ -672,16 +667,6 @@ fn generate_typst_markup_with_intro(
     if req.include_toc {
         append_toc_page(&mut markup, req);
         markup.push_str("#pagebreak()\n");
-    }
-
-    if let Some((date, dedications)) = intro {
-        markup.push_str(&format!(
-            "#align(center, text(size: 16pt, weight: \"bold\")[תנ\\\"ך על הפרק])\n#align(center)[{}]\n#v(0.6em)\n",
-            typst_escape(date)
-        ));
-        for dedication in dedications {
-            markup.push_str(&format!("{}\n\n", typst_escape(dedication)));
-        }
     }
 
     for (idx, perek) in req.perakim.iter().enumerate() {
@@ -779,9 +764,9 @@ pub fn build_daily_pdf(
     fonts_dir: &Path,
     date: &str,
     dedications: &[String],
+    perek_id: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    let (markup, files) = generate_typst_markup_with_intro(req, Some((date, dedications)));
-    compile_pdf(markup, files, fonts_dir)
+    daily::build(req, fonts_dir, date, dedications, perek_id)
 }
 
 fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
