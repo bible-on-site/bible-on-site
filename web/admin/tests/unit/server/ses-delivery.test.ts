@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 	telegramProcess: vi.fn(),
 	telegramSweep: vi.fn(),
 	whatsappSweep: vi.fn(),
+	scheduledProcess: vi.fn(),
 }));
 vi.mock("~/server/db", () => mocks);
 vi.mock("~/server/daily-bulletins.server", () => ({
@@ -71,6 +72,9 @@ vi.mock("~/server/whatsapp-delivery.server", () => ({
 vi.mock("~/server/telegram-delivery.server", () => ({
 	processTelegramJob: mocks.telegramProcess,
 	reconcileTelegramOutbox: mocks.telegramSweep,
+}));
+vi.mock("~/server/scheduled-bulletin.server", () => ({
+	processScheduledBulletin: mocks.scheduledProcess,
 }));
 vi.mock("node:timers/promises", () => ({ setTimeout: mocks.delay }));
 vi.mock("@aws-sdk/client-sqs", () => ({
@@ -1950,6 +1954,72 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		}
 	});
 
+	it.each(["bulletin.schedule", "bulletin.generate"])(
+		"acknowledges %s only after its durable handler completes",
+		async (kind) => {
+			const controller = new AbortController();
+			const body = JSON.stringify({
+				kind,
+				scheduledAt: "2026-10-29T08:00:00Z",
+				...(kind === "bulletin.generate" ? { date: "2026-10-29" } : {}),
+			});
+			const gate = deferred<boolean>();
+			mocks.scheduledProcess.mockReturnValueOnce(gate.promise);
+			messages(controller, [body]);
+			const running = startEmailWorker(controller.signal);
+			await vi.waitFor(() =>
+				expect(mocks.scheduledProcess).toHaveBeenCalledOnce(),
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(false);
+			expect(mocks.scheduledProcess).toHaveBeenCalledWith(
+				JSON.parse(body),
+				controller.signal,
+				{ client: expect.anything(), url: expect.stringContaining("sqs.") },
+			);
+			gate.resolve(true);
+			await running;
+			expect(
+				mocks.sqs.mock.calls
+					.filter(([command]) => command.kind === "delete")
+					.map(([command]) => command.input.ReceiptHandle),
+			).toEqual(["receipt-0"]);
+			expect(mocks.parse).not.toHaveBeenCalled();
+		},
+	);
+	it("retains a rejected scheduled message and continues native SES processing", async () => {
+		const row = seed("test", "accepted");
+		mocks.parse.mockReturnValue(delivery());
+		mocks.scheduledProcess.mockResolvedValueOnce(false);
+		const controller = new AbortController();
+		messages(controller, [
+			'{"kind":"bulletin.schedule","scheduledAt":"invalid"}',
+			'{"eventType":"Delivery"}',
+		]);
+		await startEmailWorker(controller.signal);
+		expect(row.status).toBe("delivered");
+		expect(
+			mocks.sqs.mock.calls
+				.filter(([command]) => command.kind === "delete")
+				.map(([command]) => command.input.ReceiptHandle),
+		).toEqual(["receipt-1"]);
+	});
+	it("retains a failed scheduled attempt rather than acknowledging partial fan-out", async () => {
+		const controller = new AbortController();
+		mocks.scheduledProcess.mockRejectedValueOnce(
+			new Error("sanitized scheduling failure"),
+		);
+		messages(controller, [
+			'{"kind":"bulletin.schedule","scheduledAt":"2026-10-29T08:00:00Z"}',
+		]);
+		mocks.delay.mockImplementationOnce(async () => controller.abort());
+		await startEmailWorker(controller.signal);
+		expect(
+			mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+		).toBe(false);
+		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
 	it("dispatches both configured channels and native email through one queue without crossing jobs", async () => {
 		configureTelegram();
 		for (const name of [
