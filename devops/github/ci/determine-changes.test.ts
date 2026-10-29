@@ -492,7 +492,11 @@ describe("detectChanges", () => {
 		]) {
 			const changes = detectChanges([file]);
 			for (const [key, flags] of Object.entries(changes)) {
-				assert.deepEqual(flags, { module_changed: false, ci_changed: key === "api" }, `${file} -> ${key}`);
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "api" },
+					`${file} -> ${key}`,
+				);
 			}
 			assert.equal(isDataDeployChange([file]), false, file);
 		}
@@ -526,6 +530,35 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the calendar converter repair requires data checks and a guarded manual deployment", () => {
+		const files = [
+			"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs",
+			"devops/study-calendar-repair.mjs",
+		];
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(detectChanges(files).data.module_changed, true);
+		assert.equal(detectChanges(files).perushim_pipeline.module_changed, false);
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			]),
+			true,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([...files, "data/mysql/tanah_test_data.sql"]),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/sefaria/pipelines/perushim-view/src/main.rs",
+			]),
+			false,
+		);
+	});
+
 	for (const [name, files, expected] of [
 		["no data changes", [], false],
 		[
