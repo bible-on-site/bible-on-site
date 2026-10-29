@@ -9,7 +9,7 @@ const projectDirectory = path.resolve(
 	"..",
 );
 const LOCAL_REACT_DIRS = ["react", "html-flip-book-react"];
-export const NPM_VERSION = "0.0.0-alpha.95"; // Update this when upgrading
+export const NPM_VERSION = "0.0.0-alpha.96"; // Update this when upgrading
 
 function localReactRef(projectRoot) {
 	const repoRoot = path.resolve(projectRoot, "..", "..");
