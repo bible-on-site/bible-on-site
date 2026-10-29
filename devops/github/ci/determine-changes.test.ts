@@ -35,7 +35,10 @@ describe("detectChanges", () => {
 			for (const [key, flags] of Object.entries(changes)) {
 				assert.deepEqual(
 					flags,
-					{ module_changed: false, ci_changed: ["website", "api", "admin"].includes(key) },
+					{
+						module_changed: false,
+						ci_changed: ["website", "api", "admin"].includes(key),
+					},
 					`${file} -> ${key}`,
 				);
 			}
@@ -346,6 +349,8 @@ describe("detectChanges", () => {
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/.covignore.mjs",
 		"web/bible-on-site/shared/typing/coverage.d.ts",
+		// Standalone report inspection never ships in the website.
+		"web/bible-on-site/scripts/coverage-gaps.mjs",
 	]) {
 		test(`${path} runs website checks without a release`, () => {
 			assert.deepEqual(changed([path], "website"), [
@@ -369,7 +374,6 @@ describe("detectChanges", () => {
 		"web/bible-on-site/public/icons/search.svg",
 		"web/bible-on-site/scripts/start-server.mjs",
 		"web/bible-on-site/scripts/generate-client-catalog.mjs",
-		"web/bible-on-site/scripts/coverage-gaps.mjs",
 		"web/bible-on-site/shared/typing/other.d.ts",
 		"web/bible-on-site/tests2/util/helper.ts",
 	]) {
@@ -474,6 +478,18 @@ describe("detectChanges", () => {
 		);
 	});
 
+	test("pending API release tooling selects API checks without unrelated delivery", () => {
+		for (const file of [
+			"devops/github/ci/pending-api-release.mjs",
+			"devops/github/ci/pending-api-release.test.mjs",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(flags, { module_changed: false, ci_changed: key === "api" }, `${file} -> ${key}`);
+			}
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+	});
 	test("module directories match path segments, not prefixes", () => {
 		const changes = detectChanges(["web/api-docs/readme.md", "appendix.md"]);
 		assert.equal(changes.api.module_changed, false);
@@ -548,6 +564,63 @@ describe("isSchemaOnlyDataChange", () => {
 			"bulletin upgrade alone stays manual",
 			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
 			true,
+		],
+		[
+			"WhatsApp upgrade and bootstrap preservation stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"devops/deploy/data-deploy/sql-files.json",
+				"web/admin/src/server/whatsapp-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"WhatsApp upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			true,
+		],
+		[
+			"WhatsApp upgrade cannot hide content changes",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_dedication_data.sql",
+			],
+			false,
+		],
+		[
+			"Telegram upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"],
+			true,
+		],
+		[
+			"Telegram upgrade with preservation fixture stays manual",
+			[
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"web/admin/src/server/telegram-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"all bulletin migrations with preservation fixture stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+			],
+			true,
+		],
+		[
+			"Telegram upgrade cannot hide a full content rebuild",
+			[
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_static_structure.sql",
+			],
+			false,
 		],
 		[
 			"bootstrap changes alone retain normal deployment behavior",
@@ -641,9 +714,11 @@ describe("isSchemaOnlyDataChange", () => {
 	});
 });
 
-test("SES infrastructure changes select data checks without releasing content", () => {
+test("bulletin infrastructure changes select data checks without releasing content", () => {
 	for (const file of [
 		"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+		"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
+		"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",

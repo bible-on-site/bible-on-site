@@ -18,7 +18,10 @@ public sealed class NativeSnapshotTests
         ["enabled"] = displayed,
         ["rect"] = new Dictionary<string, object>
         {
-            ["x"] = x, ["y"] = y, ["width"] = 20, ["height"] = 20d
+            ["x"] = x,
+            ["y"] = y,
+            ["width"] = 20,
+            ["height"] = 20d
         }
     };
 
@@ -169,7 +172,8 @@ public sealed class NativeSnapshotTests
     {
         var executor = new SnapshotExecutor([Entry("collection"), Entry("collection"), Entry("heading", y: 40)])
         {
-            TimeoutOnLookup = 2, FrameWidth = 100
+            TimeoutOnLookup = 2,
+            FrameWidth = 100
         };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         var page = new PerekPage(driver, new IosPlatformAdapter());

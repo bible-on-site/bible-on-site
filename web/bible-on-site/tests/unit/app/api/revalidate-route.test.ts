@@ -100,6 +100,30 @@ describe("POST /api/revalidate", () => {
 		delete process.env.REVALIDATE_SECRET;
 	});
 
+	it.each([
+		["perek:5:dedications", "sefer:1:perek-dedications"],
+		["perek:717:dedications", "sefer:25:perek-dedications"],
+	])("preserves manual %s invalidation for the flat chapter and aggregate book", async (tag, aggregateTag) => {
+		const res = await POST(req(`/api/revalidate?tag=${tag}`));
+		expect(res.status).toBe(200);
+		expect(mockRevalidateTag.mock.calls).toEqual([
+			[tag, { expire: 0 }],
+			[aggregateTag, { expire: 0 }],
+		]);
+		expect(mockRevalidatePath).not.toHaveBeenCalled();
+		expect(await res.json()).toMatchObject({ revalidated: true, tag });
+	});
+
+	it.each(["perek:930:dedications", "perek:0:dedications", "perek:0717:dedications", "perek:other:dedications"])(
+		"retains unknown or noncanonical manual tag %s without inventing a book", async (tag) => {
+			const res = await POST(req(`/api/revalidate?tag=${tag}`));
+			expect(res.status).toBe(200);
+			expect(mockRevalidateTag.mock.calls).toEqual([[tag, { expire: 0 }]]);
+			expect(mockRevalidatePath).not.toHaveBeenCalled();
+			expect(await res.json()).toMatchObject({ revalidated: true, tag });
+		},
+	);
+
 	it("expires the tag immediately so the next request re-renders", async () => {
 		const res = await POST(req("/api/revalidate?tag=articles"));
 

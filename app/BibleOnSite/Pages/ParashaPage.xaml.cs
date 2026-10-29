@@ -30,6 +30,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     // Articles view state is owned by the shared reader chrome (#2573).
     private ReaderChrome _chrome = null!;
 
+    // Native safe-area + Back plumbing is owned by the shared platform
+    // chrome coordinator (#2573).
+    private ReaderPlatformChrome _platformChrome = null!;
+
     // Guard: ignore CurrentItemChanged events fired by the CarouselView during
     // initial collection assignment — the ViewModel already holds the unit.
     private bool _carouselInitializing;
@@ -48,9 +52,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     public ParashaPage()
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = new ParashaViewModel();
         BindingContext = _viewModel;
         FinishSetup();
@@ -59,9 +60,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     public ParashaPage(ParashaViewModel viewModel)
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         FinishSetup();
@@ -84,13 +82,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
         InitializeSearchHeader();
-        // The capsule Back owns return affordances now (#2467, same contract
-        // as the perek reader): it stays enabled while a transient surface
-        // would consume Back. The hamburger is never repurposed into a close
-        // control.
-        NormalNavigationBar.BackStateProvider = OwnsReaderReturnSurface;
-        ReaderMenuOverlay.PropertyChanged += OnReaderSurfaceVisibilityChanged;
-        ExitFullScreenButton.PropertyChanged += OnReaderSurfaceVisibilityChanged;
+        SetupPlatformChrome();
 #if ANDROID || IOS
         if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
         {
@@ -127,6 +119,36 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     /// <summary>Fire-and-forget row rebuild — the discard keeps it off the
     /// PropertyChanged path while still routing errors to the async context.</summary>
     private void RebuildLoadedRows() => _ = _viewModel.RebuildLoadedRowsAsync();
+
+    /// <summary>
+    /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
+    /// and edge-back history, Android predictive-Back registration, Windows
+    /// keyboard Back, and the capsule's enabled-state provider — through the
+    /// one coordinator. Only the division plugs differ: which transient
+    /// surfaces consume Back and what Back does to them.
+    /// </summary>
+    private void SetupPlatformChrome()
+    {
+        _platformChrome = new ReaderPlatformChrome(
+            new ReaderPlatformChromeSurfaces
+            {
+                Page = this,
+                Root = MainGrid,
+                NavigationBar = NormalNavigationBar,
+                BottomBar = BottomBar,
+                FanMenu = FanMenu,
+                Carousel = ParashaCarousel,
+                BackSensitiveOverlays = [ReaderMenuOverlay, ExitFullScreenButton],
+                SearchSurface = ChapterSearch,
+                SelectionSurface = SelectionBar,
+            },
+            new ReaderPlatformChromeActions
+            {
+                OwnsReturnSurface = OwnsReaderReturnSurface,
+                TryHandleBack = TryHandleReaderBack,
+                SuppressFocus = () => ChapterSearch.IsSearchOpen,
+            });
+    }
 
     /// <summary>
     /// Wires the shared reader chrome — bottom bar, perushim sheet, articles
@@ -177,9 +199,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             ChapterSearch.Close();
         }
         Shell.SetNavBarIsVisible(this, false);
-#if ANDROID
-        UpdateReaderBack();
-#endif
+        _platformChrome.RefreshNativeBack();
     }
 
     /// <summary>
@@ -389,28 +409,14 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-#if ANDROID
-        RegisterReaderBack();
-#endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
-#endif
+        _platformChrome.Appearing();
         SubscribeRecitation();
-#if IOS
-        // Native history must be ready before asynchronous reader positioning.
-        ConfigureIosReaderHistory();
-#endif
         await InitializeRecitationAsync();
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-#endif
-#if IOS
-        ApplyBottomBarSafeArea();
-        SizeChanged -= OnPageSizeChanged;
-        SizeChanged += OnPageSizeChanged;
 #endif
         if (_viewModel.Unit == null && !_isLoading)
         {
@@ -472,9 +478,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
-#if IOS
-        Dispatcher.Dispatch(ConfigureIosReaderHistory);
-#endif
+        _platformChrome.ScheduleHistoryRefresh();
     }
 
     /// <summary>
@@ -575,23 +579,13 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
     }
 
-    private void OnReaderListLoaded(object? sender, EventArgs e)
-    {
-#if IOS
-        // Newly realized verse lists must yield the edge gesture to history.
-        ConfigureIosReaderHistory();
-#endif
-    }
+    private void OnReaderListLoaded(object? sender, EventArgs e) =>
+        _platformChrome.ReaderSurfaceRealized();
 
     protected override void OnDisappearing()
     {
         FinishSearchIntroduction();
-#if ANDROID
-        UnregisterReaderBack();
-#endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
-#endif
+        _platformChrome.Disappearing();
         if (!_preserveSearchOnDisappear)
         {
             ChapterSearch.Close();
@@ -607,10 +601,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         MainActivity.TouchReleased -= OnTouchReleased;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
-#endif
-#if IOS
-        // A page pushed above gets its native edge-back back (#2432).
-        RestoreIosInteractiveBack();
 #endif
         base.OnDisappearing();
     }
@@ -776,17 +766,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     #endregion
 
     #region Navigation & Picker
-
-    private void OnReaderSurfaceVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(IsVisible))
-        {
-            NormalNavigationBar.RefreshBackState();
-#if ANDROID
-            UpdateReaderBack();
-#endif
-        }
-    }
 
     /// <summary>
     /// Whether a transient reader surface would consume Back — mirrors
@@ -973,55 +952,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             // the final snap. ScrollTo also resets MAUI's current snap target.
             ParashaCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
         }
-    }
-#endif
-
-    #endregion
-
-    #region iOS Safe Area
-
-#if IOS
-    /// <summary>
-    /// The page disables automatic safe-area padding so the reader spans the
-    /// full width in landscape — see ReaderSafeArea for the shared logic
-    /// which is what produced the empty landscape side bands (#1308).
-    /// Keep the root's top inset so the reader toolbar stays below the status
-    /// bar and notch. Its bottom edge also respects the home indicator, with
-    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
-    /// and descendant layouts unpadded so landscape content spans the width.
-    /// Views inside scroll views (the carousel cells and pasukim lists) never
-    /// apply safe-area padding, so only the direct layout chain needs this.
-    /// </summary>
-    private void ConfigureReaderSafeArea()
-    {
-        ReaderSafeArea.Configure(MainGrid);
-    }
-
-    private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-
-    private void ApplyBottomBarSafeArea()
-    {
-        double bottom = 0;
-        var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
-            .OfType<UIKit.UIWindowScene>()
-            .FirstOrDefault()?.Windows
-            .FirstOrDefault(w => w.IsKeyWindow);
-        if (window != null)
-        {
-            bottom = window.SafeAreaInsets.Bottom;
-        }
-
-        // Shift the bars down over the home-indicator inset and pull the page
-        // up underneath so no gap shows (tester-confirmed combination).
-        // With no inset (iPad, landscape) the same assignments restore the
-        // layout defaults, so an inset disappearing never leaves stale values.
-        var totalHeight = ReaderBottomBar.TotalHeight + bottom;
-        BottomBar.TranslationY = bottom;
-        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-        BottomBar.HeightRequest = totalHeight;
-        FanMenu.SetBottomInset(bottom);
-        this.Padding = new Thickness(0, 0, 0, -bottom);
-        Resources["BottomBarTotalHeight"] = totalHeight;
     }
 #endif
 

@@ -617,6 +617,69 @@ describe("cached loader tag contracts", () => {
 		},
 	);
 
+	it("tags the sefer spread map with one aggregate tag and the global fallback", async () => {
+		stubTables({});
+		const { getSeferPerekDedicationLines } = await import(
+			"../../../src/lib/dedications/loaders"
+		);
+		await getSeferPerekDedicationLines(BERESHIT_SEFER_ID);
+		const tags = stampedTags("sefer-perek-dedication-lines-v2", "1");
+		expect(tags).toEqual(["dedications", "sefer:1:perek-dedications"]);
+	});
+
+	it("keeps the largest book below the tag limit and invalidates its last perek's aggregate", async () => {
+		// תהילים spans 568..717 (150 chapters). One tag per chapter used
+		// to exceed Next's 128-tag limit, dropping tags near this last perek.
+		expect(seferPerekIds(25)).toHaveLength(150);
+		stubTables({
+			perek: [
+				{
+					perek_id_low: 717,
+					perek_id_high: 717,
+					dedication_id: 10,
+					expires_at: null,
+				},
+			],
+			dedication: [{ id: 10, subject: "last chapter", expires_at: null }],
+		});
+		const { getPerekDedications, getSeferPerekDedicationLines } = await import(
+			"../../../src/lib/dedications/loaders"
+		);
+		expect(await getSeferPerekDedicationLines(25)).toEqual({
+			717: ["מוקדש לlast chapter"],
+		});
+		await getPerekDedications(717);
+		const tags = stampedTags("sefer-perek-dedication-lines-v2", "25");
+		expect(tags).toEqual(["dedications", "sefer:25:perek-dedications"]);
+		expect(tags.length).toBeLessThanOrEqual(128);
+		expect(
+			stampedOpts("sefer-perek-dedication-lines-v2", "25")?.revalidate,
+		).toBe(false);
+
+		const { resolveEntityChanges } = await import(
+			"../../../src/lib/revalidate/dependencies"
+		);
+		const invalidation = await resolveEntityChanges([
+			{ kind: "dedication", id: 10, perekRanges: [{ low: 717, high: 717 }] },
+		]);
+		// Check the producer/consumer contract together: the same scoped
+		// event expires both the flat heading and the whole book spread,
+		// without falling back to invalidating every book's dedications.
+		expect(tags.filter((tag) => invalidation.tags.includes(tag))).toEqual([
+			"sefer:25:perek-dedications",
+		]);
+		expect(
+			stampedTags("perek-dedications", "717").filter((tag) =>
+				invalidation.tags.includes(tag),
+			),
+		).toEqual(["perek:717:dedications"]);
+		expect(invalidation.paths).toHaveLength(150);
+		expect(invalidation.paths).toEqual(
+			expect.arrayContaining(["/929/568", "/929/717"]),
+		);
+		expect(invalidation.urls).toEqual(invalidation.paths);
+	});
+
 	it("stamps no time bound so consuming routes stay fully static", async () => {
 		stubTables({});
 		const loaders = await import("../../../src/lib/dedications/loaders");

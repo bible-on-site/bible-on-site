@@ -26,6 +26,10 @@ import {
 } from "@/app/components/reading/unit-book-navigation";
 import { useUnitBookContentNavigation } from "@/app/components/reading/useUnitBookContentNavigation";
 import type { Perek } from "@/data/db/tanah-view-types";
+import {
+	parashaCanonicalSlug,
+	resolveParashaSegment,
+} from "@/data/parasha/parasha-slugs";
 import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
@@ -46,6 +50,14 @@ import {
 	parashaUnitDocumentTitle,
 	unitBoundaryMarkers,
 } from "./parasha-book-utils";
+
+// Book content routes read/write the canonical slug segment (issue
+// #2738) — module-level so the navigation hook's deps stay stable.
+const PARASHA_BOOK_SEGMENTS = {
+	unitIdFor: (segment: string) =>
+		resolveParashaSegment(segment)?.unitId ?? null,
+	segmentFor: parashaCanonicalSlug,
+};
 
 /**
  * The פרשה sefer book: a flipbook over one Torah sefer sliced by
@@ -101,6 +113,7 @@ const ParashaSefer = (props: {
 		PARASHA_ROOT_ALIASES,
 		currentUnitId,
 		initialContent,
+		PARASHA_BOOK_SEGMENTS,
 	);
 
 	const pasukCount = (perekId: number) =>
@@ -177,6 +190,9 @@ const ParashaSefer = (props: {
 	const flatPageTitle = parashaUnitDocumentTitle(
 		units.find((unit) => unit.unitId === currentUnitId)?.name ?? "",
 	);
+	const currentSlug =
+		units.find((unit) => unit.unitId === currentUnitId)?.slug ??
+		String(currentUnitId);
 	useEffect(() => {
 		if (!isVisible) {
 			releaseSeferDocumentTitle(flatPageTitle);
@@ -205,7 +221,7 @@ const ParashaSefer = (props: {
 	const requestedPage = historyMapper.routeToPage(
 		initialBookPage
 			? parashaBookPageRoute(seferName, initialBookPage)
-			: `${PARASHA_ROOT}/${currentUnitId}?book${haftara ? "&haftara" : ""}`,
+			: `${PARASHA_ROOT}/${currentSlug}?book${haftara ? "&haftara" : ""}`,
 	);
 
 	const scopeSummaries = (
@@ -221,7 +237,7 @@ const ParashaSefer = (props: {
 	};
 
 	const contentPages = units.flatMap((unit) => {
-		const unitPath = `${PARASHA_ROOT}/${unit.unitId}`;
+		const unitPath = `${PARASHA_ROOT}/${unit.slug}`;
 		const torahKey = unitBookKey(unit.unitId, "torah");
 		const haftaraKey = unitBookKey(unit.unitId, "haftara");
 		const torahSummaries = scopeSummaries(unit, "torah");

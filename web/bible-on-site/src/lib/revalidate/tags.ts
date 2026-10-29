@@ -42,7 +42,7 @@ export const perekDedicationsTag = (perekId: number) =>
 export const seferDedicationsTag = (seferId: number) =>
 	`sefer:${seferId}:dedications`;
 
-/** All perek-scoped dedication lines rendered in one sefer's spreads. */
+/** Perek-scoped dedication lines aggregated across one sefer's spreads. */
 export const seferPerekDedicationsTag = (seferId: number) =>
 	`sefer:${seferId}:perek-dedications`;
 

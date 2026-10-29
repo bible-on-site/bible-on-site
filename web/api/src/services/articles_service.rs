@@ -903,7 +903,8 @@ mod tests {
             created_at: chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
-                .unwrap(),
+                .unwrap()
+                .and_utc(),
         }
     }
 

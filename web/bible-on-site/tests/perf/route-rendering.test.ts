@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { parashaCanonicalSlug } from "../../src/data/parasha/parasha-slugs";
 import { reportBenchmark } from "../util/benchmark";
 
 const NEXT_BUILD_DIR = resolve(__dirname, "../../.next");
@@ -113,7 +114,7 @@ test.describe("Route Rendering Modes", () => {
 	}) => {
 		for (const suffix of ["", "?perush=Rashi", ""]) {
 			const response = await request.get(
-				`/${encodeURIComponent("פרשה")}/1${suffix}`,
+				`/${encodeURIComponent("פרשה")}/${encodeURIComponent(parashaCanonicalSlug(1))}${suffix}`,
 			);
 			expect(response.status()).toBe(200);
 			expect(response.headers()["x-robots-tag"]).toBe(
@@ -141,7 +142,10 @@ test.describe("Route Rendering Modes", () => {
 			// Public /פרשה URLs rewrite to these internal static route outputs.
 			const routes = [
 				"/parasha",
-				...Array.from({ length: 54 }, (_, index) => `/parasha/${index + 1}`),
+				...Array.from(
+					{ length: 54 },
+					(_, index) => `/parasha/${parashaCanonicalSlug(index + 1)}`,
+				),
 			];
 			for (const route of routes) {
 				expect(manifest.routes[route], `${route} must stay SSG`).toBeDefined();
@@ -149,7 +153,7 @@ test.describe("Route Rendering Modes", () => {
 			}
 			expect(
 				Object.keys(manifest.routes).filter((route) =>
-					/^\/parasha\/\d+$/.test(route),
+					/^\/parasha\/[^/]+$/.test(route),
 				),
 			).toHaveLength(54);
 		});

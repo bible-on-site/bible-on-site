@@ -78,16 +78,18 @@ export const MODULES = {
 		// site, so they must not package, release, or bump the version (#2132):
 		// the tests/ tree, colocated *.test.*/​*.spec.* files (including
 		// .test.env), the root jest*/playwright* harness and the e2e-only
-		// helpers it imports, and coverage fixtures. package*.json,
-		// next.config.mjs, src/, public/, scripts/ (build-time), and
-		// Docker/tsconfig build inputs stay release-affecting.
+		// helpers it imports, coverage fixtures and the coverage-report CLI.
+		// package*.json, next.config.mjs, src/, public/, other build-time
+		// scripts/, and Docker/tsconfig inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$|scripts\/coverage-gaps\.mjs$)/,
 	},
 	api: {
 		directory: "web/api",
 		ciPaths: [
 			...NATIVE_IMAGE_CI_PATHS,
+			"devops/github/ci/pending-api-release.mjs",
+			"devops/github/ci/pending-api-release.test.mjs",
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
@@ -160,6 +162,8 @@ export const MODULES = {
 			...SHARED_CI_PATHS,
 			"devops/deploy/data-deploy",
 			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+			"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
+			"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
 			"devops/daily-bulletin-infra.test.mjs",
 			"web/bulletin/assets/email",
 			"web/bulletin/scripts/prepare-email-assets.mjs",
@@ -211,8 +215,14 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  */
 export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
-	const bulletinMigration = "data/mysql/tanah_daily_bulletin_upgrade.sql";
-	const hasBulletinMigration = dataFiles.includes(bulletinMigration);
+	const bulletinMigrations = new Set([
+		"data/mysql/tanah_daily_bulletin_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+	]);
+	const hasBulletinMigration = dataFiles.some((file) =>
+		bulletinMigrations.has(file),
+	);
 	return (
 		dataFiles.length > 0 &&
 		!changedFiles.some((file) =>
@@ -221,7 +231,7 @@ export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
-				file === bulletinMigration ||
+				bulletinMigrations.has(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.
 				(hasBulletinMigration &&
