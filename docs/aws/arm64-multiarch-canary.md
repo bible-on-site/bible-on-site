@@ -710,9 +710,26 @@ but still reported `IN_PROGRESS`. That rolling-completion gate remains failed,
 including after adding the readiness signal. It is not evidence that simply
 adding a health check fixes the control-plane completion delay. No observation
 budget was extended. All owned tasks from this trial were confirmed stopped.
-A longer deployment-state observation requires the repository performance-rule
-exception; applying the readiness check to production requires specific AWS
-change approval.
+After reviewing that measured state and cost exposure, Dorad explicitly
+approved one fresh isolated trial with a 180-second rolling-deployment
+observation. That trial passed: initial API readiness was **14.969 seconds**,
+the replacement was ready in **2.603 seconds**, and the old task stayed ready
+through replacement readiness. ECS reported the replacement `HEALTHY`; the
+old task was observed `STOPPED` by 58.639 seconds after replacement readiness.
+The service then reported **`COMPLETED` at 103.463 seconds**, with desired/running
+1, pending 0 and no failed tasks. Sampled new-task readiness remained 200
+through completion, with each request retaining its two-second limit.
+
+Only the rolling control-plane observation changed from 90 to 180 seconds,
+under that explicit exception. API startup stayed at 30 seconds, requests at
+two seconds, initial deployment observation and cleanup at 90 seconds, and
+CPU/memory limits were unchanged. The earlier 90-second failures remain
+recorded; they are not relabeled passes. All API and database tasks from the
+approved trial were confirmed stopped, and its model/document fingerprints
+matched the same scalar baseline. This qualifies one isolated ECS rolling
+trial with the readiness check; it does not prove production traffic routing,
+canonical release provenance or an architecture cutover. Applying that check
+to production still requires specific AWS change approval.
 
 Canonical publication and platform pulls, a fully qualified current x86
 rollback definition, ECS readiness/circuit-breaker behavior, normal release
