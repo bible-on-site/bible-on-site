@@ -107,7 +107,8 @@ env:
   # every other run stays in shadow mode (diagnostics only). The selector
   # itself honors FORCE_FULL_SUITE.
   E2E_SELECTION_MODE: ${{ inputs.e2e_selection_mode || vars.E2E_SELECTION_MODE || 'shadow' }}
-  FORCE_FULL_SUITE: ${{ inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
+  # Queue checks cover every entry in the combined head, not just its last delta.
+  FORCE_FULL_SUITE: ${{ github.event_name == 'merge_group' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
   IS_MASTER_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
   TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
@@ -272,8 +273,8 @@ jobs:
     outputs:
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
       sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
-      # Fork PR tokens are read-only, so their rebuilt image travels as a workflow artifact instead.
-      can_publish_sefaria_mongo: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      # Queue validation and read-only fork PRs use a workflow artifact instead of publishing.
+      can_publish_sefaria_mongo: ${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - name: Check Sefaria MongoDB image availability
         id: check_sefaria_mongo
@@ -326,6 +327,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+      - name: Test module change routing
+        run: node --test devops/github/ci/determine-changes.test.ts
       - name: Determine module changes
         id: determine
         run: node devops/github/ci/determine-changes.ts
@@ -2298,14 +2301,15 @@ jobs:
       actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
     with:
+      force_full_suite: ${{ github.event_name == 'merge_group' }}
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
-    # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
-    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # PR and combined queue heads need native audio precision as well as the signed build.
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
     steps:
@@ -2754,6 +2758,7 @@ jobs:
     if: >-
       ${{ always() && !cancelled() && !failure() && (
         needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
+        (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
         needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
       ) }}
@@ -3041,14 +3046,14 @@ jobs:
             fi
           fi
 
-          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ]; then WEBSITE_MODULE_CHANGED=true; else WEBSITE_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ]; then WEBSITE_CI_CHANGED=true; else WEBSITE_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ]; then WEBSITE_MASTER_COVERAGE_AVAILABLE=true; else WEBSITE_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.website_e2e.result }}" = "success" ]; then E2E_STATUS=success; else E2E_STATUS=failure; fi
             # The performance job owns production-build validation, including
             # coverage-baseline recovery runs with no source changes.
-            PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.website_performance.result }}" = "success" ]; then PERFORMANCE_STATUS=success; else PERFORMANCE_STATUS=failure; fi
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3064,11 +3069,11 @@ jobs:
             fi
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ]; then API_MODULE_CHANGED=true; else API_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ]; then API_CI_CHANGED=true; else API_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ]; then API_MASTER_COVERAGE_AVAILABLE=true; else API_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.api_e2e.result }}" = "success" ]; then API_STATUS=success; else API_STATUS=failure; fi
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3081,8 +3086,8 @@ jobs:
             fi
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ]; then APP_MODULE_CHANGED=true; else APP_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ]; then APP_CI_CHANGED=true; else APP_CI_CHANGED=false; fi
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
             if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
@@ -3093,9 +3098,9 @@ jobs:
               exit 1
             fi
           fi
-          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ]; then APP_MASTER_COVERAGE_AVAILABLE=true; else APP_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.app_ci.result }}" = "success" ]; then APP_STATUS=success; else APP_STATUS=failure; fi
             if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3108,20 +3113,20 @@ jobs:
               exit 1
             fi
             APP_IOS_RESULT="${{ needs.app_ios_ci.result }}"
-            # Native audio precision runs on PRs; mobile E2E runs on every relevant CI event.
-            if [ "$APP_IOS_RESULT" != "success" ] && [ "$APP_IOS_RESULT" != "skipped" ]; then
+            # Match app_ios_ci: a triggered PR or queue precision suite must succeed.
+            if { [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "merge_group" ]; } && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; } && [ "$APP_IOS_RESULT" != "success" ]; then
               echo "App iOS CI failed"
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ]; then BULLETIN_MODULE_CHANGED=true; else BULLETIN_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ]; then BULLETIN_CI_CHANGED=true; else BULLETIN_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ]; then BULLETIN_MASTER_COVERAGE_AVAILABLE=true; else BULLETIN_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             # A triggered suite that did not complete (failure, skip, cancel) blocks the merge.
-            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.bulletin_ci.result }}" = "success" ]; then BULLETIN_STATUS=success; else BULLETIN_STATUS=failure; fi
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3134,11 +3139,11 @@ jobs:
             fi
           fi
 
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ]; then ADMIN_MODULE_CHANGED=true; else ADMIN_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then ADMIN_CI_CHANGED=true; else ADMIN_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ]; then ADMIN_MASTER_COVERAGE_AVAILABLE=true; else ADMIN_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.admin_ci.result }}" = "success" ]; then ADMIN_STATUS=success; else ADMIN_STATUS=failure; fi
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3151,22 +3156,23 @@ jobs:
             fi
           fi
 
-          DATA_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ]; then DATA_MODULE_CHANGED=true; else DATA_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then DATA_CI_CHANGED=true; else DATA_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ]; then DATA_MASTER_COVERAGE_AVAILABLE=true; else DATA_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$DATA_CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.data_ci.result }}" = "success" ]; then DATA_STATUS=success; else DATA_STATUS=failure; fi
             if [ "$DATA_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          PERUSHIM_PIPELINE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_DATA_SQL_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_NOTES_SQLITE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
-            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          if [ "${{ needs.determine_changes.outputs.perushim_pipeline_ci_changed }}" = "true" ]; then PERUSHIM_PIPELINE_CI_CHANGED=true; else PERUSHIM_PIPELINE_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ]; then PERUSHIM_PIPELINE_MODULE_CHANGED=true; else PERUSHIM_PIPELINE_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ]; then PERUSHIM_DATA_SQL_AVAILABLE=true; else PERUSHIM_DATA_SQL_AVAILABLE=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ]; then PERUSHIM_NOTES_SQLITE_AVAILABLE=true; else PERUSHIM_NOTES_SQLITE_AVAILABLE=false; fi
+          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || { [ "${{ github.event_name }}" = "merge_group" ] && [ "$PERUSHIM_PIPELINE_CI_CHANGED" = "true" ]; } || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
+            if [ "${{ needs.perushim_data.result }}" = "success" ]; then PERUSHIM_STATUS=success; else PERUSHIM_STATUS=failure; fi
             if [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
