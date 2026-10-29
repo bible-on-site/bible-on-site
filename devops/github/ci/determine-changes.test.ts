@@ -542,6 +542,13 @@ describe("isSchemaOnlyDataChange", () => {
 		assert.equal(
 			isSchemaOnlyDataChange([
 				...files,
+				"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			]),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
 				"data/mysql/tanah_sefarim_and_perakim_data.sql",
 			]),
 			true,

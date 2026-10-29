@@ -228,6 +228,9 @@ export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 		"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs";
 	if (
 		dataFiles.includes(calendarConverter) &&
+		!changedFiles.some((file) =>
+			MODULES.perushim_pipeline.extraModulePaths.includes(file),
+		) &&
 		dataFiles.every(
 			(file) =>
 				file === calendarConverter ||
