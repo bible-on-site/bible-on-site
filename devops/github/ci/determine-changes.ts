@@ -214,10 +214,11 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  * This path check does not certify SQL safety or existence: deleted migrations
  * also stay manual rather than triggering a full production bootstrap.
  */
-export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
-	const dataFiles = changedFiles.filter(
-		(file) => isAt(file, "data") && !DATA_DOCUMENTATION_PATTERN.test(file),
+export function isSchemaOnlyDataChange(files: string[]): boolean {
+	const changedFiles = files.filter(
+		(file) => !DATA_DOCUMENTATION_PATTERN.test(file),
 	);
+	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
 	const bulletinMigration = "data/mysql/tanah_daily_bulletin_upgrade.sql";
 	const hasBulletinMigration = dataFiles.includes(bulletinMigration);
 	return (

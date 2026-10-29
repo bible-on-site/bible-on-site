@@ -24,6 +24,30 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+
+	describe("documentation preserves every migration routing decision", () => {
+		for (const migrations of [
+			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+			],
+		]) {
+			test(migrations.join(" + "), () => {
+				const files = ["data/annotations/GOLDEN.md", ...migrations];
+				assert.deepEqual(detectChanges(files).data, {
+					module_changed: true,
+					ci_changed: true,
+				});
+				assert.equal(
+					isSchemaOnlyDataChange(files),
+					isSchemaOnlyDataChange(migrations),
+				);
+				assert.equal(isDataDeployChange(files), false);
+			});
+		}
+	});
 	test("the annotation evaluation guide selects data checks without delivery", () => {
 		const files = ["data/annotations/GOLDEN.md"];
 		const changes = detectChanges(files);
