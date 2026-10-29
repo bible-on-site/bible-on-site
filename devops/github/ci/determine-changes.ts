@@ -311,7 +311,9 @@ export function baseRevision(
 				: { kind: "sha", sha: before };
 		}
 		case "merge_group":
-			// Exclude changes of PRs queued ahead; master lacks them.
+			// Keep the immediate queue delta for diagnostics only. HEADGREEN can
+			// merge entries ahead using this group's checks, so main validates
+			// every module in the combined head rather than trusting this delta.
 			return {
 				kind: "sha",
 				sha: required(event.merge_group?.base_sha, "merge_group.base_sha"),
@@ -396,14 +398,23 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 			"Audited publisher docstring-only change: data checks required, no delivery.",
 		);
 	}
+	const mergeGroup = GITHUB_EVENT_NAME === "merge_group";
+	if (mergeGroup) {
+		// A preceding queue entry may still have unfinished checks. Validate
+		// the combined head conservatively, without any release intent.
+		for (const flags of Object.values(changes)) {
+			flags.module_changed = false;
+			flags.ci_changed = true;
+		}
+	}
 	const lines = Object.entries(changes).flatMap(([key, flags]) => [
 		`${key}_module_changed=${flags.module_changed}`,
 		`${key}_ci_changed=${flags.ci_changed}`,
 	]);
 	lines.push(
-		`data_schema_only_changed=${isSchemaOnlyDataChange(deliveryFiles)}`,
+		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
-	lines.push(`data_deploy_changed=${isDataDeployChange(files)}`);
+	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;
