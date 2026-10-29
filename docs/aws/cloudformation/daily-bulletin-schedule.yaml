@@ -63,4 +63,4 @@ Resources:
           Arn: !Ref DeadLetterQueueArn
 Outputs:
   ScheduleArn:
-    Value: !GetAtt Schedule.Arn
+    Value: !Sub "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${ScheduleGroup}/${Schedule}"
