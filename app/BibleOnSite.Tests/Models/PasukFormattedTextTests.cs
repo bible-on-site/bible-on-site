@@ -162,6 +162,17 @@ public class PasukFormattedTextTests
                 Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
             };
             var weak = CreateFormattedWeakReference(pasuk);
+            // The bounded MRU keeps the freshest entries rooted (#2309); binding
+            // enough newer pesukim evicts this pasuk's entry again.
+            foreach (var i in Enumerable.Range(0, 200))
+            {
+                var newer = new Pasuk
+                {
+                    PasukNum = i + 2, Text = "",
+                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
+                };
+                _ = newer.FormattedText;
+            }
 
             GarbageCollection.CollectCycles();
 
@@ -196,6 +207,50 @@ public class PasukFormattedTextTests
 
             second.Should().BeSameAs(first);
             Flatten(second).Should().Be("בְּרֵאשִׁית");
+        }
+
+        [Fact]
+        public void serves_a_rebound_verse_from_the_mru_across_gc_churn()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "בְּרֵאשִׁית" }]
+            };
+            var weak = CreateFormattedWeakReference(pasuk);
+
+            GarbageCollection.CollectCycles();
+
+            // A cell unload followed by GC must not force a rebuild on rebind
+            // (#2309): the MRU keeps the FormattedString rooted for the
+            // freshest pesukim.
+            weak.TryGetTarget(out var formatted).Should().BeTrue();
+            pasuk.FormattedText.Should().BeSameAs(formatted);
+            GC.KeepAlive(pasuk);
+        }
+
+        [Fact]
+        public void formatted_text_mru_evicts_the_least_recently_built_pasuk()
+        {
+            var first = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "א" }]
+            };
+            var firstFormatted = first.FormattedText;
+            // Push the first pasuk past the MRU capacity of 128 entries.
+            foreach (var i in Enumerable.Range(0, 200))
+            {
+                var other = new Pasuk
+                {
+                    PasukNum = i + 2, Text = "",
+                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
+                };
+                _ = other.FormattedText;
+            }
+
+            first.FormattedText.Should().NotBeSameAs(firstFormatted);
+            first.FormattedText.Should().BeSameAs(first.FormattedText);
         }
 
         [Fact]
