@@ -12,7 +12,15 @@
 // `.next/server/app/929/1/%D7%A8%D7%A9%22%D7%99.html`).
 import FileSystemCacheModule from "next/dist/server/lib/incremental-cache/file-system-cache.js";
 
-const FileSystemCache = FileSystemCacheModule.default;
+// The CJS module's export shape differs by loader: the standalone runtime
+// gives the exports object with the class at `.default`, while Turbopack dev
+// bundles may expose it directly — pick whichever candidate is a class.
+const FileSystemCache = [
+	FileSystemCacheModule.default,
+	FileSystemCacheModule.default?.default,
+	FileSystemCacheModule.FileSystemCache,
+	FileSystemCacheModule,
+].find((candidate) => typeof candidate === "function");
 
 // Filename characters safe on Windows, macOS and Linux alike. Anything else —
 // non-ASCII letters, `"`, `*`, `?`, `|`, `<`, `>`, `%`, control characters —
