@@ -33,6 +33,7 @@ exclude_paths:
   - "data/mysql/tanah_dynamic_structure.sql"
   - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_reading_metrics_upgrade.sql"

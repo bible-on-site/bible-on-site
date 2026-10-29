@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
 import type {
 	BulletinEmailState,
 	EmailAudience,
@@ -51,6 +52,7 @@ type QueueRequest = {
 
 export function DailyBulletinPage() {
 	const [date, setDate] = useState(todayInJerusalem);
+	const [telegramBusy, setTelegramBusy] = useState(false);
 	const [whatsappPending, setWhatsAppPending] = useState(false);
 	const [requestedAudience, setRequestedAudience] =
 		useState<EmailAudience | null>(null);
@@ -115,12 +117,12 @@ export function DailyBulletinPage() {
 	});
 	const emailOrPreparationBusy =
 		prepare.isPending || queueEmail.isPending || changeAudience.isPending;
-	const busy = emailOrPreparationBusy || whatsappPending;
+	const busy = emailOrPreparationBusy || telegramBusy || whatsappPending;
 	const whatsappControls = (
 		<BulletinWhatsAppControls
 			date={date}
 			prepared={!!saved?.pdfBase64}
-			disabled={emailOrPreparationBusy}
+			disabled={emailOrPreparationBusy || telegramBusy}
 			onBusyChange={setWhatsAppPending}
 		/>
 	);
@@ -442,6 +444,11 @@ export function DailyBulletinPage() {
 									: "שליחת ניסיון בלבד"}
 						</button>
 					</section>
+					<BulletinTelegramControls
+						date={date}
+						disabled={emailOrPreparationBusy || whatsappPending}
+						onBusyChange={setTelegramBusy}
+					/>
 					{whatsappControls}
 					<section className="rounded-xl border border-gray-200 bg-white p-4">
 						<h2 className="mb-3 text-xl font-semibold">תצוגת דוא"ל</h2>

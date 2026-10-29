@@ -44,6 +44,21 @@ const SUPPRESSED = "השליחה נעצרה בעקבות שינוי במצב ה�
 const QUEUE_FAILED =
 	"לא ניתן להעביר את כל הנמענים לתור. אפשר לנסות שוב באותה בקשה.";
 
+const TELEGRAM_JOB_ID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function optionalTelegramDelivery() {
+	if (
+		[
+			"BULLETIN_TELEGRAM_BOT_TOKEN",
+			"BULLETIN_TELEGRAM_BOT_USERNAME",
+			"BULLETIN_TELEGRAM_TEST_CHAT_ID",
+		].some((name) => !process.env[name]?.trim())
+	)
+		return null;
+	return import("./telegram-delivery.server");
+}
+
 const WHATSAPP_JOB_ID =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -658,6 +673,18 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					await reconcileEmailOutbox(client, runtime.queueUrl, signal);
 					if (signal.aborted) break;
 					try {
+						const telegram = await optionalTelegramDelivery();
+						if (signal.aborted) break;
+						await telegram?.reconcileTelegramOutbox(
+							client,
+							runtime.queueUrl,
+							signal,
+						);
+					} catch {
+						if (!signal.aborted)
+							console.error("Telegram bulletin outbox reconciliation failed");
+					}
+					try {
 						const whatsapp = await optionalWhatsAppDelivery();
 						if (signal.aborted) break;
 						await whatsapp?.reconcileWhatsAppOutbox(
@@ -708,6 +735,26 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					) {
 						await processEmailRecipient(payload.recipientId);
 						handled = true;
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						payload.kind === "telegram.send"
+					) {
+						if (
+							Object.keys(payload).length === 2 &&
+							"jobId" in payload &&
+							typeof payload.jobId === "string" &&
+							TELEGRAM_JOB_ID.test(payload.jobId)
+						) {
+							const telegram = await optionalTelegramDelivery();
+							if (signal.aborted) break;
+							if (telegram)
+								handled = await telegram.processTelegramJob(
+									payload.jobId.toLowerCase(),
+									signal,
+								);
+						}
 					} else if (
 						typeof payload === "object" &&
 						payload !== null &&
