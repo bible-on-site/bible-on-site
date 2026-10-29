@@ -14,12 +14,12 @@ weights (`requirements-encoders.txt`). `--no-retype` emits the bare
 lexical rows for diagnosis — useful determinism checks, not the shipped
 tier (its type skew is documented in GOLDEN.md).
 
-Gated production run (weights fetch once; encoder optional otherwise):
+Gated production run from the repository root (weights fetch once; encoder optional otherwise):
 
     # articles first, straight from the live export
-    node --import tsx devops/export-tanahpedia-articles.mts \\
+    node devops/export-tanahpedia-articles.mts \\
         --out /tmp/articles.json --env-file <module>/.dev.env
-    python publish.py --pasuk-out /tmp/mentions-pasuk.json \\
+    python data/annotations/publish.py --pasuk-out /tmp/mentions-pasuk.json \\
         --articles /tmp/articles.json --article-out /tmp/mentions-article.json
     node devops/import-tanahpedia-mentions.mts \\
         --decorations /tmp/mentions-pasuk.json --dry-run
