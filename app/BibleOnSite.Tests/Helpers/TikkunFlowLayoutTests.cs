@@ -365,8 +365,9 @@ public class TikkunFlowLayoutTests
         [Fact]
         public void ignores_niqqud_and_taamim_while_counting()
         {
-            // בְּרֵאשִׁ֖ית carries 6 base letters wrapped in niqqud + a taam;
-            // 28 + 6 = 34 fits exactly (had marks counted, 35+ would wrap).
+            // The pointed word carries six base letters under niqqud and a taam.
+            // Twenty-eight unpointed letters plus six reaches the cap exactly,
+            // so the next word wraps (had marks counted, it would not fit).
             var pointed = "בְּרֵאשִׁ֖ית";
             pointed.Length.Should().BeGreaterThan(6);
             TikkunFlowLayout.HebrewLetters(pointed).Should().Be(6);
@@ -396,8 +397,9 @@ public class TikkunFlowLayoutTests
         [Fact]
         public void maqaf_groups_count_their_letters_but_stay_unsplit()
         {
-            // "אָב־אָב" — 4 letters across a maqaf; the maqaf adds zero and the
-            // group is one layout unit: 33 + 4 = 37 → the whole group wraps.
+            // The maqaf-joined pair carries four letters and counts as one
+            // layout unit — with the 33-letter word it exceeds the budget, so
+            // the whole group wraps unsplit.
             const string maqafGroup = "אָב־אָב";
             TikkunFlowLayout.HebrewLetters(maqafGroup).Should().Be(4);
 
