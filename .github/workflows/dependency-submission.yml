@@ -50,6 +50,9 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # A delayed job may start after a squash merge deleted the PR branch.
+          # Fetch the event's immutable head explicitly; all-branch fetches omit it.
+          git fetch --no-tags --no-recurse-submodules origin "$PR_HEAD_SHA"
           comparison_base=$(git merge-base "$SNAPSHOT_SHA" "$PR_HEAD_SHA")
           git checkout --detach "$comparison_base"
           echo "SNAPSHOT_SHA=$comparison_base" >> "$GITHUB_ENV"
