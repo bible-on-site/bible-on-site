@@ -125,8 +125,8 @@ public sealed class TestStorage : IAsyncDisposable
         {
             // A service handle outside this storage's tracking (e.g. a cached
             // connection member) can still hold a file under Root — Windows
-            // then refuses the delete. A residue dir beats an unsafe close;
-            // the OS reaps it on process exit anyway.
+            // then refuses the delete. A residue dir beats an unsafe close
+            // and the OS reaps it on process exit anyway.
         }
         catch (UnauthorizedAccessException)
         {

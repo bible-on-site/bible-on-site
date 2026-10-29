@@ -831,12 +831,12 @@ public class PerekLoadingTests
         IPadDeliveryService pad, Microsoft.Maui.Storage.IFileSystem fileSystem)
         : PerushimNotesService(pad, fileSystem)
     {
-        public TaskCompletionSource MetricsEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<int> MetricsEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<IReadOnlyDictionary<int, ReadingMetric>> MetricsResult { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
         {
-            MetricsEntered.TrySetResult();
+            MetricsEntered.TrySetResult(perekId);
             return MetricsResult.Task;
         }
     }
