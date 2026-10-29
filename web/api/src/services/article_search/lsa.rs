@@ -237,14 +237,7 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
     let mut q = y;
     orthonormalize(&mut q, n_docs, sketch);
     // B = Qᵀ·A — sketch × terms
-    let mut b = vec![0.0f32; sketch * n_terms];
-    for (d, doc) in docs.iter().enumerate() {
-        for &(tid, w) in doc {
-            for j in 0..sketch {
-                b[j * n_terms + tid as usize] += q[d * sketch + j] * w;
-            }
-        }
-    }
+    let b = compressed_matrix(docs, &q, n_terms, sketch);
     // Eigen-decompose B·Bᵀ (sketch × sketch) → U_b and σ².
     let mut bbt = vec![0.0f32; sketch * sketch];
     for i in 0..sketch {
@@ -280,6 +273,32 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
         &eigenvectors,
         &keep,
     ))
+}
+
+/// Accumulate each term contiguously, then transpose without arithmetic.
+/// Every matrix cell keeps the original document/entry addition order.
+fn compressed_matrix(docs: &[SparseVector], q: &[f32], n_terms: usize, sketch: usize) -> Vec<f32> {
+    let mut term_major = vec![0.0f32; n_terms * sketch];
+    for (d, doc) in docs.iter().enumerate() {
+        let q_row = &q[d * sketch..(d + 1) * sketch];
+        for &(tid, weight) in doc {
+            let row = &mut term_major[tid as usize * sketch..(tid as usize + 1) * sketch];
+            for (value, coefficient) in row.iter_mut().zip(q_row) {
+                *value += *coefficient * weight;
+            }
+        }
+    }
+    let mut b = vec![0.0f32; n_terms * sketch];
+    const TERM_BLOCK: usize = 32;
+    for start in (0..n_terms).step_by(TERM_BLOCK) {
+        let end = (start + TERM_BLOCK).min(n_terms);
+        for j in 0..sketch {
+            for term in start..end {
+                b[j * n_terms + term] = term_major[term * sketch + j];
+            }
+        }
+    }
+    b
 }
 
 /// V = Bᵀ·U_b·Σ⁻¹ for the retained directions, stored as terms × dimensions.
@@ -600,6 +619,54 @@ impl<'a> Cursor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compressed_layout_keeps_every_scalar_addition_and_partial_block() {
+        for (terms, sketch) in [(31, 144), (32, 144), (33, 144), (65, 7), (0, 144), (33, 0)] {
+            let docs: Vec<SparseVector> = (0..5)
+                .map(|d| {
+                    if terms == 0 {
+                        vec![]
+                    } else {
+                        vec![
+                            (0, 1.0),
+                            ((d % terms) as u32, -0.25),
+                            (0, 2.0),
+                            (((d * 7) % terms) as u32, 0.125),
+                        ]
+                    }
+                })
+                .collect();
+            let mut rng = SplitMix64(RNG_SEED);
+            let q: Vec<f32> = (0..docs.len() * sketch)
+                .map(|_| rng.next_gaussian())
+                .collect();
+            let mut expected = vec![0.0f32; terms * sketch];
+            for (d, doc) in docs.iter().enumerate() {
+                for &(tid, w) in doc {
+                    for j in 0..sketch {
+                        expected[j * terms + tid as usize] += q[d * sketch + j] * w;
+                    }
+                }
+            }
+            let actual = compressed_matrix(&docs, &q, terms, sketch);
+            assert_eq!(
+                actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(compressed_matrix(&[], &[], 33, 144), vec![0.0; 33 * 144]);
+    }
+
+    #[test]
+    fn compressed_layout_does_not_reassociate_duplicate_or_document_terms() {
+        let docs = vec![
+            vec![(0, 100_000_000.0), (0, 1.0)],
+            vec![(0, -100_000_000.0)],
+            vec![(0, 3.0)],
+        ];
+        assert_eq!(compressed_matrix(&docs, &[1.0; 3], 1, 1), vec![3.0]);
+    }
 
     fn counts(pairs: &[(&str, u32)]) -> HashMap<String, u32> {
         pairs.iter().map(|(t, c)| (t.to_string(), *c)).collect()

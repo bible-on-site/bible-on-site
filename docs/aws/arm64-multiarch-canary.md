@@ -347,12 +347,69 @@ The combined actual-Dockerfile image passed the same full-corpus cold gate in
 26.586 seconds. Document SQL took 1.699 seconds, and warm readiness took
 1.519 seconds while a separate test session held the retraining lock. The
 hard limits remained 0.25 vCPU/512 MiB; process high-water RSS was about
-216.45 MiB and there was no OOM. Final normal validation passed 297 unit tests,
+216.45 MiB and there was no OOM. That revision's normal validation passed 297 unit tests,
 two mandatory MySQL tests and 59 HTTP E2E tests; merged API line coverage was
 13,241/13,392 (98.872%), above the unchanged 97% gate. Local image labels
 explicitly identify the working tree; final native CI must bind published
 images to the committed source. These are local amd64 results, not ARM or
 Fargate performance evidence.
+
+### Production-version repeat and further CPU headroom (2026-10-29)
+
+The preceding cold/warm measurements used MySQL 8.4.13. A seed image pinned to
+the official MySQL 8.4.9 amd64 child was then rehearsed to match production's
+version. Its authenticated TCP/corpus-marker startup missed the unchanged
+30-second database gate at 0.5 vCPU/1 GiB. At the valid Fargate size of
+1 vCPU/2 GiB, it passed in 23.075 seconds. These are temporary database
+resources; API and production resource limits remain unchanged. At the
+published regional rates, that temporary server costs $0.0631936/hour of
+compute, excluding public IPv4, logs, image storage and client tasks.
+
+The API's first repeat against 8.4.9 missed its unchanged 30-second cold gate.
+A separately labeled diagnostic became ready in 30.531 seconds, which remains
+a failure. Another diagnostic became ready in 27.304 seconds; that single pass
+does not erase the failure or establish reliable startup. The exact ordered
+2,682 input rows and all public name/abstract/content hashes matched the prior
+fixture, as did the resulting stored model. The CPU sample found no aggregate
+VM starvation or OOM: training took 20.502 seconds, with the task using its
+expected quarter-CPU quota. Subsequent public-data, seven dedication-scope,
+queued-update and real-MySQL timestamp/atomic rollback/cancellation checks
+passed. The new failure is retained and blocks qualification.
+
+Two additional CPU changes retain the model contract. The compressed matrix
+accumulates contiguous term rows, preserving every cell's original addition
+order, then transposes without arithmetic. Normalization bypasses per-character
+NFD only for identity-decomposition ASCII and regular Hebrew letters; all
+other characters keep the original fallback. On pinned Rust 1.99.1, both
+normalization modes matched over all 1,112,064 Unicode scalar values in two
+contexts and every one of the public corpus's 8,043 name/abstract/plain-text
+fields. Focused tests cover boundary blocks, duplicate/cancelling terms,
+spacing, quotes, final letters and Unicode decomposition/case.
+
+At 0.25 vCPU/512 MiB, the combined standalone profiler completed in
+13.951 seconds, with 228.4 MiB process high-water RSS. Its complete basis,
+persisted model, document embeddings and all tested query score/ranking bytes
+match the original frozen baseline exactly. This is an amd64 algorithm proof,
+not an API startup or ARM/Fargate result. Training now explicitly orders rows
+by ID; this preserves the observed fixture order and prevents query-plan
+changes from silently changing the model's input sequence.
+
+The actual rebuilt Dockerfile image then passed two independent fresh-table
+cold starts against MySQL 8.4.9 in **18.025 and 18.472 seconds**, using the
+unchanged 30-second gate and 0.25 vCPU/512 MiB API limits. Warm readiness with
+an independently held retraining lock passed in 1.234 seconds. Input bytes
+and the stored model remained identical. The largest public HTML, all 929
+chapter labels, covering-source TIMESTAMP, all seven dedication scopes,
+expiry handling, 120 bounded HTTP requests, exact-holder release and queued
+update checks passed. Both API candidates and the holder were cleaned up.
+
+Fresh normal validation passed 301 unit tests, the nextest run, two mandatory
+real-MySQL regressions and 59 HTTP E2E tests; all 18 report-watcher regressions
+also passed. Merged API line coverage is 13,312/13,463 (98.878%), above the
+unchanged 97% gate. Normal cargo-make lint, strict all-target Clippy and
+rustfmt passed. These remain local amd64 results with honest working-tree
+image/source labels. Final committed-source native CI, published archive
+provenance and isolated AWS comparison remain gates before ARM migration.
 
 The unexecuted AWS comparison plan uses a separate MySQL server and sequential
 amd64/ARM64 API services at those same limits. It uses an owned temporary

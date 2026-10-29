@@ -768,7 +768,7 @@ async fn retrain_locked(conn: &RetrainLock<'_>) -> Result<usize, DbErr> {
     let rows = conn
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::MySql,
-            "SELECT id, name, abstract, content FROM tanah_article WHERE perek_id BETWEEN 1 AND 929",
+            "SELECT id, name, abstract, content FROM tanah_article WHERE perek_id BETWEEN 1 AND 929 ORDER BY id",
         ))
         .await?;
     let mut counts_per_doc = Vec::with_capacity(rows.len());
