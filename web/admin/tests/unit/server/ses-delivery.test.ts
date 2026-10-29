@@ -20,8 +20,10 @@ const mocks = vi.hoisted(() => ({
 	destroy: vi.fn(),
 	parse: vi.fn(),
 	delay: vi.fn(),
+	whatsappProcess: vi.fn(),
 	telegramProcess: vi.fn(),
 	telegramSweep: vi.fn(),
+	whatsappSweep: vi.fn(),
 }));
 vi.mock("~/server/db", () => mocks);
 vi.mock("~/server/daily-bulletins.server", () => ({
@@ -62,6 +64,10 @@ vi.mock("~/server/ses-settings.server", async () => {
 	};
 });
 vi.mock("~/server/ses-events.server", () => ({ parseSesEvent: mocks.parse }));
+vi.mock("~/server/whatsapp-delivery.server", () => ({
+	processWhatsAppJob: mocks.whatsappProcess,
+	reconcileWhatsAppOutbox: mocks.whatsappSweep,
+}));
 vi.mock("~/server/telegram-delivery.server", () => ({
 	processTelegramJob: mocks.telegramProcess,
 	reconcileTelegramOutbox: mocks.telegramSweep,
@@ -465,6 +471,14 @@ beforeEach(() => {
 		vi.stubEnv(name, "");
 	mocks.telegramProcess.mockReset().mockResolvedValue(true);
 	mocks.telegramSweep.mockReset().mockResolvedValue(undefined);
+	for (const name of [
+		"BULLETIN_WHATSAPP_API_TOKEN",
+		"BULLETIN_WHATSAPP_INSTANCE_ID",
+		"BULLETIN_WHATSAPP_TEST_GROUP_ID",
+	])
+		vi.stubEnv(name, "");
+	mocks.whatsappProcess.mockReset().mockResolvedValue(true);
+	mocks.whatsappSweep.mockReset().mockResolvedValue(undefined);
 	state = {
 		jobs: [],
 		subscribers: [subscriber(), subscriber(2)],
@@ -533,6 +547,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.unstubAllEnvs();
+	vi.restoreAllMocks();
 });
 
 describe("enqueue", () => {
@@ -646,7 +661,7 @@ describe("enqueue", () => {
 
 		expect(mocks.sqs).toHaveBeenCalledOnce();
 		expect(mocks.sqs.mock.calls[0][0].kind).toBe("batch");
-		expect(mocks.telegramSweep).not.toHaveBeenCalled();
+		expect(mocks.whatsappSweep).not.toHaveBeenCalled();
 		expect(state.recipients.every(({ status }) => status === "queued")).toBe(
 			true,
 		);
@@ -1265,7 +1280,7 @@ describe("summary and queue loop", () => {
 			expect(mocks.txExecute).not.toHaveBeenCalled();
 			expect(mocks.txQuery).not.toHaveBeenCalled();
 			expect(mocks.sendOne).not.toHaveBeenCalled();
-			expect(mocks.telegramProcess).not.toHaveBeenCalled();
+			expect(mocks.whatsappProcess).not.toHaveBeenCalled();
 			expect(mocks.destroy).toHaveBeenCalledOnce();
 		},
 	);
@@ -1577,6 +1592,191 @@ describe("summary and queue loop", () => {
 	});
 });
 
+describe("optional WhatsApp dispatch in the existing worker", () => {
+	function configureWhatsApp() {
+		for (const name of [
+			"INSTANCE_ID",
+			"API_TOKEN",
+			"API_URL",
+			"MEDIA_URL",
+			"SENDER_PHONE",
+			"TEST_GROUP_ID",
+			"TEST_PARTICIPANT_DIGEST",
+		])
+			vi.stubEnv(`BULLETIN_WHATSAPP_${name}`, "fixture-config");
+	}
+
+	const whatsappBody = (jobId = key) =>
+		`{"kind":"whatsapp.send","jobId":"${jobId}"}`;
+
+	function messages(controller: AbortController, bodies: string[]) {
+		let next = 0;
+		mocks.sqs.mockImplementation(async (command) => {
+			if (command.kind !== "receive") return {};
+			if (next >= bodies.length) {
+				controller.abort();
+				return {};
+			}
+			return {
+				Messages: [
+					{
+						Body: bodies[next],
+						ReceiptHandle: `receipt-${next++}`,
+					},
+				],
+			};
+		});
+	}
+
+	it.each([
+		"BULLETIN_WHATSAPP_INSTANCE_ID",
+		"BULLETIN_WHATSAPP_API_TOKEN",
+		"BULLETIN_WHATSAPP_API_URL",
+		"BULLETIN_WHATSAPP_MEDIA_URL",
+		"BULLETIN_WHATSAPP_SENDER_PHONE",
+		"BULLETIN_WHATSAPP_TEST_GROUP_ID",
+		"BULLETIN_WHATSAPP_TEST_PARTICIPANT_DIGEST",
+	])(
+		"leaves WhatsApp unacknowledged without affecting email when %s is absent",
+		async (name) => {
+			configureWhatsApp();
+			vi.stubEnv(name, " ");
+			seed("test", "accepted");
+			const controller = new AbortController();
+			messages(controller, [whatsappBody(), '{"kind":"send","recipientId":1}']);
+
+			await startEmailWorker(controller.signal);
+
+			expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+			expect(mocks.whatsappProcess).not.toHaveBeenCalled();
+			expect(
+				mocks.sqs.mock.calls
+					.filter(([command]) => command.kind === "delete")
+					.map(([command]) => command.input.ReceiptHandle),
+			).toEqual(["receipt-1"]);
+		},
+	);
+
+	it("routes mixed jobs and native SES events through one consumer and acknowledges durable WhatsApp completion", async () => {
+		configureWhatsApp();
+		const row = seed("test", "accepted");
+		const controller = new AbortController();
+		const native = { eventType: "Delivery" };
+		const order: string[] = [];
+		mocks.parse.mockReturnValue(delivery());
+		mocks.whatsappProcess.mockImplementationOnce(async () => {
+			order.push("whatsapp-persisted");
+			return true;
+		});
+		messages(controller, [
+			`{"jobId":"${key.toUpperCase()}","kind":"whatsapp.send"}`,
+			'{"kind":"send","recipientId":1}',
+			'{"eventType":"Delivery"}',
+		]);
+		const receive = mocks.sqs.getMockImplementation();
+		mocks.sqs.mockImplementation(async (command) => {
+			if (command.kind === "delete") order.push(command.input.ReceiptHandle);
+			return receive?.(command);
+		});
+
+		await startEmailWorker(controller.signal);
+
+		expect(mocks.whatsappProcess).toHaveBeenCalledExactlyOnceWith(
+			key,
+			controller.signal,
+		);
+		expect(mocks.whatsappSweep).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ send: mocks.sqs }),
+			config.queueUrl,
+			controller.signal,
+		);
+		expect(mocks.sqsConfig).toHaveBeenCalledOnce();
+		expect(mocks.parse).toHaveBeenCalledExactlyOnceWith(native, config);
+		expect(row.status).toBe("delivered");
+		expect(order).toEqual([
+			"whatsapp-persisted",
+			"receipt-0",
+			"receipt-1",
+			"receipt-2",
+		]);
+		expect(mocks.sendOne).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		'{"kind":"whatsapp.send"}',
+		'{"kind":"whatsapp.send","jobId":1}',
+		'{"kind":"whatsapp.send","jobId":"invalid"}',
+		`{"kind":"whatsapp.send","jobId":"${key}","groupId":"120363000000000001@g.us"}`,
+	])(
+		"refuses malformed WhatsApp body %j before dispatch or SES parsing",
+		async (body) => {
+			configureWhatsApp();
+			const controller = new AbortController();
+			messages(controller, [body]);
+
+			await startEmailWorker(controller.signal);
+
+			expect(mocks.whatsappProcess).not.toHaveBeenCalled();
+			expect(mocks.parse).not.toHaveBeenCalled();
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(false);
+		},
+	);
+
+	it("keeps unhandled WhatsApp work for recovery", async () => {
+		configureWhatsApp();
+		mocks.whatsappProcess.mockResolvedValueOnce(false);
+		const controller = new AbortController();
+		messages(controller, [whatsappBody()]);
+
+		await startEmailWorker(controller.signal);
+
+		expect(mocks.whatsappProcess).toHaveBeenCalledOnce();
+		expect(
+			mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+		).toBe(false);
+	});
+
+	it("does not acknowledge WhatsApp persistence errors or retry its provider mutation", async () => {
+		configureWhatsApp();
+		mocks.whatsappProcess.mockRejectedValueOnce(new Error("private details"));
+		const controller = new AbortController();
+		messages(controller, [whatsappBody()]);
+		mocks.delay.mockImplementationOnce(async () => controller.abort());
+
+		await startEmailWorker(controller.signal);
+
+		expect(mocks.whatsappProcess).toHaveBeenCalledOnce();
+		expect(
+			mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+		).toBe(false);
+		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
+
+	it("isolates WhatsApp outbox failure so a native email event still completes", async () => {
+		configureWhatsApp();
+		const row = seed("test", "accepted");
+		const controller = new AbortController();
+		mocks.parse.mockReturnValue(delivery());
+		mocks.whatsappSweep.mockRejectedValueOnce(new Error("private details"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		messages(controller, ['{"eventType":"Delivery"}']);
+		try {
+			await startEmailWorker(controller.signal);
+			expect(row.status).toBe("delivered");
+			expect(log).toHaveBeenCalledExactlyOnceWith(
+				"WhatsApp bulletin outbox reconciliation failed",
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(true);
+		} finally {
+			log.mockRestore();
+		}
+	});
+});
+
 describe("optional Telegram dispatch in the existing worker", () => {
 	function configureTelegram() {
 		vi.stubEnv("BULLETIN_TELEGRAM_BOT_TOKEN", "fixture-token");
@@ -1748,5 +1948,59 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		} finally {
 			log.mockRestore();
 		}
+	});
+
+	it("dispatches both configured channels and native email through one queue without crossing jobs", async () => {
+		configureTelegram();
+		for (const name of [
+			"INSTANCE_ID",
+			"API_TOKEN",
+			"API_URL",
+			"MEDIA_URL",
+			"SENDER_PHONE",
+			"TEST_GROUP_ID",
+			"TEST_PARTICIPANT_DIGEST",
+		])
+			vi.stubEnv(`BULLETIN_WHATSAPP_${name}`, "fixture-config");
+		const row = seed("test", "accepted");
+		mocks.parse.mockReturnValue(delivery());
+		const controller = new AbortController();
+		messages(controller, [
+			telegramBody(),
+			`{"kind":"whatsapp.send","jobId":"${key}"}`,
+			'{"kind":"send","recipientId":1}',
+			'{"eventType":"Delivery"}',
+		]);
+		await startEmailWorker(controller.signal);
+		expect(mocks.telegramProcess).toHaveBeenCalledExactlyOnceWith(
+			key,
+			controller.signal,
+		);
+		expect(mocks.whatsappProcess).toHaveBeenCalledExactlyOnceWith(
+			key,
+			controller.signal,
+		);
+		expect(mocks.telegramSweep).toHaveBeenCalledOnce();
+		expect(mocks.whatsappSweep).toHaveBeenCalledOnce();
+		expect(row.status).toBe("delivered");
+		expect(
+			mocks.sqs.mock.calls
+				.filter(([command]) => command.kind === "delete")
+				.map(([command]) => command.input.ReceiptHandle),
+		).toEqual(["receipt-0", "receipt-1", "receipt-2", "receipt-3"]);
+	});
+	it("stops quietly if shutdown accompanies a Telegram sweep failure", async () => {
+		configureTelegram();
+		const controller = new AbortController();
+		mocks.telegramSweep.mockImplementationOnce(async () => {
+			controller.abort();
+			throw new Error("private teardown failure");
+		});
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		await startEmailWorker(controller.signal);
+		expect(log).not.toHaveBeenCalled();
+		expect(mocks.sqs).not.toHaveBeenCalled();
+		expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+		expect(mocks.destroy).toHaveBeenCalledOnce();
 	});
 });

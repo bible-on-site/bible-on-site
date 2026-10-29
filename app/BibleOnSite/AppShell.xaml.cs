@@ -240,13 +240,24 @@ public partial class AppShell : Shell
 		}
 
 		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented,
-			Navigation.NavigationStack.Count > 1) switch
+			Navigation.NavigationStack.Count > 1, RootBackMayExitApp) switch
 		{
 			BackExitAction.Consume => true,
 			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
 			_ => false,
 		};
 	}
+
+	/// <summary>
+	/// Whether an unhandled root Back press can leave the app. Android's system
+	/// Back can; iOS/MacCatalyst have no root Back source — the only consult
+	/// reaching <see cref="OnBackButtonPressed"/> at the root is UIKit's
+	/// interactive-pop recognizer, which can stay enabled a beat after the
+	/// stack already settled there. Deferring the stale probe lets the empty
+	/// pop cancel instead of covering the page with the exit confirmation
+	/// (#2701).
+	/// </summary>
+	private static bool RootBackMayExitApp => !OperatingSystem.IsIOS() && !OperatingSystem.IsMacCatalyst();
 
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
@@ -280,8 +291,8 @@ public partial class AppShell : Shell
 	/// edge touches before the shared flyout pan — every root destination
 	/// (calendar, Masora, Tanahpedia, ...) would lose the right-edge drawer
 	/// swipe to a dead history gesture (#2432). Gate it on real history for
-	/// every Shell page; the reader additionally wires carousel priority in
-	/// ConfigureIosReaderHistory.
+	/// every Shell page; the readers additionally wire carousel priority via
+	/// <see cref="Helpers.ReaderPlatformChrome"/>.
 	/// </summary>
 	private void GateIosInteractiveBack()
 	{

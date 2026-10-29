@@ -553,6 +553,30 @@ describe("isSchemaOnlyDataChange", () => {
 			true,
 		],
 		[
+			"WhatsApp upgrade and bootstrap preservation stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"devops/deploy/data-deploy/sql-files.json",
+				"web/admin/src/server/whatsapp-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"WhatsApp upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			true,
+		],
+		[
+			"WhatsApp upgrade cannot hide content changes",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_dedication_data.sql",
+			],
+			false,
+		],
+		[
 			"Telegram upgrade alone stays manual",
 			["data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"],
 			true,
@@ -567,10 +591,11 @@ describe("isSchemaOnlyDataChange", () => {
 			true,
 		],
 		[
-			"both channel migrations with preservation fixture stay manual",
+			"all bulletin migrations with preservation fixture stay manual",
 			[
 				"data/mysql/tanah_daily_bulletin_upgrade.sql",
 				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
 				"data/mysql/db-populator/src/main.rs",
 			],
 			true,
@@ -679,6 +704,7 @@ describe("isSchemaOnlyDataChange", () => {
 test("bulletin infrastructure changes select data checks without releasing content", () => {
 	for (const file of [
 		"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+		"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
 		"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",

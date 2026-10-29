@@ -79,7 +79,7 @@ describe("sitemap build-time snapshot", () => {
 				`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב א")}`,
 				`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב ב")}`,
 				`${SITE_ORIGIN}/pedia/${encodeURIComponent("יעקב")}`,
-				`${SITE_ORIGIN}/פרשה/54`,
+				`${SITE_ORIGIN}/פרשה/וזאת-הברכה`,
 			]),
 		);
 		expect(urls.every((url) => new URL(url).origin === SITE_ORIGIN)).toBe(true);

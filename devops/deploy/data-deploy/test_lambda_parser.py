@@ -179,6 +179,34 @@ class LambdaParserSafetyTests(unittest.TestCase):
         self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
         self.assertEqual(VALIDATOR.preprocess_sql(path.read_text(encoding="utf-8")), processed)
 
+    def test_both_channel_upgrades_follow_the_shared_schema_once(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        base = manifest.index("tanah_daily_bulletin_upgrade.sql")
+        for name in ("tanah_daily_bulletin_telegram_upgrade.sql", "tanah_daily_bulletin_whatsapp_upgrade.sql"):
+            with self.subTest(migration=name):
+                self.assertEqual(manifest.count(name), 1)
+                self.assertLess(base, manifest.index(name))
+
+    def test_whatsapp_upgrade_is_additive_and_all_prepared_blocks_survive_parser(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        filename = "tanah_daily_bulletin_whatsapp_upgrade.sql"
+        self.assertIn(filename, manifest)
+        self.assertLess(manifest.index("tanah_daily_bulletin_upgrade.sql"), manifest.index(filename))
+        path = ROOT / "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        statements = LAMBDA.parse_statements(processed)
+        # Two session settings, three complete prepared DDL groups, one default.
+        self.assertEqual(len(statements), 15)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|REPLACE)\b")
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+        self.assertEqual(VALIDATOR.parse_statements(processed), statements)
+        for operation in ("PREPARE whatsappUpgrade", "EXECUTE whatsappUpgrade", "DEALLOCATE PREPARE whatsappUpgrade"):
+            self.assertEqual(sum(statement.startswith(operation) for statement in statements), 3)
+        self.assertEqual(sum("INSERT IGNORE INTO tanah_daily_bulletin_whatsapp_settings" in statement for statement in statements), 1)
+        self.assertIn("DEFAULT ''test''", processed)
+
 
 if __name__ == "__main__":
     unittest.main()

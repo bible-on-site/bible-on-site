@@ -156,19 +156,19 @@ mod tests {
                 sefer_id: 1,
                 dedication_id: 7,
                 expires_at: None,
-                created_at: expiry,
+                created_at: expiry.and_utc(),
             }]])
             .append_query_results([vec![helek_dedication::Model {
                 helek_id: 1,
                 dedication_id: 7,
                 expires_at: None,
-                created_at: expiry,
+                created_at: expiry.and_utc(),
             }]])
             .append_query_results([vec![parasha_dedication::Model {
                 parasha_id: 2,
                 dedication_id: 7,
                 expires_at: None,
-                created_at: expiry,
+                created_at: expiry.and_utc(),
             }]])
             .append_query_results([vec![article_dedication::Model {
                 article_id: 19,
@@ -179,12 +179,12 @@ mod tests {
                 entry_id: "entry-1".into(),
                 dedication_id: 7,
                 expires_at: None,
-                created_at: expiry,
+                created_at: expiry.and_utc(),
             }]])
             .append_query_results([vec![masora_dedication::Model {
                 dedication_id: 7,
                 expires_at: None,
-                created_at: expiry,
+                created_at: expiry.and_utc(),
             }]])
             .append_query_results([vec![dedication::Model {
                 id: 7,

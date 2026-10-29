@@ -173,6 +173,7 @@ jobs:
       is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      admin_playwright_version: ${{ steps.get_admin_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
       - name: Checkout
@@ -183,6 +184,10 @@ jobs:
       - name: Get Website Playwright version
         id: get_website_playwright_version
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
+        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
+      - name: Get Admin Playwright version
+        id: get_admin_playwright_version
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
 
   determine_baseline_availability:
@@ -768,6 +773,8 @@ jobs:
       # The browser install only needs node_modules; it runs in the background
       # across MySQL/Rust/populate/build and is gated before the perf test. On
       # a binary-cache hit only the system dependencies are installed.
+      # Every suite runs headless, so --only-shell skips the headed Chromium
+      # build and downloads only the headless shell.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -775,7 +782,7 @@ jobs:
           if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
-            bun x playwright install --with-deps chromium
+            bun x playwright install --with-deps --only-shell chromium
           fi
 
       - name: Restore Next.js build cache
@@ -1043,6 +1050,8 @@ jobs:
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
       # hit only the system dependencies are installed.
+      # Every suite runs headless, so --only-shell skips the headed Chromium
+      # build and downloads only the headless shell.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -1050,7 +1059,7 @@ jobs:
           if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
-            bun x playwright install --with-deps chromium
+            bun x playwright install --with-deps --only-shell chromium
           fi
 
       - name: Setup Rust
@@ -1410,6 +1419,7 @@ jobs:
         with:
           module: admin
           directory: ${{ env.ADMIN_DIRECTORY }}
+          playwright-version: ${{ needs.setup_env.outputs.admin_playwright_version }}
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
@@ -1431,11 +1441,19 @@ jobs:
         run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
-      # across lint/typecheck/unit/build and is gated before E2E.
+      # across lint/typecheck/unit/build and is gated before E2E. On a
+      # binary-cache hit only the system dependencies are installed.
+      # Every suite runs headless, so --only-shell skips the headed Chromium
+      # build and downloads only the headless shell.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
-        run: bun x playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
+            bun x playwright install-deps chromium
+          else
+            bun x playwright install --with-deps --only-shell chromium
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1476,7 +1494,9 @@ jobs:
 
       - name: Unit Test with Coverage
         id: bun-unit-test
-        run: bun run coverage:unit
+        run: >-
+          bun run coverage:unit --reporter=default --reporter=github-actions
+          --reporter=junit --outputFile.junit=.junit-report/unit-results.xml
 
       - name: Build
         id: bun-build
@@ -1501,6 +1521,13 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      # A fresh random schema exercises real locks, quota reservations and the
+      # additive deployment parser without altering the E2E database.
+      - name: Verify WhatsApp migration and concurrent claims with MySQL
+        env:
+          BULLETIN_MYSQL_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/
+        run: bun run test:mysql
+
       - name: Wait for RustFS and S3 buckets
         wait: rustfs
 
@@ -1515,6 +1542,17 @@ jobs:
 
       - name: Wait for data crate build
         wait: crates
+
+      # Saved after the wait: the cache key's payload is what the background
+      # install produced. The upload itself backgrounds too — nothing writes
+      # ~/.cache/ms-playwright afterwards.
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.playwright-cache-hit != 'true' }}
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
       # push runs. A missing baseline is not an error — the selector falls
@@ -1698,7 +1736,9 @@ jobs:
         if: always()
         with:
           name: admin-e2e-html-report-${{ github.run_id }}
+          # The configured report root is hidden; retain only this report tree.
           path: ${{ env.ADMIN_DIRECTORY }}/.playwright-report
+          include-hidden-files: true
           retention-days: 7
           overwrite: true
 
@@ -1999,13 +2039,6 @@ jobs:
           flags: api
           report_type: test_results
 
-      - name: Store API E2E HTML Report
-        uses: actions/upload-artifact@v7
-        with:
-          name: api-e2e-html-report-${{ github.run_id }}
-          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
-          retention-days: 7
-          overwrite: true
 
       - name: Store API Coverage Report (wf)
         uses: actions/upload-artifact@v7
@@ -2277,15 +2310,25 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
-      # Needs webkit on top of chromium, so it cannot share the website jobs'
-      # Linux playwright cache entry. PR-scoped by design: a save on miss
-      # speeds up reruns and later pushes of the same pull request.
+      # Needs webkit on top of the chromium headless shell. A first-run miss
+      # still restores the website jobs' master-seeded shell entry so only
+      # webkit downloads; the webkit-keyed entry holds both and is PR-scoped
+      # by design: a save on miss speeds up reruns and later pushes of the
+      # same pull request.
       - name: Restore playwright binaries
         id: playwright-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+
+      - name: Restore shared chromium binaries
+        id: playwright-chromium-cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-shell-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
@@ -2297,7 +2340,7 @@ jobs:
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium webkit
           else
-            bun x playwright install --with-deps chromium webkit
+            bun x playwright install --with-deps --only-shell chromium webkit
           fi
           bun x playwright test --config playwright.recitation.config.ts
 
@@ -2306,7 +2349,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI

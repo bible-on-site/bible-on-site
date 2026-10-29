@@ -1,4 +1,3 @@
-import { runOutboxSweep } from "./outbox-deadline.server";
 import "@tanstack/react-start/server-only";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -24,6 +23,7 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import { runOutboxSweep } from "./outbox-deadline.server";
 import {
 	type SesAudience,
 	SesClient,
@@ -43,6 +43,7 @@ const UNCERTAIN = "תוצאת השליחה אינה ודאית. נדרשת בד�
 const SUPPRESSED = "השליחה נעצרה בעקבות שינוי במצב הדיוור או בהסכמת הנמען.";
 const QUEUE_FAILED =
 	"לא ניתן להעביר את כל הנמענים לתור. אפשר לנסות שוב באותה בקשה.";
+
 const TELEGRAM_JOB_ID =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -56,6 +57,25 @@ async function optionalTelegramDelivery() {
 	)
 		return null;
 	return import("./telegram-delivery.server");
+}
+
+const WHATSAPP_JOB_ID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function optionalWhatsAppDelivery() {
+	if (
+		[
+			"INSTANCE_ID",
+			"API_TOKEN",
+			"API_URL",
+			"MEDIA_URL",
+			"SENDER_PHONE",
+			"TEST_GROUP_ID",
+			"TEST_PARTICIPANT_DIGEST",
+		].some((name) => !process.env[`BULLETIN_WHATSAPP_${name}`]?.trim())
+	)
+		return null;
+	return import("./whatsapp-delivery.server");
 }
 
 type RecipientStatus = EmailJobStatus | "bounced" | "complained";
@@ -664,6 +684,19 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 						if (!signal.aborted)
 							console.error("Telegram bulletin outbox reconciliation failed");
 					}
+					try {
+						const whatsapp = await optionalWhatsAppDelivery();
+						if (signal.aborted) break;
+						await whatsapp?.reconcileWhatsAppOutbox(
+							client,
+							runtime.queueUrl,
+							signal,
+						);
+					} catch {
+						// A missing migration/provider configuration must not block the existing email consumer.
+						if (!signal.aborted)
+							console.error("WhatsApp bulletin outbox reconciliation failed");
+					}
 				}
 				if (signal.aborted) break;
 				const result = await client.send(
@@ -718,6 +751,26 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 							if (signal.aborted) break;
 							if (telegram)
 								handled = await telegram.processTelegramJob(
+									payload.jobId.toLowerCase(),
+									signal,
+								);
+						}
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						payload.kind === "whatsapp.send"
+					) {
+						if (
+							Object.keys(payload).length === 2 &&
+							"jobId" in payload &&
+							typeof payload.jobId === "string" &&
+							WHATSAPP_JOB_ID.test(payload.jobId)
+						) {
+							const whatsapp = await optionalWhatsAppDelivery();
+							if (signal.aborted) break;
+							if (whatsapp)
+								handled = await whatsapp.processWhatsAppJob(
 									payload.jobId.toLowerCase(),
 									signal,
 								);

@@ -161,6 +161,7 @@ export const MODULES = {
 			"devops/deploy/data-deploy",
 			"docs/aws/cloudformation/daily-bulletin-ses.yaml",
 			"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
+			"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
 			"devops/daily-bulletin-infra.test.mjs",
 			"web/bulletin/assets/email",
 			"web/bulletin/scripts/prepare-email-assets.mjs",
@@ -215,6 +216,7 @@ export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
 	const bulletinMigrations = new Set([
 		"data/mysql/tanah_daily_bulletin_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+		"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
 	]);
 	const hasBulletinMigration = dataFiles.some((file) =>
 		bulletinMigrations.has(file),
