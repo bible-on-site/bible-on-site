@@ -31,12 +31,14 @@ export function useArticleShare(canonicalPath: string, title?: string) {
 				}
 				// Genuine share failures (NotAllowedError, data errors) drop
 				// through to the clipboard fallback.
+				console.error("Native share failed, copying to clipboard:", error);
 			}
 		}
 		try {
 			await navigator.clipboard.writeText(url);
 			setOutcome("copied");
-		} catch {
+		} catch (error) {
+			console.error("Article share clipboard copy failed:", error);
 			setOutcome("failed");
 		}
 		window.clearTimeout(timerRef.current);
