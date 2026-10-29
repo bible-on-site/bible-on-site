@@ -1200,3 +1200,171 @@ describe("Telegram durable attempt and recovery", () => {
 		expect(mocks.send).not.toHaveBeenCalled();
 	});
 });
+
+describe("Telegram failure and concurrency boundaries", () => {
+	it.each(["missing-runtime", "unverified-channel"])(
+		"cannot activate real delivery with %s",
+		async (kind) => {
+			if (kind === "missing-runtime") mocks.runtime.mockReturnValue(null);
+			else mocks.targets.mockResolvedValue({ test: null, real: null });
+			await expect(
+				setTelegramAudience({
+					audience: "real",
+					expectedRevision: 0,
+					confirmReal: true,
+				}),
+			).rejects.toThrow("הערוץ הציבורי טרם הוגדר ואומת");
+			expect(mocks.transaction).not.toHaveBeenCalled();
+			expect(state.settings).toEqual({ audience: "test", revision: 0 });
+		},
+	);
+	it("keeps a same-audience request idempotent at the largest safe revision", async () => {
+		state.settings.revision = Number.MAX_SAFE_INTEGER;
+		expect(
+			await setTelegramAudience({
+				audience: "test",
+				expectedRevision: Number.MAX_SAFE_INTEGER,
+				confirmReal: false,
+			}),
+		).toEqual(state.settings);
+		expect(state.writes).toHaveLength(0);
+		await expect(
+			setTelegramAudience({
+				audience: "real",
+				expectedRevision: Number.MAX_SAFE_INTEGER,
+				confirmReal: true,
+			}),
+		).rejects.toThrow("הפרסום נעצר");
+		expect(state.settings).toEqual({
+			audience: "test",
+			revision: Number.MAX_SAFE_INTEGER,
+		});
+		expect(state.writes).toHaveLength(0);
+	});
+	it("refuses enqueue when runtime is absent without reading or creating a job", async () => {
+		mocks.runtime.mockReturnValue(null);
+		await expect(enqueueBulletinTelegram(request())).rejects.toThrow(
+			"שירות הטלגרם טרם הוגדר",
+		);
+		expect(mocks.transaction).not.toHaveBeenCalled();
+		expect(mocks.prepared).not.toHaveBeenCalled();
+		expect(mocks.sqs).not.toHaveBeenCalled();
+	});
+	it.each([
+		{ pdfBase64: "" },
+		{ filename: "" },
+		{ filename: "x".repeat(256) },
+		{ filename: "../private.pdf" },
+		{ filename: "private\\file.pdf" },
+		{ filename: "private\nfile.pdf" },
+		{ source: "x".repeat(1025) },
+		{ input: { ...prepared.input, perekId: 0 } },
+		{ input: { ...prepared.input, perekId: 930 } },
+		{ input: { ...prepared.input, perekId: 1.5 } },
+	])(
+		"refuses invalid frozen bulletin content before target lookup or publication (%#)",
+		async (change) => {
+			mocks.prepared.mockResolvedValue({ ...prepared, ...change });
+			await expect(enqueueBulletinTelegram(request())).rejects.toThrow(
+				"פרסום העלון נכשל",
+			);
+			expect(state.jobs).toHaveLength(0);
+			expect(mocks.targets).not.toHaveBeenCalled();
+			expect(mocks.sqs).not.toHaveBeenCalled();
+		},
+	);
+	it.each([
+		null,
+		{ botId: 123456, chatId: -100999, title: "Changed target", username: null },
+	])(
+		"does not create work for a missing or changed verified destination (%#)",
+		async (target) => {
+			mocks.targets.mockResolvedValue({ test: target, real: null });
+			await expect(enqueueBulletinTelegram(request())).rejects.toBeInstanceOf(
+				TelegramSuppressedError,
+			);
+			expect(state.jobs).toHaveLength(0);
+			expect(mocks.sqs).not.toHaveBeenCalled();
+		},
+	);
+	it("rolls back the job if the production ledger reservation loses ownership", async () => {
+		state.settings.audience = "real";
+		mocks.txExecute.mockImplementation(async (_connection, sql, params) =>
+			sql.includes("SET status = 'sending'")
+				? { affectedRows: 0 }
+				: write(sql, params),
+		);
+		await expect(
+			enqueueBulletinTelegram(request(key, "real")),
+		).rejects.toBeInstanceOf(TelegramSuppressedError);
+		expect(state.jobs).toHaveLength(0);
+		expect(state.channel).toBe("pending");
+		expect(state.channelHistory.provider_message_id).toBeNull();
+		expect(mocks.sqs).not.toHaveBeenCalled();
+	});
+	it("rolls back an insert that cannot be read back instead of publishing incomplete work", async () => {
+		mocks.txQueryOne.mockImplementation(async (_connection, sql, params) =>
+			sql.endsWith("WHERE id = ?") ? null : select(sql, params),
+		);
+		await expect(enqueueBulletinTelegram(request())).rejects.toThrow(
+			"פרסום העלון נכשל",
+		);
+		expect(state.jobs).toHaveLength(0);
+		expect(mocks.sqs).not.toHaveBeenCalled();
+	});
+	it.each(["uncertain", "suppressed", "failed"] as const)(
+		"shows a sanitized %s explanation without exposing stored provider details",
+		async (status) => {
+			const row = fixture("test", status);
+			row.last_error = `private provider ${config.token}`;
+			state.jobs.push(row);
+			const result = await getBulletinTelegramState(date);
+			expect(result.job).toMatchObject({ status, error: expect.any(String) });
+			expect(result.job?.error).not.toContain(config.token);
+			expect(result.job?.error).not.toContain("private provider");
+		},
+	);
+	it.each([{ bot_id: 0 }, { bot_id: 1.5 }, { target_chat_id: -100999 }])(
+		"suppresses a stale frozen identity without calling the provider (%#)",
+		async (change) => {
+			state.jobs.push({ ...fixture(), ...change });
+			expect(await processTelegramJob(key)).toBe(true);
+			expect(state.jobs[0].status).toBe("suppressed");
+			expect(mocks.prepared).not.toHaveBeenCalled();
+			expect(mocks.send).not.toHaveBeenCalled();
+		},
+	);
+	it("suppresses a claimed job whose saved bulletin disappeared", async () => {
+		state.jobs.push(fixture());
+		mocks.prepared.mockResolvedValue(null);
+		await processTelegramJob(key);
+		expect(state.jobs[0].status).toBe("suppressed");
+		expect(mocks.send).not.toHaveBeenCalled();
+	});
+	it("marks a stale in-flight real job uncertain and never reuploads it", async () => {
+		const row = fixture("real", "sending");
+		row.stale = true;
+		row.attempt_token = "original-claim";
+		state.jobs.push(row);
+		state.channel = "sending";
+		state.channelHistory.provider_message_id = `telegram-job:${key}`;
+		expect(await processTelegramJob(key)).toBe(true);
+		expect(state.jobs[0].status).toBe("uncertain");
+		expect(state.channel).toBe("uncertain");
+		expect(await processTelegramJob(key)).toBe(true);
+		expect(mocks.send).not.toHaveBeenCalled();
+	});
+	it("keeps an upload uncertain when its acknowledgement update loses the claim", async () => {
+		state.jobs.push(fixture());
+		mocks.execute.mockImplementation(async (sql, params) =>
+			sql.includes("SET status = 'sent'")
+				? { affectedRows: 0 }
+				: write(sql, params),
+		);
+		await processTelegramJob(key);
+		expect(state.jobs[0].status).toBe("uncertain");
+		expect(state.jobs[0].provider_message_id).toBeNull();
+		await processTelegramJob(key);
+		expect(mocks.send).toHaveBeenCalledOnce();
+	});
+});

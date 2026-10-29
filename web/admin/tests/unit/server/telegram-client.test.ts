@@ -135,6 +135,63 @@ describe("Telegram configuration and target verification", () => {
 		expect(() => new TelegramClient(bad, fetchMock)).toThrow(TelegramError);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
+	it.each([
+		null,
+		undefined,
+		{},
+		{ token: 7, expectedBotUsername: "ExampleTestBot" },
+		{ token: TOKEN, expectedBotUsername: null },
+	])(
+		"rejects missing or untyped runtime credentials without transport access (%#)",
+		(invalid) => {
+			const fetchMock = provider();
+			expect(
+				() => new TelegramClient(invalid as unknown as typeof config, fetchMock),
+			).toThrow(TelegramError);
+			expect(fetchMock).not.toHaveBeenCalled();
+		},
+	);
+	it.each([null, { id: 0 }, { id: 1.5 }])(
+		"does not query membership when discovered bot identity is invalid (%#)",
+		async (me) => {
+			const values = metadata();
+			values.getMe = me;
+			const fetchMock = provider(values);
+			await outcome(
+				new TelegramClient(config, fetchMock).verifyTarget({
+					chatId: CHAT,
+					audience: "test",
+				}),
+				"failed",
+			);
+			expect(fetchMock.mock.calls.map(([url]) => method(url))).toEqual([
+				"getMe",
+				"getChat",
+			]);
+		},
+	);
+	it("observes a rejected transport when the metadata deadline expires during request setup", async () => {
+		vi.useFakeTimers();
+		const fetchMock = vi.fn<typeof fetch>(() => {
+			vi.advanceTimersByTime(15_000);
+			return Promise.reject(new Error(`late private transport ${TOKEN}`));
+		});
+		await outcome(
+			new TelegramClient(config, fetchMock).verifyTarget(target),
+			"failed",
+		);
+		await flush();
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(vi.getTimerCount()).toBe(0);
+	});
+	it("treats a structured server error during verification as a sanitized read failure", async () => {
+		const fetchMock = vi.fn<typeof fetch>(async () => refusal(503));
+		await outcome(
+			new TelegramClient(config, fetchMock).verifyTarget(target),
+			"failed",
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+	});
 	it("verifies a private channel and shares one signal across all metadata requests", async () => {
 		const fetchMock = provider();
 		const client = new TelegramClient(

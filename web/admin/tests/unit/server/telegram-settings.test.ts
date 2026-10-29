@@ -122,6 +122,55 @@ describe("Telegram private runtime configuration", () => {
 			expect(mocks.queryOne).not.toHaveBeenCalled();
 		},
 	);
+	it.each([
+		["BULLETIN_TELEGRAM_BOT_USERNAME", ""],
+		["BULLETIN_TELEGRAM_TEST_CHAT_ID", ""],
+		["BULLETIN_SES_ACCOUNT_ID", ""],
+		["BULLETIN_SES_ACCOUNT_ID", "123"],
+		["BULLETIN_EMAIL_QUEUE_URL", ""],
+		["BULLETIN_EMAIL_QUEUE_URL", "not a URL"],
+		[
+			"BULLETIN_EMAIL_QUEUE_URL",
+			"http://sqs.il-central-1.amazonaws.com/123456789012/bulletin",
+		],
+		[
+			"BULLETIN_EMAIL_QUEUE_URL",
+			"https://sqs.il-central-1.amazonaws.com/123456789012/bulletin#fragment",
+		],
+		[
+			"BULLETIN_EMAIL_QUEUE_URL",
+			"https://user@sqs.il-central-1.amazonaws.com/123456789012/bulletin",
+		],
+		[
+			"BULLETIN_EMAIL_QUEUE_URL",
+			"https://:password@sqs.il-central-1.amazonaws.com/123456789012/bulletin",
+		],
+	])(
+		"refuses incomplete or unsafe %s before database/provider access",
+		async (name, value) => {
+			configure();
+			vi.stubEnv(name, value);
+			expect(() => awaitModule.loadTelegramRuntime()).toThrow(
+				"הגדרות שירות הטלגרם אינן תקינות",
+			);
+			expect(mocks.queryOne).not.toHaveBeenCalled();
+			expect(mocks.verify).not.toHaveBeenCalled();
+		},
+	);
+	it.each(["", "us-east-1"])(
+		"uses the configured AWS region fallback %s with its exact queue",
+		(region) => {
+			configure();
+			vi.stubEnv("BULLETIN_SES_REGION", "");
+			vi.stubEnv("AWS_REGION", region);
+			const expected = region || "il-central-1";
+			vi.stubEnv(
+				"BULLETIN_EMAIL_QUEUE_URL",
+				`https://sqs.${expected}.amazonaws.com/123456789012/bulletin`,
+			);
+			expect(awaitModule.loadTelegramRuntime()?.region).toBe(expected);
+		},
+	);
 	it("never resolves an application SSM parameter instead of a token", async () => {
 		configure();
 		vi.stubEnv("BULLETIN_TELEGRAM_BOT_TOKEN", "");
@@ -179,6 +228,21 @@ describe("Telegram settings and target readiness", () => {
 		expect(mocks.verify).toHaveBeenCalledTimes(1);
 		await awaitModule.verifyTelegramTargets({ ...runtime, token: `${token}x` });
 		expect(mocks.verify).toHaveBeenCalledTimes(2);
+	});
+	it("blocks each unverified audience and omits absent target metadata", () => {
+		const targets = { test: null, real: null };
+		for (const audience of ["test", "real"] as const) {
+			const readiness = awaitModule.telegramReadiness(targets, audience);
+			expect(readiness).toMatchObject({ canSend: false, canUseReal: false });
+			expect(readiness.blockers).toHaveLength(1);
+		}
+		expect(awaitModule.targetView(null)).toBeNull();
+		configure();
+		const runtime = awaitModule.loadTelegramRuntime();
+		if (!runtime) throw new Error("fixture");
+		expect(() => awaitModule.targetChatId(runtime, "real")).toThrow();
+		expect(awaitModule.targetChatId(runtime, "test")).toBe(-100111);
+		expect(mocks.verify).not.toHaveBeenCalled();
 	});
 	it("keeps failures generic and does not expose provider errors", async () => {
 		configure();
@@ -393,6 +457,58 @@ describe("last-moment Telegram send slot", () => {
 			if (stage !== "final") expect(mocks.queryOne).not.toHaveBeenCalled();
 			if (["settings", "job", "legacy"].includes(stage))
 				expect(mocks.txExecute).not.toHaveBeenCalled();
+		},
+	);
+	it("treats a missing pacing row as immediate while still reserving and rechecking", async () => {
+		ready();
+		const read = mocks.txQueryOne.getMockImplementation();
+		mocks.txQueryOne.mockImplementation(async (...args) =>
+			String(args[1]).includes("AS wait_ms") ? null : read?.(...args),
+		);
+		await awaitModule.reserveTelegramSendSlot("job", "claim");
+		expect(mocks.txExecute).toHaveBeenCalledOnce();
+		expect(mocks.wait).not.toHaveBeenCalled();
+		expect(mocks.queryOne).toHaveBeenCalledOnce();
+	});
+	it("rejects corrupt nonfinite pacing without waiting or checking a send target", async () => {
+		ready(Number.NaN);
+		await expect(
+			awaitModule.reserveTelegramSendSlot("job", "claim"),
+		).rejects.toThrow("הגדרות שירות הטלגרם אינן תקינות");
+		expect(mocks.txExecute).not.toHaveBeenCalled();
+		expect(mocks.wait).not.toHaveBeenCalled();
+		expect(mocks.queryOne).not.toHaveBeenCalled();
+	});
+	it.each(["runtime", "missing", "status", "token"])(
+		"stops a paced send if its final %s changes",
+		async (field) => {
+			ready(250);
+			mocks.wait.mockImplementationOnce(async () => {
+				if (field === "runtime") {
+					for (const name of [
+						"BULLETIN_TELEGRAM_BOT_TOKEN",
+						"BULLETIN_TELEGRAM_BOT_USERNAME",
+						"BULLETIN_TELEGRAM_TEST_CHAT_ID",
+					])
+						vi.stubEnv(name, "");
+				} else {
+					mocks.queryOne.mockResolvedValueOnce(
+						field === "missing"
+							? null
+							: {
+									audience: "test",
+									target_chat_id: -100111,
+									status: field === "status" ? "uncertain" : "sending",
+									attempt_token: field === "token" ? "another-claim" : "claim",
+								},
+					);
+				}
+			});
+			await expect(
+				awaitModule.reserveTelegramSendSlot("job", "claim"),
+			).rejects.toThrow();
+			expect(mocks.wait).toHaveBeenCalledExactlyOnceWith(250);
+			expect(mocks.queryOne).toHaveBeenCalledOnce();
 		},
 	);
 	it("stops before transaction work when already cancelled", async () => {

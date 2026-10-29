@@ -13,6 +13,7 @@ import type {
 	BulletinTelegramState,
 	TelegramJobSummary,
 } from "~/lib/bulletin-telegram";
+import { deferred } from "../../util/deferred";
 
 const mocks = vi.hoisted(() => ({
 	read: vi.fn(),
@@ -443,6 +444,116 @@ describe("independent Telegram bulletin controls", () => {
 		expect(client.getQueryState(["daily-bulletin", DATE])).toBeUndefined();
 	});
 
+	it("recovers a failed settings read by explicit refresh without sending", async () => {
+		mocks.read.mockRejectedValueOnce(new Error("private read failure"));
+		view();
+		await screen.findByText("לא ניתן לטעון את מצב הטלגרם כעת.");
+		expect(send()).toBeDisabled();
+		fireEvent.click(screen.getByRole("button", { name: "רענון מצב הטלגרם" }));
+		await loaded();
+		await waitFor(() => expect(send()).toBeEnabled());
+		expect(mocks.read).toHaveBeenCalledTimes(2);
+		expect(mocks.queue).not.toHaveBeenCalled();
+		expect(mocks.audience).not.toHaveBeenCalled();
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	});
+	it("shows the pending audience change and updates all cached dates without moving their jobs", async () => {
+		const pending = deferred<{ audience: "real"; revision: number }>();
+		mocks.audience.mockReturnValueOnce(pending.promise);
+		const { client } = view();
+		await loaded();
+		const retained = job("sent", { audience: "real", date: NEXT_DATE });
+		client.setQueryData(["bulletin-telegram", NEXT_DATE], {
+			...ready(),
+			settings: { audience: "real", revision: 3 },
+			job: retained,
+		});
+		client.setQueryData(["bulletin-telegram", "2026-10-30"], {
+			...ready(),
+			job: job("sent", { date: "2026-10-30" }),
+		});
+		client
+			.getQueryCache()
+			.build(client, { queryKey: ["bulletin-telegram", "empty-cache"] });
+		selectReal();
+		fireEvent.click(
+			screen.getByRole("checkbox", { name: /אני מאשר מעבר לפרסום/ }),
+		);
+		fireEvent.click(saveMode());
+		const saving = await screen.findByRole("button", { name: "שומר יעד..." });
+		expect(saving).toBeDisabled();
+		const selector = screen.getByLabelText("יעד השליחה בטלגרם");
+		expect(selector).toBeDisabled();
+		fireEvent.change(selector, { target: { value: "test" } });
+		expect(mocks.audience).toHaveBeenCalledOnce();
+		serverState = {
+			...serverState,
+			settings: { audience: "real", revision: 5 },
+			job: null,
+		};
+		await act(async () => pending.resolve({ audience: "real", revision: 5 }));
+		await screen.findByText("מצב פרסום בערוץ הציבורי");
+		expect(
+			client.getQueryData<BulletinTelegramState>([
+				"bulletin-telegram",
+				NEXT_DATE,
+			]),
+		).toMatchObject({
+			settings: { audience: "real", revision: 5 },
+			job: retained,
+		});
+		expect(
+			client.getQueryData<BulletinTelegramState>([
+				"bulletin-telegram",
+				"2026-10-30",
+			]),
+		).toMatchObject({
+			settings: { audience: "real", revision: 5 },
+			job: null,
+		});
+		expect(
+			client.getQueryData(["bulletin-telegram", "empty-cache"]),
+		).toBeUndefined();
+		expect(mocks.queue).not.toHaveBeenCalled();
+	});
+	it("does not recreate an expired date cache from a late enqueue response", async () => {
+		const pending = deferred<TelegramJobSummary>();
+		mocks.queue.mockReturnValueOnce(pending.promise);
+		const { client, rerender } = view();
+		await loaded();
+		fireEvent.click(send());
+		await waitFor(() => expect(mocks.queue).toHaveBeenCalledOnce());
+		rerender(NEXT_DATE);
+		await waitFor(() =>
+			expect(mocks.read).toHaveBeenCalledWith({ data: NEXT_DATE }),
+		);
+		await act(async () =>
+			client.removeQueries({
+				queryKey: ["bulletin-telegram", DATE],
+				exact: true,
+			}),
+		);
+		await act(async () => pending.resolve(job("queued")));
+		expect(client.getQueryData(["bulletin-telegram", DATE])).toBeUndefined();
+		expect(
+			client.getQueryData<BulletinTelegramState>([
+				"bulletin-telegram",
+				NEXT_DATE,
+			])?.job,
+		).toBeNull();
+		expect(
+			screen.queryByText(/ניסיון בטלגרם: ממתין בתור/),
+		).not.toBeInTheDocument();
+		expect(mocks.queue).toHaveBeenCalledOnce();
+	});
+	it("shows the saved job explanation while a failed attempt waits for explicit operator action", async () => {
+		serverState.job = job("failed", { error: "יש לבדוק את מצב הפרסום" });
+		view();
+		await loaded();
+		expect(screen.getByText("יש לבדוק את מצב הפרסום")).toBeVisible();
+		expect(send()).toBeDisabled();
+		expect(mocks.queue).not.toHaveBeenCalled();
+	});
 	it("locks Telegram controls while another bulletin mutation is pending", async () => {
 		view(DATE, true);
 		await loaded();
