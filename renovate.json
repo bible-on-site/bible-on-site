@@ -148,7 +148,7 @@
 			]
 		},
 		{
-			"description": "Review cargo-make CLI updates for the upstream ZIP compatibility gap; do not confuse API dev-dependency removal with a patched installed tool. https://github.com/bible-on-site/bible-on-site/issues/2826",
+			"description": "Regular cargo-make CLI updates require review for the upstream ZIP gap; vulnerability-alert updates retain the existing repository policy. https://github.com/bible-on-site/bible-on-site/issues/2826",
 			"matchDatasources": [
 				"crate"
 			],
