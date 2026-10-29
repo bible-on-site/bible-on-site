@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Jerusalem study-day trigger for the existing durable bulletin worker.
+Parameters:
+  ScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues: [DISABLED, ENABLED]
+  WorkerQueueArn:
+    Type: String
+    Default: arn:aws:sqs:il-central-1:250598594267:bible-on-site-daily-bulletin-worker
+    AllowedValues: [arn:aws:sqs:il-central-1:250598594267:bible-on-site-daily-bulletin-worker]
+  DeadLetterQueueArn:
+    Type: String
+    Default: arn:aws:sqs:il-central-1:250598594267:bible-on-site-daily-bulletin-worker-dlq
+    AllowedValues: [arn:aws:sqs:il-central-1:250598594267:bible-on-site-daily-bulletin-worker-dlq]
+Resources:
+  ScheduleGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: bible-on-site-daily-bulletin
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !GetAtt ScheduleGroup.Arn
+      Policies:
+        - PolicyName: BulletinScheduleQueueOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: [!Ref WorkerQueueArn, !Ref DeadLetterQueueArn]
+  Schedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: daily-bulletin-1000
+      GroupName: !Ref ScheduleGroup
+      Description: Generate the current study day's bulletin; advance Israeli weekday holidays.
+      State: !Ref ScheduleState
+      ScheduleExpression: cron(0 10 ? * SUN-THU *)
+      ScheduleExpressionTimezone: Asia/Jerusalem
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !Ref WorkerQueueArn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"kind":"bulletin.schedule","scheduledAt":"<aws.scheduler.scheduled-time>"}'
+        RetryPolicy:
+          MaximumEventAgeInSeconds: 3600
+          MaximumRetryAttempts: 0
+        DeadLetterConfig:
+          Arn: !Ref DeadLetterQueueArn
+Outputs:
+  ScheduleArn:
+    Value: !GetAtt Schedule.Arn
