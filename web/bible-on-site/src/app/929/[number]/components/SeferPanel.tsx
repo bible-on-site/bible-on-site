@@ -233,6 +233,71 @@ export function SeferPanel({
 		return () => document.removeEventListener("keydown", onKey);
 	}, [articleFullscreen]);
 
+	/* ─── Article fullscreen modal + return-to-grid focus (#2786) ─── */
+	const rootRef = useRef<HTMLElement>(null);
+	// Set by an explicit חזרה למאמרים click — the article card that should
+	// receive focus once the overlay unmounts.
+	const pendingArticleFocus = useRef<number | null>(null);
+	const wasArticleFullscreen = useRef(false);
+
+	// The article fullscreen is a modal dialog: aria-modal alone does not
+	// keep Tab inside, so every body sibling of the portal goes inert (the
+	// panel's own inert covers the embedded twin). Focus enters on the exit
+	// control and returns to the embedded twin on exit. The embedded body
+	// never unmounts and keeps its scroll — mirror that position into the
+	// fullscreen body.
+	useEffect(() => {
+		const wasFullscreen = wasArticleFullscreen.current;
+		wasArticleFullscreen.current = articleFullscreen;
+		if (articleFullscreen === wasFullscreen) return;
+		if (articleFullscreen) {
+			const dialog = document.querySelector<HTMLElement>(
+				"[data-article-dialog]",
+			);
+			/* istanbul ignore if -- the portal mounts in the same commit */
+			if (!dialog) return;
+			const inerted: Element[] = [];
+			for (const sibling of document.body.children) {
+				if (sibling === dialog || sibling.hasAttribute("inert")) continue;
+				sibling.setAttribute("inert", "");
+				inerted.push(sibling);
+			}
+			(
+				dialog.querySelector<HTMLElement>(
+					"[data-article-action='fullscreen']",
+				) ?? dialog
+			).focus();
+			const embeddedBody = rootRef.current?.querySelector<HTMLElement>(
+				"[data-article-body]",
+			);
+			const fullscreenBody = dialog.querySelector<HTMLElement>(
+				"[data-article-body]",
+			);
+			if (embeddedBody && fullscreenBody) {
+				fullscreenBody.scrollTop = embeddedBody.scrollTop;
+			}
+			return () => {
+				for (const el of inerted) el.removeAttribute("inert");
+			};
+		}
+		if (pendingArticleFocus.current == null) {
+			rootRef.current
+				?.querySelector<HTMLElement>("[data-article-action='fullscreen']")
+				?.focus();
+		}
+	}, [articleFullscreen]);
+
+	// After an explicit return to the grid, hand focus to the article's card —
+	// the masonry never unmounted, so its DOM order and scroll are intact.
+	useEffect(() => {
+		if (selectedArticle || pendingArticleFocus.current == null) return;
+		const card = document.getElementById(
+			`article-${pendingArticleFocus.current}`,
+		);
+		pendingArticleFocus.current = null;
+		card?.focus();
+	}, [selectedArticle]);
+
 	/* ─── Perush selection (global default / sefer override) ─── */
 	// Read directly (the panel lives in the client-only flipbook) and re-read
 	// on the module's change event — resolveSeferPerushSelection returns a
@@ -398,13 +463,24 @@ export function SeferPanel({
 		[onNavigate, perekId],
 	);
 
+	// חזרה למאמרים always lands on the articles grid — from the embedded view
+	// and from article fullscreen alike (#2786). The card it came from gets
+	// focus once the overlay clears.
+	const returnToArticles = useCallback(() => {
+		pendingArticleFocus.current = selectedArticle?.id ?? null;
+		setArticleFullscreen(false);
+		navigate();
+	}, [selectedArticle?.id, navigate]);
+
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
 
 	return (
 		<section
+			ref={rootRef}
 			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
+			inert={articleFullscreen}
 		>
 			{/* tablist header: פרשנים - date - מאמרים (RTL order) */}
 			<div
@@ -712,7 +788,7 @@ export function SeferPanel({
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => navigate()}
+								onBack={returnToArticles}
 								fullPage
 								fullscreen={articleFullscreen}
 								onToggleFullscreen={() => setArticleFullscreen((prev) => !prev)}
@@ -730,12 +806,14 @@ export function SeferPanel({
 						role="dialog"
 						aria-modal="true"
 						aria-label={selectedArticle.name}
+						data-article-dialog
+						tabIndex={-1}
 					>
 						<div className={styles.articleFullscreenBody}>
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => setArticleFullscreen(false)}
+								onBack={returnToArticles}
 								fullPage
 								fullscreen
 								onToggleFullscreen={() => setArticleFullscreen(false)}
