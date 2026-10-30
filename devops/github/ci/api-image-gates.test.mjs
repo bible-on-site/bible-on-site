@@ -7,13 +7,24 @@ const workflow = readFileSync(
 	new URL("../../../.github/workflows/ci.yml", import.meta.url),
 	"utf8",
 );
-const start = workflow.indexOf(
-	'          if { [ "',
-	workflow.indexOf("          API_MASTER_COVERAGE_AVAILABLE="),
+const crossModule = workflow.indexOf("\n  cross_module_ci:");
+assert.notEqual(crossModule, -1, "Cross-module quality checks must exist");
+const apiSettings = workflow.indexOf(
+	"API_MASTER_COVERAGE_AVAILABLE=",
+	crossModule,
 );
+assert.notEqual(apiSettings, -1, "API coverage selection must exist");
+const start = workflow.indexOf('          if { [ "', apiSettings);
 assert.notEqual(start, -1, "API image quality gate must exist");
-const end = workflow.indexOf("          APP_MODULE_CHANGED=", start);
-assert.notEqual(end, -1, "API image quality gate must end before app checks");
+const appSettings = workflow.indexOf("APP_MODULE_CHANGED=", start);
+assert.notEqual(
+	appSettings,
+	-1,
+	"API image quality gate must end before app checks",
+);
+// Assignments may be inline in an if statement; exclude the entire next line.
+const end = workflow.lastIndexOf("\n", appSettings);
+assert.ok(end > start, "API architecture checks must precede app selection");
 const script = workflow.slice(start, end);
 const shell =
 	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
