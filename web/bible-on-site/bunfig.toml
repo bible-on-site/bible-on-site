@@ -16,7 +16,7 @@ minimumReleaseAgeExcludes = [
 	"@biomejs/cli-win32-arm64@2.6.3",
 	"@biomejs/cli-win32-x64@2.6.3",
 	"@napi-rs/wasm-runtime@1.2.6",
-	"html-flip-book-react@0.0.0-alpha.96",
-	"html-flip-book-vanilla@0.0.0-alpha.96",
+	"html-flip-book-react@0.0.0-alpha.97",
+	"html-flip-book-vanilla@0.0.0-alpha.97",
 	"monocart-coverage-reports@3.1.0",
 ]
