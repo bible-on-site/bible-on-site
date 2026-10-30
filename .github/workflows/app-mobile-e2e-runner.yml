@@ -421,6 +421,7 @@ jobs:
         with:
           distribution: microsoft
           java-version: "21"
+          verify-signature: true
 
       # iOS legs stay on the Xcode-27-compatible set; Android legs take the
       # newer set carrying Android SDK 36.1.118 (#2708). Resolve once so the
