@@ -6,6 +6,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import {
+	apiPackageVersion,
+	assertPlainVersion,
+	verifyApiRuntime,
+} from "./verify-api-native.mjs";
+
+export { assertApiResponses } from "./verify-api-native.mjs";
 
 const startupBudgetMs = 30_000;
 
@@ -16,32 +23,30 @@ export function parseOptions(args) {
 			service: { type: "string" },
 			image: { type: "string" },
 			arch: { type: "string" },
-			"db-url": { type: "string" },
+			"expected-version": { type: "string" },
 		},
 	});
-	assert.ok(["website", "admin", "api"].includes(values.service), "--service must be website, admin, or api");
-	assert.ok(["amd64", "arm64"].includes(values.arch), "--arch must be amd64 or arm64");
-	assert.ok(values.image && !values.image.startsWith("-"), "--image is required");
-	const { "db-url": databaseUrl } = values;
-	if (values.service === "api") assertLocalFixture(databaseUrl);
-	else assert.equal(databaseUrl, undefined, "Only the API smoke check accepts --db-url");
+	const { "expected-version": expectedVersion } = values;
+	assert.ok(
+		["website", "admin", "api"].includes(values.service),
+		"--service must be website, admin, or api",
+	);
+	assert.ok(
+		["amd64", "arm64"].includes(values.arch),
+		"--arch must be amd64 or arm64",
+	);
+	assert.ok(
+		values.image && !values.image.startsWith("-"),
+		"--image is required",
+	);
+	if (values.service !== "api")
+		assert.equal(
+			expectedVersion,
+			undefined,
+			"Only API accepts --expected-version",
+		);
+	else if (expectedVersion !== undefined) assertPlainVersion(expectedVersion);
 	return values;
-}
-
-export function assertLocalFixture(value) {
-	assert.ok(value, "API smoke requires --db-url for a local native_image_smoke fixture");
-	const url = new URL(value);
-	assert.equal(url.protocol, "mysql:");
-	assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname), "Refusing a non-loopback DB: smoke checks must never use a live database");
-	assert.equal(url.pathname, "/native_image_smoke", "Use the disposable native_image_smoke database");
-}
-
-export function assertApiResponses(health, graphql) {
-	assert.equal(health.status, "ok");
-	assert.match(health.version, /^\d+\.\d+\.\d+/, "API must report its compiled version");
-	assert.equal(graphql.errors, undefined, "GraphQL fixture query must not return errors");
-	assert.equal(graphql.data.__typename, "QueryRoot");
-	assert.deepEqual(graphql.data.articlesByPerekId, [], "Empty schema fixture must be queried through MySQL");
 }
 
 export function assertAdminResponses(result) {
@@ -51,15 +56,21 @@ export function assertAdminResponses(result) {
 	assert.equal(location.pathname, "/oauth2/authorize");
 	assert.equal(location.searchParams.get("client_id"), "native-smoke");
 	assert.equal(location.searchParams.get("identity_provider"), "AWSSSO");
-	assert.equal(location.searchParams.get("redirect_uri"), "http://127.0.0.1:3101/auth/callback");
+	assert.equal(
+		location.searchParams.get("redirect_uri"),
+		"http://127.0.0.1:3101/auth/callback",
+	);
 	assert.equal(result.serverFnStatus, 401);
 	assert.match(result.serverFnBody, /^SESSION_EXPIRED:/);
 }
 
-function runDocker(args) {
+function runDocker(args, { input } = {}) {
 	return execFileSync("docker", args, {
-		encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
-		stdio: ["ignore", "pipe", "pipe"],
+		encoding: "utf8",
+		timeout: 30_000,
+		maxBuffer: 4 * 1024 * 1024,
+		input,
+		stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
 	}).trim();
 }
 
@@ -79,85 +90,198 @@ async function waitForProbe(probe, docker, name, now, sleep) {
 			return probe();
 		} catch (error) {
 			lastError = error;
-			const running = docker(["inspect", "--format", "{{.State.Running}}", name]);
-			assert.equal(running, "true", "Container exited before the startup probe succeeded");
+			const running = docker([
+				"inspect",
+				"--format",
+				"{{.State.Running}}",
+				name,
+			]);
+			assert.equal(
+				running,
+				"true",
+				"Container exited before the startup probe succeeded",
+			);
 			await sleep(250);
 		}
 	} while (now() < deadline);
-	throw new Error(`Container did not start within ${startupBudgetMs} ms`, { cause: lastError });
+	throw new Error(`Container did not start within ${startupBudgetMs} ms`, {
+		cause: lastError,
+	});
 }
 
 export async function verifyImage(options, dependencies = {}) {
 	const docker = dependencies.docker ?? runDocker;
 	const now = dependencies.now ?? Date.now;
-	const sleep = dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
-	const { service, image, arch, "db-url": databaseUrl } = options;
-	assert.equal(dependencies.runnerArch ?? process.arch, arch === "amd64" ? "x64" : "arm64", "Host must be a native runner for the requested architecture");
-	if (service === "api") assertLocalFixture(databaseUrl);
-	const metadata = JSON.parse(docker(["image", "inspect", "--format", "{{json .}}", image]));
+	const sleep =
+		dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
+	const {
+		service,
+		image,
+		arch,
+		"expected-version": requestedVersion,
+		"db-url": externalDbUrl,
+	} = options;
+	assert.equal(
+		externalDbUrl,
+		undefined,
+		"API qualification owns its independent MySQL server; external DB URLs are forbidden",
+	);
+	assert.equal(
+		dependencies.runnerArch ?? process.arch,
+		arch === "amd64" ? "x64" : "arm64",
+		"Host must be a native runner for the requested architecture",
+	);
+	const metadata = JSON.parse(
+		docker(["image", "inspect", "--format", "{{json .}}", image]),
+	);
 	assert.equal(metadata.Os, "linux");
-	assert.equal(metadata.Architecture, arch, "Image metadata must match the native runner");
+	assert.equal(
+		metadata.Architecture,
+		arch,
+		"Image metadata must match the native runner",
+	);
 	const name = `native-smoke-${service}-${randomUUID()}`;
-	const common = ["run", "--name", name, "--platform", `linux/${arch}`, "--cpus", "0.25", "--memory", service === "website" ? "2048m" : "512m"];
+	const common = [
+		"run",
+		"--name",
+		name,
+		"--platform",
+		`linux/${arch}`,
+		"--cpus",
+		"0.25",
+		"--memory",
+		service === "website" ? "2048m" : "512m",
+	];
 	const evidence = { service, image, arch, imageId: metadata.Id };
+	if (service !== "api")
+		assert.equal(
+			requestedVersion,
+			undefined,
+			"Only API accepts --expected-version",
+		);
+	if (service === "api") {
+		const expectedVersion =
+			requestedVersion ??
+			apiPackageVersion(
+				readFileSync(
+					new URL("../../../web/api/Cargo.toml", import.meta.url),
+					"utf8",
+				),
+			);
+		return {
+			...evidence,
+			...(await verifyApiRuntime({
+				docker,
+				common,
+				image,
+				arch,
+				expectedVersion,
+				now,
+				sleep,
+				createFixture: dependencies.createFixture,
+			})),
+		};
+	}
 	let created = false;
-	let failed = false;
+	let failure;
 	try {
 		if (service === "website") {
-			const probe = readFileSync(new URL("./verify-website-native.mjs", import.meta.url), "utf8");
+			const probe = readFileSync(
+				new URL("./verify-website-native.mjs", import.meta.url),
+				"utf8",
+			);
 			created = true;
-			const output = docker([...common, "--network", "none", "--entrypoint", "node", image, "--input-type=module", "-e", probe, arch]);
+			const output = docker([
+				...common,
+				"--network",
+				"none",
+				"--entrypoint",
+				"node",
+				image,
+				"--input-type=module",
+				"-e",
+				probe,
+				arch,
+			]);
 			evidence.nativeDependencies = JSON.parse(output.split("\n").at(-1));
 		} else {
-			const env = service === "admin" ? [
-				"--network", "none", "-e", "SKIP_AUTH=false",
-				"-e", "COGNITO_USER_POOL_ID=il-central-1_native-smoke",
-				"-e", "COGNITO_CLIENT_ID=native-smoke",
-				"-e", "COGNITO_CLIENT_SECRET=fixture-only",
-				"-e", "COGNITO_DOMAIN=login.example.invalid",
-				"-e", "AWS_EC2_METADATA_DISABLED=true",
-			] : [
-				"--network", "host", "-e", "PROFILE=prod", "-e", "HOST=127.0.0.1",
-				"-e", "PORT=3003", "-e", `DB_URL=${databaseUrl}`,
+			const env = [
+				"--network",
+				"none",
+				"-e",
+				"SKIP_AUTH=false",
+				"-e",
+				"COGNITO_USER_POOL_ID=il-central-1_native-smoke",
+				"-e",
+				"COGNITO_CLIENT_ID=native-smoke",
+				"-e",
+				"COGNITO_CLIENT_SECRET=fixture-only",
+				"-e",
+				"COGNITO_DOMAIN=login.example.invalid",
+				"-e",
+				"AWS_EC2_METADATA_DISABLED=true",
 			];
 			created = true;
 			docker([...common, "--detach", ...env, image]);
 			const expected = arch === "amd64" ? "x86_64" : "aarch64";
 			assert.equal(docker(["exec", name, "uname", "-m"]), expected);
-			if (service === "admin") {
-				const result = await waitForProbe(() => JSON.parse(docker(["exec", name, "node", "--input-type=module", "-e", adminProbe])), docker, name, now, sleep);
-				assertAdminResponses(result);
-				evidence.auth = result;
-			} else {
-				const health = await waitForProbe(() => JSON.parse(docker(["exec", name, "wget", "-T", "2", "-qO-", "http://127.0.0.1:3003/health"])), docker, name, now, sleep);
-				const graphql = JSON.parse(docker(["exec", name, "wget", "-T", "2", "-qO-", "--header=Content-Type: application/json", '--post-data={"query":"query { __typename articlesByPerekId(perekId: 1) { id } }"}', "http://127.0.0.1:3003/"]));
-				assertApiResponses(health, graphql);
-				evidence.health = health;
-				evidence.graphql = graphql;
+			const result = await waitForProbe(
+				() =>
+					JSON.parse(
+						docker([
+							"exec",
+							name,
+							"node",
+							"--input-type=module",
+							"-e",
+							adminProbe,
+						]),
+					),
+				docker,
+				name,
+				now,
+				sleep,
+			);
+			assertAdminResponses(result);
+			evidence.auth = result;
+		}
+	} catch (error) {
+		failure = error;
+		if (created) {
+			try {
+				console.error(docker(["logs", name]));
+			} catch (logsError) {
+				console.error(`Could not read container logs: ${logsError.message}`);
 			}
 		}
-		return evidence;
-	} catch (error) {
-		failed = true;
-		if (created) {
-			try { console.error(docker(["logs", name])); }
-			catch (logsError) { console.error(`Could not read container logs: ${logsError.message}`); }
-		}
-		throw error;
 	} finally {
 		if (created) {
-			try { docker(["rm", "--force", name]); }
-			catch (cleanupError) {
-				console.error(`Could not remove smoke container ${name}: ${cleanupError.message}`);
-				if (!failed) throw cleanupError;
+			try {
+				docker(["rm", "--force", name]);
+			} catch (cleanupError) {
+				console.error(
+					`Could not remove smoke container ${name}: ${cleanupError.message}`,
+				);
+				failure ??= cleanupError;
 			}
 		}
 	}
+	if (failure) throw failure;
+	return evidence;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+	process.argv[1] &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
 	try {
-		console.log(JSON.stringify(await verifyImage(parseOptions(process.argv.slice(2))), null, 2));
+		console.log(
+			JSON.stringify(
+				await verifyImage(parseOptions(process.argv.slice(2))),
+				null,
+				2,
+			),
+		);
 	} catch (error) {
 		console.error(error);
 		process.exitCode = 1;

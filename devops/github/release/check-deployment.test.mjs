@@ -586,3 +586,38 @@ test("a completed SQL dispatch is a no-op even after its archive expires", () =>
 	assert.equal(result.deploy, false);
 	assert.match(result.reason, /already deployed/);
 });
+
+test("API platform selection comes from published provenance rather than dispatch flags", () => {
+	const payload = {
+		ref: sha,
+		ci_run_id: 10,
+		module_name: "api",
+		module_version: "1.0.10",
+		released_artifact_name: "bible-on-site-api-docker-10",
+		released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64",
+	};
+	const release = {
+		...published,
+		tag_name: "api-v1.0.10",
+		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+	};
+	const api = { ...input, moduleName: "api", moduleDirectory: "web/api" };
+	assert.equal(
+		checkDeployment(api, request({ releases: [release] })).apiArm64,
+		true,
+	);
+	const legacy = { ...release, body: "legacy single-platform release" };
+	assert.equal(
+		checkDeployment({ ...api, apiArm64: true }, request({ releases: [legacy] }))
+			.apiArm64,
+		undefined,
+	);
+	const wrong = {
+		...release,
+		body: `<!-- release-delivery:${JSON.stringify({ ...payload, released_arm64_artifact_name: "other-run" })} -->`,
+	};
+	assert.throws(
+		() => checkDeployment(api, request({ releases: [wrong] })),
+		/published CI provenance/,
+	);
+});

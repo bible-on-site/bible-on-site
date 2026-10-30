@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"scripts": {
 		"test:e2e": "playwright test --config=playwright.config.ts",
-		"coverage:e2e": "cross-env MEASURE_COV=1 playwright test --config=playwright.config.ts"
+		"coverage:e2e": "node --test coverage-file.test.mjs && cross-env MEASURE_COV=1 playwright test --config=playwright.config.ts"
 	},
 	"engines": {
 		"node": ">=26.10.0 <27"

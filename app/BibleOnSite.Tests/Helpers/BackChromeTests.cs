@@ -1,5 +1,6 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 
@@ -8,6 +9,7 @@ namespace BibleOnSite.Tests.Helpers;
 /// <summary><see cref="BackChrome.Apply"/> headless coverage (#2467): the
 /// policy math is pinned by <see cref="BackChromePolicyTests"/>; these tests
 /// exercise the page-side application itself.</summary>
+[Collection(PreferencesServiceCollection.Name)]
 public class BackChromeTests : IDisposable
 {
     public BackChromeTests()
