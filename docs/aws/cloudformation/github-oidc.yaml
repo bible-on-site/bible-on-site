@@ -177,17 +177,6 @@ Resources:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-bulletin"
 
           # EC2 Security Groups - dynamically whitelist GitHub runner IP for RDS access during SSG build
-          # DescribeSecurityGroupRules has no resource-level permissions. Limit
-          # this read to the deployment region; it verifies build ownership
-          # before cleanup and recovers a grant whose CLI response was lost.
-          - Sid: EC2DescribeSSGBuildRuleOwnership
-            Effect: Allow
-            Action: ec2:DescribeSecurityGroupRules
-            Resource: "*"
-            Condition:
-              StringEquals:
-                aws:RequestedRegion: !Ref AWS::Region
-
           # Note: Both security-group and security-group-rule resources are required
           - Sid: EC2SecurityGroupSSGBuild
             Effect: Allow
@@ -226,6 +215,20 @@ Resources:
                 token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
       ManagedPolicyArns:
         - !Ref GitHubActionsECRDeployPolicy
+      # Keep the ownership read on this exact role, leaving the existing shared
+      # managed policy untouched. This Describe API has no resource-level scope.
+      Policies:
+        - PolicyName: GitHubActionsSSGBuildRuleOwnershipRead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EC2DescribeSSGBuildRuleOwnership
+                Effect: Allow
+                Action: ec2:DescribeSecurityGroupRules
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: !Ref AWS::Region
       Tags:
         - Key: Project
           Value: bible-on-site
