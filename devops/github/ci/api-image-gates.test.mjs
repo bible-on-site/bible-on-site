@@ -7,12 +7,19 @@ const workflow = readFileSync(
 	new URL("../../../.github/workflows/ci.yml", import.meta.url),
 	"utf8",
 );
+const apiCoverageAssignment = workflow.indexOf(
+	"then API_MASTER_COVERAGE_AVAILABLE=true;",
+);
+assert.notEqual(apiCoverageAssignment, -1, "API coverage setup must exist");
 const start = workflow.indexOf(
 	'          if { [ "',
-	workflow.indexOf("          API_MASTER_COVERAGE_AVAILABLE="),
+	apiCoverageAssignment,
 );
 assert.notEqual(start, -1, "API image quality gate must exist");
-const end = workflow.indexOf("          APP_MODULE_CHANGED=", start);
+const end = workflow.indexOf(
+	'          if [ "${{ needs.determine_changes.outputs.app_module_changed }}"',
+	start,
+);
 assert.notEqual(end, -1, "API image quality gate must end before app checks");
 const script = workflow.slice(start, end);
 const shell =
