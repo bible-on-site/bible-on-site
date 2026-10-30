@@ -225,8 +225,10 @@ async function rapidFlips(page: Page, n: number): Promise<number> {
 		// may coalesce into a single event.
 		await page.waitForTimeout(120);
 	}
-	// Wait for the last animation to finish (flip animations are ~400ms)
+	// Keep the 600ms sampling window, then require the final animation to finish.
+	// A full turn takes about 800ms; the window alone can observe a partial turn.
 	await page.waitForTimeout(600);
+	await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
 	expect(
 		committedChapterId(page),
 		"rapid next clicks must commit a later spread before measuring completes",
