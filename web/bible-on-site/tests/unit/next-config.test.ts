@@ -42,9 +42,11 @@ describe("next.config.mjs", () => {
 		expect(cssChunking("")).toBe(true);
 	});
 
-	it("budgets only production builds and preserves every other config option", () => {
-		const result = nativeJson(
-			`import os from "node:os";
+	it.each(["linux", "darwin", "win32"])(
+		"budgets only production builds on %s and preserves other options",
+		(platform) => {
+			const result = nativeJson(
+				`import os from "node:os";
 			 import { syncBuiltinESMExports } from "node:module";
 			 import { isDeepStrictEqual } from "node:util";
 			 const calls = { available: 0, constrained: 0, parallelism: 0 };
@@ -54,29 +56,34 @@ describe("next.config.mjs", () => {
 			 syncBuiltinESMExports();
 			 const { default: configure } = await import(${JSON.stringify(configUrl)});
 			 const { PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERVER, PHASE_DEVELOPMENT_SERVER } = await import("next/constants.js");
+			 Object.defineProperty(process, "platform", { value: ${JSON.stringify(platform)} });
 			 const context = { defaultConfig: { experimental: { cpus: 19 } } };
 			 const server = configure(PHASE_PRODUCTION_SERVER, context);
 			 const dev = configure(PHASE_DEVELOPMENT_SERVER, context);
 			 const runtimeCalls = { ...calls };
 			 const build = configure(PHASE_PRODUCTION_BUILD, context);
-			 const { cpus, ...experimental } = build.experimental;
+			 const { cpus, staticGenerationMaxConcurrency, ...experimental } = build.experimental;
 			 console.log(JSON.stringify({
-			   cpus, calls, runtimeCalls,
+			   cpus, concurrency: staticGenerationMaxConcurrency ?? null, calls, runtimeCalls,
 			   runtimeCpuOverride: Object.hasOwn(server.experimental, "cpus"),
+			   runtimeConcurrencyOverride: Object.hasOwn(server.experimental, "staticGenerationMaxConcurrency"),
 			   sameRuntimeOptions: isDeepStrictEqual(server, dev),
 			   sameOtherBuildOptions: isDeepStrictEqual({ ...build, experimental }, server)
 			 }));`,
-			{ NODE_ENV: "production" },
-		);
-		expect(result).toEqual({
-			cpus: 5,
-			calls: { available: 1, constrained: 1, parallelism: 1 },
-			runtimeCalls: { available: 0, constrained: 0, parallelism: 0 },
-			runtimeCpuOverride: false,
-			sameRuntimeOptions: true,
-			sameOtherBuildOptions: true,
-		});
-	});
+				{ NODE_ENV: "production" },
+			);
+			expect(result).toEqual({
+				cpus: 5,
+				concurrency: platform === "win32" ? 1 : null,
+				calls: { available: 1, constrained: 1, parallelism: 1 },
+				runtimeCalls: { available: 0, constrained: 0, parallelism: 0 },
+				runtimeCpuOverride: false,
+				runtimeConcurrencyOverride: false,
+				sameRuntimeOptions: true,
+				sameOtherBuildOptions: true,
+			});
+		},
+	);
 });
 
 const GiB = 1024 ** 3;

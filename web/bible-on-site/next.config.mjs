@@ -273,6 +273,12 @@ export default (phase, { defaultConfig }) => {
 		...nextConfig,
 		experimental: {
 			...nextConfig.experimental,
+			// Concurrent prerenders queued over 180 output writes on Windows;
+			// even small HTML files waited beyond the 60-second page deadline.
+			// Bound the producer queue without changing that deadline or retries.
+			...(process.platform === "win32"
+				? { staticGenerationMaxConcurrency: 1 }
+				: {}),
 			cpus: getBuildWorkerCount({
 				defaultCpuLimit: defaultConfig.experimental.cpus,
 				parallelism: availableParallelism(),
