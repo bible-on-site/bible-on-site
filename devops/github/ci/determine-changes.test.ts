@@ -115,6 +115,12 @@ describe("detectChanges", () => {
 			".github/workflows/architecture-validation.yml",
 			"devops/github/ci/verify-native-image.mjs",
 			"devops/github/ci/verify-native-image.test.mjs",
+			"devops/github/ci/native-api-fixture.mjs",
+			"devops/github/ci/native-api-fixture.test.mjs",
+			"devops/github/ci/native-api-fixture.sql",
+			"devops/github/ci/native-api-fixture-rows.sql",
+			"devops/github/ci/verify-api-native.mjs",
+			"devops/github/ci/verify-api-native.test.mjs",
 			"devops/github/ci/verify-website-native.mjs",
 		]) {
 			const changes = detectChanges([file]);
@@ -128,6 +134,28 @@ describe("detectChanges", () => {
 					`${file} -> ${key}`,
 				);
 			}
+		}
+	});
+
+	test("API publication contracts and dependency changes gate recovery without data delivery", () => {
+		for (const file of [
+			"devops/github/ci/release-coverage.mjs",
+			"devops/github/release/api-image-assets.mjs",
+			"devops/github/release/api-image-assets.test.mjs",
+			"devops/github/release/check-deployment.mjs",
+			"devops/github/release/check-deployment.test.mjs",
+			"devops/github/release/release-provenance.mjs",
+			"devops/package.json",
+			"devops/bun.lock",
+		]) {
+			const changes = detectChanges([file]);
+			assert.deepEqual(
+				changes.data,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
+			assert.equal(isDataDeployChange([file]), false, file);
+			assert.equal(changes.api.module_changed, false, file);
 		}
 	});
 
