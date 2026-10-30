@@ -48,6 +48,12 @@ const NATIVE_IMAGE_CI_PATHS = [
 	".github/workflows/architecture-validation.yml",
 	"devops/github/ci/verify-native-image.mjs",
 	"devops/github/ci/verify-native-image.test.mjs",
+	"devops/github/ci/native-api-fixture.mjs",
+	"devops/github/ci/native-api-fixture.test.mjs",
+	"devops/github/ci/native-api-fixture.sql",
+	"devops/github/ci/native-api-fixture-rows.sql",
+	"devops/github/ci/verify-api-native.mjs",
+	"devops/github/ci/verify-api-native.test.mjs",
 	"devops/github/ci/verify-website-native.mjs",
 ];
 // Deterministic E2E test-selection tooling plus the shared Playwright
@@ -182,6 +188,14 @@ export const MODULES = {
 			"web/bible-on-site/public/icons/whatsapp.svg",
 			"web/bible-on-site/public/icons/telegram.svg",
 			"devops/deploy/ecr-deploy",
+			"devops/github/ci/release-coverage.mjs",
+			"devops/github/release/api-image-assets.mjs",
+			"devops/github/release/api-image-assets.test.mjs",
+			"devops/github/release/check-deployment.mjs",
+			"devops/github/release/check-deployment.test.mjs",
+			"devops/github/release/release-provenance.mjs",
+			"devops/package.json",
+			"devops/bun.lock",
 			"devops/github/ci/determine-changes.test.ts",
 			"devops/github/ci/publish-docstring.mts",
 			"devops/github/ci/publish-docstring-proof.py",
@@ -230,6 +244,22 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		(file) => !DATA_DOCUMENTATION_PATTERN.test(file),
 	);
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	// Calendar exports are repaired through a guarded date-only database operation.
+	// Converter/fixture changes must not launch a replacement production bootstrap.
+	const calendarConverter =
+		"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs";
+	if (
+		dataFiles.includes(calendarConverter) &&
+		!changedFiles.some((file) =>
+			MODULES.perushim_pipeline.extraModulePaths.includes(file),
+		) &&
+		dataFiles.every(
+			(file) =>
+				file === calendarConverter ||
+				file === "data/mysql/tanah_sefarim_and_perakim_data.sql",
+		)
+	)
+		return true;
 	const bulletinMigrations = new Set([
 		"data/mysql/tanah_daily_bulletin_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
