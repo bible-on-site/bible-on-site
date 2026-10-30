@@ -5,6 +5,7 @@ using BibleOnSite.ViewModels;
 using CommunityToolkit.Mvvm.Input;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.SystemTextJson;
+using Moq.Protected;
 
 namespace BibleOnSite.Tests.ViewModels;
 
@@ -27,8 +28,19 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
     private readonly Mock<ITanahpediaService> _pedia = new(MockBehavior.Strict);
     private readonly Mock<IDedicationService> _dedications = new(MockBehavior.Strict);
     private readonly GraphQLHttpClient _client = new(
-        new GraphQLHttpClientOptions { EndPoint = new Uri("https://unused.invalid/graphql") },
-        new SystemTextJsonSerializer(), new HttpClient(new Mock<HttpMessageHandler>(MockBehavior.Strict).Object));
+        new GraphQLHttpClientOptions
+        {
+            EndPoint = new Uri("https://unused.invalid/graphql"),
+            HttpMessageHandler = CreateHttpHandler()
+        },
+        new SystemTextJsonSerializer());
+
+    private static HttpMessageHandler CreateHttpHandler()
+    {
+        var handler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+        handler.Protected().Setup("Dispose", ItExpr.IsAny<bool>()).CallBase();
+        return handler.Object;
+    }
 
     [Theory]
     [MemberData(nameof(NavigationCases))]
