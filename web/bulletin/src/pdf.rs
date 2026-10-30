@@ -764,9 +764,8 @@ pub fn build_daily_pdf(
     fonts_dir: &Path,
     date: &str,
     dedications: &[String],
-    perek_id: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    daily::build(req, fonts_dir, date, dedications, perek_id)
+    daily::build(req, fonts_dir, date, dedications)
 }
 
 fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {

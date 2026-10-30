@@ -48,12 +48,7 @@ fn contact(icon: &str, url: &str, label: &str, ltr: bool) -> String {
     )
 }
 
-fn markup(
-    req: &PdfRequest,
-    date: &str,
-    dedications: &[String],
-    perek_id: i32,
-) -> (String, TypstFiles) {
+fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, TypstFiles) {
     let perek = &req.perakim[0];
     let source = format!("{} {}", req.sefer_name, perek.perek_heb);
     let mut files = vec![("daily-logo.jpg".into(), LOGO.to_vec())];
@@ -132,7 +127,7 @@ fn markup(
         }
     }
     out.push_str(&format!(
-        "#block(width: 100%, fill: rgb(\"F5F9FA\"), inset: 7pt, radius: 4pt, above: 0.5em, breakable: false)[\n#align(center, text(font: \"Frank Ruhl Libre\", size: 11pt, weight: \"bold\", fill: rgb(\"28758A\"))[#link(\"https://xn--febl3a.co.il/929/{perek_id}\")[להמשך לימוד על הפרק]])\n#v(4pt)\n#set text(size: 9pt)\n#align(center)[{} #h(9pt) {}]\n#v(2pt)\n#align(center)[{} #h(9pt) {} #h(9pt) {}]\n]\n]\n",
+        "#block(width: 100%, fill: rgb(\"F5F9FA\"), inset: 7pt, radius: 4pt, above: 0.5em, breakable: false)[\n#set text(size: 9pt)\n#align(center)[{} #h(9pt) {}]\n#v(2pt)\n#align(center)[{} #h(9pt) {} #h(9pt) {}]\n]\n]\n",
         contact("email", "mailto:tanah.site@gmail.com", "tanah.site@gmail.com", true),
         contact("phone", "tel:+37257078640", "+372-57078640", true),
         contact("whatsapp", "https://wa.me/37257078640", "ווטסאפ", false),
@@ -147,13 +142,12 @@ pub(super) fn build(
     fonts_dir: &Path,
     date: &str,
     dedications: &[String],
-    perek_id: i32,
 ) -> Result<Vec<u8>> {
     ensure!(
-        req.perakim.len() == 1 && perek_id > 0,
+        req.perakim.len() == 1,
         "A daily bulletin must contain exactly one chapter"
     );
-    let (markup, files) = markup(req, date, dedications, perek_id);
+    let (markup, files) = markup(req, date, dedications);
     compile_pdf(markup, files, fonts_dir)
 }
 
@@ -185,7 +179,7 @@ mod tests {
 
     #[test]
     fn branded_daily_layout_preserves_content_and_links() {
-        let (source, files) = markup(&request(), "יח חשוון תשפז", &["לזכות המשפחה".into()], 1);
+        let (source, files) = markup(&request(), "יח חשוון תשפז", &["לזכות המשפחה".into()]);
         assert!(source.contains("daily-logo.jpg"));
         assert!(
             source.contains("173E52") && source.contains("28758A") && source.contains("D8BD82")
@@ -196,7 +190,9 @@ mod tests {
         assert_eq!(source.matches("כותרת מלאה").count(), 1);
         assert!(!source.contains("שם חלופי"));
         assert!(source.contains("שם המחבר") && source.contains("גוף המאמר"));
-        assert!(source.contains("https://xn--febl3a.co.il/929/1"));
+        assert!(!source.contains("להמשך לימוד על הפרק"));
+        assert!(!source.contains("https://xn--febl3a.co.il/929/"));
+        assert!(source.contains("https://xn--febl3a.co.il/"));
         for name in ["email", "phone", "whatsapp", "telegram", "globe"] {
             assert!(source.contains(&format!("daily-{name}.png")));
             assert!(
@@ -222,11 +218,11 @@ mod tests {
         req.perakim[0].header.clear();
         req.perakim[0].articles.clear();
         req.perakim[0].pesukim.push(vec![]);
-        let (source, _) = markup(&req, "יח חשוון תשפז", &[], 1);
+        let (source, _) = markup(&req, "יח חשוון תשפז", &[]);
         assert!(!source.contains("מאמר על הפרק"));
         assert!(!source.contains("הלימוד מוקדש"));
         req.perakim[0].articles = vec![("כותרת חלופית".into(), " ".into(), "<p></p>".into())];
-        let (source, _) = markup(&req, "יח חשוון תשפז", &[], 1);
+        let (source, _) = markup(&req, "יח חשוון תשפז", &[]);
         assert!(source.contains("כותרת חלופית"));
         assert!(!source.contains("#linebreak()#text(size: 10pt"));
     }
@@ -234,18 +230,17 @@ mod tests {
     #[test]
     fn compiles_with_bundled_branding_assets() {
         let fonts = Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts");
-        let bytes = build(&request(), &fonts, "יח חשוון תשפז", &[], 1).unwrap();
+        let bytes = build(&request(), &fonts, "יח חשוון תשפז", &[]).unwrap();
         assert!(bytes.starts_with(b"%PDF"));
     }
 
     #[test]
-    fn rejects_multi_chapter_and_invalid_daily_requests() {
+    fn rejects_empty_and_multi_chapter_daily_requests() {
         let fonts = Path::new("missing-fonts");
         let mut req = request();
-        assert!(build(&req, fonts, "תאריך", &[], 0).is_err());
         req.perakim.clear();
-        assert!(build(&req, fonts, "תאריך", &[], 1).is_err());
+        assert!(build(&req, fonts, "תאריך", &[]).is_err());
         req.perakim = vec![PdfPerekInput::default(), PdfPerekInput::default()];
-        assert!(build(&req, fonts, "תאריך", &[], 1).is_err());
+        assert!(build(&req, fonts, "תאריך", &[]).is_err());
     }
 }

@@ -6,6 +6,11 @@ and byline, and project contact icons. Images are embedded from the existing
 email assets, so generation needs no network requests. General chapter and book
 exports retain their separate layout.
 
+The PDF ends with the contact details. The email retains its chapter continuation
+link.
+
+![PDF contact footer](daily-bulletin-contact-footer.png)
+
 Download names follow the archived bulletin convention:
 
 ```text

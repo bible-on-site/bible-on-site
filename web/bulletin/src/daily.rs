@@ -264,7 +264,7 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
         cover_accent_hex: "48A9C4".into(),
         cover_text: pdf::PdfCoverText::default(),
     };
-    let bytes = pdf::build_daily_pdf(&req, fonts_dir, &hebrew_date, &dedications, input.perek_id)?;
+    let bytes = pdf::build_daily_pdf(&req, fonts_dir, &hebrew_date, &dedications)?;
     let filename = bulletin_filename(input.perek_id, &source, &chapter.header);
     Ok(DailyArtifacts {
         subject,
