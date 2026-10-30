@@ -32,6 +32,28 @@ public class ReaderPlatformChromeTests : IDisposable
         public void RaiseOpenChanged() => _searchOpenChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private sealed class FakePerushimSheet : IReaderPerushimSheetSurface
+    {
+        private EventHandler<bool>? _isOpenChanged;
+
+        event EventHandler<bool>? IReaderPerushimSheetSurface.IsOpenChanged
+        {
+            add => _isOpenChanged += value;
+            remove => _isOpenChanged -= value;
+        }
+
+#pragma warning disable S1172 // Fake satisfies the interface contract; toggle arguments unused.
+        public Task ToggleAsync(double hostHeight, double maxExpandedHeight) => Task.CompletedTask;
+#pragma warning restore S1172
+
+        public void CloseImmediate()
+        {
+            // Fake no-op — tests drive open state through RaiseOpenChanged.
+        }
+
+        public void RaiseOpenChanged(bool isOpen) => _isOpenChanged?.Invoke(this, isOpen);
+    }
+
     /// <summary>The rig every reader page constructs in SetupPlatformChrome.</summary>
     private sealed class Rig
     {
@@ -45,6 +67,7 @@ public class ReaderPlatformChromeTests : IDisposable
         public readonly ReaderExitFullscreenButton ExitButton = new();
         public readonly FakeSearchSurface Search = new();
         public readonly Grid SelectionBar = new();
+        public readonly FakePerushimSheet Sheet = new();
 
         public bool OwnsSurface;
         public int TryHandleCalls;
@@ -63,6 +86,7 @@ public class ReaderPlatformChromeTests : IDisposable
                     BackSensitiveOverlays = [MenuOverlay, ExitButton],
                     SearchSurface = withSearchTriggers ? Search : null,
                     SelectionSurface = withSearchTriggers ? SelectionBar : null,
+                    PerushimSheet = Sheet,
                 },
                 new ReaderPlatformChromeActions
                 {
@@ -133,6 +157,22 @@ public class ReaderPlatformChromeTests : IDisposable
 
         rig.NavigationBar.BackEnabled.Should().BeTrue(
             "the exit-fullscreen overlay drives the same refresh as the menu");
+    }
+
+    [Fact]
+    public void PerushimSheetOpenChange_RefreshesCapsuleBackState()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.NavigationBar.BackEnabled.Should().BeFalse(
+            "no transient surface at a root destination keeps Back disabled");
+
+        rig.OwnsSurface = true;
+        rig.Sheet.RaiseOpenChanged(true);
+
+        rig.NavigationBar.BackEnabled.Should().BeTrue(
+            "the sheet's own IsOpenChanged re-derives the capsule state — " +
+            "it reports no IsVisible flip the overlay subscription could ride (#2766)");
     }
 
     [Fact]
