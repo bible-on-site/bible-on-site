@@ -96,12 +96,11 @@ fn bulletin_filename(perek_id: i32, source: &str, header: &str) -> String {
         })
         .collect();
     let cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
-    // Keep the download basename within Windows' 255 UTF-16 unit limit.
+    // UTF-8's byte limit also fits Windows' UTF-16 unit limit. Reserve four
+    // bytes for .pdf and stop before a character that would cross the limit.
     let mut stem = String::new();
-    let mut units = 0;
     for c in cleaned.chars() {
-        units += c.len_utf16();
-        if units > 251 {
+        if stem.len() + c.len_utf8() > 251 {
             break;
         }
         stem.push(c);
@@ -322,7 +321,17 @@ mod tests {
         assert_eq!(bulletin_filename(1, "בראשית א", " "), "1_בראשית א - 1.pdf");
         let long = bulletin_filename(1, "בראשית א", &"כותרת 🌍 ".repeat(100));
         assert!(long.encode_utf16().count() <= 255);
+        assert!(long.len() <= 255, "{} UTF-8 bytes", long.len());
         assert!(long.ends_with(".pdf"));
+    }
+
+    #[test]
+    fn file_name_byte_limit_preserves_complete_unicode_characters() {
+        let ascii = bulletin_filename(1, "x", &"a".repeat(300));
+        assert_eq!(ascii.len(), 255);
+        let header = format!("{}🌍", "a".repeat(240));
+        let unicode = bulletin_filename(1, "x", &header);
+        assert_eq!(unicode, format!("1_x - 1 - {}.pdf", "a".repeat(240)));
     }
 
     #[test]
@@ -338,6 +347,11 @@ mod tests {
             assert!(name.starts_with(&format!("{id}_")));
             assert!(name.ends_with(".pdf"));
             assert!(name.encode_utf16().count() <= 255);
+            assert!(
+                name.len() <= 255,
+                "chapter {id}: {} UTF-8 bytes",
+                name.len()
+            );
             assert!(
                 !name
                     .chars()
