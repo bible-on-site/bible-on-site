@@ -244,6 +244,22 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		(file) => !DATA_DOCUMENTATION_PATTERN.test(file),
 	);
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	// Calendar exports are repaired through a guarded date-only database operation.
+	// Converter/fixture changes must not launch a replacement production bootstrap.
+	const calendarConverter =
+		"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs";
+	if (
+		dataFiles.includes(calendarConverter) &&
+		!changedFiles.some((file) =>
+			MODULES.perushim_pipeline.extraModulePaths.includes(file),
+		) &&
+		dataFiles.every(
+			(file) =>
+				file === calendarConverter ||
+				file === "data/mysql/tanah_sefarim_and_perakim_data.sql",
+		)
+	)
+		return true;
 	const bulletinMigrations = new Set([
 		"data/mysql/tanah_daily_bulletin_upgrade.sql",
 		"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",

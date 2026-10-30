@@ -599,7 +599,11 @@ describe("detectChanges", () => {
 		]) {
 			const changes = detectChanges([file]);
 			for (const [key, flags] of Object.entries(changes)) {
-				assert.deepEqual(flags, { module_changed: false, ci_changed: key === "api" }, `${file} -> ${key}`);
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "api" },
+					`${file} -> ${key}`,
+				);
 			}
 			assert.equal(isDataDeployChange([file]), false, file);
 		}
@@ -633,6 +637,42 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the calendar converter repair requires data checks and a guarded manual deployment", () => {
+		const files = [
+			"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs",
+			"devops/study-calendar-repair.mjs",
+		];
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(detectChanges(files).data.module_changed, true);
+		assert.equal(detectChanges(files).perushim_pipeline.module_changed, false);
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			]),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			]),
+			true,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([...files, "data/mysql/tanah_test_data.sql"]),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/sefaria/pipelines/perushim-view/src/main.rs",
+			]),
+			false,
+		);
+	});
+
 	for (const [name, files, expected] of [
 		["no data changes", [], false],
 		[
@@ -1310,11 +1350,13 @@ describe("merge-group workflow contract", () => {
 						"bash.exe",
 					)
 				: "bash";
+		const scenarios: { label: string; succeeds: boolean; script: string }[] = [];
 		const evaluate = (
 			event: string,
 			failedJob?: string,
 			ciChanged = true,
 			baselineAvailable = true,
+			succeeds = false,
 			versions = { amd64: "0.1.96", arm64: "0.1.96" },
 			prerequisiteSource = prerequisites,
 		) => {
@@ -1338,11 +1380,9 @@ describe("merge-group workflow contract", () => {
 					throw new Error(`Unexpected prerequisite expression: ${expression}`);
 				},
 			);
-			return spawnSync(bash, ["--noprofile", "--norc", "-e", "-s"], {
-				input: script,
-				encoding: "utf8",
-			});
+			scenarios.push({ label: `${event}/${failedJob ?? "all"}`, succeeds, script });
 		};
+		evaluate("merge_group", undefined, true, true, true);
 		// Paired-image guards may arrive independently of the queue fixture.
 		// Keep output substitution strict and exercise missing/mismatched versions.
 		const versionGate = prerequisites + `
@@ -1358,20 +1398,14 @@ fi
 			["", "0.1.96"],
 			["0.1.96", ""],
 		] as const) {
-			const result = evaluate("merge_group", undefined, true, true,
-				{ amd64, arm64 }, versionGate);
-			assert.ifError(result.error);
-			assert.equal(result.status, amd64 !== "" && amd64 === arm64 ? 0 : 1,
-				result.stdout + result.stderr);
+			evaluate("merge_group", undefined, true, true,
+				amd64 !== "" && amd64 === arm64, { amd64, arm64 }, versionGate);
 		}
 		assert.throws(
-			() => evaluate("merge_group", undefined, true, true, undefined,
+			() => evaluate("merge_group", undefined, true, true, false, undefined,
 				prerequisites + "\n${{ needs.unknown.outputs.module_version }}"),
 			/Unexpected prerequisite expression/,
 		);
-		const passing = evaluate("merge_group");
-		assert.ifError(passing.error);
-		assert.equal(passing.status, 0, passing.stdout + passing.stderr);
 		for (const name of [
 			"website_performance",
 			"website_e2e",
@@ -1395,29 +1429,33 @@ fi
 			"deploy_verifier",
 			"calendar_pdf_artifacts",
 		]) {
-			const result = evaluate("merge_group", name);
-			assert.ifError(result.error);
-			assert.notEqual(
-				result.status,
-				0,
-				`${name} may not skip on a combined queue head`,
-			);
+			evaluate("merge_group", name);
 		}
 		// Baseline recovery alone never selects the PR native-audio producer.
-		const recovery = evaluate("pull_request", "app_ios_ci", false, false);
-		assert.ifError(recovery.error);
-		assert.equal(recovery.status, 0, recovery.stdout + recovery.stderr);
+		evaluate("pull_request", "app_ios_ci", false, false, true);
 		for (const event of ["push", "workflow_dispatch"]) {
 			for (const name of ["app_ios_ci", "perushim_data"]) {
-				const result = evaluate(event, name);
-				assert.ifError(result.error);
-				assert.equal(
-					result.status,
-					0,
-					`${event}/${name}: ${result.stdout}${result.stderr}`,
-				);
+				evaluate(event, name, true, true, true);
 			}
 		}
+		// Run the real shell gates in isolated subshells without paying native Bash
+		// startup once for each scenario, which exceeded the unchanged 5s deadline.
+		const result = spawnSync(bash, ["--noprofile", "--norc", "-s"], {
+			input: scenarios.map(({ script }, index) =>
+				`( set -e\n${script}\n)\nprintf 'GATE_RESULT_${index}=%s\\n' "$?"`,
+			).join("\n"),
+			encoding: "utf8",
+		});
+		assert.ifError(result.error);
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		const outcomes = [...result.stdout.matchAll(/^GATE_RESULT_(\d+)=(\d+)$/gm)];
+		assert.equal(outcomes.length, scenarios.length, result.stdout + result.stderr);
+		for (const [index, scenario] of scenarios.entries()) {
+			assert.equal(Number(outcomes[index][1]), index);
+			assert.equal(Number(outcomes[index][2]) === 0, scenario.succeeds,
+				`${scenario.label}: ${result.stdout}${result.stderr}`);
+		}
+
 	});
 
 	test("queue validation cannot run production website packaging or release jobs", () => {
