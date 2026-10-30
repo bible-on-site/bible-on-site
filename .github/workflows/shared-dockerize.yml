@@ -5,6 +5,11 @@ on:
       module_directory:
         required: true
         type: string
+      perushim_data_artifact:
+        description: "perushim SQL artifact to load into the local SSG database ('' = build against prod RDS directly)"
+        required: false
+        type: string
+        default: ''
     secrets:
       # AWS credentials for SSG builds (website only) - used to fetch DB_URL from SSM
       # and dynamically whitelist runner IP in RDS security group
@@ -211,6 +216,70 @@ jobs:
           timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
+
+      # --- Local SSG database (website only) ---
+      # Bake SSG pages from the post-deploy data state: a prod RDS dump minus the
+      # dynamic content tables, plus a replay of the deploy manifest carrying the
+      # fresh perushim artifact. Falls back to querying prod RDS when no perushim
+      # artifact is available (e.g. an expired baseline).
+      - name: Set up local MySQL for SSG build data
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact != '' }}
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Download perushim SQL (same run)
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact == 'perushim-data-sql' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: perushim-data-sql
+          path: data/mysql
+
+      - name: Download perushim SQL master baseline
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact == 'perushim-data-sql.master' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ inputs.perushim_data_artifact }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d data/mysql
+
+      - name: Dump production data into local MySQL
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact != '' && steps.rds_creds.outputs.db_url != '' }}
+        id: dump_prod
+        env:
+          PROD_DB_URL: ${{ steps.rds_creds.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          read -r DB_HOST DB_PORT DB_USER DB_NAME <<<"$(python3 -c 'from urllib.parse import urlparse; import os; u=urlparse(os.environ["PROD_DB_URL"]); print(u.hostname, u.port or 3306, u.username, u.path.lstrip("/").split("?")[0])')"
+          export MYSQL_PWD="$(python3 -c 'from urllib.parse import urlparse, unquote; import os; print(unquote(urlparse(os.environ["PROD_DB_URL"]).password or ""))')"
+          # parshan/perush/note are redeployed from the manifest below, so the
+          # dump carries every static, tanahpedia and metrics table as it runs on prod.
+          mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
+            --single-transaction --quick --no-tablespaces --column-statistics=0 \
+            --set-gtid-purged=OFF --default-character-set=utf8mb4 \
+            --databases "$DB_NAME" \
+            --ignore-table="$DB_NAME.parshan" --ignore-table="$DB_NAME.perush" --ignore-table="$DB_NAME.note" \
+            | sed -e 's/DEFINER[ ]*=[ ]*[^ ]* / /g' \
+            | mysql -h 127.0.0.1 -u root -ptest_123
+          unset MYSQL_PWD
+          echo "local_db_url=mysql://root:test_123@127.0.0.1:3306/$DB_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Replay the deploy manifest on the local dump
+        if: ${{ env.IS_NPM == 'true' && steps.dump_prod.outputs.local_db_url != '' }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pymysql
+          python3 devops/deploy/data-deploy/validate_lambda_parser.py \
+            --db "${{ steps.dump_prod.outputs.local_db_url }}"
+      # --- End Local SSG database ---
+
       - name: Merge and audit approved recitation timings
         if: ${{ env.IS_NPM == 'true' }}
         run: |
@@ -235,7 +304,7 @@ jobs:
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         shell: bash
         env:
-          DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+          DB_URL: ${{ steps.dump_prod.outputs.local_db_url || steps.rds_creds.outputs.db_url || '' }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           CACHE_ARGS=()
