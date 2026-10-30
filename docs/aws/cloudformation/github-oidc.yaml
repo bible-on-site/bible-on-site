@@ -5,26 +5,24 @@
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: |
-  GitHub Actions OIDC Provider and IAM Role for ECR deployments.
+Description: GitHub Actions OIDC provider and ECR deployment role (documentation only).
 
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
-
-  This template sets up OpenID Connect (OIDC) authentication between GitHub Actions
-  and AWS, allowing GitHub workflows to assume an IAM role without storing long-lived
-  AWS credentials as secrets.
-
-  Sensitive Information Restoration:
-  | Placeholder | Description | Restoration Command |
-  |---|---|---|
-  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
-
-  GITHUB REPOSITORY SECRETS:
-  | Name                | Value                                                            | Description       |
-  |---------------------|------------------------------------------------------------------|-------------------|
-  | AWS_DEPLOY_ROLE_ARN | arn:aws:iam::<AWS_ACCOUNT_ID>:role/GitHubActionsECRDeployRole    | IAM role for OIDC |
-  | AWS_REGION          | il-central-1                                                     | AWS region        |
-  | AWS_ACCOUNT_ID      | <AWS_ACCOUNT_ID>                                                 | AWS account ID    |
+# This template sets up OpenID Connect (OIDC) authentication between GitHub Actions
+# and AWS, allowing GitHub workflows to assume an IAM role without storing long-lived
+# AWS credentials as secrets. Keep setup notes outside CloudFormation's 1024-character
+# Description limit. The documentation-only warning above still applies.
+#
+# Sensitive Information Restoration:
+# | Placeholder | Description | Restoration Command |
+# |---|---|---|
+# | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+#
+# GITHUB REPOSITORY SECRETS:
+# | Name                | Value                                                            | Description       |
+# |---------------------|------------------------------------------------------------------|-------------------|
+# | AWS_DEPLOY_ROLE_ARN | arn:aws:iam::<AWS_ACCOUNT_ID>:role/GitHubActionsECRDeployRole    | IAM role for OIDC |
+# | AWS_REGION          | il-central-1                                                     | AWS region        |
+# | AWS_ACCOUNT_ID      | <AWS_ACCOUNT_ID>                                                 | AWS account ID    |
 
 Parameters:
   GitHubOrg:
