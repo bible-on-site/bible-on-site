@@ -108,11 +108,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     /// <summary>
     /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
-    /// and edge-back history, Android predictive-Back registration, Windows
-    /// keyboard Back, and the capsule's enabled-state provider — through the
-    /// one coordinator. Masora's only transient return surface is fullscreen:
-    /// the capsule stays enabled while the floating exit control is up — the
-    /// same surface <see cref="TryHandleReaderBack"/> serves (#2467).
+    /// and edge-back history, Android predictive-Back registration, and the
+    /// capsule's enabled-state provider — through the one coordinator.
+    /// Masora's transient return surfaces are fullscreen and the perushim
+    /// sheet (#2766): the capsule stays enabled while either is up — the
+    /// same surfaces <see cref="TryHandleReaderBack"/> serves (#2467).
     /// </summary>
     private void SetupPlatformChrome()
     {
@@ -126,10 +126,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 FanMenu = FanMenu,
                 Carousel = MasoraCarousel,
                 BackSensitiveOverlays = [ExitFullScreenButton],
+                PerushimSheet = PerushimPanel,
             },
             new ReaderPlatformChromeActions
             {
-                OwnsReturnSurface = () => ExitFullScreenButton.IsVisible,
+                OwnsReturnSurface = () => ExitFullScreenButton.IsVisible || PerushimPanel.IsOpen,
                 TryHandleBack = TryHandleReaderBack,
             });
     }
@@ -557,8 +558,17 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the unit picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
         { _chrome.ExitFullScreen(); return true; }
+        if (MasoraUnitPickerPopup.IsVisible)
+        { MasoraUnitPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         return false;
     }
 
