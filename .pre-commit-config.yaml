@@ -145,6 +145,17 @@ repos:
         files: ^web/admin/
         pass_filenames: false
         priority: 10
+      # App unit tests (#1229): same staged-file bucketing as dotnet-analyzers;
+      # --tests runs `dotnet test` on the test projects covering the touched
+      # dirs (BibleOnSite.Tests <- app/BibleOnSite, devops.Tests <- app/devops).
+      - id: app-unit-tests
+        name: app unit tests
+        entry: node devops/precommit-dotnet.mjs --tests
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^app/
+        pass_filenames: false
+        priority: 10
       # C# analyzer gate (#2114): builds each touched app/ project so the
       # SonarAnalyzer.CSharp severities in .editorconfig fail locally instead
       # of first surfacing as post-push Codacy/Qodana annotations. Skips
@@ -183,6 +194,16 @@ repos:
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^(web/(api|bulletin)|data)/
+        pass_filenames: false
+        priority: 10
+      # Rust unit tests (#1229): `cargo make test-unit` on the modules that
+      # define it — data/ has no test-unit task and stays lint-only.
+      - id: rust-unit-tests
+        name: rust unit tests (per-module)
+        entry: node devops/precommit-rust.mjs --tests
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(web/api|web/bulletin)/
         pass_filenames: false
         priority: 10
       # Local gate for recurring Codacy findings with no analyzer equivalent
