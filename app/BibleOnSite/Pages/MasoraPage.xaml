@@ -5,6 +5,7 @@
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.MasoraPage"
              x:Name="MasoraPageRoot"
@@ -76,8 +77,20 @@
                           Margin="0">
                 <CarouselView.ItemTemplate>
                     <DataTemplate x:DataType="models:MasoraUnit">
-                        <!-- Unit page: header + CollectionView of rows -->
+                        <!-- Unit page: header + CollectionView of rows.
+                             On Windows the column caps and centers (#2766). -->
                         <Grid RowDefinitions="Auto,*">
+                            <Grid.MaximumWidthRequest>
+                                <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                                    <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
+                                </OnPlatform>
+                            </Grid.MaximumWidthRequest>
+                            <Grid.HorizontalOptions>
+                                <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                                    <On Platform="Windows" Value="Center"/>
+                                </OnPlatform>
+                            </Grid.HorizontalOptions>
                             <!-- Unit header: parasha-identity heading + break label -->
                             <VerticalStackLayout Grid.Row="0" Spacing="2" Padding="16,12,16,8">
                                 <Label AutomationId="MasoraUnitHeading"
@@ -207,6 +220,8 @@
                 <!-- Previous unit (bottom-left satellite). Disabled at the first unit via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="PrevUnitButton"
                         AutomationId="PrevUnitButton"
+                        SemanticProperties.Description="היחידה הקודמת"
+                        ToolTipProperties.Text="היחידה הקודמת"
                         Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                         Command="{Binding LoadPreviousCommand}"
                         Clicked="OnMenuItemClicked"/>
@@ -214,12 +229,16 @@
                 <!-- Unit picker (top satellite) -->
                 <controls:ReaderFanMenuSatellite x:Name="UnitPickerButton"
                         AutomationId="UnitPickerButton"
+                        SemanticProperties.Description="בחירת יחידה"
+                        ToolTipProperties.Text="בחירת יחידה"
                         Text="{x:Static fonts:FluentUI.library_24_regular}"
                         Clicked="OnUnitPickerClicked"/>
 
                 <!-- Next unit (bottom-right satellite). Disabled at the last unit via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="NextUnitButton"
                         AutomationId="NextUnitButton"
+                        SemanticProperties.Description="היחידה הבאה"
+                        ToolTipProperties.Text="היחידה הבאה"
                         Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                         ScaleX="-1"
                         Command="{Binding LoadNextCommand}"

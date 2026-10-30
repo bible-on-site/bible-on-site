@@ -446,8 +446,8 @@ jobs:
 
   package_website:
     name: Package Website
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -456,6 +456,10 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
 
   # Master pushes package the release; other events (PR, merge queue) build the
   # same release Docker configuration as a pre-merge check without uploading it,
@@ -547,7 +551,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Get Module Version
         id: get_version
@@ -852,7 +857,8 @@ jobs:
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -1081,7 +1087,8 @@ jobs:
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -1474,7 +1481,8 @@ jobs:
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -1787,7 +1795,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2214,7 +2223,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2392,7 +2402,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2571,7 +2582,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       # Per-job key: rust-cache never overwrites an existing key, so a shared key is owned by whichever job saves first.
       - name: Cache Cargo dependencies

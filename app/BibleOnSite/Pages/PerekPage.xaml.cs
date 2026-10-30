@@ -96,10 +96,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     /// <summary>
     /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
-    /// and edge-back history, Android predictive-Back registration, Windows
-    /// keyboard Back, and the capsule's enabled-state provider — through the
-    /// one coordinator. Only the division plugs differ: which transient
-    /// surfaces consume Back and what Back does to them.
+    /// and edge-back history, Android predictive-Back registration, and the
+    /// capsule's enabled-state provider — through the one coordinator. Only
+    /// the division plugs differ: which transient surfaces consume Back and
+    /// what Back does to them.
     /// </summary>
     private void SetupPlatformChrome()
     {
@@ -115,12 +115,12 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 BackSensitiveOverlays = [ReaderMenuOverlay, ExitFullScreenButton],
                 SearchSurface = ChapterSearch,
                 SelectionSurface = SelectionBar,
+                PerushimSheet = PerushimPanel,
             },
             new ReaderPlatformChromeActions
             {
                 OwnsReturnSurface = OwnsReaderReturnSurface,
                 TryHandleBack = TryHandleReaderBack,
-                SuppressFocus = () => ChapterSearch.IsSearchOpen,
             });
     }
 
@@ -1313,6 +1313,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private bool OwnsReaderReturnSurface() =>
         ExitFullScreenButton.IsVisible
         || ReaderMenuOverlay.IsOpen
+        || PerushimPanel.IsOpen
         || ChapterSearch.IsSearchOpen
         || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
             _chapterRecitationSelection, _focusedPasuk != null,

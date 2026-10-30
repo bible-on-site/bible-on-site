@@ -30,7 +30,7 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
     public bool IsOpen { get; private set; }
 
     /// <summary>Raised whenever <see cref="IsOpen"/> changes (toggle, pan-dismiss).</summary>
-#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
+#pragma warning disable S3264 // Subscribed by the shared ReaderChrome/ReaderPlatformChrome coordinators; Codacy's per-file analysis misses them.
     public event EventHandler<bool>? IsOpenChanged;
 #pragma warning restore S3264
 
