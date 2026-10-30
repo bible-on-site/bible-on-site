@@ -39,6 +39,7 @@ import {
 	updateEntry,
 } from "~/server/tanahpedia/entries";
 import { getLlmAssistantStatus } from "~/server/tanahpedia/llm-assistant";
+import { WEBSITE_BASE } from "~/lib/website-base";
 
 interface EntryFormData {
 	unique_name: string;
@@ -64,10 +65,6 @@ export const Route = createFileRoute("/tanahpedia/entries/$id")({
 	component: EntryEditPage,
 });
 
-const WEBSITE_BASE =
-	typeof import.meta.env.VITE_WEBSITE_URL === "string"
-		? import.meta.env.VITE_WEBSITE_URL.replace(/\/$/, "")
-		: "http://localhost:3001";
 
 function EntryEditPage() {
 	const { id } = Route.useParams();
