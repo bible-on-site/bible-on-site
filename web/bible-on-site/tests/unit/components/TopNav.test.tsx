@@ -1,8 +1,10 @@
 /**
  * @jest-environment jsdom
  */
+import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
 import Image from "next/image";
+import sharp from "sharp";
 
 let mockPathname = "/";
 jest.mock("next/navigation", () => ({
@@ -51,7 +53,13 @@ describe("TopNav", () => {
 		expect(search).not.toHaveTextContent(/\S/);
 	});
 
-	it("serves the pre-sized header logo directly while other images remain optimized", () => {
+	it("serves a real DPR3 header bitmap directly while other images remain optimized", async () => {
+		const bitmap = await sharp(
+			resolve(
+				__dirname,
+				"../../../public/images/logos/logo-white-letters-69.webp",
+			),
+		).metadata();
 		render(
 			<>
 				<TopNav />
@@ -75,6 +83,20 @@ describe("TopNav", () => {
 		expect(logo).toHaveAttribute("height", "50");
 		expect(logo).toHaveStyle({ width: "72px", height: "auto" });
 		expect(logo.closest("a")).toHaveAttribute("href", "/");
+
+		// Inspect the actual served bitmap: a responsive srcset alone cannot
+		// provide detail if the encoded source still contains only 69 pixels.
+		const displayedWidth = Number.parseFloat(logo.style.width);
+		const displayedHeight =
+			(displayedWidth * Number(logo.getAttribute("height"))) /
+			Number(logo.getAttribute("width"));
+		expect(bitmap.format).toBe("webp");
+		expect(bitmap.width ?? 0).toBeGreaterThanOrEqual(
+			Math.ceil(displayedWidth * 3),
+		);
+		expect(bitmap.height ?? 0).toBeGreaterThanOrEqual(
+			Math.ceil(displayedHeight * 3),
+		);
 
 		const control = screen.getByRole("img", { name: "Optimizer control" });
 		expect(control.getAttribute("src")).toContain("/_next/image?");
