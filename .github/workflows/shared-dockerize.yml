@@ -283,11 +283,13 @@ jobs:
 
       - name: Replay the deploy manifest on the local dump
         if: ${{ env.IS_NPM == 'true' && steps.dump_prod.outputs.local_db_url != '' }}
+        env:
+          LOCAL_DB_URL: ${{ steps.dump_prod.outputs.local_db_url }}
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pymysql
           python3 devops/deploy/data-deploy/validate_lambda_parser.py \
-            --db "${{ steps.dump_prod.outputs.local_db_url }}"
+            --db "$LOCAL_DB_URL"
       # --- End Local SSG database ---
 
       - name: Merge and audit approved recitation timings

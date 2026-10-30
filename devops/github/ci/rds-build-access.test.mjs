@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -355,4 +356,55 @@ test("database credentials stay data and never become host shell code", () => {
 		"mysql://user:pass@$(bad)/tanah",
 	])
 		assert.throws(() => databaseHost(value), /Invalid database/);
+});
+
+test("manifest replay passes the derived database URL as literal data", () => {
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/shared-dockerize.yml", import.meta.url),
+		"utf8",
+	).replace(/\r\n/g, "\n");
+	const step = workflow
+		.split("      - name: Replay the deploy manifest on the local dump\n")[1]
+		?.split("      # --- End Local SSG database ---")[0];
+	assert.ok(step, "The real manifest replay step must exist");
+	assert.match(
+		step,
+		/LOCAL_DB_URL: \$\{\{ steps\.dump_prod\.outputs\.local_db_url \}\}/,
+	);
+	const marker = "        run: |\n";
+	const start = step.indexOf(marker);
+	assert.notEqual(start, -1, "Manifest replay must have a shell command");
+	const script = step
+		.slice(start + marker.length)
+		.split("\n")
+		.map((line) => line.replace(/^          /, ""))
+		.join("\n");
+	const url = "mysql://root:test_123@127.0.0.1:3306/db$(unsafe)";
+	const shell =
+		process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+	const result = spawnSync(
+		shell,
+		[
+			"--noprofile",
+			"--norc",
+			"-e",
+			"-c",
+			String.raw`python3() { printf '%s\0' "$@"; }; unsafe() { printf INJECTION_EXECUTED; };` +
+				"\n" +
+				script.replace("${{ steps.dump_prod.outputs.local_db_url }}", url),
+		],
+		{ encoding: "utf8", timeout: 5000, env: { ...process.env, LOCAL_DB_URL: url } },
+	);
+	assert.ifError(result.error);
+	assert.equal(result.status, 0, result.stderr);
+	assert.deepEqual(result.stdout.split("\0").filter(Boolean), [
+		"-m",
+		"pip",
+		"install",
+		"--quiet",
+		"pymysql",
+		"devops/deploy/data-deploy/validate_lambda_parser.py",
+		"--db",
+		url,
+	]);
 });
