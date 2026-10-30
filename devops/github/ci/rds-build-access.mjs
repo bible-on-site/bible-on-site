@@ -184,7 +184,7 @@ export async function grantAccess(
 	]);
 	if (response.Return !== true || response.SecurityGroupRules?.length !== 1)
 		throw new Error("Missing successful security group rule receipt");
-	const rule = response.SecurityGroupRules[0];
+	const [rule] = response.SecurityGroupRules;
 	validateRule(rule, lease);
 	lease.ruleId = rule.SecurityGroupRuleId;
 	// Keep the write-ahead journal intact if writing the full receipt fails.
