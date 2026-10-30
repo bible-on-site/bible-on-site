@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
 	mkdirSync,
 	mkdtempSync,
@@ -31,6 +31,85 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+
+	describe("documentation preserves every migration routing decision", () => {
+		for (const migrations of [
+			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+			],
+		]) {
+			test(migrations.join(" + "), () => {
+				const files = ["data/annotations/GOLDEN.md", ...migrations];
+				assert.deepEqual(detectChanges(files).data, {
+					module_changed: true,
+					ci_changed: true,
+				});
+				assert.equal(
+					isSchemaOnlyDataChange(files),
+					isSchemaOnlyDataChange(migrations),
+				);
+				assert.equal(isDataDeployChange(files), false);
+			});
+		}
+	});
+	test("the annotation evaluation guide selects data checks without delivery", () => {
+		const files = ["data/annotations/GOLDEN.md"];
+		const changes = detectChanges(files);
+		assert.deepEqual(changes.data, { module_changed: false, ci_changed: true });
+		for (const [key, flags] of Object.entries(changes)) {
+			if (key !== "data")
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: false },
+					key,
+				);
+		}
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isSchemaOnlyDataChange(files), false);
+	});
+
+	test("the guide exception preserves real annotation inputs and exact path boundaries", () => {
+		for (const file of [
+			"data/annotations/publish.py",
+			"data/annotations/golden/metrics-baseline.json",
+			"data/annotations/GOLDEN.md.bak",
+			"data/annotations/nested/GOLDEN.md",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).data,
+				{ module_changed: true, ci_changed: false },
+				file,
+			);
+			assert.deepEqual(
+				detectChanges(["data/annotations/GOLDEN.md", file]).data,
+				{ module_changed: true, ci_changed: true },
+				file,
+			);
+		}
+	});
+
+	test("the guide does not turn a manual migration into a full data deployment", () => {
+		const files = [
+			"data/annotations/GOLDEN.md",
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+		];
+		assert.deepEqual(detectChanges(files).data, {
+			module_changed: true,
+			ci_changed: true,
+		});
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			]),
+			false,
+		);
+	});
+
 	test("native image validation changes select all three services without a release", () => {
 		for (const file of [
 			".github/workflows/architecture-validation.yml",
@@ -855,12 +934,19 @@ describe("main", () => {
 	 * Builds origin history `base -> (api change) -> (website change)` on master,
 	 * then runs `main` in a depth-1 clone of HEAD, like actions/checkout. PRs
 	 * use a synthetic merge whose first parent has newer release-only bumps.
+	 * Queue runs keep master at root and put both entries on the queue branch.
 	 */
 	function run(
 		eventName: string,
-		event: (shas: { root: string; replaced: string; base: string }) => object,
+		event: (shas: {
+			root: string;
+			replaced: string;
+			base: string;
+			head: string;
+		}) => object,
 		changedPath = "web/bible-on-site/src/page.tsx",
 		changeKind: "write" | "delete" = "write",
+		ancestorPath = "web/api/src/main.rs",
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -879,7 +965,10 @@ describe("main", () => {
 			git(work, "checkout", "--quiet", "-b", "replaced");
 			const replaced = commit(work, "web/admin/src/main.tsx");
 			git(work, "checkout", "--quiet", "master");
-			const base = commit(work, "web/api/src/main.rs");
+			if (eventName === "merge_group") {
+				git(work, "checkout", "--quiet", "-b", "gh-readonly-queue/master/tail");
+			}
+			const base = commit(work, ancestorPath);
 			if (eventName === "pull_request") {
 				git(work, "checkout", "--quiet", "-b", "feature");
 				commit(work, "web/bible-on-site/src/page.tsx");
@@ -902,6 +991,16 @@ describe("main", () => {
 			} else {
 				commit(work, changedPath);
 			}
+			const head = git(work, "rev-parse", "HEAD");
+			if (eventName === "merge_group") {
+				assert.equal(git(work, "rev-parse", "master"), root);
+				assert.equal(git(work, "rev-parse", "HEAD^"), base);
+				assert.equal(git(work, "diff", "--name-only", base, head), changedPath);
+				assert.deepEqual(
+					git(work, "diff", "--name-only", root, head).split("\n"),
+					[ancestorPath, changedPath].sort(),
+				);
+			}
 			// Use the Git transport so background maintenance cannot race a loose-object copy.
 			git(directory, "clone", "--quiet", "--no-local", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
@@ -918,7 +1017,10 @@ describe("main", () => {
 			);
 			const eventPath = join(directory, "event.json");
 			const outputPath = join(directory, "output.txt");
-			writeFileSync(eventPath, JSON.stringify(event({ root, replaced, base })));
+			writeFileSync(
+				eventPath,
+				JSON.stringify(event({ root, replaced, base, head })),
+			);
 			const changes = main(
 				{
 					GITHUB_EVENT_NAME: eventName,
@@ -965,6 +1067,28 @@ describe("main", () => {
 		assert.match(output, /^admin_module_changed=false$/m);
 		assert.match(output, /^bulletin_module_changed=false$/m);
 	});
+
+	for (const changeKind of ["write", "delete"] as const) {
+		test(
+			"an annotation guide " + changeKind + " emits CI-only data outputs",
+			() => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"data/annotations/GOLDEN.md",
+					changeKind,
+				);
+				assert.deepEqual(changes.data, {
+					module_changed: false,
+					ci_changed: true,
+				});
+				assert.match(output, /^data_module_changed=false$/m);
+				assert.match(output, /^data_ci_changed=true$/m);
+				assert.match(output, /^data_deploy_changed=false$/m);
+				assert.match(output, /^data_schema_only_changed=false$/m);
+			},
+		);
+	}
 
 	test("a timing-only master push schedules native packaging with unchanged app version", () => {
 		const { changes, output } = run(
@@ -1021,18 +1145,304 @@ describe("main", () => {
 		websiteOnly(run("push", () => ({ before: "0".repeat(40) })).changes);
 	});
 
-	test("merge_group compares with the queue base", () => {
-		websiteOnly(
-			run("merge_group", ({ base }) => ({ merge_group: { base_sha: base } }))
-				.changes,
+	test("HEADGREEN tail validates the app entry ahead of a breadcrumb-only entry", () => {
+		// #2797 -> #2804: payload base d56ae2f already contained the app entry,
+		// while head 45b8990 added only the breadcrumb fix. That delta cannot
+		// authorize skipping app checks for the combined tail HEADGREEN validates.
+		const { changes, output } = run(
+			"merge_group",
+			({ base, head }) => ({
+				action: "checks_requested",
+				merge_group: {
+					base_sha: base,
+					head_sha: head,
+					base_ref: "refs/heads/master",
+					head_ref: "refs/heads/gh-readonly-queue/master/tail",
+				},
+			}),
+			"web/bible-on-site/src/app/components/BreadcrumbDropdown.tsx",
+			"write",
+			"app/BibleOnSite/AppShell.xaml.cs",
 		);
+		for (const [key, flags] of Object.entries(changes)) {
+			assert.deepEqual(flags, { module_changed: false, ci_changed: true }, key);
+		}
+		assert.match(output, /^data_schema_only_changed=false$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
 	});
+
+	for (const path of [
+		"data/mysql/tanahpedia_alter_mention_decoration.sql",
+		"devops/deploy/data-deploy/index.mts",
+	]) {
+		test(`merge_group validates without delivery intent for ${path}`, () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				path,
+			);
+			for (const flags of Object.values(changes)) {
+				assert.deepEqual(flags, { module_changed: false, ci_changed: true });
+			}
+			assert.match(output, /^data_schema_only_changed=false$/m);
+			assert.match(output, /^data_deploy_changed=false$/m);
+		});
+	}
 
 	test("workflow_dispatch compares with master", () => {
 		const { changes } = run("workflow_dispatch", () => ({}));
 		for (const flags of Object.values(changes)) {
 			assert.deepEqual(flags, { module_changed: false, ci_changed: false });
 		}
+	});
+});
+
+describe("merge-group workflow contract", () => {
+	const ci = readFileSync(
+		new URL("../../../.github/workflows/ci.yml", import.meta.url),
+		"utf8",
+	).replace(/\r/g, "");
+	const job = (name: string) => {
+		const section = ci.split(`\n  ${name}:\n`)[1];
+		assert.ok(section, `Missing job ${name}`);
+		return section.split(/\n {2}[a-z][a-z0-9_]*:\n/)[0];
+	};
+	const condition = (name: string) => {
+		const value = job(name).match(/^ {4}if: (.+)$/m)?.[1];
+		assert.ok(value, `Missing condition for ${name}`);
+		return value;
+	};
+
+	test("routing regressions run before selection on every event without package dependencies", () => {
+		const steps = job("determine_changes");
+		const setup = steps.indexOf("uses: actions/setup-node@");
+		const regression = steps.indexOf(
+			"run: node --test devops/github/ci/determine-changes.test.ts",
+		);
+		const selection = steps.indexOf(
+			"run: node devops/github/ci/determine-changes.ts",
+		);
+		assert.ok(setup >= 0 && regression > setup && selection > regression);
+		const nextStep = steps.indexOf("\n      - ", selection);
+		const routingSteps = steps.slice(0, nextStep < 0 ? steps.length : nextStep);
+		assert.doesNotMatch(routingSteps, /^ {4}if:|^ {8}if:/m);
+	});
+
+	test("combined queue heads force full Playwright and mobile suites", () => {
+		assert.ok(
+			ci.includes(
+				`FORCE_FULL_SUITE: \${{ github.event_name == 'merge_group' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}`,
+			),
+		);
+		assert.ok(
+			job("app_mobile_e2e").includes(
+				`force_full_suite: \${{ github.event_name == 'merge_group' }}`,
+			),
+		);
+	});
+
+	test("a missing queue Mongo image is exported and loaded by both consumers without registry publication", () => {
+		assert.ok(
+			job("determine_docker_image_availability").includes(
+				`can_publish_sefaria_mongo: \${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}`,
+			),
+		);
+		const producer = job("build_sefaria_mongo_docker");
+		assert.ok(
+			producer.includes(
+				"needs.determine_changes.outputs.data_ci_changed == 'true'",
+			),
+		);
+		assert.ok(
+			producer.includes(
+				"can_publish_sefaria_mongo == 'true' && 'type=registry,compression=zstd,force-compression=true,oci-mediatypes=true' || 'type=docker,dest=/tmp/sefaria-mongo-image.tar'",
+			),
+		);
+		assert.ok(producer.includes("can_publish_sefaria_mongo != 'true'"));
+		assert.ok(
+			producer.includes(`name: \${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}`),
+		);
+		for (const name of ["data_ci", "perushim_data"]) {
+			const consumer = job(name);
+			assert.ok(consumer.includes("build_sefaria_mongo_docker"), name);
+			assert.ok(
+				consumer.includes(
+					`outputs.is_sefaria_mongo_available }}" != "true" ] && [ "\${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo }}" != "true"`,
+				),
+				name,
+			);
+			assert.ok(
+				consumer.includes(
+					`gh run download \${{ github.run_id }} -n \${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}`,
+				),
+				name,
+			);
+			assert.ok(
+				consumer.includes("docker load --input /tmp/sefaria-mongo-image.tar"),
+				name,
+			);
+		}
+	});
+
+	test("queue perushim and native audio producers have matching required gates", () => {
+		assert.ok(
+			job("perushim_data").includes(
+				"(github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true')",
+			),
+		);
+		assert.ok(
+			condition("app_ios_ci").includes(
+				"(github.event_name == 'pull_request' || github.event_name == 'merge_group')",
+			),
+		);
+		const prerequisites = job("cross_module_ci")
+			.split("        run: |\n")[1]
+			.split("\n      - name: Checkout")[0]
+			.split("\n")
+			.map((line) => line.slice(10))
+			.join("\n");
+		const bash =
+			process.platform === "win32"
+				? join(
+						process.env.ProgramFiles ?? "C:\\Program Files",
+						"Git",
+						"bin",
+						"bash.exe",
+					)
+				: "bash";
+		const evaluate = (
+			event: string,
+			failedJob?: string,
+			ciChanged = true,
+			baselineAvailable = true,
+			versions = { amd64: "0.1.96", arm64: "0.1.96" },
+			prerequisiteSource = prerequisites,
+		) => {
+			const script = prerequisiteSource.replace(
+				/\$\{\{ ([^}]+) \}\}/g,
+				(_match, expression: string) => {
+					if (expression === "github.event_name") return event;
+					if (expression.endsWith(".result")) {
+						return expression === `needs.${failedJob}.result`
+							? "skipped"
+							: "success";
+					}
+					if (expression === "needs.package_api.outputs.module_version")
+						return versions.amd64;
+					if (expression === "needs.package_api_arm64.outputs.module_version")
+						return versions.arm64;
+					if (expression.includes("_ci_changed")) return String(ciChanged);
+					if (expression.includes("_module_changed")) return "false";
+					if (expression.includes(".outputs.is_"))
+						return String(baselineAvailable);
+					throw new Error(`Unexpected prerequisite expression: ${expression}`);
+				},
+			);
+			return spawnSync(bash, ["--noprofile", "--norc", "-e", "-s"], {
+				input: script,
+				encoding: "utf8",
+			});
+		};
+		// Paired-image guards may arrive independently of the queue fixture.
+		// Keep output substitution strict and exercise missing/mismatched versions.
+		const versionGate = prerequisites + `
+if [ -z "\${{ needs.package_api.outputs.module_version }}" ] ||
+   [ "\${{ needs.package_api.outputs.module_version }}" != "\${{ needs.package_api_arm64.outputs.module_version }}" ]; then
+  exit 1
+fi
+`;
+		for (const [amd64, arm64] of [
+			["0.1.96", "0.1.96"],
+			["0.1.96", "0.1.95"],
+			["", ""],
+			["", "0.1.96"],
+			["0.1.96", ""],
+		] as const) {
+			const result = evaluate("merge_group", undefined, true, true,
+				{ amd64, arm64 }, versionGate);
+			assert.ifError(result.error);
+			assert.equal(result.status, amd64 !== "" && amd64 === arm64 ? 0 : 1,
+				result.stdout + result.stderr);
+		}
+		assert.throws(
+			() => evaluate("merge_group", undefined, true, true, undefined,
+				prerequisites + "\n${{ needs.unknown.outputs.module_version }}"),
+			/Unexpected prerequisite expression/,
+		);
+		const passing = evaluate("merge_group");
+		assert.ifError(passing.error);
+		assert.equal(passing.status, 0, passing.stdout + passing.stderr);
+		for (const name of [
+			"website_performance",
+			"website_e2e",
+			"api_e2e",
+			"app_ci",
+			"admin_ci",
+			"bulletin_ci",
+			"data_ci",
+			"app_mobile_e2e",
+			"app_ios_ci",
+			"perushim_data",
+			"package_ios_pr",
+			"package_windows_pr",
+			"package_api",
+			"package_bulletin",
+			"package_admin",
+			"validate_website_architectures",
+			"validate_api_architectures",
+			"validate_admin_architectures",
+			"recitation_ci",
+			"deploy_verifier",
+			"calendar_pdf_artifacts",
+		]) {
+			const result = evaluate("merge_group", name);
+			assert.ifError(result.error);
+			assert.notEqual(
+				result.status,
+				0,
+				`${name} may not skip on a combined queue head`,
+			);
+		}
+		// Baseline recovery alone never selects the PR native-audio producer.
+		const recovery = evaluate("pull_request", "app_ios_ci", false, false);
+		assert.ifError(recovery.error);
+		assert.equal(recovery.status, 0, recovery.stdout + recovery.stderr);
+		for (const event of ["push", "workflow_dispatch"]) {
+			for (const name of ["app_ios_ci", "perushim_data"]) {
+				const result = evaluate(event, name);
+				assert.ifError(result.error);
+				assert.equal(
+					result.status,
+					0,
+					`${event}/${name}: ${result.stdout}${result.stderr}`,
+				);
+			}
+		}
+	});
+
+	test("queue validation cannot run production website packaging or release jobs", () => {
+		for (const name of [
+			"package_website",
+			"release_website",
+			"release_api",
+			"release_app",
+			"release_admin",
+			"release_bulletin",
+			"release_data",
+		]) {
+			assert.ok(condition(name).includes("github.event_name == 'push'"), name);
+			assert.ok(
+				condition(name).includes(
+					"needs.setup_env.outputs.is_master_branch == 'true'",
+				),
+				name,
+			);
+		}
+		assert.ok(
+			ci.includes(
+				`IS_MASTER_BRANCH: \${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}`,
+			),
+		);
 	});
 });
 

@@ -44,10 +44,19 @@ const parashaSeferFirstSlugs = Object.entries(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	// Route-cache keys are built from decoded pathnames, so quoted Hebrew slugs
+	// like רש"י produce filenames NTFS rejects. The handler subclasses the
+	// default filesystem cache and percent-encodes filename-unsafe key
+	// segments only (issue #1999).
+	cacheHandler: fileURLToPath(new URL("./cache-handler.mjs", import.meta.url)),
 	// Keep the canonical source bytes outside JavaScript chunks and present in
 	// standalone images for both route handlers and server component runtimes.
+	// The cache handler is required at runtime by the standalone server too.
 	outputFileTracingIncludes: {
-		"/*": ["./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"],
+		"/*": [
+			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+			"./cache-handler.mjs",
+		],
 	},
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {

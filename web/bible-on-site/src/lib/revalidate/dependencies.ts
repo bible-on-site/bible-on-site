@@ -1,9 +1,9 @@
 import { getAllMasoraUnits } from "@/data/masora/masora-units";
+import { parashaCanonicalSlug } from "@/data/parasha/parasha-slugs";
 import {
 	getAllParashaUnits,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
-import { parashaCanonicalSlug } from "@/data/parasha/parasha-slugs";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug, normalizeAuthorName } from "@/lib/authors";
 import {
@@ -12,10 +12,8 @@ import {
 	seferPerekIds,
 } from "@/lib/dedications/service";
 import { isMissingMysqlSchema } from "@/lib/mysql-errors";
-import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { canonicalPasukCount } from "@/lib/reading/queries";
-import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
-import type { CategoryKey } from "@/lib/tanahpedia/types";
+import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import type {
 	ArticleCoveringSpan,
 	EntityChange,
@@ -39,6 +37,8 @@ import {
 	seferDedicationsTag,
 	seferPerekDedicationsTag,
 } from "@/lib/revalidate/tags";
+import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
+import type { CategoryKey } from "@/lib/tanahpedia/types";
 
 /**
  * The website-owned dependency index: maps a committed entity change to
@@ -338,9 +338,7 @@ async function refPereksForEntities(entityIds: string[]): Promise<number[]> {
 }
 
 /** Entity types linked to the given entities (for category-page deps). */
-async function entityTypesForEntities(
-	entityIds: string[],
-): Promise<string[]> {
+async function entityTypesForEntities(entityIds: string[]): Promise<string[]> {
 	/* istanbul ignore next -- callers always pass a non-empty entity id list */
 	if (entityIds.length === 0) return [];
 	const rows = await query<{ entity_type: string }>(
@@ -453,10 +451,7 @@ async function resolveArticle(
 		);
 		if (author[0]) {
 			addTag(sink, authorTag(normalizeAuthorName(author[0].name)));
-			addPath(
-				sink,
-				`/929/authors/${authorNameToSlug(author[0].name)}`,
-			);
+			addPath(sink, `/929/authors/${authorNameToSlug(author[0].name)}`);
 		}
 	}
 	// The supplied spans are the destroyed side; the live rows complete the
@@ -544,18 +539,12 @@ async function resolvePediaEntity(
 		refPereksForEntities([change.entityId]),
 		entityTypesForEntities([change.entityId]),
 	]);
-	const names = new Set([
-		...(change.entryUniqueNames ?? []),
-		...linkedEntries,
-	]);
+	const names = new Set([...(change.entryUniqueNames ?? []), ...linkedEntries]);
 	const types = new Set([
 		...(change.entityType ? [change.entityType] : []),
 		...entityTypes,
 	]);
-	const pereks = new Set([
-		...(change.refPerekIds ?? []),
-		...refPerekIds,
-	]);
+	const pereks = new Set([...(change.refPerekIds ?? []), ...refPerekIds]);
 	// Synonyms of linked entries point at pages whose bodies render entity
 	// data — resolve them while the links exist.
 	if (names.size > 0) {

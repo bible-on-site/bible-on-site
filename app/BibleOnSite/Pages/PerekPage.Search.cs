@@ -222,14 +222,14 @@ public partial class PerekPage
         {
             if (result is AuthorSearchResult author)
             {
-                await Shell.Current.GoToAsync($"ArticlesPage?authorId={author.Author.Id}&authorName={Uri.EscapeDataString(author.Author.Name)}");
+                await ShellAppNavigator.Instance.GoToAsync($"ArticlesPage?authorId={author.Author.Id}&authorName={Uri.EscapeDataString(author.Author.Name)}");
             }
             else if (result is ArticleSearchResult article)
             {
                 // Excerpt + phrase fully describe the jump target; plain query
                 // parameters keep the destination self-contained and survive
                 // Shell's string-only query handling (#2078).
-                await Shell.Current.GoToAsync(
+                await ShellAppNavigator.Instance.GoToAsync(
                     $"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}" +
                     $"&searchExcerpt={Uri.EscapeDataString(article.Excerpt)}" +
                     $"&searchPhrase={Uri.EscapeDataString(article.SearchPhrase)}");
@@ -238,12 +238,12 @@ public partial class PerekPage
             {
                 // UniqueName is the canonical slug — alias hits already resolve
                 // server-side, so this always opens the right entry (#2104).
-                await Shell.Current.GoToAsync(
+                await ShellAppNavigator.Instance.GoToAsync(
                     $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(entry.UniqueName)}");
             }
             else if (GetSearchPerekId(result) > 0)
             {
-                await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
                 {
                     ["searchResult"] = result
                 });

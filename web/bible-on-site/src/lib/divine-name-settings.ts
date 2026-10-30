@@ -86,12 +86,17 @@ export function getDivineNameMaskingSettings(): DivineNameMaskingSettings {
 let snapshot: DivineNameMaskingSettings | null = null;
 
 /**
- * Active external-store subscribers. The cache can only go stale while
- * nobody is listening — a cross-tab storage write needs a storage event
- * listener to reach this tab's cache — so the first subscriber after a
- * silent stretch re-syncs before anyone renders the stale value.
+ * Active external-store subscribers. One pair of window listeners fans out
+ * to every subscriber: a reader page holds hundreds of DivineNameText
+ * components, and the flip book's leaf buffer mounts/unmounts pages on
+ * every turn, so per-component window listeners churned hundreds of
+ * add/removeEventListener calls per flip (#2805). The cache can only go
+ * stale while nobody is listening — a cross-tab storage write needs a
+ * storage event listener to reach this tab's cache — so the first
+ * subscriber after a silent stretch re-syncs before anyone renders the
+ * stale value.
  */
-let subscribers = 0;
+const listeners = new Set<() => void>();
 
 const divineNameMaskingSettingsEqual = (
 	a: DivineNameMaskingSettings,
@@ -127,33 +132,41 @@ export function getDivineNameMaskingServerSnapshot(): DivineNameMaskingSettings 
 	return DEFAULT_DIVINE_NAME_MASKING;
 }
 
+const notifyListeners = () => {
+	snapshot = getDivineNameMaskingSettings();
+	for (const listener of listeners) listener();
+};
+
+// Cross-tab storage events fire for every key — only ours is relevant, so
+// unrelated preference writes in another tab don't refresh every segment.
+const onStorage = (event: StorageEvent) => {
+	if (event.key === DIVINE_NAME_MASKING_KEY) notifyListeners();
+};
+
 export function subscribeDivineNameMasking(onChange: () => void): () => void {
-	const handler = () => {
-		snapshot = getDivineNameMaskingSettings();
-		onChange();
-	};
-	// Cross-tab storage events fire for every key — only ours is relevant, so
-	// unrelated preference writes in another tab don't refresh every segment.
-	const onStorage = (event: StorageEvent) => {
-		if (event.key === DIVINE_NAME_MASKING_KEY) handler();
-	};
-	window.addEventListener(DIVINE_NAME_MASKING_EVENT, handler);
-	window.addEventListener("storage", onStorage);
-	// First listener after a silent stretch: catch up on cross-tab writes the
-	// detached storage listener could not receive, and notify when the value
-	// moved so useSyncExternalStore re-reads the fresh snapshot instead of
-	// painting the stale configuration a closed reader left behind.
-	if (subscribers === 0) {
+	// First listener after a silent stretch: install the shared window
+	// listeners, then catch up on cross-tab writes they could not receive
+	// and notify when the value moved so useSyncExternalStore re-reads the
+	// fresh snapshot instead of painting the stale configuration a closed
+	// reader left behind.
+	const isFirst = listeners.size === 0;
+	if (isFirst) {
+		window.addEventListener(DIVINE_NAME_MASKING_EVENT, notifyListeners);
+		window.addEventListener("storage", onStorage);
+	}
+	listeners.add(onChange);
+	if (isFirst) {
 		const latest = getDivineNameMaskingSettings();
 		if (snapshot === null || !divineNameMaskingSettingsEqual(latest, snapshot)) {
 			snapshot = latest;
 			onChange();
 		}
 	}
-	subscribers += 1;
 	return () => {
-		subscribers -= 1;
-		window.removeEventListener(DIVINE_NAME_MASKING_EVENT, handler);
-		window.removeEventListener("storage", onStorage);
+		listeners.delete(onChange);
+		if (listeners.size === 0) {
+			window.removeEventListener(DIVINE_NAME_MASKING_EVENT, notifyListeners);
+			window.removeEventListener("storage", onStorage);
+		}
 	};
 }

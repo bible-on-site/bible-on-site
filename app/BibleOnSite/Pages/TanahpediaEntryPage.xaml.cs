@@ -139,7 +139,7 @@ public partial class TanahpediaEntryPage : ContentPage
         {
             var pasuk = new Pasuk { PasukNum = item.PasukNumber, Text = item.VerseText };
             var result = new PasukSearchResult(pasuk, item.PerekId, string.Empty);
-            await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
+            await ShellAppNavigator.Instance.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
             {
                 ["searchResult"] = result
             });
@@ -166,7 +166,7 @@ public partial class TanahpediaEntryPage : ContentPage
             try
             {
                 var location = shell.CurrentState.Location.OriginalString;
-                await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
             }
             #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
             catch (Exception ex) //NOSONAR — back navigation failure alerts the user.

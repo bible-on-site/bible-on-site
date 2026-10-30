@@ -112,9 +112,24 @@ export function EntryAliasesPanel({
 	const [editor, setEditor] = useState<EditorState | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
+	const [freshness, setFreshness] = useState<string | null>(null);
 
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: aliasesKey });
+
+	// The commit succeeded but the public site may still serve the previous
+	// name/content — flag it right here instead of waiting on the global
+	// banner's poll (#2763), and refresh that status query immediately.
+	const flagFreshness = (websiteFresh: boolean | undefined) => {
+		setFreshness(
+			websiteFresh === false
+				? "השינוי נשמר, אך עדכון האתר הציבורי לא הוחל - הקישור עלול להציג תוכן ישן עד שהרענון יושלם."
+				: null,
+		);
+		void queryClient.invalidateQueries({
+			queryKey: ["website-revalidation-status"],
+		});
+	};
 
 	const saveMutation = useMutation({
 		mutationFn: (input: {
@@ -126,6 +141,7 @@ export function EntryAliasesPanel({
 			void invalidate();
 			setEditor(null);
 			setActionError(null);
+			flagFreshness(saved.websiteFresh);
 			setNotice(
 				saved.kind === "disambiguation"
 					? `נשמר - «${saved.name}» מציג כעת דף פירושונים עם ${saved.targetCount} ערכים.`
@@ -146,6 +162,7 @@ export function EntryAliasesPanel({
 		onSuccess: (result) => {
 			void invalidate();
 			setActionError(null);
+			flagFreshness(result.websiteFresh);
 			setNotice(
 				result.remainingTargets === 0
 					? `השם «${result.name}» נמחק לגמרי.`
@@ -161,6 +178,7 @@ export function EntryAliasesPanel({
 			void invalidate();
 			setEditor(null);
 			setActionError(null);
+			flagFreshness(result.websiteFresh);
 			setNotice(
 				`השם «${result.name}» נמחק לגמרי (${result.removedTargets} יעדים).`,
 			);
@@ -178,6 +196,7 @@ export function EntryAliasesPanel({
 	const openCreate = () => {
 		setNotice(null);
 		setActionError(null);
+		setFreshness(null);
 		setEditor({
 			nameInput: "",
 			editingName: null,
@@ -191,6 +210,7 @@ export function EntryAliasesPanel({
 	const openEdit = (alias: EntryAliasView) => {
 		setNotice(null);
 		setActionError(null);
+		setFreshness(null);
 		setEditor({
 			nameInput: alias.name,
 			editingName: alias.name,
@@ -252,6 +272,11 @@ export function EntryAliasesPanel({
 			{notice && (
 				<p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg p-3">
 					{notice}
+				</p>
+			)}
+			{freshness && (
+				<p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+					{freshness}
 				</p>
 			)}
 			{actionError && (
