@@ -48,23 +48,107 @@ export function apiToken(credentials, now = Math.floor(Date.now() / 1000)) {
 	return `${message}.${sign("sha256", Buffer.from(message), { key, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
 }
 
-export function appleReader(credentials, fetcher) {
+// Reads that may legitimately be retried: throttling, gateway/server faults
+// and request timeouts. 4xx authorization/lookup answers and malformed or
+// truncated payloads are permanent — retrying them hides the real cause.
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+/** Network and deadline failures fetch surfaces without an HTTP status. */
+function isTransientRead(error) {
+	return (
+		error?.name === "TimeoutError" ||
+		error?.name === "AbortError" ||
+		error instanceof TypeError
+	);
+}
+
+function retryAfterMs(response, now) {
+	const header = response.headers?.get?.("retry-after");
+	if (header == null) return null;
+	const seconds = Number(header);
+	if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+	const date = Date.parse(header);
+	return Number.isNaN(date) ? null : Math.max(0, date - now());
+}
+
+/**
+ * Read-only App Store Connect GET with a bounded retry budget (#2842): a
+ * single 15 s timeout used to kill the whole pack publish mid-planning.
+ * Transient timeout/network failures and throttled/server answers retry with
+ * exponential backoff + jitter (Retry-After honored), capped by `retries` and
+ * an overall `budgetMs`; permanent 4xx/malformed answers stay actionable and
+ * are never retried. `sleep`/`now`/`random` are injected by tests.
+ */
+export function appleReader(
+	credentials,
+	fetcher,
+	{
+		retries = 3,
+		timeoutMs = 15000,
+		budgetMs = 120000,
+		sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+		now = () => Date.now(),
+		random = Math.random,
+		report = console.error,
+	} = {},
+) {
+	if (!Number.isSafeInteger(retries) || retries < 1)
+		throw new Error("Apple read retries must be a positive integer");
 	return async (path, parameters) => {
 		const url = new URL(`https://api.appstoreconnect.apple.com/v1/${path}`);
 		url.search = new URLSearchParams(parameters).toString();
-		const response = await fetcher(url, {
-			headers: { Authorization: `Bearer ${apiToken(credentials)}` },
-			redirect: "error",
-			signal: AbortSignal.timeout(15000),
-		});
-		if (!response.ok)
-			throw new Error(
-				`App Store Connect lookup failed: HTTP ${response.status}`,
+		const deadline = now() + budgetMs;
+		let failure = null;
+		for (let attempt = 1; ; attempt++) {
+			// The per-request deadline is unchanged — retries wrap whole
+			// requests, they never stretch a single one.
+			const remaining = Math.max(1, Math.min(timeoutMs, deadline - now()));
+			let waitMs = null;
+			try {
+				const response = await fetcher(url, {
+					headers: { Authorization: `Bearer ${apiToken(credentials)}` },
+					redirect: "error",
+					signal: AbortSignal.timeout(remaining),
+				});
+				if (response.ok) {
+					const result = await response.json();
+					if (!Array.isArray(result.data) || result.links?.next)
+						throw new Error(
+							"App Store Connect returned an incomplete build lookup",
+						);
+					return result;
+				}
+				if (!RETRYABLE_STATUS.has(response.status))
+					throw new Error(
+						`App Store Connect lookup failed: HTTP ${response.status}`,
+					);
+				failure = new Error(
+					`App Store Connect lookup failed: HTTP ${response.status}`,
+				);
+				waitMs = retryAfterMs(response, now);
+			} catch (error) {
+				if (!isTransientRead(error)) throw error;
+				failure = error;
+			}
+			if (attempt >= retries || deadline - now() <= 0) break;
+			// A server-directed Retry-After is authoritative: honor it fully up
+			// to the remaining budget instead of retrying inside the throttle
+			// window. Self-chosen exponential backoff stays capped at 30 s.
+			const backoff = Math.min(
+				waitMs ?? Math.min(1000 * 2 ** (attempt - 1) + random() * 250, 30000),
+				Math.max(0, deadline - now()),
 			);
-		const result = await response.json();
-		if (!Array.isArray(result.data) || result.links?.next)
-			throw new Error("App Store Connect returned an incomplete build lookup");
-		return result;
+			report(
+				JSON.stringify({
+					phase: "apple-read-retry",
+					path,
+					attempt: attempt + 1,
+					failure: failure.message,
+				}),
+			);
+			if (backoff > 0) await sleep(backoff);
+		}
+		throw failure;
 	};
 }
 

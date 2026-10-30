@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -559,6 +559,7 @@ test("only the changed pack uploads; identical packs are reused", async () => {
 				directory: dir,
 				bundle: "com.tanah.daily929",
 				credentials,
+				repository: "o/r",
 				github: noGithub,
 				exec: (command, args) => {
 					uploads.push(args[2]);
@@ -601,6 +602,7 @@ test("a fresh upload verifies by version monotonicity when Apple exposes no chec
 				directory: dir,
 				bundle: "com.tanah.daily929",
 				credentials,
+				repository: "o/r",
 				github: noGithub,
 				exec: () => {
 					// Our upload created a newer version; Apple reports its file
@@ -647,6 +649,7 @@ test("a fresh upload is not verified by a foreign version with a conflicting che
 					bundle: "com.tanah.daily929",
 					credentials,
 					attempts: 2,
+					repository: "o/r",
 					github: noGithub,
 					exec: () => ({ status: 0, stdout: "Asset pack uploaded" }),
 					sleep: () => Promise.resolve(),
@@ -762,6 +765,564 @@ test("a blocked pack halts the fleet before any upload", async () => {
 				remoteReader(remote),
 			),
 			/blocked.*perushim-notes/,
+		);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+// ---------- #2842: receipt discovery ENOBUFS, completeness, bootstrap ----------
+
+/**
+ * Exec dispatcher exercising the REAL defaultGithub adapter: `gh api` answers
+ * canned {count,tags} scan pages, `gh release download` writes a receipt file
+ * into --dir, `gh release upload` is recorded, `xcrun` simulates altool.
+ */
+function releaseExec({
+	pages = {},
+	receipt = null,
+	onUpload = null,
+	calls = { api: [], download: [], upload: [], xcrun: [] },
+}) {
+	return (command, args) => {
+		if (command === "xcrun") {
+			calls.xcrun.push(args);
+			if (onUpload) onUpload(args);
+			return { status: 0, stdout: "Asset pack uploaded" };
+		}
+		assert.equal(command, "gh");
+		if (args[0] === "api") {
+			calls.api.push(args);
+			const page = Number(
+				new URLSearchParams(args[1].split("?")[1]).get("page"),
+			);
+			const scan = pages[page] ?? { count: 0, tags: [] };
+			if (scan instanceof Error) throw scan;
+			if (typeof scan === "object" && scan.status != null) return scan;
+			return {
+				status: 0,
+				stdout: JSON.stringify(scan),
+				stderr: scan.stderr ?? "",
+			};
+		}
+		if (args[0] === "release" && args[1] === "download") {
+			calls.download.push(args[2]);
+			if (receipt != null)
+				writeFileSync(
+					path.join(
+						args[args.indexOf("--dir") + 1],
+						"asset-pack-publication.json",
+					),
+					receipt,
+				);
+			return { status: 0, stdout: "", stderr: "" };
+		}
+		if (args[0] === "release" && args[1] === "upload") {
+			calls.upload.push(args[2]);
+			return { status: 0, stdout: "", stderr: "" };
+		}
+		throw new Error(`unexpected gh args: ${args.join(" ")}`);
+	};
+}
+
+function unverifiableRemote(id) {
+	return {
+		[id]: {
+			pack: {
+				type: "backgroundAssets",
+				id: `apple-pack-${id}`,
+				attributes: { assetPackIdentifier: id },
+			},
+			versions: [
+				{
+					id: "v-live",
+					number: 26,
+					state: "COMPLETE",
+					beta: "READY_FOR_TESTING",
+					files: [assetFile(sha256(`${id}-foreign-archive`))],
+				},
+			],
+		},
+	};
+}
+
+test("receipt discovery queries only tag names via gh api --jq (bounded stdout)", async () => {
+	const entries = [plannedPack("recitation-1", "audio-archive")];
+	const dir = packDir(entries);
+	const calls = { api: [], download: [], upload: [], xcrun: [] };
+	const remote = unverifiableRemote("recitation-1");
+	try {
+		await uploadAssetPacks(
+			{
+				directory: dir,
+				bundle: "com.tanah.daily929",
+				credentials,
+				repository: "o/r",
+				exec: releaseExec({
+					pages: { 1: { count: 3, tags: [] } },
+					calls,
+					onUpload: () => {
+						remote["recitation-1"].versions.push({
+							id: "v-new",
+							number: 27,
+							state: "COMPLETE",
+							beta: "READY_FOR_TESTING",
+							files: [assetFile(entries[0].archiveSha256)],
+						});
+					},
+				}),
+				sleep: () => Promise.resolve(),
+			},
+			remoteReader(remote),
+		);
+		const jq = calls.api[0].indexOf("--jq");
+		assert.notEqual(jq, -1);
+		assert.match(calls.api[0][jq + 1], /index\("asset-pack-publication\.json"\)/);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+// The failing run's signature: spawnSync gh ENOBUFS killed the receipt read;
+// the fleet then decided upload for every pack. Unverifiable content must
+// block instead of publishing on missing evidence.
+test("an ENOBUFS receipt failure blocks unverifiable packs instead of uploading", async () => {
+	const entries = [plannedPack("perushim-notes", "notes-archive")];
+	const dir = packDir(entries);
+	const calls = { api: [], download: [], upload: [], xcrun: [] };
+	const warnings = [];
+	try {
+		await assert.rejects(
+			uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					repository: "o/r",
+					exec: releaseExec({
+						pages: { 1: new Error("spawnSync gh ENOBUFS") },
+						calls,
+					}),
+					report: (line) => warnings.push(line),
+					sleep: () => Promise.resolve(),
+				},
+				remoteReader(unverifiableRemote("perushim-notes")),
+			),
+			/blocked.*perushim-notes.*unverifiable/s,
+		);
+		assert.equal(calls.xcrun.length, 0);
+		assert.equal(calls.upload.length, 0);
+		assert.ok(warnings.some((line) => /receipt unavailable.*ENOBUFS/.test(line)));
+	} finally {
+		cleanup(dir);
+	}
+});
+
+test("a completed empty receipt search is an explicit bootstrap that may upload", async () => {
+	const entries = [plannedPack("recitation-1", "audio-archive")];
+	const dir = packDir(entries);
+	const calls = { api: [], download: [], upload: [], xcrun: [] };
+	const remote = unverifiableRemote("recitation-1");
+	const lines = [];
+	try {
+		const result = await uploadAssetPacks(
+			{
+				directory: dir,
+				bundle: "com.tanah.daily929",
+				credentials,
+				releaseTag: "app-v5.0.225",
+				repository: "o/r",
+				exec: releaseExec({
+					pages: { 1: { count: 2, tags: [] } },
+					calls,
+					onUpload: () => {
+						remote["recitation-1"].versions.push({
+							id: "v-new",
+							number: 27,
+							state: "COMPLETE",
+							beta: "READY_FOR_TESTING",
+							files: [assetFile(entries[0].archiveSha256)],
+						});
+					},
+				}),
+				report: (line) => lines.push(line),
+				sleep: () => Promise.resolve(),
+			},
+			remoteReader(remote),
+		);
+		assert.equal(result.uploaded, 1);
+		assert.deepEqual(calls.upload, ["app-v5.0.225"]);
+		assert.ok(lines.some((line) => /bootstrap/.test(line)));
+	} finally {
+		cleanup(dir);
+	}
+});
+
+test("receipt discovery follows pages until history ends and stderr never corrupts stdout", async () => {
+	const entries = [plannedPack("perushim-notes", "notes-archive")];
+	const dir = packDir(entries);
+	const calls = { api: [], download: [], upload: [], xcrun: [] };
+	// The remote archive checksum differs from the rebuilt archive; only the
+	// downloaded receipt tie may prove reuse.
+	const remote = unverifiableRemote("perushim-notes");
+	remote["perushim-notes"].versions[0].files = [
+		assetFile(sha256("original-archive")),
+	];
+	const receipt = JSON.stringify({
+		version: 1,
+		packs: {
+			"perushim-notes": {
+				versionId: "v-live",
+				contentSha256: entries[0].contentSha256,
+				archiveSha256: sha256("original-archive"),
+			},
+		},
+	});
+	try {
+		const result = await uploadAssetPacks(
+			{
+				directory: dir,
+				bundle: "com.tanah.daily929",
+				credentials,
+				releaseTag: "app-v5.0.225",
+				repository: "o/r",
+				exec: releaseExec({
+					pages: {
+						1: { count: 100, tags: [], stderr: "warning: noisy" },
+						2: { count: 100, tags: ["app-v5.0.224"] },
+					},
+					receipt,
+					calls,
+				}),
+				sleep: () => Promise.resolve(),
+			},
+			remoteReader(remote),
+		);
+		assert.equal(result.reused, 1);
+		assert.equal(calls.xcrun.length, 0);
+		assert.equal(calls.api.length, 2);
+		assert.deepEqual(calls.download, ["app-v5.0.224"]);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+test("an incomplete receipt search is unavailable evidence, not an absent receipt", async () => {
+	const entries = [plannedPack("recitation-1", "audio-archive")];
+	const dir = packDir(entries);
+	const calls = { api: [], download: [], upload: [], xcrun: [] };
+	try {
+		await assert.rejects(
+			uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					repository: "o/r",
+					exec: releaseExec({
+						// Every page full, never a receipt: the search gives up
+						// explicitly rather than pretending history ended.
+						pages: new Proxy(
+							{},
+							{ get: () => ({ count: 100, tags: [] }) },
+						),
+						calls,
+					}),
+					sleep: () => Promise.resolve(),
+				},
+				remoteReader(unverifiableRemote("recitation-1")),
+			),
+			/blocked.*recitation-1/s,
+		);
+		assert.equal(calls.api.length, 25);
+		assert.equal(calls.xcrun.length, 0);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+test("a malformed or undownloadable receipt blocks unverifiable packs", async () => {
+	for (const receipt of ["{not json", JSON.stringify({ version: 2 })]) {
+		const entries = [plannedPack("recitation-1", "audio-archive")];
+		const dir = packDir(entries);
+		const calls = { api: [], download: [], upload: [], xcrun: [] };
+		try {
+			await assert.rejects(
+				uploadAssetPacks(
+					{
+						directory: dir,
+						bundle: "com.tanah.daily929",
+						credentials,
+						repository: "o/r",
+						exec: releaseExec({
+							pages: { 1: { count: 5, tags: ["app-v5.0.224"] } },
+							receipt,
+							calls,
+						}),
+						sleep: () => Promise.resolve(),
+					},
+					remoteReader(unverifiableRemote("recitation-1")),
+				),
+				/blocked/,
+			);
+			assert.equal(calls.xcrun.length, 0);
+		} finally {
+			cleanup(dir);
+		}
+	}
+});
+
+test("a transient gh failure retries; a checksum-proven pack still reuses when the receipt is unavailable", async () => {
+	const entries = [
+		plannedPack("recitation-1", "audio-archive"),
+		plannedPack("recitation-2", "other-archive"),
+	];
+	const dir = packDir(entries);
+	const calls = { api: [], download: [], upload: [], xcrun: [] };
+	const remote = {
+		"recitation-1": {
+			pack: {
+				type: "backgroundAssets",
+				id: "apple-pack-recitation-1",
+				attributes: { assetPackIdentifier: "recitation-1" },
+			},
+			versions: [
+				{
+					id: "v-live",
+					number: 26,
+					state: "COMPLETE",
+					beta: "READY_FOR_TESTING",
+					files: [assetFile(entries[0].archiveSha256)],
+				},
+			],
+		},
+		...unverifiableRemote("recitation-2"),
+	};
+	try {
+		await assert.rejects(
+			uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					repository: "o/r",
+					githubPolicy: { retryDelayMs: 0 },
+					exec: releaseExec({
+						pages: {
+							// Transient transport failures are retried; HTTP 5xx matches
+							// gh-api.mjs's transient pattern as well.
+							1: new Error("dial tcp 10.0.0.1: i/o timeout"),
+						},
+						calls,
+					}),
+					sleep: () => Promise.resolve(),
+				},
+				remoteReader(remote),
+			),
+			/blocked.*recitation-2/s,
+		);
+		// Page 1 kept timing out: withApiRetries retried then gave up.
+		assert.equal(calls.api.length, 3);
+		assert.equal(calls.xcrun.length, 0);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+// ---------- #2842: a failed planning read never reaches the upload loop ----------
+
+test("a remote read failure during planning runs no uploads", async () => {
+	const entries = [plannedPack("perushim-notes", "notes"), plannedPack("recitation-1", "audio")];
+	const dir = packDir(entries);
+	const calls = { xcrun: [] };
+	let versionsReads = 0;
+	const base = remoteReader({
+		"perushim-notes": unverifiableRemote("perushim-notes")["perushim-notes"],
+		"recitation-1": unverifiableRemote("recitation-1")["recitation-1"],
+	});
+	try {
+		await assert.rejects(
+			uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					repository: "o/r",
+					github: noGithub,
+					exec: (command) => {
+						if (command === "xcrun") calls.xcrun.push(command);
+						return { status: 0, stdout: "" };
+					},
+					sleep: () => Promise.resolve(),
+				},
+				async (requestPath, parameters) => {
+					if (requestPath.endsWith("/versions") && ++versionsReads === 2)
+						throw new DOMException(
+							"The operation was aborted due to timeout",
+							"TimeoutError",
+						);
+					return base(requestPath, parameters);
+				},
+			),
+			/aborted due to timeout/,
+		);
+		assert.equal(calls.xcrun.length, 0);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+// ---------- #2842: fresh-upload provenance ----------
+
+test("a fresh upload is not verified when a concurrent producer added an unattributed version", async () => {
+	const entries = [plannedPack("recitation-1", "new-archive")];
+	const dir = packDir(entries);
+	const remote = {
+		"recitation-1": {
+			pack: { type: "backgroundAssets", id: "apple-pack-recitation-1", attributes: { assetPackIdentifier: "recitation-1" } },
+			versions: [
+				{ id: "v1", number: 1, state: "COMPLETE", beta: "READY_FOR_TESTING", files: [assetFile(sha256("old"))] },
+			],
+		},
+	};
+	try {
+		await assert.rejects(
+			uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					attempts: 2,
+					repository: "o/r",
+					github: noGithub,
+					exec: () => {
+						// Our upload landed as v2 — but a concurrent producer pushed
+						// v3 in the same window. Both lack checksums; size alone
+						// cannot prove which version carries our bytes.
+						const assetOnly = (id) => ({
+							id,
+							state: "COMPLETE",
+							beta: "READY_FOR_TESTING",
+							files: [
+								{
+									type: "backgroundAssetUploadFiles",
+									id: `f-${id}`,
+									attributes: { assetType: "ASSET", fileSize: entries[0].archiveBytes },
+								},
+							],
+						});
+						remote["recitation-1"].versions.push(
+							{ ...assetOnly("v2"), number: 2 },
+							{ ...assetOnly("v3"), number: 3 },
+						);
+						return { status: 0, stdout: "Asset pack uploaded" };
+					},
+					sleep: () => Promise.resolve(),
+				},
+				remoteReader(remote),
+			),
+			/deliverable version matching the archive content/,
+		);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+// ---------- #2842: read retry through the real appleReader ----------
+
+test("a transient timeout on the versions read retries instead of killing planning", async () => {
+	const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+	const entries = [plannedPack("perushim-notes", "notes-archive")];
+	const dir = packDir(entries);
+	const remote = unverifiableRemote("perushim-notes");
+	// Checksum-proof reuse: the live version carries our exact archive.
+	remote["perushim-notes"].versions[0].files = [
+		assetFile(entries[0].archiveSha256),
+	];
+	let versionsCalls = 0;
+	const dispatch = remoteReader(remote);
+	const fetcher = async (url) => {
+		const requestPath = url.pathname.replace(/^\/v1\//, "");
+		const parameters = Object.fromEntries(url.searchParams);
+		if (requestPath.endsWith("/versions") && ++versionsCalls === 1)
+			throw new DOMException(
+				"The operation was aborted due to timeout",
+				"TimeoutError",
+			);
+		return {
+			ok: true,
+			status: 200,
+			json: async () => dispatch(requestPath, parameters),
+		};
+	};
+	try {
+		const result = await uploadAssetPacks(
+			{
+				directory: dir,
+				bundle: "com.tanah.daily929",
+				credentials: {
+					key_id: "TESTKEY",
+					issuer_id: "test-issuer",
+					key: privateKey.export({ type: "pkcs8", format: "pem" }),
+				},
+				repository: "o/r",
+				github: noGithub,
+				fetcher,
+				readPolicy: {
+					sleep: () => Promise.resolve(),
+					random: () => 0,
+					report: () => {},
+				},
+				exec: () => {
+					throw new Error("altool must not run for a reused pack");
+				},
+				sleep: () => Promise.resolve(),
+			},
+		);
+		assert.equal(result.reused, 1);
+		// Plan read (1 failure + 1 retry) plus the deliverable verify read.
+		assert.equal(versionsCalls, 3);
+	} finally {
+		cleanup(dir);
+	}
+});
+
+test("a fresh upload is not verified when Apple reports no checksum and no file size", async () => {
+	const entries = [plannedPack("recitation-1", "new-archive")];
+	const dir = packDir(entries);
+	const remote = {
+		"recitation-1": {
+			pack: { type: "backgroundAssets", id: "apple-pack-recitation-1", attributes: { assetPackIdentifier: "recitation-1" } },
+			versions: [
+				{ id: "v1", number: 1, state: "COMPLETE", beta: "READY_FOR_TESTING", files: [assetFile(sha256("old"))] },
+			],
+		},
+	};
+	try {
+		await assert.rejects(
+			uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					attempts: 2,
+					repository: "o/r",
+					github: noGithub,
+					exec: () => {
+						remote["recitation-1"].versions.push({
+							id: "v2",
+							number: 2,
+							state: "COMPLETE",
+							beta: "READY_FOR_TESTING",
+							files: [],
+						});
+						return { status: 0, stdout: "Asset pack uploaded" };
+					},
+					sleep: () => Promise.resolve(),
+				},
+				remoteReader(remote),
+			),
+			/deliverable version matching the archive content/,
 		);
 	} finally {
 		cleanup(dir);
