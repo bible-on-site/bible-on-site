@@ -10,7 +10,7 @@
 	},
 	"scripts": {
 		"backend": "node ./local-backend.mjs",
-		"coverage:merge": "node ./merge-lcov.mts --out ../.coverage/lcov.info --require ../web/bible-on-site/.coverage/merged/lcov.info --require ../web/api/.coverage/merged/lcov.info --optional ../web/admin/.coverage/merged/lcov.info --optional ../app/.coverage/merged/lcov.info --optional ../data/.coverage/merged/lcov.info --rm-input-dirs",
+		"coverage:merge": "node ./merge-lcov.mts --out ../.coverage/lcov.info --require ../web/bible-on-site/.coverage/merged/lcov.info --require ../web/api/.coverage/merged/lcov.info --optional ../web/admin/.coverage/merged/lcov.info --optional ../app/.coverage/merged/lcov.info --optional ../data/.coverage/merged/lcov.info --optional ../.coverage/devops/lcov.info --rm-input-dirs",
 		"coverage:gaps": "node ./coverage-gaps.mjs",
 		"test:coverage-gaps": "node --test coverage-gaps.test.mjs",
 		"dev": "node ./dev-all.mts",
@@ -26,7 +26,8 @@
 		"deploy:data": "node ./deploy/data-deploy/index.mts",
 		"test:deploy-data": "node --test deploy/data-deploy/lambda-invocation.test.mts deploy/data-deploy/deploy-payload.test.mts",
 		"deploy:bulletin": "node ./deploy/bulletin-deploy/index.mts",
-		"bump:cargo": "node ./bump-cargo-version.ts"
+		"bump:cargo": "node ./bump-cargo-version.ts",
+		"coverage:release": "node ./github/ci/release-coverage.mjs"
 	},
 	"dependencies": {
 		"@aws-sdk/client-ec2": "3.1158.0",
