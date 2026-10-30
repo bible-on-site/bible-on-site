@@ -14,6 +14,42 @@ const template = YAML.parse(
 	),
 );
 
+function assertSesSendScope(statement) {
+	const arn = `arn:\${AWS::Partition}:ses:\${AWS::Region}:\${AWS::AccountId}:`;
+	assert.equal(statement.Effect, "Allow");
+	assert.equal(statement.Action, "ses:SendEmail", "no additional send APIs");
+	assert.deepEqual(statement.Resource, [
+		`${arn}identity/\${BulletinEmailIdentity}`,
+		`${arn}configuration-set/\${BulletinConfigurationSet}`,
+		`${arn}contact-list/\${BulletinContactList}`,
+	], "sending with list management needs exactly these three resources");
+	assert.deepEqual(statement.Condition, {
+		StringEquals: { "ses:FromAddress": "FromAddress" },
+	}, "the exact sender restriction must remain");
+}
+
+const sendStatement = template.Resources.BulletinAdminRuntimePolicy.Properties
+	.PolicyDocument.Statement.find(statement => statement.Sid === "SendFromBulletinIdentity");
+
+test("SES sending permits list management only for the bulletin resources and sender", () => {
+	assertSesSendScope(sendStatement);
+});
+
+test("SES scope guard rejects the missing list grant, wildcard resources and broader send APIs", () => {
+	const missingList = structuredClone(sendStatement);
+	missingList.Resource.pop();
+	assert.throws(() => assertSesSendScope(missingList), /exactly these three resources/);
+	const wildcard = structuredClone(sendStatement);
+	wildcard.Resource.push("*");
+	assert.throws(() => assertSesSendScope(wildcard), /exactly these three resources/);
+	const rawSend = structuredClone(sendStatement);
+	rawSend.Action = ["ses:SendEmail", "ses:SendRawEmail"];
+	assert.throws(() => assertSesSendScope(rawSend), /no additional send APIs/);
+	const anySender = structuredClone(sendStatement);
+	delete anySender.Condition;
+	assert.throws(() => assertSesSendScope(anySender), /exact sender restriction/);
+});
+
 // Bun preserves the scalar values of the !Ref and !GetAtt intrinsic tags.
 // SQS rejects a policy statement with multiple resources or another queue's ARN.
 function assertQueuePolicyScope(resource) {
