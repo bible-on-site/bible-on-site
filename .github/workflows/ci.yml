@@ -446,8 +446,8 @@ jobs:
 
   package_website:
     name: Package Website
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -456,6 +456,10 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
 
   # Master pushes package the release; other events (PR, merge queue) build the
   # same release Docker configuration as a pre-merge check without uploading it,
