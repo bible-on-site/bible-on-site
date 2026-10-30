@@ -377,6 +377,14 @@ public class DivineNameMaskingTests
     [Collection(PreferencesServiceCollection.Name)]
     public class Rendering : IDisposable
     {
+        public Rendering()
+        {
+            // Sibling suites in this collection can leave ambient masking
+            // enabled (Load() publishes ambient options); the baseline for
+            // FormattedText rendering is disabled, same as AmbientState.
+            DivineNameMasking.Apply(DivineNameMaskingOptions.Disabled);
+        }
+
         public void Dispose()
         {
             // Service setters publish ambient options — always restore disabled
