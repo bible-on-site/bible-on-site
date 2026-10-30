@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
+import { type FrameMetrics, reduceFrameSamples } from "../util/frame-metrics";
 
 /**
  * Performance regression test: rapid page flips in the sefer (FlipBook) view.
@@ -71,13 +72,6 @@ declare global {
 			observer: PerformanceObserver | null;
 		};
 	}
-}
-
-interface FrameMetrics {
-	frames: number;
-	blockedMs: number;
-	longFrames: number;
-	longtaskMs: number;
 }
 
 /**
@@ -168,11 +162,10 @@ async function startFrameProbe(page: Page): Promise<void> {
 
 /** Stop the probe and reduce its samples into metrics. */
 async function stopFrameProbe(page: Page): Promise<FrameMetrics> {
-	return page.evaluate((budgetMs) => {
+	const samples = await page.evaluate(() => {
 		const probe = window.__flipProbe;
 		window.__flipProbe = undefined;
-		if (!probe)
-			return { frames: 0, blockedMs: 0, longFrames: 0, longtaskMs: 0 };
+		if (!probe) return { frames: [], longtaskMs: 0 };
 		cancelAnimationFrame(probe.raf);
 		// A long task can finish just before this evaluation, with its delivery
 		// still queued. Disconnecting first would silently drop that sample.
@@ -180,21 +173,12 @@ async function stopFrameProbe(page: Page): Promise<FrameMetrics> {
 			probe.longtaskMs += entry.duration;
 		}
 		probe.observer?.disconnect();
-		let blockedMs = 0;
-		let longFrames = 0;
-		for (const gap of probe.frames) {
-			if (gap > budgetMs) {
-				blockedMs += gap - budgetMs;
-				if (gap > 50) longFrames += 1;
-			}
-		}
 		return {
-			frames: probe.frames.length,
-			blockedMs,
-			longFrames,
+			frames: probe.frames,
 			longtaskMs: probe.longtaskMs,
 		};
-	}, FRAME_GAP_BUDGET_MS);
+	});
+	return reduceFrameSamples(samples, FRAME_GAP_BUDGET_MS);
 }
 
 /** The book writes the numeric chapter URL only after committing a spread. */
