@@ -192,6 +192,7 @@ jobs:
       - name: Grant owned runner access to RDS
         if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
         env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           RDS_BUILD_ACCESS_LEASE: ${{ runner.temp }}/rds-build-access.json
           RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
         run: node devops/github/ci/rds-build-access.mjs grant
@@ -363,6 +364,7 @@ jobs:
       - name: Remove only this build's RDS access rule
         if: ${{ always() && env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
         env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           RDS_BUILD_ACCESS_LEASE: ${{ runner.temp }}/rds-build-access.json
           RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
         run: node devops/github/ci/rds-build-access.mjs cleanup

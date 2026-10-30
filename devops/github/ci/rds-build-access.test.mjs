@@ -18,6 +18,7 @@ async function fixture(t) {
 	t.after(() => rmSync(dir, { recursive: true, force: true }));
 	const env = {
 		AWS_REGION: "il-central-1",
+		RDS_BUILD_ACCESS_ROLE: "arn:aws:iam::123456789012:role/ci",
 		RDS_SECURITY_GROUP: "sg-0123456789abcdef0",
 		GITHUB_RUN_ID: "1234",
 		GITHUB_RUN_ATTEMPT: "2",
@@ -27,7 +28,7 @@ async function fixture(t) {
 	const calls = [];
 	let rules = [];
 	const rule = () => ({
-		GroupOwnerId: "250598594267",
+		GroupOwnerId: "123456789012",
 		GroupId: env.RDS_SECURITY_GROUP,
 		SecurityGroupRuleId: ruleId,
 		IsEgress: false,
@@ -47,7 +48,7 @@ async function fixture(t) {
 		calls.push(args);
 		switch (args[1]) {
 			case "get-caller-identity":
-				return { Account: "250598594267" };
+				return { Account: "123456789012" };
 			case "authorize-security-group-ingress": {
 				// The ownership journal must exist before the first AWS mutation.
 				assert.equal(
@@ -272,6 +273,49 @@ test("a stale journal from another run or attempt cannot revoke access", async (
 	assert.ok(
 		!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
 	);
+});
+
+test("invalid configured deployment roles fail before IP lookup or AWS calls", async (t) => {
+	const f = await fixture(t);
+	for (const role of [
+		undefined,
+		"arn:aws:iam::111:role/ci",
+		"arn:aws:sts::123456789012:role/ci",
+		"arn:aws:iam::123456789012:user/ci",
+		"arn:aws:iam::123456789012:role/",
+	]) {
+		await assert.rejects(
+			grantAccess(
+				{ ...f.env, RDS_BUILD_ACCESS_ROLE: role },
+				{
+					...f.deps,
+					publicIp: async () => {
+						throw new Error("IP lookup must not run");
+					},
+				},
+			),
+			/deployment role/,
+		);
+	}
+	assert.equal(f.calls.length, 0);
+});
+
+test("malformed persisted ownership tokens and rule IDs cannot reach AWS", async (t) => {
+	const f = await fixture(t);
+	const lease = await grantAccess(f.env, f.deps);
+	f.calls.length = 0;
+	for (const changed of [
+		{ nonce: "-".repeat(36) },
+		{ nonce: "f".repeat(100000) },
+		{ ruleId: "sgr-0123456789abcdefg" },
+	]) {
+		writeFileSync(
+			f.env.RDS_BUILD_ACCESS_LEASE,
+			JSON.stringify({ ...lease, ...changed }),
+		);
+		await assert.rejects(cleanupAccess(f.env, f.deps), /Invalid/);
+	}
+	assert.equal(f.calls.length, 0);
 });
 
 test("refuses to report cleanup success without AWS acknowledgement and empty readback", async (t) => {

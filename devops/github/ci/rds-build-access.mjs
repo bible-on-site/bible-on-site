@@ -5,7 +5,6 @@ import { isIP } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ACCOUNT = "250598594267";
 const REGION = "il-central-1";
 const SOURCE = "github-actions-build";
 
@@ -48,7 +47,7 @@ function context(env) {
 	)
 		throw new Error("Invalid build identity");
 	return {
-		account: ACCOUNT,
+		account: deploymentAccount(env.RDS_BUILD_ACCESS_ROLE),
 		region: REGION,
 		group: env.RDS_SECURITY_GROUP,
 		run: env.GITHUB_RUN_ID,
@@ -57,9 +56,25 @@ function context(env) {
 	};
 }
 
-async function checkAccount(aws) {
+export function deploymentAccount(role) {
+	const parts = (role ?? "").split(":");
+	if (
+		parts.length !== 6 ||
+		parts[0] !== "arn" ||
+		parts[1] !== "aws" ||
+		parts[2] !== "iam" ||
+		parts[3] !== "" ||
+		!/^[0-9]{12}$/.test(parts[4]) ||
+		!parts[5].startsWith("role/") ||
+		parts[5].length <= 5
+	)
+		throw new Error("Invalid configured AWS deployment role");
+	return parts[4];
+}
+
+async function checkAccount(aws, expected) {
 	const identity = await aws(["sts", "get-caller-identity"]);
-	if (identity.Account !== ACCOUNT) throw new Error("Unexpected AWS account");
+	if (identity.Account !== expected) throw new Error("Unexpected AWS account");
 }
 
 function tagsFor(lease) {
@@ -73,26 +88,46 @@ function tagsFor(lease) {
 }
 
 function validateLease(lease, expected) {
+	const fields = new Map(Object.entries(lease));
 	for (const [key, value] of Object.entries(expected)) {
-		if (lease[key] !== value)
+		if (fields.get(key) !== value)
 			throw new Error(`Build access lease ${key} mismatch`);
 	}
-	if (
-		!/^[a-f0-9-]{36}$/.test(lease.nonce ?? "") ||
-		lease.cidr !== `${runnerIpv4(lease.ip)}/32`
-	)
+	if (!validNonce(lease.nonce) || lease.cidr !== `${runnerIpv4(lease.ip)}/32`)
 		throw new Error("Invalid build access lease");
-	if (lease.ruleId && !/^sgr-[a-f0-9]{17}$/.test(lease.ruleId))
+	if (lease.ruleId && !validRuleId(lease.ruleId))
 		throw new Error("Invalid security group rule ID");
 }
 
-function validateRule(rule, lease) {
-	const tags = Object.fromEntries(
-		(rule.Tags ?? []).map(({ Key, Value }) => [Key, Value]),
+function hex(value) {
+	return [...value].every((char) => "0123456789abcdef".includes(char));
+}
+
+function validNonce(value) {
+	if (typeof value !== "string" || value.length !== 36) return false;
+	const parts = value.split("-");
+	return (
+		parts.length === 5 &&
+		parts.every(
+			(part, index) => part.length === [8, 4, 4, 4, 12][index] && hex(part),
+		)
 	);
+}
+
+function validRuleId(value) {
+	return (
+		typeof value === "string" &&
+		value.length === 21 &&
+		value.startsWith("sgr-") &&
+		hex(value.slice(4))
+	);
+}
+
+function validateRule(rule, lease) {
+	const tags = new Map((rule.Tags ?? []).map(({ Key, Value }) => [Key, Value]));
 	if (
 		Object.entries(tagsFor(lease)).some(
-			([key, value]) => tags[key] !== value,
+			([key, value]) => tags.get(key) !== value,
 		) ||
 		rule.GroupOwnerId !== lease.account ||
 		rule.GroupId !== lease.group ||
@@ -101,7 +136,7 @@ function validateRule(rule, lease) {
 		rule.FromPort !== 3306 ||
 		rule.ToPort !== 3306 ||
 		rule.CidrIpv4 !== lease.cidr ||
-		!/^sgr-[a-f0-9]{17}$/.test(rule.SecurityGroupRuleId ?? "") ||
+		!validRuleId(rule.SecurityGroupRuleId) ||
 		(lease.ruleId && rule.SecurityGroupRuleId !== lease.ruleId)
 	) {
 		throw new Error(
@@ -120,7 +155,7 @@ export async function grantAccess(
 	const ip = runnerIpv4(await publicIp());
 	const lease = { ...expected, ip, cidr: `${ip}/32`, nonce: nonce() };
 	validateLease(lease, expected);
-	await checkAccount(aws);
+	await checkAccount(aws, expected.account);
 	writeFileSync(env.RDS_BUILD_ACCESS_LEASE, `${JSON.stringify(lease)}\n`, {
 		flag: "wx",
 		mode: 0o600,
@@ -172,7 +207,7 @@ export async function cleanupAccess(env, { aws = awsCli } = {}) {
 		throw error;
 	}
 	validateLease(lease, context(env));
-	await checkAccount(aws);
+	await checkAccount(aws, lease.account);
 	const query = [
 		"ec2",
 		"describe-security-group-rules",
