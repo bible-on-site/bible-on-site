@@ -347,11 +347,7 @@ mod tests {
             assert!(name.starts_with(&format!("{id}_")));
             assert!(name.ends_with(".pdf"));
             assert!(name.encode_utf16().count() <= 255);
-            assert!(
-                name.len() <= 255,
-                "chapter {id}: {} UTF-8 bytes",
-                name.len()
-            );
+            assert!(name.len() <= 255, "oversized chapter {id} filename");
             assert!(
                 !name
                     .chars()
