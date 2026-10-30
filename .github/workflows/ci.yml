@@ -2138,6 +2138,7 @@ jobs:
         with:
           distribution: "microsoft"
           java-version: "17"
+          verify-signature: true
 
       - name: Setup Python for recitation extension packaging
         uses: actions/setup-python@v7
