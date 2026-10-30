@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
@@ -16,7 +17,7 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
     {
         Display, Perek, ExtensionPacks, Recitation, Sound, Support,
         RecitationSound, RecitationPacks, ArticleBack, ArticleAuthor, Article,
-        LandingCategory, LandingEntry, CategoryEntry, EntryCategory, EntryBack, Parasha
+        LandingCategory, LandingEntry, CategoryEntry, EntryCategory, EntryBack, Parasha, CalendarReader
     }
 
     public static IEnumerable<object[]> NavigationCases =>
@@ -127,6 +128,85 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
         navigator.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ArticleChangedDuringPendingOperation_HandlesFailureAndCanRunAgain(
+        bool authorNavigation, bool retainArticle)
+    {
+        var operation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).Returns(operation.Task);
+        var share = new Mock<IShare>();
+        share.Setup(s => s.RequestAsync(It.IsAny<ShareTextRequest>())).Returns(operation.Task);
+        var model = new ArticleDetailViewModel(navigator.Object, share.Object);
+        var original = CreateArticle();
+        model.SetArticle(original);
+        var command = authorNavigation ? model.GoToAuthorCommand : model.ShareCommand;
+        var pending = command.ExecuteAsync(null);
+        pending.IsCompleted.Should().BeFalse();
+
+        model.Article = retainArticle
+            ? new Article { Id = 18, PerekId = 305, Name = "Replacement", Abstract = "" }
+            : null;
+        operation.SetException(new InvalidOperationException("Platform operation interrupted"));
+        await pending;
+
+        command.IsRunning.Should().BeFalse();
+        command.ExecutionTask!.IsCompletedSuccessfully.Should().BeTrue();
+        model.SetArticle(original);
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        share.Setup(s => s.RequestAsync(It.IsAny<ShareTextRequest>())).Returns(Task.CompletedTask);
+        await command.ExecuteAsync(null);
+        model.Article.Should().BeSameAs(original);
+        command.ExecutionTask!.IsCompletedSuccessfully.Should().BeTrue();
+        if (authorNavigation)
+        {
+            navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Exactly(2));
+        }
+        else
+        {
+            share.Verify(s => s.RequestAsync(It.IsAny<ShareTextRequest>()), Times.Exactly(2));
+        }
+    }
+
+    [Fact]
+    public void UncheckingMaskingRadioOptions_DoesNotOverwriteTheSelectedOptions()
+    {
+        var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var model = new PreferencesViewModel(preferences,
+            PerushimNotesService.CreateForTesting(_delivery.Object,
+                Path.Join(Path.GetTempPath(), Path.GetRandomFileName())),
+            new RecitationService(_files.Object, _delivery.Object),
+            new Mock<IAppNavigator>(MockBehavior.Strict).Object);
+        preferences.DivineNameMaskElohim = DivineNameMaskOption.Custom;
+        preferences.DivineNameMaskYhwh = DivineNameMaskOption.Custom;
+        preferences.DivineNameMaskEl = DivineNameMaskOption.Hyphen;
+        preferences.DivineNameMaskShaddai = DivineNameMaskOption.Custom;
+        var notifications = new List<string?>();
+        model.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+        model.IsMaskElohimAsIs = false;
+        model.IsMaskElohimElokim = false;
+        model.IsMaskElohimHyphen = false;
+        model.IsMaskElohimCustom = false;
+        model.IsMaskYhwhHeh = false;
+        model.IsMaskYhwhDalet = false;
+        model.IsMaskYhwhCustom = false;
+        model.IsMaskElAsIs = false;
+        model.IsMaskElHyphen = false;
+        model.IsMaskShaddaiAsIs = false;
+        model.IsMaskShaddaiHyphen = false;
+        model.IsMaskShaddaiCustom = false;
+
+        preferences.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Custom);
+        preferences.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Custom);
+        preferences.DivineNameMaskEl.Should().Be(DivineNameMaskOption.Hyphen);
+        preferences.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Custom);
+        notifications.Should().BeEmpty("radio deselection is a no-op, including preference notifications");
+    }
+
     private (IAsyncRelayCommand Command, object? Parameter, string Route) CreateCommand(
         Destination destination, IAppNavigator navigator)
     {
@@ -185,6 +265,9 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
             Destination.EntryCategory => (entry.OpenEntityCategoryCommand,
                 new TanahpediaLinkedEntity { EntityType = "PERSON" }, "tanahpediaCategory?key=PERSON&entityType=PERSON"),
             Destination.EntryBack => (entry.GoBackCommand, null, ".."),
+            Destination.CalendarReader => (new LearningCalendarViewModel(new PerekScheduleService(database),
+                perekData, navigator).OpenPerekCommand, new CalendarCellViewModel { PerekId = 305 },
+                AppRoutes.CalendarReader + "?perekId=305"),
             Destination.Parasha => (new ParashaListViewModel(new ParashaDataService(database), perekData, navigator)
                 .OpenParashaCommand, new ParashaUnit
                 {
@@ -204,5 +287,6 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
     {
         _client.Dispose();
         PreferencesService.ResetForTesting();
+        DivineNameMasking.Apply(DivineNameMaskingOptions.Disabled);
     }
 }
