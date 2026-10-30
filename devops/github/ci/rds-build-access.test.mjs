@@ -1,0 +1,314 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import {
+	cleanupAccess,
+	databaseHost,
+	grantAccess,
+	runnerIpv4,
+} from "./rds-build-access.mjs";
+
+const nonce = "5c2c5bcd-0247-45de-a281-1296f2111fa1";
+const ruleId = "sgr-0123456789abcdef0";
+
+async function fixture(t) {
+	const dir = mkdtempSync(join(tmpdir(), "rds-build-access-"));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const env = {
+		AWS_REGION: "il-central-1",
+		RDS_SECURITY_GROUP: "sg-0123456789abcdef0",
+		GITHUB_RUN_ID: "1234",
+		GITHUB_RUN_ATTEMPT: "2",
+		GITHUB_JOB: "package",
+		RDS_BUILD_ACCESS_LEASE: join(dir, "lease.json"),
+	};
+	const calls = [];
+	let rules = [];
+	const rule = () => ({
+		GroupOwnerId: "250598594267",
+		GroupId: env.RDS_SECURITY_GROUP,
+		SecurityGroupRuleId: ruleId,
+		IsEgress: false,
+		IpProtocol: "tcp",
+		FromPort: 3306,
+		ToPort: 3306,
+		CidrIpv4: "198.51.100.7/32",
+		Tags: Object.entries({
+			Source: "github-actions-build",
+			RunId: "1234",
+			RunAttempt: "2",
+			Job: "package",
+			BuildLease: nonce,
+		}).map(([Key, Value]) => ({ Key, Value })),
+	});
+	const aws = async (args) => {
+		calls.push(args);
+		switch (args[1]) {
+			case "get-caller-identity":
+				return { Account: "250598594267" };
+			case "authorize-security-group-ingress": {
+				// The ownership journal must exist before the first AWS mutation.
+				assert.equal(
+					JSON.parse(readFileSync(env.RDS_BUILD_ACCESS_LEASE, "utf8")).nonce,
+					nonce,
+				);
+				rules = [rule()];
+				return { Return: true, SecurityGroupRules: structuredClone(rules) };
+			}
+			case "describe-security-group-rules":
+				return { SecurityGroupRules: structuredClone(rules) };
+			case "revoke-security-group-ingress":
+				rules = [];
+				return { Return: true };
+			default:
+				throw new Error(`Unexpected AWS command ${args[1]}`);
+		}
+	};
+	return {
+		env,
+		calls,
+		aws,
+		rule,
+		deps: { aws, publicIp: async () => "198.51.100.7\n", nonce: () => nonce },
+		setRules(value) {
+			rules = value;
+		},
+	};
+}
+
+test("creates one /32 TCP3306 rule and revokes only its captured ID after fresh ownership verification", async (t) => {
+	const f = await fixture(t);
+	const lease = await grantAccess(f.env, f.deps);
+	assert.equal(lease.ruleId, ruleId);
+	assert.equal(
+		JSON.parse(readFileSync(f.env.RDS_BUILD_ACCESS_LEASE, "utf8")).ruleId,
+		ruleId,
+	);
+	const grant = f.calls.find(
+		(args) => args[1] === "authorize-security-group-ingress",
+	);
+	assert.equal(grant[grant.indexOf("--cidr") + 1], "198.51.100.7/32");
+	assert.equal(grant[grant.indexOf("--port") + 1], "3306");
+	assert.equal(grant[grant.indexOf("--protocol") + 1], "tcp");
+	await cleanupAccess(f.env, f.deps);
+	assert.deepEqual(
+		f.calls.filter((args) => args[1] === "revoke-security-group-ingress"),
+		[
+			[
+				"ec2",
+				"revoke-security-group-ingress",
+				"--group-id",
+				f.env.RDS_SECURITY_GROUP,
+				"--security-group-rule-ids",
+				ruleId,
+			],
+		],
+	);
+	assert.equal(
+		f.calls.filter((args) => args[1] === "describe-security-group-rules")
+			.length,
+		2,
+	);
+});
+
+test("duplicate grant failure never revokes an existing rule for the runner's CIDR", async (t) => {
+	const f = await fixture(t);
+	const aws = async (args) => {
+		if (args[1] === "authorize-security-group-ingress")
+			throw new Error("InvalidPermission.Duplicate");
+		if (args[1] === "describe-security-group-rules") {
+			assert.ok(args.includes(`Name=tag:BuildLease,Values=${nonce}`));
+			return { SecurityGroupRules: [] }; // Existing rule has no new random ownership tag.
+		}
+		return f.aws(args);
+	};
+	await assert.rejects(grantAccess(f.env, { ...f.deps, aws }), /Duplicate/);
+	await cleanupAccess(f.env, { aws });
+	assert.ok(
+		!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
+	);
+});
+
+test("recovers an owned rule when the grant response is lost, retaining the original failure", async (t) => {
+	const f = await fixture(t);
+	const aws = async (args) => {
+		const result = await f.aws(args);
+		if (args[1] === "authorize-security-group-ingress")
+			throw new Error("response lost");
+		return result;
+	};
+	await assert.rejects(grantAccess(f.env, { ...f.deps, aws }), /response lost/);
+	assert.equal(
+		JSON.parse(readFileSync(f.env.RDS_BUILD_ACCESS_LEASE, "utf8")).ruleId,
+		undefined,
+	);
+	await cleanupAccess(f.env, { aws });
+	assert.equal(
+		f.calls.filter((args) => args[1] === "revoke-security-group-ingress")
+			.length,
+		1,
+	);
+});
+
+test("a failed receipt write preserves the ownership journal for cleanup", async (t) => {
+	const f = await fixture(t);
+	writeFileSync(`${f.env.RDS_BUILD_ACCESS_LEASE}.receipt`, "occupied");
+	await assert.rejects(grantAccess(f.env, f.deps), { code: "EEXIST" });
+	assert.equal(
+		JSON.parse(readFileSync(f.env.RDS_BUILD_ACCESS_LEASE, "utf8")).nonce,
+		nonce,
+	);
+	await cleanupAccess(f.env, f.deps);
+	assert.equal(
+		f.calls.filter((args) => args[1] === "revoke-security-group-ingress")
+			.length,
+		1,
+	);
+});
+
+test("cleanup without a grant journal makes no AWS call", async (t) => {
+	const f = await fixture(t);
+	await cleanupAccess(f.env, f.deps);
+	assert.equal(f.calls.length, 0);
+});
+
+for (const [field, value] of Object.entries({
+	GroupOwnerId: "111111111111",
+	GroupId: "sg-11111111111111111",
+	IsEgress: true,
+	IpProtocol: "-1",
+	FromPort: 0,
+	ToPort: 65535,
+	CidrIpv4: "0.0.0.0/0",
+	SecurityGroupRuleId: "sgr-11111111111111111",
+	Tags: [],
+})) {
+	test(`cleanup refuses a changed or unowned ${field}`, async (t) => {
+		const f = await fixture(t);
+		await grantAccess(f.env, f.deps);
+		f.setRules([{ ...f.rule(), [field]: value }]);
+		await assert.rejects(cleanupAccess(f.env, f.deps), /does not match/);
+		assert.ok(
+			!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
+		);
+	});
+}
+
+test("ambiguous ownership fails without deleting either rule", async (t) => {
+	const f = await fixture(t);
+	await grantAccess(f.env, f.deps);
+	f.setRules([f.rule(), f.rule()]);
+	await assert.rejects(cleanupAccess(f.env, f.deps), /Ambiguous/);
+	assert.ok(
+		!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
+	);
+});
+
+test("a previously removed rule needs no further mutation", async (t) => {
+	const f = await fixture(t);
+	await grantAccess(f.env, f.deps);
+	f.setRules([]);
+	await cleanupAccess(f.env, f.deps);
+	assert.ok(
+		!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
+	);
+});
+
+for (const ip of [
+	"",
+	"198.51.100.7/24",
+	"198.51.100.7\n0.0.0.0",
+	"$(touch /tmp/unsafe)",
+	"::1",
+	"256.1.1.1",
+]) {
+	test(`invalid IP ${JSON.stringify(ip)} cannot reach AWS`, async (t) => {
+		const f = await fixture(t);
+		await assert.rejects(
+			grantAccess(f.env, { ...f.deps, publicIp: async () => ip }),
+			/IPv4/,
+		);
+		assert.equal(f.calls.length, 0);
+	});
+}
+
+test("wrong account or region cannot grant or revoke access", async (t) => {
+	const f = await fixture(t);
+	await assert.rejects(
+		grantAccess({ ...f.env, AWS_REGION: "us-east-1" }, f.deps),
+		/region/,
+	);
+	assert.equal(f.calls.length, 0);
+	await assert.rejects(
+		grantAccess(f.env, {
+			...f.deps,
+			aws: async () => ({ Account: "111111111111" }),
+		}),
+		/account/,
+	);
+	await grantAccess(f.env, f.deps);
+	await assert.rejects(
+		cleanupAccess(f.env, { aws: async () => ({ Account: "111111111111" }) }),
+		/account/,
+	);
+	assert.ok(
+		!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
+	);
+});
+
+test("a stale journal from another run or attempt cannot revoke access", async (t) => {
+	const f = await fixture(t);
+	await grantAccess(f.env, f.deps);
+	await assert.rejects(
+		cleanupAccess({ ...f.env, GITHUB_RUN_ATTEMPT: "3" }, f.deps),
+		/attempt mismatch/,
+	);
+	await assert.rejects(
+		cleanupAccess({ ...f.env, GITHUB_RUN_ID: "5678" }, f.deps),
+		/run mismatch/,
+	);
+	assert.ok(
+		!f.calls.some((args) => args[1] === "revoke-security-group-ingress"),
+	);
+});
+
+test("refuses to report cleanup success without AWS acknowledgement and empty readback", async (t) => {
+	const f = await fixture(t);
+	await grantAccess(f.env, f.deps);
+	await assert.rejects(
+		cleanupAccess(f.env, {
+			aws: async (args) =>
+				args[1] === "revoke-security-group-ingress"
+					? { Return: false }
+					: f.aws(args),
+		}),
+		/did not confirm/,
+	);
+	await assert.rejects(
+		cleanupAccess(f.env, {
+			aws: async (args) =>
+				args[1] === "revoke-security-group-ingress"
+					? { Return: true }
+					: f.aws(args),
+		}),
+		/still present/,
+	);
+});
+
+test("database credentials stay data and never become host shell code", () => {
+	assert.equal(runnerIpv4("198.51.100.7\n"), "198.51.100.7");
+	assert.equal(
+		databaseHost("mysql://user:p%40%24%28bad%29@db.example.com:3306/tanah"),
+		"db.example.com",
+	);
+	for (const value of [
+		"not a URL",
+		"https://db.example.com",
+		"mysql://user:pass@-bad/tanah",
+		"mysql://user:pass@db.example.com:1234/tanah",
+		"mysql://user:pass@$(bad)/tanah",
+	])
+		assert.throws(() => databaseHost(value), /Invalid database/);
+});
