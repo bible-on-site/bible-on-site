@@ -341,7 +341,11 @@ describe("AliyahControls — minhag variants", () => {
 
 	it("disables server-rendered controls until the first click can be handled", () => {
 		const container = document.createElement("div");
-		container.innerHTML = renderToString(makeVariantJsx());
+		const serverDocument = new DOMParser().parseFromString(
+			renderToString(makeVariantJsx()),
+			"text/html",
+		);
+		container.replaceChildren(...serverDocument.body.childNodes);
 		document.body.append(container);
 		const controls = container.querySelector("fieldset");
 		expect(controls).toBeDisabled();
