@@ -50,9 +50,11 @@
   transition: all 0.2s ease;
 }
 
-.backLink:hover {
-  background: #2a3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .backLink:hover {
+    background: #2a3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 @media (max-width: 768px) {
@@ -83,7 +85,9 @@
     color: #16213d;
   }
 
-  .backLink:hover {
-    background: #c7d2fe;
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #c7d2fe;
+    }
   }
 }

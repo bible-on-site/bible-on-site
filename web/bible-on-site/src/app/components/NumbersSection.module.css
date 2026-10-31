@@ -57,9 +57,11 @@
 	inset: 0;
 }
 
-.statLink:hover {
-	text-decoration: underline;
-	text-decoration-color: var(--link-accent, #1552ac);
+@media (hover: hover) {
+	.statLink:hover {
+		text-decoration: underline;
+		text-decoration-color: var(--link-accent, #1552ac);
+	}
 }
 
 .statLink:focus-visible {
