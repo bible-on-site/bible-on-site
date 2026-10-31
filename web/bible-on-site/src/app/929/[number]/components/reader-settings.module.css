@@ -190,12 +190,81 @@
 .maskingGroup > legend label {
 	gap: 10px;
 }
-.maskingGroup:disabled .nameFieldset {
+.choices {
+	display: grid;
+	gap: 14px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	min-inline-size: 0;
+}
+.choices:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
 }
-.maskingGroup:disabled .nameFieldset * {
+.choices:disabled * {
 	cursor: not-allowed;
+}
+.disclosure {
+	display: grid;
+	gap: 14px;
+}
+.disclosureToggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 8px 10px;
+	margin-inline: -10px;
+	box-sizing: content-box;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-weight: 600;
+	text-align: start;
+	cursor: pointer;
+}
+.disclosureToggle:hover {
+	background: var(--surface-muted, #f8fafc);
+}
+.disclosureToggle:active {
+	background: var(--border-subtle, #e2e8f0);
+}
+.disclosureToggle:focus-visible {
+	outline: 2px solid var(--link-accent, #1552ac);
+	outline-offset: 1px;
+}
+.disclosureToggle svg {
+	flex: none;
+	color: var(--muted-text, #637598);
+	transition: transform 160ms ease;
+}
+.disclosureToggle[aria-expanded="true"] svg {
+	transform: rotate(180deg);
+}
+.disclosureBody {
+	display: grid;
+	gap: 22px;
+	animation: disclosure-reveal 160ms ease-out;
+}
+.disclosureBody[hidden] {
+	display: none;
+}
+@keyframes disclosure-reveal {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.disclosureToggle svg {
+		transition: none;
+	}
+	.disclosureBody {
+		animation: none;
+	}
 }
 
 @media (prefers-color-scheme: dark) {
