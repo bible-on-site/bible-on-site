@@ -1,8 +1,6 @@
 export {
-	getAllAuthorIds,
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
-	getAuthorById,
 	getAuthorByName,
 	getAuthorImageUrl,
 } from "./service";
