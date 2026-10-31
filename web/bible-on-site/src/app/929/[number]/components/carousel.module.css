@@ -23,6 +23,14 @@
   transition: opacity 0.15s ease;
 }
 
+/* 32px visual, 44px hit area. */
+.navButton::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+
 .navButton[hidden] {
   display: none;
 }
