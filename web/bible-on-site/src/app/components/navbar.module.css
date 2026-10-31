@@ -149,11 +149,11 @@
   object-fit: contain;
 }
 
-/* The whole rest of the row is the link, at least 44px tall to tap. */
+/* At least 44px tall to tap. Not flex: 1: a full-row link would reach into
+   Link's 200px prefetch margin while the menu is parked off-screen. */
 .menuItem > a {
   display: flex;
   align-items: center;
-  flex: 1;
   min-height: 44px;
   margin-block: 0;
 }
