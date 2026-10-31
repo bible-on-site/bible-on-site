@@ -140,6 +140,10 @@ test.describe("Accessibility statement page", () => {
 		await trigger.click();
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
 		await expect(menu).toBeVisible();
+		// Playwright refuses clicks on obscured elements, so this fails if the
+		// perek text paints over the popover.
+		await menu.getByRole("button", { name: "איפוס התאמות נגישות" }).click();
+		await expect(menu.locator('p[role="status"]')).not.toBeEmpty();
 		await page.keyboard.press("Escape");
 		await expect(menu).toHaveCount(0);
 		await expect(trigger).toBeFocused();
