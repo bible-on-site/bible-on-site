@@ -3426,6 +3426,7 @@ jobs:
           bun run test:version
           node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs
           bun run test:review-audit
+          node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
