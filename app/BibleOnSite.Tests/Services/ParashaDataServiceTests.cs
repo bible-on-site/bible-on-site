@@ -9,6 +9,7 @@ namespace BibleOnSite.Tests.Services;
 /// פרשה על הפרק export consumption: units, ordered Haftarah auxiliaries,
 /// and canonical range clipping against the shared contract tables.
 /// </summary>
+[Collection(PreferencesServiceCollection.Name)]
 public class ParashaDataServiceTests
 {
     private const string DbName = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
@@ -384,9 +385,13 @@ public class ParashaDataServiceTests
         // The parameterless ctor resolves the singletons — preferences must
         // be initialized the way app startup does.
         PreferencesService.Initialize(new InMemoryPreferencesStorage());
-        new BibleOnSite.ViewModels.ParashaViewModel().Should().NotBeNull();
-        new BibleOnSite.ViewModels.ParashaListViewModel().Should().NotBeNull();
-        ParashaDataService.Instance.Should().BeSameAs(ParashaDataService.Instance);
+        try
+        {
+            new BibleOnSite.ViewModels.ParashaViewModel().Should().NotBeNull();
+            new BibleOnSite.ViewModels.ParashaListViewModel().Should().NotBeNull();
+            ParashaDataService.Instance.Should().BeSameAs(ParashaDataService.Instance);
+        }
+        finally { PreferencesService.ResetForTesting(); }
     }
 
     [Fact]

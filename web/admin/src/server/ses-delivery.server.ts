@@ -44,6 +44,11 @@ const SUPPRESSED = "השליחה נעצרה בעקבות שינוי במצב ה�
 const QUEUE_FAILED =
 	"לא ניתן להעביר את כל הנמענים לתור. אפשר לנסות שוב באותה בקשה.";
 
+// SES publishes this plain-text control message when validating its SNS destination.
+// It is not an email event or a send request. Acknowledge only the exact message.
+const SES_SNS_VALIDATION_MESSAGE =
+	"Successfully validated SNS topic for Amazon SES event publishing.";
+
 const TELEGRAM_JOB_ID =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -720,6 +725,14 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					try {
 						payload = JSON.parse(message.Body);
 					} catch {
+						if (message.Body === SES_SNS_VALIDATION_MESSAGE)
+							await client.send(
+								new DeleteMessageCommand({
+									QueueUrl: runtime.queueUrl,
+									ReceiptHandle: message.ReceiptHandle,
+								}),
+								{ abortSignal: AbortSignal.timeout(15_000) },
+							);
 						continue;
 					}
 					let handled = false;
@@ -775,6 +788,21 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 									signal,
 								);
 						}
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						(payload.kind === "bulletin.schedule" ||
+							payload.kind === "bulletin.generate")
+					) {
+						const { processScheduledBulletin } = await import(
+							"./scheduled-bulletin.server"
+						);
+						if (signal.aborted) break;
+						handled = await processScheduledBulletin(payload, signal, {
+							client,
+							url: runtime.queueUrl,
+						});
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
