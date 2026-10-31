@@ -1,6 +1,6 @@
 /* Set the nav background color for the search page */
 body:has(.search-layout) .top-nav {
-  background-color: #1552ac;
+  background-color: var(--accent-600);
 }
 
 .search-layout {
