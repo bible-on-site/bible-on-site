@@ -76,6 +76,8 @@ video {
 	--link-accent-hover: var(--accent-700);
 	--pasuk-num-color: var(--accent-900);
 	--muted-text: #666666;
+	--skeleton-base: #e8ecf2;
+	--skeleton-highlight: #f8fafc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -89,6 +91,8 @@ video {
 		--link-accent-hover: var(--accent-200);
 		--pasuk-num-color: var(--accent-200);
 		--muted-text: #9aa0a6;
+		--skeleton-base: #242a3a;
+		--skeleton-highlight: #2d3548;
 	}
 }
 
@@ -140,6 +144,7 @@ html[data-a11y-contrast="high"] {
 	--hc-on-inverse: #ffffff;
 	--hc-accent: #3d2f8f;
 	--danger-color: #8b0000;
+	--skeleton-base: #d6d6d6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -157,6 +162,7 @@ html[data-a11y-contrast="high"] {
 		--hc-on-inverse: #ffffff;
 		--hc-accent: #b7adf0;
 		--danger-color: #ff8080;
+		--skeleton-base: #333333;
 	}
 }
 
