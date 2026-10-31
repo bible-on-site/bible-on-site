@@ -68,6 +68,13 @@ export interface ResolvedInvalidation {
  */
 const MAX_RESOLVED = 2000;
 
+/**
+ * `src/app/sitemap.ts` is prerendered once and lists every article, author
+ * and pedia entry from uncached DB reads, so only an explicit path
+ * revalidation picks up a created, deleted or renamed one (#1124).
+ */
+const SITEMAP_PATH = "/sitemap.xml";
+
 interface Sink {
 	tags: Set<string>;
 	paths: Set<string>;
@@ -421,6 +428,7 @@ function addPediaEntryDeps(
 		addPath(sink, `/pedia/${name}`);
 	}
 	addPath(sink, "/pedia");
+	addPath(sink, SITEMAP_PATH);
 	for (const entityType of entityTypes) {
 		const path = categoryPath(entityType);
 		if (path) addPath(sink, path);
@@ -438,6 +446,7 @@ async function resolveArticle(
 	change: Extract<EntityChange, { kind: "article" }>,
 ) {
 	addTag(sink, articleTag(change.id));
+	addPath(sink, SITEMAP_PATH);
 	for (const perekId of change.perekIds) {
 		addTag(sink, perekArticlesTag(perekId));
 		addPath(sink, `/929/${perekId}`);
@@ -475,6 +484,7 @@ async function resolveAuthor(
 	// The index lists every author.
 	addTag(sink, COLLECTION_TAGS.authors);
 	addPath(sink, "/929/authors");
+	addPath(sink, SITEMAP_PATH);
 	for (const name of [change.name, change.oldName]) {
 		if (!name) continue;
 		addTag(sink, authorTag(normalizeAuthorName(name)));
