@@ -434,6 +434,16 @@
 	cursor: pointer;
 	font: inherit;
 	padding: 2px 8px;
+	position: relative;
+}
+/* Compact chip, 44px-tall hit area. */
+.pasukSelectionButton::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	top: 50%;
+	height: 44px;
+	transform: translateY(-50%);
 }
 .pasukSelectionButton:hover {
 	background: color-mix(

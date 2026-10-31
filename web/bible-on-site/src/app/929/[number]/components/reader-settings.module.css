@@ -10,6 +10,7 @@
 	}
 }
 .button {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -21,6 +22,13 @@
 	color: #1c2c5d;
 	cursor: pointer;
 	box-shadow: 0 1px 3px #0002;
+}
+/* 40px visual, 44px hit area. */
+.button::before {
+	content: "";
+	position: absolute;
+	inset: -2px;
+	border-radius: 50%;
 }
 .button:hover {
 	background: #e9eff8;
@@ -62,6 +70,8 @@
 	background: transparent;
 	color: var(--muted-text, #637598);
 	font-size: 24px;
+	min-width: 44px;
+	min-height: 44px;
 	padding: 0 6px;
 	cursor: pointer;
 }
@@ -75,6 +85,7 @@
 }
 .categories button {
 	flex: 1;
+	min-height: 44px;
 	border: 0;
 	padding: 9px;
 	background: transparent;
@@ -113,6 +124,7 @@
 	direction: ltr;
 }
 .section select {
+	min-height: 44px;
 	padding: 9px;
 	border: 1px solid #d8e1ef;
 	border-radius: 8px;
