@@ -5,15 +5,16 @@ using BibleOnSite.ViewModels;
 namespace BibleOnSite.Pages;
 
 /// <summary>
-/// עלון יומי (#2806): the daily-bulletin join carousel mirroring the website's
-/// public join surface — Telegram, WhatsApp and email cards. Supports the
-/// ?channel= deep link used by the flyout קבוצת ווטסאפ entry.
+/// עלון יומי (#2806): the daily-bulletin join cards mirroring the website's
+/// public join surface — Telegram, WhatsApp and email. Supports the
+/// ?channel= deep link, which scrolls the matching card into view.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration and controls.
 public partial class DailyBulletinPage : ContentPage, IQueryAttributable
 #pragma warning restore S2333
 {
     private readonly DailyBulletinViewModel _viewModel;
+    private int? _pendingCardIndex;
 
     public DailyBulletinPage()
     {
@@ -23,10 +24,10 @@ public partial class DailyBulletinPage : ContentPage, IQueryAttributable
     }
 
     /// <summary>
-    /// ?channel=whatsapp (and friends) selects the matching card. Before the
-    /// carousel exists the bound Position lands the card without motion; on an
-    /// already-presented page a reduced-motion user gets an instant ScrollTo
-    /// instead of an animated one.
+    /// ?channel=whatsapp (and friends) reveals the matching card. Before the
+    /// first layout the index is held until <see cref="OnSizeAllocated"/>;
+    /// a reduced-motion user then gets an instant scroll instead of an
+    /// animated one.
     /// </summary>
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
@@ -35,14 +36,30 @@ public partial class DailyBulletinPage : ContentPage, IQueryAttributable
             return;
         }
 
-        var index = BulletinJoinCards.PositionForKey(key);
-        if (BulletinCarousel.Handler is null || MotionPreferences.PlatformPrefersMotion())
+        _pendingCardIndex = BulletinJoinCards.PositionForKey(key);
+        RevealPendingCard();
+    }
+
+    protected override void OnSizeAllocated(double width, double height)
+    {
+        base.OnSizeAllocated(width, height);
+        RevealPendingCard();
+    }
+
+    private async void RevealPendingCard()
+    {
+        if (_pendingCardIndex is not { } index
+            || index >= JoinCards.Children.Count
+            || CardsScroll.Height <= 0)
         {
-            _viewModel.Position = index;
+            return;
         }
-        else
+
+        _pendingCardIndex = null;
+        if (JoinCards.Children[index] is VisualElement card)
         {
-            BulletinCarousel.ScrollTo(index, animate: false);
+            await CardsScroll.ScrollToAsync(
+                card, ScrollToPosition.Center, MotionPreferences.PlatformPrefersMotion());
         }
     }
 }
