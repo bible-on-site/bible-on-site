@@ -276,6 +276,7 @@ jobs:
         with:
           distribution: "microsoft"
           java-version: "17"
+          verify-signature: true
 
       - name: Hash NuGet dependency inputs
         id: nuget-key

@@ -3088,7435 +3088,7435 @@ INSERT INTO tanah_perek (id, perek, header)
 VALUES (929, 929, '');
 -- tanah_perek_date
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (1, 1, '2014-03-28', '57750329', '17:16:00');
+VALUES (1, 1, '2014-12-21', '57750329', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (1, 2, '2017-11-03', '57781103', '20:24:00');
+VALUES (1, 2, '2018-07-15', '57781103', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (1, 3, '2021-12-05', '57821305', '17:52:00');
+VALUES (1, 3, '2022-02-06', '57821305', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (1, 4, '2024-12-07', '57851207', '19:40:00');
+VALUES (1, 4, '2025-08-31', '57851207', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (2, 1, '2014-03-28', '57750330', '17:17:00');
+VALUES (2, 1, '2014-12-22', '57750330', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (2, 2, '2017-11-04', '57781104', '20:24:00');
+VALUES (2, 2, '2018-07-16', '57781104', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (2, 3, '2021-12-06', '57821306', '17:53:00');
+VALUES (2, 3, '2022-02-07', '57821306', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (2, 4, '2024-12-08', '57851208', '19:38:00');
+VALUES (2, 4, '2025-09-01', '57851208', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (3, 1, '2014-04-01', '57750401', '17:17:00');
+VALUES (3, 1, '2014-12-23', '57750401', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (3, 2, '2017-11-05', '57781105', '20:23:00');
+VALUES (3, 2, '2018-07-17', '57781105', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (3, 3, '2021-12-07', '57821307', '17:54:00');
+VALUES (3, 3, '2022-02-08', '57821307', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (3, 4, '2024-12-09', '57851209', '19:37:00');
+VALUES (3, 4, '2025-09-02', '57851209', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (4, 1, '2014-04-02', '57750402', '17:18:00');
+VALUES (4, 1, '2014-12-24', '57750402', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (4, 2, '2017-11-06', '57781106', '20:23:00');
+VALUES (4, 2, '2018-07-18', '57781106', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (4, 3, '2021-12-08', '57821308', '17:55:00');
+VALUES (4, 3, '2022-02-09', '57821308', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (4, 4, '2024-12-10', '57851210', '19:36:00');
+VALUES (4, 4, '2025-09-03', '57851210', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (5, 1, '2014-04-03', '57750403', '17:18:00');
+VALUES (5, 1, '2014-12-25', '57750403', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (5, 2, '2017-11-07', '57781107', '20:22:00');
+VALUES (5, 2, '2018-07-19', '57781107', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (5, 3, '2021-12-09', '57821309', '17:55:00');
+VALUES (5, 3, '2022-02-10', '57821309', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (5, 4, '2024-12-11', '57851211', '19:34:00');
+VALUES (5, 4, '2025-09-04', '57851211', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (6, 1, '2014-04-06', '57750406', '17:20:00');
+VALUES (6, 1, '2014-12-28', '57750406', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (6, 2, '2017-11-10', '57781110', '20:20:00');
+VALUES (6, 2, '2018-07-22', '57781110', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (6, 3, '2021-12-12', '57821312', '17:58:00');
+VALUES (6, 3, '2022-02-13', '57821312', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (6, 4, '2024-12-14', '57851214', '19:30:00');
+VALUES (6, 4, '2025-09-07', '57851214', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (7, 1, '2014-04-07', '57750407', '17:20:00');
+VALUES (7, 1, '2014-12-29', '57750407', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (7, 2, '2017-11-11', '57781111', '20:20:00');
+VALUES (7, 2, '2018-07-23', '57781111', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (7, 3, '2021-12-13', '57821313', '17:59:00');
+VALUES (7, 3, '2022-02-14', '57821313', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (7, 4, '2024-12-15', '57851215', '19:29:00');
+VALUES (7, 4, '2025-09-08', '57851215', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (8, 1, '2014-04-08', '57750408', '17:21:00');
+VALUES (8, 1, '2014-12-30', '57750408', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (8, 2, '2017-11-12', '57781112', '20:19:00');
+VALUES (8, 2, '2018-07-24', '57781112', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (8, 3, '2021-12-14', '57821314', '17:59:00');
+VALUES (8, 3, '2022-02-15', '57821314', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (8, 4, '2024-12-16', '57851216', '19:28:00');
+VALUES (8, 4, '2025-09-09', '57851216', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (9, 1, '2014-04-09', '57750409', '17:22:00');
+VALUES (9, 1, '2014-12-31', '57750409', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (9, 2, '2017-11-13', '57781113', '20:18:00');
+VALUES (9, 2, '2018-07-25', '57781113', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (9, 3, '2021-12-15', '57821315', '18:00:00');
+VALUES (9, 3, '2022-02-16', '57821315', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (9, 4, '2024-12-17', '57851217', '19:26:00');
+VALUES (9, 4, '2025-09-10', '57851217', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (10, 1, '2014-04-10', '57750410', '17:22:00');
+VALUES (10, 1, '2015-01-01', '57750410', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (10, 2, '2017-11-14', '57781114', '20:18:00');
+VALUES (10, 2, '2018-07-26', '57781114', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (10, 3, '2021-12-16', '57821316', '18:01:00');
+VALUES (10, 3, '2022-02-17', '57821316', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (10, 4, '2024-12-18', '57851218', '19:25:00');
+VALUES (10, 4, '2025-09-11', '57851218', '19:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (11, 1, '2014-04-13', '57750413', '17:25:00');
+VALUES (11, 1, '2015-01-04', '57750413', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (11, 2, '2017-11-17', '57781117', '20:15:00');
+VALUES (11, 2, '2018-07-29', '57781117', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (11, 3, '2021-12-19', '57821319', '18:03:00');
+VALUES (11, 3, '2022-02-20', '57821319', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (11, 4, '2024-12-21', '57851221', '19:21:00');
+VALUES (11, 4, '2025-09-14', '57851221', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (12, 1, '2014-04-14', '57750414', '17:25:00');
+VALUES (12, 1, '2015-01-05', '57750414', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (12, 2, '2017-11-18', '57781118', '20:15:00');
+VALUES (12, 2, '2018-07-30', '57781118', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (12, 3, '2021-12-20', '57821320', '18:04:00');
+VALUES (12, 3, '2022-02-21', '57821320', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (12, 4, '2024-12-22', '57851222', '19:19:00');
+VALUES (12, 4, '2025-09-15', '57851222', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (13, 1, '2014-04-15', '57750415', '17:26:00');
+VALUES (13, 1, '2015-01-06', '57750415', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (13, 2, '2017-11-19', '57781119', '20:14:00');
+VALUES (13, 2, '2018-07-31', '57781119', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (13, 3, '2021-12-21', '57821321', '18:05:00');
+VALUES (13, 3, '2022-02-22', '57821321', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (13, 4, '2024-12-23', '57851223', '19:18:00');
+VALUES (13, 4, '2025-09-16', '57851223', '19:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (14, 1, '2014-04-16', '57750416', '17:27:00');
+VALUES (14, 1, '2015-01-07', '57750416', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (14, 2, '2017-11-20', '57781120', '20:13:00');
+VALUES (14, 2, '2018-08-01', '57781120', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (14, 3, '2021-12-22', '57821322', '18:06:00');
+VALUES (14, 3, '2022-02-23', '57821322', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (14, 4, '2024-12-24', '57851224', '19:17:00');
+VALUES (14, 4, '2025-09-17', '57851224', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (15, 1, '2014-04-17', '57750417', '17:27:00');
+VALUES (15, 1, '2015-01-08', '57750417', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (15, 2, '2017-11-21', '57781121', '20:12:00');
+VALUES (15, 2, '2018-08-02', '57781121', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (15, 3, '2021-12-23', '57821323', '18:07:00');
+VALUES (15, 3, '2022-02-24', '57821323', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (15, 4, '2024-12-25', '57851225', '19:15:00');
+VALUES (15, 4, '2025-09-18', '57851225', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (16, 1, '2014-04-20', '57750420', '17:30:00');
+VALUES (16, 1, '2015-01-11', '57750420', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (16, 2, '2017-11-24', '57781124', '20:09:00');
+VALUES (16, 2, '2018-08-05', '57781124', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (16, 3, '2021-12-26', '57821326', '18:09:00');
+VALUES (16, 3, '2022-02-27', '57821326', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (16, 4, '2024-12-28', '57851228', '19:11:00');
+VALUES (16, 4, '2025-09-21', '57851228', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (17, 1, '2014-04-21', '57750421', '17:31:00');
+VALUES (17, 1, '2015-01-12', '57750421', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (17, 2, '2017-11-25', '57781125', '20:08:00');
+VALUES (17, 2, '2018-08-06', '57781125', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (17, 3, '2021-12-27', '57821327', '18:09:00');
+VALUES (17, 3, '2022-02-28', '57821327', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (17, 4, '2024-12-28', '57851229', '19:10:00');
+VALUES (17, 4, '2025-09-22', '57851229', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (18, 1, '2014-04-22', '57750422', '17:31:00');
+VALUES (18, 1, '2015-01-13', '57750422', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (18, 2, '2017-11-26', '57781126', '20:07:00');
+VALUES (18, 2, '2018-08-07', '57781126', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (18, 3, '2021-12-28', '57821328', '18:10:00');
+VALUES (18, 3, '2022-03-01', '57821328', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (18, 4, '2025-01-01', '57860101', '19:09:00');
+VALUES (18, 4, '2025-09-23', '57860101', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (19, 1, '2014-04-23', '57750423', '17:32:00');
+VALUES (19, 1, '2015-01-14', '57750423', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (19, 2, '2017-11-27', '57781127', '20:06:00');
+VALUES (19, 2, '2018-08-08', '57781127', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (19, 3, '2021-12-28', '57821329', '18:11:00');
+VALUES (19, 3, '2022-03-02', '57821329', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (19, 4, '2025-01-02', '57860102', '19:07:00');
+VALUES (19, 4, '2025-09-24', '57860102', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (20, 1, '2014-04-24', '57750424', '17:33:00');
+VALUES (20, 1, '2015-01-15', '57750424', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (20, 2, '2017-11-28', '57781128', '20:05:00');
+VALUES (20, 2, '2018-08-09', '57781128', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (20, 3, '2021-12-28', '57821330', '18:12:00');
+VALUES (20, 3, '2022-03-03', '57821330', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (20, 4, '2025-01-03', '57860103', '19:06:00');
+VALUES (20, 4, '2025-09-25', '57860103', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (21, 1, '2014-04-27', '57750427', '17:36:00');
+VALUES (21, 1, '2015-01-18', '57750427', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (21, 2, '2017-12-01', '57781201', '20:02:00');
+VALUES (21, 2, '2018-08-12', '57781201', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (21, 3, '2021-12-03', '57821403', '18:14:00');
+VALUES (21, 3, '2022-03-06', '57821403', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (21, 4, '2025-01-06', '57860106', '19:02:00');
+VALUES (21, 4, '2025-09-28', '57860106', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (22, 1, '2014-04-28', '57750428', '17:36:00');
+VALUES (22, 1, '2015-01-19', '57750428', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (22, 2, '2017-12-02', '57781202', '20:01:00');
+VALUES (22, 2, '2018-08-13', '57781202', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (22, 3, '2021-12-04', '57821404', '18:15:00');
+VALUES (22, 3, '2022-03-07', '57821404', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (22, 4, '2025-01-07', '57860107', '19:01:00');
+VALUES (22, 4, '2025-09-29', '57860107', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (23, 1, '2014-04-28', '57750429', '17:37:00');
+VALUES (23, 1, '2015-01-20', '57750429', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (23, 2, '2017-12-03', '57781203', '20:00:00');
+VALUES (23, 2, '2018-08-14', '57781203', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (23, 3, '2021-12-05', '57821405', '18:15:00');
+VALUES (23, 3, '2022-03-08', '57821405', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (23, 4, '2025-01-08', '57860108', '18:59:00');
+VALUES (23, 4, '2025-09-30', '57860108', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (24, 1, '2014-05-01', '57750501', '17:38:00');
+VALUES (24, 1, '2015-01-21', '57750501', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (24, 2, '2017-12-04', '57781204', '19:59:00');
+VALUES (24, 2, '2018-08-15', '57781204', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (24, 3, '2021-12-06', '57821406', '18:16:00');
+VALUES (24, 3, '2022-03-09', '57821406', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (24, 4, '2025-01-09', '57860109', '18:58:00');
+VALUES (24, 4, '2025-10-01', '57860109', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (25, 1, '2014-05-02', '57750502', '17:39:00');
+VALUES (25, 1, '2015-01-22', '57750502', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (25, 2, '2017-12-05', '57781205', '19:58:00');
+VALUES (25, 2, '2018-08-16', '57781205', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (25, 3, '2021-12-07', '57821407', '18:17:00');
+VALUES (25, 3, '2022-03-10', '57821407', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (25, 4, '2025-01-10', '57860110', '18:57:00');
+VALUES (25, 4, '2025-10-02', '57860110', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (26, 1, '2014-05-05', '57750505', '17:42:00');
+VALUES (26, 1, '2015-01-25', '57750505', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (26, 2, '2017-12-08', '57781208', '19:55:00');
+VALUES (26, 2, '2018-08-19', '57781208', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (26, 3, '2021-12-10', '57821410', '18:19:00');
+VALUES (26, 3, '2022-03-13', '57821410', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (26, 4, '2025-01-13', '57860113', '18:53:00');
+VALUES (26, 4, '2025-10-05', '57860113', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (27, 1, '2014-05-06', '57750506', '17:42:00');
+VALUES (27, 1, '2015-01-26', '57750506', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (27, 2, '2017-12-09', '57781209', '19:53:00');
+VALUES (27, 2, '2018-08-20', '57781209', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (27, 3, '2021-12-11', '57821411', '18:19:00');
+VALUES (27, 3, '2022-03-14', '57821411', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (27, 4, '2025-01-14', '57860114', '18:52:00');
+VALUES (27, 4, '2025-10-06', '57860114', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (28, 1, '2014-05-07', '57750507', '17:43:00');
+VALUES (28, 1, '2015-01-27', '57750507', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (28, 2, '2017-12-10', '57781210', '19:52:00');
+VALUES (28, 2, '2018-08-21', '57781210', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (28, 3, '2021-12-12', '57821412', '18:20:00');
+VALUES (28, 3, '2022-03-15', '57821412', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (28, 4, '2025-01-15', '57860115', '18:51:00');
+VALUES (28, 4, '2025-10-07', '57860115', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (29, 1, '2014-05-08', '57750508', '17:44:00');
+VALUES (29, 1, '2015-01-28', '57750508', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (29, 2, '2017-12-11', '57781211', '19:51:00');
+VALUES (29, 2, '2018-08-22', '57781211', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (29, 3, '2021-12-13', '57821413', '18:21:00');
+VALUES (29, 3, '2022-03-16', '57821413', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (29, 4, '2025-01-16', '57860116', '18:49:00');
+VALUES (29, 4, '2025-10-08', '57860116', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (30, 1, '2014-05-09', '57750509', '17:45:00');
+VALUES (30, 1, '2015-01-29', '57750509', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (30, 2, '2017-12-12', '57781212', '19:50:00');
+VALUES (30, 2, '2018-08-23', '57781212', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (30, 3, '2021-12-14', '57821414', '18:21:00');
+VALUES (30, 3, '2022-03-17', '57821414', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (30, 4, '2025-01-17', '57860117', '18:48:00');
+VALUES (30, 4, '2025-10-09', '57860117', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (31, 1, '2014-05-12', '57750512', '17:48:00');
+VALUES (31, 1, '2015-02-01', '57750512', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (31, 2, '2017-12-15', '57781215', '19:46:00');
+VALUES (31, 2, '2018-08-26', '57781215', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (31, 3, '2021-12-17', '57821417', '18:23:00');
+VALUES (31, 3, '2022-03-20', '57821417', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (31, 4, '2025-01-20', '57860120', '18:44:00');
+VALUES (31, 4, '2025-10-12', '57860120', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (32, 1, '2014-05-13', '57750513', '17:48:00');
+VALUES (32, 1, '2015-02-02', '57750513', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (32, 2, '2017-12-16', '57781216', '19:45:00');
+VALUES (32, 2, '2018-08-27', '57781216', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (32, 3, '2021-12-18', '57821418', '18:24:00');
+VALUES (32, 3, '2022-03-21', '57821418', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (32, 4, '2025-01-21', '57860121', '18:43:00');
+VALUES (32, 4, '2025-10-13', '57860121', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (33, 1, '2014-05-14', '57750514', '17:49:00');
+VALUES (33, 1, '2015-02-03', '57750514', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (33, 2, '2017-12-17', '57781217', '19:44:00');
+VALUES (33, 2, '2018-08-28', '57781217', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (33, 3, '2021-12-19', '57821419', '18:25:00');
+VALUES (33, 3, '2022-03-22', '57821419', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (33, 4, '2025-01-22', '57860122', '18:42:00');
+VALUES (33, 4, '2025-10-14', '57860122', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (34, 1, '2014-05-15', '57750515', '17:50:00');
+VALUES (34, 1, '2015-02-04', '57750515', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (34, 2, '2017-12-18', '57781218', '19:42:00');
+VALUES (34, 2, '2018-08-29', '57781218', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (34, 3, '2021-12-20', '57821420', '18:26:00');
+VALUES (34, 3, '2022-03-23', '57821420', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (34, 4, '2025-01-23', '57860123', '18:41:00');
+VALUES (34, 4, '2025-10-15', '57860123', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (35, 1, '2014-05-16', '57750516', '17:51:00');
+VALUES (35, 1, '2015-02-05', '57750516', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (35, 2, '2017-12-19', '57781219', '19:41:00');
+VALUES (35, 2, '2018-08-30', '57781219', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (35, 3, '2021-12-21', '57821421', '18:26:00');
+VALUES (35, 3, '2022-03-24', '57821421', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (35, 4, '2025-01-24', '57860124', '18:40:00');
+VALUES (35, 4, '2025-10-16', '57860124', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (36, 1, '2014-05-19', '57750519', '17:54:00');
+VALUES (36, 1, '2015-02-08', '57750519', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (36, 2, '2017-12-22', '57781222', '19:37:00');
+VALUES (36, 2, '2018-09-02', '57781222', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (36, 3, '2021-12-24', '57821424', '19:28:00');
+VALUES (36, 3, '2022-03-27', '57821424', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (36, 4, '2025-01-27', '57860127', '18:37:00');
+VALUES (36, 4, '2025-10-19', '57860127', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (37, 1, '2014-05-20', '57750520', '17:54:00');
+VALUES (37, 1, '2015-02-09', '57750520', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (37, 2, '2017-12-23', '57781223', '19:36:00');
+VALUES (37, 2, '2018-09-03', '57781223', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (37, 3, '2021-12-25', '57821425', '19:29:00');
+VALUES (37, 3, '2022-03-28', '57821425', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (37, 4, '2025-01-28', '57860128', '18:36:00');
+VALUES (37, 4, '2025-10-20', '57860128', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (38, 1, '2014-05-21', '57750521', '17:55:00');
+VALUES (38, 1, '2015-02-10', '57750521', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (38, 2, '2017-12-24', '57781224', '19:35:00');
+VALUES (38, 2, '2018-09-04', '57781224', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (38, 3, '2021-12-26', '57821426', '19:30:00');
+VALUES (38, 3, '2022-03-29', '57821426', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (38, 4, '2025-01-28', '57860129', '18:35:00');
+VALUES (38, 4, '2025-10-21', '57860129', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (39, 1, '2014-05-22', '57750522', '17:56:00');
+VALUES (39, 1, '2015-02-11', '57750522', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (39, 2, '2017-12-25', '57781225', '19:33:00');
+VALUES (39, 2, '2018-09-05', '57781225', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (39, 3, '2021-12-27', '57821427', '19:30:00');
+VALUES (39, 3, '2022-03-30', '57821427', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (39, 4, '2025-01-28', '57860130', '18:34:00');
+VALUES (39, 4, '2025-10-22', '57860130', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (40, 1, '2014-05-23', '57750523', '17:57:00');
+VALUES (40, 1, '2015-02-12', '57750523', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (40, 2, '2017-12-26', '57781226', '19:32:00');
+VALUES (40, 2, '2018-09-06', '57781226', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (40, 3, '2021-12-28', '57821428', '19:31:00');
+VALUES (40, 3, '2022-03-31', '57821428', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (40, 4, '2025-02-01', '57860201', '18:33:00');
+VALUES (40, 4, '2025-10-23', '57860201', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (41, 1, '2014-05-26', '57750526', '17:59:00');
+VALUES (41, 1, '2015-02-15', '57750526', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (41, 2, '2017-12-28', '57781229', '19:28:00');
+VALUES (41, 2, '2018-09-09', '57781229', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (41, 3, '2021-07-02', '57820702', '19:33:00');
+VALUES (41, 3, '2022-04-03', '57820702', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (41, 4, '2025-02-04', '57860204', '17:30:00');
+VALUES (41, 4, '2025-10-26', '57860204', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (42, 1, '2014-05-27', '57750527', '18:00:00');
+VALUES (42, 1, '2015-02-16', '57750527', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (42, 2, '2018-01-01', '57790101', '19:27:00');
+VALUES (42, 2, '2018-09-10', '57790101', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (42, 3, '2021-07-03', '57820703', '19:34:00');
+VALUES (42, 3, '2022-04-04', '57820703', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (42, 4, '2025-02-05', '57860205', '17:29:00');
+VALUES (42, 4, '2025-10-27', '57860205', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (43, 1, '2014-05-28', '57750528', '18:01:00');
+VALUES (43, 1, '2015-02-17', '57750528', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (43, 2, '2018-01-02', '57790102', '19:25:00');
+VALUES (43, 2, '2018-09-11', '57790102', '19:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (43, 3, '2021-07-04', '57820704', '19:35:00');
+VALUES (43, 3, '2022-04-05', '57820704', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (43, 4, '2025-02-06', '57860206', '17:28:00');
+VALUES (43, 4, '2025-10-28', '57860206', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (44, 1, '2014-05-28', '57750529', '18:02:00');
+VALUES (44, 1, '2015-02-18', '57750529', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (44, 2, '2018-01-03', '57790103', '19:24:00');
+VALUES (44, 2, '2018-09-12', '57790103', '19:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (44, 3, '2021-07-05', '57820705', '19:35:00');
+VALUES (44, 3, '2022-04-06', '57820705', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (44, 4, '2025-02-07', '57860207', '17:27:00');
+VALUES (44, 4, '2025-10-29', '57860207', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (45, 1, '2014-05-28', '57750530', '18:03:00');
+VALUES (45, 1, '2015-02-19', '57750530', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (45, 2, '2018-01-04', '57790104', '19:22:00');
+VALUES (45, 2, '2018-09-13', '57790104', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (45, 3, '2021-07-06', '57820706', '19:36:00');
+VALUES (45, 3, '2022-04-07', '57820706', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (45, 4, '2025-02-08', '57860208', '17:26:00');
+VALUES (45, 4, '2025-10-30', '57860208', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (46, 1, '2014-06-03', '57750603', '18:05:00');
+VALUES (46, 1, '2015-02-22', '57750603', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (46, 2, '2018-01-07', '57790107', '19:18:00');
+VALUES (46, 2, '2018-09-16', '57790107', '19:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (46, 3, '2021-07-09', '57820709', '19:38:00');
+VALUES (46, 3, '2022-04-10', '57820709', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (46, 4, '2025-02-11', '57860211', '17:24:00');
+VALUES (46, 4, '2025-11-02', '57860211', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (47, 1, '2014-06-04', '57750604', '18:06:00');
+VALUES (47, 1, '2015-02-23', '57750604', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (47, 2, '2018-01-08', '57790108', '19:17:00');
+VALUES (47, 2, '2018-09-17', '57790108', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (47, 3, '2021-07-10', '57820710', '19:39:00');
+VALUES (47, 3, '2022-04-11', '57820710', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (47, 4, '2025-02-12', '57860212', '17:23:00');
+VALUES (47, 4, '2025-11-03', '57860212', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (48, 1, '2014-06-05', '57750605', '18:06:00');
+VALUES (48, 1, '2015-02-24', '57750605', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (48, 2, '2018-01-09', '57790109', '19:16:00');
+VALUES (48, 2, '2018-09-18', '57790109', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (48, 3, '2021-07-11', '57820711', '19:40:00');
+VALUES (48, 3, '2022-04-12', '57820711', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (48, 4, '2025-02-13', '57860213', '17:22:00');
+VALUES (48, 4, '2025-11-04', '57860213', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (49, 1, '2014-06-06', '57750606', '18:07:00');
+VALUES (49, 1, '2015-02-25', '57750606', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (49, 2, '2018-01-10', '57790110', '19:14:00');
+VALUES (49, 2, '2018-09-19', '57790110', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (49, 3, '2021-07-12', '57820712', '19:40:00');
+VALUES (49, 3, '2022-04-13', '57820712', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (49, 4, '2025-02-14', '57860214', '17:21:00');
+VALUES (49, 4, '2025-11-05', '57860214', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (50, 1, '2014-06-07', '57750607', '18:08:00');
+VALUES (50, 1, '2015-02-26', '57750607', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (50, 2, '2018-01-11', '57790111', '19:13:00');
+VALUES (50, 2, '2018-09-20', '57790111', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (50, 3, '2021-07-13', '57820713', '19:41:00');
+VALUES (50, 3, '2022-04-14', '57820713', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (50, 4, '2025-02-15', '57860215', '17:21:00');
+VALUES (50, 4, '2025-11-06', '57860215', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (51, 1, '2014-06-10', '57750610', '18:10:00');
+VALUES (51, 1, '2015-03-01', '57750610', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (51, 2, '2018-01-14', '57790114', '19:09:00');
+VALUES (51, 2, '2018-09-23', '57790114', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (51, 3, '2021-07-16', '57820716', '19:43:00');
+VALUES (51, 3, '2022-04-17', '57820716', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (51, 4, '2025-02-18', '57860218', '17:19:00');
+VALUES (51, 4, '2025-11-09', '57860218', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (52, 1, '2014-06-11', '57750611', '18:11:00');
+VALUES (52, 1, '2015-03-02', '57750611', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (52, 2, '2018-01-15', '57790115', '19:08:00');
+VALUES (52, 2, '2018-09-24', '57790115', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (52, 3, '2021-07-17', '57820717', '19:44:00');
+VALUES (52, 3, '2022-04-18', '57820717', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (52, 4, '2025-02-19', '57860219', '17:18:00');
+VALUES (52, 4, '2025-11-10', '57860219', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (53, 1, '2014-06-12', '57750612', '18:12:00');
+VALUES (53, 1, '2015-03-03', '57750612', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (53, 2, '2018-01-16', '57790116', '19:06:00');
+VALUES (53, 2, '2018-09-25', '57790116', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (53, 3, '2021-07-18', '57820718', '19:45:00');
+VALUES (53, 3, '2022-04-19', '57820718', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (53, 4, '2025-02-20', '57860220', '17:18:00');
+VALUES (53, 4, '2025-11-11', '57860220', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (54, 1, '2014-06-13', '57750613', '18:12:00');
+VALUES (54, 1, '2015-03-04', '57750613', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (54, 2, '2018-01-17', '57790117', '19:05:00');
+VALUES (54, 2, '2018-09-26', '57790117', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (54, 3, '2021-07-19', '57820719', '19:46:00');
+VALUES (54, 3, '2022-04-20', '57820719', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (54, 4, '2025-02-21', '57860221', '17:17:00');
+VALUES (54, 4, '2025-11-12', '57860221', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (55, 1, '2014-06-14', '57750614', '18:13:00');
+VALUES (55, 1, '2015-03-05', '57750614', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (55, 2, '2018-01-18', '57790118', '19:04:00');
+VALUES (55, 2, '2018-09-27', '57790118', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (55, 3, '2021-07-20', '57820720', '19:46:00');
+VALUES (55, 3, '2022-04-21', '57820720', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (55, 4, '2025-02-22', '57860222', '17:17:00');
+VALUES (55, 4, '2025-11-13', '57860222', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (56, 1, '2014-06-17', '57750617', '18:15:00');
+VALUES (56, 1, '2015-03-08', '57750617', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (56, 2, '2018-01-21', '57790121', '19:00:00');
+VALUES (56, 2, '2018-09-30', '57790121', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (56, 3, '2021-07-23', '57820723', '19:49:00');
+VALUES (56, 3, '2022-04-24', '57820723', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (56, 4, '2025-02-25', '57860225', '17:15:00');
+VALUES (56, 4, '2025-11-16', '57860225', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (57, 1, '2014-06-18', '57750618', '18:16:00');
+VALUES (57, 1, '2015-03-09', '57750618', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (57, 2, '2018-01-22', '57790122', '18:58:00');
+VALUES (57, 2, '2018-10-01', '57790122', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (57, 3, '2021-07-24', '57820724', '19:50:00');
+VALUES (57, 3, '2022-04-25', '57820724', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (57, 4, '2025-02-26', '57860226', '17:15:00');
+VALUES (57, 4, '2025-11-17', '57860226', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (58, 1, '2014-06-19', '57750619', '18:16:00');
+VALUES (58, 1, '2015-03-10', '57750619', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (58, 2, '2018-01-23', '57790123', '18:57:00');
+VALUES (58, 2, '2018-10-02', '57790123', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (58, 3, '2021-07-25', '57820725', '19:50:00');
+VALUES (58, 3, '2022-04-26', '57820725', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (58, 4, '2025-02-27', '57860227', '17:14:00');
+VALUES (58, 4, '2025-11-18', '57860227', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (59, 1, '2014-06-20', '57750620', '18:17:00');
+VALUES (59, 1, '2015-03-11', '57750620', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (59, 2, '2018-01-24', '57790124', '18:56:00');
+VALUES (59, 2, '2018-10-03', '57790124', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (59, 3, '2021-07-26', '57820726', '19:51:00');
+VALUES (59, 3, '2022-04-27', '57820726', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (59, 4, '2025-02-28', '57860228', '17:14:00');
+VALUES (59, 4, '2025-11-19', '57860228', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (60, 1, '2014-06-21', '57750621', '18:18:00');
+VALUES (60, 1, '2015-03-12', '57750621', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (60, 2, '2018-01-25', '57790125', '18:55:00');
+VALUES (60, 2, '2018-10-04', '57790125', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (60, 3, '2021-07-27', '57820727', '19:52:00');
+VALUES (60, 3, '2022-04-28', '57820727', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (60, 4, '2025-02-28', '57860229', '17:14:00');
+VALUES (60, 4, '2025-11-20', '57860229', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (61, 1, '2014-06-24', '57750624', '18:20:00');
+VALUES (61, 1, '2015-03-15', '57750624', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (61, 2, '2018-01-28', '57790128', '18:51:00');
+VALUES (61, 2, '2018-10-07', '57790128', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (61, 3, '2021-07-28', '57820730', '19:54:00');
+VALUES (61, 3, '2022-05-01', '57820730', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (61, 4, '2025-03-03', '57860303', '17:13:00');
+VALUES (61, 4, '2025-11-23', '57860303', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (62, 1, '2014-06-25', '57750625', '18:21:00');
+VALUES (62, 1, '2015-03-16', '57750625', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (62, 2, '2018-01-28', '57790129', '18:50:00');
+VALUES (62, 2, '2018-10-08', '57790129', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (62, 3, '2021-08-01', '57820801', '19:55:00');
+VALUES (62, 3, '2022-05-02', '57820801', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (62, 4, '2025-03-04', '57860304', '17:13:00');
+VALUES (62, 4, '2025-11-24', '57860304', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (63, 1, '2014-06-26', '57750626', '18:21:00');
+VALUES (63, 1, '2015-03-17', '57750626', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (63, 2, '2018-01-28', '57790130', '18:48:00');
+VALUES (63, 2, '2018-10-09', '57790130', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (63, 3, '2021-08-02', '57820802', '19:56:00');
+VALUES (63, 3, '2022-05-03', '57820802', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (63, 4, '2025-03-05', '57860305', '17:12:00');
+VALUES (63, 4, '2025-11-25', '57860305', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (64, 1, '2014-06-27', '57750627', '18:22:00');
+VALUES (64, 1, '2015-03-18', '57750627', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (64, 2, '2018-02-01', '57790201', '18:47:00');
+VALUES (64, 2, '2018-10-10', '57790201', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (64, 3, '2021-08-03', '57820803', '19:57:00');
+VALUES (64, 3, '2022-05-04', '57820803', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (64, 4, '2025-03-06', '57860306', '17:12:00');
+VALUES (64, 4, '2025-11-26', '57860306', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (65, 1, '2014-06-28', '57750628', '18:23:00');
+VALUES (65, 1, '2015-03-19', '57750628', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (65, 2, '2018-02-02', '57790202', '18:46:00');
+VALUES (65, 2, '2018-10-11', '57790202', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (65, 3, '2021-08-04', '57820804', '19:58:00');
+VALUES (65, 3, '2022-05-05', '57820804', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (65, 4, '2025-03-07', '57860307', '17:12:00');
+VALUES (65, 4, '2025-11-27', '57860307', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (66, 1, '2014-07-02', '57750702', '18:25:00');
+VALUES (66, 1, '2015-03-22', '57750702', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (66, 2, '2018-02-05', '57790205', '18:42:00');
+VALUES (66, 2, '2018-10-14', '57790205', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (66, 3, '2021-08-07', '57820807', '20:00:00');
+VALUES (66, 3, '2022-05-08', '57820807', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (66, 4, '2025-03-10', '57860310', '17:12:00');
+VALUES (66, 4, '2025-11-30', '57860310', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (67, 1, '2014-07-03', '57750703', '18:25:00');
+VALUES (67, 1, '2015-03-23', '57750703', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (67, 2, '2018-02-06', '57790206', '18:41:00');
+VALUES (67, 2, '2018-10-15', '57790206', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (67, 3, '2021-08-08', '57820808', '20:01:00');
+VALUES (67, 3, '2022-05-09', '57820808', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (67, 4, '2025-03-11', '57860311', '17:12:00');
+VALUES (67, 4, '2025-12-01', '57860311', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (68, 1, '2014-07-04', '57750704', '18:26:00');
+VALUES (68, 1, '2015-03-24', '57750704', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (68, 2, '2018-02-07', '57790207', '18:40:00');
+VALUES (68, 2, '2018-10-16', '57790207', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (68, 3, '2021-08-09', '57820809', '20:02:00');
+VALUES (68, 3, '2022-05-10', '57820809', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (68, 4, '2025-03-12', '57860312', '17:12:00');
+VALUES (68, 4, '2025-12-02', '57860312', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (69, 1, '2014-07-05', '57750705', '18:27:00');
+VALUES (69, 1, '2015-03-25', '57750705', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (69, 2, '2018-02-08', '57790208', '18:39:00');
+VALUES (69, 2, '2018-10-17', '57790208', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (69, 3, '2021-08-10', '57820810', '20:02:00');
+VALUES (69, 3, '2022-05-11', '57820810', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (69, 4, '2025-03-13', '57860313', '17:12:00');
+VALUES (69, 4, '2025-12-03', '57860313', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (70, 1, '2014-07-06', '57750706', '18:27:00');
+VALUES (70, 1, '2015-03-26', '57750706', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (70, 2, '2018-02-09', '57790209', '18:38:00');
+VALUES (70, 2, '2018-10-18', '57790209', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (70, 3, '2021-08-11', '57820811', '20:03:00');
+VALUES (70, 3, '2022-05-12', '57820811', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (70, 4, '2025-03-14', '57860314', '17:12:00');
+VALUES (70, 4, '2025-12-04', '57860314', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (71, 1, '2014-07-09', '57750709', '19:30:00');
+VALUES (71, 1, '2015-03-29', '57750709', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (71, 2, '2018-02-12', '57790212', '18:35:00');
+VALUES (71, 2, '2018-10-21', '57790212', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (71, 3, '2021-08-14', '57820814', '20:06:00');
+VALUES (71, 3, '2022-05-15', '57820814', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (71, 4, '2025-03-17', '57860317', '17:12:00');
+VALUES (71, 4, '2025-12-07', '57860317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (72, 1, '2014-07-10', '57750710', '19:30:00');
+VALUES (72, 1, '2015-03-30', '57750710', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (72, 2, '2018-02-13', '57790213', '18:34:00');
+VALUES (72, 2, '2018-10-22', '57790213', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (72, 3, '2021-08-15', '57820815', '20:06:00');
+VALUES (72, 3, '2022-05-16', '57820815', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (72, 4, '2025-03-18', '57860318', '17:12:00');
+VALUES (72, 4, '2025-12-08', '57860318', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (73, 1, '2014-07-11', '57750711', '19:31:00');
+VALUES (73, 1, '2015-03-31', '57750711', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (73, 2, '2018-02-14', '57790214', '18:33:00');
+VALUES (73, 2, '2018-10-23', '57790214', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (73, 3, '2021-08-16', '57820816', '20:07:00');
+VALUES (73, 3, '2022-05-17', '57820816', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (73, 4, '2025-03-19', '57860319', '17:12:00');
+VALUES (73, 4, '2025-12-09', '57860319', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (74, 1, '2014-07-12', '57750712', '19:32:00');
+VALUES (74, 1, '2015-04-01', '57750712', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (74, 2, '2018-02-15', '57790215', '18:32:00');
+VALUES (74, 2, '2018-10-24', '57790215', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (74, 3, '2021-08-17', '57820817', '20:08:00');
+VALUES (74, 3, '2022-05-18', '57820817', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (74, 4, '2025-03-20', '57860320', '17:12:00');
+VALUES (74, 4, '2025-12-10', '57860320', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (75, 1, '2014-07-13', '57750713', '19:32:00');
+VALUES (75, 1, '2015-04-02', '57750713', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (75, 2, '2018-02-16', '57790216', '18:31:00');
+VALUES (75, 2, '2018-10-25', '57790216', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (75, 3, '2021-08-18', '57820818', '20:09:00');
+VALUES (75, 3, '2022-05-19', '57820818', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (75, 4, '2025-03-21', '57860321', '17:13:00');
+VALUES (75, 4, '2025-12-11', '57860321', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (76, 1, '2014-07-16', '57750716', '19:34:00');
+VALUES (76, 1, '2015-04-05', '57750716', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (76, 2, '2018-02-19', '57790219', '17:28:00');
+VALUES (76, 2, '2018-10-28', '57790219', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (76, 3, '2021-08-21', '57820821', '20:11:00');
+VALUES (76, 3, '2022-05-22', '57820821', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (76, 4, '2025-03-24', '57860324', '17:13:00');
+VALUES (76, 4, '2025-12-14', '57860324', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (77, 1, '2014-07-17', '57750717', '19:35:00');
+VALUES (77, 1, '2015-04-06', '57750717', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (77, 2, '2018-02-20', '57790220', '17:27:00');
+VALUES (77, 2, '2018-10-29', '57790220', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (77, 3, '2021-08-22', '57820822', '20:12:00');
+VALUES (77, 3, '2022-05-23', '57820822', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (77, 4, '2025-03-25', '57860325', '17:14:00');
+VALUES (77, 4, '2025-12-15', '57860325', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (78, 1, '2014-07-18', '57750718', '19:36:00');
+VALUES (78, 1, '2015-04-07', '57750718', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (78, 2, '2018-02-21', '57790221', '17:26:00');
+VALUES (78, 2, '2018-10-30', '57790221', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (78, 3, '2021-08-23', '57820823', '20:13:00');
+VALUES (78, 3, '2022-05-24', '57820823', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (78, 4, '2025-03-26', '57860326', '17:14:00');
+VALUES (78, 4, '2025-12-16', '57860326', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (79, 1, '2014-07-19', '57750719', '19:37:00');
+VALUES (79, 1, '2015-04-08', '57750719', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (79, 2, '2018-02-22', '57790222', '17:25:00');
+VALUES (79, 2, '2018-10-31', '57790222', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (79, 3, '2021-08-24', '57820824', '20:13:00');
+VALUES (79, 3, '2022-05-25', '57820824', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (79, 4, '2025-03-27', '57860327', '17:15:00');
+VALUES (79, 4, '2025-12-17', '57860327', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (80, 1, '2014-07-20', '57750720', '19:37:00');
+VALUES (80, 1, '2015-04-09', '57750720', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (80, 2, '2018-02-23', '57790223', '17:25:00');
+VALUES (80, 2, '2018-11-01', '57790223', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (80, 3, '2021-08-25', '57820825', '20:14:00');
+VALUES (80, 3, '2022-05-26', '57820825', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (80, 4, '2025-03-28', '57860328', '17:15:00');
+VALUES (80, 4, '2025-12-18', '57860328', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (81, 1, '2014-07-23', '57750723', '19:39:00');
+VALUES (81, 1, '2015-04-12', '57750723', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (81, 2, '2018-02-26', '57790226', '17:22:00');
+VALUES (81, 2, '2018-11-04', '57790226', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (81, 3, '2021-08-28', '57820828', '20:16:00');
+VALUES (81, 3, '2022-05-29', '57820828', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (81, 4, '2025-04-01', '57860401', '17:16:00');
+VALUES (81, 4, '2025-12-21', '57860401', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (82, 1, '2014-07-24', '57750724', '19:40:00');
+VALUES (82, 1, '2015-04-13', '57750724', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (82, 2, '2018-02-27', '57790227', '17:22:00');
+VALUES (82, 2, '2018-11-05', '57790227', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (82, 3, '2021-08-28', '57820829', '20:17:00');
+VALUES (82, 3, '2022-05-30', '57820829', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (82, 4, '2025-04-02', '57860402', '17:17:00');
+VALUES (82, 4, '2025-12-22', '57860402', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (83, 1, '2014-07-25', '57750725', '19:41:00');
+VALUES (83, 1, '2015-04-14', '57750725', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (83, 2, '2018-02-28', '57790228', '17:21:00');
+VALUES (83, 2, '2018-11-06', '57790228', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (83, 3, '2021-09-01', '57820901', '20:17:00');
+VALUES (83, 3, '2022-05-31', '57820901', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (83, 4, '2025-04-03', '57860403', '17:17:00');
+VALUES (83, 4, '2025-12-23', '57860403', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (84, 1, '2014-07-26', '57750726', '19:42:00');
+VALUES (84, 1, '2015-04-15', '57750726', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (84, 2, '2018-02-28', '57790229', '17:20:00');
+VALUES (84, 2, '2018-11-07', '57790229', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (84, 3, '2021-09-02', '57820902', '20:18:00');
+VALUES (84, 3, '2022-06-01', '57820902', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (84, 4, '2025-04-04', '57860404', '17:18:00');
+VALUES (84, 4, '2025-12-24', '57860404', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (85, 1, '2014-07-27', '57750727', '19:42:00');
+VALUES (85, 1, '2015-04-16', '57750727', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (85, 2, '2018-02-28', '57790230', '17:20:00');
+VALUES (85, 2, '2018-11-08', '57790230', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (85, 3, '2021-09-03', '57820903', '20:19:00');
+VALUES (85, 3, '2022-06-02', '57820903', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (85, 4, '2025-04-05', '57860405', '17:18:00');
+VALUES (85, 4, '2025-12-25', '57860405', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (86, 1, '2014-07-28', '57750730', '19:45:00');
+VALUES (86, 1, '2015-04-19', '57750730', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (86, 2, '2018-03-03', '57790303', '17:18:00');
+VALUES (86, 2, '2018-11-11', '57790303', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (86, 3, '2021-09-06', '57820906', '20:20:00');
+VALUES (86, 3, '2022-06-05', '57820906', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (86, 4, '2025-04-08', '57860408', '17:20:00');
+VALUES (86, 4, '2025-12-28', '57860408', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (87, 1, '2014-08-01', '57750801', '19:45:00');
+VALUES (87, 1, '2015-04-20', '57750801', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (87, 2, '2018-03-04', '57790304', '17:17:00');
+VALUES (87, 2, '2018-11-12', '57790304', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (87, 3, '2021-09-07', '57820907', '20:21:00');
+VALUES (87, 3, '2022-06-06', '57820907', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (87, 4, '2025-04-09', '57860409', '17:21:00');
+VALUES (87, 4, '2025-12-29', '57860409', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (88, 1, '2014-08-02', '57750802', '19:46:00');
+VALUES (88, 1, '2015-04-21', '57750802', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (88, 2, '2018-03-05', '57790305', '17:17:00');
+VALUES (88, 2, '2018-11-13', '57790305', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (88, 3, '2021-09-08', '57820908', '20:21:00');
+VALUES (88, 3, '2022-06-07', '57820908', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (88, 4, '2025-04-10', '57860410', '17:21:00');
+VALUES (88, 4, '2025-12-30', '57860410', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (89, 1, '2014-08-03', '57750803', '19:47:00');
+VALUES (89, 1, '2015-04-22', '57750803', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (89, 2, '2018-03-06', '57790306', '17:16:00');
+VALUES (89, 2, '2018-11-14', '57790306', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (89, 3, '2021-09-09', '57820909', '20:22:00');
+VALUES (89, 3, '2022-06-08', '57820909', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (89, 4, '2025-04-11', '57860411', '17:22:00');
+VALUES (89, 4, '2025-12-31', '57860411', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (90, 1, '2014-08-04', '57750804', '19:48:00');
+VALUES (90, 1, '2015-04-23', '57750804', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (90, 2, '2018-03-07', '57790307', '17:16:00');
+VALUES (90, 2, '2018-11-15', '57790307', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (90, 3, '2021-09-10', '57820910', '20:22:00');
+VALUES (90, 3, '2022-06-09', '57820910', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (90, 4, '2025-04-12', '57860412', '17:23:00');
+VALUES (90, 4, '2026-01-01', '57860412', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (91, 1, '2014-08-07', '57750807', '19:50:00');
+VALUES (91, 1, '2015-04-26', '57750807', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (91, 2, '2018-03-10', '57790310', '17:14:00');
+VALUES (91, 2, '2018-11-18', '57790310', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (91, 3, '2021-09-13', '57820913', '20:24:00');
+VALUES (91, 3, '2022-06-12', '57820913', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (91, 4, '2025-04-15', '57860415', '17:25:00');
+VALUES (91, 4, '2026-01-04', '57860415', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (92, 1, '2014-08-08', '57750808', '19:51:00');
+VALUES (92, 1, '2015-04-27', '57750808', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (92, 2, '2018-03-11', '57790311', '17:14:00');
+VALUES (92, 2, '2018-11-19', '57790311', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (92, 3, '2021-09-14', '57820914', '20:24:00');
+VALUES (92, 3, '2022-06-13', '57820914', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (92, 4, '2025-04-16', '57860416', '17:25:00');
+VALUES (92, 4, '2026-01-05', '57860416', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (93, 1, '2014-08-09', '57750809', '19:52:00');
+VALUES (93, 1, '2015-04-28', '57750809', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (93, 2, '2018-03-12', '57790312', '17:14:00');
+VALUES (93, 2, '2018-11-20', '57790312', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (93, 3, '2021-09-15', '57820915', '20:25:00');
+VALUES (93, 3, '2022-06-14', '57820915', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (93, 4, '2025-04-17', '57860417', '17:26:00');
+VALUES (93, 4, '2026-01-06', '57860417', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (94, 1, '2014-08-10', '57750810', '19:53:00');
+VALUES (94, 1, '2015-04-29', '57750810', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (94, 2, '2018-03-13', '57790313', '17:13:00');
+VALUES (94, 2, '2018-11-21', '57790313', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (94, 3, '2021-09-16', '57820916', '20:25:00');
+VALUES (94, 3, '2022-06-15', '57820916', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (94, 4, '2025-04-18', '57860418', '17:27:00');
+VALUES (94, 4, '2026-01-07', '57860418', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (95, 1, '2014-08-11', '57750811', '19:53:00');
+VALUES (95, 1, '2015-04-30', '57750811', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (95, 2, '2018-03-14', '57790314', '17:13:00');
+VALUES (95, 2, '2018-11-22', '57790314', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (95, 3, '2021-09-17', '57820917', '20:25:00');
+VALUES (95, 3, '2022-06-16', '57820917', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (95, 4, '2025-04-19', '57860419', '17:28:00');
+VALUES (95, 4, '2026-01-08', '57860419', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (96, 1, '2014-08-14', '57750814', '19:56:00');
+VALUES (96, 1, '2015-05-03', '57750814', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (96, 2, '2018-03-17', '57790317', '17:12:00');
+VALUES (96, 2, '2018-11-25', '57790317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (96, 3, '2021-09-20', '57820920', '20:26:00');
+VALUES (96, 3, '2022-06-19', '57820920', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (96, 4, '2025-04-22', '57860422', '17:30:00');
+VALUES (96, 4, '2026-01-11', '57860422', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (97, 1, '2014-08-15', '57750815', '19:57:00');
+VALUES (97, 1, '2015-05-04', '57750815', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (97, 2, '2018-03-18', '57790318', '17:12:00');
+VALUES (97, 2, '2018-11-26', '57790318', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (97, 3, '2021-09-21', '57820921', '20:27:00');
+VALUES (97, 3, '2022-06-20', '57820921', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (97, 4, '2025-04-23', '57860423', '17:31:00');
+VALUES (97, 4, '2026-01-12', '57860423', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (98, 1, '2014-08-16', '57750816', '19:57:00');
+VALUES (98, 1, '2015-05-05', '57750816', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (98, 2, '2018-03-19', '57790319', '17:12:00');
+VALUES (98, 2, '2018-11-27', '57790319', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (98, 3, '2021-09-22', '57820922', '20:27:00');
+VALUES (98, 3, '2022-06-21', '57820922', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (98, 4, '2025-04-24', '57860424', '17:32:00');
+VALUES (98, 4, '2026-01-13', '57860424', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (99, 1, '2014-08-17', '57750817', '19:58:00');
+VALUES (99, 1, '2015-05-06', '57750817', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (99, 2, '2018-03-20', '57790320', '17:12:00');
+VALUES (99, 2, '2018-11-28', '57790320', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (99, 3, '2021-09-23', '57820923', '20:27:00');
+VALUES (99, 3, '2022-06-22', '57820923', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (99, 4, '2025-04-25', '57860425', '17:32:00');
+VALUES (99, 4, '2026-01-14', '57860425', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (100, 1, '2014-08-18', '57750818', '19:59:00');
+VALUES (100, 1, '2015-05-07', '57750818', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (100, 2, '2018-03-21', '57790321', '17:12:00');
+VALUES (100, 2, '2018-11-29', '57790321', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (100, 3, '2021-09-24', '57820924', '20:27:00');
+VALUES (100, 3, '2022-06-23', '57820924', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (100, 4, '2025-04-26', '57860426', '17:33:00');
+VALUES (100, 4, '2026-01-15', '57860426', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (101, 1, '2014-08-21', '57750821', '20:01:00');
+VALUES (101, 1, '2015-05-10', '57750821', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (101, 2, '2018-03-24', '57790324', '17:12:00');
+VALUES (101, 2, '2018-12-02', '57790324', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (101, 3, '2021-09-27', '57820927', '20:27:00');
+VALUES (101, 3, '2022-06-26', '57820927', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (101, 4, '2025-04-28', '57860429', '17:36:00');
+VALUES (101, 4, '2026-01-18', '57860429', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (102, 1, '2014-08-22', '57750822', '20:02:00');
+VALUES (102, 1, '2015-05-11', '57750822', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (102, 2, '2018-03-25', '57790325', '17:12:00');
+VALUES (102, 2, '2018-12-03', '57790325', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (102, 3, '2021-09-28', '57820928', '20:28:00');
+VALUES (102, 3, '2022-06-27', '57820928', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (102, 4, '2025-05-01', '57860501', '17:37:00');
+VALUES (102, 4, '2026-01-19', '57860501', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (103, 1, '2014-08-23', '57750823', '20:03:00');
+VALUES (103, 1, '2015-05-12', '57750823', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (103, 2, '2018-03-26', '57790326', '17:12:00');
+VALUES (103, 2, '2018-12-04', '57790326', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (103, 3, '2021-09-28', '57820929', '20:28:00');
+VALUES (103, 3, '2022-06-28', '57820929', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (103, 4, '2025-05-02', '57860502', '17:37:00');
+VALUES (103, 4, '2026-01-20', '57860502', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (104, 1, '2014-08-24', '57750824', '20:04:00');
+VALUES (104, 1, '2015-05-13', '57750824', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (104, 2, '2018-03-27', '57790327', '17:12:00');
+VALUES (104, 2, '2018-12-05', '57790327', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (104, 3, '2021-09-28', '57820930', '20:28:00');
+VALUES (104, 3, '2022-06-29', '57820930', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (104, 4, '2025-05-03', '57860503', '17:38:00');
+VALUES (104, 4, '2026-01-21', '57860503', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (105, 1, '2014-08-25', '57750825', '20:05:00');
+VALUES (105, 1, '2015-05-14', '57750825', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (105, 2, '2018-03-28', '57790328', '17:12:00');
+VALUES (105, 2, '2018-12-06', '57790328', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (105, 3, '2021-10-01', '57821001', '20:28:00');
+VALUES (105, 3, '2022-06-30', '57821001', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (105, 4, '2025-05-04', '57860504', '17:39:00');
+VALUES (105, 4, '2026-01-22', '57860504', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (106, 1, '2014-08-28', '57750828', '20:07:00');
+VALUES (106, 1, '2015-05-17', '57750828', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (106, 2, '2018-04-01', '57790401', '17:12:00');
+VALUES (106, 2, '2018-12-09', '57790401', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (106, 3, '2021-10-04', '57821004', '20:27:00');
+VALUES (106, 3, '2022-07-03', '57821004', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (106, 4, '2025-05-07', '57860507', '17:42:00');
+VALUES (106, 4, '2026-01-25', '57860507', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (107, 1, '2014-08-28', '57750829', '20:08:00');
+VALUES (107, 1, '2015-05-18', '57750829', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (107, 2, '2018-04-02', '57790402', '17:12:00');
+VALUES (107, 2, '2018-12-10', '57790402', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (107, 3, '2021-10-05', '57821005', '20:27:00');
+VALUES (107, 3, '2022-07-04', '57821005', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (107, 4, '2025-05-08', '57860508', '17:43:00');
+VALUES (107, 4, '2026-01-26', '57860508', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (108, 1, '2014-09-01', '57750901', '20:09:00');
+VALUES (108, 1, '2015-05-19', '57750901', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (108, 2, '2018-04-03', '57790403', '17:13:00');
+VALUES (108, 2, '2018-12-11', '57790403', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (108, 3, '2021-10-06', '57821006', '20:27:00');
+VALUES (108, 3, '2022-07-05', '57821006', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (108, 4, '2025-05-09', '57860509', '17:43:00');
+VALUES (108, 4, '2026-01-27', '57860509', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (109, 1, '2014-09-02', '57750902', '20:09:00');
+VALUES (109, 1, '2015-05-20', '57750902', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (109, 2, '2018-04-04', '57790404', '17:13:00');
+VALUES (109, 2, '2018-12-12', '57790404', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (109, 3, '2021-10-07', '57821007', '20:27:00');
+VALUES (109, 3, '2022-07-06', '57821007', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (109, 4, '2025-05-10', '57860510', '17:44:00');
+VALUES (109, 4, '2026-01-28', '57860510', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (110, 1, '2014-09-03', '57750903', '20:10:00');
+VALUES (110, 1, '2015-05-21', '57750903', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (110, 2, '2018-04-05', '57790405', '17:13:00');
+VALUES (110, 2, '2018-12-13', '57790405', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (110, 3, '2021-10-08', '57821008', '20:27:00');
+VALUES (110, 3, '2022-07-07', '57821008', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (110, 4, '2025-05-11', '57860511', '17:45:00');
+VALUES (110, 4, '2026-01-29', '57860511', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (111, 1, '2014-09-06', '57750906', '20:12:00');
+VALUES (111, 1, '2015-05-24', '57750906', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (111, 2, '2018-04-08', '57790408', '17:14:00');
+VALUES (111, 2, '2018-12-16', '57790408', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (111, 3, '2021-10-11', '57821011', '20:26:00');
+VALUES (111, 3, '2022-07-10', '57821011', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (111, 4, '2025-05-14', '57860514', '17:48:00');
+VALUES (111, 4, '2026-02-01', '57860514', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (112, 1, '2014-09-07', '57750907', '20:13:00');
+VALUES (112, 1, '2015-05-25', '57750907', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (112, 2, '2018-04-09', '57790409', '17:14:00');
+VALUES (112, 2, '2018-12-17', '57790409', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (112, 3, '2021-10-12', '57821012', '20:26:00');
+VALUES (112, 3, '2022-07-11', '57821012', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (112, 4, '2025-05-15', '57860515', '17:49:00');
+VALUES (112, 4, '2026-02-02', '57860515', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (113, 1, '2014-09-08', '57750908', '20:14:00');
+VALUES (113, 1, '2015-05-26', '57750908', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (113, 2, '2018-04-10', '57790410', '17:15:00');
+VALUES (113, 2, '2018-12-18', '57790410', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (113, 3, '2021-10-13', '57821013', '20:25:00');
+VALUES (113, 3, '2022-07-12', '57821013', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (113, 4, '2025-05-16', '57860516', '17:49:00');
+VALUES (113, 4, '2026-02-03', '57860516', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (114, 1, '2014-09-09', '57750909', '20:15:00');
+VALUES (114, 1, '2015-05-27', '57750909', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (114, 2, '2018-04-11', '57790411', '17:15:00');
+VALUES (114, 2, '2018-12-19', '57790411', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (114, 3, '2021-10-14', '57821014', '20:25:00');
+VALUES (114, 3, '2022-07-13', '57821014', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (114, 4, '2025-05-17', '57860517', '17:50:00');
+VALUES (114, 4, '2026-02-04', '57860517', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (115, 1, '2014-09-10', '57750910', '20:15:00');
+VALUES (115, 1, '2015-05-28', '57750910', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (115, 2, '2018-04-12', '57790412', '17:16:00');
+VALUES (115, 2, '2018-12-20', '57790412', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (115, 3, '2021-10-15', '57821015', '20:24:00');
+VALUES (115, 3, '2022-07-14', '57821015', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (115, 4, '2025-05-18', '57860518', '17:51:00');
+VALUES (115, 4, '2026-02-05', '57860518', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (116, 1, '2014-09-13', '57750913', '20:17:00');
+VALUES (116, 1, '2015-05-31', '57750913', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (116, 2, '2018-04-15', '57790415', '17:17:00');
+VALUES (116, 2, '2018-12-23', '57790415', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (116, 3, '2021-10-18', '57821018', '20:23:00');
+VALUES (116, 3, '2022-07-17', '57821018', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (116, 4, '2025-05-21', '57860521', '17:54:00');
+VALUES (116, 4, '2026-02-08', '57860521', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (117, 1, '2014-09-14', '57750914', '20:18:00');
+VALUES (117, 1, '2015-06-01', '57750914', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (117, 2, '2018-04-16', '57790416', '17:18:00');
+VALUES (117, 2, '2018-12-24', '57790416', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (117, 3, '2021-10-19', '57821019', '20:23:00');
+VALUES (117, 3, '2022-07-18', '57821019', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (117, 4, '2025-05-22', '57860522', '17:55:00');
+VALUES (117, 4, '2026-02-09', '57860522', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (118, 1, '2014-09-15', '57750915', '20:18:00');
+VALUES (118, 1, '2015-06-02', '57750915', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (118, 2, '2018-04-17', '57790417', '17:18:00');
+VALUES (118, 2, '2018-12-25', '57790417', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (118, 3, '2021-10-20', '57821020', '20:22:00');
+VALUES (118, 3, '2022-07-19', '57821020', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (118, 4, '2025-05-23', '57860523', '17:55:00');
+VALUES (118, 4, '2026-02-10', '57860523', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (119, 1, '2014-09-16', '57750916', '20:19:00');
+VALUES (119, 1, '2015-06-03', '57750916', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (119, 2, '2018-04-18', '57790418', '17:19:00');
+VALUES (119, 2, '2018-12-26', '57790418', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (119, 3, '2021-10-21', '57821021', '20:22:00');
+VALUES (119, 3, '2022-07-20', '57821021', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (119, 4, '2025-05-24', '57860524', '17:56:00');
+VALUES (119, 4, '2026-02-11', '57860524', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (120, 1, '2014-09-17', '57750917', '20:20:00');
+VALUES (120, 1, '2015-06-04', '57750917', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (120, 2, '2018-04-19', '57790419', '17:19:00');
+VALUES (120, 2, '2018-12-27', '57790419', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (120, 3, '2021-10-22', '57821022', '20:21:00');
+VALUES (120, 3, '2022-07-21', '57821022', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (120, 4, '2025-05-25', '57860525', '17:57:00');
+VALUES (120, 4, '2026-02-12', '57860525', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (121, 1, '2014-09-20', '57750920', '20:21:00');
+VALUES (121, 1, '2015-06-07', '57750920', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (121, 2, '2018-04-22', '57790422', '17:21:00');
+VALUES (121, 2, '2018-12-30', '57790422', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (121, 3, '2021-10-25', '57821025', '20:19:00');
+VALUES (121, 3, '2022-07-24', '57821025', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (121, 4, '2025-05-28', '57860528', '17:59:00');
+VALUES (121, 4, '2026-02-15', '57860528', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (122, 1, '2014-09-21', '57750921', '20:22:00');
+VALUES (122, 1, '2015-06-08', '57750921', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (122, 2, '2018-04-23', '57790423', '17:22:00');
+VALUES (122, 2, '2018-12-31', '57790423', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (122, 3, '2021-10-26', '57821026', '20:18:00');
+VALUES (122, 3, '2022-07-25', '57821026', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (122, 4, '2025-05-28', '57860529', '18:00:00');
+VALUES (122, 4, '2026-02-16', '57860529', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (123, 1, '2014-09-22', '57750922', '20:22:00');
+VALUES (123, 1, '2015-06-09', '57750922', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (123, 2, '2018-04-24', '57790424', '17:22:00');
+VALUES (123, 2, '2019-01-01', '57790424', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (123, 3, '2021-10-27', '57821027', '20:18:00');
+VALUES (123, 3, '2022-07-26', '57821027', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (123, 4, '2025-05-28', '57860530', '18:01:00');
+VALUES (123, 4, '2026-02-17', '57860530', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (124, 1, '2014-09-23', '57750923', '20:23:00');
+VALUES (124, 1, '2015-06-10', '57750923', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (124, 2, '2018-04-25', '57790425', '17:23:00');
+VALUES (124, 2, '2019-01-02', '57790425', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (124, 3, '2021-10-28', '57821028', '20:17:00');
+VALUES (124, 3, '2022-07-27', '57821028', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (124, 4, '2025-06-01', '57860601', '18:02:00');
+VALUES (124, 4, '2026-02-18', '57860601', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (125, 1, '2014-09-24', '57750924', '20:23:00');
+VALUES (125, 1, '2015-06-11', '57750924', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (125, 2, '2018-04-26', '57790426', '17:24:00');
+VALUES (125, 2, '2019-01-03', '57790426', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (125, 3, '2021-10-28', '57821029', '20:16:00');
+VALUES (125, 3, '2022-07-28', '57821029', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (125, 4, '2025-06-02', '57860602', '18:03:00');
+VALUES (125, 4, '2026-02-19', '57860602', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (126, 1, '2014-09-27', '57750927', '20:25:00');
+VALUES (126, 1, '2015-06-14', '57750927', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (126, 2, '2018-04-28', '57790429', '17:26:00');
+VALUES (126, 2, '2019-01-06', '57790429', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (126, 3, '2021-11-03', '57821103', '20:14:00');
+VALUES (126, 3, '2022-07-31', '57821103', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (126, 4, '2025-06-05', '57860605', '18:05:00');
+VALUES (126, 4, '2026-02-22', '57860605', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (127, 1, '2014-09-28', '57750928', '20:25:00');
+VALUES (127, 1, '2015-06-15', '57750928', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (127, 2, '2018-05-01', '57790501', '17:27:00');
+VALUES (127, 2, '2019-01-07', '57790501', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (127, 3, '2021-11-04', '57821104', '20:13:00');
+VALUES (127, 3, '2022-08-01', '57821104', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (127, 4, '2025-06-06', '57860606', '18:06:00');
+VALUES (127, 4, '2026-02-23', '57860606', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (128, 1, '2014-09-28', '57750929', '20:25:00');
+VALUES (128, 1, '2015-06-16', '57750929', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (128, 2, '2018-05-02', '57790502', '17:27:00');
+VALUES (128, 2, '2019-01-08', '57790502', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (128, 3, '2021-11-05', '57821105', '20:12:00');
+VALUES (128, 3, '2022-08-02', '57821105', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (128, 4, '2025-06-07', '57860607', '18:06:00');
+VALUES (128, 4, '2026-02-24', '57860607', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (129, 1, '2014-09-28', '57750930', '20:26:00');
+VALUES (129, 1, '2015-06-17', '57750930', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (129, 2, '2018-05-03', '57790503', '17:28:00');
+VALUES (129, 2, '2019-01-09', '57790503', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (129, 3, '2021-11-06', '57821106', '20:11:00');
+VALUES (129, 3, '2022-08-03', '57821106', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (129, 4, '2025-06-08', '57860608', '18:07:00');
+VALUES (129, 4, '2026-02-25', '57860608', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (130, 1, '2014-10-01', '57751001', '20:26:00');
+VALUES (130, 1, '2015-06-18', '57751001', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (130, 2, '2018-05-04', '57790504', '17:29:00');
+VALUES (130, 2, '2019-01-10', '57790504', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (130, 3, '2021-11-07', '57821107', '20:10:00');
+VALUES (130, 3, '2022-08-04', '57821107', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (130, 4, '2025-06-09', '57860609', '18:08:00');
+VALUES (130, 4, '2026-02-26', '57860609', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (131, 1, '2014-10-04', '57751004', '20:27:00');
+VALUES (131, 1, '2015-06-21', '57751004', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (131, 2, '2018-05-07', '57790507', '17:31:00');
+VALUES (131, 2, '2019-01-13', '57790507', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (131, 3, '2021-11-10', '57821110', '20:07:00');
+VALUES (131, 3, '2022-08-07', '57821110', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (131, 4, '2025-06-12', '57860612', '18:10:00');
+VALUES (131, 4, '2026-03-01', '57860612', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (132, 1, '2014-10-05', '57751005', '20:27:00');
+VALUES (132, 1, '2015-06-22', '57751005', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (132, 2, '2018-05-08', '57790508', '17:32:00');
+VALUES (132, 2, '2019-01-14', '57790508', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (132, 3, '2021-11-11', '57821111', '20:07:00');
+VALUES (132, 3, '2022-08-08', '57821111', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (132, 4, '2025-06-13', '57860613', '18:11:00');
+VALUES (132, 4, '2026-03-02', '57860613', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (133, 1, '2014-10-06', '57751006', '20:27:00');
+VALUES (133, 1, '2015-06-23', '57751006', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (133, 2, '2018-05-09', '57790509', '17:33:00');
+VALUES (133, 2, '2019-01-15', '57790509', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (133, 3, '2021-11-12', '57821112', '20:06:00');
+VALUES (133, 3, '2022-08-09', '57821112', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (133, 4, '2025-06-14', '57860614', '18:12:00');
+VALUES (133, 4, '2026-03-03', '57860614', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (134, 1, '2014-10-07', '57751007', '20:27:00');
+VALUES (134, 1, '2015-06-24', '57751007', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (134, 2, '2018-05-10', '57790510', '17:34:00');
+VALUES (134, 2, '2019-01-16', '57790510', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (134, 3, '2021-11-13', '57821113', '20:05:00');
+VALUES (134, 3, '2022-08-10', '57821113', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (134, 4, '2025-06-15', '57860615', '18:12:00');
+VALUES (134, 4, '2026-03-04', '57860615', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (135, 1, '2014-10-08', '57751008', '20:27:00');
+VALUES (135, 1, '2015-06-25', '57751008', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (135, 2, '2018-05-11', '57790511', '17:35:00');
+VALUES (135, 2, '2019-01-17', '57790511', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (135, 3, '2021-11-14', '57821114', '20:03:00');
+VALUES (135, 3, '2022-08-11', '57821114', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (135, 4, '2025-06-16', '57860616', '18:13:00');
+VALUES (135, 4, '2026-03-05', '57860616', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (136, 1, '2014-10-11', '57751011', '20:28:00');
+VALUES (136, 1, '2015-06-28', '57751011', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (136, 2, '2018-05-14', '57790514', '17:37:00');
+VALUES (136, 2, '2019-01-20', '57790514', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (136, 3, '2021-11-17', '57821117', '20:00:00');
+VALUES (136, 3, '2022-08-14', '57821117', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (136, 4, '2025-06-19', '57860619', '18:15:00');
+VALUES (136, 4, '2026-03-08', '57860619', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (137, 1, '2014-10-12', '57751012', '20:28:00');
+VALUES (137, 1, '2015-06-29', '57751012', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (137, 2, '2018-05-15', '57790515', '17:38:00');
+VALUES (137, 2, '2019-01-21', '57790515', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (137, 3, '2021-11-18', '57821118', '19:59:00');
+VALUES (137, 3, '2022-08-15', '57821118', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (137, 4, '2025-06-20', '57860620', '18:16:00');
+VALUES (137, 4, '2026-03-09', '57860620', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (138, 1, '2014-10-13', '57751013', '20:28:00');
+VALUES (138, 1, '2015-06-30', '57751013', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (138, 2, '2018-05-16', '57790516', '17:39:00');
+VALUES (138, 2, '2019-01-22', '57790516', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (138, 3, '2021-11-19', '57821119', '19:58:00');
+VALUES (138, 3, '2022-08-16', '57821119', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (138, 4, '2025-06-21', '57860621', '18:17:00');
+VALUES (138, 4, '2026-03-10', '57860621', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (139, 1, '2014-10-14', '57751014', '20:28:00');
+VALUES (139, 1, '2015-07-01', '57751014', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (139, 2, '2018-05-17', '57790517', '17:40:00');
+VALUES (139, 2, '2019-01-23', '57790517', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (139, 3, '2021-11-20', '57821120', '19:57:00');
+VALUES (139, 3, '2022-08-17', '57821120', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (139, 4, '2025-06-22', '57860622', '18:17:00');
+VALUES (139, 4, '2026-03-11', '57860622', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (140, 1, '2014-10-15', '57751015', '20:27:00');
+VALUES (140, 1, '2015-07-02', '57751015', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (140, 2, '2018-05-18', '57790518', '17:41:00');
+VALUES (140, 2, '2019-01-24', '57790518', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (140, 3, '2021-11-21', '57821121', '19:56:00');
+VALUES (140, 3, '2022-08-18', '57821121', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (140, 4, '2025-06-23', '57860623', '18:18:00');
+VALUES (140, 4, '2026-03-12', '57860623', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (141, 1, '2014-10-18', '57751018', '20:27:00');
+VALUES (141, 1, '2015-07-05', '57751018', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (141, 2, '2018-05-21', '57790521', '17:43:00');
+VALUES (141, 2, '2019-01-27', '57790521', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (141, 3, '2021-11-24', '57821124', '19:52:00');
+VALUES (141, 3, '2022-08-21', '57821124', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (141, 4, '2025-06-26', '57860626', '18:20:00');
+VALUES (141, 4, '2026-03-15', '57860626', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (142, 1, '2014-10-19', '57751019', '20:27:00');
+VALUES (142, 1, '2015-07-06', '57751019', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (142, 2, '2018-05-22', '57790522', '17:44:00');
+VALUES (142, 2, '2019-01-28', '57790522', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (142, 3, '2021-11-25', '57821125', '19:51:00');
+VALUES (142, 3, '2022-08-22', '57821125', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (142, 4, '2025-06-27', '57860627', '18:21:00');
+VALUES (142, 4, '2026-03-16', '57860627', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (143, 1, '2014-10-20', '57751020', '20:27:00');
+VALUES (143, 1, '2015-07-07', '57751020', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (143, 2, '2018-05-23', '57790523', '17:45:00');
+VALUES (143, 2, '2019-01-29', '57790523', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (143, 3, '2021-11-26', '57821126', '19:50:00');
+VALUES (143, 3, '2022-08-23', '57821126', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (143, 4, '2025-06-28', '57860628', '18:21:00');
+VALUES (143, 4, '2026-03-17', '57860628', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (144, 1, '2014-10-21', '57751021', '20:26:00');
+VALUES (144, 1, '2015-07-08', '57751021', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (144, 2, '2018-05-24', '57790524', '17:46:00');
+VALUES (144, 2, '2019-01-30', '57790524', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (144, 3, '2021-11-27', '57821127', '19:49:00');
+VALUES (144, 3, '2022-08-24', '57821127', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (144, 4, '2025-06-28', '57860629', '18:22:00');
+VALUES (144, 4, '2026-03-18', '57860629', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (145, 1, '2014-10-22', '57751022', '20:26:00');
+VALUES (145, 1, '2015-07-09', '57751022', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (145, 2, '2018-05-25', '57790525', '17:47:00');
+VALUES (145, 2, '2019-01-31', '57790525', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (145, 3, '2021-11-28', '57821128', '19:47:00');
+VALUES (145, 3, '2022-08-25', '57821128', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (145, 4, '2025-07-01', '57860701', '18:23:00');
+VALUES (145, 4, '2026-03-19', '57860701', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (146, 1, '2014-10-25', '57751025', '20:25:00');
+VALUES (146, 1, '2015-07-12', '57751025', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (146, 2, '2018-05-28', '57790528', '17:49:00');
+VALUES (146, 2, '2019-02-03', '57790528', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (146, 3, '2021-12-01', '57821201', '19:44:00');
+VALUES (146, 3, '2022-08-28', '57821201', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (146, 4, '2025-07-04', '57860704', '18:25:00');
+VALUES (146, 4, '2026-03-22', '57860704', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (147, 1, '2014-10-26', '57751026', '20:25:00');
+VALUES (147, 1, '2015-07-13', '57751026', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (147, 2, '2018-05-28', '57790529', '17:50:00');
+VALUES (147, 2, '2019-02-04', '57790529', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (147, 3, '2021-12-02', '57821202', '19:42:00');
+VALUES (147, 3, '2022-08-29', '57821202', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (147, 4, '2025-07-05', '57860705', '18:26:00');
+VALUES (147, 4, '2026-03-23', '57860705', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (148, 1, '2014-10-27', '57751027', '20:25:00');
+VALUES (148, 1, '2015-07-14', '57751027', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (148, 2, '2018-05-28', '57790530', '17:51:00');
+VALUES (148, 2, '2019-02-05', '57790530', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (148, 3, '2021-12-03', '57821203', '19:41:00');
+VALUES (148, 3, '2022-08-30', '57821203', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (148, 4, '2025-07-06', '57860706', '18:26:00');
+VALUES (148, 4, '2026-03-24', '57860706', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (149, 1, '2014-10-28', '57751028', '20:24:00');
+VALUES (149, 1, '2015-07-15', '57751028', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (149, 2, '2018-12-01', '57791301', '17:52:00');
+VALUES (149, 2, '2019-02-06', '57791301', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (149, 3, '2021-12-04', '57821204', '19:40:00');
+VALUES (149, 3, '2022-08-31', '57821204', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (149, 4, '2025-07-07', '57860707', '18:27:00');
+VALUES (149, 4, '2026-03-25', '57860707', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (150, 1, '2014-10-28', '57751029', '20:24:00');
+VALUES (150, 1, '2015-07-16', '57751029', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (150, 2, '2018-12-02', '57791302', '17:53:00');
+VALUES (150, 2, '2019-02-07', '57791302', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (150, 3, '2021-12-05', '57821205', '19:39:00');
+VALUES (150, 3, '2022-09-01', '57821205', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (150, 4, '2025-07-08', '57860708', '18:28:00');
+VALUES (150, 4, '2026-03-26', '57860708', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (151, 1, '2014-11-03', '57751103', '20:22:00');
+VALUES (151, 1, '2015-07-19', '57751103', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (151, 2, '2018-12-05', '57791305', '17:55:00');
+VALUES (151, 2, '2019-02-10', '57791305', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (151, 3, '2021-12-08', '57821208', '19:35:00');
+VALUES (151, 3, '2022-09-04', '57821208', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (151, 4, '2025-07-11', '57860711', '19:30:00');
+VALUES (151, 4, '2026-03-29', '57860711', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (152, 1, '2014-11-04', '57751104', '20:22:00');
+VALUES (152, 1, '2015-07-20', '57751104', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (152, 2, '2018-12-06', '57791306', '17:56:00');
+VALUES (152, 2, '2019-02-11', '57791306', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (152, 3, '2021-12-09', '57821209', '19:33:00');
+VALUES (152, 3, '2022-09-05', '57821209', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (152, 4, '2025-07-12', '57860712', '19:30:00');
+VALUES (152, 4, '2026-03-30', '57860712', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (153, 1, '2014-11-05', '57751105', '20:21:00');
+VALUES (153, 1, '2015-07-21', '57751105', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (153, 2, '2018-12-07', '57791307', '17:57:00');
+VALUES (153, 2, '2019-02-12', '57791307', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (153, 3, '2021-12-10', '57821210', '19:32:00');
+VALUES (153, 3, '2022-09-06', '57821210', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (153, 4, '2025-07-13', '57860713', '19:31:00');
+VALUES (153, 4, '2026-03-31', '57860713', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (154, 1, '2014-11-06', '57751106', '20:20:00');
+VALUES (154, 1, '2015-07-22', '57751106', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (154, 2, '2018-12-08', '57791308', '17:58:00');
+VALUES (154, 2, '2019-02-13', '57791308', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (154, 3, '2021-12-11', '57821211', '19:31:00');
+VALUES (154, 3, '2022-09-07', '57821211', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (154, 4, '2025-07-14', '57860714', '19:32:00');
+VALUES (154, 4, '2026-04-01', '57860714', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (155, 1, '2014-11-07', '57751107', '20:20:00');
+VALUES (155, 1, '2015-07-23', '57751107', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (155, 2, '2018-12-09', '57791309', '17:58:00');
+VALUES (155, 2, '2019-02-14', '57791309', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (155, 3, '2021-12-12', '57821212', '19:29:00');
+VALUES (155, 3, '2022-09-08', '57821212', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (155, 4, '2025-07-15', '57860715', '19:32:00');
+VALUES (155, 4, '2026-04-02', '57860715', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (156, 1, '2014-11-10', '57751110', '20:18:00');
+VALUES (156, 1, '2015-07-26', '57751110', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (156, 2, '2018-12-12', '57791312', '18:01:00');
+VALUES (156, 2, '2019-02-17', '57791312', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (156, 3, '2021-12-15', '57821215', '19:25:00');
+VALUES (156, 3, '2022-09-11', '57821215', '19:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (156, 4, '2025-07-18', '57860718', '19:35:00');
+VALUES (156, 4, '2026-04-05', '57860718', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (157, 1, '2014-11-11', '57751111', '20:17:00');
+VALUES (157, 1, '2015-07-27', '57751111', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (157, 2, '2018-12-13', '57791313', '18:02:00');
+VALUES (157, 2, '2019-02-18', '57791313', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (157, 3, '2021-12-16', '57821216', '19:24:00');
+VALUES (157, 3, '2022-09-12', '57821216', '19:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (157, 4, '2025-07-19', '57860719', '19:35:00');
+VALUES (157, 4, '2026-04-06', '57860719', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (158, 1, '2014-11-12', '57751112', '20:16:00');
+VALUES (158, 1, '2015-07-28', '57751112', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (158, 2, '2018-12-14', '57791314', '18:02:00');
+VALUES (158, 2, '2019-02-19', '57791314', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (158, 3, '2021-12-17', '57821217', '19:22:00');
+VALUES (158, 3, '2022-09-13', '57821217', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (158, 4, '2025-07-20', '57860720', '19:36:00');
+VALUES (158, 4, '2026-04-07', '57860720', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (159, 1, '2014-11-13', '57751113', '20:16:00');
+VALUES (159, 1, '2015-07-29', '57751113', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (159, 2, '2018-12-15', '57791315', '18:03:00');
+VALUES (159, 2, '2019-02-20', '57791315', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (159, 3, '2021-12-18', '57821218', '19:21:00');
+VALUES (159, 3, '2022-09-14', '57821218', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (159, 4, '2025-07-21', '57860721', '19:37:00');
+VALUES (159, 4, '2026-04-08', '57860721', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (160, 1, '2014-11-14', '57751114', '20:15:00');
+VALUES (160, 1, '2015-07-30', '57751114', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (160, 2, '2018-12-16', '57791316', '18:04:00');
+VALUES (160, 2, '2019-02-21', '57791316', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (160, 3, '2021-12-19', '57821219', '19:20:00');
+VALUES (160, 3, '2022-09-15', '57821219', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (160, 4, '2025-07-22', '57860722', '19:37:00');
+VALUES (160, 4, '2026-04-09', '57860722', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (161, 1, '2014-11-17', '57751117', '20:12:00');
+VALUES (161, 1, '2015-08-02', '57751117', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (161, 2, '2018-12-19', '57791319', '18:06:00');
+VALUES (161, 2, '2019-02-24', '57791319', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (161, 3, '2021-12-22', '57821222', '19:16:00');
+VALUES (161, 3, '2022-09-18', '57821222', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (161, 4, '2025-07-25', '57860725', '19:40:00');
+VALUES (161, 4, '2026-04-12', '57860725', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (162, 1, '2014-11-18', '57751118', '20:11:00');
+VALUES (162, 1, '2015-08-03', '57751118', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (162, 2, '2018-12-20', '57791320', '18:07:00');
+VALUES (162, 2, '2019-02-25', '57791320', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (162, 3, '2021-12-23', '57821223', '19:14:00');
+VALUES (162, 3, '2022-09-19', '57821223', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (162, 4, '2025-07-26', '57860726', '19:40:00');
+VALUES (162, 4, '2026-04-13', '57860726', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (163, 1, '2014-11-19', '57751119', '20:11:00');
+VALUES (163, 1, '2015-08-04', '57751119', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (163, 2, '2018-12-21', '57791321', '18:08:00');
+VALUES (163, 2, '2019-02-26', '57791321', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (163, 3, '2021-12-24', '57821224', '19:13:00');
+VALUES (163, 3, '2022-09-20', '57821224', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (163, 4, '2025-07-27', '57860727', '19:41:00');
+VALUES (163, 4, '2026-04-14', '57860727', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (164, 1, '2014-11-20', '57751120', '20:10:00');
+VALUES (164, 1, '2015-08-05', '57751120', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (164, 2, '2018-12-22', '57791322', '18:09:00');
+VALUES (164, 2, '2019-02-27', '57791322', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (164, 3, '2021-12-25', '57821225', '19:12:00');
+VALUES (164, 3, '2022-09-21', '57821225', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (164, 4, '2025-07-28', '57860728', '19:42:00');
+VALUES (164, 4, '2026-04-15', '57860728', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (165, 1, '2014-11-21', '57751121', '20:09:00');
+VALUES (165, 1, '2015-08-06', '57751121', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (165, 2, '2018-12-23', '57791323', '18:09:00');
+VALUES (165, 2, '2019-02-28', '57791323', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (165, 3, '2021-12-26', '57821226', '19:10:00');
+VALUES (165, 3, '2022-09-22', '57821226', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (165, 4, '2025-07-28', '57860729', '19:43:00');
+VALUES (165, 4, '2026-04-16', '57860729', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (166, 1, '2014-11-24', '57751124', '20:06:00');
+VALUES (166, 1, '2015-08-09', '57751124', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (166, 2, '2018-12-26', '57791326', '18:11:00');
+VALUES (166, 2, '2019-03-03', '57791326', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (166, 3, '2021-12-28', '57821229', '19:06:00');
+VALUES (166, 3, '2022-09-25', '57821229', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (166, 4, '2025-08-02', '57860802', '19:45:00');
+VALUES (166, 4, '2026-04-19', '57860802', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (167, 1, '2014-11-25', '57751125', '20:05:00');
+VALUES (167, 1, '2015-08-10', '57751125', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (167, 2, '2018-12-27', '57791327', '18:12:00');
+VALUES (167, 2, '2019-03-04', '57791327', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (167, 3, '2022-01-01', '57830101', '19:05:00');
+VALUES (167, 3, '2022-09-26', '57830101', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (167, 4, '2025-08-03', '57860803', '19:46:00');
+VALUES (167, 4, '2026-04-20', '57860803', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (168, 1, '2014-11-26', '57751126', '20:04:00');
+VALUES (168, 1, '2015-08-11', '57751126', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (168, 2, '2018-12-28', '57791328', '18:13:00');
+VALUES (168, 2, '2019-03-05', '57791328', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (168, 3, '2022-01-02', '57830102', '19:04:00');
+VALUES (168, 3, '2022-09-27', '57830102', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (168, 4, '2025-08-04', '57860804', '19:46:00');
+VALUES (168, 4, '2026-04-21', '57860804', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (169, 1, '2014-11-27', '57751127', '20:03:00');
+VALUES (169, 1, '2015-08-12', '57751127', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (169, 2, '2018-12-28', '57791329', '18:14:00');
+VALUES (169, 2, '2019-03-06', '57791329', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (169, 3, '2022-01-03', '57830103', '19:02:00');
+VALUES (169, 3, '2022-09-28', '57830103', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (169, 4, '2025-08-05', '57860805', '19:47:00');
+VALUES (169, 4, '2026-04-22', '57860805', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (170, 1, '2014-11-28', '57751128', '20:02:00');
+VALUES (170, 1, '2015-08-13', '57751128', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (170, 2, '2018-12-28', '57791330', '18:14:00');
+VALUES (170, 2, '2019-03-07', '57791330', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (170, 3, '2022-01-04', '57830104', '19:01:00');
+VALUES (170, 3, '2022-09-29', '57830104', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (170, 4, '2025-08-06', '57860806', '19:48:00');
+VALUES (170, 4, '2026-04-23', '57860806', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (171, 1, '2014-12-01', '57751201', '19:58:00');
+VALUES (171, 1, '2015-08-16', '57751201', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (171, 2, '2018-12-03', '57791403', '18:16:00');
+VALUES (171, 2, '2019-03-10', '57791403', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (171, 3, '2022-01-07', '57830107', '18:57:00');
+VALUES (171, 3, '2022-10-02', '57830107', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (171, 4, '2025-08-09', '57860809', '19:50:00');
+VALUES (171, 4, '2026-04-26', '57860809', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (172, 1, '2014-12-02', '57751202', '19:57:00');
+VALUES (172, 1, '2015-08-17', '57751202', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (172, 2, '2018-12-04', '57791404', '18:17:00');
+VALUES (172, 2, '2019-03-11', '57791404', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (172, 3, '2022-01-08', '57830108', '18:56:00');
+VALUES (172, 3, '2022-10-03', '57830108', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (172, 4, '2025-08-10', '57860810', '19:51:00');
+VALUES (172, 4, '2026-04-27', '57860810', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (173, 1, '2014-12-03', '57751203', '19:56:00');
+VALUES (173, 1, '2015-08-18', '57751203', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (173, 2, '2018-12-05', '57791405', '18:18:00');
+VALUES (173, 2, '2019-03-12', '57791405', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (173, 3, '2022-01-09', '57830109', '18:55:00');
+VALUES (173, 3, '2022-10-04', '57830109', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (173, 4, '2025-08-11', '57860811', '19:52:00');
+VALUES (173, 4, '2026-04-28', '57860811', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (174, 1, '2014-12-04', '57751204', '19:55:00');
+VALUES (174, 1, '2015-08-19', '57751204', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (174, 2, '2018-12-06', '57791406', '18:19:00');
+VALUES (174, 2, '2019-03-13', '57791406', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (174, 3, '2022-01-10', '57830110', '18:53:00');
+VALUES (174, 3, '2022-10-05', '57830110', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (174, 4, '2025-08-12', '57860812', '19:53:00');
+VALUES (174, 4, '2026-04-29', '57860812', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (175, 1, '2014-12-05', '57751205', '19:54:00');
+VALUES (175, 1, '2015-08-20', '57751205', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (175, 2, '2018-12-07', '57791407', '18:19:00');
+VALUES (175, 2, '2019-03-14', '57791407', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (175, 3, '2022-01-11', '57830111', '18:52:00');
+VALUES (175, 3, '2022-10-06', '57830111', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (175, 4, '2025-08-13', '57860813', '19:54:00');
+VALUES (175, 4, '2026-04-30', '57860813', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (176, 1, '2014-12-08', '57751208', '19:50:00');
+VALUES (176, 1, '2015-08-23', '57751208', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (176, 2, '2018-12-10', '57791410', '18:21:00');
+VALUES (176, 2, '2019-03-17', '57791410', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (176, 3, '2022-01-14', '57830114', '18:48:00');
+VALUES (176, 3, '2022-10-09', '57830114', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (176, 4, '2025-08-16', '57860816', '19:56:00');
+VALUES (176, 4, '2026-05-03', '57860816', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (177, 1, '2014-12-09', '57751209', '19:49:00');
+VALUES (177, 1, '2015-08-24', '57751209', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (177, 2, '2018-12-11', '57791411', '18:22:00');
+VALUES (177, 2, '2019-03-18', '57791411', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (177, 3, '2022-01-15', '57830115', '18:47:00');
+VALUES (177, 3, '2022-10-10', '57830115', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (177, 4, '2025-08-17', '57860817', '19:57:00');
+VALUES (177, 4, '2026-05-04', '57860817', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (178, 1, '2014-12-10', '57751210', '19:48:00');
+VALUES (178, 1, '2015-08-25', '57751210', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (178, 2, '2018-12-12', '57791412', '18:23:00');
+VALUES (178, 2, '2019-03-19', '57791412', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (178, 3, '2022-01-16', '57830116', '18:46:00');
+VALUES (178, 3, '2022-10-11', '57830116', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (178, 4, '2025-08-18', '57860818', '19:58:00');
+VALUES (178, 4, '2026-05-05', '57860818', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (179, 1, '2014-12-11', '57751211', '19:46:00');
+VALUES (179, 1, '2015-08-26', '57751211', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (179, 2, '2018-12-13', '57791413', '18:23:00');
+VALUES (179, 2, '2019-03-20', '57791413', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (179, 3, '2022-01-17', '57830117', '18:45:00');
+VALUES (179, 3, '2022-10-12', '57830117', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (179, 4, '2025-08-19', '57860819', '19:58:00');
+VALUES (179, 4, '2026-05-06', '57860819', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (180, 1, '2014-12-12', '57751212', '19:45:00');
+VALUES (180, 1, '2015-08-27', '57751212', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (180, 2, '2018-12-14', '57791414', '18:24:00');
+VALUES (180, 2, '2019-03-21', '57791414', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (180, 3, '2022-01-18', '57830118', '18:44:00');
+VALUES (180, 3, '2022-10-13', '57830118', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (180, 4, '2025-08-20', '57860820', '19:59:00');
+VALUES (180, 4, '2026-05-07', '57860820', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (181, 1, '2014-12-15', '57751215', '19:41:00');
+VALUES (181, 1, '2015-08-30', '57751215', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (181, 2, '2018-12-17', '57791417', '18:26:00');
+VALUES (181, 2, '2019-03-24', '57791417', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (181, 3, '2022-01-21', '57830121', '18:40:00');
+VALUES (181, 3, '2022-10-16', '57830121', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (181, 4, '2025-08-23', '57860823', '20:02:00');
+VALUES (181, 4, '2026-05-10', '57860823', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (182, 1, '2014-12-16', '57751216', '19:40:00');
+VALUES (182, 1, '2015-08-31', '57751216', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (182, 2, '2018-12-18', '57791418', '18:27:00');
+VALUES (182, 2, '2019-03-25', '57791418', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (182, 3, '2022-01-22', '57830122', '18:39:00');
+VALUES (182, 3, '2022-10-17', '57830122', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (182, 4, '2025-08-24', '57860824', '20:02:00');
+VALUES (182, 4, '2026-05-11', '57860824', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (183, 1, '2014-12-17', '57751217', '19:39:00');
+VALUES (183, 1, '2015-09-01', '57751217', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (183, 2, '2018-12-19', '57791419', '18:27:00');
+VALUES (183, 2, '2019-03-26', '57791419', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (183, 3, '2022-01-23', '57830123', '18:38:00');
+VALUES (183, 3, '2022-10-18', '57830123', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (183, 4, '2025-08-25', '57860825', '20:03:00');
+VALUES (183, 4, '2026-05-12', '57860825', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (184, 1, '2014-12-18', '57751218', '19:37:00');
+VALUES (184, 1, '2015-09-02', '57751218', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (184, 2, '2018-12-20', '57791420', '18:28:00');
+VALUES (184, 2, '2019-03-27', '57791420', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (184, 3, '2022-01-24', '57830124', '18:37:00');
+VALUES (184, 3, '2022-10-19', '57830124', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (184, 4, '2025-08-26', '57860826', '20:04:00');
+VALUES (184, 4, '2026-05-13', '57860826', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (185, 1, '2014-12-19', '57751219', '19:36:00');
+VALUES (185, 1, '2015-09-03', '57751219', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (185, 2, '2018-12-21', '57791421', '18:29:00');
+VALUES (185, 2, '2019-03-28', '57791421', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (185, 3, '2022-01-25', '57830125', '18:36:00');
+VALUES (185, 3, '2022-10-20', '57830125', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (185, 4, '2025-08-27', '57860827', '20:05:00');
+VALUES (185, 4, '2026-05-14', '57860827', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (186, 1, '2014-12-22', '57751222', '19:32:00');
+VALUES (186, 1, '2015-09-06', '57751222', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (186, 2, '2018-12-24', '57791424', '19:31:00');
+VALUES (186, 2, '2019-03-31', '57791424', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (186, 3, '2022-01-28', '57830128', '18:33:00');
+VALUES (186, 3, '2022-10-23', '57830128', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (186, 4, '2025-09-01', '57860901', '20:07:00');
+VALUES (186, 4, '2026-05-17', '57860901', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (187, 1, '2014-12-23', '57751223', '19:31:00');
+VALUES (187, 1, '2015-09-07', '57751223', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (187, 2, '2018-12-25', '57791425', '19:32:00');
+VALUES (187, 2, '2019-04-01', '57791425', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (187, 3, '2022-01-28', '57830129', '18:32:00');
+VALUES (187, 3, '2022-10-24', '57830129', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (187, 4, '2025-09-02', '57860902', '20:08:00');
+VALUES (187, 4, '2026-05-18', '57860902', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (188, 1, '2014-12-24', '57751224', '19:30:00');
+VALUES (188, 1, '2015-09-08', '57751224', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (188, 2, '2018-12-26', '57791426', '19:32:00');
+VALUES (188, 2, '2019-04-02', '57791426', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (188, 3, '2022-01-28', '57830130', '18:31:00');
+VALUES (188, 3, '2022-10-25', '57830130', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (188, 4, '2025-09-03', '57860903', '20:09:00');
+VALUES (188, 4, '2026-05-19', '57860903', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (189, 1, '2014-12-25', '57751225', '19:28:00');
+VALUES (189, 1, '2015-09-09', '57751225', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (189, 2, '2018-12-27', '57791427', '19:33:00');
+VALUES (189, 2, '2019-04-03', '57791427', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (189, 3, '2022-02-01', '57830201', '18:30:00');
+VALUES (189, 3, '2022-10-26', '57830201', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (189, 4, '2025-09-04', '57860904', '20:10:00');
+VALUES (189, 4, '2026-05-20', '57860904', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (190, 1, '2014-12-26', '57751226', '19:27:00');
+VALUES (190, 1, '2015-09-10', '57751226', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (190, 2, '2018-12-28', '57791428', '19:34:00');
+VALUES (190, 2, '2019-04-04', '57791428', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (190, 3, '2022-02-02', '57830202', '18:29:00');
+VALUES (190, 3, '2022-10-27', '57830202', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (190, 4, '2025-09-05', '57860905', '20:10:00');
+VALUES (190, 4, '2026-05-21', '57860905', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (191, 1, '2014-12-28', '57751229', '19:23:00');
+VALUES (191, 1, '2015-09-13', '57751229', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (191, 2, '2018-07-02', '57790702', '19:36:00');
+VALUES (191, 2, '2019-04-07', '57790702', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (191, 3, '2022-02-05', '57830205', '17:26:00');
+VALUES (191, 3, '2022-10-30', '57830205', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (191, 4, '2025-09-08', '57860908', '20:12:00');
+VALUES (191, 4, '2026-05-24', '57860908', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (192, 1, '2015-01-01', '57760101', '19:21:00');
+VALUES (192, 1, '2015-09-14', '57760101', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (192, 2, '2018-07-03', '57790703', '19:37:00');
+VALUES (192, 2, '2019-04-08', '57790703', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (192, 3, '2022-02-06', '57830206', '17:26:00');
+VALUES (192, 3, '2022-10-31', '57830206', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (192, 4, '2025-09-09', '57860909', '20:13:00');
+VALUES (192, 4, '2026-05-25', '57860909', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (193, 1, '2015-01-02', '57760102', '19:20:00');
+VALUES (193, 1, '2015-09-15', '57760102', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (193, 2, '2018-07-04', '57790704', '19:37:00');
+VALUES (193, 2, '2019-04-09', '57790704', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (193, 3, '2022-02-07', '57830207', '17:25:00');
+VALUES (193, 3, '2022-11-01', '57830207', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (193, 4, '2025-09-10', '57860910', '20:14:00');
+VALUES (193, 4, '2026-05-26', '57860910', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (194, 1, '2015-01-03', '57760103', '19:19:00');
+VALUES (194, 1, '2015-09-16', '57760103', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (194, 2, '2018-07-05', '57790705', '19:38:00');
+VALUES (194, 2, '2019-04-10', '57790705', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (194, 3, '2022-02-08', '57830208', '17:24:00');
+VALUES (194, 3, '2022-11-02', '57830208', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (194, 4, '2025-09-11', '57860911', '20:15:00');
+VALUES (194, 4, '2026-05-27', '57860911', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (195, 1, '2015-01-04', '57760104', '19:17:00');
+VALUES (195, 1, '2015-09-17', '57760104', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (195, 2, '2018-07-06', '57790706', '19:39:00');
+VALUES (195, 2, '2019-04-11', '57790706', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (195, 3, '2022-02-09', '57830209', '17:23:00');
+VALUES (195, 3, '2022-11-03', '57830209', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (195, 4, '2025-09-12', '57860912', '20:15:00');
+VALUES (195, 4, '2026-05-28', '57860912', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (196, 1, '2015-01-07', '57760107', '19:13:00');
+VALUES (196, 1, '2015-09-20', '57760107', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (196, 2, '2018-07-09', '57790709', '19:41:00');
+VALUES (196, 2, '2019-04-14', '57790709', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (196, 3, '2022-02-12', '57830212', '17:21:00');
+VALUES (196, 3, '2022-11-06', '57830212', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (196, 4, '2025-09-15', '57860915', '20:17:00');
+VALUES (196, 4, '2026-05-31', '57860915', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (197, 1, '2015-01-08', '57760108', '19:12:00');
+VALUES (197, 1, '2015-09-21', '57760108', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (197, 2, '2018-07-10', '57790710', '19:42:00');
+VALUES (197, 2, '2019-04-15', '57790710', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (197, 3, '2022-02-13', '57830213', '17:20:00');
+VALUES (197, 3, '2022-11-07', '57830213', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (197, 4, '2025-09-16', '57860916', '20:18:00');
+VALUES (197, 4, '2026-06-01', '57860916', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (198, 1, '2015-01-09', '57760109', '19:11:00');
+VALUES (198, 1, '2015-09-22', '57760109', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (198, 2, '2018-07-11', '57790711', '19:42:00');
+VALUES (198, 2, '2019-04-16', '57790711', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (198, 3, '2022-02-14', '57830214', '17:20:00');
+VALUES (198, 3, '2022-11-08', '57830214', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (198, 4, '2025-09-17', '57860917', '20:19:00');
+VALUES (198, 4, '2026-06-02', '57860917', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (199, 1, '2015-01-10', '57760110', '19:09:00');
+VALUES (199, 1, '2015-09-23', '57760110', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (199, 2, '2018-07-12', '57790712', '19:43:00');
+VALUES (199, 2, '2019-04-17', '57790712', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (199, 3, '2022-02-15', '57830215', '17:19:00');
+VALUES (199, 3, '2022-11-09', '57830215', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (199, 4, '2025-09-18', '57860918', '20:19:00');
+VALUES (199, 4, '2026-06-03', '57860918', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (200, 1, '2015-01-11', '57760111', '19:08:00');
+VALUES (200, 1, '2015-09-24', '57760111', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (200, 2, '2018-07-13', '57790713', '19:44:00');
+VALUES (200, 2, '2019-04-18', '57790713', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (200, 3, '2022-02-16', '57830216', '17:18:00');
+VALUES (200, 3, '2022-11-10', '57830216', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (200, 4, '2025-09-19', '57860919', '20:20:00');
+VALUES (200, 4, '2026-06-04', '57860919', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (201, 1, '2015-01-14', '57760114', '19:04:00');
+VALUES (201, 1, '2015-09-27', '57760114', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (201, 2, '2018-07-16', '57790716', '19:46:00');
+VALUES (201, 2, '2019-04-21', '57790716', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (201, 3, '2022-02-19', '57830219', '17:17:00');
+VALUES (201, 3, '2022-11-13', '57830219', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (201, 4, '2025-09-22', '57860922', '20:21:00');
+VALUES (201, 4, '2026-06-07', '57860922', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (202, 1, '2015-01-15', '57760115', '19:03:00');
+VALUES (202, 1, '2015-09-28', '57760115', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (202, 2, '2018-07-17', '57790717', '19:47:00');
+VALUES (202, 2, '2019-04-22', '57790717', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (202, 3, '2022-02-20', '57830220', '17:16:00');
+VALUES (202, 3, '2022-11-14', '57830220', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (202, 4, '2025-09-23', '57860923', '20:22:00');
+VALUES (202, 4, '2026-06-08', '57860923', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (203, 1, '2015-01-16', '57760116', '19:01:00');
+VALUES (203, 1, '2015-09-29', '57760116', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (203, 2, '2018-07-18', '57790718', '19:48:00');
+VALUES (203, 2, '2019-04-23', '57790718', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (203, 3, '2022-02-21', '57830221', '17:16:00');
+VALUES (203, 3, '2022-11-15', '57830221', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (203, 4, '2025-09-24', '57860924', '20:22:00');
+VALUES (203, 4, '2026-06-09', '57860924', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (204, 1, '2015-01-17', '57760117', '19:00:00');
+VALUES (204, 1, '2015-09-30', '57760117', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (204, 2, '2018-07-19', '57790719', '19:49:00');
+VALUES (204, 2, '2019-04-24', '57790719', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (204, 3, '2022-02-22', '57830222', '17:15:00');
+VALUES (204, 3, '2022-11-16', '57830222', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (204, 4, '2025-09-25', '57860925', '20:23:00');
+VALUES (204, 4, '2026-06-10', '57860925', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (205, 1, '2015-01-18', '57760118', '18:59:00');
+VALUES (205, 1, '2015-10-01', '57760118', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (205, 2, '2018-07-20', '57790720', '19:49:00');
+VALUES (205, 2, '2019-04-25', '57790720', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (205, 3, '2022-02-23', '57830223', '17:15:00');
+VALUES (205, 3, '2022-11-17', '57830223', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (205, 4, '2025-09-26', '57860926', '20:23:00');
+VALUES (205, 4, '2026-06-11', '57860926', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (206, 1, '2015-01-21', '57760121', '18:55:00');
+VALUES (206, 1, '2015-10-04', '57760121', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (206, 2, '2018-07-23', '57790723', '19:52:00');
+VALUES (206, 2, '2019-04-28', '57790723', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (206, 3, '2022-02-26', '57830226', '17:14:00');
+VALUES (206, 3, '2022-11-20', '57830226', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (206, 4, '2025-09-28', '57860929', '20:25:00');
+VALUES (206, 4, '2026-06-14', '57860929', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (207, 1, '2015-01-22', '57760122', '18:54:00');
+VALUES (207, 1, '2015-10-05', '57760122', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (207, 2, '2018-07-24', '57790724', '19:53:00');
+VALUES (207, 2, '2019-04-29', '57790724', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (207, 3, '2022-02-27', '57830227', '17:13:00');
+VALUES (207, 3, '2022-11-21', '57830227', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (207, 4, '2025-09-28', '57860930', '20:25:00');
+VALUES (207, 4, '2026-06-15', '57860930', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (208, 1, '2015-01-23', '57760123', '18:52:00');
+VALUES (208, 1, '2015-10-06', '57760123', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (208, 2, '2018-07-25', '57790725', '19:53:00');
+VALUES (208, 2, '2019-04-30', '57790725', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (208, 3, '2022-02-28', '57830228', '17:13:00');
+VALUES (208, 3, '2022-11-22', '57830228', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (208, 4, '2025-10-01', '57861001', '20:25:00');
+VALUES (208, 4, '2026-06-16', '57861001', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (209, 1, '2015-01-24', '57760124', '18:51:00');
+VALUES (209, 1, '2015-10-07', '57760124', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (209, 2, '2018-07-26', '57790726', '19:54:00');
+VALUES (209, 2, '2019-05-01', '57790726', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (209, 3, '2022-02-28', '57830229', '17:13:00');
+VALUES (209, 3, '2022-11-23', '57830229', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (209, 4, '2025-10-02', '57861002', '20:26:00');
+VALUES (209, 4, '2026-06-17', '57861002', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (210, 1, '2015-01-25', '57760125', '18:50:00');
+VALUES (210, 1, '2015-10-08', '57760125', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (210, 2, '2018-07-27', '57790727', '19:55:00');
+VALUES (210, 2, '2019-05-02', '57790727', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (210, 3, '2022-02-28', '57830230', '17:13:00');
+VALUES (210, 3, '2022-11-24', '57830230', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (210, 4, '2025-10-03', '57861003', '20:26:00');
+VALUES (210, 4, '2026-06-18', '57861003', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (211, 1, '2015-01-28', '57760128', '18:46:00');
+VALUES (211, 1, '2015-10-11', '57760128', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (211, 2, '2018-07-28', '57790730', '19:57:00');
+VALUES (211, 2, '2019-05-05', '57790730', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (211, 3, '2022-03-03', '57830303', '17:12:00');
+VALUES (211, 3, '2022-11-27', '57830303', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (211, 4, '2025-10-06', '57861006', '20:27:00');
+VALUES (211, 4, '2026-06-21', '57861006', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (212, 1, '2015-01-28', '57760129', '18:45:00');
+VALUES (212, 1, '2015-10-12', '57760129', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (212, 2, '2018-08-01', '57790801', '19:58:00');
+VALUES (212, 2, '2019-05-06', '57790801', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (212, 3, '2022-03-04', '57830304', '17:12:00');
+VALUES (212, 3, '2022-11-28', '57830304', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (212, 4, '2025-10-07', '57861007', '20:27:00');
+VALUES (212, 4, '2026-06-22', '57861007', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (213, 1, '2015-01-28', '57760130', '18:44:00');
+VALUES (213, 1, '2015-10-13', '57760130', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (213, 2, '2018-08-02', '57790802', '19:59:00');
+VALUES (213, 2, '2019-05-07', '57790802', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (213, 3, '2022-03-05', '57830305', '17:12:00');
+VALUES (213, 3, '2022-11-29', '57830305', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (213, 4, '2025-10-08', '57861008', '20:27:00');
+VALUES (213, 4, '2026-06-23', '57861008', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (214, 1, '2015-02-01', '57760201', '18:43:00');
+VALUES (214, 1, '2015-10-14', '57760201', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (214, 2, '2018-08-03', '57790803', '20:00:00');
+VALUES (214, 2, '2019-05-08', '57790803', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (214, 3, '2022-03-06', '57830306', '17:12:00');
+VALUES (214, 3, '2022-11-30', '57830306', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (214, 4, '2025-10-09', '57861009', '20:27:00');
+VALUES (214, 4, '2026-06-24', '57861009', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (215, 1, '2015-02-02', '57760202', '18:42:00');
+VALUES (215, 1, '2015-10-15', '57760202', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (215, 2, '2018-08-04', '57790804', '20:01:00');
+VALUES (215, 2, '2019-05-09', '57790804', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (215, 3, '2022-03-07', '57830307', '17:12:00');
+VALUES (215, 3, '2022-12-01', '57830307', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (215, 4, '2025-10-10', '57861010', '20:27:00');
+VALUES (215, 4, '2026-06-25', '57861010', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (216, 1, '2015-02-05', '57760205', '18:38:00');
+VALUES (216, 1, '2015-10-18', '57760205', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (216, 2, '2018-08-07', '57790807', '20:03:00');
+VALUES (216, 2, '2019-05-12', '57790807', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (216, 3, '2022-03-10', '57830310', '17:12:00');
+VALUES (216, 3, '2022-12-04', '57830310', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (216, 4, '2025-10-13', '57861013', '20:28:00');
+VALUES (216, 4, '2026-06-28', '57861013', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (217, 1, '2015-02-06', '57760206', '18:37:00');
+VALUES (217, 1, '2015-10-19', '57760206', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (217, 2, '2018-08-08', '57790808', '20:04:00');
+VALUES (217, 2, '2019-05-13', '57790808', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (217, 3, '2022-03-11', '57830311', '17:12:00');
+VALUES (217, 3, '2022-12-05', '57830311', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (217, 4, '2025-10-14', '57861014', '20:28:00');
+VALUES (217, 4, '2026-06-29', '57861014', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (218, 1, '2015-02-07', '57760207', '18:36:00');
+VALUES (218, 1, '2015-10-20', '57760207', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (218, 2, '2018-08-09', '57790809', '20:05:00');
+VALUES (218, 2, '2019-05-14', '57790809', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (218, 3, '2022-03-12', '57830312', '17:12:00');
+VALUES (218, 3, '2022-12-06', '57830312', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (218, 4, '2025-10-15', '57861015', '20:28:00');
+VALUES (218, 4, '2026-06-30', '57861015', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (219, 1, '2015-02-08', '57760208', '18:35:00');
+VALUES (219, 1, '2015-10-21', '57760208', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (219, 2, '2018-08-10', '57790810', '20:05:00');
+VALUES (219, 2, '2019-05-15', '57790810', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (219, 3, '2022-03-13', '57830313', '17:12:00');
+VALUES (219, 3, '2022-12-07', '57830313', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (219, 4, '2025-10-16', '57861016', '20:28:00');
+VALUES (219, 4, '2026-07-01', '57861016', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (220, 1, '2015-02-09', '57760209', '18:34:00');
+VALUES (220, 1, '2015-10-22', '57760209', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (220, 2, '2018-08-11', '57790811', '20:06:00');
+VALUES (220, 2, '2019-05-16', '57790811', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (220, 3, '2022-03-14', '57830314', '17:12:00');
+VALUES (220, 3, '2022-12-08', '57830314', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (220, 4, '2025-10-17', '57861017', '20:27:00');
+VALUES (220, 4, '2026-07-02', '57861017', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (221, 1, '2015-02-12', '57760212', '17:31:00');
+VALUES (221, 1, '2015-10-25', '57760212', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (221, 2, '2018-08-14', '57790814', '20:09:00');
+VALUES (221, 2, '2019-05-19', '57790814', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (221, 3, '2022-03-17', '57830317', '17:13:00');
+VALUES (221, 3, '2022-12-11', '57830317', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (221, 4, '2025-10-20', '57861020', '20:27:00');
+VALUES (221, 4, '2026-07-05', '57861020', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (222, 1, '2015-02-13', '57760213', '17:30:00');
+VALUES (222, 1, '2015-10-26', '57760213', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (222, 2, '2018-08-15', '57790815', '20:09:00');
+VALUES (222, 2, '2019-05-20', '57790815', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (222, 3, '2022-03-18', '57830318', '17:13:00');
+VALUES (222, 3, '2022-12-12', '57830318', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (222, 4, '2025-10-21', '57861021', '20:27:00');
+VALUES (222, 4, '2026-07-06', '57861021', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (223, 1, '2015-02-14', '57760214', '17:29:00');
+VALUES (223, 1, '2015-10-27', '57760214', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (223, 2, '2018-08-16', '57790816', '20:10:00');
+VALUES (223, 2, '2019-05-21', '57790816', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (223, 3, '2022-03-19', '57830319', '17:13:00');
+VALUES (223, 3, '2022-12-13', '57830319', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (223, 4, '2025-10-22', '57861022', '20:27:00');
+VALUES (223, 4, '2026-07-07', '57861022', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (224, 1, '2015-02-15', '57760215', '17:28:00');
+VALUES (224, 1, '2015-10-28', '57760215', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (224, 2, '2018-08-17', '57790817', '20:11:00');
+VALUES (224, 2, '2019-05-22', '57790817', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (224, 3, '2022-03-20', '57830320', '17:13:00');
+VALUES (224, 3, '2022-12-14', '57830320', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (224, 4, '2025-10-23', '57861023', '20:26:00');
+VALUES (224, 4, '2026-07-08', '57861023', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (225, 1, '2015-02-16', '57760216', '17:27:00');
+VALUES (225, 1, '2015-10-29', '57760216', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (225, 2, '2018-08-18', '57790818', '20:12:00');
+VALUES (225, 2, '2019-05-23', '57790818', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (225, 3, '2022-03-21', '57830321', '17:14:00');
+VALUES (225, 3, '2022-12-15', '57830321', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (225, 4, '2025-10-24', '57861024', '20:26:00');
+VALUES (225, 4, '2026-07-09', '57861024', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (226, 1, '2015-02-19', '57760219', '17:25:00');
+VALUES (226, 1, '2015-11-01', '57760219', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (226, 2, '2018-08-21', '57790821', '20:14:00');
+VALUES (226, 2, '2019-05-26', '57790821', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (226, 3, '2022-03-24', '57830324', '17:15:00');
+VALUES (226, 3, '2022-12-18', '57830324', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (226, 4, '2025-10-27', '57861027', '20:25:00');
+VALUES (226, 4, '2026-07-12', '57861027', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (227, 1, '2015-02-20', '57760220', '17:24:00');
+VALUES (227, 1, '2015-11-02', '57760220', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (227, 2, '2018-08-22', '57790822', '20:14:00');
+VALUES (227, 2, '2019-05-27', '57790822', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (227, 3, '2022-03-25', '57830325', '17:15:00');
+VALUES (227, 3, '2022-12-19', '57830325', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (227, 4, '2025-10-28', '57861028', '20:25:00');
+VALUES (227, 4, '2026-07-13', '57861028', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (228, 1, '2015-02-21', '57760221', '17:23:00');
+VALUES (228, 1, '2015-11-03', '57760221', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (228, 2, '2018-08-23', '57790823', '20:15:00');
+VALUES (228, 2, '2019-05-28', '57790823', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (228, 3, '2022-03-26', '57830326', '17:16:00');
+VALUES (228, 3, '2022-12-20', '57830326', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (228, 4, '2025-10-28', '57861029', '20:24:00');
+VALUES (228, 4, '2026-07-14', '57861029', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (229, 1, '2015-02-22', '57760222', '17:23:00');
+VALUES (229, 1, '2015-11-04', '57760222', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (229, 2, '2018-08-24', '57790824', '20:16:00');
+VALUES (229, 2, '2019-05-29', '57790824', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (229, 3, '2022-03-27', '57830327', '17:16:00');
+VALUES (229, 3, '2022-12-21', '57830327', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (229, 4, '2025-11-01', '57861101', '20:24:00');
+VALUES (229, 4, '2026-07-15', '57861101', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (230, 1, '2015-02-23', '57760223', '17:22:00');
+VALUES (230, 1, '2015-11-05', '57760223', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (230, 2, '2018-08-25', '57790825', '20:17:00');
+VALUES (230, 2, '2019-05-30', '57790825', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (230, 3, '2022-03-28', '57830328', '17:17:00');
+VALUES (230, 3, '2022-12-22', '57830328', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (230, 4, '2025-11-02', '57861102', '20:24:00');
+VALUES (230, 4, '2026-07-16', '57861102', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (231, 1, '2015-02-26', '57760226', '17:20:00');
+VALUES (231, 1, '2015-11-08', '57760226', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (231, 2, '2018-08-28', '57790828', '20:18:00');
+VALUES (231, 2, '2019-06-02', '57790828', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (231, 3, '2022-04-01', '57830401', '17:18:00');
+VALUES (231, 3, '2022-12-25', '57830401', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (231, 4, '2025-11-05', '57861105', '20:22:00');
+VALUES (231, 4, '2026-07-19', '57861105', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (232, 1, '2015-02-27', '57760227', '17:19:00');
+VALUES (232, 1, '2015-11-09', '57760227', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (232, 2, '2018-08-28', '57790829', '20:19:00');
+VALUES (232, 2, '2019-06-03', '57790829', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (232, 3, '2022-04-02', '57830402', '17:19:00');
+VALUES (232, 3, '2022-12-26', '57830402', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (232, 4, '2025-11-06', '57861106', '20:22:00');
+VALUES (232, 4, '2026-07-20', '57861106', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (233, 1, '2015-02-28', '57760228', '17:18:00');
+VALUES (233, 1, '2015-11-10', '57760228', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (233, 2, '2018-09-01', '57790901', '20:20:00');
+VALUES (233, 2, '2019-06-04', '57790901', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (233, 3, '2022-04-03', '57830403', '17:19:00');
+VALUES (233, 3, '2022-12-27', '57830403', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (233, 4, '2025-11-07', '57861107', '20:21:00');
+VALUES (233, 4, '2026-07-21', '57861107', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (234, 1, '2015-02-28', '57760229', '17:18:00');
+VALUES (234, 1, '2015-11-11', '57760229', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (234, 2, '2018-09-02', '57790902', '20:20:00');
+VALUES (234, 2, '2019-06-05', '57790902', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (234, 3, '2022-04-04', '57830404', '17:20:00');
+VALUES (234, 3, '2022-12-28', '57830404', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (234, 4, '2025-11-08', '57861108', '20:20:00');
+VALUES (234, 4, '2026-07-22', '57861108', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (235, 1, '2015-02-28', '57760230', '17:17:00');
+VALUES (235, 1, '2015-11-12', '57760230', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (235, 2, '2018-09-03', '57790903', '20:21:00');
+VALUES (235, 2, '2019-06-06', '57790903', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (235, 3, '2022-04-05', '57830405', '17:20:00');
+VALUES (235, 3, '2022-12-29', '57830405', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (235, 4, '2025-11-09', '57861109', '20:20:00');
+VALUES (235, 4, '2026-07-23', '57861109', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (236, 1, '2015-03-03', '57760303', '17:16:00');
+VALUES (236, 1, '2015-11-15', '57760303', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (236, 2, '2018-09-06', '57790906', '20:22:00');
+VALUES (236, 2, '2019-06-09', '57790906', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (236, 3, '2022-04-08', '57830408', '17:22:00');
+VALUES (236, 3, '2023-01-01', '57830408', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (236, 4, '2025-11-12', '57861112', '20:18:00');
+VALUES (236, 4, '2026-07-26', '57861112', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (237, 1, '2015-03-04', '57760304', '17:15:00');
+VALUES (237, 1, '2015-11-16', '57760304', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (237, 2, '2018-09-07', '57790907', '20:23:00');
+VALUES (237, 2, '2019-06-10', '57790907', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (237, 3, '2022-04-09', '57830409', '17:23:00');
+VALUES (237, 3, '2023-01-02', '57830409', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (237, 4, '2025-11-13', '57861113', '20:17:00');
+VALUES (237, 4, '2026-07-27', '57861113', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (238, 1, '2015-03-05', '57760305', '17:15:00');
+VALUES (238, 1, '2015-11-17', '57760305', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (238, 2, '2018-09-08', '57790908', '20:23:00');
+VALUES (238, 2, '2019-06-11', '57790908', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (238, 3, '2022-04-10', '57830410', '17:24:00');
+VALUES (238, 3, '2023-01-03', '57830410', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (238, 4, '2025-11-14', '57861114', '20:16:00');
+VALUES (238, 4, '2026-07-28', '57861114', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (239, 1, '2015-03-06', '57760306', '17:14:00');
+VALUES (239, 1, '2015-11-18', '57760306', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (239, 2, '2018-09-09', '57790909', '20:24:00');
+VALUES (239, 2, '2019-06-12', '57790909', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (239, 3, '2022-04-11', '57830411', '17:24:00');
+VALUES (239, 3, '2023-01-04', '57830411', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (239, 4, '2025-11-15', '57861115', '20:15:00');
+VALUES (239, 4, '2026-07-29', '57861115', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (240, 1, '2015-03-07', '57760307', '17:14:00');
+VALUES (240, 1, '2015-11-19', '57760307', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (240, 2, '2018-09-10', '57790910', '20:24:00');
+VALUES (240, 2, '2019-06-13', '57790910', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (240, 3, '2022-04-12', '57830412', '17:25:00');
+VALUES (240, 3, '2023-01-05', '57830412', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (240, 4, '2025-11-16', '57861116', '20:15:00');
+VALUES (240, 4, '2026-07-30', '57861116', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (241, 1, '2015-03-10', '57760310', '17:13:00');
+VALUES (241, 1, '2015-11-22', '57760310', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (241, 2, '2018-09-13', '57790913', '20:25:00');
+VALUES (241, 2, '2019-06-16', '57790913', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (241, 3, '2022-04-15', '57830415', '17:27:00');
+VALUES (241, 3, '2023-01-08', '57830415', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (241, 4, '2025-11-19', '57861119', '20:12:00');
+VALUES (241, 4, '2026-08-02', '57861119', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (242, 1, '2015-03-11', '57760311', '17:13:00');
+VALUES (242, 1, '2015-11-23', '57760311', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (242, 2, '2018-09-14', '57790914', '20:26:00');
+VALUES (242, 2, '2019-06-17', '57790914', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (242, 3, '2022-04-16', '57830416', '17:28:00');
+VALUES (242, 3, '2023-01-09', '57830416', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (242, 4, '2025-11-20', '57861120', '20:11:00');
+VALUES (242, 4, '2026-08-03', '57861120', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (243, 1, '2015-03-12', '57760312', '17:13:00');
+VALUES (243, 1, '2015-11-24', '57760312', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (243, 2, '2018-09-15', '57790915', '20:26:00');
+VALUES (243, 2, '2019-06-18', '57790915', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (243, 3, '2022-04-17', '57830417', '17:29:00');
+VALUES (243, 3, '2023-01-10', '57830417', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (243, 4, '2025-11-21', '57861121', '20:10:00');
+VALUES (243, 4, '2026-08-04', '57861121', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (244, 1, '2015-03-13', '57760313', '17:12:00');
+VALUES (244, 1, '2015-11-25', '57760313', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (244, 2, '2018-09-16', '57790916', '20:26:00');
+VALUES (244, 2, '2019-06-19', '57790916', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (244, 3, '2022-04-18', '57830418', '17:30:00');
+VALUES (244, 3, '2023-01-11', '57830418', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (244, 4, '2025-11-22', '57861122', '20:09:00');
+VALUES (244, 4, '2026-08-05', '57861122', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (245, 1, '2015-03-14', '57760314', '17:12:00');
+VALUES (245, 1, '2015-11-26', '57760314', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (245, 2, '2018-09-17', '57790917', '20:26:00');
+VALUES (245, 2, '2019-06-20', '57790917', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (245, 3, '2022-04-19', '57830419', '17:31:00');
+VALUES (245, 3, '2023-01-12', '57830419', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (245, 4, '2025-11-23', '57861123', '20:08:00');
+VALUES (245, 4, '2026-08-06', '57861123', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (246, 1, '2015-03-17', '57760317', '17:12:00');
+VALUES (246, 1, '2015-11-29', '57760317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (246, 2, '2018-09-20', '57790920', '20:27:00');
+VALUES (246, 2, '2019-06-23', '57790920', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (246, 3, '2022-04-22', '57830422', '17:33:00');
+VALUES (246, 3, '2023-01-15', '57830422', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (246, 4, '2025-11-26', '57861126', '20:06:00');
+VALUES (246, 4, '2026-08-09', '57861126', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (247, 1, '2015-03-18', '57760318', '17:12:00');
+VALUES (247, 1, '2015-11-30', '57760318', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (247, 2, '2018-09-21', '57790921', '20:27:00');
+VALUES (247, 2, '2019-06-24', '57790921', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (247, 3, '2022-04-23', '57830423', '17:34:00');
+VALUES (247, 3, '2023-01-16', '57830423', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (247, 4, '2025-11-27', '57861127', '20:05:00');
+VALUES (247, 4, '2026-08-10', '57861127', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (248, 1, '2015-03-19', '57760319', '17:12:00');
+VALUES (248, 1, '2015-12-01', '57760319', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (248, 2, '2018-09-22', '57790922', '20:27:00');
+VALUES (248, 2, '2019-06-25', '57790922', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (248, 3, '2022-04-24', '57830424', '17:35:00');
+VALUES (248, 3, '2023-01-17', '57830424', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (248, 4, '2025-11-28', '57861128', '20:04:00');
+VALUES (248, 4, '2026-08-11', '57861128', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (249, 1, '2015-03-20', '57760320', '17:12:00');
+VALUES (249, 1, '2015-12-02', '57760320', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (249, 2, '2018-09-23', '57790923', '20:27:00');
+VALUES (249, 2, '2019-06-26', '57790923', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (249, 3, '2022-04-25', '57830425', '17:36:00');
+VALUES (249, 3, '2023-01-18', '57830425', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (249, 4, '2025-11-28', '57861129', '20:02:00');
+VALUES (249, 4, '2026-08-12', '57861129', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (250, 1, '2015-03-21', '57760321', '17:12:00');
+VALUES (250, 1, '2015-12-03', '57760321', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (250, 2, '2018-09-24', '57790924', '20:28:00');
+VALUES (250, 2, '2019-06-27', '57790924', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (250, 3, '2022-04-26', '57830426', '17:36:00');
+VALUES (250, 3, '2023-01-19', '57830426', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (250, 4, '2025-11-28', '57861130', '20:01:00');
+VALUES (250, 4, '2026-08-13', '57861130', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (251, 1, '2015-03-24', '57760324', '17:12:00');
+VALUES (251, 1, '2015-12-06', '57760324', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (251, 2, '2018-09-27', '57790927', '20:28:00');
+VALUES (251, 2, '2019-06-30', '57790927', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (251, 3, '2022-04-28', '57830429', '17:39:00');
+VALUES (251, 3, '2023-01-22', '57830429', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (251, 4, '2025-12-03', '57861203', '19:58:00');
+VALUES (251, 4, '2026-08-16', '57861203', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (252, 1, '2015-03-25', '57760325', '17:12:00');
+VALUES (252, 1, '2015-12-07', '57760325', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (252, 2, '2018-09-28', '57790928', '20:28:00');
+VALUES (252, 2, '2019-07-01', '57790928', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (252, 3, '2022-05-01', '57830501', '17:40:00');
+VALUES (252, 3, '2023-01-23', '57830501', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (252, 4, '2025-12-04', '57861204', '19:57:00');
+VALUES (252, 4, '2026-08-17', '57861204', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (253, 1, '2015-03-26', '57760326', '17:12:00');
+VALUES (253, 1, '2015-12-08', '57760326', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (253, 2, '2018-09-28', '57790929', '20:27:00');
+VALUES (253, 2, '2019-07-02', '57790929', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (253, 3, '2022-05-02', '57830502', '17:41:00');
+VALUES (253, 3, '2023-01-24', '57830502', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (253, 4, '2025-12-05', '57861205', '19:56:00');
+VALUES (253, 4, '2026-08-18', '57861205', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (254, 1, '2015-03-27', '57760327', '17:12:00');
+VALUES (254, 1, '2015-12-09', '57760327', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (254, 2, '2018-09-28', '57790930', '20:27:00');
+VALUES (254, 2, '2019-07-03', '57790930', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (254, 3, '2022-05-03', '57830503', '17:42:00');
+VALUES (254, 3, '2023-01-25', '57830503', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (254, 4, '2025-12-06', '57861206', '19:55:00');
+VALUES (254, 4, '2026-08-19', '57861206', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (255, 1, '2015-03-28', '57760328', '17:12:00');
+VALUES (255, 1, '2015-12-10', '57760328', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (255, 2, '2018-10-01', '57791001', '20:27:00');
+VALUES (255, 2, '2019-07-04', '57791001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (255, 3, '2022-05-04', '57830504', '17:42:00');
+VALUES (255, 3, '2023-01-26', '57830504', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (255, 4, '2025-12-07', '57861207', '19:53:00');
+VALUES (255, 4, '2026-08-20', '57861207', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (256, 1, '2015-04-01', '57760401', '17:13:00');
+VALUES (256, 1, '2015-12-13', '57760401', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (256, 2, '2018-10-04', '57791004', '20:27:00');
+VALUES (256, 2, '2019-07-07', '57791004', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (256, 3, '2022-05-07', '57830507', '17:45:00');
+VALUES (256, 3, '2023-01-29', '57830507', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (256, 4, '2025-12-10', '57861210', '19:50:00');
+VALUES (256, 4, '2026-08-23', '57861210', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (257, 1, '2015-04-02', '57760402', '17:13:00');
+VALUES (257, 1, '2015-12-14', '57760402', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (257, 2, '2018-10-05', '57791005', '20:27:00');
+VALUES (257, 2, '2019-07-08', '57791005', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (257, 3, '2022-05-08', '57830508', '17:46:00');
+VALUES (257, 3, '2023-01-30', '57830508', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (257, 4, '2025-12-11', '57861211', '19:49:00');
+VALUES (257, 4, '2026-08-24', '57861211', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (258, 1, '2015-04-03', '57760403', '17:14:00');
+VALUES (258, 1, '2015-12-15', '57760403', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (258, 2, '2018-10-06', '57791006', '20:26:00');
+VALUES (258, 2, '2019-07-09', '57791006', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (258, 3, '2022-05-09', '57830509', '17:47:00');
+VALUES (258, 3, '2023-01-31', '57830509', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (258, 4, '2025-12-12', '57861212', '19:47:00');
+VALUES (258, 4, '2026-08-25', '57861212', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (259, 1, '2015-04-04', '57760404', '17:14:00');
+VALUES (259, 1, '2015-12-16', '57760404', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (259, 2, '2018-10-07', '57791007', '20:26:00');
+VALUES (259, 2, '2019-07-10', '57791007', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (259, 3, '2022-05-10', '57830510', '17:48:00');
+VALUES (259, 3, '2023-02-01', '57830510', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (259, 4, '2025-12-13', '57861213', '19:46:00');
+VALUES (259, 4, '2026-08-26', '57861213', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (260, 1, '2015-04-05', '57760405', '17:14:00');
+VALUES (260, 1, '2015-12-17', '57760405', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (260, 2, '2018-10-08', '57791008', '20:26:00');
+VALUES (260, 2, '2019-07-11', '57791008', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (260, 3, '2022-05-11', '57830511', '17:48:00');
+VALUES (260, 3, '2023-02-02', '57830511', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (260, 4, '2025-12-14', '57861214', '19:45:00');
+VALUES (260, 4, '2026-08-27', '57861214', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (261, 1, '2015-04-08', '57760408', '17:16:00');
+VALUES (261, 1, '2015-12-20', '57760408', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (261, 2, '2018-10-11', '57791011', '20:25:00');
+VALUES (261, 2, '2019-07-14', '57791011', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (261, 3, '2022-05-14', '57830514', '17:51:00');
+VALUES (261, 3, '2023-02-05', '57830514', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (261, 4, '2025-12-17', '57861217', '19:41:00');
+VALUES (261, 4, '2026-08-30', '57861217', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (262, 1, '2015-04-09', '57760409', '17:16:00');
+VALUES (262, 1, '2015-12-21', '57760409', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (262, 2, '2018-10-12', '57791012', '20:24:00');
+VALUES (262, 2, '2019-07-15', '57791012', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (262, 3, '2022-05-15', '57830515', '17:52:00');
+VALUES (262, 3, '2023-02-06', '57830515', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (262, 4, '2025-12-18', '57861218', '19:40:00');
+VALUES (262, 4, '2026-08-31', '57861218', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (263, 1, '2015-04-10', '57760410', '17:16:00');
+VALUES (263, 1, '2015-12-22', '57760410', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (263, 2, '2018-10-13', '57791013', '20:24:00');
+VALUES (263, 2, '2019-07-16', '57791013', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (263, 3, '2022-05-16', '57830516', '17:53:00');
+VALUES (263, 3, '2023-02-07', '57830516', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (263, 4, '2025-12-19', '57861219', '19:39:00');
+VALUES (263, 4, '2026-09-01', '57861219', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (264, 1, '2015-04-11', '57760411', '17:17:00');
+VALUES (264, 1, '2015-12-23', '57760411', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (264, 2, '2018-10-14', '57791014', '20:23:00');
+VALUES (264, 2, '2019-07-17', '57791014', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (264, 3, '2022-05-17', '57830517', '17:54:00');
+VALUES (264, 3, '2023-02-08', '57830517', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (264, 4, '2025-12-20', '57861220', '19:37:00');
+VALUES (264, 4, '2026-09-02', '57861220', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (265, 1, '2015-04-12', '57760412', '17:17:00');
+VALUES (265, 1, '2015-12-24', '57760412', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (265, 2, '2018-10-15', '57791015', '20:23:00');
+VALUES (265, 2, '2019-07-18', '57791015', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (265, 3, '2022-05-18', '57830518', '17:54:00');
+VALUES (265, 3, '2023-02-09', '57830518', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (265, 4, '2025-12-21', '57861221', '19:36:00');
+VALUES (265, 4, '2026-09-03', '57861221', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (266, 1, '2015-04-15', '57760415', '17:19:00');
+VALUES (266, 1, '2015-12-27', '57760415', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (266, 2, '2018-10-18', '57791018', '20:21:00');
+VALUES (266, 2, '2019-07-21', '57791018', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (266, 3, '2022-05-21', '57830521', '17:57:00');
+VALUES (266, 3, '2023-02-12', '57830521', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (266, 4, '2025-12-24', '57861224', '19:32:00');
+VALUES (266, 4, '2026-09-06', '57861224', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (267, 1, '2015-04-16', '57760416', '17:20:00');
+VALUES (267, 1, '2015-12-28', '57760416', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (267, 2, '2018-10-19', '57791019', '20:20:00');
+VALUES (267, 2, '2019-07-22', '57791019', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (267, 3, '2022-05-22', '57830522', '17:58:00');
+VALUES (267, 3, '2023-02-13', '57830522', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (267, 4, '2025-12-25', '57861225', '19:31:00');
+VALUES (267, 4, '2026-09-07', '57861225', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (268, 1, '2015-04-17', '57760417', '17:20:00');
+VALUES (268, 1, '2015-12-29', '57760417', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (268, 2, '2018-10-20', '57791020', '20:20:00');
+VALUES (268, 2, '2019-07-23', '57791020', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (268, 3, '2022-05-23', '57830523', '17:58:00');
+VALUES (268, 3, '2023-02-14', '57830523', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (268, 4, '2025-12-26', '57861226', '19:29:00');
+VALUES (268, 4, '2026-09-08', '57861226', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (269, 1, '2015-04-18', '57760418', '17:21:00');
+VALUES (269, 1, '2015-12-30', '57760418', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (269, 2, '2018-10-21', '57791021', '20:19:00');
+VALUES (269, 2, '2019-07-24', '57791021', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (269, 3, '2022-05-24', '57830524', '17:59:00');
+VALUES (269, 3, '2023-02-15', '57830524', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (269, 4, '2025-12-27', '57861227', '19:28:00');
+VALUES (269, 4, '2026-09-09', '57861227', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (270, 1, '2015-04-19', '57760419', '17:22:00');
+VALUES (270, 1, '2015-12-31', '57760419', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (270, 2, '2018-10-22', '57791022', '20:19:00');
+VALUES (270, 2, '2019-07-25', '57791022', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (270, 3, '2022-05-25', '57830525', '18:00:00');
+VALUES (270, 3, '2023-02-16', '57830525', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (270, 4, '2025-12-28', '57861228', '19:27:00');
+VALUES (270, 4, '2026-09-10', '57861228', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (271, 1, '2015-04-22', '57760422', '17:24:00');
+VALUES (271, 1, '2016-01-03', '57760422', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (271, 2, '2018-10-25', '57791025', '20:16:00');
+VALUES (271, 2, '2019-07-28', '57791025', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (271, 3, '2022-05-28', '57830528', '18:02:00');
+VALUES (271, 3, '2023-02-19', '57830528', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (271, 4, '2026-01-02', '57870102', '19:23:00');
+VALUES (271, 4, '2026-09-13', '57870102', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (272, 1, '2015-04-23', '57760423', '17:24:00');
+VALUES (272, 1, '2016-01-04', '57760423', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (272, 2, '2018-10-26', '57791026', '20:16:00');
+VALUES (272, 2, '2019-07-29', '57791026', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (272, 3, '2022-05-28', '57830529', '18:03:00');
+VALUES (272, 3, '2023-02-20', '57830529', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (272, 4, '2026-01-03', '57870103', '19:21:00');
+VALUES (272, 4, '2026-09-14', '57870103', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (273, 1, '2015-04-24', '57760424', '17:25:00');
+VALUES (273, 1, '2016-01-05', '57760424', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (273, 2, '2018-10-27', '57791027', '20:15:00');
+VALUES (273, 2, '2019-07-30', '57791027', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (273, 3, '2022-05-28', '57830530', '18:04:00');
+VALUES (273, 3, '2023-02-21', '57830530', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (273, 4, '2026-01-04', '57870104', '19:20:00');
+VALUES (273, 4, '2026-09-15', '57870104', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (274, 1, '2015-04-25', '57760425', '17:26:00');
+VALUES (274, 1, '2016-01-06', '57760425', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (274, 2, '2018-10-28', '57791028', '20:14:00');
+VALUES (274, 2, '2019-07-31', '57791028', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (274, 3, '2022-06-01', '57830601', '18:05:00');
+VALUES (274, 3, '2023-02-22', '57830601', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (274, 4, '2026-01-05', '57870105', '19:18:00');
+VALUES (274, 4, '2026-09-16', '57870105', '19:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (275, 1, '2015-04-26', '57760426', '17:27:00');
+VALUES (275, 1, '2016-01-07', '57760426', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (275, 2, '2018-10-28', '57791029', '20:13:00');
+VALUES (275, 2, '2019-08-01', '57791029', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (275, 3, '2022-06-02', '57830602', '18:06:00');
+VALUES (275, 3, '2023-02-23', '57830602', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (275, 4, '2026-01-06', '57870106', '19:17:00');
+VALUES (275, 4, '2026-09-17', '57870106', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (276, 1, '2015-04-28', '57760429', '17:29:00');
+VALUES (276, 1, '2016-01-10', '57760429', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (276, 2, '2018-11-03', '57791103', '20:11:00');
+VALUES (276, 2, '2019-08-04', '57791103', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (276, 3, '2022-06-05', '57830605', '18:08:00');
+VALUES (276, 3, '2023-02-26', '57830605', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (276, 4, '2026-01-09', '57870109', '19:13:00');
+VALUES (276, 4, '2026-09-20', '57870109', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (277, 1, '2015-05-01', '57760501', '17:30:00');
+VALUES (277, 1, '2016-01-11', '57760501', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (277, 2, '2018-11-04', '57791104', '20:10:00');
+VALUES (277, 2, '2019-08-05', '57791104', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (277, 3, '2022-06-06', '57830606', '18:09:00');
+VALUES (277, 3, '2023-02-27', '57830606', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (277, 4, '2026-01-10', '57870110', '19:12:00');
+VALUES (277, 4, '2026-09-21', '57870110', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (278, 1, '2015-05-02', '57760502', '17:30:00');
+VALUES (278, 1, '2016-01-12', '57760502', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (278, 2, '2018-11-05', '57791105', '20:09:00');
+VALUES (278, 2, '2019-08-06', '57791105', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (278, 3, '2022-06-07', '57830607', '18:09:00');
+VALUES (278, 3, '2023-02-28', '57830607', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (278, 4, '2026-01-11', '57870111', '19:10:00');
+VALUES (278, 4, '2026-09-22', '57870111', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (279, 1, '2015-05-03', '57760503', '17:31:00');
+VALUES (279, 1, '2016-01-13', '57760503', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (279, 2, '2018-11-06', '57791106', '20:08:00');
+VALUES (279, 2, '2019-08-07', '57791106', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (279, 3, '2022-06-08', '57830608', '18:10:00');
+VALUES (279, 3, '2023-03-01', '57830608', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (279, 4, '2026-01-12', '57870112', '19:09:00');
+VALUES (279, 4, '2026-09-23', '57870112', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (280, 1, '2015-05-04', '57760504', '17:32:00');
+VALUES (280, 1, '2016-01-14', '57760504', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (280, 2, '2018-11-07', '57791107', '20:07:00');
+VALUES (280, 2, '2019-08-08', '57791107', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (280, 3, '2022-06-09', '57830609', '18:11:00');
+VALUES (280, 3, '2023-03-02', '57830609', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (280, 4, '2026-01-13', '57870113', '19:08:00');
+VALUES (280, 4, '2026-09-24', '57870113', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (281, 1, '2015-05-07', '57760507', '17:35:00');
+VALUES (281, 1, '2016-01-17', '57760507', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (281, 2, '2018-11-10', '57791110', '20:04:00');
+VALUES (281, 2, '2019-08-11', '57791110', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (281, 3, '2022-06-12', '57830612', '18:13:00');
+VALUES (281, 3, '2023-03-05', '57830612', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (281, 4, '2026-01-16', '57870116', '19:04:00');
+VALUES (281, 4, '2026-09-27', '57870116', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (282, 1, '2015-05-08', '57760508', '17:35:00');
+VALUES (282, 1, '2016-01-18', '57760508', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (282, 2, '2018-11-11', '57791111', '20:03:00');
+VALUES (282, 2, '2019-08-12', '57791111', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (282, 3, '2022-06-13', '57830613', '18:14:00');
+VALUES (282, 3, '2023-03-06', '57830613', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (282, 4, '2026-01-17', '57870117', '19:02:00');
+VALUES (282, 4, '2026-09-28', '57870117', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (283, 1, '2015-05-09', '57760509', '17:36:00');
+VALUES (283, 1, '2016-01-19', '57760509', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (283, 2, '2018-11-12', '57791112', '20:02:00');
+VALUES (283, 2, '2019-08-13', '57791112', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (283, 3, '2022-06-14', '57830614', '18:14:00');
+VALUES (283, 3, '2023-03-07', '57830614', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (283, 4, '2026-01-18', '57870118', '19:01:00');
+VALUES (283, 4, '2026-09-29', '57870118', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (284, 1, '2015-05-10', '57760510', '17:37:00');
+VALUES (284, 1, '2016-01-20', '57760510', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (284, 2, '2018-11-13', '57791113', '20:01:00');
+VALUES (284, 2, '2019-08-14', '57791113', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (284, 3, '2022-06-15', '57830615', '18:15:00');
+VALUES (284, 3, '2023-03-08', '57830615', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (284, 4, '2026-01-19', '57870119', '19:00:00');
+VALUES (284, 4, '2026-09-30', '57870119', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (285, 1, '2015-05-11', '57760511', '17:38:00');
+VALUES (285, 1, '2016-01-21', '57760511', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (285, 2, '2018-11-14', '57791114', '19:59:00');
+VALUES (285, 2, '2019-08-15', '57791114', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (285, 3, '2022-06-16', '57830616', '18:16:00');
+VALUES (285, 3, '2023-03-09', '57830616', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (285, 4, '2026-01-20', '57870120', '18:58:00');
+VALUES (285, 4, '2026-10-01', '57870120', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (286, 1, '2015-05-14', '57760514', '17:40:00');
+VALUES (286, 1, '2016-01-24', '57760514', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (286, 2, '2018-11-17', '57791117', '19:56:00');
+VALUES (286, 2, '2019-08-18', '57791117', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (286, 3, '2022-06-19', '57830619', '18:18:00');
+VALUES (286, 3, '2023-03-12', '57830619', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (286, 4, '2026-01-23', '57870123', '18:55:00');
+VALUES (286, 4, '2026-10-04', '57870123', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (287, 1, '2015-05-15', '57760515', '17:41:00');
+VALUES (287, 1, '2016-01-25', '57760515', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (287, 2, '2018-11-18', '57791118', '19:55:00');
+VALUES (287, 2, '2019-08-19', '57791118', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (287, 3, '2022-06-20', '57830620', '18:19:00');
+VALUES (287, 3, '2023-03-13', '57830620', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (287, 4, '2026-01-24', '57870124', '18:53:00');
+VALUES (287, 4, '2026-10-05', '57870124', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (288, 1, '2015-05-16', '57760516', '17:42:00');
+VALUES (288, 1, '2016-01-26', '57760516', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (288, 2, '2018-11-19', '57791119', '19:54:00');
+VALUES (288, 2, '2019-08-20', '57791119', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (288, 3, '2022-06-21', '57830621', '18:19:00');
+VALUES (288, 3, '2023-03-14', '57830621', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (288, 4, '2026-01-25', '57870125', '18:52:00');
+VALUES (288, 4, '2026-10-06', '57870125', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (289, 1, '2015-05-17', '57760517', '17:43:00');
+VALUES (289, 1, '2016-01-27', '57760517', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (289, 2, '2018-11-20', '57791120', '19:53:00');
+VALUES (289, 2, '2019-08-21', '57791120', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (289, 3, '2022-06-22', '57830622', '18:20:00');
+VALUES (289, 3, '2023-03-15', '57830622', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (289, 4, '2026-01-26', '57870126', '18:51:00');
+VALUES (289, 4, '2026-10-07', '57870126', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (290, 1, '2015-05-18', '57760518', '17:44:00');
+VALUES (290, 1, '2016-01-28', '57760518', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (290, 2, '2018-11-21', '57791121', '19:51:00');
+VALUES (290, 2, '2019-08-22', '57791121', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (290, 3, '2022-06-23', '57830623', '18:21:00');
+VALUES (290, 3, '2023-03-16', '57830623', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (290, 4, '2026-01-27', '57870127', '18:50:00');
+VALUES (290, 4, '2026-10-08', '57870127', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (291, 1, '2015-05-21', '57760521', '17:47:00');
+VALUES (291, 1, '2016-01-31', '57760521', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (291, 2, '2018-11-24', '57791124', '19:48:00');
+VALUES (291, 2, '2019-08-25', '57791124', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (291, 3, '2022-06-26', '57830626', '18:23:00');
+VALUES (291, 3, '2023-03-19', '57830626', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (291, 4, '2026-01-28', '57870130', '18:46:00');
+VALUES (291, 4, '2026-10-11', '57870130', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (292, 1, '2015-05-22', '57760522', '17:47:00');
+VALUES (292, 1, '2016-02-01', '57760522', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (292, 2, '2018-11-25', '57791125', '19:46:00');
+VALUES (292, 2, '2019-08-26', '57791125', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (292, 3, '2022-06-27', '57830627', '18:23:00');
+VALUES (292, 3, '2023-03-20', '57830627', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (292, 4, '2026-02-01', '57870201', '18:45:00');
+VALUES (292, 4, '2026-10-12', '57870201', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (293, 1, '2015-05-23', '57760523', '17:48:00');
+VALUES (293, 1, '2016-02-02', '57760523', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (293, 2, '2018-11-26', '57791126', '19:45:00');
+VALUES (293, 2, '2019-08-27', '57791126', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (293, 3, '2022-06-28', '57830628', '18:24:00');
+VALUES (293, 3, '2023-03-21', '57830628', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (293, 4, '2026-02-02', '57870202', '18:44:00');
+VALUES (293, 4, '2026-10-13', '57870202', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (294, 1, '2015-05-24', '57760524', '17:49:00');
+VALUES (294, 1, '2016-02-03', '57760524', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (294, 2, '2018-11-27', '57791127', '19:44:00');
+VALUES (294, 2, '2019-08-28', '57791127', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (294, 3, '2022-06-28', '57830629', '18:25:00');
+VALUES (294, 3, '2023-03-22', '57830629', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (294, 4, '2026-02-03', '57870203', '18:42:00');
+VALUES (294, 4, '2026-10-14', '57870203', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (295, 1, '2015-05-25', '57760525', '17:50:00');
+VALUES (295, 1, '2016-02-04', '57760525', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (295, 2, '2018-11-28', '57791128', '19:43:00');
+VALUES (295, 2, '2019-08-29', '57791128', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (295, 3, '2022-07-01', '57830701', '18:25:00');
+VALUES (295, 3, '2023-03-23', '57830701', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (295, 4, '2026-02-04', '57870204', '18:41:00');
+VALUES (295, 4, '2026-10-15', '57870204', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (296, 1, '2015-05-28', '57760528', '17:53:00');
+VALUES (296, 1, '2016-02-07', '57760528', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (296, 2, '2018-12-01', '57791201', '19:39:00');
+VALUES (296, 2, '2019-09-01', '57791201', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (296, 3, '2022-07-04', '57830704', '19:27:00');
+VALUES (296, 3, '2023-03-26', '57830704', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (296, 4, '2026-02-07', '57870207', '18:38:00');
+VALUES (296, 4, '2026-10-18', '57870207', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (297, 1, '2015-05-28', '57760529', '17:53:00');
+VALUES (297, 1, '2016-02-08', '57760529', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (297, 2, '2018-12-02', '57791202', '19:38:00');
+VALUES (297, 2, '2019-09-02', '57791202', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (297, 3, '2022-07-05', '57830705', '19:28:00');
+VALUES (297, 3, '2023-03-27', '57830705', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (297, 4, '2026-02-08', '57870208', '18:37:00');
+VALUES (297, 4, '2026-10-19', '57870208', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (298, 1, '2015-05-28', '57760530', '17:54:00');
+VALUES (298, 1, '2016-02-09', '57760530', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (298, 2, '2018-12-03', '57791203', '19:36:00');
+VALUES (298, 2, '2019-09-03', '57791203', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (298, 3, '2022-07-06', '57830706', '19:29:00');
+VALUES (298, 3, '2023-03-28', '57830706', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (298, 4, '2026-02-09', '57870209', '18:36:00');
+VALUES (298, 4, '2026-10-20', '57870209', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (299, 1, '2015-12-01', '57761301', '17:55:00');
+VALUES (299, 1, '2016-02-10', '57761301', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (299, 2, '2018-12-04', '57791204', '19:35:00');
+VALUES (299, 2, '2019-09-04', '57791204', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (299, 3, '2022-07-07', '57830707', '19:29:00');
+VALUES (299, 3, '2023-03-29', '57830707', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (299, 4, '2026-02-10', '57870210', '18:35:00');
+VALUES (299, 4, '2026-10-21', '57870210', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (300, 1, '2015-12-02', '57761302', '17:56:00');
+VALUES (300, 1, '2016-02-11', '57761302', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (300, 2, '2018-12-05', '57791205', '19:34:00');
+VALUES (300, 2, '2019-09-05', '57791205', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (300, 3, '2022-07-08', '57830708', '19:30:00');
+VALUES (300, 3, '2023-03-30', '57830708', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (300, 4, '2026-02-11', '57870211', '18:34:00');
+VALUES (300, 4, '2026-10-22', '57870211', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (301, 1, '2015-12-05', '57761305', '17:58:00');
+VALUES (301, 1, '2016-02-14', '57761305', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (301, 2, '2018-12-08', '57791208', '19:30:00');
+VALUES (301, 2, '2019-09-08', '57791208', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (301, 3, '2022-07-11', '57830711', '19:32:00');
+VALUES (301, 3, '2023-04-02', '57830711', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (301, 4, '2026-02-14', '57870214', '17:31:00');
+VALUES (301, 4, '2026-10-25', '57870214', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (302, 1, '2015-12-06', '57761306', '17:59:00');
+VALUES (302, 1, '2016-02-15', '57761306', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (302, 2, '2018-12-09', '57791209', '19:28:00');
+VALUES (302, 2, '2019-09-09', '57791209', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (302, 3, '2022-07-12', '57830712', '19:33:00');
+VALUES (302, 3, '2023-04-03', '57830712', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (302, 4, '2026-02-15', '57870215', '17:30:00');
+VALUES (302, 4, '2026-10-26', '57870215', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (303, 1, '2015-12-07', '57761307', '18:00:00');
+VALUES (303, 1, '2016-02-16', '57761307', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (303, 2, '2018-12-10', '57791210', '19:27:00');
+VALUES (303, 2, '2019-09-10', '57791210', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (303, 3, '2022-07-13', '57830713', '19:34:00');
+VALUES (303, 3, '2023-04-04', '57830713', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (303, 4, '2026-02-16', '57870216', '17:29:00');
+VALUES (303, 4, '2026-10-27', '57870216', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (304, 1, '2015-12-08', '57761308', '18:01:00');
+VALUES (304, 1, '2016-02-17', '57761308', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (304, 2, '2018-12-11', '57791211', '19:26:00');
+VALUES (304, 2, '2019-09-11', '57791211', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (304, 3, '2022-07-14', '57830714', '19:34:00');
+VALUES (304, 3, '2023-04-05', '57830714', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (304, 4, '2026-02-17', '57870217', '17:28:00');
+VALUES (304, 4, '2026-10-28', '57870217', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (305, 1, '2015-12-09', '57761309', '18:02:00');
+VALUES (305, 1, '2016-02-18', '57761309', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (305, 2, '2018-12-12', '57791212', '19:24:00');
+VALUES (305, 2, '2019-09-12', '57791212', '19:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (305, 3, '2022-07-15', '57830715', '19:35:00');
+VALUES (305, 3, '2023-04-06', '57830715', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (305, 4, '2026-02-18', '57870218', '17:27:00');
+VALUES (305, 4, '2026-10-29', '57870218', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (306, 1, '2015-12-12', '57761312', '18:04:00');
+VALUES (306, 1, '2016-02-21', '57761312', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (306, 2, '2018-12-15', '57791215', '19:20:00');
+VALUES (306, 2, '2019-09-15', '57791215', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (306, 3, '2022-07-18', '57830718', '19:37:00');
+VALUES (306, 3, '2023-04-09', '57830718', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (306, 4, '2026-02-21', '57870221', '17:25:00');
+VALUES (306, 4, '2026-11-01', '57870221', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (307, 1, '2015-12-13', '57761313', '18:05:00');
+VALUES (307, 1, '2016-02-22', '57761313', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (307, 2, '2018-12-16', '57791216', '19:19:00');
+VALUES (307, 2, '2019-09-16', '57791216', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (307, 3, '2022-07-19', '57830719', '19:38:00');
+VALUES (307, 3, '2023-04-10', '57830719', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (307, 4, '2026-02-22', '57870222', '17:24:00');
+VALUES (307, 4, '2026-11-02', '57870222', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (308, 1, '2015-12-14', '57761314', '18:05:00');
+VALUES (308, 1, '2016-02-23', '57761314', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (308, 2, '2018-12-17', '57791217', '19:17:00');
+VALUES (308, 2, '2019-09-17', '57791217', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (308, 3, '2022-07-20', '57830720', '19:39:00');
+VALUES (308, 3, '2023-04-11', '57830720', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (308, 4, '2026-02-23', '57870223', '17:23:00');
+VALUES (308, 4, '2026-11-03', '57870223', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (309, 1, '2015-12-15', '57761315', '18:06:00');
+VALUES (309, 1, '2016-02-24', '57761315', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (309, 2, '2018-12-18', '57791218', '19:16:00');
+VALUES (309, 2, '2019-09-18', '57791218', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (309, 3, '2022-07-21', '57830721', '19:39:00');
+VALUES (309, 3, '2023-04-12', '57830721', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (309, 4, '2026-02-24', '57870224', '17:22:00');
+VALUES (309, 4, '2026-11-04', '57870224', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (310, 1, '2015-12-16', '57761316', '18:07:00');
+VALUES (310, 1, '2016-02-25', '57761316', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (310, 2, '2018-12-19', '57791219', '19:15:00');
+VALUES (310, 2, '2019-09-19', '57791219', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (310, 3, '2022-07-22', '57830722', '19:40:00');
+VALUES (310, 3, '2023-04-13', '57830722', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (310, 4, '2026-02-25', '57870225', '17:22:00');
+VALUES (310, 4, '2026-11-05', '57870225', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (311, 1, '2015-12-19', '57761319', '18:09:00');
+VALUES (311, 1, '2016-02-28', '57761319', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (311, 2, '2018-12-22', '57791222', '19:11:00');
+VALUES (311, 2, '2019-09-22', '57791222', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (311, 3, '2022-07-25', '57830725', '19:42:00');
+VALUES (311, 3, '2023-04-16', '57830725', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (311, 4, '2026-02-28', '57870228', '17:20:00');
+VALUES (311, 4, '2026-11-08', '57870228', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (312, 1, '2015-12-20', '57761320', '18:10:00');
+VALUES (312, 1, '2016-02-29', '57761320', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (312, 2, '2018-12-23', '57791223', '19:09:00');
+VALUES (312, 2, '2019-09-23', '57791223', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (312, 3, '2022-07-26', '57830726', '19:43:00');
+VALUES (312, 3, '2023-04-17', '57830726', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (312, 4, '2026-02-28', '57870229', '17:19:00');
+VALUES (312, 4, '2026-11-09', '57870229', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (313, 1, '2015-12-21', '57761321', '18:11:00');
+VALUES (313, 1, '2016-03-01', '57761321', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (313, 2, '2018-12-24', '57791224', '19:08:00');
+VALUES (313, 2, '2019-09-24', '57791224', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (313, 3, '2022-07-27', '57830727', '19:44:00');
+VALUES (313, 3, '2023-04-18', '57830727', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (313, 4, '2026-02-28', '57870230', '17:18:00');
+VALUES (313, 4, '2026-11-10', '57870230', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (314, 1, '2015-12-22', '57761322', '18:11:00');
+VALUES (314, 1, '2016-03-02', '57761322', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (314, 2, '2018-12-25', '57791225', '19:07:00');
+VALUES (314, 2, '2019-09-25', '57791225', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (314, 3, '2022-07-28', '57830728', '19:45:00');
+VALUES (314, 3, '2023-04-19', '57830728', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (314, 4, '2026-03-01', '57870301', '17:18:00');
+VALUES (314, 4, '2026-11-11', '57870301', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (315, 1, '2015-12-23', '57761323', '18:12:00');
+VALUES (315, 1, '2016-03-03', '57761323', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (315, 2, '2018-12-26', '57791226', '19:05:00');
+VALUES (315, 2, '2019-09-26', '57791226', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (315, 3, '2022-07-28', '57830729', '19:45:00');
+VALUES (315, 3, '2023-04-20', '57830729', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (315, 4, '2026-03-02', '57870302', '17:17:00');
+VALUES (315, 4, '2026-11-12', '57870302', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (316, 1, '2015-12-26', '57761326', '18:14:00');
+VALUES (316, 1, '2016-03-06', '57761326', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (316, 2, '2018-12-28', '57791229', '19:01:00');
+VALUES (316, 2, '2019-09-29', '57791229', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (316, 3, '2022-08-02', '57830802', '19:48:00');
+VALUES (316, 3, '2023-04-23', '57830802', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (316, 4, '2026-03-05', '57870305', '17:16:00');
+VALUES (316, 4, '2026-11-15', '57870305', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (317, 1, '2015-12-27', '57761327', '18:15:00');
+VALUES (317, 1, '2016-03-07', '57761327', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (317, 2, '2019-01-01', '57800101', '19:00:00');
+VALUES (317, 2, '2019-09-30', '57800101', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (317, 3, '2022-08-03', '57830803', '19:49:00');
+VALUES (317, 3, '2023-04-24', '57830803', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (317, 4, '2026-03-06', '57870306', '17:15:00');
+VALUES (317, 4, '2026-11-16', '57870306', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (318, 1, '2015-12-28', '57761328', '18:16:00');
+VALUES (318, 1, '2016-03-08', '57761328', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (318, 2, '2019-01-02', '57800102', '18:59:00');
+VALUES (318, 2, '2019-10-01', '57800102', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (318, 3, '2022-08-04', '57830804', '19:49:00');
+VALUES (318, 3, '2023-04-25', '57830804', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (318, 4, '2026-03-07', '57870307', '17:15:00');
+VALUES (318, 4, '2026-11-17', '57870307', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (319, 1, '2015-12-28', '57761329', '18:16:00');
+VALUES (319, 1, '2016-03-09', '57761329', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (319, 2, '2019-01-03', '57800103', '18:57:00');
+VALUES (319, 2, '2019-10-02', '57800103', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (319, 3, '2022-08-05', '57830805', '19:50:00');
+VALUES (319, 3, '2023-04-26', '57830805', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (319, 4, '2026-03-08', '57870308', '17:14:00');
+VALUES (319, 4, '2026-11-18', '57870308', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (320, 1, '2015-12-28', '57761330', '18:17:00');
+VALUES (320, 1, '2016-03-10', '57761330', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (320, 2, '2019-01-04', '57800104', '18:56:00');
+VALUES (320, 2, '2019-10-03', '57800104', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (320, 3, '2022-08-06', '57830806', '19:51:00');
+VALUES (320, 3, '2023-04-27', '57830806', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (320, 4, '2026-03-09', '57870309', '17:14:00');
+VALUES (320, 4, '2026-11-19', '57870309', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (321, 1, '2015-12-03', '57761403', '18:19:00');
+VALUES (321, 1, '2016-03-13', '57761403', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (321, 2, '2019-01-07', '57800107', '18:52:00');
+VALUES (321, 2, '2019-10-06', '57800107', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (321, 3, '2022-08-09', '57830809', '19:53:00');
+VALUES (321, 3, '2023-04-30', '57830809', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (321, 4, '2026-03-12', '57870312', '17:13:00');
+VALUES (321, 4, '2026-11-22', '57870312', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (322, 1, '2015-12-04', '57761404', '18:20:00');
+VALUES (322, 1, '2016-03-14', '57761404', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (322, 2, '2019-01-08', '57800108', '18:51:00');
+VALUES (322, 2, '2019-10-07', '57800108', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (322, 3, '2022-08-10', '57830810', '19:54:00');
+VALUES (322, 3, '2023-05-01', '57830810', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (322, 4, '2026-03-13', '57870313', '17:13:00');
+VALUES (322, 4, '2026-11-23', '57870313', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (323, 1, '2015-12-05', '57761405', '18:20:00');
+VALUES (323, 1, '2016-03-15', '57761405', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (323, 2, '2019-01-09', '57800109', '18:50:00');
+VALUES (323, 2, '2019-10-08', '57800109', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (323, 3, '2022-08-11', '57830811', '19:55:00');
+VALUES (323, 3, '2023-05-02', '57830811', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (323, 4, '2026-03-14', '57870314', '17:13:00');
+VALUES (323, 4, '2026-11-24', '57870314', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (324, 1, '2015-12-06', '57761406', '18:21:00');
+VALUES (324, 1, '2016-03-16', '57761406', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (324, 2, '2019-01-10', '57800110', '18:49:00');
+VALUES (324, 2, '2019-10-09', '57800110', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (324, 3, '2022-08-12', '57830812', '19:56:00');
+VALUES (324, 3, '2023-05-03', '57830812', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (324, 4, '2026-03-15', '57870315', '17:12:00');
+VALUES (324, 4, '2026-11-25', '57870315', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (325, 1, '2015-12-07', '57761407', '18:22:00');
+VALUES (325, 1, '2016-03-17', '57761407', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (325, 2, '2019-01-11', '57800111', '18:47:00');
+VALUES (325, 2, '2019-10-10', '57800111', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (325, 3, '2022-08-13', '57830813', '19:57:00');
+VALUES (325, 3, '2023-05-04', '57830813', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (325, 4, '2026-03-16', '57870316', '17:12:00');
+VALUES (325, 4, '2026-11-26', '57870316', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (326, 1, '2015-12-10', '57761410', '18:24:00');
+VALUES (326, 1, '2016-03-20', '57761410', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (326, 2, '2019-01-14', '57800114', '18:44:00');
+VALUES (326, 2, '2019-10-13', '57800114', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (326, 3, '2022-08-16', '57830816', '19:59:00');
+VALUES (326, 3, '2023-05-07', '57830816', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (326, 4, '2026-03-19', '57870319', '17:12:00');
+VALUES (326, 4, '2026-11-29', '57870319', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (327, 1, '2015-12-11', '57761411', '18:25:00');
+VALUES (327, 1, '2016-03-21', '57761411', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (327, 2, '2019-01-15', '57800115', '18:43:00');
+VALUES (327, 2, '2019-10-14', '57800115', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (327, 3, '2022-08-17', '57830817', '20:00:00');
+VALUES (327, 3, '2023-05-08', '57830817', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (327, 4, '2026-03-20', '57870320', '17:12:00');
+VALUES (327, 4, '2026-11-30', '57870320', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (328, 1, '2015-12-12', '57761412', '18:25:00');
+VALUES (328, 1, '2016-03-22', '57761412', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (328, 2, '2019-01-16', '57800116', '18:42:00');
+VALUES (328, 2, '2019-10-15', '57800116', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (328, 3, '2022-08-18', '57830818', '20:01:00');
+VALUES (328, 3, '2023-05-09', '57830818', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (328, 4, '2026-03-21', '57870321', '17:12:00');
+VALUES (328, 4, '2026-12-01', '57870321', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (329, 1, '2015-12-13', '57761413', '18:26:00');
+VALUES (329, 1, '2016-03-23', '57761413', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (329, 2, '2019-01-17', '57800117', '18:40:00');
+VALUES (329, 2, '2019-10-16', '57800117', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (329, 3, '2022-08-19', '57830819', '20:01:00');
+VALUES (329, 3, '2023-05-10', '57830819', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (329, 4, '2026-03-22', '57870322', '17:12:00');
+VALUES (329, 4, '2026-12-02', '57870322', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (330, 1, '2015-12-14', '57761414', '18:27:00');
+VALUES (330, 1, '2016-03-24', '57761414', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (330, 2, '2019-01-18', '57800118', '18:39:00');
+VALUES (330, 2, '2019-10-17', '57800118', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (330, 3, '2022-08-20', '57830820', '20:02:00');
+VALUES (330, 3, '2023-05-11', '57830820', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (330, 4, '2026-03-23', '57870323', '17:12:00');
+VALUES (330, 4, '2026-12-03', '57870323', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (331, 1, '2015-12-17', '57761417', '19:29:00');
+VALUES (331, 1, '2016-03-27', '57761417', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (331, 2, '2019-01-21', '57800121', '18:36:00');
+VALUES (331, 2, '2019-10-20', '57800121', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (331, 3, '2022-08-23', '57830823', '20:05:00');
+VALUES (331, 3, '2023-05-14', '57830823', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (331, 4, '2026-03-26', '57870326', '17:12:00');
+VALUES (331, 4, '2026-12-06', '57870326', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (332, 1, '2015-12-18', '57761418', '19:29:00');
+VALUES (332, 1, '2016-03-28', '57761418', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (332, 2, '2019-01-22', '57800122', '18:35:00');
+VALUES (332, 2, '2019-10-21', '57800122', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (332, 3, '2022-08-24', '57830824', '20:05:00');
+VALUES (332, 3, '2023-05-15', '57830824', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (332, 4, '2026-03-27', '57870327', '17:12:00');
+VALUES (332, 4, '2026-12-07', '57870327', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (333, 1, '2015-12-19', '57761419', '19:30:00');
+VALUES (333, 1, '2016-03-29', '57761419', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (333, 2, '2019-01-23', '57800123', '18:34:00');
+VALUES (333, 2, '2019-10-22', '57800123', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (333, 3, '2022-08-25', '57830825', '20:06:00');
+VALUES (333, 3, '2023-05-16', '57830825', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (333, 4, '2026-03-28', '57870328', '17:12:00');
+VALUES (333, 4, '2026-12-08', '57870328', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (334, 1, '2015-12-20', '57761420', '19:31:00');
+VALUES (334, 1, '2016-03-30', '57761420', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (334, 2, '2019-01-24', '57800124', '18:33:00');
+VALUES (334, 2, '2019-10-23', '57800124', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (334, 3, '2022-08-26', '57830826', '20:07:00');
+VALUES (334, 3, '2023-05-17', '57830826', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (334, 4, '2026-03-28', '57870329', '17:12:00');
+VALUES (334, 4, '2026-12-09', '57870329', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (335, 1, '2015-12-21', '57761421', '19:31:00');
+VALUES (335, 1, '2016-03-31', '57761421', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (335, 2, '2019-01-25', '57800125', '18:32:00');
+VALUES (335, 2, '2019-10-24', '57800125', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (335, 3, '2022-08-27', '57830827', '20:08:00');
+VALUES (335, 3, '2023-05-18', '57830827', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (335, 4, '2026-03-28', '57870330', '17:12:00');
+VALUES (335, 4, '2026-12-10', '57870330', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (336, 1, '2015-12-24', '57761424', '19:34:00');
+VALUES (336, 1, '2016-04-03', '57761424', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (336, 2, '2019-01-28', '57800128', '17:29:00');
+VALUES (336, 2, '2019-10-27', '57800128', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (336, 3, '2022-09-01', '57830901', '20:10:00');
+VALUES (336, 3, '2023-05-21', '57830901', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (336, 4, '2026-04-03', '57870403', '17:13:00');
+VALUES (336, 4, '2026-12-13', '57870403', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (337, 1, '2015-12-25', '57761425', '19:34:00');
+VALUES (337, 1, '2016-04-04', '57761425', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (337, 2, '2019-01-28', '57800129', '17:28:00');
+VALUES (337, 2, '2019-10-28', '57800129', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (337, 3, '2022-09-02', '57830902', '20:11:00');
+VALUES (337, 3, '2023-05-22', '57830902', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (337, 4, '2026-04-04', '57870404', '17:13:00');
+VALUES (337, 4, '2026-12-14', '57870404', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (338, 1, '2015-12-26', '57761426', '19:35:00');
+VALUES (338, 1, '2016-04-05', '57761426', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (338, 2, '2019-01-28', '57800130', '17:27:00');
+VALUES (338, 2, '2019-10-29', '57800130', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (338, 3, '2022-09-03', '57830903', '20:12:00');
+VALUES (338, 3, '2023-05-23', '57830903', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (338, 4, '2026-04-05', '57870405', '17:14:00');
+VALUES (338, 4, '2026-12-15', '57870405', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (339, 1, '2015-12-27', '57761427', '19:36:00');
+VALUES (339, 1, '2016-04-06', '57761427', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (339, 2, '2019-02-01', '57800201', '17:27:00');
+VALUES (339, 2, '2019-10-30', '57800201', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (339, 3, '2022-09-04', '57830904', '20:12:00');
+VALUES (339, 3, '2023-05-24', '57830904', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (339, 4, '2026-04-06', '57870406', '17:14:00');
+VALUES (339, 4, '2026-12-16', '57870406', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (340, 1, '2015-12-28', '57761428', '19:36:00');
+VALUES (340, 1, '2016-04-07', '57761428', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (340, 2, '2019-02-02', '57800202', '17:26:00');
+VALUES (340, 2, '2019-10-31', '57800202', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (340, 3, '2022-09-05', '57830905', '20:13:00');
+VALUES (340, 3, '2023-05-25', '57830905', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (340, 4, '2026-04-07', '57870407', '17:14:00');
+VALUES (340, 4, '2026-12-17', '57870407', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (341, 1, '2015-07-02', '57760702', '19:39:00');
+VALUES (341, 1, '2016-04-10', '57760702', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (341, 2, '2019-02-05', '57800205', '17:23:00');
+VALUES (341, 2, '2019-11-03', '57800205', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (341, 3, '2022-09-08', '57830908', '20:15:00');
+VALUES (341, 3, '2023-05-28', '57830908', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (341, 4, '2026-04-10', '57870410', '17:16:00');
+VALUES (341, 4, '2026-12-20', '57870410', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (342, 1, '2015-07-03', '57760703', '19:39:00');
+VALUES (342, 1, '2016-04-11', '57760703', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (342, 2, '2019-02-06', '57800206', '17:23:00');
+VALUES (342, 2, '2019-11-04', '57800206', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (342, 3, '2022-09-09', '57830909', '20:16:00');
+VALUES (342, 3, '2023-05-29', '57830909', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (342, 4, '2026-04-11', '57870411', '17:16:00');
+VALUES (342, 4, '2026-12-21', '57870411', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (343, 1, '2015-07-04', '57760704', '19:40:00');
+VALUES (343, 1, '2016-04-12', '57760704', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (343, 2, '2019-02-07', '57800207', '17:22:00');
+VALUES (343, 2, '2019-11-05', '57800207', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (343, 3, '2022-09-10', '57830910', '20:17:00');
+VALUES (343, 3, '2023-05-30', '57830910', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (343, 4, '2026-04-12', '57870412', '17:17:00');
+VALUES (343, 4, '2026-12-22', '57870412', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (344, 1, '2015-07-05', '57760705', '19:41:00');
+VALUES (344, 1, '2016-04-13', '57760705', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (344, 2, '2019-02-08', '57800208', '17:21:00');
+VALUES (344, 2, '2019-11-06', '57800208', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (344, 3, '2022-09-11', '57830911', '20:17:00');
+VALUES (344, 3, '2023-05-31', '57830911', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (344, 4, '2026-04-13', '57870413', '17:17:00');
+VALUES (344, 4, '2026-12-23', '57870413', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (345, 1, '2015-07-06', '57760706', '19:41:00');
+VALUES (345, 1, '2016-04-14', '57760706', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (345, 2, '2019-02-09', '57800209', '17:20:00');
+VALUES (345, 2, '2019-11-07', '57800209', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (345, 3, '2022-09-12', '57830912', '20:18:00');
+VALUES (345, 3, '2023-06-01', '57830912', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (345, 4, '2026-04-14', '57870414', '17:18:00');
+VALUES (345, 4, '2026-12-24', '57870414', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (346, 1, '2015-07-09', '57760709', '19:44:00');
+VALUES (346, 1, '2016-04-17', '57760709', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (346, 2, '2019-02-12', '57800212', '17:18:00');
+VALUES (346, 2, '2019-11-10', '57800212', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (346, 3, '2022-09-15', '57830915', '20:20:00');
+VALUES (346, 3, '2023-06-04', '57830915', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (346, 4, '2026-04-17', '57870417', '17:19:00');
+VALUES (346, 4, '2026-12-27', '57870417', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (347, 1, '2015-07-10', '57760710', '19:45:00');
+VALUES (347, 1, '2016-04-18', '57760710', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (347, 2, '2019-02-13', '57800213', '17:18:00');
+VALUES (347, 2, '2019-11-11', '57800213', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (347, 3, '2022-09-16', '57830916', '20:20:00');
+VALUES (347, 3, '2023-06-05', '57830916', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (347, 4, '2026-04-18', '57870418', '17:20:00');
+VALUES (347, 4, '2026-12-28', '57870418', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (348, 1, '2015-07-11', '57760711', '19:45:00');
+VALUES (348, 1, '2016-04-19', '57760711', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (348, 2, '2019-02-14', '57800214', '17:17:00');
+VALUES (348, 2, '2019-11-12', '57800214', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (348, 3, '2022-09-17', '57830917', '20:21:00');
+VALUES (348, 3, '2023-06-06', '57830917', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (348, 4, '2026-04-19', '57870419', '17:20:00');
+VALUES (348, 4, '2026-12-29', '57870419', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (349, 1, '2015-07-12', '57760712', '19:46:00');
+VALUES (349, 1, '2016-04-20', '57760712', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (349, 2, '2019-02-15', '57800215', '17:17:00');
+VALUES (349, 2, '2019-11-13', '57800215', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (349, 3, '2022-09-18', '57830918', '20:21:00');
+VALUES (349, 3, '2023-06-07', '57830918', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (349, 4, '2026-04-20', '57870420', '17:21:00');
+VALUES (349, 4, '2026-12-30', '57870420', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (350, 1, '2015-07-13', '57760713', '19:47:00');
+VALUES (350, 1, '2016-04-21', '57760713', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (350, 2, '2019-02-16', '57800216', '17:16:00');
+VALUES (350, 2, '2019-11-14', '57800216', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (350, 3, '2022-09-19', '57830919', '20:22:00');
+VALUES (350, 3, '2023-06-08', '57830919', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (350, 4, '2026-04-21', '57870421', '17:22:00');
+VALUES (350, 4, '2026-12-31', '57870421', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (351, 1, '2015-07-16', '57760716', '19:49:00');
+VALUES (351, 1, '2016-04-24', '57760716', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (351, 2, '2019-02-19', '57800219', '17:15:00');
+VALUES (351, 2, '2019-11-17', '57800219', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (351, 3, '2022-09-22', '57830922', '20:23:00');
+VALUES (351, 3, '2023-06-11', '57830922', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (351, 4, '2026-04-24', '57870424', '17:24:00');
+VALUES (351, 4, '2027-01-03', '57870424', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (352, 1, '2015-07-17', '57760717', '19:50:00');
+VALUES (352, 1, '2016-04-25', '57760717', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (352, 2, '2019-02-20', '57800220', '17:15:00');
+VALUES (352, 2, '2019-11-18', '57800220', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (352, 3, '2022-09-23', '57830923', '20:24:00');
+VALUES (352, 3, '2023-06-12', '57830923', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (352, 4, '2026-04-25', '57870425', '17:24:00');
+VALUES (352, 4, '2027-01-04', '57870425', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (353, 1, '2015-07-18', '57760718', '19:51:00');
+VALUES (353, 1, '2016-04-26', '57760718', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (353, 2, '2019-02-21', '57800221', '17:14:00');
+VALUES (353, 2, '2019-11-19', '57800221', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (353, 3, '2022-09-24', '57830924', '20:24:00');
+VALUES (353, 3, '2023-06-13', '57830924', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (353, 4, '2026-04-26', '57870426', '17:25:00');
+VALUES (353, 4, '2027-01-05', '57870426', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (354, 1, '2015-07-19', '57760719', '19:52:00');
+VALUES (354, 1, '2016-04-27', '57760719', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (354, 2, '2019-02-22', '57800222', '17:14:00');
+VALUES (354, 2, '2019-11-20', '57800222', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (354, 3, '2022-09-25', '57830925', '20:25:00');
+VALUES (354, 3, '2023-06-14', '57830925', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (354, 4, '2026-04-27', '57870427', '17:26:00');
+VALUES (354, 4, '2027-01-06', '57870427', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (355, 1, '2015-07-20', '57760720', '19:52:00');
+VALUES (355, 1, '2016-04-28', '57760720', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (355, 2, '2019-02-23', '57800223', '17:13:00');
+VALUES (355, 2, '2019-11-21', '57800223', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (355, 3, '2022-09-26', '57830926', '20:25:00');
+VALUES (355, 3, '2023-06-15', '57830926', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (355, 4, '2026-04-28', '57870428', '17:27:00');
+VALUES (355, 4, '2027-01-07', '57870428', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (356, 1, '2015-07-23', '57760723', '19:55:00');
+VALUES (356, 1, '2016-05-01', '57760723', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (356, 2, '2019-02-26', '57800226', '17:13:00');
+VALUES (356, 2, '2019-11-24', '57800226', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (356, 3, '2022-09-28', '57830929', '20:26:00');
+VALUES (356, 3, '2023-06-18', '57830929', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (356, 4, '2026-05-02', '57870502', '17:29:00');
+VALUES (356, 4, '2027-01-10', '57870502', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (357, 1, '2015-07-24', '57760724', '19:56:00');
+VALUES (357, 1, '2016-05-02', '57760724', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (357, 2, '2019-02-27', '57800227', '17:12:00');
+VALUES (357, 2, '2019-11-25', '57800227', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (357, 3, '2022-09-28', '57830930', '20:26:00');
+VALUES (357, 3, '2023-06-19', '57830930', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (357, 4, '2026-05-03', '57870503', '17:30:00');
+VALUES (357, 4, '2027-01-11', '57870503', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (358, 1, '2015-07-25', '57760725', '19:56:00');
+VALUES (358, 1, '2016-05-03', '57760725', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (358, 2, '2019-02-28', '57800228', '17:12:00');
+VALUES (358, 2, '2019-11-26', '57800228', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (358, 3, '2022-10-01', '57831001', '20:26:00');
+VALUES (358, 3, '2023-06-20', '57831001', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (358, 4, '2026-05-04', '57870504', '17:31:00');
+VALUES (358, 4, '2027-01-12', '57870504', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (359, 1, '2015-07-26', '57760726', '19:57:00');
+VALUES (359, 1, '2016-05-04', '57760726', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (359, 2, '2019-02-28', '57800229', '17:12:00');
+VALUES (359, 2, '2019-11-27', '57800229', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (359, 3, '2022-10-02', '57831002', '20:27:00');
+VALUES (359, 3, '2023-06-21', '57831002', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (359, 4, '2026-05-05', '57870505', '17:31:00');
+VALUES (359, 4, '2027-01-13', '57870505', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (360, 1, '2015-07-27', '57760727', '19:58:00');
+VALUES (360, 1, '2016-05-05', '57760727', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (360, 2, '2019-02-28', '57800230', '17:12:00');
+VALUES (360, 2, '2019-11-28', '57800230', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (360, 3, '2022-10-03', '57831003', '20:27:00');
+VALUES (360, 3, '2023-06-22', '57831003', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (360, 4, '2026-05-06', '57870506', '17:32:00');
+VALUES (360, 4, '2027-01-14', '57870506', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (361, 1, '2015-07-28', '57760730', '20:00:00');
+VALUES (361, 1, '2016-05-08', '57760730', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (361, 2, '2019-03-03', '57800303', '17:12:00');
+VALUES (361, 2, '2019-12-01', '57800303', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (361, 3, '2022-10-06', '57831006', '20:27:00');
+VALUES (361, 3, '2023-06-25', '57831006', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (361, 4, '2026-05-09', '57870509', '17:35:00');
+VALUES (361, 4, '2027-01-17', '57870509', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (362, 1, '2015-08-01', '57760801', '20:01:00');
+VALUES (362, 1, '2016-05-09', '57760801', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (362, 2, '2019-03-04', '57800304', '17:12:00');
+VALUES (362, 2, '2019-12-02', '57800304', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (362, 3, '2022-10-07', '57831007', '20:27:00');
+VALUES (362, 3, '2023-06-26', '57831007', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (362, 4, '2026-05-10', '57870510', '17:36:00');
+VALUES (362, 4, '2027-01-18', '57870510', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (363, 1, '2015-08-02', '57760802', '20:02:00');
+VALUES (363, 1, '2016-05-10', '57760802', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (363, 2, '2019-03-05', '57800305', '17:12:00');
+VALUES (363, 2, '2019-12-03', '57800305', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (363, 3, '2022-10-08', '57831008', '20:28:00');
+VALUES (363, 3, '2023-06-27', '57831008', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (363, 4, '2026-05-11', '57870511', '17:36:00');
+VALUES (363, 4, '2027-01-19', '57870511', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (364, 1, '2015-08-03', '57760803', '20:03:00');
+VALUES (364, 1, '2016-05-11', '57760803', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (364, 2, '2019-03-06', '57800306', '17:12:00');
+VALUES (364, 2, '2019-12-04', '57800306', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (364, 3, '2022-10-09', '57831009', '20:28:00');
+VALUES (364, 3, '2023-06-28', '57831009', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (364, 4, '2026-05-12', '57870512', '17:37:00');
+VALUES (364, 4, '2027-01-20', '57870512', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (365, 1, '2015-08-04', '57760804', '20:04:00');
+VALUES (365, 1, '2016-05-12', '57760804', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (365, 2, '2019-03-07', '57800307', '17:12:00');
+VALUES (365, 2, '2019-12-05', '57800307', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (365, 3, '2022-10-10', '57831010', '20:28:00');
+VALUES (365, 3, '2023-06-29', '57831010', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (365, 4, '2026-05-13', '57870513', '17:38:00');
+VALUES (365, 4, '2027-01-21', '57870513', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (366, 1, '2015-08-07', '57760807', '20:06:00');
+VALUES (366, 1, '2016-05-15', '57760807', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (366, 2, '2019-03-10', '57800310', '17:12:00');
+VALUES (366, 2, '2019-12-08', '57800310', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (366, 3, '2022-10-13', '57831013', '20:27:00');
+VALUES (366, 3, '2023-07-02', '57831013', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (366, 4, '2026-05-16', '57870516', '17:41:00');
+VALUES (366, 4, '2027-01-24', '57870516', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (367, 1, '2015-08-08', '57760808', '20:07:00');
+VALUES (367, 1, '2016-05-16', '57760808', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (367, 2, '2019-03-11', '57800311', '17:12:00');
+VALUES (367, 2, '2019-12-09', '57800311', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (367, 3, '2022-10-14', '57831014', '20:27:00');
+VALUES (367, 3, '2023-07-03', '57831014', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (367, 4, '2026-05-17', '57870517', '17:42:00');
+VALUES (367, 4, '2027-01-25', '57870517', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (368, 1, '2015-08-09', '57760809', '20:08:00');
+VALUES (368, 1, '2016-05-17', '57760809', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (368, 2, '2019-03-12', '57800312', '17:12:00');
+VALUES (368, 2, '2019-12-10', '57800312', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (368, 3, '2022-10-15', '57831015', '20:27:00');
+VALUES (368, 3, '2023-07-04', '57831015', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (368, 4, '2026-05-18', '57870518', '17:42:00');
+VALUES (368, 4, '2027-01-26', '57870518', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (369, 1, '2015-08-10', '57760810', '20:08:00');
+VALUES (369, 1, '2016-05-18', '57760810', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (369, 2, '2019-03-13', '57800313', '17:13:00');
+VALUES (369, 2, '2019-12-11', '57800313', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (369, 3, '2022-10-16', '57831016', '20:27:00');
+VALUES (369, 3, '2023-07-05', '57831016', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (369, 4, '2026-05-19', '57870519', '17:43:00');
+VALUES (369, 4, '2027-01-27', '57870519', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (370, 1, '2015-08-11', '57760811', '20:09:00');
+VALUES (370, 1, '2016-05-19', '57760811', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (370, 2, '2019-03-14', '57800314', '17:13:00');
+VALUES (370, 2, '2019-12-12', '57800314', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (370, 3, '2022-10-17', '57831017', '20:27:00');
+VALUES (370, 3, '2023-07-06', '57831017', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (370, 4, '2026-05-20', '57870520', '17:44:00');
+VALUES (370, 4, '2027-01-28', '57870520', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (371, 1, '2015-08-14', '57760814', '20:11:00');
+VALUES (371, 1, '2016-05-22', '57760814', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (371, 2, '2019-03-17', '57800317', '17:14:00');
+VALUES (371, 2, '2019-12-15', '57800317', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (371, 3, '2022-10-20', '57831020', '20:26:00');
+VALUES (371, 3, '2023-07-09', '57831020', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (371, 4, '2026-05-23', '57870523', '17:47:00');
+VALUES (371, 4, '2027-01-31', '57870523', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (372, 1, '2015-08-15', '57760815', '20:12:00');
+VALUES (372, 1, '2016-05-23', '57760815', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (372, 2, '2019-03-18', '57800318', '17:14:00');
+VALUES (372, 2, '2019-12-16', '57800318', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (372, 3, '2022-10-21', '57831021', '20:26:00');
+VALUES (372, 3, '2023-07-10', '57831021', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (372, 4, '2026-05-24', '57870524', '17:48:00');
+VALUES (372, 4, '2027-02-01', '57870524', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (373, 1, '2015-08-16', '57760816', '20:13:00');
+VALUES (373, 1, '2016-05-24', '57760816', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (373, 2, '2019-03-19', '57800319', '17:14:00');
+VALUES (373, 2, '2019-12-17', '57800319', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (373, 3, '2022-10-22', '57831022', '20:26:00');
+VALUES (373, 3, '2023-07-11', '57831022', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (373, 4, '2026-05-25', '57870525', '17:48:00');
+VALUES (373, 4, '2027-02-02', '57870525', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (374, 1, '2015-08-17', '57760817', '20:14:00');
+VALUES (374, 1, '2016-05-25', '57760817', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (374, 2, '2019-03-20', '57800320', '17:15:00');
+VALUES (374, 2, '2019-12-18', '57800320', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (374, 3, '2022-10-23', '57831023', '20:25:00');
+VALUES (374, 3, '2023-07-12', '57831023', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (374, 4, '2026-05-26', '57870526', '17:49:00');
+VALUES (374, 4, '2027-02-03', '57870526', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (375, 1, '2015-08-18', '57760818', '20:14:00');
+VALUES (375, 1, '2016-05-26', '57760818', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (375, 2, '2019-03-21', '57800321', '17:15:00');
+VALUES (375, 2, '2019-12-19', '57800321', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (375, 3, '2022-10-24', '57831024', '20:25:00');
+VALUES (375, 3, '2023-07-13', '57831024', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (375, 4, '2026-05-27', '57870527', '17:50:00');
+VALUES (375, 4, '2027-02-04', '57870527', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (376, 1, '2015-08-21', '57760821', '20:16:00');
+VALUES (376, 1, '2016-05-29', '57760821', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (376, 2, '2019-03-24', '57800324', '17:16:00');
+VALUES (376, 2, '2019-12-22', '57800324', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (376, 3, '2022-10-27', '57831027', '20:24:00');
+VALUES (376, 3, '2023-07-16', '57831027', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (376, 4, '2026-05-28', '57870530', '17:53:00');
+VALUES (376, 4, '2027-02-07', '57870530', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (377, 1, '2015-08-22', '57760822', '20:17:00');
+VALUES (377, 1, '2016-05-30', '57760822', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (377, 2, '2019-03-25', '57800325', '17:17:00');
+VALUES (377, 2, '2019-12-23', '57800325', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (377, 3, '2022-10-28', '57831028', '20:23:00');
+VALUES (377, 3, '2023-07-17', '57831028', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (377, 4, '2026-12-01', '57871301', '17:54:00');
+VALUES (377, 4, '2027-02-08', '57871301', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (378, 1, '2015-08-23', '57760823', '20:18:00');
+VALUES (378, 1, '2016-05-31', '57760823', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (378, 2, '2019-03-26', '57800326', '17:17:00');
+VALUES (378, 2, '2019-12-24', '57800326', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (378, 3, '2022-10-28', '57831029', '20:23:00');
+VALUES (378, 3, '2023-07-18', '57831029', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (378, 4, '2026-12-02', '57871302', '17:54:00');
+VALUES (378, 4, '2027-02-09', '57871302', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (379, 1, '2015-08-24', '57760824', '20:18:00');
+VALUES (379, 1, '2016-06-01', '57760824', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (379, 2, '2019-03-27', '57800327', '17:18:00');
+VALUES (379, 2, '2019-12-25', '57800327', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (379, 3, '2022-11-01', '57831101', '20:22:00');
+VALUES (379, 3, '2023-07-19', '57831101', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (379, 4, '2026-12-03', '57871303', '17:55:00');
+VALUES (379, 4, '2027-02-10', '57871303', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (380, 1, '2015-08-25', '57760825', '20:19:00');
+VALUES (380, 1, '2016-06-02', '57760825', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (380, 2, '2019-03-28', '57800328', '17:19:00');
+VALUES (380, 2, '2019-12-26', '57800328', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (380, 3, '2022-11-02', '57831102', '20:22:00');
+VALUES (380, 3, '2023-07-20', '57831102', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (380, 4, '2026-12-04', '57871304', '17:56:00');
+VALUES (380, 4, '2027-02-11', '57871304', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (381, 1, '2015-08-28', '57760828', '20:21:00');
+VALUES (381, 1, '2016-06-05', '57760828', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (381, 2, '2019-04-01', '57800401', '17:20:00');
+VALUES (381, 2, '2019-12-29', '57800401', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (381, 3, '2022-11-05', '57831105', '20:20:00');
+VALUES (381, 3, '2023-07-23', '57831105', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (381, 4, '2026-12-07', '57871307', '17:58:00');
+VALUES (381, 4, '2027-02-14', '57871307', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (382, 1, '2015-08-28', '57760829', '20:21:00');
+VALUES (382, 1, '2016-06-06', '57760829', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (382, 2, '2019-04-02', '57800402', '17:21:00');
+VALUES (382, 2, '2019-12-30', '57800402', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (382, 3, '2022-11-06', '57831106', '20:19:00');
+VALUES (382, 3, '2023-07-24', '57831106', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (382, 4, '2026-12-08', '57871308', '17:59:00');
+VALUES (382, 4, '2027-02-15', '57871308', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (383, 1, '2015-09-01', '57760901', '20:22:00');
+VALUES (383, 1, '2016-06-07', '57760901', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (383, 2, '2019-04-03', '57800403', '17:22:00');
+VALUES (383, 2, '2019-12-31', '57800403', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (383, 3, '2022-11-07', '57831107', '20:19:00');
+VALUES (383, 3, '2023-07-25', '57831107', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (383, 4, '2026-12-09', '57871309', '18:00:00');
+VALUES (383, 4, '2027-02-16', '57871309', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (384, 1, '2015-09-02', '57760902', '20:22:00');
+VALUES (384, 1, '2016-06-08', '57760902', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (384, 2, '2019-04-04', '57800404', '17:22:00');
+VALUES (384, 2, '2020-01-01', '57800404', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (384, 3, '2022-11-08', '57831108', '20:18:00');
+VALUES (384, 3, '2023-07-26', '57831108', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (384, 4, '2026-12-10', '57871310', '18:01:00');
+VALUES (384, 4, '2027-02-17', '57871310', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (385, 1, '2015-09-03', '57760903', '20:23:00');
+VALUES (385, 1, '2016-06-09', '57760903', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (385, 2, '2019-04-05', '57800405', '17:23:00');
+VALUES (385, 2, '2020-01-02', '57800405', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (385, 3, '2022-11-09', '57831109', '20:17:00');
+VALUES (385, 3, '2023-07-27', '57831109', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (385, 4, '2026-12-11', '57871311', '18:02:00');
+VALUES (385, 4, '2027-02-18', '57871311', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (386, 1, '2015-09-06', '57760906', '20:24:00');
+VALUES (386, 1, '2016-06-12', '57760906', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (386, 2, '2019-04-08', '57800408', '17:25:00');
+VALUES (386, 2, '2020-01-05', '57800408', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (386, 3, '2022-11-12', '57831112', '20:15:00');
+VALUES (386, 3, '2023-07-30', '57831112', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (386, 4, '2026-12-14', '57871314', '18:04:00');
+VALUES (386, 4, '2027-02-21', '57871314', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (387, 1, '2015-09-07', '57760907', '20:24:00');
+VALUES (387, 1, '2016-06-13', '57760907', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (387, 2, '2019-04-09', '57800409', '17:26:00');
+VALUES (387, 2, '2020-01-06', '57800409', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (387, 3, '2022-11-13', '57831113', '20:14:00');
+VALUES (387, 3, '2023-07-31', '57831113', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (387, 4, '2026-12-15', '57871315', '18:05:00');
+VALUES (387, 4, '2027-02-22', '57871315', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (388, 1, '2015-09-08', '57760908', '20:25:00');
+VALUES (388, 1, '2016-06-14', '57760908', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (388, 2, '2019-04-10', '57800410', '17:27:00');
+VALUES (388, 2, '2020-01-07', '57800410', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (388, 3, '2022-11-14', '57831114', '20:13:00');
+VALUES (388, 3, '2023-08-01', '57831114', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (388, 4, '2026-12-16', '57871316', '18:06:00');
+VALUES (388, 4, '2027-02-23', '57871316', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (389, 1, '2015-09-09', '57760909', '20:25:00');
+VALUES (389, 1, '2016-06-15', '57760909', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (389, 2, '2019-04-11', '57800411', '17:27:00');
+VALUES (389, 2, '2020-01-08', '57800411', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (389, 3, '2022-11-15', '57831115', '20:12:00');
+VALUES (389, 3, '2023-08-02', '57831115', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (389, 4, '2026-12-17', '57871317', '18:06:00');
+VALUES (389, 4, '2027-02-24', '57871317', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (390, 1, '2015-09-10', '57760910', '20:26:00');
+VALUES (390, 1, '2016-06-16', '57760910', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (390, 2, '2019-04-12', '57800412', '17:28:00');
+VALUES (390, 2, '2020-01-09', '57800412', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (390, 3, '2022-11-16', '57831116', '20:11:00');
+VALUES (390, 3, '2023-08-03', '57831116', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (390, 4, '2026-12-18', '57871318', '18:07:00');
+VALUES (390, 4, '2027-02-25', '57871318', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (391, 1, '2015-09-13', '57760913', '20:26:00');
+VALUES (391, 1, '2016-06-19', '57760913', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (391, 2, '2019-04-15', '57800415', '17:30:00');
+VALUES (391, 2, '2020-01-12', '57800415', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (391, 3, '2022-11-19', '57831119', '20:09:00');
+VALUES (391, 3, '2023-08-06', '57831119', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (391, 4, '2026-12-21', '57871321', '18:09:00');
+VALUES (391, 4, '2027-02-28', '57871321', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (392, 1, '2015-09-14', '57760914', '20:27:00');
+VALUES (392, 1, '2016-06-20', '57760914', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (392, 2, '2019-04-16', '57800416', '17:31:00');
+VALUES (392, 2, '2020-01-13', '57800416', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (392, 3, '2022-11-20', '57831120', '20:08:00');
+VALUES (392, 3, '2023-08-07', '57831120', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (392, 4, '2026-12-22', '57871322', '18:10:00');
+VALUES (392, 4, '2027-03-01', '57871322', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (393, 1, '2015-09-15', '57760915', '20:27:00');
+VALUES (393, 1, '2016-06-21', '57760915', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (393, 2, '2019-04-17', '57800417', '17:32:00');
+VALUES (393, 2, '2020-01-14', '57800417', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (393, 3, '2022-11-21', '57831121', '20:07:00');
+VALUES (393, 3, '2023-08-08', '57831121', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (393, 4, '2026-12-23', '57871323', '18:11:00');
+VALUES (393, 4, '2027-03-02', '57871323', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (394, 1, '2015-09-16', '57760916', '20:27:00');
+VALUES (394, 1, '2016-06-22', '57760916', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (394, 2, '2019-04-18', '57800418', '17:33:00');
+VALUES (394, 2, '2020-01-15', '57800418', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (394, 3, '2022-11-22', '57831122', '20:06:00');
+VALUES (394, 3, '2023-08-09', '57831122', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (394, 4, '2026-12-24', '57871324', '18:11:00');
+VALUES (394, 4, '2027-03-03', '57871324', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (395, 1, '2015-09-17', '57760917', '20:27:00');
+VALUES (395, 1, '2016-06-23', '57760917', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (395, 2, '2019-04-19', '57800419', '17:34:00');
+VALUES (395, 2, '2020-01-16', '57800419', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (395, 3, '2022-11-23', '57831123', '20:05:00');
+VALUES (395, 3, '2023-08-10', '57831123', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (395, 4, '2026-12-25', '57871325', '18:12:00');
+VALUES (395, 4, '2027-03-04', '57871325', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (396, 1, '2015-09-20', '57760920', '20:27:00');
+VALUES (396, 1, '2016-06-26', '57760920', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (396, 2, '2019-04-22', '57800422', '17:36:00');
+VALUES (396, 2, '2020-01-19', '57800422', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (396, 3, '2022-11-26', '57831126', '20:02:00');
+VALUES (396, 3, '2023-08-13', '57831126', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (396, 4, '2026-12-28', '57871328', '18:14:00');
+VALUES (396, 4, '2027-03-07', '57871328', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (397, 1, '2015-09-21', '57760921', '20:28:00');
+VALUES (397, 1, '2016-06-27', '57760921', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (397, 2, '2019-04-23', '57800423', '17:37:00');
+VALUES (397, 2, '2020-01-20', '57800423', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (397, 3, '2022-11-27', '57831127', '20:01:00');
+VALUES (397, 3, '2023-08-14', '57831127', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (397, 4, '2026-12-28', '57871329', '18:15:00');
+VALUES (397, 4, '2027-03-08', '57871329', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (398, 1, '2015-09-22', '57760922', '20:28:00');
+VALUES (398, 1, '2016-06-28', '57760922', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (398, 2, '2019-04-24', '57800424', '17:38:00');
+VALUES (398, 2, '2020-01-21', '57800424', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (398, 3, '2022-11-28', '57831128', '19:59:00');
+VALUES (398, 3, '2023-08-15', '57831128', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (398, 4, '2026-12-28', '57871330', '18:16:00');
+VALUES (398, 4, '2027-03-09', '57871330', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (399, 1, '2015-09-23', '57760923', '20:28:00');
+VALUES (399, 1, '2016-06-29', '57760923', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (399, 2, '2019-04-25', '57800425', '17:39:00');
+VALUES (399, 2, '2020-01-22', '57800425', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (399, 3, '2022-11-28', '57831129', '19:58:00');
+VALUES (399, 3, '2023-08-16', '57831129', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (399, 4, '2026-12-01', '57871401', '18:16:00');
+VALUES (399, 4, '2027-03-10', '57871401', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (400, 1, '2015-09-24', '57760924', '20:28:00');
+VALUES (400, 1, '2016-06-30', '57760924', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (400, 2, '2019-04-26', '57800426', '17:40:00');
+VALUES (400, 2, '2020-01-23', '57800426', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (400, 3, '2022-11-28', '57831130', '19:57:00');
+VALUES (400, 3, '2023-08-17', '57831130', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (400, 4, '2026-12-02', '57871402', '18:17:00');
+VALUES (400, 4, '2027-03-11', '57871402', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (401, 1, '2015-09-27', '57760927', '20:27:00');
+VALUES (401, 1, '2016-07-03', '57760927', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (401, 2, '2019-04-28', '57800429', '17:42:00');
+VALUES (401, 2, '2020-01-26', '57800429', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (401, 3, '2022-12-03', '57831203', '19:54:00');
+VALUES (401, 3, '2023-08-20', '57831203', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (401, 4, '2026-12-05', '57871405', '18:19:00');
+VALUES (401, 4, '2027-03-14', '57871405', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (402, 1, '2015-09-28', '57760928', '20:27:00');
+VALUES (402, 1, '2016-07-04', '57760928', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (402, 2, '2019-05-01', '57800501', '17:43:00');
+VALUES (402, 2, '2020-01-27', '57800501', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (402, 3, '2022-12-04', '57831204', '19:53:00');
+VALUES (402, 3, '2023-08-21', '57831204', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (402, 4, '2026-12-06', '57871406', '18:20:00');
+VALUES (402, 4, '2027-03-15', '57871406', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (403, 1, '2015-09-28', '57760929', '20:27:00');
+VALUES (403, 1, '2016-07-05', '57760929', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (403, 2, '2019-05-02', '57800502', '17:44:00');
+VALUES (403, 2, '2020-01-28', '57800502', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (403, 3, '2022-12-05', '57831205', '19:51:00');
+VALUES (403, 3, '2023-08-22', '57831205', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (403, 4, '2026-12-07', '57871407', '18:21:00');
+VALUES (403, 4, '2027-03-16', '57871407', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (404, 1, '2015-09-28', '57760930', '20:27:00');
+VALUES (404, 1, '2016-07-06', '57760930', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (404, 2, '2019-05-03', '57800503', '17:45:00');
+VALUES (404, 2, '2020-01-29', '57800503', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (404, 3, '2022-12-06', '57831206', '19:50:00');
+VALUES (404, 3, '2023-08-23', '57831206', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (404, 4, '2026-12-08', '57871408', '18:21:00');
+VALUES (404, 4, '2027-03-17', '57871408', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (405, 1, '2015-10-01', '57761001', '20:27:00');
+VALUES (405, 1, '2016-07-07', '57761001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (405, 2, '2019-05-04', '57800504', '17:46:00');
+VALUES (405, 2, '2020-01-30', '57800504', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (405, 3, '2022-12-07', '57831207', '19:49:00');
+VALUES (405, 3, '2023-08-24', '57831207', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (405, 4, '2026-12-09', '57871409', '18:22:00');
+VALUES (405, 4, '2027-03-18', '57871409', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (406, 1, '2015-10-04', '57761004', '20:26:00');
+VALUES (406, 1, '2016-07-10', '57761004', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (406, 2, '2019-05-07', '57800507', '17:48:00');
+VALUES (406, 2, '2020-02-02', '57800507', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (406, 3, '2022-12-10', '57831210', '19:45:00');
+VALUES (406, 3, '2023-08-27', '57831210', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (406, 4, '2026-12-12', '57871412', '18:24:00');
+VALUES (406, 4, '2027-03-21', '57871412', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (407, 1, '2015-10-05', '57761005', '20:25:00');
+VALUES (407, 1, '2016-07-11', '57761005', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (407, 2, '2019-05-08', '57800508', '17:49:00');
+VALUES (407, 2, '2020-02-03', '57800508', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (407, 3, '2022-12-11', '57831211', '19:44:00');
+VALUES (407, 3, '2023-08-28', '57831211', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (407, 4, '2026-12-13', '57871413', '18:25:00');
+VALUES (407, 4, '2027-03-22', '57871413', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (408, 1, '2015-10-06', '57761006', '20:25:00');
+VALUES (408, 1, '2016-07-12', '57761006', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (408, 2, '2019-05-09', '57800509', '17:50:00');
+VALUES (408, 2, '2020-02-04', '57800509', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (408, 3, '2022-12-12', '57831212', '19:43:00');
+VALUES (408, 3, '2023-08-29', '57831212', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (408, 4, '2026-12-14', '57871414', '18:25:00');
+VALUES (408, 4, '2027-03-23', '57871414', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (409, 1, '2015-10-07', '57761007', '20:25:00');
+VALUES (409, 1, '2016-07-13', '57761007', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (409, 2, '2019-05-10', '57800510', '17:51:00');
+VALUES (409, 2, '2020-02-05', '57800510', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (409, 3, '2022-12-13', '57831213', '19:41:00');
+VALUES (409, 3, '2023-08-30', '57831213', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (409, 4, '2026-12-15', '57871415', '18:26:00');
+VALUES (409, 4, '2027-03-24', '57871415', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (410, 1, '2015-10-08', '57761008', '20:24:00');
+VALUES (410, 1, '2016-07-14', '57761008', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (410, 2, '2019-05-11', '57800511', '17:52:00');
+VALUES (410, 2, '2020-02-06', '57800511', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (410, 3, '2022-12-14', '57831214', '19:40:00');
+VALUES (410, 3, '2023-08-31', '57831214', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (410, 4, '2026-12-16', '57871416', '18:27:00');
+VALUES (410, 4, '2027-03-25', '57871416', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (411, 1, '2015-10-11', '57761011', '20:23:00');
+VALUES (411, 1, '2016-07-17', '57761011', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (411, 2, '2019-05-14', '57800514', '17:54:00');
+VALUES (411, 2, '2020-02-09', '57800514', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (411, 3, '2022-12-17', '57831217', '19:36:00');
+VALUES (411, 3, '2023-09-03', '57831217', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (411, 4, '2026-12-19', '57871419', '19:29:00');
+VALUES (411, 4, '2027-03-28', '57871419', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (412, 1, '2015-10-12', '57761012', '20:22:00');
+VALUES (412, 1, '2016-07-18', '57761012', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (412, 2, '2019-05-15', '57800515', '17:55:00');
+VALUES (412, 2, '2020-02-10', '57800515', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (412, 3, '2022-12-18', '57831218', '19:35:00');
+VALUES (412, 3, '2023-09-04', '57831218', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (412, 4, '2026-12-20', '57871420', '19:29:00');
+VALUES (412, 4, '2027-03-29', '57871420', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (413, 1, '2015-10-13', '57761013', '20:22:00');
+VALUES (413, 1, '2016-07-19', '57761013', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (413, 2, '2019-05-16', '57800516', '17:56:00');
+VALUES (413, 2, '2020-02-11', '57800516', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (413, 3, '2022-12-19', '57831219', '19:34:00');
+VALUES (413, 3, '2023-09-05', '57831219', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (413, 4, '2026-12-21', '57871421', '19:30:00');
+VALUES (413, 4, '2027-03-30', '57871421', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (414, 1, '2015-10-14', '57761014', '20:21:00');
+VALUES (414, 1, '2016-07-20', '57761014', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (414, 2, '2019-05-17', '57800517', '17:57:00');
+VALUES (414, 2, '2020-02-12', '57800517', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (414, 3, '2022-12-20', '57831220', '19:32:00');
+VALUES (414, 3, '2023-09-06', '57831220', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (414, 4, '2026-12-22', '57871422', '19:31:00');
+VALUES (414, 4, '2027-03-31', '57871422', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (415, 1, '2015-10-15', '57761015', '20:21:00');
+VALUES (415, 1, '2016-07-21', '57761015', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (415, 2, '2019-05-18', '57800518', '17:57:00');
+VALUES (415, 2, '2020-02-13', '57800518', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (415, 3, '2022-12-21', '57831221', '19:31:00');
+VALUES (415, 3, '2023-09-07', '57831221', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (415, 4, '2026-12-23', '57871423', '19:32:00');
+VALUES (415, 4, '2027-04-01', '57871423', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (416, 1, '2015-10-18', '57761018', '20:19:00');
+VALUES (416, 1, '2016-07-24', '57761018', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (416, 2, '2019-05-21', '57800521', '18:00:00');
+VALUES (416, 2, '2020-02-16', '57800521', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (416, 3, '2022-12-24', '57831224', '19:27:00');
+VALUES (416, 3, '2023-09-10', '57831224', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (416, 4, '2026-12-26', '57871426', '19:34:00');
+VALUES (416, 4, '2027-04-04', '57871426', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (417, 1, '2015-10-19', '57761019', '20:18:00');
+VALUES (417, 1, '2016-07-25', '57761019', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (417, 2, '2019-05-22', '57800522', '18:01:00');
+VALUES (417, 2, '2020-02-17', '57800522', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (417, 3, '2022-12-25', '57831225', '19:26:00');
+VALUES (417, 3, '2023-09-11', '57831225', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (417, 4, '2026-12-27', '57871427', '19:34:00');
+VALUES (417, 4, '2027-04-05', '57871427', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (418, 1, '2015-10-20', '57761020', '20:17:00');
+VALUES (418, 1, '2016-07-26', '57761020', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (418, 2, '2019-05-23', '57800523', '18:01:00');
+VALUES (418, 2, '2020-02-18', '57800523', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (418, 3, '2022-12-26', '57831226', '19:24:00');
+VALUES (418, 3, '2023-09-12', '57831226', '19:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (418, 4, '2026-12-28', '57871428', '19:35:00');
+VALUES (418, 4, '2027-04-06', '57871428', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (419, 1, '2015-10-21', '57761021', '20:17:00');
+VALUES (419, 1, '2016-07-27', '57761021', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (419, 2, '2019-05-24', '57800524', '18:02:00');
+VALUES (419, 2, '2020-02-19', '57800524', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (419, 3, '2022-12-27', '57831227', '19:23:00');
+VALUES (419, 3, '2023-09-13', '57831227', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (419, 4, '2026-12-28', '57871429', '19:36:00');
+VALUES (419, 4, '2027-04-07', '57871429', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (420, 1, '2015-10-22', '57761022', '20:16:00');
+VALUES (420, 1, '2016-07-28', '57761022', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (420, 2, '2019-05-25', '57800525', '18:03:00');
+VALUES (420, 2, '2020-02-20', '57800525', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (420, 3, '2022-12-28', '57831228', '19:21:00');
+VALUES (420, 3, '2023-09-14', '57831228', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (420, 4, '2026-07-01', '57870701', '19:36:00');
+VALUES (420, 4, '2027-04-08', '57870701', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (421, 1, '2015-10-25', '57761025', '20:13:00');
+VALUES (421, 1, '2016-07-31', '57761025', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (421, 2, '2019-05-28', '57800528', '18:05:00');
+VALUES (421, 2, '2020-02-23', '57800528', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (421, 3, '2023-01-02', '57840102', '19:17:00');
+VALUES (421, 3, '2023-09-17', '57840102', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (421, 4, '2026-07-04', '57870704', '19:39:00');
+VALUES (421, 4, '2027-04-11', '57870704', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (422, 1, '2015-10-26', '57761026', '20:12:00');
+VALUES (422, 1, '2016-08-01', '57761026', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (422, 2, '2019-05-28', '57800529', '18:06:00');
+VALUES (422, 2, '2020-02-24', '57800529', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (422, 3, '2023-01-03', '57840103', '19:16:00');
+VALUES (422, 3, '2023-09-18', '57840103', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (422, 4, '2026-07-05', '57870705', '19:39:00');
+VALUES (422, 4, '2027-04-12', '57870705', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (423, 1, '2015-10-27', '57761027', '20:12:00');
+VALUES (423, 1, '2016-08-02', '57761027', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (423, 2, '2019-05-28', '57800530', '18:07:00');
+VALUES (423, 2, '2020-02-25', '57800530', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (423, 3, '2023-01-04', '57840104', '19:15:00');
+VALUES (423, 3, '2023-09-19', '57840104', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (423, 4, '2026-07-06', '57870706', '19:40:00');
+VALUES (423, 4, '2027-04-13', '57870706', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (424, 1, '2015-10-28', '57761028', '20:11:00');
+VALUES (424, 1, '2016-08-03', '57761028', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (424, 2, '2019-06-01', '57800601', '18:08:00');
+VALUES (424, 2, '2020-02-26', '57800601', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (424, 3, '2023-01-05', '57840105', '19:13:00');
+VALUES (424, 3, '2023-09-20', '57840105', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (424, 4, '2026-07-07', '57870707', '19:41:00');
+VALUES (424, 4, '2027-04-14', '57870707', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (425, 1, '2015-10-28', '57761029', '20:10:00');
+VALUES (425, 1, '2016-08-04', '57761029', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (425, 2, '2019-06-02', '57800602', '18:08:00');
+VALUES (425, 2, '2020-02-27', '57800602', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (425, 3, '2023-01-06', '57840106', '19:12:00');
+VALUES (425, 3, '2023-09-21', '57840106', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (425, 4, '2026-07-08', '57870708', '19:42:00');
+VALUES (425, 4, '2027-04-15', '57870708', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (426, 1, '2015-11-03', '57761103', '20:07:00');
+VALUES (426, 1, '2016-08-07', '57761103', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (426, 2, '2019-06-05', '57800605', '18:11:00');
+VALUES (426, 2, '2020-03-01', '57800605', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (426, 3, '2023-01-09', '57840109', '19:08:00');
+VALUES (426, 3, '2023-09-24', '57840109', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (426, 4, '2026-07-11', '57870711', '19:44:00');
+VALUES (426, 4, '2027-04-18', '57870711', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (427, 1, '2015-11-04', '57761104', '20:06:00');
+VALUES (427, 1, '2016-08-08', '57761104', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (427, 2, '2019-06-06', '57800606', '18:11:00');
+VALUES (427, 2, '2020-03-02', '57800606', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (427, 3, '2023-01-10', '57840110', '19:07:00');
+VALUES (427, 3, '2023-09-25', '57840110', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (427, 4, '2026-07-12', '57870712', '19:45:00');
+VALUES (427, 4, '2027-04-19', '57870712', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (428, 1, '2015-11-05', '57761105', '20:05:00');
+VALUES (428, 1, '2016-08-09', '57761105', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (428, 2, '2019-06-07', '57800607', '18:12:00');
+VALUES (428, 2, '2020-03-03', '57800607', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (428, 3, '2023-01-11', '57840111', '19:05:00');
+VALUES (428, 3, '2023-09-26', '57840111', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (428, 4, '2026-07-13', '57870713', '19:45:00');
+VALUES (428, 4, '2027-04-20', '57870713', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (429, 1, '2015-11-06', '57761106', '20:04:00');
+VALUES (429, 1, '2016-08-10', '57761106', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (429, 2, '2019-06-08', '57800608', '18:13:00');
+VALUES (429, 2, '2020-03-04', '57800608', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (429, 3, '2023-01-12', '57840112', '19:04:00');
+VALUES (429, 3, '2023-09-27', '57840112', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (429, 4, '2026-07-14', '57870714', '19:46:00');
+VALUES (429, 4, '2027-04-21', '57870714', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (430, 1, '2015-11-07', '57761107', '20:03:00');
+VALUES (430, 1, '2016-08-11', '57761107', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (430, 2, '2019-06-09', '57800609', '18:13:00');
+VALUES (430, 2, '2020-03-05', '57800609', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (430, 3, '2023-01-13', '57840113', '19:03:00');
+VALUES (430, 3, '2023-09-28', '57840113', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (430, 4, '2026-07-15', '57870715', '19:47:00');
+VALUES (430, 4, '2027-04-22', '57870715', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (431, 1, '2015-11-10', '57761110', '20:00:00');
+VALUES (431, 1, '2016-08-14', '57761110', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (431, 2, '2019-06-12', '57800612', '18:16:00');
+VALUES (431, 2, '2020-03-08', '57800612', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (431, 3, '2023-01-16', '57840116', '18:59:00');
+VALUES (431, 3, '2023-10-01', '57840116', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (431, 4, '2026-07-18', '57870718', '19:49:00');
+VALUES (431, 4, '2027-04-25', '57870718', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (432, 1, '2015-11-11', '57761111', '19:59:00');
+VALUES (432, 1, '2016-08-15', '57761111', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (432, 2, '2019-06-13', '57800613', '18:16:00');
+VALUES (432, 2, '2020-03-09', '57800613', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (432, 3, '2023-01-17', '57840117', '18:57:00');
+VALUES (432, 3, '2023-10-02', '57840117', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (432, 4, '2026-07-19', '57870719', '19:50:00');
+VALUES (432, 4, '2027-04-26', '57870719', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (433, 1, '2015-11-12', '57761112', '19:57:00');
+VALUES (433, 1, '2016-08-16', '57761112', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (433, 2, '2019-06-14', '57800614', '18:17:00');
+VALUES (433, 2, '2020-03-10', '57800614', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (433, 3, '2023-01-18', '57840118', '18:56:00');
+VALUES (433, 3, '2023-10-03', '57840118', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (433, 4, '2026-07-20', '57870720', '19:51:00');
+VALUES (433, 4, '2027-04-27', '57870720', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (434, 1, '2015-11-13', '57761113', '19:56:00');
+VALUES (434, 1, '2016-08-17', '57761113', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (434, 2, '2019-06-15', '57800615', '18:18:00');
+VALUES (434, 2, '2020-03-11', '57800615', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (434, 3, '2023-01-19', '57840119', '18:55:00');
+VALUES (434, 3, '2023-10-04', '57840119', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (434, 4, '2026-07-21', '57870721', '19:52:00');
+VALUES (434, 4, '2027-04-28', '57870721', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (435, 1, '2015-11-14', '57761114', '19:55:00');
+VALUES (435, 1, '2016-08-18', '57761114', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (435, 2, '2019-06-16', '57800616', '18:18:00');
+VALUES (435, 2, '2020-03-12', '57800616', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (435, 3, '2023-01-20', '57840120', '18:54:00');
+VALUES (435, 3, '2023-10-05', '57840120', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (435, 4, '2026-07-22', '57870722', '19:53:00');
+VALUES (435, 4, '2027-04-29', '57870722', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (436, 1, '2015-11-17', '57761117', '19:52:00');
+VALUES (436, 1, '2016-08-21', '57761117', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (436, 2, '2019-06-19', '57800619', '18:20:00');
+VALUES (436, 2, '2020-03-15', '57800619', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (436, 3, '2023-01-23', '57840123', '18:50:00');
+VALUES (436, 3, '2023-10-08', '57840123', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (436, 4, '2026-07-25', '57870725', '19:55:00');
+VALUES (436, 4, '2027-05-02', '57870725', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (437, 1, '2015-11-18', '57761118', '19:50:00');
+VALUES (437, 1, '2016-08-22', '57761118', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (437, 2, '2019-06-20', '57800620', '18:21:00');
+VALUES (437, 2, '2020-03-16', '57800620', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (437, 3, '2023-01-24', '57840124', '18:49:00');
+VALUES (437, 3, '2023-10-09', '57840124', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (437, 4, '2026-07-26', '57870726', '19:56:00');
+VALUES (437, 4, '2027-05-03', '57870726', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (438, 1, '2015-11-19', '57761119', '19:49:00');
+VALUES (438, 1, '2016-08-23', '57761119', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (438, 2, '2019-06-21', '57800621', '18:22:00');
+VALUES (438, 2, '2020-03-17', '57800621', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (438, 3, '2023-01-25', '57840125', '18:47:00');
+VALUES (438, 3, '2023-10-10', '57840125', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (438, 4, '2026-07-27', '57870727', '19:57:00');
+VALUES (438, 4, '2027-05-04', '57870727', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (439, 1, '2015-11-20', '57761120', '19:48:00');
+VALUES (439, 1, '2016-08-24', '57761120', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (439, 2, '2019-06-22', '57800622', '18:22:00');
+VALUES (439, 2, '2020-03-18', '57800622', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (439, 3, '2023-01-26', '57840126', '18:46:00');
+VALUES (439, 3, '2023-10-11', '57840126', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (439, 4, '2026-07-28', '57870728', '19:57:00');
+VALUES (439, 4, '2027-05-05', '57870728', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (440, 1, '2015-11-21', '57761121', '19:47:00');
+VALUES (440, 1, '2016-08-25', '57761121', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (440, 2, '2019-06-23', '57800623', '18:23:00');
+VALUES (440, 2, '2020-03-19', '57800623', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (440, 3, '2023-01-27', '57840127', '18:45:00');
+VALUES (440, 3, '2023-10-12', '57840127', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (440, 4, '2026-07-28', '57870729', '19:58:00');
+VALUES (440, 4, '2027-05-06', '57870729', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (441, 1, '2015-11-24', '57761124', '19:43:00');
+VALUES (441, 1, '2016-08-28', '57761124', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (441, 2, '2019-06-26', '57800626', '18:25:00');
+VALUES (441, 2, '2020-03-22', '57800626', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (441, 3, '2023-01-28', '57840130', '18:42:00');
+VALUES (441, 3, '2023-10-15', '57840130', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (441, 4, '2026-08-02', '57870802', '20:01:00');
+VALUES (441, 4, '2027-05-09', '57870802', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (442, 1, '2015-11-25', '57761125', '19:42:00');
+VALUES (442, 1, '2016-08-29', '57761125', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (442, 2, '2019-06-27', '57800627', '18:26:00');
+VALUES (442, 2, '2020-03-23', '57800627', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (442, 3, '2023-02-01', '57840201', '18:40:00');
+VALUES (442, 3, '2023-10-16', '57840201', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (442, 4, '2026-08-03', '57870803', '20:01:00');
+VALUES (442, 4, '2027-05-10', '57870803', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (443, 1, '2015-11-26', '57761126', '19:40:00');
+VALUES (443, 1, '2016-08-30', '57761126', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (443, 2, '2019-06-28', '57800628', '18:27:00');
+VALUES (443, 2, '2020-03-24', '57800628', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (443, 3, '2023-02-02', '57840202', '18:39:00');
+VALUES (443, 3, '2023-10-17', '57840202', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (443, 4, '2026-08-04', '57870804', '20:02:00');
+VALUES (443, 4, '2027-05-11', '57870804', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (444, 1, '2015-11-27', '57761127', '19:39:00');
+VALUES (444, 1, '2016-08-31', '57761127', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (444, 2, '2019-06-28', '57800629', '18:27:00');
+VALUES (444, 2, '2020-03-25', '57800629', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (444, 3, '2023-02-03', '57840203', '18:38:00');
+VALUES (444, 3, '2023-10-18', '57840203', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (444, 4, '2026-08-05', '57870805', '20:03:00');
+VALUES (444, 4, '2027-05-12', '57870805', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (445, 1, '2015-11-28', '57761128', '19:38:00');
+VALUES (445, 1, '2016-09-01', '57761128', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (445, 2, '2019-07-01', '57800701', '18:28:00');
+VALUES (445, 2, '2020-03-26', '57800701', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (445, 3, '2023-02-04', '57840204', '18:37:00');
+VALUES (445, 3, '2023-10-19', '57840204', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (445, 4, '2026-08-06', '57870806', '20:04:00');
+VALUES (445, 4, '2027-05-13', '57870806', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (446, 1, '2015-12-01', '57761201', '19:34:00');
+VALUES (446, 1, '2016-09-04', '57761201', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (446, 2, '2019-07-04', '57800704', '19:30:00');
+VALUES (446, 2, '2020-03-29', '57800704', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (446, 3, '2023-02-07', '57840207', '18:34:00');
+VALUES (446, 3, '2023-10-22', '57840207', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (446, 4, '2026-08-09', '57870809', '20:06:00');
+VALUES (446, 4, '2027-05-16', '57870809', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (447, 1, '2015-12-02', '57761202', '19:33:00');
+VALUES (447, 1, '2016-09-05', '57761202', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (447, 2, '2019-07-05', '57800705', '19:31:00');
+VALUES (447, 2, '2020-03-30', '57800705', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (447, 3, '2023-02-08', '57840208', '18:33:00');
+VALUES (447, 3, '2023-10-23', '57840208', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (447, 4, '2026-08-10', '57870810', '20:07:00');
+VALUES (447, 4, '2027-05-17', '57870810', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (448, 1, '2015-12-03', '57761203', '19:31:00');
+VALUES (448, 1, '2016-09-06', '57761203', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (448, 2, '2019-07-06', '57800706', '19:31:00');
+VALUES (448, 2, '2020-03-31', '57800706', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (448, 3, '2023-02-09', '57840209', '18:32:00');
+VALUES (448, 3, '2023-10-24', '57840209', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (448, 4, '2026-08-11', '57870811', '20:08:00');
+VALUES (448, 4, '2027-05-18', '57870811', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (449, 1, '2015-12-04', '57761204', '19:30:00');
+VALUES (449, 1, '2016-09-07', '57761204', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (449, 2, '2019-07-07', '57800707', '19:32:00');
+VALUES (449, 2, '2020-04-01', '57800707', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (449, 3, '2023-02-10', '57840210', '18:31:00');
+VALUES (449, 3, '2023-10-25', '57840210', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (449, 4, '2026-08-12', '57870812', '20:09:00');
+VALUES (449, 4, '2027-05-19', '57870812', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (450, 1, '2015-12-05', '57761205', '19:29:00');
+VALUES (450, 1, '2016-09-08', '57761205', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (450, 2, '2019-07-08', '57800708', '19:33:00');
+VALUES (450, 2, '2020-04-02', '57800708', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (450, 3, '2023-02-11', '57840211', '18:30:00');
+VALUES (450, 3, '2023-10-26', '57840211', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (450, 4, '2026-08-13', '57870813', '20:09:00');
+VALUES (450, 4, '2027-05-20', '57870813', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (451, 1, '2015-12-08', '57761208', '19:24:00');
+VALUES (451, 1, '2016-09-11', '57761208', '19:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (451, 2, '2019-07-11', '57800711', '19:35:00');
+VALUES (451, 2, '2020-04-05', '57800711', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (451, 3, '2023-02-14', '57840214', '17:27:00');
+VALUES (451, 3, '2023-10-29', '57840214', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (451, 4, '2026-08-16', '57870816', '20:12:00');
+VALUES (451, 4, '2027-05-23', '57870816', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (452, 1, '2015-12-09', '57761209', '19:23:00');
+VALUES (452, 1, '2016-09-12', '57761209', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (452, 2, '2019-07-12', '57800712', '19:36:00');
+VALUES (452, 2, '2020-04-06', '57800712', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (452, 3, '2023-02-15', '57840215', '17:27:00');
+VALUES (452, 3, '2023-10-30', '57840215', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (452, 4, '2026-08-17', '57870817', '20:12:00');
+VALUES (452, 4, '2027-05-24', '57870817', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (453, 1, '2015-12-10', '57761210', '19:22:00');
+VALUES (453, 1, '2016-09-13', '57761210', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (453, 2, '2019-07-13', '57800713', '19:36:00');
+VALUES (453, 2, '2020-04-07', '57800713', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (453, 3, '2023-02-16', '57840216', '17:26:00');
+VALUES (453, 3, '2023-10-31', '57840216', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (453, 4, '2026-08-18', '57870818', '20:13:00');
+VALUES (453, 4, '2027-05-25', '57870818', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (454, 1, '2015-12-11', '57761211', '19:20:00');
+VALUES (454, 1, '2016-09-14', '57761211', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (454, 2, '2019-07-14', '57800714', '19:37:00');
+VALUES (454, 2, '2020-04-08', '57800714', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (454, 3, '2023-02-17', '57840217', '17:25:00');
+VALUES (454, 3, '2023-11-01', '57840217', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (454, 4, '2026-08-19', '57870819', '20:14:00');
+VALUES (454, 4, '2027-05-26', '57870819', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (455, 1, '2015-12-12', '57761212', '19:19:00');
+VALUES (455, 1, '2016-09-15', '57761212', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (455, 2, '2019-07-15', '57800715', '19:38:00');
+VALUES (455, 2, '2020-04-09', '57800715', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (455, 3, '2023-02-18', '57840218', '17:24:00');
+VALUES (455, 3, '2023-11-02', '57840218', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (455, 4, '2026-08-20', '57870820', '20:14:00');
+VALUES (455, 4, '2027-05-27', '57870820', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (456, 1, '2015-12-15', '57761215', '19:15:00');
+VALUES (456, 1, '2016-09-18', '57761215', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (456, 2, '2019-07-18', '57800718', '19:40:00');
+VALUES (456, 2, '2020-04-12', '57800718', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (456, 3, '2023-02-21', '57840221', '17:22:00');
+VALUES (456, 3, '2023-11-05', '57840221', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (456, 4, '2026-08-23', '57870823', '20:17:00');
+VALUES (456, 4, '2027-05-30', '57870823', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (457, 1, '2015-12-16', '57761216', '19:14:00');
+VALUES (457, 1, '2016-09-19', '57761216', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (457, 2, '2019-07-19', '57800719', '19:41:00');
+VALUES (457, 2, '2020-04-13', '57800719', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (457, 3, '2023-02-22', '57840222', '17:21:00');
+VALUES (457, 3, '2023-11-06', '57840222', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (457, 4, '2026-08-24', '57870824', '20:17:00');
+VALUES (457, 4, '2027-05-31', '57870824', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (458, 1, '2015-12-17', '57761217', '19:12:00');
+VALUES (458, 1, '2016-09-20', '57761217', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (458, 2, '2019-07-20', '57800720', '19:41:00');
+VALUES (458, 2, '2020-04-14', '57800720', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (458, 3, '2023-02-23', '57840223', '17:20:00');
+VALUES (458, 3, '2023-11-07', '57840223', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (458, 4, '2026-08-25', '57870825', '20:18:00');
+VALUES (458, 4, '2027-06-01', '57870825', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (459, 1, '2015-12-18', '57761218', '19:11:00');
+VALUES (459, 1, '2016-09-21', '57761218', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (459, 2, '2019-07-21', '57800721', '19:42:00');
+VALUES (459, 2, '2020-04-15', '57800721', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (459, 3, '2023-02-24', '57840224', '17:20:00');
+VALUES (459, 3, '2023-11-08', '57840224', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (459, 4, '2026-08-26', '57870826', '20:18:00');
+VALUES (459, 4, '2027-06-02', '57870826', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (460, 1, '2015-12-19', '57761219', '19:10:00');
+VALUES (460, 1, '2016-09-22', '57761219', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (460, 2, '2019-07-22', '57800722', '19:43:00');
+VALUES (460, 2, '2020-04-16', '57800722', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (460, 3, '2023-02-25', '57840225', '17:19:00');
+VALUES (460, 3, '2023-11-09', '57840225', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (460, 4, '2026-08-27', '57870827', '20:19:00');
+VALUES (460, 4, '2027-06-03', '57870827', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (461, 1, '2015-12-22', '57761222', '19:06:00');
+VALUES (461, 1, '2016-09-25', '57761222', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (461, 2, '2019-07-25', '57800725', '19:45:00');
+VALUES (461, 2, '2020-04-19', '57800725', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (461, 3, '2023-02-28', '57840228', '17:17:00');
+VALUES (461, 3, '2023-11-12', '57840228', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (461, 4, '2026-09-01', '57870901', '20:21:00');
+VALUES (461, 4, '2027-06-06', '57870901', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (462, 1, '2015-12-23', '57761223', '19:04:00');
+VALUES (462, 1, '2016-09-26', '57761223', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (462, 2, '2019-07-26', '57800726', '19:46:00');
+VALUES (462, 2, '2020-04-20', '57800726', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (462, 3, '2023-02-28', '57840229', '17:17:00');
+VALUES (462, 3, '2023-11-13', '57840229', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (462, 4, '2026-09-02', '57870902', '20:21:00');
+VALUES (462, 4, '2027-06-07', '57870902', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (463, 1, '2015-12-24', '57761224', '19:03:00');
+VALUES (463, 1, '2016-09-27', '57761224', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (463, 2, '2019-07-27', '57800727', '19:47:00');
+VALUES (463, 2, '2020-04-21', '57800727', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (463, 3, '2023-03-01', '57840301', '17:16:00');
+VALUES (463, 3, '2023-11-14', '57840301', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (463, 4, '2026-09-03', '57870903', '20:22:00');
+VALUES (463, 4, '2027-06-08', '57870903', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (464, 1, '2015-12-25', '57761225', '19:02:00');
+VALUES (464, 1, '2016-09-28', '57761225', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (464, 2, '2019-07-28', '57800728', '19:48:00');
+VALUES (464, 2, '2020-04-22', '57800728', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (464, 3, '2023-03-02', '57840302', '17:16:00');
+VALUES (464, 3, '2023-11-15', '57840302', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (464, 4, '2026-09-04', '57870904', '20:22:00');
+VALUES (464, 4, '2027-06-09', '57870904', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (465, 1, '2015-12-26', '57761226', '19:00:00');
+VALUES (465, 1, '2016-09-29', '57761226', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (465, 2, '2019-07-28', '57800729', '19:48:00');
+VALUES (465, 2, '2020-04-23', '57800729', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (465, 3, '2023-03-03', '57840303', '17:15:00');
+VALUES (465, 3, '2023-11-16', '57840303', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (465, 4, '2026-09-05', '57870905', '20:23:00');
+VALUES (465, 4, '2027-06-10', '57870905', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (466, 1, '2015-12-28', '57761229', '18:56:00');
+VALUES (466, 1, '2016-10-02', '57761229', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (466, 2, '2019-08-02', '57800802', '19:51:00');
+VALUES (466, 2, '2020-04-26', '57800802', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (466, 3, '2023-03-06', '57840306', '17:14:00');
+VALUES (466, 3, '2023-11-19', '57840306', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (466, 4, '2026-09-08', '57870908', '20:24:00');
+VALUES (466, 4, '2027-06-13', '57870908', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (467, 1, '2016-01-01', '57770101', '18:55:00');
+VALUES (467, 1, '2016-10-03', '57770101', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (467, 2, '2019-08-03', '57800803', '19:52:00');
+VALUES (467, 2, '2020-04-27', '57800803', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (467, 3, '2023-03-07', '57840307', '17:14:00');
+VALUES (467, 3, '2023-11-20', '57840307', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (467, 4, '2026-09-09', '57870909', '20:25:00');
+VALUES (467, 4, '2027-06-14', '57870909', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (468, 1, '2016-01-02', '57770102', '18:54:00');
+VALUES (468, 1, '2016-10-04', '57770102', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (468, 2, '2019-08-04', '57800804', '19:52:00');
+VALUES (468, 2, '2020-04-28', '57800804', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (468, 3, '2023-03-08', '57840308', '17:13:00');
+VALUES (468, 3, '2023-11-21', '57840308', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (468, 4, '2026-09-10', '57870910', '20:25:00');
+VALUES (468, 4, '2027-06-15', '57870910', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (469, 1, '2016-01-03', '57770103', '18:53:00');
+VALUES (469, 1, '2016-10-05', '57770103', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (469, 2, '2019-08-05', '57800805', '19:53:00');
+VALUES (469, 2, '2020-04-29', '57800805', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (469, 3, '2023-03-09', '57840309', '17:13:00');
+VALUES (469, 3, '2023-11-22', '57840309', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (469, 4, '2026-09-11', '57870911', '20:25:00');
+VALUES (469, 4, '2027-06-16', '57870911', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (470, 1, '2016-01-04', '57770104', '18:51:00');
+VALUES (470, 1, '2016-10-06', '57770104', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (470, 2, '2019-08-06', '57800806', '19:54:00');
+VALUES (470, 2, '2020-04-30', '57800806', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (470, 3, '2023-03-10', '57840310', '17:13:00');
+VALUES (470, 3, '2023-11-23', '57840310', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (470, 4, '2026-09-12', '57870912', '20:26:00');
+VALUES (470, 4, '2027-06-17', '57870912', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (471, 1, '2016-01-07', '57770107', '18:48:00');
+VALUES (471, 1, '2016-10-09', '57770107', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (471, 2, '2019-08-09', '57800809', '19:56:00');
+VALUES (471, 2, '2020-05-03', '57800809', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (471, 3, '2023-03-13', '57840313', '17:12:00');
+VALUES (471, 3, '2023-11-26', '57840313', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (471, 4, '2026-09-15', '57870915', '20:26:00');
+VALUES (471, 4, '2027-06-20', '57870915', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (472, 1, '2016-01-08', '57770108', '18:46:00');
+VALUES (472, 1, '2016-10-10', '57770108', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (472, 2, '2019-08-10', '57800810', '19:57:00');
+VALUES (472, 2, '2020-05-04', '57800810', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (472, 3, '2023-03-14', '57840314', '17:12:00');
+VALUES (472, 3, '2023-11-27', '57840314', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (472, 4, '2026-09-16', '57870916', '20:27:00');
+VALUES (472, 4, '2027-06-21', '57870916', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (473, 1, '2016-01-09', '57770109', '18:45:00');
+VALUES (473, 1, '2016-10-11', '57770109', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (473, 2, '2019-08-11', '57800811', '19:58:00');
+VALUES (473, 2, '2020-05-05', '57800811', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (473, 3, '2023-03-15', '57840315', '17:12:00');
+VALUES (473, 3, '2023-11-28', '57840315', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (473, 4, '2026-09-17', '57870917', '20:27:00');
+VALUES (473, 4, '2027-06-22', '57870917', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (474, 1, '2016-01-10', '57770110', '18:44:00');
+VALUES (474, 1, '2016-10-12', '57770110', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (474, 2, '2019-08-12', '57800812', '19:59:00');
+VALUES (474, 2, '2020-05-06', '57800812', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (474, 3, '2023-03-16', '57840316', '17:12:00');
+VALUES (474, 3, '2023-11-29', '57840316', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (474, 4, '2026-09-18', '57870918', '20:27:00');
+VALUES (474, 4, '2027-06-23', '57870918', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (475, 1, '2016-01-11', '57770111', '18:43:00');
+VALUES (475, 1, '2016-10-13', '57770111', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (475, 2, '2019-08-13', '57800813', '20:00:00');
+VALUES (475, 2, '2020-05-07', '57800813', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (475, 3, '2023-03-17', '57840317', '17:12:00');
+VALUES (475, 3, '2023-11-30', '57840317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (475, 4, '2026-09-19', '57870919', '20:27:00');
+VALUES (475, 4, '2027-06-24', '57870919', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (476, 1, '2016-01-14', '57770114', '18:40:00');
+VALUES (476, 1, '2016-10-16', '57770114', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (476, 2, '2019-08-16', '57800816', '20:02:00');
+VALUES (476, 2, '2020-05-10', '57800816', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (476, 3, '2023-03-20', '57840320', '17:12:00');
+VALUES (476, 3, '2023-12-03', '57840320', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (476, 4, '2026-09-22', '57870922', '20:28:00');
+VALUES (476, 4, '2027-06-27', '57870922', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (477, 1, '2016-01-15', '57770115', '18:39:00');
+VALUES (477, 1, '2016-10-17', '57770115', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (477, 2, '2019-08-17', '57800817', '20:03:00');
+VALUES (477, 2, '2020-05-11', '57800817', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (477, 3, '2023-03-21', '57840321', '17:12:00');
+VALUES (477, 3, '2023-12-04', '57840321', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (477, 4, '2026-09-23', '57870923', '20:28:00');
+VALUES (477, 4, '2027-06-28', '57870923', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (478, 1, '2016-01-16', '57770116', '18:37:00');
+VALUES (478, 1, '2016-10-18', '57770116', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (478, 2, '2019-08-18', '57800818', '20:04:00');
+VALUES (478, 2, '2020-05-12', '57800818', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (478, 3, '2023-03-22', '57840322', '17:12:00');
+VALUES (478, 3, '2023-12-05', '57840322', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (478, 4, '2026-09-24', '57870924', '20:28:00');
+VALUES (478, 4, '2027-06-29', '57870924', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (479, 1, '2016-01-17', '57770117', '18:36:00');
+VALUES (479, 1, '2016-10-19', '57770117', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (479, 2, '2019-08-19', '57800819', '20:04:00');
+VALUES (479, 2, '2020-05-13', '57800819', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (479, 3, '2023-03-23', '57840323', '17:12:00');
+VALUES (479, 3, '2023-12-06', '57840323', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (479, 4, '2026-09-25', '57870925', '20:28:00');
+VALUES (479, 4, '2027-06-30', '57870925', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (480, 1, '2016-01-18', '57770118', '18:35:00');
+VALUES (480, 1, '2016-10-20', '57770118', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (480, 2, '2019-08-20', '57800820', '20:05:00');
+VALUES (480, 2, '2020-05-14', '57800820', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (480, 3, '2023-03-24', '57840324', '17:12:00');
+VALUES (480, 3, '2023-12-07', '57840324', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (480, 4, '2026-09-26', '57870926', '20:28:00');
+VALUES (480, 4, '2027-07-01', '57870926', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (481, 1, '2016-01-21', '57770121', '18:32:00');
+VALUES (481, 1, '2016-10-23', '57770121', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (481, 2, '2019-08-23', '57800823', '20:08:00');
+VALUES (481, 2, '2020-05-17', '57800823', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (481, 3, '2023-03-27', '57840327', '17:12:00');
+VALUES (481, 3, '2023-12-10', '57840327', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (481, 4, '2026-09-28', '57870929', '20:27:00');
+VALUES (481, 4, '2027-07-04', '57870929', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (482, 1, '2016-01-22', '57770122', '18:31:00');
+VALUES (482, 1, '2016-10-24', '57770122', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (482, 2, '2019-08-24', '57800824', '20:08:00');
+VALUES (482, 2, '2020-05-18', '57800824', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (482, 3, '2023-03-28', '57840328', '17:13:00');
+VALUES (482, 3, '2023-12-11', '57840328', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (482, 4, '2026-09-28', '57870930', '20:27:00');
+VALUES (482, 4, '2027-07-05', '57870930', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (483, 1, '2016-01-23', '57770123', '18:30:00');
+VALUES (483, 1, '2016-10-25', '57770123', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (483, 2, '2019-08-25', '57800825', '20:09:00');
+VALUES (483, 2, '2020-05-19', '57800825', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (483, 3, '2023-03-28', '57840329', '17:13:00');
+VALUES (483, 3, '2023-12-12', '57840329', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (483, 4, '2026-10-01', '57871001', '20:27:00');
+VALUES (483, 4, '2027-07-06', '57871001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (484, 1, '2016-01-24', '57770124', '18:29:00');
+VALUES (484, 1, '2016-10-26', '57770124', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (484, 2, '2019-08-26', '57800826', '20:10:00');
+VALUES (484, 2, '2020-05-20', '57800826', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (484, 3, '2023-04-01', '57840401', '17:13:00');
+VALUES (484, 3, '2023-12-13', '57840401', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (484, 4, '2026-10-02', '57871002', '20:27:00');
+VALUES (484, 4, '2027-07-07', '57871002', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (485, 1, '2016-01-25', '57770125', '18:29:00');
+VALUES (485, 1, '2016-10-27', '57770125', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (485, 2, '2019-08-27', '57800827', '20:11:00');
+VALUES (485, 2, '2020-05-21', '57800827', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (485, 3, '2023-04-02', '57840402', '17:13:00');
+VALUES (485, 3, '2023-12-14', '57840402', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (485, 4, '2026-10-03', '57871003', '20:27:00');
+VALUES (485, 4, '2027-07-08', '57871003', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (486, 1, '2016-01-28', '57770128', '17:26:00');
+VALUES (486, 1, '2016-10-30', '57770128', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (486, 2, '2019-09-01', '57800901', '20:13:00');
+VALUES (486, 2, '2020-05-24', '57800901', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (486, 3, '2023-04-05', '57840405', '17:14:00');
+VALUES (486, 3, '2023-12-17', '57840405', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (486, 4, '2026-10-06', '57871006', '20:26:00');
+VALUES (486, 4, '2027-07-11', '57871006', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (487, 1, '2016-01-28', '57770129', '17:25:00');
+VALUES (487, 1, '2016-10-31', '57770129', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (487, 2, '2019-09-02', '57800902', '20:14:00');
+VALUES (487, 2, '2020-05-25', '57800902', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (487, 3, '2023-04-06', '57840406', '17:15:00');
+VALUES (487, 3, '2023-12-18', '57840406', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (487, 4, '2026-10-07', '57871007', '20:25:00');
+VALUES (487, 4, '2027-07-12', '57871007', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (488, 1, '2016-01-28', '57770130', '17:24:00');
+VALUES (488, 1, '2016-11-01', '57770130', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (488, 2, '2019-09-03', '57800903', '20:14:00');
+VALUES (488, 2, '2020-05-26', '57800903', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (488, 3, '2023-04-07', '57840407', '17:15:00');
+VALUES (488, 3, '2023-12-19', '57840407', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (488, 4, '2026-10-08', '57871008', '20:25:00');
+VALUES (488, 4, '2027-07-13', '57871008', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (489, 1, '2016-02-01', '57770201', '17:23:00');
+VALUES (489, 1, '2016-11-02', '57770201', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (489, 2, '2019-09-04', '57800904', '20:15:00');
+VALUES (489, 2, '2020-05-27', '57800904', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (489, 3, '2023-04-08', '57840408', '17:16:00');
+VALUES (489, 3, '2023-12-20', '57840408', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (489, 4, '2026-10-09', '57871009', '20:25:00');
+VALUES (489, 4, '2027-07-14', '57871009', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (490, 1, '2016-02-02', '57770202', '17:23:00');
+VALUES (490, 1, '2016-11-03', '57770202', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (490, 2, '2019-09-05', '57800905', '20:16:00');
+VALUES (490, 2, '2020-05-28', '57800905', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (490, 3, '2023-04-09', '57840409', '17:16:00');
+VALUES (490, 3, '2023-12-21', '57840409', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (490, 4, '2026-10-10', '57871010', '20:24:00');
+VALUES (490, 4, '2027-07-15', '57871010', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (491, 1, '2016-02-05', '57770205', '17:21:00');
+VALUES (491, 1, '2016-11-06', '57770205', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (491, 2, '2019-09-08', '57800908', '20:18:00');
+VALUES (491, 2, '2020-05-31', '57800908', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (491, 3, '2023-04-12', '57840412', '17:17:00');
+VALUES (491, 3, '2023-12-24', '57840412', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (491, 4, '2026-10-13', '57871013', '20:23:00');
+VALUES (491, 4, '2027-07-18', '57871013', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (492, 1, '2016-02-06', '57770206', '17:20:00');
+VALUES (492, 1, '2016-11-07', '57770206', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (492, 2, '2019-09-09', '57800909', '20:18:00');
+VALUES (492, 2, '2020-06-01', '57800909', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (492, 3, '2023-04-13', '57840413', '17:18:00');
+VALUES (492, 3, '2023-12-25', '57840413', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (492, 4, '2026-10-14', '57871014', '20:22:00');
+VALUES (492, 4, '2027-07-19', '57871014', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (493, 1, '2016-02-07', '57770207', '17:19:00');
+VALUES (493, 1, '2016-11-08', '57770207', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (493, 2, '2019-09-10', '57800910', '20:19:00');
+VALUES (493, 2, '2020-06-02', '57800910', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (493, 3, '2023-04-14', '57840414', '17:19:00');
+VALUES (493, 3, '2023-12-26', '57840414', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (493, 4, '2026-10-15', '57871015', '20:22:00');
+VALUES (493, 4, '2027-07-20', '57871015', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (494, 1, '2016-02-08', '57770208', '17:19:00');
+VALUES (494, 1, '2016-11-09', '57770208', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (494, 2, '2019-09-11', '57800911', '20:20:00');
+VALUES (494, 2, '2020-06-03', '57800911', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (494, 3, '2023-04-15', '57840415', '17:19:00');
+VALUES (494, 3, '2023-12-27', '57840415', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (494, 4, '2026-10-16', '57871016', '20:21:00');
+VALUES (494, 4, '2027-07-21', '57871016', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (495, 1, '2016-02-09', '57770209', '17:18:00');
+VALUES (495, 1, '2016-11-10', '57770209', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (495, 2, '2019-09-12', '57800912', '20:20:00');
+VALUES (495, 2, '2020-06-04', '57800912', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (495, 3, '2023-04-16', '57840416', '17:20:00');
+VALUES (495, 3, '2023-12-28', '57840416', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (495, 4, '2026-10-17', '57871017', '20:21:00');
+VALUES (495, 4, '2027-07-22', '57871017', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (496, 1, '2016-02-12', '57770212', '17:16:00');
+VALUES (496, 1, '2016-11-13', '57770212', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (496, 2, '2019-09-15', '57800915', '20:22:00');
+VALUES (496, 2, '2020-06-07', '57800915', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (496, 3, '2023-04-19', '57840419', '17:22:00');
+VALUES (496, 3, '2023-12-31', '57840419', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (496, 4, '2026-10-20', '57871020', '20:19:00');
+VALUES (496, 4, '2027-07-25', '57871020', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (497, 1, '2016-02-13', '57770213', '17:16:00');
+VALUES (497, 1, '2016-11-14', '57770213', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (497, 2, '2019-09-16', '57800916', '20:22:00');
+VALUES (497, 2, '2020-06-08', '57800916', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (497, 3, '2023-04-20', '57840420', '17:22:00');
+VALUES (497, 3, '2024-01-01', '57840420', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (497, 4, '2026-10-21', '57871021', '20:18:00');
+VALUES (497, 4, '2027-07-26', '57871021', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (498, 1, '2016-02-14', '57770214', '17:15:00');
+VALUES (498, 1, '2016-11-15', '57770214', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (498, 2, '2019-09-17', '57800917', '20:23:00');
+VALUES (498, 2, '2020-06-09', '57800917', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (498, 3, '2023-04-21', '57840421', '17:23:00');
+VALUES (498, 3, '2024-01-02', '57840421', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (498, 4, '2026-10-22', '57871022', '20:17:00');
+VALUES (498, 4, '2027-07-27', '57871022', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (499, 1, '2016-02-15', '57770215', '17:15:00');
+VALUES (499, 1, '2016-11-16', '57770215', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (499, 2, '2019-09-18', '57800918', '20:23:00');
+VALUES (499, 2, '2020-06-10', '57800918', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (499, 3, '2023-04-22', '57840422', '17:24:00');
+VALUES (499, 3, '2024-01-03', '57840422', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (499, 4, '2026-10-23', '57871023', '20:16:00');
+VALUES (499, 4, '2027-07-28', '57871023', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (500, 1, '2016-02-16', '57770216', '17:15:00');
+VALUES (500, 1, '2016-11-17', '57770216', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (500, 2, '2019-09-19', '57800919', '20:24:00');
+VALUES (500, 2, '2020-06-11', '57800919', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (500, 3, '2023-04-23', '57840423', '17:24:00');
+VALUES (500, 3, '2024-01-04', '57840423', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (500, 4, '2026-10-24', '57871024', '20:16:00');
+VALUES (500, 4, '2027-07-29', '57871024', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (501, 1, '2016-02-19', '57770219', '17:14:00');
+VALUES (501, 1, '2016-11-20', '57770219', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (501, 2, '2019-09-22', '57800922', '20:25:00');
+VALUES (501, 2, '2020-06-14', '57800922', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (501, 3, '2023-04-26', '57840426', '17:26:00');
+VALUES (501, 3, '2024-01-07', '57840426', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (501, 4, '2026-10-27', '57871027', '20:13:00');
+VALUES (501, 4, '2027-08-01', '57871027', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (502, 1, '2016-02-20', '57770220', '17:13:00');
+VALUES (502, 1, '2016-11-21', '57770220', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (502, 2, '2019-09-23', '57800923', '20:25:00');
+VALUES (502, 2, '2020-06-15', '57800923', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (502, 3, '2023-04-27', '57840427', '17:27:00');
+VALUES (502, 3, '2024-01-08', '57840427', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (502, 4, '2026-10-28', '57871028', '20:12:00');
+VALUES (502, 4, '2027-08-02', '57871028', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (503, 1, '2016-02-21', '57770221', '17:13:00');
+VALUES (503, 1, '2016-11-22', '57770221', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (503, 2, '2019-09-24', '57800924', '20:26:00');
+VALUES (503, 2, '2020-06-16', '57800924', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (503, 3, '2023-04-28', '57840428', '17:28:00');
+VALUES (503, 3, '2024-01-09', '57840428', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (503, 4, '2026-10-28', '57871029', '20:11:00');
+VALUES (503, 4, '2027-08-03', '57871029', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (504, 1, '2016-02-22', '57770222', '17:13:00');
+VALUES (504, 1, '2016-11-23', '57770222', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (504, 2, '2019-09-25', '57800925', '20:26:00');
+VALUES (504, 2, '2020-06-17', '57800925', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (504, 3, '2023-04-28', '57840429', '17:29:00');
+VALUES (504, 3, '2024-01-10', '57840429', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (504, 4, '2026-11-01', '57871101', '20:11:00');
+VALUES (504, 4, '2027-08-04', '57871101', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (505, 1, '2016-02-23', '57770223', '17:12:00');
+VALUES (505, 1, '2016-11-24', '57770223', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (505, 2, '2019-09-26', '57800926', '20:26:00');
+VALUES (505, 2, '2020-06-18', '57800926', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (505, 3, '2023-05-01', '57840501', '17:30:00');
+VALUES (505, 3, '2024-01-11', '57840501', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (505, 4, '2026-11-02', '57871102', '20:10:00');
+VALUES (505, 4, '2027-08-05', '57871102', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (506, 1, '2016-02-26', '57770226', '17:12:00');
+VALUES (506, 1, '2016-11-27', '57770226', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (506, 2, '2019-09-28', '57800929', '20:27:00');
+VALUES (506, 2, '2020-06-21', '57800929', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (506, 3, '2023-05-04', '57840504', '17:32:00');
+VALUES (506, 3, '2024-01-14', '57840504', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (506, 4, '2026-11-05', '57871105', '20:07:00');
+VALUES (506, 4, '2027-08-08', '57871105', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (507, 1, '2016-02-27', '57770227', '17:12:00');
+VALUES (507, 1, '2016-11-28', '57770227', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (507, 2, '2019-09-28', '57800930', '20:27:00');
+VALUES (507, 2, '2020-06-22', '57800930', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (507, 3, '2023-05-05', '57840505', '17:33:00');
+VALUES (507, 3, '2024-01-15', '57840505', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (507, 4, '2026-11-06', '57871106', '20:06:00');
+VALUES (507, 4, '2027-08-09', '57871106', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (508, 1, '2016-02-28', '57770228', '17:12:00');
+VALUES (508, 1, '2016-11-29', '57770228', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (508, 2, '2019-10-01', '57801001', '20:27:00');
+VALUES (508, 2, '2020-06-23', '57801001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (508, 3, '2023-05-06', '57840506', '17:34:00');
+VALUES (508, 3, '2024-01-16', '57840506', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (508, 4, '2026-11-07', '57871107', '20:05:00');
+VALUES (508, 4, '2027-08-10', '57871107', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (509, 1, '2016-02-28', '57770229', '17:12:00');
+VALUES (509, 1, '2016-11-30', '57770229', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (509, 2, '2019-10-02', '57801002', '20:27:00');
+VALUES (509, 2, '2020-06-24', '57801002', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (509, 3, '2023-05-07', '57840507', '17:34:00');
+VALUES (509, 3, '2024-01-17', '57840507', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (509, 4, '2026-11-08', '57871108', '20:04:00');
+VALUES (509, 4, '2027-08-11', '57871108', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (510, 1, '2016-03-01', '57770301', '17:12:00');
+VALUES (510, 1, '2016-12-01', '57770301', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (510, 2, '2019-10-03', '57801003', '20:27:00');
+VALUES (510, 2, '2020-06-25', '57801003', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (510, 3, '2023-05-08', '57840508', '17:35:00');
+VALUES (510, 3, '2024-01-18', '57840508', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (510, 4, '2026-11-09', '57871109', '20:03:00');
+VALUES (510, 4, '2027-08-12', '57871109', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (511, 1, '2016-03-04', '57770304', '17:12:00');
+VALUES (511, 1, '2016-12-04', '57770304', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (511, 2, '2019-10-06', '57801006', '20:28:00');
+VALUES (511, 2, '2020-06-28', '57801006', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (511, 3, '2023-05-11', '57840511', '17:38:00');
+VALUES (511, 3, '2024-01-21', '57840511', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (511, 4, '2026-11-12', '57871112', '19:59:00');
+VALUES (511, 4, '2027-08-15', '57871112', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (512, 1, '2016-03-05', '57770305', '17:12:00');
+VALUES (512, 1, '2016-12-05', '57770305', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (512, 2, '2019-10-07', '57801007', '20:28:00');
+VALUES (512, 2, '2020-06-29', '57801007', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (512, 3, '2023-05-12', '57840512', '17:39:00');
+VALUES (512, 3, '2024-01-22', '57840512', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (512, 4, '2026-11-13', '57871113', '19:58:00');
+VALUES (512, 4, '2027-08-16', '57871113', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (513, 1, '2016-03-06', '57770306', '17:12:00');
+VALUES (513, 1, '2016-12-06', '57770306', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (513, 2, '2019-10-08', '57801008', '20:28:00');
+VALUES (513, 2, '2020-06-30', '57801008', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (513, 3, '2023-05-13', '57840513', '17:40:00');
+VALUES (513, 3, '2024-01-23', '57840513', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (513, 4, '2026-11-14', '57871114', '19:57:00');
+VALUES (513, 4, '2027-08-17', '57871114', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (514, 1, '2016-03-07', '57770307', '17:12:00');
+VALUES (514, 1, '2016-12-07', '57770307', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (514, 2, '2019-10-09', '57801009', '20:27:00');
+VALUES (514, 2, '2020-07-01', '57801009', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (514, 3, '2023-05-14', '57840514', '17:40:00');
+VALUES (514, 3, '2024-01-24', '57840514', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (514, 4, '2026-11-15', '57871115', '19:56:00');
+VALUES (514, 4, '2027-08-18', '57871115', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (515, 1, '2016-03-08', '57770308', '17:12:00');
+VALUES (515, 1, '2016-12-08', '57770308', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (515, 2, '2019-10-10', '57801010', '20:27:00');
+VALUES (515, 2, '2020-07-02', '57801010', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (515, 3, '2023-05-15', '57840515', '17:41:00');
+VALUES (515, 3, '2024-01-25', '57840515', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (515, 4, '2026-11-16', '57871116', '19:55:00');
+VALUES (515, 4, '2027-08-19', '57871116', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (516, 1, '2016-03-11', '57770311', '17:13:00');
+VALUES (516, 1, '2016-12-11', '57770311', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (516, 2, '2019-10-13', '57801013', '20:27:00');
+VALUES (516, 2, '2020-07-05', '57801013', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (516, 3, '2023-05-18', '57840518', '17:44:00');
+VALUES (516, 3, '2024-01-28', '57840518', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (516, 4, '2026-11-19', '57871119', '19:51:00');
+VALUES (516, 4, '2027-08-22', '57871119', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (517, 1, '2016-03-12', '57770312', '17:13:00');
+VALUES (517, 1, '2016-12-12', '57770312', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (517, 2, '2019-10-14', '57801014', '20:27:00');
+VALUES (517, 2, '2020-07-06', '57801014', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (517, 3, '2023-05-19', '57840519', '17:45:00');
+VALUES (517, 3, '2024-01-29', '57840519', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (517, 4, '2026-11-20', '57871120', '19:50:00');
+VALUES (517, 4, '2027-08-23', '57871120', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (518, 1, '2016-03-13', '57770313', '17:13:00');
+VALUES (518, 1, '2016-12-13', '57770313', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (518, 2, '2019-10-15', '57801015', '20:27:00');
+VALUES (518, 2, '2020-07-07', '57801015', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (518, 3, '2023-05-20', '57840520', '17:46:00');
+VALUES (518, 3, '2024-01-30', '57840520', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (518, 4, '2026-11-21', '57871121', '19:49:00');
+VALUES (518, 4, '2027-08-24', '57871121', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (519, 1, '2016-03-14', '57770314', '17:14:00');
+VALUES (519, 1, '2016-12-14', '57770314', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (519, 2, '2019-10-16', '57801016', '20:26:00');
+VALUES (519, 2, '2020-07-08', '57801016', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (519, 3, '2023-05-21', '57840521', '17:46:00');
+VALUES (519, 3, '2024-01-31', '57840521', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (519, 4, '2026-11-22', '57871122', '19:48:00');
+VALUES (519, 4, '2027-08-25', '57871122', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (520, 1, '2016-03-15', '57770315', '17:14:00');
+VALUES (520, 1, '2016-12-15', '57770315', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (520, 2, '2019-10-17', '57801017', '20:26:00');
+VALUES (520, 2, '2020-07-09', '57801017', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (520, 3, '2023-05-22', '57840522', '17:47:00');
+VALUES (520, 3, '2024-02-01', '57840522', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (520, 4, '2026-11-23', '57871123', '19:47:00');
+VALUES (520, 4, '2027-08-26', '57871123', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (521, 1, '2016-03-18', '57770318', '17:15:00');
+VALUES (521, 1, '2016-12-18', '57770318', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (521, 2, '2019-10-20', '57801020', '20:25:00');
+VALUES (521, 2, '2020-07-12', '57801020', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (521, 3, '2023-05-25', '57840525', '17:50:00');
+VALUES (521, 3, '2024-02-04', '57840525', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (521, 4, '2026-11-26', '57871126', '19:43:00');
+VALUES (521, 4, '2027-08-29', '57871126', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (522, 1, '2016-03-19', '57770319', '17:15:00');
+VALUES (522, 1, '2016-12-19', '57770319', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (522, 2, '2019-10-21', '57801021', '20:25:00');
+VALUES (522, 2, '2020-07-13', '57801021', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (522, 3, '2023-05-26', '57840526', '17:51:00');
+VALUES (522, 3, '2024-02-05', '57840526', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (522, 4, '2026-11-27', '57871127', '19:41:00');
+VALUES (522, 4, '2027-08-30', '57871127', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (523, 1, '2016-03-20', '57770320', '17:16:00');
+VALUES (523, 1, '2016-12-20', '57770320', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (523, 2, '2019-10-22', '57801022', '20:24:00');
+VALUES (523, 2, '2020-07-14', '57801022', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (523, 3, '2023-05-27', '57840527', '17:52:00');
+VALUES (523, 3, '2024-02-06', '57840527', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (523, 4, '2026-11-28', '57871128', '19:40:00');
+VALUES (523, 4, '2027-08-31', '57871128', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (524, 1, '2016-03-21', '57770321', '17:16:00');
+VALUES (524, 1, '2016-12-21', '57770321', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (524, 2, '2019-10-23', '57801023', '20:24:00');
+VALUES (524, 2, '2020-07-15', '57801023', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (524, 3, '2023-05-28', '57840528', '17:52:00');
+VALUES (524, 3, '2024-02-07', '57840528', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (524, 4, '2026-11-28', '57871129', '19:39:00');
+VALUES (524, 4, '2027-09-01', '57871129', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (525, 1, '2016-03-22', '57770322', '17:17:00');
+VALUES (525, 1, '2016-12-22', '57770322', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (525, 2, '2019-10-24', '57801024', '20:23:00');
+VALUES (525, 2, '2020-07-16', '57801024', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (525, 3, '2023-05-28', '57840529', '17:53:00');
+VALUES (525, 3, '2024-02-08', '57840529', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (525, 4, '2026-11-28', '57871130', '19:38:00');
+VALUES (525, 4, '2027-09-02', '57871130', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (526, 1, '2016-03-25', '57770325', '17:18:00');
+VALUES (526, 1, '2016-12-25', '57770325', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (526, 2, '2019-10-27', '57801027', '20:22:00');
+VALUES (526, 2, '2020-07-19', '57801027', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (526, 3, '2023-12-02', '57841302', '17:56:00');
+VALUES (526, 3, '2024-02-11', '57841302', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (526, 4, '2026-12-03', '57871203', '19:34:00');
+VALUES (526, 4, '2027-09-05', '57871203', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (527, 1, '2016-03-26', '57770326', '17:19:00');
+VALUES (527, 1, '2016-12-26', '57770326', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (527, 2, '2019-10-28', '57801028', '20:21:00');
+VALUES (527, 2, '2020-07-20', '57801028', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (527, 3, '2023-12-03', '57841303', '17:57:00');
+VALUES (527, 3, '2024-02-12', '57841303', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (527, 4, '2026-12-04', '57871204', '19:32:00');
+VALUES (527, 4, '2027-09-06', '57871204', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (528, 1, '2016-03-27', '57770327', '17:20:00');
+VALUES (528, 1, '2016-12-27', '57770327', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (528, 2, '2019-10-28', '57801029', '20:21:00');
+VALUES (528, 2, '2020-07-21', '57801029', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (528, 3, '2023-12-04', '57841304', '17:57:00');
+VALUES (528, 3, '2024-02-13', '57841304', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (528, 4, '2026-12-05', '57871205', '19:31:00');
+VALUES (528, 4, '2027-09-07', '57871205', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (529, 1, '2016-03-28', '57770328', '17:20:00');
+VALUES (529, 1, '2016-12-28', '57770328', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (529, 2, '2019-11-01', '57801101', '20:20:00');
+VALUES (529, 2, '2020-07-22', '57801101', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (529, 3, '2023-12-05', '57841305', '17:58:00');
+VALUES (529, 3, '2024-02-14', '57841305', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (529, 4, '2026-12-06', '57871206', '19:30:00');
+VALUES (529, 4, '2027-09-08', '57871206', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (530, 1, '2016-03-28', '57770329', '17:21:00');
+VALUES (530, 1, '2016-12-29', '57770329', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (530, 2, '2019-11-02', '57801102', '20:19:00');
+VALUES (530, 2, '2020-07-23', '57801102', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (530, 3, '2023-12-06', '57841306', '17:59:00');
+VALUES (530, 3, '2024-02-15', '57841306', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (530, 4, '2026-12-07', '57871207', '19:28:00');
+VALUES (530, 4, '2027-09-09', '57871207', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (531, 1, '2016-04-03', '57770403', '17:23:00');
+VALUES (531, 1, '2017-01-01', '57770403', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (531, 2, '2019-11-05', '57801105', '20:17:00');
+VALUES (531, 2, '2020-07-26', '57801105', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (531, 3, '2023-12-09', '57841309', '18:01:00');
+VALUES (531, 3, '2024-02-18', '57841309', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (531, 4, '2026-12-10', '57871210', '19:24:00');
+VALUES (531, 4, '2027-09-12', '57871210', '19:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (532, 1, '2016-04-04', '57770404', '17:23:00');
+VALUES (532, 1, '2017-01-02', '57770404', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (532, 2, '2019-11-06', '57801106', '20:17:00');
+VALUES (532, 2, '2020-07-27', '57801106', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (532, 3, '2023-12-10', '57841310', '18:02:00');
+VALUES (532, 3, '2024-02-19', '57841310', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (532, 4, '2026-12-11', '57871211', '19:23:00');
+VALUES (532, 4, '2027-09-13', '57871211', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (533, 1, '2016-04-05', '57770405', '17:24:00');
+VALUES (533, 1, '2017-01-03', '57770405', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (533, 2, '2019-11-07', '57801107', '20:16:00');
+VALUES (533, 2, '2020-07-28', '57801107', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (533, 3, '2023-12-11', '57841311', '18:03:00');
+VALUES (533, 3, '2024-02-20', '57841311', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (533, 4, '2026-12-12', '57871212', '19:22:00');
+VALUES (533, 4, '2027-09-14', '57871212', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (534, 1, '2016-04-06', '57770406', '17:25:00');
+VALUES (534, 1, '2017-01-04', '57770406', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (534, 2, '2019-11-08', '57801108', '20:15:00');
+VALUES (534, 2, '2020-07-29', '57801108', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (534, 3, '2023-12-12', '57841312', '18:04:00');
+VALUES (534, 3, '2024-02-21', '57841312', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (534, 4, '2026-12-13', '57871213', '19:20:00');
+VALUES (534, 4, '2027-09-15', '57871213', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (535, 1, '2016-04-07', '57770407', '17:26:00');
+VALUES (535, 1, '2017-01-05', '57770407', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (535, 2, '2019-11-09', '57801109', '20:14:00');
+VALUES (535, 2, '2020-07-30', '57801109', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (535, 3, '2023-12-13', '57841313', '18:05:00');
+VALUES (535, 3, '2024-02-22', '57841313', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (535, 4, '2026-12-14', '57871214', '19:19:00');
+VALUES (535, 4, '2027-09-16', '57871214', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (536, 1, '2016-04-10', '57770410', '17:28:00');
+VALUES (536, 1, '2017-01-08', '57770410', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (536, 2, '2019-11-12', '57801112', '20:12:00');
+VALUES (536, 2, '2020-08-02', '57801112', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (536, 3, '2023-12-16', '57841316', '18:07:00');
+VALUES (536, 3, '2024-02-25', '57841316', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (536, 4, '2026-12-17', '57871217', '19:15:00');
+VALUES (536, 4, '2027-09-19', '57871217', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (537, 1, '2016-04-11', '57770411', '17:29:00');
+VALUES (537, 1, '2017-01-09', '57770411', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (537, 2, '2019-11-13', '57801113', '20:11:00');
+VALUES (537, 2, '2020-08-03', '57801113', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (537, 3, '2023-12-17', '57841317', '18:08:00');
+VALUES (537, 3, '2024-02-26', '57841317', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (537, 4, '2026-12-18', '57871218', '19:13:00');
+VALUES (537, 4, '2027-09-20', '57871218', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (538, 1, '2016-04-12', '57770412', '17:29:00');
+VALUES (538, 1, '2017-01-10', '57770412', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (538, 2, '2019-11-14', '57801114', '20:10:00');
+VALUES (538, 2, '2020-08-04', '57801114', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (538, 3, '2023-12-18', '57841318', '18:08:00');
+VALUES (538, 3, '2024-02-27', '57841318', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (538, 4, '2026-12-19', '57871219', '19:12:00');
+VALUES (538, 4, '2027-09-21', '57871219', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (539, 1, '2016-04-13', '57770413', '17:30:00');
+VALUES (539, 1, '2017-01-11', '57770413', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (539, 2, '2019-11-15', '57801115', '20:09:00');
+VALUES (539, 2, '2020-08-05', '57801115', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (539, 3, '2023-12-19', '57841319', '18:09:00');
+VALUES (539, 3, '2024-02-28', '57841319', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (539, 4, '2026-12-20', '57871220', '19:11:00');
+VALUES (539, 4, '2027-09-22', '57871220', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (540, 1, '2016-04-14', '57770414', '17:31:00');
+VALUES (540, 1, '2017-01-12', '57770414', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (540, 2, '2019-11-16', '57801116', '20:08:00');
+VALUES (540, 2, '2020-08-06', '57801116', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (540, 3, '2023-12-20', '57841320', '18:10:00');
+VALUES (540, 3, '2024-02-29', '57841320', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (540, 4, '2026-12-21', '57871221', '19:09:00');
+VALUES (540, 4, '2027-09-23', '57871221', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (541, 1, '2016-04-17', '57770417', '17:33:00');
+VALUES (541, 1, '2017-01-15', '57770417', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (541, 2, '2019-11-19', '57801119', '20:05:00');
+VALUES (541, 2, '2020-08-09', '57801119', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (541, 3, '2023-12-23', '57841323', '18:12:00');
+VALUES (541, 3, '2024-03-03', '57841323', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (541, 4, '2026-12-24', '57871224', '19:05:00');
+VALUES (541, 4, '2027-09-26', '57871224', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (542, 1, '2016-04-18', '57770418', '17:34:00');
+VALUES (542, 1, '2017-01-16', '57770418', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (542, 2, '2019-11-20', '57801120', '20:04:00');
+VALUES (542, 2, '2020-08-10', '57801120', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (542, 3, '2023-12-24', '57841324', '18:13:00');
+VALUES (542, 3, '2024-03-04', '57841324', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (542, 4, '2026-12-25', '57871225', '19:04:00');
+VALUES (542, 4, '2027-09-27', '57871225', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (543, 1, '2016-04-19', '57770419', '17:35:00');
+VALUES (543, 1, '2017-01-17', '57770419', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (543, 2, '2019-11-21', '57801121', '20:03:00');
+VALUES (543, 2, '2020-08-11', '57801121', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (543, 3, '2023-12-25', '57841325', '18:13:00');
+VALUES (543, 3, '2024-03-05', '57841325', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (543, 4, '2026-12-26', '57871226', '19:03:00');
+VALUES (543, 4, '2027-09-28', '57871226', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (544, 1, '2016-04-20', '57770420', '17:36:00');
+VALUES (544, 1, '2017-01-18', '57770420', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (544, 2, '2019-11-22', '57801122', '20:02:00');
+VALUES (544, 2, '2020-08-12', '57801122', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (544, 3, '2023-12-26', '57841326', '18:14:00');
+VALUES (544, 3, '2024-03-06', '57841326', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (544, 4, '2026-12-27', '57871227', '19:01:00');
+VALUES (544, 4, '2027-09-29', '57871227', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (545, 1, '2016-04-21', '57770421', '17:37:00');
+VALUES (545, 1, '2017-01-19', '57770421', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (545, 2, '2019-11-23', '57801123', '20:01:00');
+VALUES (545, 2, '2020-08-13', '57801123', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (545, 3, '2023-12-27', '57841327', '18:15:00');
+VALUES (545, 3, '2024-03-07', '57841327', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (545, 4, '2026-12-28', '57871228', '19:00:00');
+VALUES (545, 4, '2027-09-30', '57871228', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (546, 1, '2016-04-24', '57770424', '17:39:00');
+VALUES (546, 1, '2017-01-22', '57770424', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (546, 2, '2019-11-26', '57801126', '19:57:00');
+VALUES (546, 2, '2020-08-16', '57801126', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (546, 3, '2023-12-28', '57841330', '18:17:00');
+VALUES (546, 3, '2024-03-10', '57841330', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (546, 4, '2027-01-02', '57880102', '18:56:00');
+VALUES (546, 4, '2027-10-03', '57880102', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (547, 1, '2016-04-25', '57770425', '17:40:00');
+VALUES (547, 1, '2017-01-23', '57770425', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (547, 2, '2019-11-27', '57801127', '19:56:00');
+VALUES (547, 2, '2020-08-17', '57801127', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (547, 3, '2023-12-01', '57841401', '18:18:00');
+VALUES (547, 3, '2024-03-11', '57841401', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (547, 4, '2027-01-03', '57880103', '18:55:00');
+VALUES (547, 4, '2027-10-04', '57880103', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (548, 1, '2016-04-26', '57770426', '17:41:00');
+VALUES (548, 1, '2017-01-24', '57770426', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (548, 2, '2019-11-28', '57801128', '19:55:00');
+VALUES (548, 2, '2020-08-18', '57801128', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (548, 3, '2023-12-02', '57841402', '18:18:00');
+VALUES (548, 3, '2024-03-12', '57841402', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (548, 4, '2027-01-04', '57880104', '18:54:00');
+VALUES (548, 4, '2027-10-05', '57880104', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (549, 1, '2016-04-27', '57770427', '17:42:00');
+VALUES (549, 1, '2017-01-25', '57770427', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (549, 2, '2019-11-28', '57801129', '19:54:00');
+VALUES (549, 2, '2020-08-19', '57801129', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (549, 3, '2023-12-03', '57841403', '18:19:00');
+VALUES (549, 3, '2024-03-13', '57841403', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (549, 4, '2027-01-05', '57880105', '18:52:00');
+VALUES (549, 4, '2027-10-06', '57880105', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (550, 1, '2016-04-28', '57770428', '17:43:00');
+VALUES (550, 1, '2017-01-26', '57770428', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (550, 2, '2019-11-28', '57801130', '19:53:00');
+VALUES (550, 2, '2020-08-20', '57801130', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (550, 3, '2023-12-04', '57841404', '18:20:00');
+VALUES (550, 3, '2024-03-14', '57841404', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (550, 4, '2027-01-06', '57880106', '18:51:00');
+VALUES (550, 4, '2027-10-07', '57880106', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (551, 1, '2016-05-02', '57770502', '17:45:00');
+VALUES (551, 1, '2017-01-29', '57770502', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (551, 2, '2019-12-03', '57801203', '19:49:00');
+VALUES (551, 2, '2020-08-23', '57801203', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (551, 3, '2023-12-07', '57841407', '18:22:00');
+VALUES (551, 3, '2024-03-17', '57841407', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (551, 4, '2027-01-09', '57880109', '18:47:00');
+VALUES (551, 4, '2027-10-10', '57880109', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (552, 1, '2016-05-03', '57770503', '17:46:00');
+VALUES (552, 1, '2017-01-30', '57770503', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (552, 2, '2019-12-04', '57801204', '19:48:00');
+VALUES (552, 2, '2020-08-24', '57801204', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (552, 3, '2023-12-08', '57841408', '18:22:00');
+VALUES (552, 3, '2024-03-18', '57841408', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (552, 4, '2027-01-10', '57880110', '18:46:00');
+VALUES (552, 4, '2027-10-11', '57880110', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (553, 1, '2016-05-04', '57770504', '17:47:00');
+VALUES (553, 1, '2017-01-31', '57770504', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (553, 2, '2019-12-05', '57801205', '19:47:00');
+VALUES (553, 2, '2020-08-25', '57801205', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (553, 3, '2023-12-09', '57841409', '18:23:00');
+VALUES (553, 3, '2024-03-19', '57841409', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (553, 4, '2027-01-11', '57880111', '18:45:00');
+VALUES (553, 4, '2027-10-12', '57880111', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (554, 1, '2016-05-05', '57770505', '17:48:00');
+VALUES (554, 1, '2017-02-01', '57770505', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (554, 2, '2019-12-06', '57801206', '19:46:00');
+VALUES (554, 2, '2020-08-26', '57801206', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (554, 3, '2023-12-10', '57841410', '18:24:00');
+VALUES (554, 3, '2024-03-20', '57841410', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (554, 4, '2027-01-12', '57880112', '18:44:00');
+VALUES (554, 4, '2027-10-13', '57880112', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (555, 1, '2016-05-06', '57770506', '17:49:00');
+VALUES (555, 1, '2017-02-02', '57770506', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (555, 2, '2019-12-07', '57801207', '19:44:00');
+VALUES (555, 2, '2020-08-27', '57801207', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (555, 3, '2023-12-11', '57841411', '18:25:00');
+VALUES (555, 3, '2024-03-21', '57841411', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (555, 4, '2027-01-13', '57880113', '18:43:00');
+VALUES (555, 4, '2027-10-14', '57880113', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (556, 1, '2016-05-09', '57770509', '17:51:00');
+VALUES (556, 1, '2017-02-05', '57770509', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (556, 2, '2019-12-10', '57801210', '19:40:00');
+VALUES (556, 2, '2020-08-30', '57801210', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (556, 3, '2023-12-14', '57841414', '18:27:00');
+VALUES (556, 3, '2024-03-24', '57841414', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (556, 4, '2027-01-16', '57880116', '18:39:00');
+VALUES (556, 4, '2027-10-17', '57880116', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (557, 1, '2016-05-10', '57770510', '17:52:00');
+VALUES (557, 1, '2017-02-06', '57770510', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (557, 2, '2019-12-11', '57801211', '19:39:00');
+VALUES (557, 2, '2020-08-31', '57801211', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (557, 3, '2023-12-15', '57841415', '18:27:00');
+VALUES (557, 3, '2024-03-25', '57841415', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (557, 4, '2027-01-17', '57880117', '18:38:00');
+VALUES (557, 4, '2027-10-18', '57880117', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (558, 1, '2016-05-11', '57770511', '17:53:00');
+VALUES (558, 1, '2017-02-07', '57770511', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (558, 2, '2019-12-12', '57801212', '19:38:00');
+VALUES (558, 2, '2020-09-01', '57801212', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (558, 3, '2023-12-16', '57841416', '18:28:00');
+VALUES (558, 3, '2024-03-26', '57841416', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (558, 4, '2027-01-18', '57880118', '18:37:00');
+VALUES (558, 4, '2027-10-19', '57880118', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (559, 1, '2016-05-12', '57770512', '17:54:00');
+VALUES (559, 1, '2017-02-08', '57770512', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (559, 2, '2019-12-13', '57801213', '19:37:00');
+VALUES (559, 2, '2020-09-02', '57801213', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (559, 3, '2023-12-17', '57841417', '18:29:00');
+VALUES (559, 3, '2024-03-27', '57841417', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (559, 4, '2027-01-19', '57880119', '18:36:00');
+VALUES (559, 4, '2027-10-20', '57880119', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (560, 1, '2016-05-13', '57770513', '17:55:00');
+VALUES (560, 1, '2017-02-09', '57770513', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (560, 2, '2019-12-14', '57801214', '19:35:00');
+VALUES (560, 2, '2020-09-03', '57801214', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (560, 3, '2023-12-18', '57841418', '18:29:00');
+VALUES (560, 3, '2024-03-28', '57841418', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (560, 4, '2027-01-20', '57880120', '18:35:00');
+VALUES (560, 4, '2027-10-21', '57880120', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (561, 1, '2016-05-16', '57770516', '17:57:00');
+VALUES (561, 1, '2017-02-12', '57770516', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (561, 2, '2019-12-17', '57801217', '19:31:00');
+VALUES (561, 2, '2020-09-06', '57801217', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (561, 3, '2023-12-21', '57841421', '19:31:00');
+VALUES (561, 3, '2024-03-31', '57841421', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (561, 4, '2027-01-23', '57880123', '18:32:00');
+VALUES (561, 4, '2027-10-24', '57880123', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (562, 1, '2016-05-17', '57770517', '17:58:00');
+VALUES (562, 1, '2017-02-13', '57770517', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (562, 2, '2019-12-18', '57801218', '19:30:00');
+VALUES (562, 2, '2020-09-07', '57801218', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (562, 3, '2023-12-22', '57841422', '19:32:00');
+VALUES (562, 3, '2024-04-01', '57841422', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (562, 4, '2027-01-24', '57880124', '18:31:00');
+VALUES (562, 4, '2027-10-25', '57880124', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (563, 1, '2016-05-18', '57770518', '17:59:00');
+VALUES (563, 1, '2017-02-14', '57770518', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (563, 2, '2019-12-19', '57801219', '19:29:00');
+VALUES (563, 2, '2020-09-08', '57801219', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (563, 3, '2023-12-23', '57841423', '19:33:00');
+VALUES (563, 3, '2024-04-02', '57841423', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (563, 4, '2027-01-25', '57880125', '18:30:00');
+VALUES (563, 4, '2027-10-26', '57880125', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (564, 1, '2016-05-19', '57770519', '18:00:00');
+VALUES (564, 1, '2017-02-15', '57770519', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (564, 2, '2019-12-20', '57801220', '19:27:00');
+VALUES (564, 2, '2020-09-09', '57801220', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (564, 3, '2023-12-24', '57841424', '19:33:00');
+VALUES (564, 3, '2024-04-03', '57841424', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (564, 4, '2027-01-26', '57880126', '18:29:00');
+VALUES (564, 4, '2027-10-27', '57880126', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (565, 1, '2016-05-20', '57770520', '18:01:00');
+VALUES (565, 1, '2017-02-16', '57770520', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (565, 2, '2019-12-21', '57801221', '19:26:00');
+VALUES (565, 2, '2020-09-10', '57801221', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (565, 3, '2023-12-25', '57841425', '19:34:00');
+VALUES (565, 3, '2024-04-04', '57841425', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (565, 4, '2027-01-27', '57880127', '18:28:00');
+VALUES (565, 4, '2027-10-28', '57880127', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (566, 1, '2016-05-23', '57770523', '18:03:00');
+VALUES (566, 1, '2017-02-19', '57770523', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (566, 2, '2019-12-24', '57801224', '19:22:00');
+VALUES (566, 2, '2020-09-13', '57801224', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (566, 3, '2023-12-28', '57841428', '19:36:00');
+VALUES (566, 3, '2024-04-07', '57841428', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (566, 4, '2027-01-28', '57880130', '17:26:00');
+VALUES (566, 4, '2027-10-31', '57880130', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (567, 1, '2016-05-24', '57770524', '18:04:00');
+VALUES (567, 1, '2017-02-20', '57770524', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (567, 2, '2019-12-25', '57801225', '19:20:00');
+VALUES (567, 2, '2020-09-14', '57801225', '19:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (567, 3, '2023-12-28', '57841429', '19:37:00');
+VALUES (567, 3, '2024-04-08', '57841429', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (567, 4, '2027-02-01', '57880201', '17:25:00');
+VALUES (567, 4, '2027-11-01', '57880201', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (568, 1, '2016-05-25', '57770525', '18:04:00');
+VALUES (568, 1, '2017-02-21', '57770525', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (568, 2, '2019-12-26', '57801226', '19:19:00');
+VALUES (568, 2, '2020-09-15', '57801226', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (568, 3, '2023-07-01', '57840701', '19:38:00');
+VALUES (568, 3, '2024-04-09', '57840701', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (568, 4, '2027-02-02', '57880202', '17:24:00');
+VALUES (568, 4, '2027-11-02', '57880202', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (569, 1, '2016-05-26', '57770526', '18:05:00');
+VALUES (569, 1, '2017-02-22', '57770526', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (569, 2, '2019-12-27', '57801227', '19:18:00');
+VALUES (569, 2, '2020-09-16', '57801227', '19:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (569, 3, '2023-07-02', '57840702', '19:38:00');
+VALUES (569, 3, '2024-04-10', '57840702', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (569, 4, '2027-02-03', '57880203', '17:23:00');
+VALUES (569, 4, '2027-11-03', '57880203', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (570, 1, '2016-05-27', '57770527', '18:06:00');
+VALUES (570, 1, '2017-02-23', '57770527', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (570, 2, '2019-12-28', '57801228', '19:16:00');
+VALUES (570, 2, '2020-09-17', '57801228', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (570, 3, '2023-07-03', '57840703', '19:39:00');
+VALUES (570, 3, '2024-04-11', '57840703', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (570, 4, '2027-02-04', '57880204', '17:23:00');
+VALUES (570, 4, '2027-11-04', '57880204', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (571, 1, '2016-05-28', '57770530', '18:08:00');
+VALUES (571, 1, '2017-02-26', '57770530', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (571, 2, '2020-01-02', '57810102', '19:12:00');
+VALUES (571, 2, '2020-09-20', '57810102', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (571, 3, '2023-07-06', '57840706', '19:41:00');
+VALUES (571, 3, '2024-04-14', '57840706', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (571, 4, '2027-02-07', '57880207', '17:20:00');
+VALUES (571, 4, '2027-11-07', '57880207', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (572, 1, '2016-06-01', '57770601', '18:09:00');
+VALUES (572, 1, '2017-02-27', '57770601', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (572, 2, '2020-01-03', '57810103', '19:11:00');
+VALUES (572, 2, '2020-09-21', '57810103', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (572, 3, '2023-07-07', '57840707', '19:42:00');
+VALUES (572, 3, '2024-04-15', '57840707', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (572, 4, '2027-02-08', '57880208', '17:20:00');
+VALUES (572, 4, '2027-11-08', '57880208', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (573, 1, '2016-06-02', '57770602', '18:10:00');
+VALUES (573, 1, '2017-02-28', '57770602', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (573, 2, '2020-01-04', '57810104', '19:10:00');
+VALUES (573, 2, '2020-09-22', '57810104', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (573, 3, '2023-07-08', '57840708', '19:43:00');
+VALUES (573, 3, '2024-04-16', '57840708', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (573, 4, '2027-02-09', '57880209', '17:19:00');
+VALUES (573, 4, '2027-11-09', '57880209', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (574, 1, '2016-06-03', '57770603', '18:10:00');
+VALUES (574, 1, '2017-03-01', '57770603', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (574, 2, '2020-01-05', '57810105', '19:08:00');
+VALUES (574, 2, '2020-09-23', '57810105', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (574, 3, '2023-07-09', '57840709', '19:44:00');
+VALUES (574, 3, '2024-04-17', '57840709', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (574, 4, '2027-02-10', '57880210', '17:19:00');
+VALUES (574, 4, '2027-11-10', '57880210', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (575, 1, '2016-06-04', '57770604', '18:11:00');
+VALUES (575, 1, '2017-03-02', '57770604', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (575, 2, '2020-01-06', '57810106', '19:07:00');
+VALUES (575, 2, '2020-09-24', '57810106', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (575, 3, '2023-07-10', '57840710', '19:44:00');
+VALUES (575, 3, '2024-04-18', '57840710', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (575, 4, '2027-02-11', '57880211', '17:18:00');
+VALUES (575, 4, '2027-11-11', '57880211', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (576, 1, '2016-06-07', '57770607', '18:13:00');
+VALUES (576, 1, '2017-03-05', '57770607', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (576, 2, '2020-01-09', '57810109', '19:03:00');
+VALUES (576, 2, '2020-09-27', '57810109', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (576, 3, '2023-07-13', '57840713', '19:47:00');
+VALUES (576, 3, '2024-04-21', '57840713', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (576, 4, '2027-02-14', '57880214', '17:16:00');
+VALUES (576, 4, '2027-11-14', '57880214', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (577, 1, '2016-06-08', '57770608', '18:14:00');
+VALUES (577, 1, '2017-03-06', '57770608', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (577, 2, '2020-01-10', '57810110', '19:02:00');
+VALUES (577, 2, '2020-09-28', '57810110', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (577, 3, '2023-07-14', '57840714', '19:48:00');
+VALUES (577, 3, '2024-04-22', '57840714', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (577, 4, '2027-02-15', '57880215', '17:16:00');
+VALUES (577, 4, '2027-11-15', '57880215', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (578, 1, '2016-06-09', '57770609', '18:15:00');
+VALUES (578, 1, '2017-03-07', '57770609', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (578, 2, '2020-01-11', '57810111', '19:00:00');
+VALUES (578, 2, '2020-09-29', '57810111', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (578, 3, '2023-07-15', '57840715', '19:48:00');
+VALUES (578, 3, '2024-04-23', '57840715', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (578, 4, '2027-02-16', '57880216', '17:15:00');
+VALUES (578, 4, '2027-11-16', '57880216', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (579, 1, '2016-06-10', '57770610', '18:15:00');
+VALUES (579, 1, '2017-03-08', '57770610', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (579, 2, '2020-01-12', '57810112', '18:59:00');
+VALUES (579, 2, '2020-09-30', '57810112', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (579, 3, '2023-07-16', '57840716', '19:49:00');
+VALUES (579, 3, '2024-04-24', '57840716', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (579, 4, '2027-02-17', '57880217', '17:15:00');
+VALUES (579, 4, '2027-11-17', '57880217', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (580, 1, '2016-06-11', '57770611', '18:16:00');
+VALUES (580, 1, '2017-03-09', '57770611', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (580, 2, '2020-01-13', '57810113', '18:58:00');
+VALUES (580, 2, '2020-10-01', '57810113', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (580, 3, '2023-07-17', '57840717', '19:50:00');
+VALUES (580, 3, '2024-04-25', '57840717', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (580, 4, '2027-02-18', '57880218', '17:15:00');
+VALUES (580, 4, '2027-11-18', '57880218', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (581, 1, '2016-06-14', '57770614', '18:18:00');
+VALUES (581, 1, '2017-03-12', '57770614', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (581, 2, '2020-01-16', '57810116', '18:54:00');
+VALUES (581, 2, '2020-10-04', '57810116', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (581, 3, '2023-07-20', '57840720', '19:52:00');
+VALUES (581, 3, '2024-04-28', '57840720', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (581, 4, '2027-02-21', '57880221', '17:13:00');
+VALUES (581, 4, '2027-11-21', '57880221', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (582, 1, '2016-06-15', '57770615', '18:19:00');
+VALUES (582, 1, '2017-03-13', '57770615', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (582, 2, '2020-01-17', '57810117', '18:53:00');
+VALUES (582, 2, '2020-10-05', '57810117', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (582, 3, '2023-07-21', '57840721', '19:53:00');
+VALUES (582, 3, '2024-04-29', '57840721', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (582, 4, '2027-02-22', '57880222', '17:13:00');
+VALUES (582, 4, '2027-11-22', '57880222', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (583, 1, '2016-06-16', '57770616', '18:20:00');
+VALUES (583, 1, '2017-03-14', '57770616', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (583, 2, '2020-01-18', '57810118', '18:51:00');
+VALUES (583, 2, '2020-10-06', '57810118', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (583, 3, '2023-07-22', '57840722', '19:54:00');
+VALUES (583, 3, '2024-04-30', '57840722', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (583, 4, '2027-02-23', '57880223', '17:13:00');
+VALUES (583, 4, '2027-11-23', '57880223', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (584, 1, '2016-06-17', '57770617', '18:20:00');
+VALUES (584, 1, '2017-03-15', '57770617', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (584, 2, '2020-01-19', '57810119', '18:50:00');
+VALUES (584, 2, '2020-10-07', '57810119', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (584, 3, '2023-07-23', '57840723', '19:55:00');
+VALUES (584, 3, '2024-05-01', '57840723', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (584, 4, '2027-02-24', '57880224', '17:13:00');
+VALUES (584, 4, '2027-11-24', '57880224', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (585, 1, '2016-06-18', '57770618', '18:21:00');
+VALUES (585, 1, '2017-03-16', '57770618', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (585, 2, '2020-01-20', '57810120', '18:49:00');
+VALUES (585, 2, '2020-10-08', '57810120', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (585, 3, '2023-07-24', '57840724', '19:56:00');
+VALUES (585, 3, '2024-05-02', '57840724', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (585, 4, '2027-02-25', '57880225', '17:12:00');
+VALUES (585, 4, '2027-11-25', '57880225', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (586, 1, '2016-06-21', '57770621', '18:23:00');
+VALUES (586, 1, '2017-03-19', '57770621', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (586, 2, '2020-01-23', '57810123', '18:45:00');
+VALUES (586, 2, '2020-10-11', '57810123', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (586, 3, '2023-07-27', '57840727', '19:58:00');
+VALUES (586, 3, '2024-05-05', '57840727', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (586, 4, '2027-02-28', '57880228', '17:12:00');
+VALUES (586, 4, '2027-11-28', '57880228', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (587, 1, '2016-06-22', '57770622', '18:24:00');
+VALUES (587, 1, '2017-03-20', '57770622', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (587, 2, '2020-01-24', '57810124', '18:44:00');
+VALUES (587, 2, '2020-10-12', '57810124', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (587, 3, '2023-07-28', '57840728', '19:59:00');
+VALUES (587, 3, '2024-05-06', '57840728', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (587, 4, '2027-02-28', '57880229', '17:12:00');
+VALUES (587, 4, '2027-11-29', '57880229', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (588, 1, '2016-06-23', '57770623', '18:24:00');
+VALUES (588, 1, '2017-03-21', '57770623', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (588, 2, '2020-01-25', '57810125', '18:43:00');
+VALUES (588, 2, '2020-10-13', '57810125', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (588, 3, '2023-07-28', '57840729', '20:00:00');
+VALUES (588, 3, '2024-05-07', '57840729', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (588, 4, '2027-02-28', '57880230', '17:12:00');
+VALUES (588, 4, '2027-11-30', '57880230', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (589, 1, '2016-06-24', '57770624', '18:25:00');
+VALUES (589, 1, '2017-03-22', '57770624', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (589, 2, '2020-01-26', '57810126', '18:42:00');
+VALUES (589, 2, '2020-10-14', '57810126', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (589, 3, '2023-07-28', '57840730', '20:00:00');
+VALUES (589, 3, '2024-05-08', '57840730', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (589, 4, '2027-03-01', '57880301', '17:12:00');
+VALUES (589, 4, '2027-12-01', '57880301', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (590, 1, '2016-06-25', '57770625', '18:26:00');
+VALUES (590, 1, '2017-03-23', '57770625', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (590, 2, '2020-01-27', '57810127', '18:41:00');
+VALUES (590, 2, '2020-10-15', '57810127', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (590, 3, '2023-08-01', '57840801', '20:01:00');
+VALUES (590, 3, '2024-05-09', '57840801', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (590, 4, '2027-03-02', '57880302', '17:12:00');
+VALUES (590, 4, '2027-12-02', '57880302', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (591, 1, '2016-06-28', '57770628', '19:28:00');
+VALUES (591, 1, '2017-03-26', '57770628', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (591, 2, '2020-01-28', '57810130', '18:37:00');
+VALUES (591, 2, '2020-10-18', '57810130', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (591, 3, '2023-08-04', '57840804', '20:04:00');
+VALUES (591, 3, '2024-05-12', '57840804', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (591, 4, '2027-03-05', '57880305', '17:12:00');
+VALUES (591, 4, '2027-12-05', '57880305', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (592, 1, '2016-06-28', '57770629', '19:28:00');
+VALUES (592, 1, '2017-03-27', '57770629', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (592, 2, '2020-02-01', '57810201', '18:36:00');
+VALUES (592, 2, '2020-10-19', '57810201', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (592, 3, '2023-08-05', '57840805', '20:04:00');
+VALUES (592, 3, '2024-05-13', '57840805', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (592, 4, '2027-03-06', '57880306', '17:12:00');
+VALUES (592, 4, '2027-12-06', '57880306', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (593, 1, '2016-07-01', '57770701', '19:29:00');
+VALUES (593, 1, '2017-03-28', '57770701', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (593, 2, '2020-02-02', '57810202', '18:35:00');
+VALUES (593, 2, '2020-10-20', '57810202', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (593, 3, '2023-08-06', '57840806', '20:05:00');
+VALUES (593, 3, '2024-05-14', '57840806', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (593, 4, '2027-03-07', '57880307', '17:12:00');
+VALUES (593, 4, '2027-12-07', '57880307', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (594, 1, '2016-07-02', '57770702', '19:30:00');
+VALUES (594, 1, '2017-03-29', '57770702', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (594, 2, '2020-02-03', '57810203', '18:34:00');
+VALUES (594, 2, '2020-10-21', '57810203', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (594, 3, '2023-08-07', '57840807', '20:06:00');
+VALUES (594, 3, '2024-05-15', '57840807', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (594, 4, '2027-03-08', '57880308', '17:12:00');
+VALUES (594, 4, '2027-12-08', '57880308', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (595, 1, '2016-07-03', '57770703', '19:31:00');
+VALUES (595, 1, '2017-03-30', '57770703', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (595, 2, '2020-02-04', '57810204', '18:33:00');
+VALUES (595, 2, '2020-10-22', '57810204', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (595, 3, '2023-08-08', '57840808', '20:07:00');
+VALUES (595, 3, '2024-05-16', '57840808', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (595, 4, '2027-03-09', '57880309', '17:12:00');
+VALUES (595, 4, '2027-12-09', '57880309', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (596, 1, '2016-07-06', '57770706', '19:33:00');
+VALUES (596, 1, '2017-04-02', '57770706', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (596, 2, '2020-02-07', '57810207', '17:30:00');
+VALUES (596, 2, '2020-10-25', '57810207', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (596, 3, '2023-08-11', '57840811', '20:09:00');
+VALUES (596, 3, '2024-05-19', '57840811', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (596, 4, '2027-03-12', '57880312', '17:13:00');
+VALUES (596, 4, '2027-12-12', '57880312', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (597, 1, '2016-07-07', '57770707', '19:33:00');
+VALUES (597, 1, '2017-04-03', '57770707', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (597, 2, '2020-02-08', '57810208', '17:29:00');
+VALUES (597, 2, '2020-10-26', '57810208', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (597, 3, '2023-08-12', '57840812', '20:10:00');
+VALUES (597, 3, '2024-05-20', '57840812', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (597, 4, '2027-03-13', '57880313', '17:13:00');
+VALUES (597, 4, '2027-12-13', '57880313', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (598, 1, '2016-07-08', '57770708', '19:34:00');
+VALUES (598, 1, '2017-04-04', '57770708', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (598, 2, '2020-02-09', '57810209', '17:29:00');
+VALUES (598, 2, '2020-10-27', '57810209', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (598, 3, '2023-08-13', '57840813', '20:11:00');
+VALUES (598, 3, '2024-05-21', '57840813', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (598, 4, '2027-03-14', '57880314', '17:13:00');
+VALUES (598, 4, '2027-12-14', '57880314', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (599, 1, '2016-07-09', '57770709', '19:35:00');
+VALUES (599, 1, '2017-04-05', '57770709', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (599, 2, '2020-02-10', '57810210', '17:28:00');
+VALUES (599, 2, '2020-10-28', '57810210', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (599, 3, '2023-08-14', '57840814', '20:11:00');
+VALUES (599, 3, '2024-05-22', '57840814', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (599, 4, '2027-03-15', '57880315', '17:14:00');
+VALUES (599, 4, '2027-12-15', '57880315', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (600, 1, '2016-07-10', '57770710', '19:35:00');
+VALUES (600, 1, '2017-04-06', '57770710', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (600, 2, '2020-02-11', '57810211', '17:27:00');
+VALUES (600, 2, '2020-10-29', '57810211', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (600, 3, '2023-08-15', '57840815', '20:12:00');
+VALUES (600, 3, '2024-05-23', '57840815', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (600, 4, '2027-03-16', '57880316', '17:14:00');
+VALUES (600, 4, '2027-12-16', '57880316', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (601, 1, '2016-07-13', '57770713', '19:38:00');
+VALUES (601, 1, '2017-04-09', '57770713', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (601, 2, '2020-02-14', '57810214', '17:24:00');
+VALUES (601, 2, '2020-11-01', '57810214', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (601, 3, '2023-08-18', '57840818', '20:14:00');
+VALUES (601, 3, '2024-05-26', '57840818', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (601, 4, '2027-03-19', '57880319', '17:15:00');
+VALUES (601, 4, '2027-12-19', '57880319', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (602, 1, '2016-07-14', '57770714', '19:38:00');
+VALUES (602, 1, '2017-04-10', '57770714', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (602, 2, '2020-02-15', '57810215', '17:23:00');
+VALUES (602, 2, '2020-11-02', '57810215', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (602, 3, '2023-08-19', '57840819', '20:15:00');
+VALUES (602, 3, '2024-05-27', '57840819', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (602, 4, '2027-03-20', '57880320', '17:16:00');
+VALUES (602, 4, '2027-12-20', '57880320', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (603, 1, '2016-07-15', '57770715', '19:39:00');
+VALUES (603, 1, '2017-04-11', '57770715', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (603, 2, '2020-02-16', '57810216', '17:23:00');
+VALUES (603, 2, '2020-11-03', '57810216', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (603, 3, '2023-08-20', '57840820', '20:16:00');
+VALUES (603, 3, '2024-05-28', '57840820', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (603, 4, '2027-03-21', '57880321', '17:16:00');
+VALUES (603, 4, '2027-12-21', '57880321', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (604, 1, '2016-07-16', '57770716', '19:40:00');
+VALUES (604, 1, '2017-04-12', '57770716', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (604, 2, '2020-02-17', '57810217', '17:22:00');
+VALUES (604, 2, '2020-11-04', '57810217', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (604, 3, '2023-08-21', '57840821', '20:16:00');
+VALUES (604, 3, '2024-05-29', '57840821', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (604, 4, '2027-03-22', '57880322', '17:16:00');
+VALUES (604, 4, '2027-12-22', '57880322', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (605, 1, '2016-07-17', '57770717', '19:41:00');
+VALUES (605, 1, '2017-04-13', '57770717', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (605, 2, '2020-02-18', '57810218', '17:21:00');
+VALUES (605, 2, '2020-11-05', '57810218', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (605, 3, '2023-08-22', '57840822', '20:17:00');
+VALUES (605, 3, '2024-05-30', '57840822', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (605, 4, '2027-03-23', '57880323', '17:17:00');
+VALUES (605, 4, '2027-12-23', '57880323', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (606, 1, '2016-07-20', '57770720', '19:43:00');
+VALUES (606, 1, '2017-04-16', '57770720', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (606, 2, '2020-02-21', '57810221', '17:19:00');
+VALUES (606, 2, '2020-11-08', '57810221', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (606, 3, '2023-08-25', '57840825', '20:19:00');
+VALUES (606, 3, '2024-06-02', '57840825', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (606, 4, '2027-03-26', '57880326', '17:19:00');
+VALUES (606, 4, '2027-12-26', '57880326', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (607, 1, '2016-07-21', '57770721', '19:44:00');
+VALUES (607, 1, '2017-04-17', '57770721', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (607, 2, '2020-02-22', '57810222', '17:19:00');
+VALUES (607, 2, '2020-11-09', '57810222', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (607, 3, '2023-08-26', '57840826', '20:19:00');
+VALUES (607, 3, '2024-06-03', '57840826', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (607, 4, '2027-03-27', '57880327', '17:19:00');
+VALUES (607, 4, '2027-12-27', '57880327', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (608, 1, '2016-07-22', '57770722', '19:44:00');
+VALUES (608, 1, '2017-04-18', '57770722', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (608, 2, '2020-02-23', '57810223', '17:18:00');
+VALUES (608, 2, '2020-11-10', '57810223', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (608, 3, '2023-08-27', '57840827', '20:20:00');
+VALUES (608, 3, '2024-06-04', '57840827', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (608, 4, '2027-03-28', '57880328', '17:20:00');
+VALUES (608, 4, '2027-12-28', '57880328', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (609, 1, '2016-07-23', '57770723', '19:45:00');
+VALUES (609, 1, '2017-04-19', '57770723', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (609, 2, '2020-02-24', '57810224', '17:17:00');
+VALUES (609, 2, '2020-11-11', '57810224', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (609, 3, '2023-08-28', '57840828', '20:21:00');
+VALUES (609, 3, '2024-06-05', '57840828', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (609, 4, '2027-03-28', '57880329', '17:20:00');
+VALUES (609, 4, '2027-12-29', '57880329', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (610, 1, '2016-07-24', '57770724', '19:46:00');
+VALUES (610, 1, '2017-04-20', '57770724', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (610, 2, '2020-02-25', '57810225', '17:17:00');
+VALUES (610, 2, '2020-11-12', '57810225', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (610, 3, '2023-08-28', '57840829', '20:21:00');
+VALUES (610, 3, '2024-06-06', '57840829', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (610, 4, '2027-03-28', '57880330', '17:21:00');
+VALUES (610, 4, '2027-12-30', '57880330', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (611, 1, '2016-07-27', '57770727', '19:48:00');
+VALUES (611, 1, '2017-04-23', '57770727', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (611, 2, '2020-02-28', '57810228', '17:15:00');
+VALUES (611, 2, '2020-11-15', '57810228', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (611, 3, '2023-09-03', '57840903', '20:23:00');
+VALUES (611, 3, '2024-06-09', '57840903', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (611, 4, '2027-04-03', '57880403', '17:23:00');
+VALUES (611, 4, '2028-01-02', '57880403', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (612, 1, '2016-07-28', '57770728', '19:49:00');
+VALUES (612, 1, '2017-04-24', '57770728', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (612, 2, '2020-02-28', '57810229', '17:15:00');
+VALUES (612, 2, '2020-11-16', '57810229', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (612, 3, '2023-09-04', '57840904', '20:23:00');
+VALUES (612, 3, '2024-06-10', '57840904', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (612, 4, '2027-04-04', '57880404', '17:24:00');
+VALUES (612, 4, '2028-01-03', '57880404', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (613, 1, '2016-07-28', '57770729', '19:50:00');
+VALUES (613, 1, '2017-04-25', '57770729', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (613, 2, '2020-03-01', '57810301', '17:15:00');
+VALUES (613, 2, '2020-11-17', '57810301', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (613, 3, '2023-09-05', '57840905', '20:24:00');
+VALUES (613, 3, '2024-06-11', '57840905', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (613, 4, '2027-04-05', '57880405', '17:24:00');
+VALUES (613, 4, '2028-01-04', '57880405', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (614, 1, '2016-07-28', '57770730', '19:51:00');
+VALUES (614, 1, '2017-04-26', '57770730', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (614, 2, '2020-03-02', '57810302', '17:14:00');
+VALUES (614, 2, '2020-11-18', '57810302', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (614, 3, '2023-09-06', '57840906', '20:24:00');
+VALUES (614, 3, '2024-06-12', '57840906', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (614, 4, '2027-04-06', '57880406', '17:25:00');
+VALUES (614, 4, '2028-01-05', '57880406', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (615, 1, '2016-08-01', '57770801', '19:51:00');
+VALUES (615, 1, '2017-04-27', '57770801', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (615, 2, '2020-03-03', '57810303', '17:14:00');
+VALUES (615, 2, '2020-11-19', '57810303', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (615, 3, '2023-09-07', '57840907', '20:24:00');
+VALUES (615, 3, '2024-06-13', '57840907', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (615, 4, '2027-04-07', '57880407', '17:26:00');
+VALUES (615, 4, '2028-01-06', '57880407', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (616, 1, '2016-08-04', '57770804', '19:54:00');
+VALUES (616, 1, '2017-04-30', '57770804', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (616, 2, '2020-03-06', '57810306', '17:13:00');
+VALUES (616, 2, '2020-11-22', '57810306', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (616, 3, '2023-09-10', '57840910', '20:26:00');
+VALUES (616, 3, '2024-06-16', '57840910', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (616, 4, '2027-04-10', '57880410', '17:28:00');
+VALUES (616, 4, '2028-01-09', '57880410', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (617, 1, '2016-08-05', '57770805', '19:55:00');
+VALUES (617, 1, '2017-05-01', '57770805', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (617, 2, '2020-03-07', '57810307', '17:13:00');
+VALUES (617, 2, '2020-11-23', '57810307', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (617, 3, '2023-09-11', '57840911', '20:26:00');
+VALUES (617, 3, '2024-06-17', '57840911', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (617, 4, '2027-04-11', '57880411', '17:29:00');
+VALUES (617, 4, '2028-01-10', '57880411', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (618, 1, '2016-08-06', '57770806', '19:55:00');
+VALUES (618, 1, '2017-05-02', '57770806', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (618, 2, '2020-03-08', '57810308', '17:12:00');
+VALUES (618, 2, '2020-11-24', '57810308', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (618, 3, '2023-09-12', '57840912', '20:26:00');
+VALUES (618, 3, '2024-06-18', '57840912', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (618, 4, '2027-04-12', '57880412', '17:30:00');
+VALUES (618, 4, '2028-01-11', '57880412', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (619, 1, '2016-08-07', '57770807', '19:56:00');
+VALUES (619, 1, '2017-05-03', '57770807', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (619, 2, '2020-03-09', '57810309', '17:12:00');
+VALUES (619, 2, '2020-11-25', '57810309', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (619, 3, '2023-09-13', '57840913', '20:26:00');
+VALUES (619, 3, '2024-06-19', '57840913', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (619, 4, '2027-04-13', '57880413', '17:30:00');
+VALUES (619, 4, '2028-01-12', '57880413', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (620, 1, '2016-08-08', '57770808', '19:57:00');
+VALUES (620, 1, '2017-05-04', '57770808', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (620, 2, '2020-03-10', '57810310', '17:12:00');
+VALUES (620, 2, '2020-11-26', '57810310', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (620, 3, '2023-09-14', '57840914', '20:27:00');
+VALUES (620, 3, '2024-06-20', '57840914', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (620, 4, '2027-04-14', '57880414', '17:31:00');
+VALUES (620, 4, '2028-01-13', '57880414', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (621, 1, '2016-08-11', '57770811', '19:59:00');
+VALUES (621, 1, '2017-05-07', '57770811', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (621, 2, '2020-03-13', '57810313', '17:12:00');
+VALUES (621, 2, '2020-11-29', '57810313', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (621, 3, '2023-09-17', '57840917', '20:27:00');
+VALUES (621, 3, '2024-06-23', '57840917', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (621, 4, '2027-04-17', '57880417', '17:34:00');
+VALUES (621, 4, '2028-01-16', '57880417', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (622, 1, '2016-08-12', '57770812', '20:00:00');
+VALUES (622, 1, '2017-05-08', '57770812', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (622, 2, '2020-03-14', '57810314', '17:12:00');
+VALUES (622, 2, '2020-11-30', '57810314', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (622, 3, '2023-09-18', '57840918', '20:27:00');
+VALUES (622, 3, '2024-06-24', '57840918', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (622, 4, '2027-04-18', '57880418', '17:34:00');
+VALUES (622, 4, '2028-01-17', '57880418', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (623, 1, '2016-08-13', '57770813', '20:01:00');
+VALUES (623, 1, '2017-05-09', '57770813', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (623, 2, '2020-03-15', '57810315', '17:12:00');
+VALUES (623, 2, '2020-12-01', '57810315', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (623, 3, '2023-09-19', '57840919', '20:27:00');
+VALUES (623, 3, '2024-06-25', '57840919', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (623, 4, '2027-04-19', '57880419', '17:35:00');
+VALUES (623, 4, '2028-01-18', '57880419', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (624, 1, '2016-08-14', '57770814', '20:02:00');
+VALUES (624, 1, '2017-05-10', '57770814', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (624, 2, '2020-03-16', '57810316', '17:12:00');
+VALUES (624, 2, '2020-12-02', '57810316', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (624, 3, '2023-09-20', '57840920', '20:27:00');
+VALUES (624, 3, '2024-06-26', '57840920', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (624, 4, '2027-04-20', '57880420', '17:36:00');
+VALUES (624, 4, '2028-01-19', '57880420', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (625, 1, '2016-08-15', '57770815', '20:03:00');
+VALUES (625, 1, '2017-05-11', '57770815', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (625, 2, '2020-03-17', '57810317', '17:12:00');
+VALUES (625, 2, '2020-12-03', '57810317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (625, 3, '2023-09-21', '57840921', '20:28:00');
+VALUES (625, 3, '2024-06-27', '57840921', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (625, 4, '2027-04-21', '57880421', '17:37:00');
+VALUES (625, 4, '2028-01-20', '57880421', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (626, 1, '2016-08-18', '57770818', '20:05:00');
+VALUES (626, 1, '2017-05-14', '57770818', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (626, 2, '2020-03-20', '57810320', '17:12:00');
+VALUES (626, 2, '2020-12-06', '57810320', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (626, 3, '2023-09-24', '57840924', '20:28:00');
+VALUES (626, 3, '2024-06-30', '57840924', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (626, 4, '2027-04-24', '57880424', '17:40:00');
+VALUES (626, 4, '2028-01-23', '57880424', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (627, 1, '2016-08-19', '57770819', '20:06:00');
+VALUES (627, 1, '2017-05-15', '57770819', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (627, 2, '2020-03-21', '57810321', '17:12:00');
+VALUES (627, 2, '2020-12-07', '57810321', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (627, 3, '2023-09-25', '57840925', '20:27:00');
+VALUES (627, 3, '2024-07-01', '57840925', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (627, 4, '2027-04-25', '57880425', '17:40:00');
+VALUES (627, 4, '2028-01-24', '57880425', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (628, 1, '2016-08-20', '57770820', '20:07:00');
+VALUES (628, 1, '2017-05-16', '57770820', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (628, 2, '2020-03-22', '57810322', '17:12:00');
+VALUES (628, 2, '2020-12-08', '57810322', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (628, 3, '2023-09-26', '57840926', '20:27:00');
+VALUES (628, 3, '2024-07-02', '57840926', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (628, 4, '2027-04-26', '57880426', '17:41:00');
+VALUES (628, 4, '2028-01-25', '57880426', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (629, 1, '2016-08-21', '57770821', '20:07:00');
+VALUES (629, 1, '2017-05-17', '57770821', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (629, 2, '2020-03-23', '57810323', '17:12:00');
+VALUES (629, 2, '2020-12-09', '57810323', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (629, 3, '2023-09-27', '57840927', '20:27:00');
+VALUES (629, 3, '2024-07-03', '57840927', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (629, 4, '2027-04-27', '57880427', '17:42:00');
+VALUES (629, 4, '2028-01-26', '57880427', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (630, 1, '2016-08-22', '57770822', '20:08:00');
+VALUES (630, 1, '2017-05-18', '57770822', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (630, 2, '2020-03-24', '57810324', '17:13:00');
+VALUES (630, 2, '2020-12-10', '57810324', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (630, 3, '2023-09-28', '57840928', '20:27:00');
+VALUES (630, 3, '2024-07-04', '57840928', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (630, 4, '2027-04-28', '57880428', '17:43:00');
+VALUES (630, 4, '2028-01-27', '57880428', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (631, 1, '2016-08-25', '57770825', '20:10:00');
+VALUES (631, 1, '2017-05-21', '57770825', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (631, 2, '2020-03-27', '57810327', '17:13:00');
+VALUES (631, 2, '2020-12-13', '57810327', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (631, 3, '2023-10-01', '57841001', '20:27:00');
+VALUES (631, 3, '2024-07-07', '57841001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (631, 4, '2027-05-02', '57880502', '17:46:00');
+VALUES (631, 4, '2028-01-30', '57880502', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (632, 1, '2016-08-26', '57770826', '20:11:00');
+VALUES (632, 1, '2017-05-22', '57770826', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (632, 2, '2020-03-28', '57810328', '17:14:00');
+VALUES (632, 2, '2020-12-14', '57810328', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (632, 3, '2023-10-02', '57841002', '20:26:00');
+VALUES (632, 3, '2024-07-08', '57841002', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (632, 4, '2027-05-03', '57880503', '17:46:00');
+VALUES (632, 4, '2028-01-31', '57880503', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (633, 1, '2016-08-27', '57770827', '20:12:00');
+VALUES (633, 1, '2017-05-23', '57770827', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (633, 2, '2020-03-28', '57810329', '17:14:00');
+VALUES (633, 2, '2020-12-15', '57810329', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (633, 3, '2023-10-03', '57841003', '20:26:00');
+VALUES (633, 3, '2024-07-09', '57841003', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (633, 4, '2027-05-04', '57880504', '17:47:00');
+VALUES (633, 4, '2028-02-01', '57880504', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (634, 1, '2016-08-28', '57770828', '20:13:00');
+VALUES (634, 1, '2017-05-24', '57770828', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (634, 2, '2020-04-01', '57810401', '17:14:00');
+VALUES (634, 2, '2020-12-16', '57810401', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (634, 3, '2023-10-04', '57841004', '20:26:00');
+VALUES (634, 3, '2024-07-10', '57841004', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (634, 4, '2027-05-05', '57880505', '17:48:00');
+VALUES (634, 4, '2028-02-02', '57880505', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (635, 1, '2016-08-28', '57770829', '20:13:00');
+VALUES (635, 1, '2017-05-25', '57770829', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (635, 2, '2020-04-02', '57810402', '17:15:00');
+VALUES (635, 2, '2020-12-17', '57810402', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (635, 3, '2023-10-05', '57841005', '20:25:00');
+VALUES (635, 3, '2024-07-11', '57841005', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (635, 4, '2027-05-06', '57880506', '17:49:00');
+VALUES (635, 4, '2028-02-03', '57880506', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (636, 1, '2016-09-03', '57770903', '20:16:00');
+VALUES (636, 1, '2017-05-28', '57770903', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (636, 2, '2020-04-05', '57810405', '17:16:00');
+VALUES (636, 2, '2020-12-20', '57810405', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (636, 3, '2023-10-08', '57841008', '20:24:00');
+VALUES (636, 3, '2024-07-14', '57841008', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (636, 4, '2027-05-09', '57880509', '17:52:00');
+VALUES (636, 4, '2028-02-06', '57880509', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (637, 1, '2016-09-04', '57770904', '20:16:00');
+VALUES (637, 1, '2017-05-29', '57770904', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (637, 2, '2020-04-06', '57810406', '17:16:00');
+VALUES (637, 2, '2020-12-21', '57810406', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (637, 3, '2023-10-09', '57841009', '20:24:00');
+VALUES (637, 3, '2024-07-15', '57841009', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (637, 4, '2027-05-10', '57880510', '17:52:00');
+VALUES (637, 4, '2028-02-07', '57880510', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (638, 1, '2016-09-05', '57770905', '20:17:00');
+VALUES (638, 1, '2017-05-30', '57770905', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (638, 2, '2020-04-07', '57810407', '17:17:00');
+VALUES (638, 2, '2020-12-22', '57810407', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (638, 3, '2023-10-10', '57841010', '20:23:00');
+VALUES (638, 3, '2024-07-16', '57841010', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (638, 4, '2027-05-11', '57880511', '17:53:00');
+VALUES (638, 4, '2028-02-08', '57880511', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (639, 1, '2016-09-06', '57770906', '20:18:00');
+VALUES (639, 1, '2017-05-31', '57770906', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (639, 2, '2020-04-08', '57810408', '17:17:00');
+VALUES (639, 2, '2020-12-23', '57810408', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (639, 3, '2023-10-11', '57841011', '20:23:00');
+VALUES (639, 3, '2024-07-17', '57841011', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (639, 4, '2027-05-12', '57880512', '17:54:00');
+VALUES (639, 4, '2028-02-09', '57880512', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (640, 1, '2016-09-07', '57770907', '20:18:00');
+VALUES (640, 1, '2017-06-01', '57770907', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (640, 2, '2020-04-09', '57810409', '17:18:00');
+VALUES (640, 2, '2020-12-24', '57810409', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (640, 3, '2023-10-12', '57841012', '20:22:00');
+VALUES (640, 3, '2024-07-18', '57841012', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (640, 4, '2027-05-13', '57880513', '17:55:00');
+VALUES (640, 4, '2028-02-10', '57880513', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (641, 1, '2016-09-10', '57770910', '20:20:00');
+VALUES (641, 1, '2017-06-04', '57770910', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (641, 2, '2020-04-12', '57810412', '17:20:00');
+VALUES (641, 2, '2020-12-27', '57810412', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (641, 3, '2023-10-15', '57841015', '20:21:00');
+VALUES (641, 3, '2024-07-21', '57841015', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (641, 4, '2027-05-16', '57880516', '17:57:00');
+VALUES (641, 4, '2028-02-13', '57880516', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (642, 1, '2016-09-11', '57770911', '20:21:00');
+VALUES (642, 1, '2017-06-05', '57770911', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (642, 2, '2020-04-13', '57810413', '17:20:00');
+VALUES (642, 2, '2020-12-28', '57810413', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (642, 3, '2023-10-16', '57841016', '20:20:00');
+VALUES (642, 3, '2024-07-22', '57841016', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (642, 4, '2027-05-17', '57880517', '17:58:00');
+VALUES (642, 4, '2028-02-14', '57880517', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (643, 1, '2016-09-12', '57770912', '20:21:00');
+VALUES (643, 1, '2017-06-06', '57770912', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (643, 2, '2020-04-14', '57810414', '17:21:00');
+VALUES (643, 2, '2020-12-29', '57810414', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (643, 3, '2023-10-17', '57841017', '20:19:00');
+VALUES (643, 3, '2024-07-23', '57841017', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (643, 4, '2027-05-18', '57880518', '17:59:00');
+VALUES (643, 4, '2028-02-15', '57880518', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (644, 1, '2016-09-13', '57770913', '20:22:00');
+VALUES (644, 1, '2017-06-07', '57770913', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (644, 2, '2020-04-15', '57810415', '17:21:00');
+VALUES (644, 2, '2020-12-30', '57810415', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (644, 3, '2023-10-18', '57841018', '20:19:00');
+VALUES (644, 3, '2024-07-24', '57841018', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (644, 4, '2027-05-19', '57880519', '18:00:00');
+VALUES (644, 4, '2028-02-16', '57880519', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (645, 1, '2016-09-14', '57770914', '20:22:00');
+VALUES (645, 1, '2017-06-08', '57770914', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (645, 2, '2020-04-16', '57810416', '17:22:00');
+VALUES (645, 2, '2020-12-31', '57810416', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (645, 3, '2023-10-19', '57841019', '20:18:00');
+VALUES (645, 3, '2024-07-25', '57841019', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (645, 4, '2027-05-20', '57880520', '18:01:00');
+VALUES (645, 4, '2028-02-17', '57880520', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (646, 1, '2016-09-17', '57770917', '20:24:00');
+VALUES (646, 1, '2017-06-11', '57770917', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (646, 2, '2020-04-19', '57810419', '17:24:00');
+VALUES (646, 2, '2021-01-03', '57810419', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (646, 3, '2023-10-22', '57841022', '20:16:00');
+VALUES (646, 3, '2024-07-28', '57841022', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (646, 4, '2027-05-23', '57880523', '18:03:00');
+VALUES (646, 4, '2028-02-20', '57880523', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (647, 1, '2016-09-18', '57770918', '20:24:00');
+VALUES (647, 1, '2017-06-12', '57770918', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (647, 2, '2020-04-20', '57810420', '17:25:00');
+VALUES (647, 2, '2021-01-04', '57810420', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (647, 3, '2023-10-23', '57841023', '20:15:00');
+VALUES (647, 3, '2024-07-29', '57841023', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (647, 4, '2027-05-24', '57880524', '18:04:00');
+VALUES (647, 4, '2028-02-21', '57880524', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (648, 1, '2016-09-19', '57770919', '20:24:00');
+VALUES (648, 1, '2017-06-13', '57770919', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (648, 2, '2020-04-21', '57810421', '17:26:00');
+VALUES (648, 2, '2021-01-05', '57810421', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (648, 3, '2023-10-24', '57841024', '20:14:00');
+VALUES (648, 3, '2024-07-30', '57841024', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (648, 4, '2027-05-25', '57880525', '18:05:00');
+VALUES (648, 4, '2028-02-22', '57880525', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (649, 1, '2016-09-20', '57770920', '20:25:00');
+VALUES (649, 1, '2017-06-14', '57770920', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (649, 2, '2020-04-22', '57810422', '17:26:00');
+VALUES (649, 2, '2021-01-06', '57810422', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (649, 3, '2023-10-25', '57841025', '20:13:00');
+VALUES (649, 3, '2024-07-31', '57841025', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (649, 4, '2027-05-26', '57880526', '18:05:00');
+VALUES (649, 4, '2028-02-23', '57880526', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (650, 1, '2016-09-21', '57770921', '20:25:00');
+VALUES (650, 1, '2017-06-15', '57770921', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (650, 2, '2020-04-23', '57810423', '17:27:00');
+VALUES (650, 2, '2021-01-07', '57810423', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (650, 3, '2023-10-26', '57841026', '20:13:00');
+VALUES (650, 3, '2024-08-01', '57841026', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (650, 4, '2027-05-27', '57880527', '18:06:00');
+VALUES (650, 4, '2028-02-24', '57880527', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (651, 1, '2016-09-24', '57770924', '20:26:00');
+VALUES (651, 1, '2017-06-18', '57770924', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (651, 2, '2020-04-26', '57810426', '17:29:00');
+VALUES (651, 2, '2021-01-10', '57810426', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (651, 3, '2023-10-28', '57841029', '20:10:00');
+VALUES (651, 3, '2024-08-04', '57841029', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (651, 4, '2027-05-28', '57880530', '18:08:00');
+VALUES (651, 4, '2028-02-27', '57880530', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (652, 1, '2016-09-25', '57770925', '20:26:00');
+VALUES (652, 1, '2017-06-19', '57770925', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (652, 2, '2020-04-27', '57810427', '17:30:00');
+VALUES (652, 2, '2021-01-11', '57810427', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (652, 3, '2023-11-01', '57841101', '20:09:00');
+VALUES (652, 3, '2024-08-05', '57841101', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (652, 4, '2027-06-01', '57880601', '18:09:00');
+VALUES (652, 4, '2028-02-28', '57880601', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (653, 1, '2016-09-26', '57770926', '20:27:00');
+VALUES (653, 1, '2017-06-20', '57770926', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (653, 2, '2020-04-28', '57810428', '17:31:00');
+VALUES (653, 2, '2021-01-12', '57810428', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (653, 3, '2023-11-02', '57841102', '20:08:00');
+VALUES (653, 3, '2024-08-06', '57841102', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (653, 4, '2027-06-02', '57880602', '18:10:00');
+VALUES (653, 4, '2028-02-29', '57880602', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (654, 1, '2016-09-27', '57770927', '20:27:00');
+VALUES (654, 1, '2017-06-21', '57770927', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (654, 2, '2020-04-28', '57810429', '17:32:00');
+VALUES (654, 2, '2021-01-13', '57810429', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (654, 3, '2023-11-03', '57841103', '20:07:00');
+VALUES (654, 3, '2024-08-07', '57841103', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (654, 4, '2027-06-03', '57880603', '18:11:00');
+VALUES (654, 4, '2028-03-01', '57880603', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (655, 1, '2016-09-28', '57770928', '20:27:00');
+VALUES (655, 1, '2017-06-22', '57770928', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (655, 2, '2020-05-01', '57810501', '17:33:00');
+VALUES (655, 2, '2021-01-14', '57810501', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (655, 3, '2023-11-04', '57841104', '20:06:00');
+VALUES (655, 3, '2024-08-08', '57841104', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (655, 4, '2027-06-04', '57880604', '18:11:00');
+VALUES (655, 4, '2028-03-02', '57880604', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (656, 1, '2016-10-01', '57771001', '20:27:00');
+VALUES (656, 1, '2017-06-25', '57771001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (656, 2, '2020-05-04', '57810504', '17:35:00');
+VALUES (656, 2, '2021-01-17', '57810504', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (656, 3, '2023-11-07', '57841107', '20:03:00');
+VALUES (656, 3, '2024-08-11', '57841107', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (656, 4, '2027-06-07', '57880607', '18:13:00');
+VALUES (656, 4, '2028-03-05', '57880607', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (657, 1, '2016-10-02', '57771002', '20:27:00');
+VALUES (657, 1, '2017-06-26', '57771002', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (657, 2, '2020-05-05', '57810505', '17:36:00');
+VALUES (657, 2, '2021-01-18', '57810505', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (657, 3, '2023-11-08', '57841108', '20:02:00');
+VALUES (657, 3, '2024-08-12', '57841108', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (657, 4, '2027-06-08', '57880608', '18:14:00');
+VALUES (657, 4, '2028-03-06', '57880608', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (658, 1, '2016-10-03', '57771003', '20:28:00');
+VALUES (658, 1, '2017-06-27', '57771003', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (658, 2, '2020-05-06', '57810506', '17:37:00');
+VALUES (658, 2, '2021-01-19', '57810506', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (658, 3, '2023-11-09', '57841109', '20:01:00');
+VALUES (658, 3, '2024-08-13', '57841109', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (658, 4, '2027-06-09', '57880609', '18:15:00');
+VALUES (658, 4, '2028-03-07', '57880609', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (659, 1, '2016-10-04', '57771004', '20:28:00');
+VALUES (659, 1, '2017-06-28', '57771004', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (659, 2, '2020-05-07', '57810507', '17:38:00');
+VALUES (659, 2, '2021-01-20', '57810507', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (659, 3, '2023-11-10', '57841110', '20:00:00');
+VALUES (659, 3, '2024-08-14', '57841110', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (659, 4, '2027-06-10', '57880610', '18:16:00');
+VALUES (659, 4, '2028-03-08', '57880610', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (660, 1, '2016-10-05', '57771005', '20:28:00');
+VALUES (660, 1, '2017-06-29', '57771005', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (660, 2, '2020-05-08', '57810508', '17:39:00');
+VALUES (660, 2, '2021-01-21', '57810508', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (660, 3, '2023-11-11', '57841111', '19:59:00');
+VALUES (660, 3, '2024-08-15', '57841111', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (660, 4, '2027-06-11', '57880611', '18:16:00');
+VALUES (660, 4, '2028-03-09', '57880611', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (661, 1, '2016-10-08', '57771008', '20:27:00');
+VALUES (661, 1, '2017-07-02', '57771008', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (661, 2, '2020-05-11', '57810511', '17:41:00');
+VALUES (661, 2, '2021-01-24', '57810511', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (661, 3, '2023-11-14', '57841114', '19:55:00');
+VALUES (661, 3, '2024-08-18', '57841114', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (661, 4, '2027-06-14', '57880614', '18:18:00');
+VALUES (661, 4, '2028-03-12', '57880614', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (662, 1, '2016-10-09', '57771009', '20:27:00');
+VALUES (662, 1, '2017-07-03', '57771009', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (662, 2, '2020-05-12', '57810512', '17:42:00');
+VALUES (662, 2, '2021-01-25', '57810512', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (662, 3, '2023-11-15', '57841115', '19:54:00');
+VALUES (662, 3, '2024-08-19', '57841115', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (662, 4, '2027-06-15', '57880615', '18:19:00');
+VALUES (662, 4, '2028-03-13', '57880615', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (663, 1, '2016-10-10', '57771010', '20:27:00');
+VALUES (663, 1, '2017-07-04', '57771010', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (663, 2, '2020-05-13', '57810513', '17:43:00');
+VALUES (663, 2, '2021-01-26', '57810513', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (663, 3, '2023-11-16', '57841116', '19:53:00');
+VALUES (663, 3, '2024-08-20', '57841116', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (663, 4, '2027-06-16', '57880616', '18:20:00');
+VALUES (663, 4, '2028-03-14', '57880616', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (664, 1, '2016-10-11', '57771011', '20:27:00');
+VALUES (664, 1, '2017-07-05', '57771011', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (664, 2, '2020-05-14', '57810514', '17:44:00');
+VALUES (664, 2, '2021-01-27', '57810514', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (664, 3, '2023-11-17', '57841117', '19:52:00');
+VALUES (664, 3, '2024-08-21', '57841117', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (664, 4, '2027-06-17', '57880617', '18:20:00');
+VALUES (664, 4, '2028-03-15', '57880617', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (665, 1, '2016-10-12', '57771012', '20:27:00');
+VALUES (665, 1, '2017-07-06', '57771012', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (665, 2, '2020-05-15', '57810515', '17:45:00');
+VALUES (665, 2, '2021-01-28', '57810515', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (665, 3, '2023-11-18', '57841118', '19:50:00');
+VALUES (665, 3, '2024-08-22', '57841118', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (665, 4, '2027-06-18', '57880618', '18:21:00');
+VALUES (665, 4, '2028-03-16', '57880618', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (666, 1, '2016-10-15', '57771015', '20:26:00');
+VALUES (666, 1, '2017-07-09', '57771015', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (666, 2, '2020-05-18', '57810518', '17:47:00');
+VALUES (666, 2, '2021-01-31', '57810518', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (666, 3, '2023-11-21', '57841121', '19:47:00');
+VALUES (666, 3, '2024-08-25', '57841121', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (666, 4, '2027-06-21', '57880621', '18:23:00');
+VALUES (666, 4, '2028-03-19', '57880621', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (667, 1, '2016-10-16', '57771016', '20:26:00');
+VALUES (667, 1, '2017-07-10', '57771016', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (667, 2, '2020-05-19', '57810519', '17:48:00');
+VALUES (667, 2, '2021-02-01', '57810519', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (667, 3, '2023-11-22', '57841122', '19:46:00');
+VALUES (667, 3, '2024-08-26', '57841122', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (667, 4, '2027-06-22', '57880622', '18:24:00');
+VALUES (667, 4, '2028-03-20', '57880622', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (668, 1, '2016-10-17', '57771017', '20:25:00');
+VALUES (668, 1, '2017-07-11', '57771017', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (668, 2, '2020-05-20', '57810520', '17:49:00');
+VALUES (668, 2, '2021-02-02', '57810520', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (668, 3, '2023-11-23', '57841123', '19:44:00');
+VALUES (668, 3, '2024-08-27', '57841123', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (668, 4, '2027-06-23', '57880623', '18:24:00');
+VALUES (668, 4, '2028-03-21', '57880623', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (669, 1, '2016-10-18', '57771018', '20:25:00');
+VALUES (669, 1, '2017-07-12', '57771018', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (669, 2, '2020-05-21', '57810521', '17:50:00');
+VALUES (669, 2, '2021-02-03', '57810521', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (669, 3, '2023-11-24', '57841124', '19:43:00');
+VALUES (669, 3, '2024-08-28', '57841124', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (669, 4, '2027-06-24', '57880624', '18:25:00');
+VALUES (669, 4, '2028-03-22', '57880624', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (670, 1, '2016-10-19', '57771019', '20:25:00');
+VALUES (670, 1, '2017-07-13', '57771019', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (670, 2, '2020-05-22', '57810522', '17:51:00');
+VALUES (670, 2, '2021-02-04', '57810522', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (670, 3, '2023-11-25', '57841125', '19:42:00');
+VALUES (670, 3, '2024-08-29', '57841125', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (670, 4, '2027-06-25', '57880625', '18:26:00');
+VALUES (670, 4, '2028-03-23', '57880625', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (671, 1, '2016-10-22', '57771022', '20:23:00');
+VALUES (671, 1, '2017-07-16', '57771022', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (671, 2, '2020-05-25', '57810525', '17:53:00');
+VALUES (671, 2, '2021-02-07', '57810525', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (671, 3, '2023-11-28', '57841128', '19:38:00');
+VALUES (671, 3, '2024-09-01', '57841128', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (671, 4, '2027-06-28', '57880628', '19:28:00');
+VALUES (671, 4, '2028-03-26', '57880628', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (672, 1, '2016-10-23', '57771023', '20:23:00');
+VALUES (672, 1, '2017-07-17', '57771023', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (672, 2, '2020-05-26', '57810526', '17:54:00');
+VALUES (672, 2, '2021-02-08', '57810526', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (672, 3, '2023-11-28', '57841129', '19:37:00');
+VALUES (672, 3, '2024-09-02', '57841129', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (672, 4, '2027-06-28', '57880629', '19:29:00');
+VALUES (672, 4, '2028-03-27', '57880629', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (673, 1, '2016-10-24', '57771024', '20:22:00');
+VALUES (673, 1, '2017-07-18', '57771024', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (673, 2, '2020-05-27', '57810527', '17:55:00');
+VALUES (673, 2, '2021-02-09', '57810527', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (673, 3, '2023-11-28', '57841130', '19:35:00');
+VALUES (673, 3, '2024-09-03', '57841130', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (673, 4, '2027-07-01', '57880701', '19:29:00');
+VALUES (673, 4, '2028-03-28', '57880701', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (674, 1, '2016-10-25', '57771025', '20:22:00');
+VALUES (674, 1, '2017-07-19', '57771025', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (674, 2, '2020-05-28', '57810528', '17:56:00');
+VALUES (674, 2, '2021-02-10', '57810528', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (674, 3, '2023-12-01', '57841201', '19:34:00');
+VALUES (674, 3, '2024-09-04', '57841201', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (674, 4, '2027-07-02', '57880702', '19:30:00');
+VALUES (674, 4, '2028-03-29', '57880702', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (675, 1, '2016-10-26', '57771026', '20:21:00');
+VALUES (675, 1, '2017-07-20', '57771026', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (675, 2, '2020-05-28', '57810529', '17:56:00');
+VALUES (675, 2, '2021-02-11', '57810529', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (675, 3, '2023-12-02', '57841202', '19:33:00');
+VALUES (675, 3, '2024-09-05', '57841202', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (675, 4, '2027-07-03', '57880703', '19:31:00');
+VALUES (675, 4, '2028-03-30', '57880703', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (676, 1, '2016-10-28', '57771029', '20:20:00');
+VALUES (676, 1, '2017-07-23', '57771029', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (676, 2, '2020-06-02', '57810602', '17:59:00');
+VALUES (676, 2, '2021-02-14', '57810602', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (676, 3, '2023-12-05', '57841205', '19:29:00');
+VALUES (676, 3, '2024-09-08', '57841205', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (676, 4, '2027-07-06', '57880706', '19:33:00');
+VALUES (676, 4, '2028-04-02', '57880706', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (677, 1, '2016-11-01', '57771101', '20:19:00');
+VALUES (677, 1, '2017-07-24', '57771101', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (677, 2, '2020-06-03', '57810603', '18:00:00');
+VALUES (677, 2, '2021-02-15', '57810603', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (677, 3, '2023-12-06', '57841206', '19:27:00');
+VALUES (677, 3, '2024-09-09', '57841206', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (677, 4, '2027-07-07', '57880707', '19:33:00');
+VALUES (677, 4, '2028-04-03', '57880707', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (678, 1, '2016-11-02', '57771102', '20:18:00');
+VALUES (678, 1, '2017-07-25', '57771102', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (678, 2, '2020-06-04', '57810604', '18:00:00');
+VALUES (678, 2, '2021-02-16', '57810604', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (678, 3, '2023-12-07', '57841207', '19:26:00');
+VALUES (678, 3, '2024-09-10', '57841207', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (678, 4, '2027-07-08', '57880708', '19:34:00');
+VALUES (678, 4, '2028-04-04', '57880708', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (679, 1, '2016-11-03', '57771103', '20:17:00');
+VALUES (679, 1, '2017-07-26', '57771103', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (679, 2, '2020-06-05', '57810605', '18:01:00');
+VALUES (679, 2, '2021-02-17', '57810605', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (679, 3, '2023-12-08', '57841208', '19:25:00');
+VALUES (679, 3, '2024-09-11', '57841208', '19:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (679, 4, '2027-07-09', '57880709', '19:35:00');
+VALUES (679, 4, '2028-04-05', '57880709', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (680, 1, '2016-11-04', '57771104', '20:17:00');
+VALUES (680, 1, '2017-07-27', '57771104', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (680, 2, '2020-06-06', '57810606', '18:02:00');
+VALUES (680, 2, '2021-02-18', '57810606', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (680, 3, '2023-12-09', '57841209', '19:23:00');
+VALUES (680, 3, '2024-09-12', '57841209', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (680, 4, '2027-07-10', '57880710', '19:36:00');
+VALUES (680, 4, '2028-04-06', '57880710', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (681, 1, '2016-11-07', '57771107', '20:14:00');
+VALUES (681, 1, '2017-07-30', '57771107', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (681, 2, '2020-06-09', '57810609', '18:04:00');
+VALUES (681, 2, '2021-02-21', '57810609', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (681, 3, '2023-12-12', '57841212', '19:19:00');
+VALUES (681, 3, '2024-09-15', '57841212', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (681, 4, '2027-07-13', '57880713', '19:38:00');
+VALUES (681, 4, '2028-04-09', '57880713', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (682, 1, '2016-11-08', '57771108', '20:14:00');
+VALUES (682, 1, '2017-07-31', '57771108', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (682, 2, '2020-06-10', '57810610', '18:05:00');
+VALUES (682, 2, '2021-02-22', '57810610', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (682, 3, '2023-12-13', '57841213', '19:18:00');
+VALUES (682, 3, '2024-09-16', '57841213', '19:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (682, 4, '2027-07-14', '57880714', '19:38:00');
+VALUES (682, 4, '2028-04-10', '57880714', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (683, 1, '2016-11-09', '57771109', '20:13:00');
+VALUES (683, 1, '2017-08-01', '57771109', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (683, 2, '2020-06-11', '57810611', '18:06:00');
+VALUES (683, 2, '2021-02-23', '57810611', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (683, 3, '2023-12-14', '57841214', '19:16:00');
+VALUES (683, 3, '2024-09-17', '57841214', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (683, 4, '2027-07-15', '57880715', '19:39:00');
+VALUES (683, 4, '2028-04-11', '57880715', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (684, 1, '2016-11-10', '57771110', '20:12:00');
+VALUES (684, 1, '2017-08-02', '57771110', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (684, 2, '2020-06-12', '57810612', '18:07:00');
+VALUES (684, 2, '2021-02-24', '57810612', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (684, 3, '2023-12-15', '57841215', '19:15:00');
+VALUES (684, 3, '2024-09-18', '57841215', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (684, 4, '2027-07-16', '57880716', '19:40:00');
+VALUES (684, 4, '2028-04-12', '57880716', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (685, 1, '2016-11-11', '57771111', '20:11:00');
+VALUES (685, 1, '2017-08-03', '57771111', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (685, 2, '2020-06-13', '57810613', '18:07:00');
+VALUES (685, 2, '2021-02-25', '57810613', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (685, 3, '2023-12-16', '57841216', '19:14:00');
+VALUES (685, 3, '2024-09-19', '57841216', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (685, 4, '2027-07-17', '57880717', '19:41:00');
+VALUES (685, 4, '2028-04-13', '57880717', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (686, 1, '2016-11-14', '57771114', '20:08:00');
+VALUES (686, 1, '2017-08-06', '57771114', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (686, 2, '2020-06-16', '57810616', '18:10:00');
+VALUES (686, 2, '2021-02-28', '57810616', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (686, 3, '2023-12-19', '57841219', '19:10:00');
+VALUES (686, 3, '2024-09-22', '57841219', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (686, 4, '2027-07-20', '57880720', '19:43:00');
+VALUES (686, 4, '2028-04-16', '57880720', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (687, 1, '2016-11-15', '57771115', '20:07:00');
+VALUES (687, 1, '2017-08-07', '57771115', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (687, 2, '2020-06-17', '57810617', '18:10:00');
+VALUES (687, 2, '2021-03-01', '57810617', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (687, 3, '2023-12-20', '57841220', '19:08:00');
+VALUES (687, 3, '2024-09-23', '57841220', '19:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (687, 4, '2027-07-21', '57880721', '19:44:00');
+VALUES (687, 4, '2028-04-17', '57880721', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (688, 1, '2016-11-16', '57771116', '20:06:00');
+VALUES (688, 1, '2017-08-08', '57771116', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (688, 2, '2020-06-18', '57810618', '18:11:00');
+VALUES (688, 2, '2021-03-02', '57810618', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (688, 3, '2023-12-21', '57841221', '19:07:00');
+VALUES (688, 3, '2024-09-24', '57841221', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (688, 4, '2027-07-22', '57880722', '19:44:00');
+VALUES (688, 4, '2028-04-18', '57880722', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (689, 1, '2016-11-17', '57771117', '20:05:00');
+VALUES (689, 1, '2017-08-09', '57771117', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (689, 2, '2020-06-19', '57810619', '18:12:00');
+VALUES (689, 2, '2021-03-03', '57810619', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (689, 3, '2023-12-22', '57841222', '19:06:00');
+VALUES (689, 3, '2024-09-25', '57841222', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (689, 4, '2027-07-23', '57880723', '19:45:00');
+VALUES (689, 4, '2028-04-19', '57880723', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (690, 1, '2016-11-18', '57771118', '20:04:00');
+VALUES (690, 1, '2017-08-10', '57771118', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (690, 2, '2020-06-20', '57810620', '18:13:00');
+VALUES (690, 2, '2021-03-04', '57810620', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (690, 3, '2023-12-23', '57841223', '19:04:00');
+VALUES (690, 3, '2024-09-26', '57841223', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (690, 4, '2027-07-24', '57880724', '19:46:00');
+VALUES (690, 4, '2028-04-20', '57880724', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (691, 1, '2016-11-21', '57771121', '20:01:00');
+VALUES (691, 1, '2017-08-13', '57771121', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (691, 2, '2020-06-23', '57810623', '18:15:00');
+VALUES (691, 2, '2021-03-07', '57810623', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (691, 3, '2023-12-26', '57841226', '19:00:00');
+VALUES (691, 3, '2024-09-29', '57841226', '19:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (691, 4, '2027-07-27', '57880727', '19:48:00');
+VALUES (691, 4, '2028-04-23', '57880727', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (692, 1, '2016-11-22', '57771122', '20:00:00');
+VALUES (692, 1, '2017-08-14', '57771122', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (692, 2, '2020-06-24', '57810624', '18:15:00');
+VALUES (692, 2, '2021-03-08', '57810624', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (692, 3, '2023-12-27', '57841227', '18:59:00');
+VALUES (692, 3, '2024-09-30', '57841227', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (692, 4, '2027-07-28', '57880728', '19:49:00');
+VALUES (692, 4, '2028-04-24', '57880728', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (693, 1, '2016-11-23', '57771123', '19:59:00');
+VALUES (693, 1, '2017-08-15', '57771123', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (693, 2, '2020-06-25', '57810625', '18:16:00');
+VALUES (693, 2, '2021-03-09', '57810625', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (693, 3, '2023-12-28', '57841228', '18:58:00');
+VALUES (693, 3, '2024-10-01', '57841228', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (693, 4, '2027-07-28', '57880729', '19:50:00');
+VALUES (693, 4, '2028-04-25', '57880729', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (694, 1, '2016-11-24', '57771124', '19:58:00');
+VALUES (694, 1, '2017-08-16', '57771124', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (694, 2, '2020-06-26', '57810626', '18:17:00');
+VALUES (694, 2, '2021-03-10', '57810626', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (694, 3, '2023-12-28', '57841229', '18:56:00');
+VALUES (694, 3, '2024-10-02', '57841229', '18:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (694, 4, '2027-07-28', '57880730', '19:51:00');
+VALUES (694, 4, '2028-04-26', '57880730', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (695, 1, '2016-11-25', '57771125', '19:57:00');
+VALUES (695, 1, '2017-08-17', '57771125', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (695, 2, '2020-06-27', '57810627', '18:17:00');
+VALUES (695, 2, '2021-03-11', '57810627', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (695, 3, '2024-01-01', '57850101', '18:55:00');
+VALUES (695, 3, '2024-10-03', '57850101', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (695, 4, '2027-08-01', '57880801', '19:52:00');
+VALUES (695, 4, '2028-04-27', '57880801', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (696, 1, '2016-11-28', '57771128', '19:53:00');
+VALUES (696, 1, '2017-08-20', '57771128', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (696, 2, '2020-07-01', '57810701', '18:20:00');
+VALUES (696, 2, '2021-03-14', '57810701', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (696, 3, '2024-01-04', '57850104', '18:51:00');
+VALUES (696, 3, '2024-10-06', '57850104', '18:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (696, 4, '2027-08-04', '57880804', '19:54:00');
+VALUES (696, 4, '2028-04-30', '57880804', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (697, 1, '2016-11-28', '57771129', '19:52:00');
+VALUES (697, 1, '2017-08-21', '57771129', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (697, 2, '2020-07-02', '57810702', '18:20:00');
+VALUES (697, 2, '2021-03-15', '57810702', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (697, 3, '2024-01-05', '57850105', '18:50:00');
+VALUES (697, 3, '2024-10-07', '57850105', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (697, 4, '2027-08-05', '57880805', '19:55:00');
+VALUES (697, 4, '2028-05-01', '57880805', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (698, 1, '2016-11-28', '57771130', '19:51:00');
+VALUES (698, 1, '2017-08-22', '57771130', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (698, 2, '2020-07-03', '57810703', '18:21:00');
+VALUES (698, 2, '2021-03-16', '57810703', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (698, 3, '2024-01-06', '57850106', '18:49:00');
+VALUES (698, 3, '2024-10-08', '57850106', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (698, 4, '2027-08-06', '57880806', '19:56:00');
+VALUES (698, 4, '2028-05-02', '57880806', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (699, 1, '2016-12-01', '57771201', '19:50:00');
+VALUES (699, 1, '2017-08-23', '57771201', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (699, 2, '2020-07-04', '57810704', '18:22:00');
+VALUES (699, 2, '2021-03-17', '57810704', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (699, 3, '2024-01-07', '57850107', '18:48:00');
+VALUES (699, 3, '2024-10-09', '57850107', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (699, 4, '2027-08-07', '57880807', '19:56:00');
+VALUES (699, 4, '2028-05-03', '57880807', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (700, 1, '2016-12-02', '57771202', '19:48:00');
+VALUES (700, 1, '2017-08-24', '57771202', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (700, 2, '2020-07-05', '57810705', '18:22:00');
+VALUES (700, 2, '2021-03-18', '57810705', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (700, 3, '2024-01-08', '57850108', '18:47:00');
+VALUES (700, 3, '2024-10-10', '57850108', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (700, 4, '2027-08-08', '57880808', '19:57:00');
+VALUES (700, 4, '2028-05-04', '57880808', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (701, 1, '2016-12-05', '57771205', '19:45:00');
+VALUES (701, 1, '2017-08-27', '57771205', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (701, 2, '2020-07-08', '57810708', '18:24:00');
+VALUES (701, 2, '2021-03-21', '57810708', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (701, 3, '2024-01-11', '57850111', '18:43:00');
+VALUES (701, 3, '2024-10-13', '57850111', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (701, 4, '2027-08-11', '57880811', '20:00:00');
+VALUES (701, 4, '2028-05-07', '57880811', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (702, 1, '2016-12-06', '57771206', '19:43:00');
+VALUES (702, 1, '2017-08-28', '57771206', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (702, 2, '2020-07-09', '57810709', '18:25:00');
+VALUES (702, 2, '2021-03-22', '57810709', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (702, 3, '2024-01-12', '57850112', '18:42:00');
+VALUES (702, 3, '2024-10-14', '57850112', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (702, 4, '2027-08-12', '57880812', '20:00:00');
+VALUES (702, 4, '2028-05-08', '57880812', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (703, 1, '2016-12-07', '57771207', '19:42:00');
+VALUES (703, 1, '2017-08-29', '57771207', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (703, 2, '2020-07-10', '57810710', '18:26:00');
+VALUES (703, 2, '2021-03-23', '57810710', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (703, 3, '2024-01-13', '57850113', '18:41:00');
+VALUES (703, 3, '2024-10-15', '57850113', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (703, 4, '2027-08-13', '57880813', '20:01:00');
+VALUES (703, 4, '2028-05-09', '57880813', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (704, 1, '2016-12-08', '57771208', '19:41:00');
+VALUES (704, 1, '2017-08-30', '57771208', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (704, 2, '2020-07-11', '57810711', '18:26:00');
+VALUES (704, 2, '2021-03-24', '57810711', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (704, 3, '2024-01-14', '57850114', '18:40:00');
+VALUES (704, 3, '2024-10-16', '57850114', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (704, 4, '2027-08-14', '57880814', '20:02:00');
+VALUES (704, 4, '2028-05-10', '57880814', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (705, 1, '2016-12-09', '57771209', '19:39:00');
+VALUES (705, 1, '2017-08-31', '57771209', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (705, 2, '2020-07-12', '57810712', '18:27:00');
+VALUES (705, 2, '2021-03-25', '57810712', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (705, 3, '2024-01-15', '57850115', '18:39:00');
+VALUES (705, 3, '2024-10-17', '57850115', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (705, 4, '2027-08-15', '57880815', '20:03:00');
+VALUES (705, 4, '2028-05-11', '57880815', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (706, 1, '2016-12-12', '57771212', '19:36:00');
+VALUES (706, 1, '2017-09-03', '57771212', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (706, 2, '2020-07-15', '57810715', '19:29:00');
+VALUES (706, 2, '2021-03-28', '57810715', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (706, 3, '2024-01-18', '57850118', '18:35:00');
+VALUES (706, 3, '2024-10-20', '57850118', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (706, 4, '2027-08-18', '57880818', '20:05:00');
+VALUES (706, 4, '2028-05-14', '57880818', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (707, 1, '2016-12-13', '57771213', '19:34:00');
+VALUES (707, 1, '2017-09-04', '57771213', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (707, 2, '2020-07-16', '57810716', '19:30:00');
+VALUES (707, 2, '2021-03-29', '57810716', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (707, 3, '2024-01-19', '57850119', '18:34:00');
+VALUES (707, 3, '2024-10-21', '57850119', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (707, 4, '2027-08-19', '57880819', '20:06:00');
+VALUES (707, 4, '2028-05-15', '57880819', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (708, 1, '2016-12-14', '57771214', '19:33:00');
+VALUES (708, 1, '2017-09-05', '57771214', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (708, 2, '2020-07-17', '57810717', '19:31:00');
+VALUES (708, 2, '2021-03-30', '57810717', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (708, 3, '2024-01-20', '57850120', '18:33:00');
+VALUES (708, 3, '2024-10-22', '57850120', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (708, 4, '2027-08-20', '57880820', '20:07:00');
+VALUES (708, 4, '2028-05-16', '57880820', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (709, 1, '2016-12-15', '57771215', '19:32:00');
+VALUES (709, 1, '2017-09-06', '57771215', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (709, 2, '2020-07-18', '57810718', '19:31:00');
+VALUES (709, 2, '2021-03-31', '57810718', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (709, 3, '2024-01-21', '57850121', '18:32:00');
+VALUES (709, 3, '2024-10-23', '57850121', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (709, 4, '2027-08-21', '57880821', '20:08:00');
+VALUES (709, 4, '2028-05-17', '57880821', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (710, 1, '2016-12-16', '57771216', '19:30:00');
+VALUES (710, 1, '2017-09-07', '57771216', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (710, 2, '2020-07-19', '57810719', '19:32:00');
+VALUES (710, 2, '2021-04-01', '57810719', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (710, 3, '2024-01-22', '57850122', '18:31:00');
+VALUES (710, 3, '2024-10-24', '57850122', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (710, 4, '2027-08-22', '57880822', '20:08:00');
+VALUES (710, 4, '2028-05-18', '57880822', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (711, 1, '2016-12-19', '57771219', '19:26:00');
+VALUES (711, 1, '2017-09-10', '57771219', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (711, 2, '2020-07-22', '57810722', '19:34:00');
+VALUES (711, 2, '2021-04-04', '57810722', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (711, 3, '2024-01-25', '57850125', '17:29:00');
+VALUES (711, 3, '2024-10-27', '57850125', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (711, 4, '2027-08-25', '57880825', '20:11:00');
+VALUES (711, 4, '2028-05-21', '57880825', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (712, 1, '2016-12-20', '57771220', '19:25:00');
+VALUES (712, 1, '2017-09-11', '57771220', '19:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (712, 2, '2020-07-23', '57810723', '19:35:00');
+VALUES (712, 2, '2021-04-05', '57810723', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (712, 3, '2024-01-26', '57850126', '17:28:00');
+VALUES (712, 3, '2024-10-28', '57850126', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (712, 4, '2027-08-26', '57880826', '20:11:00');
+VALUES (712, 4, '2028-05-22', '57880826', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (713, 1, '2016-12-21', '57771221', '19:23:00');
+VALUES (713, 1, '2017-09-12', '57771221', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (713, 2, '2020-07-24', '57810724', '19:35:00');
+VALUES (713, 2, '2021-04-06', '57810724', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (713, 3, '2024-01-27', '57850127', '17:27:00');
+VALUES (713, 3, '2024-10-29', '57850127', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (713, 4, '2027-08-27', '57880827', '20:12:00');
+VALUES (713, 4, '2028-05-23', '57880827', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (714, 1, '2016-12-22', '57771222', '19:22:00');
+VALUES (714, 1, '2017-09-13', '57771222', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (714, 2, '2020-07-25', '57810725', '19:36:00');
+VALUES (714, 2, '2021-04-07', '57810725', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (714, 3, '2024-01-28', '57850128', '17:26:00');
+VALUES (714, 3, '2024-10-30', '57850128', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (714, 4, '2027-08-28', '57880828', '20:13:00');
+VALUES (714, 4, '2028-05-24', '57880828', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (715, 1, '2016-12-23', '57771223', '19:21:00');
+VALUES (715, 1, '2017-09-14', '57771223', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (715, 2, '2020-07-26', '57810726', '19:37:00');
+VALUES (715, 2, '2021-04-08', '57810726', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (715, 3, '2024-01-28', '57850129', '17:25:00');
+VALUES (715, 3, '2024-10-31', '57850129', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (715, 4, '2027-08-28', '57880829', '20:14:00');
+VALUES (715, 4, '2028-05-25', '57880829', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (716, 1, '2016-12-26', '57771226', '19:17:00');
+VALUES (716, 1, '2017-09-17', '57771226', '19:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (716, 2, '2020-07-28', '57810729', '19:39:00');
+VALUES (716, 2, '2021-04-11', '57810729', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (716, 3, '2024-02-02', '57850202', '17:23:00');
+VALUES (716, 3, '2024-11-03', '57850202', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (716, 4, '2027-09-03', '57880903', '20:16:00');
+VALUES (716, 4, '2028-05-28', '57880903', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (717, 1, '2016-12-27', '57771227', '19:15:00');
+VALUES (717, 1, '2017-09-18', '57771227', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (717, 2, '2020-07-28', '57810730', '19:40:00');
+VALUES (717, 2, '2021-04-12', '57810730', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (717, 3, '2024-02-03', '57850203', '17:22:00');
+VALUES (717, 3, '2024-11-04', '57850203', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (717, 4, '2027-09-04', '57880904', '20:16:00');
+VALUES (717, 4, '2028-05-29', '57880904', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (718, 1, '2016-12-28', '57771228', '19:14:00');
+VALUES (718, 1, '2017-09-19', '57771228', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (718, 2, '2020-08-01', '57810801', '19:41:00');
+VALUES (718, 2, '2021-04-13', '57810801', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (718, 3, '2024-02-04', '57850204', '17:21:00');
+VALUES (718, 3, '2024-11-05', '57850204', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (718, 4, '2027-09-05', '57880905', '20:17:00');
+VALUES (718, 4, '2028-05-30', '57880905', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (719, 1, '2016-12-28', '57771229', '19:13:00');
+VALUES (719, 1, '2017-09-20', '57771229', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (719, 2, '2020-08-02', '57810802', '19:41:00');
+VALUES (719, 2, '2021-04-14', '57810802', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (719, 3, '2024-02-05', '57850205', '17:21:00');
+VALUES (719, 3, '2024-11-06', '57850205', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (719, 4, '2027-09-06', '57880906', '20:18:00');
+VALUES (719, 4, '2028-05-31', '57880906', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (720, 1, '2017-01-01', '57780101', '19:11:00');
+VALUES (720, 1, '2017-09-21', '57780101', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (720, 2, '2020-08-03', '57810803', '19:42:00');
+VALUES (720, 2, '2021-04-15', '57810803', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (720, 3, '2024-02-06', '57850206', '17:20:00');
+VALUES (720, 3, '2024-11-07', '57850206', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (720, 4, '2027-09-07', '57880907', '20:18:00');
+VALUES (720, 4, '2028-06-01', '57880907', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (721, 1, '2017-01-04', '57780104', '19:07:00');
+VALUES (721, 1, '2017-09-24', '57780104', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (721, 2, '2020-08-06', '57810806', '19:44:00');
+VALUES (721, 2, '2021-04-18', '57810806', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (721, 3, '2024-02-09', '57850209', '17:18:00');
+VALUES (721, 3, '2024-11-10', '57850209', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (721, 4, '2027-09-10', '57880910', '20:20:00');
+VALUES (721, 4, '2028-06-04', '57880910', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (722, 1, '2017-01-05', '57780105', '19:06:00');
+VALUES (722, 1, '2017-09-25', '57780105', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (722, 2, '2020-08-07', '57810807', '19:45:00');
+VALUES (722, 2, '2021-04-19', '57810807', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (722, 3, '2024-02-10', '57850210', '17:17:00');
+VALUES (722, 3, '2024-11-11', '57850210', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (722, 4, '2027-09-11', '57880911', '20:21:00');
+VALUES (722, 4, '2028-06-05', '57880911', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (723, 1, '2017-01-06', '57780106', '19:05:00');
+VALUES (723, 1, '2017-09-26', '57780106', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (723, 2, '2020-08-08', '57810808', '19:46:00');
+VALUES (723, 2, '2021-04-20', '57810808', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (723, 3, '2024-02-11', '57850211', '17:17:00');
+VALUES (723, 3, '2024-11-12', '57850211', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (723, 4, '2027-09-12', '57880912', '20:21:00');
+VALUES (723, 4, '2028-06-06', '57880912', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (724, 1, '2017-01-07', '57780107', '19:03:00');
+VALUES (724, 1, '2017-09-27', '57780107', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (724, 2, '2020-08-09', '57810809', '19:47:00');
+VALUES (724, 2, '2021-04-21', '57810809', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (724, 3, '2024-02-12', '57850212', '17:16:00');
+VALUES (724, 3, '2024-11-13', '57850212', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (724, 4, '2027-09-13', '57880913', '20:22:00');
+VALUES (724, 4, '2028-06-07', '57880913', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (725, 1, '2017-01-08', '57780108', '19:02:00');
+VALUES (725, 1, '2017-09-28', '57780108', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (725, 2, '2020-08-10', '57810810', '19:47:00');
+VALUES (725, 2, '2021-04-22', '57810810', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (725, 3, '2024-02-13', '57850213', '17:16:00');
+VALUES (725, 3, '2024-11-14', '57850213', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (725, 4, '2027-09-14', '57880914', '20:22:00');
+VALUES (725, 4, '2028-06-08', '57880914', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (726, 1, '2017-01-11', '57780111', '18:58:00');
+VALUES (726, 1, '2017-10-01', '57780111', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (726, 2, '2020-08-13', '57810813', '19:50:00');
+VALUES (726, 2, '2021-04-25', '57810813', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (726, 3, '2024-02-16', '57850216', '17:15:00');
+VALUES (726, 3, '2024-11-17', '57850216', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (726, 4, '2027-09-17', '57880917', '20:24:00');
+VALUES (726, 4, '2028-06-11', '57880917', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (727, 1, '2017-01-12', '57780112', '18:57:00');
+VALUES (727, 1, '2017-10-02', '57780112', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (727, 2, '2020-08-14', '57810814', '19:51:00');
+VALUES (727, 2, '2021-04-26', '57810814', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (727, 3, '2024-02-17', '57850217', '17:14:00');
+VALUES (727, 3, '2024-11-18', '57850217', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (727, 4, '2027-09-18', '57880918', '20:24:00');
+VALUES (727, 4, '2028-06-12', '57880918', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (728, 1, '2017-01-13', '57780113', '18:55:00');
+VALUES (728, 1, '2017-10-03', '57780113', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (728, 2, '2020-08-15', '57810815', '19:51:00');
+VALUES (728, 2, '2021-04-27', '57810815', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (728, 3, '2024-02-18', '57850218', '17:14:00');
+VALUES (728, 3, '2024-11-19', '57850218', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (728, 4, '2027-09-19', '57880919', '20:24:00');
+VALUES (728, 4, '2028-06-13', '57880919', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (729, 1, '2017-01-14', '57780114', '18:54:00');
+VALUES (729, 1, '2017-10-04', '57780114', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (729, 2, '2020-08-16', '57810816', '19:52:00');
+VALUES (729, 2, '2021-04-28', '57810816', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (729, 3, '2024-02-19', '57850219', '17:14:00');
+VALUES (729, 3, '2024-11-20', '57850219', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (729, 4, '2027-09-20', '57880920', '20:25:00');
+VALUES (729, 4, '2028-06-14', '57880920', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (730, 1, '2017-01-15', '57780115', '18:53:00');
+VALUES (730, 1, '2017-10-05', '57780115', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (730, 2, '2020-08-17', '57810817', '19:53:00');
+VALUES (730, 2, '2021-04-29', '57810817', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (730, 3, '2024-02-20', '57850220', '17:13:00');
+VALUES (730, 3, '2024-11-21', '57850220', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (730, 4, '2027-09-21', '57880921', '20:25:00');
+VALUES (730, 4, '2028-06-15', '57880921', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (731, 1, '2017-01-18', '57780118', '18:49:00');
+VALUES (731, 1, '2017-10-08', '57780118', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (731, 2, '2020-08-20', '57810820', '19:55:00');
+VALUES (731, 2, '2021-05-02', '57810820', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (731, 3, '2024-02-23', '57850223', '17:12:00');
+VALUES (731, 3, '2024-11-24', '57850223', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (731, 4, '2027-09-24', '57880924', '20:26:00');
+VALUES (731, 4, '2028-06-18', '57880924', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (732, 1, '2017-01-19', '57780119', '18:48:00');
+VALUES (732, 1, '2017-10-09', '57780119', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (732, 2, '2020-08-21', '57810821', '19:56:00');
+VALUES (732, 2, '2021-05-03', '57810821', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (732, 3, '2024-02-24', '57850224', '17:12:00');
+VALUES (732, 3, '2024-11-25', '57850224', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (732, 4, '2027-09-25', '57880925', '20:26:00');
+VALUES (732, 4, '2028-06-19', '57880925', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (733, 1, '2017-01-20', '57780120', '18:47:00');
+VALUES (733, 1, '2017-10-10', '57780120', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (733, 2, '2020-08-22', '57810822', '19:57:00');
+VALUES (733, 2, '2021-05-04', '57810822', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (733, 3, '2024-02-25', '57850225', '17:12:00');
+VALUES (733, 3, '2024-11-26', '57850225', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (733, 4, '2027-09-26', '57880926', '20:27:00');
+VALUES (733, 4, '2028-06-20', '57880926', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (734, 1, '2017-01-21', '57780121', '18:46:00');
+VALUES (734, 1, '2017-10-11', '57780121', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (734, 2, '2020-08-23', '57810823', '19:58:00');
+VALUES (734, 2, '2021-05-05', '57810823', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (734, 3, '2024-02-26', '57850226', '17:12:00');
+VALUES (734, 3, '2024-11-27', '57850226', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (734, 4, '2027-09-27', '57880927', '20:27:00');
+VALUES (734, 4, '2028-06-21', '57880927', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (735, 1, '2017-01-22', '57780122', '18:44:00');
+VALUES (735, 1, '2017-10-12', '57780122', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (735, 2, '2020-08-24', '57810824', '19:59:00');
+VALUES (735, 2, '2021-05-06', '57810824', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (735, 3, '2024-02-27', '57850227', '17:12:00');
+VALUES (735, 3, '2024-11-28', '57850227', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (735, 4, '2027-09-28', '57880928', '20:27:00');
+VALUES (735, 4, '2028-06-22', '57880928', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (736, 1, '2017-01-25', '57780125', '18:41:00');
+VALUES (736, 1, '2017-10-15', '57780125', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (736, 2, '2020-08-27', '57810827', '20:01:00');
+VALUES (736, 2, '2021-05-09', '57810827', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (736, 3, '2024-02-28', '57850230', '17:12:00');
+VALUES (736, 3, '2024-12-01', '57850230', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (736, 4, '2027-10-01', '57881001', '20:27:00');
+VALUES (736, 4, '2028-06-25', '57881001', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (737, 1, '2017-01-26', '57780126', '18:40:00');
+VALUES (737, 1, '2017-10-16', '57780126', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (737, 2, '2020-08-28', '57810828', '20:02:00');
+VALUES (737, 2, '2021-05-10', '57810828', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (737, 3, '2024-03-01', '57850301', '17:12:00');
+VALUES (737, 3, '2024-12-02', '57850301', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (737, 4, '2027-10-02', '57881002', '20:27:00');
+VALUES (737, 4, '2028-06-26', '57881002', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (738, 1, '2017-01-27', '57780127', '18:39:00');
+VALUES (738, 1, '2017-10-17', '57780127', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (738, 2, '2020-08-28', '57810829', '20:03:00');
+VALUES (738, 2, '2021-05-11', '57810829', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (738, 3, '2024-03-02', '57850302', '17:12:00');
+VALUES (738, 3, '2024-12-03', '57850302', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (738, 4, '2027-10-03', '57881003', '20:28:00');
+VALUES (738, 4, '2028-06-27', '57881003', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (739, 1, '2017-01-28', '57780128', '18:38:00');
+VALUES (739, 1, '2017-10-18', '57780128', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (739, 2, '2020-09-01', '57810901', '20:03:00');
+VALUES (739, 2, '2021-05-12', '57810901', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (739, 3, '2024-03-03', '57850303', '17:12:00');
+VALUES (739, 3, '2024-12-04', '57850303', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (739, 4, '2027-10-04', '57881004', '20:28:00');
+VALUES (739, 4, '2028-06-28', '57881004', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (740, 1, '2017-01-28', '57780129', '18:37:00');
+VALUES (740, 1, '2017-10-19', '57780129', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (740, 2, '2020-09-02', '57810902', '20:04:00');
+VALUES (740, 2, '2021-05-13', '57810902', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (740, 3, '2024-03-04', '57850304', '17:12:00');
+VALUES (740, 3, '2024-12-05', '57850304', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (740, 4, '2027-10-05', '57881005', '20:28:00');
+VALUES (740, 4, '2028-06-29', '57881005', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (741, 1, '2017-02-02', '57780202', '18:34:00');
+VALUES (741, 1, '2017-10-22', '57780202', '18:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (741, 2, '2020-09-05', '57810905', '20:07:00');
+VALUES (741, 2, '2021-05-16', '57810905', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (741, 3, '2024-03-07', '57850307', '17:12:00');
+VALUES (741, 3, '2024-12-08', '57850307', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (741, 4, '2027-10-08', '57881008', '20:27:00');
+VALUES (741, 4, '2028-07-02', '57881008', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (742, 1, '2017-02-03', '57780203', '18:33:00');
+VALUES (742, 1, '2017-10-23', '57780203', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (742, 2, '2020-09-06', '57810906', '20:07:00');
+VALUES (742, 2, '2021-05-17', '57810906', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (742, 3, '2024-03-08', '57850308', '17:12:00');
+VALUES (742, 3, '2024-12-09', '57850308', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (742, 4, '2027-10-09', '57881009', '20:27:00');
+VALUES (742, 4, '2028-07-03', '57881009', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (743, 1, '2017-02-04', '57780204', '18:32:00');
+VALUES (743, 1, '2017-10-24', '57780204', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (743, 2, '2020-09-07', '57810907', '20:08:00');
+VALUES (743, 2, '2021-05-18', '57810907', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (743, 3, '2024-03-09', '57850309', '17:12:00');
+VALUES (743, 3, '2024-12-10', '57850309', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (743, 4, '2027-10-10', '57881010', '20:27:00');
+VALUES (743, 4, '2028-07-04', '57881010', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (744, 1, '2017-02-05', '57780205', '18:31:00');
+VALUES (744, 1, '2017-10-25', '57780205', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (744, 2, '2020-09-08', '57810908', '20:09:00');
+VALUES (744, 2, '2021-05-19', '57810908', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (744, 3, '2024-03-10', '57850310', '17:13:00');
+VALUES (744, 3, '2024-12-11', '57850310', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (744, 4, '2027-10-11', '57881011', '20:27:00');
+VALUES (744, 4, '2028-07-05', '57881011', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (745, 1, '2017-02-06', '57780206', '18:30:00');
+VALUES (745, 1, '2017-10-26', '57780206', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (745, 2, '2020-09-09', '57810909', '20:10:00');
+VALUES (745, 2, '2021-05-20', '57810909', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (745, 3, '2024-03-11', '57850311', '17:13:00');
+VALUES (745, 3, '2024-12-12', '57850311', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (745, 4, '2027-10-12', '57881012', '20:27:00');
+VALUES (745, 4, '2028-07-06', '57881012', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (746, 1, '2017-02-09', '57780209', '17:27:00');
+VALUES (746, 1, '2017-10-29', '57780209', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (746, 2, '2020-09-12', '57810912', '20:12:00');
+VALUES (746, 2, '2021-05-23', '57810912', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (746, 3, '2024-03-14', '57850314', '17:14:00');
+VALUES (746, 3, '2024-12-15', '57850314', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (746, 4, '2027-10-15', '57881015', '20:26:00');
+VALUES (746, 4, '2028-07-09', '57881015', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (747, 1, '2017-02-10', '57780210', '17:26:00');
+VALUES (747, 1, '2017-10-30', '57780210', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (747, 2, '2020-09-13', '57810913', '20:13:00');
+VALUES (747, 2, '2021-05-24', '57810913', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (747, 3, '2024-03-15', '57850315', '17:14:00');
+VALUES (747, 3, '2024-12-16', '57850315', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (747, 4, '2027-10-16', '57881016', '20:26:00');
+VALUES (747, 4, '2028-07-10', '57881016', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (748, 1, '2017-02-11', '57780211', '17:25:00');
+VALUES (748, 1, '2017-10-31', '57780211', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (748, 2, '2020-09-14', '57810914', '20:13:00');
+VALUES (748, 2, '2021-05-25', '57810914', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (748, 3, '2024-03-16', '57850316', '17:15:00');
+VALUES (748, 3, '2024-12-17', '57850316', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (748, 4, '2027-10-17', '57881017', '20:25:00');
+VALUES (748, 4, '2028-07-11', '57881017', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (749, 1, '2017-02-12', '57780212', '17:24:00');
+VALUES (749, 1, '2017-11-01', '57780212', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (749, 2, '2020-09-15', '57810915', '20:14:00');
+VALUES (749, 2, '2021-05-26', '57810915', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (749, 3, '2024-03-17', '57850317', '17:15:00');
+VALUES (749, 3, '2024-12-18', '57850317', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (749, 4, '2027-10-18', '57881018', '20:25:00');
+VALUES (749, 4, '2028-07-12', '57881018', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (750, 1, '2017-02-13', '57780213', '17:24:00');
+VALUES (750, 1, '2017-11-02', '57780213', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (750, 2, '2020-09-16', '57810916', '20:15:00');
+VALUES (750, 2, '2021-05-27', '57810916', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (750, 3, '2024-03-18', '57850318', '17:15:00');
+VALUES (750, 3, '2024-12-19', '57850318', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (750, 4, '2027-10-19', '57881019', '20:25:00');
+VALUES (750, 4, '2028-07-13', '57881019', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (751, 1, '2017-02-16', '57780216', '17:21:00');
+VALUES (751, 1, '2017-11-05', '57780216', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (751, 2, '2020-09-19', '57810919', '20:17:00');
+VALUES (751, 2, '2021-05-30', '57810919', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (751, 3, '2024-03-21', '57850321', '17:17:00');
+VALUES (751, 3, '2024-12-22', '57850321', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (751, 4, '2027-10-22', '57881022', '20:23:00');
+VALUES (751, 4, '2028-07-16', '57881022', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (752, 1, '2017-02-17', '57780217', '17:21:00');
+VALUES (752, 1, '2017-11-06', '57780217', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (752, 2, '2020-09-20', '57810920', '20:17:00');
+VALUES (752, 2, '2021-05-31', '57810920', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (752, 3, '2024-03-22', '57850322', '17:17:00');
+VALUES (752, 3, '2024-12-23', '57850322', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (752, 4, '2027-10-23', '57881023', '20:23:00');
+VALUES (752, 4, '2028-07-17', '57881023', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (753, 1, '2017-02-18', '57780218', '17:20:00');
+VALUES (753, 1, '2017-11-07', '57780218', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (753, 2, '2020-09-21', '57810921', '20:18:00');
+VALUES (753, 2, '2021-06-01', '57810921', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (753, 3, '2024-03-23', '57850323', '17:18:00');
+VALUES (753, 3, '2024-12-24', '57850323', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (753, 4, '2027-10-24', '57881024', '20:22:00');
+VALUES (753, 4, '2028-07-18', '57881024', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (754, 1, '2017-02-19', '57780219', '17:19:00');
+VALUES (754, 1, '2017-11-08', '57780219', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (754, 2, '2020-09-22', '57810922', '20:19:00');
+VALUES (754, 2, '2021-06-02', '57810922', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (754, 3, '2024-03-24', '57850324', '17:18:00');
+VALUES (754, 3, '2024-12-25', '57850324', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (754, 4, '2027-10-25', '57881025', '20:22:00');
+VALUES (754, 4, '2028-07-19', '57881025', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (755, 1, '2017-02-20', '57780220', '17:19:00');
+VALUES (755, 1, '2017-11-09', '57780220', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (755, 2, '2020-09-23', '57810923', '20:19:00');
+VALUES (755, 2, '2021-06-03', '57810923', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (755, 3, '2024-03-25', '57850325', '17:19:00');
+VALUES (755, 3, '2024-12-26', '57850325', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (755, 4, '2027-10-26', '57881026', '20:21:00');
+VALUES (755, 4, '2028-07-20', '57881026', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (756, 1, '2017-02-23', '57780223', '17:17:00');
+VALUES (756, 1, '2017-11-12', '57780223', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (756, 2, '2020-09-26', '57810926', '20:21:00');
+VALUES (756, 2, '2021-06-06', '57810926', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (756, 3, '2024-03-28', '57850328', '17:21:00');
+VALUES (756, 3, '2024-12-29', '57850328', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (756, 4, '2027-10-28', '57881029', '20:19:00');
+VALUES (756, 4, '2028-07-23', '57881029', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (757, 1, '2017-02-24', '57780224', '17:17:00');
+VALUES (757, 1, '2017-11-13', '57780224', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (757, 2, '2020-09-27', '57810927', '20:22:00');
+VALUES (757, 2, '2021-06-07', '57810927', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (757, 3, '2024-03-28', '57850329', '17:21:00');
+VALUES (757, 3, '2024-12-30', '57850329', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (757, 4, '2027-11-01', '57881101', '20:19:00');
+VALUES (757, 4, '2028-07-24', '57881101', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (758, 1, '2017-02-25', '57780225', '17:16:00');
+VALUES (758, 1, '2017-11-14', '57780225', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (758, 2, '2020-09-28', '57810928', '20:22:00');
+VALUES (758, 2, '2021-06-08', '57810928', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (758, 3, '2024-03-28', '57850330', '17:22:00');
+VALUES (758, 3, '2024-12-31', '57850330', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (758, 4, '2027-11-02', '57881102', '20:18:00');
+VALUES (758, 4, '2028-07-25', '57881102', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (759, 1, '2017-02-26', '57780226', '17:16:00');
+VALUES (759, 1, '2017-11-15', '57780226', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (759, 2, '2020-09-28', '57810929', '20:23:00');
+VALUES (759, 2, '2021-06-09', '57810929', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (759, 3, '2024-04-01', '57850401', '17:23:00');
+VALUES (759, 3, '2025-01-01', '57850401', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (759, 4, '2027-11-03', '57881103', '20:17:00');
+VALUES (759, 4, '2028-07-26', '57881103', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (760, 1, '2017-02-27', '57780227', '17:15:00');
+VALUES (760, 1, '2017-11-16', '57780227', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (760, 2, '2020-09-28', '57810930', '20:23:00');
+VALUES (760, 2, '2021-06-10', '57810930', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (760, 3, '2024-04-02', '57850402', '17:23:00');
+VALUES (760, 3, '2025-01-02', '57850402', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (760, 4, '2027-11-04', '57881104', '20:17:00');
+VALUES (760, 4, '2028-07-27', '57881104', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (761, 1, '2017-03-01', '57780301', '17:14:00');
+VALUES (761, 1, '2017-11-19', '57780301', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (761, 2, '2020-10-03', '57811003', '20:24:00');
+VALUES (761, 2, '2021-06-13', '57811003', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (761, 3, '2024-04-05', '57850405', '17:26:00');
+VALUES (761, 3, '2025-01-05', '57850405', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (761, 4, '2027-11-07', '57881107', '20:14:00');
+VALUES (761, 4, '2028-07-30', '57881107', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (762, 1, '2017-03-02', '57780302', '17:14:00');
+VALUES (762, 1, '2017-11-20', '57780302', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (762, 2, '2020-10-04', '57811004', '20:25:00');
+VALUES (762, 2, '2021-06-14', '57811004', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (762, 3, '2024-04-06', '57850406', '17:26:00');
+VALUES (762, 3, '2025-01-06', '57850406', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (762, 4, '2027-11-08', '57881108', '20:13:00');
+VALUES (762, 4, '2028-07-31', '57881108', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (763, 1, '2017-03-03', '57780303', '17:13:00');
+VALUES (763, 1, '2017-11-21', '57780303', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (763, 2, '2020-10-05', '57811005', '20:25:00');
+VALUES (763, 2, '2021-06-15', '57811005', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (763, 3, '2024-04-07', '57850407', '17:27:00');
+VALUES (763, 3, '2025-01-07', '57850407', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (763, 4, '2027-11-09', '57881109', '20:13:00');
+VALUES (763, 4, '2028-08-01', '57881109', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (764, 1, '2017-03-04', '57780304', '17:13:00');
+VALUES (764, 1, '2017-11-22', '57780304', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (764, 2, '2020-10-06', '57811006', '20:25:00');
+VALUES (764, 2, '2021-06-16', '57811006', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (764, 3, '2024-04-08', '57850408', '17:28:00');
+VALUES (764, 3, '2025-01-08', '57850408', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (764, 4, '2027-11-10', '57881110', '20:12:00');
+VALUES (764, 4, '2028-08-02', '57881110', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (765, 1, '2017-03-05', '57780305', '17:13:00');
+VALUES (765, 1, '2017-11-23', '57780305', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (765, 2, '2020-10-07', '57811007', '20:26:00');
+VALUES (765, 2, '2021-06-17', '57811007', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (765, 3, '2024-04-09', '57850409', '17:29:00');
+VALUES (765, 3, '2025-01-09', '57850409', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (765, 4, '2027-11-11', '57881111', '20:11:00');
+VALUES (765, 4, '2028-08-03', '57881111', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (766, 1, '2017-03-08', '57780308', '17:12:00');
+VALUES (766, 1, '2017-11-26', '57780308', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (766, 2, '2020-10-10', '57811010', '20:27:00');
+VALUES (766, 2, '2021-06-20', '57811010', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (766, 3, '2024-04-12', '57850412', '17:31:00');
+VALUES (766, 3, '2025-01-12', '57850412', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (766, 4, '2027-11-14', '57881114', '20:08:00');
+VALUES (766, 4, '2028-08-06', '57881114', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (767, 1, '2017-03-09', '57780309', '17:12:00');
+VALUES (767, 1, '2017-11-27', '57780309', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (767, 2, '2020-10-11', '57811011', '20:27:00');
+VALUES (767, 2, '2021-06-21', '57811011', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (767, 3, '2024-04-13', '57850413', '17:32:00');
+VALUES (767, 3, '2025-01-13', '57850413', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (767, 4, '2027-11-15', '57881115', '20:07:00');
+VALUES (767, 4, '2028-08-07', '57881115', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (768, 1, '2017-03-10', '57780310', '17:12:00');
+VALUES (768, 1, '2017-11-28', '57780310', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (768, 2, '2020-10-12', '57811012', '20:27:00');
+VALUES (768, 2, '2021-06-22', '57811012', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (768, 3, '2024-04-14', '57850414', '17:33:00');
+VALUES (768, 3, '2025-01-14', '57850414', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (768, 4, '2027-11-16', '57881116', '20:06:00');
+VALUES (768, 4, '2028-08-08', '57881116', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (769, 1, '2017-03-11', '57780311', '17:12:00');
+VALUES (769, 1, '2017-11-29', '57780311', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (769, 2, '2020-10-13', '57811013', '20:27:00');
+VALUES (769, 2, '2021-06-23', '57811013', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (769, 3, '2024-04-15', '57850415', '17:33:00');
+VALUES (769, 3, '2025-01-15', '57850415', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (769, 4, '2027-11-17', '57881117', '20:05:00');
+VALUES (769, 4, '2028-08-09', '57881117', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (770, 1, '2017-03-12', '57780312', '17:12:00');
+VALUES (770, 1, '2017-11-30', '57780312', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (770, 2, '2020-10-14', '57811014', '20:27:00');
+VALUES (770, 2, '2021-06-24', '57811014', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (770, 3, '2024-04-16', '57850416', '17:34:00');
+VALUES (770, 3, '2025-01-16', '57850416', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (770, 4, '2027-11-18', '57881118', '20:04:00');
+VALUES (770, 4, '2028-08-10', '57881118', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (771, 1, '2017-03-15', '57780315', '17:12:00');
+VALUES (771, 1, '2017-12-03', '57780315', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (771, 2, '2020-10-17', '57811017', '20:28:00');
+VALUES (771, 2, '2021-06-27', '57811017', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (771, 3, '2024-04-19', '57850419', '17:37:00');
+VALUES (771, 3, '2025-01-19', '57850419', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (771, 4, '2027-11-21', '57881121', '20:01:00');
+VALUES (771, 4, '2028-08-13', '57881121', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (772, 1, '2017-03-16', '57780316', '17:12:00');
+VALUES (772, 1, '2017-12-04', '57780316', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (772, 2, '2020-10-18', '57811018', '20:28:00');
+VALUES (772, 2, '2021-06-28', '57811018', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (772, 3, '2024-04-20', '57850420', '17:38:00');
+VALUES (772, 3, '2025-01-20', '57850420', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (772, 4, '2027-11-22', '57881122', '20:00:00');
+VALUES (772, 4, '2028-08-14', '57881122', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (773, 1, '2017-03-17', '57780317', '17:12:00');
+VALUES (773, 1, '2017-12-05', '57780317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (773, 2, '2020-10-19', '57811019', '20:28:00');
+VALUES (773, 2, '2021-06-29', '57811019', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (773, 3, '2024-04-21', '57850421', '17:39:00');
+VALUES (773, 3, '2025-01-21', '57850421', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (773, 4, '2027-11-23', '57881123', '19:59:00');
+VALUES (773, 4, '2028-08-15', '57881123', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (774, 1, '2017-03-18', '57780318', '17:12:00');
+VALUES (774, 1, '2017-12-06', '57780318', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (774, 2, '2020-10-20', '57811020', '20:28:00');
+VALUES (774, 2, '2021-06-30', '57811020', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (774, 3, '2024-04-22', '57850422', '17:39:00');
+VALUES (774, 3, '2025-01-22', '57850422', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (774, 4, '2027-11-24', '57881124', '19:58:00');
+VALUES (774, 4, '2028-08-16', '57881124', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (775, 1, '2017-03-19', '57780319', '17:12:00');
+VALUES (775, 1, '2017-12-07', '57780319', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (775, 2, '2020-10-21', '57811021', '20:28:00');
+VALUES (775, 2, '2021-07-01', '57811021', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (775, 3, '2024-04-23', '57850423', '17:40:00');
+VALUES (775, 3, '2025-01-23', '57850423', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (775, 4, '2027-11-25', '57881125', '19:56:00');
+VALUES (775, 4, '2028-08-17', '57881125', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (776, 1, '2017-03-22', '57780322', '17:12:00');
+VALUES (776, 1, '2017-12-10', '57780322', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (776, 2, '2020-10-24', '57811024', '20:27:00');
+VALUES (776, 2, '2021-07-04', '57811024', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (776, 3, '2024-04-26', '57850426', '17:43:00');
+VALUES (776, 3, '2025-01-26', '57850426', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (776, 4, '2027-11-28', '57881128', '19:53:00');
+VALUES (776, 4, '2028-08-20', '57881128', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (777, 1, '2017-03-23', '57780323', '17:13:00');
+VALUES (777, 1, '2017-12-11', '57780323', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (777, 2, '2020-10-25', '57811025', '20:27:00');
+VALUES (777, 2, '2021-07-05', '57811025', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (777, 3, '2024-04-27', '57850427', '17:44:00');
+VALUES (777, 3, '2025-01-27', '57850427', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (777, 4, '2027-11-28', '57881129', '19:52:00');
+VALUES (777, 4, '2028-08-21', '57881129', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (778, 1, '2017-03-24', '57780324', '17:13:00');
+VALUES (778, 1, '2017-12-12', '57780324', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (778, 2, '2020-10-26', '57811026', '20:27:00');
+VALUES (778, 2, '2021-07-06', '57811026', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (778, 3, '2024-04-28', '57850428', '17:45:00');
+VALUES (778, 3, '2025-01-28', '57850428', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (778, 4, '2027-11-28', '57881130', '19:51:00');
+VALUES (778, 4, '2028-08-22', '57881130', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (779, 1, '2017-03-25', '57780325', '17:13:00');
+VALUES (779, 1, '2017-12-13', '57780325', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (779, 2, '2020-10-27', '57811027', '20:27:00');
+VALUES (779, 2, '2021-07-07', '57811027', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (779, 3, '2024-04-28', '57850429', '17:45:00');
+VALUES (779, 3, '2025-01-29', '57850429', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (779, 4, '2027-12-01', '57881201', '19:49:00');
+VALUES (779, 4, '2028-08-23', '57881201', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (780, 1, '2017-03-26', '57780326', '17:13:00');
+VALUES (780, 1, '2017-12-14', '57780326', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (780, 2, '2020-10-28', '57811028', '20:26:00');
+VALUES (780, 2, '2021-07-08', '57811028', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (780, 3, '2024-05-01', '57850501', '17:46:00');
+VALUES (780, 3, '2025-01-30', '57850501', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (780, 4, '2027-12-02', '57881202', '19:48:00');
+VALUES (780, 4, '2028-08-24', '57881202', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (781, 1, '2017-03-28', '57780329', '17:15:00');
+VALUES (781, 1, '2017-12-17', '57780329', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (781, 2, '2020-11-02', '57811102', '20:25:00');
+VALUES (781, 2, '2021-07-11', '57811102', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (781, 3, '2024-05-04', '57850504', '17:49:00');
+VALUES (781, 3, '2025-02-02', '57850504', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (781, 4, '2027-12-05', '57881205', '19:44:00');
+VALUES (781, 4, '2028-08-27', '57881205', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (782, 1, '2017-03-28', '57780330', '17:15:00');
+VALUES (782, 1, '2017-12-18', '57780330', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (782, 2, '2020-11-03', '57811103', '20:25:00');
+VALUES (782, 2, '2021-07-12', '57811103', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (782, 3, '2024-05-05', '57850505', '17:50:00');
+VALUES (782, 3, '2025-02-03', '57850505', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (782, 4, '2027-12-06', '57881206', '19:43:00');
+VALUES (782, 4, '2028-08-28', '57881206', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (783, 1, '2017-04-01', '57780401', '17:15:00');
+VALUES (783, 1, '2017-12-19', '57780401', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (783, 2, '2020-11-04', '57811104', '20:25:00');
+VALUES (783, 2, '2021-07-13', '57811104', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (783, 3, '2024-05-06', '57850506', '17:51:00');
+VALUES (783, 3, '2025-02-04', '57850506', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (783, 4, '2027-12-07', '57881207', '19:42:00');
+VALUES (783, 4, '2028-08-29', '57881207', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (784, 1, '2017-04-02', '57780402', '17:16:00');
+VALUES (784, 1, '2017-12-20', '57780402', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (784, 2, '2020-11-05', '57811105', '20:24:00');
+VALUES (784, 2, '2021-07-14', '57811105', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (784, 3, '2024-05-07', '57850507', '17:51:00');
+VALUES (784, 3, '2025-02-05', '57850507', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (784, 4, '2027-12-08', '57881208', '19:41:00');
+VALUES (784, 4, '2028-08-30', '57881208', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (785, 1, '2017-04-03', '57780403', '17:16:00');
+VALUES (785, 1, '2017-12-21', '57780403', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (785, 2, '2020-11-06', '57811106', '20:24:00');
+VALUES (785, 2, '2021-07-15', '57811106', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (785, 3, '2024-05-08', '57850508', '17:52:00');
+VALUES (785, 3, '2025-02-06', '57850508', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (785, 4, '2027-12-09', '57881209', '19:39:00');
+VALUES (785, 4, '2028-08-31', '57881209', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (786, 1, '2017-04-06', '57780406', '17:18:00');
+VALUES (786, 1, '2017-12-24', '57780406', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (786, 2, '2020-11-09', '57811109', '20:22:00');
+VALUES (786, 2, '2021-07-18', '57811109', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (786, 3, '2024-05-11', '57850511', '17:55:00');
+VALUES (786, 3, '2025-02-09', '57850511', '17:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (786, 4, '2027-12-12', '57881212', '19:35:00');
+VALUES (786, 4, '2028-09-03', '57881212', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (787, 1, '2017-04-07', '57780407', '17:18:00');
+VALUES (787, 1, '2017-12-25', '57780407', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (787, 2, '2020-11-10', '57811110', '20:22:00');
+VALUES (787, 2, '2021-07-19', '57811110', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (787, 3, '2024-05-12', '57850512', '17:56:00');
+VALUES (787, 3, '2025-02-10', '57850512', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (787, 4, '2027-12-13', '57881213', '19:34:00');
+VALUES (787, 4, '2028-09-04', '57881213', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (788, 1, '2017-04-08', '57780408', '17:19:00');
+VALUES (788, 1, '2017-12-26', '57780408', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (788, 2, '2020-11-11', '57811111', '20:21:00');
+VALUES (788, 2, '2021-07-20', '57811111', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (788, 3, '2024-05-13', '57850513', '17:56:00');
+VALUES (788, 3, '2025-02-11', '57850513', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (788, 4, '2027-12-14', '57881214', '19:33:00');
+VALUES (788, 4, '2028-09-05', '57881214', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (789, 1, '2017-04-09', '57780409', '17:19:00');
+VALUES (789, 1, '2017-12-27', '57780409', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (789, 2, '2020-11-12', '57811112', '20:21:00');
+VALUES (789, 2, '2021-07-21', '57811112', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (789, 3, '2024-05-14', '57850514', '17:57:00');
+VALUES (789, 3, '2025-02-12', '57850514', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (789, 4, '2027-12-15', '57881215', '19:31:00');
+VALUES (789, 4, '2028-09-06', '57881215', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (790, 1, '2017-04-10', '57780410', '17:20:00');
+VALUES (790, 1, '2017-12-28', '57780410', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (790, 2, '2020-11-13', '57811113', '20:20:00');
+VALUES (790, 2, '2021-07-22', '57811113', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (790, 3, '2024-05-15', '57850515', '17:58:00');
+VALUES (790, 3, '2025-02-13', '57850515', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (790, 4, '2027-12-16', '57881216', '19:30:00');
+VALUES (790, 4, '2028-09-07', '57881216', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (791, 1, '2017-04-13', '57780413', '17:22:00');
+VALUES (791, 1, '2017-12-31', '57780413', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (791, 2, '2020-11-16', '57811116', '20:18:00');
+VALUES (791, 2, '2021-07-25', '57811116', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (791, 3, '2024-05-18', '57850518', '18:00:00');
+VALUES (791, 3, '2025-02-16', '57850518', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (791, 4, '2027-12-19', '57881219', '19:26:00');
+VALUES (791, 4, '2028-09-10', '57881219', '19:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (792, 1, '2017-04-14', '57780414', '17:23:00');
+VALUES (792, 1, '2018-01-01', '57780414', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (792, 2, '2020-11-17', '57811117', '20:17:00');
+VALUES (792, 2, '2021-07-26', '57811117', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (792, 3, '2024-05-19', '57850519', '18:01:00');
+VALUES (792, 3, '2025-02-17', '57850519', '18:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (792, 4, '2027-12-20', '57881220', '19:25:00');
+VALUES (792, 4, '2028-09-11', '57881220', '19:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (793, 1, '2017-04-15', '57780415', '17:23:00');
+VALUES (793, 1, '2018-01-02', '57780415', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (793, 2, '2020-11-18', '57811118', '20:17:00');
+VALUES (793, 2, '2021-07-27', '57811118', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (793, 3, '2024-05-20', '57850520', '18:02:00');
+VALUES (793, 3, '2025-02-18', '57850520', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (793, 4, '2027-12-21', '57881221', '19:23:00');
+VALUES (793, 4, '2028-09-12', '57881221', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (794, 1, '2017-04-16', '57780416', '17:24:00');
+VALUES (794, 1, '2018-01-03', '57780416', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (794, 2, '2020-11-19', '57811119', '20:16:00');
+VALUES (794, 2, '2021-07-28', '57811119', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (794, 3, '2024-05-21', '57850521', '18:03:00');
+VALUES (794, 3, '2025-02-19', '57850521', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (794, 4, '2027-12-22', '57881222', '19:22:00');
+VALUES (794, 4, '2028-09-13', '57881222', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (795, 1, '2017-04-17', '57780417', '17:25:00');
+VALUES (795, 1, '2018-01-04', '57780417', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (795, 2, '2020-11-20', '57811120', '20:15:00');
+VALUES (795, 2, '2021-07-29', '57811120', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (795, 3, '2024-05-22', '57850522', '18:04:00');
+VALUES (795, 3, '2025-02-20', '57850522', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (795, 4, '2027-12-23', '57881223', '19:21:00');
+VALUES (795, 4, '2028-09-14', '57881223', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (796, 1, '2017-04-20', '57780420', '17:27:00');
+VALUES (796, 1, '2018-01-07', '57780420', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (796, 2, '2020-11-23', '57811123', '20:13:00');
+VALUES (796, 2, '2021-08-01', '57811123', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (796, 3, '2024-05-25', '57850525', '18:06:00');
+VALUES (796, 3, '2025-02-23', '57850525', '18:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (796, 4, '2027-12-26', '57881226', '19:16:00');
+VALUES (796, 4, '2028-09-17', '57881226', '19:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (797, 1, '2017-04-21', '57780421', '17:28:00');
+VALUES (797, 1, '2018-01-08', '57780421', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (797, 2, '2020-11-24', '57811124', '20:12:00');
+VALUES (797, 2, '2021-08-02', '57811124', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (797, 3, '2024-05-26', '57850526', '18:07:00');
+VALUES (797, 3, '2025-02-24', '57850526', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (797, 4, '2027-12-27', '57881227', '19:15:00');
+VALUES (797, 4, '2028-09-18', '57881227', '19:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (798, 1, '2017-04-22', '57780422', '17:28:00');
+VALUES (798, 1, '2018-01-09', '57780422', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (798, 2, '2020-11-25', '57811125', '20:11:00');
+VALUES (798, 2, '2021-08-03', '57811125', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (798, 3, '2024-05-27', '57850527', '18:07:00');
+VALUES (798, 3, '2025-02-25', '57850527', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (798, 4, '2027-12-28', '57881228', '19:14:00');
+VALUES (798, 4, '2028-09-19', '57881228', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (799, 1, '2017-04-23', '57780423', '17:29:00');
+VALUES (799, 1, '2018-01-10', '57780423', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (799, 2, '2020-11-26', '57811126', '20:10:00');
+VALUES (799, 2, '2021-08-04', '57811126', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (799, 3, '2024-05-28', '57850528', '18:08:00');
+VALUES (799, 3, '2025-02-26', '57850528', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (799, 4, '2027-12-28', '57881229', '19:12:00');
+VALUES (799, 4, '2028-09-20', '57881229', '19:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (800, 1, '2017-04-24', '57780424', '17:30:00');
+VALUES (800, 1, '2018-01-11', '57780424', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (800, 2, '2020-11-27', '57811127', '20:09:00');
+VALUES (800, 2, '2021-08-05', '57811127', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (800, 3, '2024-05-28', '57850529', '18:09:00');
+VALUES (800, 3, '2025-02-27', '57850529', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (800, 4, '2028-01-01', '57890101', '19:11:00');
+VALUES (800, 4, '2028-09-21', '57890101', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (801, 1, '2017-04-27', '57780427', '17:32:00');
+VALUES (801, 1, '2018-01-14', '57780427', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (801, 2, '2020-11-28', '57811130', '20:06:00');
+VALUES (801, 2, '2021-08-08', '57811130', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (801, 3, '2024-06-02', '57850602', '18:11:00');
+VALUES (801, 3, '2025-03-02', '57850602', '18:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (801, 4, '2028-01-04', '57890104', '19:07:00');
+VALUES (801, 4, '2028-09-24', '57890104', '19:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (802, 1, '2017-04-28', '57780428', '17:33:00');
+VALUES (802, 1, '2018-01-15', '57780428', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (802, 2, '2020-12-01', '57811201', '20:05:00');
+VALUES (802, 2, '2021-08-09', '57811201', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (802, 3, '2024-06-03', '57850603', '18:12:00');
+VALUES (802, 3, '2025-03-03', '57850603', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (802, 4, '2028-01-05', '57890105', '19:06:00');
+VALUES (802, 4, '2028-09-25', '57890105', '19:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (803, 1, '2017-04-28', '57780429', '17:34:00');
+VALUES (803, 1, '2018-01-16', '57780429', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (803, 2, '2020-12-02', '57811202', '20:04:00');
+VALUES (803, 2, '2021-08-10', '57811202', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (803, 3, '2024-06-04', '57850604', '18:13:00');
+VALUES (803, 3, '2025-03-04', '57850604', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (803, 4, '2028-01-06', '57890106', '19:04:00');
+VALUES (803, 4, '2028-09-26', '57890106', '19:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (804, 1, '2017-05-01', '57780501', '17:35:00');
+VALUES (804, 1, '2018-01-17', '57780501', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (804, 2, '2020-12-03', '57811203', '20:03:00');
+VALUES (804, 2, '2021-08-11', '57811203', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (804, 3, '2024-06-05', '57850605', '18:13:00');
+VALUES (804, 3, '2025-03-05', '57850605', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (804, 4, '2028-01-07', '57890107', '19:03:00');
+VALUES (804, 4, '2028-09-27', '57890107', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (805, 1, '2017-05-02', '57780502', '17:36:00');
+VALUES (805, 1, '2018-01-18', '57780502', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (805, 2, '2020-12-04', '57811204', '20:02:00');
+VALUES (805, 2, '2021-08-12', '57811204', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (805, 3, '2024-06-06', '57850606', '18:14:00');
+VALUES (805, 3, '2025-03-06', '57850606', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (805, 4, '2028-01-08', '57890108', '19:02:00');
+VALUES (805, 4, '2028-09-28', '57890108', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (806, 1, '2017-05-05', '57780505', '17:38:00');
+VALUES (806, 1, '2018-01-21', '57780505', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (806, 2, '2020-12-07', '57811207', '19:59:00');
+VALUES (806, 2, '2021-08-15', '57811207', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (806, 3, '2024-06-09', '57850609', '18:16:00');
+VALUES (806, 3, '2025-03-09', '57850609', '18:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (806, 4, '2028-01-11', '57890111', '18:58:00');
+VALUES (806, 4, '2028-10-01', '57890111', '18:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (807, 1, '2017-05-06', '57780506', '17:39:00');
+VALUES (807, 1, '2018-01-22', '57780506', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (807, 2, '2020-12-08', '57811208', '19:58:00');
+VALUES (807, 2, '2021-08-16', '57811208', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (807, 3, '2024-06-10', '57850610', '18:17:00');
+VALUES (807, 3, '2025-03-10', '57850610', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (807, 4, '2028-01-12', '57890112', '18:57:00');
+VALUES (807, 4, '2028-10-02', '57890112', '18:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (808, 1, '2017-05-07', '57780507', '17:40:00');
+VALUES (808, 1, '2018-01-23', '57780507', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (808, 2, '2020-12-09', '57811209', '19:57:00');
+VALUES (808, 2, '2021-08-17', '57811209', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (808, 3, '2024-06-11', '57850611', '18:17:00');
+VALUES (808, 3, '2025-03-11', '57850611', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (808, 4, '2028-01-13', '57890113', '18:55:00');
+VALUES (808, 4, '2028-10-03', '57890113', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (809, 1, '2017-05-08', '57780508', '17:41:00');
+VALUES (809, 1, '2018-01-24', '57780508', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (809, 2, '2020-12-10', '57811210', '19:55:00');
+VALUES (809, 2, '2021-08-18', '57811210', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (809, 3, '2024-06-12', '57850612', '18:18:00');
+VALUES (809, 3, '2025-03-12', '57850612', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (809, 4, '2028-01-14', '57890114', '18:54:00');
+VALUES (809, 4, '2028-10-04', '57890114', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (810, 1, '2017-05-09', '57780509', '17:42:00');
+VALUES (810, 1, '2018-01-25', '57780509', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (810, 2, '2020-12-11', '57811211', '19:54:00');
+VALUES (810, 2, '2021-08-19', '57811211', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (810, 3, '2024-06-13', '57850613', '18:19:00');
+VALUES (810, 3, '2025-03-13', '57850613', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (810, 4, '2028-01-15', '57890115', '18:53:00');
+VALUES (810, 4, '2028-10-05', '57890115', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (811, 1, '2017-05-12', '57780512', '17:44:00');
+VALUES (811, 1, '2018-01-28', '57780512', '17:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (811, 2, '2020-12-14', '57811214', '19:51:00');
+VALUES (811, 2, '2021-08-22', '57811214', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (811, 3, '2024-06-16', '57850616', '18:21:00');
+VALUES (811, 3, '2025-03-16', '57850616', '18:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (811, 4, '2028-01-18', '57890118', '18:49:00');
+VALUES (811, 4, '2028-10-08', '57890118', '18:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (812, 1, '2017-05-13', '57780513', '17:45:00');
+VALUES (812, 1, '2018-01-29', '57780513', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (812, 2, '2020-12-15', '57811215', '19:50:00');
+VALUES (812, 2, '2021-08-23', '57811215', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (812, 3, '2024-06-17', '57850617', '18:22:00');
+VALUES (812, 3, '2025-03-17', '57850617', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (812, 4, '2028-01-19', '57890119', '18:48:00');
+VALUES (812, 4, '2028-10-09', '57890119', '18:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (813, 1, '2017-05-14', '57780514', '17:46:00');
+VALUES (813, 1, '2018-01-30', '57780514', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (813, 2, '2020-12-16', '57811216', '19:48:00');
+VALUES (813, 2, '2021-08-24', '57811216', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (813, 3, '2024-06-18', '57850618', '18:22:00');
+VALUES (813, 3, '2025-03-18', '57850618', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (813, 4, '2028-01-20', '57890120', '18:47:00');
+VALUES (813, 4, '2028-10-10', '57890120', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (814, 1, '2017-05-15', '57780515', '17:47:00');
+VALUES (814, 1, '2018-01-31', '57780515', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (814, 2, '2020-12-17', '57811217', '19:47:00');
+VALUES (814, 2, '2021-08-25', '57811217', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (814, 3, '2024-06-19', '57850619', '18:23:00');
+VALUES (814, 3, '2025-03-19', '57850619', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (814, 4, '2028-01-21', '57890121', '18:45:00');
+VALUES (814, 4, '2028-10-11', '57890121', '18:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (815, 1, '2017-05-16', '57780516', '17:48:00');
+VALUES (815, 1, '2018-02-01', '57780516', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (815, 2, '2020-12-18', '57811218', '19:46:00');
+VALUES (815, 2, '2021-08-26', '57811218', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (815, 3, '2024-06-20', '57850620', '18:24:00');
+VALUES (815, 3, '2025-03-20', '57850620', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (815, 4, '2028-01-22', '57890122', '18:44:00');
+VALUES (815, 4, '2028-10-12', '57890122', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (816, 1, '2017-05-19', '57780519', '17:50:00');
+VALUES (816, 1, '2018-02-04', '57780519', '17:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (816, 2, '2020-12-21', '57811221', '19:42:00');
+VALUES (816, 2, '2021-08-29', '57811221', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (816, 3, '2024-06-23', '57850623', '18:26:00');
+VALUES (816, 3, '2025-03-23', '57850623', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (816, 4, '2028-01-25', '57890125', '18:41:00');
+VALUES (816, 4, '2028-10-15', '57890125', '18:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (817, 1, '2017-05-20', '57780520', '17:51:00');
+VALUES (817, 1, '2018-02-05', '57780520', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (817, 2, '2020-12-22', '57811222', '19:41:00');
+VALUES (817, 2, '2021-08-30', '57811222', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (817, 3, '2024-06-24', '57850624', '18:26:00');
+VALUES (817, 3, '2025-03-24', '57850624', '18:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (817, 4, '2028-01-26', '57890126', '18:40:00');
+VALUES (817, 4, '2028-10-16', '57890126', '18:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (818, 1, '2017-05-21', '57780521', '17:52:00');
+VALUES (818, 1, '2018-02-06', '57780521', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (818, 2, '2020-12-23', '57811223', '19:39:00');
+VALUES (818, 2, '2021-08-31', '57811223', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (818, 3, '2024-06-25', '57850625', '18:27:00');
+VALUES (818, 3, '2025-03-25', '57850625', '18:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (818, 4, '2028-01-27', '57890127', '18:39:00');
+VALUES (818, 4, '2028-10-17', '57890127', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (819, 1, '2017-05-22', '57780522', '17:53:00');
+VALUES (819, 1, '2018-02-07', '57780522', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (819, 2, '2020-12-24', '57811224', '19:38:00');
+VALUES (819, 2, '2021-09-01', '57811224', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (819, 3, '2024-06-26', '57850626', '18:28:00');
+VALUES (819, 3, '2025-03-26', '57850626', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (819, 4, '2028-01-28', '57890128', '18:38:00');
+VALUES (819, 4, '2028-10-18', '57890128', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (820, 1, '2017-05-23', '57780523', '17:54:00');
+VALUES (820, 1, '2018-02-08', '57780523', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (820, 2, '2020-12-25', '57811225', '19:37:00');
+VALUES (820, 2, '2021-09-02', '57811225', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (820, 3, '2024-06-27', '57850627', '18:28:00');
+VALUES (820, 3, '2025-03-27', '57850627', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (820, 4, '2028-01-28', '57890129', '18:36:00');
+VALUES (820, 4, '2028-10-19', '57890129', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (821, 1, '2017-05-26', '57780526', '17:56:00');
+VALUES (821, 1, '2018-02-11', '57780526', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (821, 2, '2020-12-28', '57811228', '19:33:00');
+VALUES (821, 2, '2021-09-05', '57811228', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (821, 3, '2024-07-01', '57850701', '19:30:00');
+VALUES (821, 3, '2025-03-30', '57850701', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (821, 4, '2028-02-02', '57890202', '18:33:00');
+VALUES (821, 4, '2028-10-22', '57890202', '18:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (822, 1, '2017-05-27', '57780527', '17:57:00');
+VALUES (822, 1, '2018-02-12', '57780527', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (822, 2, '2020-12-28', '57811229', '19:32:00');
+VALUES (822, 2, '2021-09-06', '57811229', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (822, 3, '2024-07-02', '57850702', '19:31:00');
+VALUES (822, 3, '2025-03-31', '57850702', '19:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (822, 4, '2028-02-03', '57890203', '18:32:00');
+VALUES (822, 4, '2028-10-23', '57890203', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (823, 1, '2017-05-28', '57780528', '17:58:00');
+VALUES (823, 1, '2018-02-13', '57780528', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (823, 2, '2021-01-01', '57820101', '19:30:00');
+VALUES (823, 2, '2021-09-07', '57820101', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (823, 3, '2024-07-03', '57850703', '19:32:00');
+VALUES (823, 3, '2025-04-01', '57850703', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (823, 4, '2028-02-04', '57890204', '18:31:00');
+VALUES (823, 4, '2028-10-24', '57890204', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (824, 1, '2017-05-28', '57780529', '17:59:00');
+VALUES (824, 1, '2018-02-14', '57780529', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (824, 2, '2021-01-02', '57820102', '19:29:00');
+VALUES (824, 2, '2021-09-08', '57820102', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (824, 3, '2024-07-04', '57850704', '19:33:00');
+VALUES (824, 3, '2025-04-02', '57850704', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (824, 4, '2028-02-05', '57890205', '18:30:00');
+VALUES (824, 4, '2028-10-25', '57890205', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (825, 1, '2017-05-28', '57780530', '18:00:00');
+VALUES (825, 1, '2018-02-15', '57780530', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (825, 2, '2021-01-03', '57820103', '19:28:00');
+VALUES (825, 2, '2021-09-09', '57820103', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (825, 3, '2024-07-05', '57850705', '19:33:00');
+VALUES (825, 3, '2025-04-03', '57850705', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (825, 4, '2028-02-06', '57890206', '18:29:00');
+VALUES (825, 4, '2028-10-26', '57890206', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (826, 1, '2017-06-03', '57780603', '18:02:00');
+VALUES (826, 1, '2018-02-18', '57780603', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (826, 2, '2021-01-06', '57820106', '19:23:00');
+VALUES (826, 2, '2021-09-12', '57820106', '19:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (826, 3, '2024-07-08', '57850708', '19:35:00');
+VALUES (826, 3, '2025-04-06', '57850708', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (826, 4, '2028-02-09', '57890209', '17:27:00');
+VALUES (826, 4, '2028-10-29', '57890209', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (827, 1, '2017-06-04', '57780604', '18:03:00');
+VALUES (827, 1, '2018-02-19', '57780604', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (827, 2, '2021-01-07', '57820107', '19:22:00');
+VALUES (827, 2, '2021-09-13', '57820107', '19:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (827, 3, '2024-07-09', '57850709', '19:36:00');
+VALUES (827, 3, '2025-04-07', '57850709', '19:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (827, 4, '2028-02-10', '57890210', '17:26:00');
+VALUES (827, 4, '2028-10-30', '57890210', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (828, 1, '2017-06-05', '57780605', '18:03:00');
+VALUES (828, 1, '2018-02-20', '57780605', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (828, 2, '2021-01-08', '57820108', '19:21:00');
+VALUES (828, 2, '2021-09-14', '57820108', '19:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (828, 3, '2024-07-10', '57850710', '19:37:00');
+VALUES (828, 3, '2025-04-08', '57850710', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (828, 4, '2028-02-11', '57890211', '17:25:00');
+VALUES (828, 4, '2028-10-31', '57890211', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (829, 1, '2017-06-06', '57780606', '18:04:00');
+VALUES (829, 1, '2018-02-21', '57780606', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (829, 2, '2021-01-09', '57820109', '19:19:00');
+VALUES (829, 2, '2021-09-15', '57820109', '19:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (829, 3, '2024-07-11', '57850711', '19:38:00');
+VALUES (829, 3, '2025-04-09', '57850711', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (829, 4, '2028-02-12', '57890212', '17:24:00');
+VALUES (829, 4, '2028-11-01', '57890212', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (830, 1, '2017-06-07', '57780607', '18:05:00');
+VALUES (830, 1, '2018-02-22', '57780607', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (830, 2, '2021-01-10', '57820110', '19:18:00');
+VALUES (830, 2, '2021-09-16', '57820110', '19:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (830, 3, '2024-07-12', '57850712', '19:38:00');
+VALUES (830, 3, '2025-04-10', '57850712', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (830, 4, '2028-02-13', '57890213', '17:24:00');
+VALUES (830, 4, '2028-11-02', '57890213', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (831, 1, '2017-06-10', '57780610', '18:07:00');
+VALUES (831, 1, '2018-02-25', '57780610', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (831, 2, '2021-01-13', '57820113', '19:14:00');
+VALUES (831, 2, '2021-09-19', '57820113', '19:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (831, 3, '2024-07-15', '57850715', '19:41:00');
+VALUES (831, 3, '2025-04-13', '57850715', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (831, 4, '2028-02-16', '57890216', '17:21:00');
+VALUES (831, 4, '2028-11-05', '57890216', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (832, 1, '2017-06-11', '57780611', '18:08:00');
+VALUES (832, 1, '2018-02-26', '57780611', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (832, 2, '2021-01-14', '57820114', '19:13:00');
+VALUES (832, 2, '2021-09-20', '57820114', '19:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (832, 3, '2024-07-16', '57850716', '19:41:00');
+VALUES (832, 3, '2025-04-14', '57850716', '19:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (832, 4, '2028-02-17', '57890217', '17:21:00');
+VALUES (832, 4, '2028-11-06', '57890217', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (833, 1, '2017-06-12', '57780612', '18:09:00');
+VALUES (833, 1, '2018-02-27', '57780612', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (833, 2, '2021-01-15', '57820115', '19:11:00');
+VALUES (833, 2, '2021-09-21', '57820115', '19:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (833, 3, '2024-07-17', '57850717', '19:42:00');
+VALUES (833, 3, '2025-04-15', '57850717', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (833, 4, '2028-02-18', '57890218', '17:20:00');
+VALUES (833, 4, '2028-11-07', '57890218', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (834, 1, '2017-06-13', '57780613', '18:09:00');
+VALUES (834, 1, '2018-02-28', '57780613', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (834, 2, '2021-01-16', '57820116', '19:10:00');
+VALUES (834, 2, '2021-09-22', '57820116', '19:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (834, 3, '2024-07-18', '57850718', '19:43:00');
+VALUES (834, 3, '2025-04-16', '57850718', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (834, 4, '2028-02-19', '57890219', '17:19:00');
+VALUES (834, 4, '2028-11-08', '57890219', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (835, 1, '2017-06-14', '57780614', '18:10:00');
+VALUES (835, 1, '2018-03-01', '57780614', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (835, 2, '2021-01-17', '57820117', '19:09:00');
+VALUES (835, 2, '2021-09-23', '57820117', '19:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (835, 3, '2024-07-19', '57850719', '19:44:00');
+VALUES (835, 3, '2025-04-17', '57850719', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (835, 4, '2028-02-20', '57890220', '17:19:00');
+VALUES (835, 4, '2028-11-09', '57890220', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (836, 1, '2017-06-17', '57780617', '18:12:00');
+VALUES (836, 1, '2018-03-04', '57780617', '18:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (836, 2, '2021-01-20', '57820120', '19:05:00');
+VALUES (836, 2, '2021-09-26', '57820120', '19:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (836, 3, '2024-07-22', '57850722', '19:46:00');
+VALUES (836, 3, '2025-04-20', '57850722', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (836, 4, '2028-02-23', '57890223', '17:17:00');
+VALUES (836, 4, '2028-11-12', '57890223', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (837, 1, '2017-06-18', '57780618', '18:13:00');
+VALUES (837, 1, '2018-03-05', '57780618', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (837, 2, '2021-01-21', '57820121', '19:03:00');
+VALUES (837, 2, '2021-09-27', '57820121', '19:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (837, 3, '2024-07-23', '57850723', '19:47:00');
+VALUES (837, 3, '2025-04-21', '57850723', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (837, 4, '2028-02-24', '57890224', '17:16:00');
+VALUES (837, 4, '2028-11-13', '57890224', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (838, 1, '2017-06-19', '57780619', '18:14:00');
+VALUES (838, 1, '2018-03-06', '57780619', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (838, 2, '2021-01-22', '57820122', '19:02:00');
+VALUES (838, 2, '2021-09-28', '57820122', '19:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (838, 3, '2024-07-24', '57850724', '19:47:00');
+VALUES (838, 3, '2025-04-22', '57850724', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (838, 4, '2028-02-25', '57890225', '17:16:00');
+VALUES (838, 4, '2028-11-14', '57890225', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (839, 1, '2017-06-20', '57780620', '18:15:00');
+VALUES (839, 1, '2018-03-07', '57780620', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (839, 2, '2021-01-23', '57820123', '19:01:00');
+VALUES (839, 2, '2021-09-29', '57820123', '19:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (839, 3, '2024-07-25', '57850725', '19:48:00');
+VALUES (839, 3, '2025-04-23', '57850725', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (839, 4, '2028-02-26', '57890226', '17:15:00');
+VALUES (839, 4, '2028-11-15', '57890226', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (840, 1, '2017-06-21', '57780621', '18:15:00');
+VALUES (840, 1, '2018-03-08', '57780621', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (840, 2, '2021-01-24', '57820124', '18:59:00');
+VALUES (840, 2, '2021-09-30', '57820124', '18:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (840, 3, '2024-07-26', '57850726', '19:49:00');
+VALUES (840, 3, '2025-04-24', '57850726', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (840, 4, '2028-02-27', '57890227', '17:15:00');
+VALUES (840, 4, '2028-11-16', '57890227', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (841, 1, '2017-06-24', '57780624', '18:17:00');
+VALUES (841, 1, '2018-03-11', '57780624', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (841, 2, '2021-01-27', '57820127', '18:55:00');
+VALUES (841, 2, '2021-10-03', '57820127', '18:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (841, 3, '2024-07-28', '57850729', '19:51:00');
+VALUES (841, 3, '2025-04-27', '57850729', '19:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (841, 4, '2028-03-01', '57890301', '17:14:00');
+VALUES (841, 4, '2028-11-19', '57890301', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (842, 1, '2017-06-25', '57780625', '18:18:00');
+VALUES (842, 1, '2018-03-12', '57780625', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (842, 2, '2021-01-28', '57820128', '18:54:00');
+VALUES (842, 2, '2021-10-04', '57820128', '18:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (842, 3, '2024-07-28', '57850730', '19:52:00');
+VALUES (842, 3, '2025-04-28', '57850730', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (842, 4, '2028-03-02', '57890302', '17:14:00');
+VALUES (842, 4, '2028-11-20', '57890302', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (843, 1, '2017-06-26', '57780626', '18:19:00');
+VALUES (843, 1, '2018-03-13', '57780626', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (843, 2, '2021-01-28', '57820129', '18:53:00');
+VALUES (843, 2, '2021-10-05', '57820129', '18:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (843, 3, '2024-08-01', '57850801', '19:53:00');
+VALUES (843, 3, '2025-04-29', '57850801', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (843, 4, '2028-03-03', '57890303', '17:13:00');
+VALUES (843, 4, '2028-11-21', '57890303', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (844, 1, '2017-06-27', '57780627', '18:19:00');
+VALUES (844, 1, '2018-03-14', '57780627', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (844, 2, '2021-01-28', '57820130', '18:52:00');
+VALUES (844, 2, '2021-10-06', '57820130', '18:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (844, 3, '2024-08-02', '57850802', '19:54:00');
+VALUES (844, 3, '2025-04-30', '57850802', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (844, 4, '2028-03-04', '57890304', '17:13:00');
+VALUES (844, 4, '2028-11-22', '57890304', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (845, 1, '2017-06-28', '57780628', '18:20:00');
+VALUES (845, 1, '2018-03-15', '57780628', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (845, 2, '2021-02-01', '57820201', '18:50:00');
+VALUES (845, 2, '2021-10-07', '57820201', '18:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (845, 3, '2024-08-03', '57850803', '19:55:00');
+VALUES (845, 3, '2025-05-01', '57850803', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (845, 4, '2028-03-05', '57890305', '17:13:00');
+VALUES (845, 4, '2028-11-23', '57890305', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (846, 1, '2017-07-02', '57780702', '18:22:00');
+VALUES (846, 1, '2018-03-18', '57780702', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (846, 2, '2021-02-04', '57820204', '18:47:00');
+VALUES (846, 2, '2021-10-10', '57820204', '18:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (846, 3, '2024-08-06', '57850806', '19:57:00');
+VALUES (846, 3, '2025-05-04', '57850806', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (846, 4, '2028-03-08', '57890308', '17:12:00');
+VALUES (846, 4, '2028-11-26', '57890308', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (847, 1, '2017-07-03', '57780703', '18:23:00');
+VALUES (847, 1, '2018-03-19', '57780703', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (847, 2, '2021-02-05', '57820205', '18:46:00');
+VALUES (847, 2, '2021-10-11', '57820205', '18:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (847, 3, '2024-08-07', '57850807', '19:58:00');
+VALUES (847, 3, '2025-05-05', '57850807', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (847, 4, '2028-03-09', '57890309', '17:12:00');
+VALUES (847, 4, '2028-11-27', '57890309', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (848, 1, '2017-07-04', '57780704', '18:24:00');
+VALUES (848, 1, '2018-03-20', '57780704', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (848, 2, '2021-02-06', '57820206', '18:44:00');
+VALUES (848, 2, '2021-10-12', '57820206', '18:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (848, 3, '2024-08-08', '57850808', '19:59:00');
+VALUES (848, 3, '2025-05-06', '57850808', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (848, 4, '2028-03-10', '57890310', '17:12:00');
+VALUES (848, 4, '2028-11-28', '57890310', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (849, 1, '2017-07-05', '57780705', '18:24:00');
+VALUES (849, 1, '2018-03-21', '57780705', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (849, 2, '2021-02-07', '57820207', '18:43:00');
+VALUES (849, 2, '2021-10-13', '57820207', '18:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (849, 3, '2024-08-09', '57850809', '19:59:00');
+VALUES (849, 3, '2025-05-07', '57850809', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (849, 4, '2028-03-11', '57890311', '17:12:00');
+VALUES (849, 4, '2028-11-29', '57890311', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (850, 1, '2017-07-06', '57780706', '18:25:00');
+VALUES (850, 1, '2018-03-22', '57780706', '18:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (850, 2, '2021-02-08', '57820208', '18:42:00');
+VALUES (850, 2, '2021-10-14', '57820208', '18:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (850, 3, '2024-08-10', '57850810', '20:00:00');
+VALUES (850, 3, '2025-05-08', '57850810', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (850, 4, '2028-03-12', '57890312', '17:12:00');
+VALUES (850, 4, '2028-11-30', '57890312', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (851, 1, '2017-07-09', '57780709', '19:27:00');
+VALUES (851, 1, '2018-03-25', '57780709', '19:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (851, 2, '2021-02-11', '57820211', '18:39:00');
+VALUES (851, 2, '2021-10-17', '57820211', '18:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (851, 3, '2024-08-13', '57850813', '20:03:00');
+VALUES (851, 3, '2025-05-11', '57850813', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (851, 4, '2028-03-15', '57890315', '17:12:00');
+VALUES (851, 4, '2028-12-03', '57890315', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (852, 1, '2017-07-10', '57780710', '19:28:00');
+VALUES (852, 1, '2018-03-26', '57780710', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (852, 2, '2021-02-12', '57820212', '18:38:00');
+VALUES (852, 2, '2021-10-18', '57820212', '18:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (852, 3, '2024-08-14', '57850814', '20:03:00');
+VALUES (852, 3, '2025-05-12', '57850814', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (852, 4, '2028-03-16', '57890316', '17:12:00');
+VALUES (852, 4, '2028-12-04', '57890316', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (853, 1, '2017-07-11', '57780711', '19:28:00');
+VALUES (853, 1, '2018-03-27', '57780711', '19:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (853, 2, '2021-02-13', '57820213', '18:37:00');
+VALUES (853, 2, '2021-10-19', '57820213', '18:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (853, 3, '2024-08-15', '57850815', '20:04:00');
+VALUES (853, 3, '2025-05-13', '57850815', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (853, 4, '2028-03-17', '57890317', '17:12:00');
+VALUES (853, 4, '2028-12-05', '57890317', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (854, 1, '2017-07-12', '57780712', '19:29:00');
+VALUES (854, 1, '2018-03-28', '57780712', '19:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (854, 2, '2021-02-14', '57820214', '18:36:00');
+VALUES (854, 2, '2021-10-20', '57820214', '18:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (854, 3, '2024-08-16', '57850816', '20:05:00');
+VALUES (854, 3, '2025-05-14', '57850816', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (854, 4, '2028-03-18', '57890318', '17:12:00');
+VALUES (854, 4, '2028-12-06', '57890318', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (855, 1, '2017-07-13', '57780713', '19:30:00');
+VALUES (855, 1, '2018-03-29', '57780713', '19:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (855, 2, '2021-02-15', '57820215', '18:35:00');
+VALUES (855, 2, '2021-10-21', '57820215', '18:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (855, 3, '2024-08-17', '57850817', '20:06:00');
+VALUES (855, 3, '2025-05-15', '57850817', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (855, 4, '2028-03-19', '57890319', '17:12:00');
+VALUES (855, 4, '2028-12-07', '57890319', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (856, 1, '2017-07-16', '57780716', '19:32:00');
+VALUES (856, 1, '2018-04-01', '57780716', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (856, 2, '2021-02-18', '57820218', '18:32:00');
+VALUES (856, 2, '2021-10-24', '57820218', '18:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (856, 3, '2024-08-20', '57850820', '20:08:00');
+VALUES (856, 3, '2025-05-18', '57850820', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (856, 4, '2028-03-22', '57890322', '17:12:00');
+VALUES (856, 4, '2028-12-10', '57890322', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (857, 1, '2017-07-17', '57780717', '19:32:00');
+VALUES (857, 1, '2018-04-02', '57780717', '19:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (857, 2, '2021-02-19', '57820219', '18:31:00');
+VALUES (857, 2, '2021-10-25', '57820219', '18:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (857, 3, '2024-08-21', '57850821', '20:09:00');
+VALUES (857, 3, '2025-05-19', '57850821', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (857, 4, '2028-03-23', '57890323', '17:13:00');
+VALUES (857, 4, '2028-12-11', '57890323', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (858, 1, '2017-07-18', '57780718', '19:33:00');
+VALUES (858, 1, '2018-04-03', '57780718', '19:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (858, 2, '2021-02-20', '57820220', '18:30:00');
+VALUES (858, 2, '2021-10-26', '57820220', '18:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (858, 3, '2024-08-22', '57850822', '20:10:00');
+VALUES (858, 3, '2025-05-20', '57850822', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (858, 4, '2028-03-24', '57890324', '17:13:00');
+VALUES (858, 4, '2028-12-12', '57890324', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (859, 1, '2017-07-19', '57780719', '19:34:00');
+VALUES (859, 1, '2018-04-04', '57780719', '19:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (859, 2, '2021-02-21', '57820221', '18:29:00');
+VALUES (859, 2, '2021-10-27', '57820221', '18:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (859, 3, '2024-08-23', '57850823', '20:10:00');
+VALUES (859, 3, '2025-05-21', '57850823', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (859, 4, '2028-03-25', '57890325', '17:13:00');
+VALUES (859, 4, '2028-12-13', '57890325', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (860, 1, '2017-07-20', '57780720', '19:35:00');
+VALUES (860, 1, '2018-04-05', '57780720', '19:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (860, 2, '2021-02-22', '57820222', '18:28:00');
+VALUES (860, 2, '2021-10-28', '57820222', '18:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (860, 3, '2024-08-24', '57850824', '20:11:00');
+VALUES (860, 3, '2025-05-22', '57850824', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (860, 4, '2028-03-26', '57890326', '17:14:00');
+VALUES (860, 4, '2028-12-14', '57890326', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (861, 1, '2017-07-23', '57780723', '19:37:00');
+VALUES (861, 1, '2018-04-08', '57780723', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (861, 2, '2021-02-25', '57820225', '17:25:00');
+VALUES (861, 2, '2021-10-31', '57820225', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (861, 3, '2024-08-27', '57850827', '20:13:00');
+VALUES (861, 3, '2025-05-25', '57850827', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (861, 4, '2028-03-28', '57890329', '17:15:00');
+VALUES (861, 4, '2028-12-17', '57890329', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (862, 1, '2017-07-24', '57780724', '19:37:00');
+VALUES (862, 1, '2018-04-09', '57780724', '19:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (862, 2, '2021-02-26', '57820226', '17:24:00');
+VALUES (862, 2, '2021-11-01', '57820226', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (862, 3, '2024-08-28', '57850828', '20:14:00');
+VALUES (862, 3, '2025-05-26', '57850828', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (862, 4, '2028-03-28', '57890330', '17:15:00');
+VALUES (862, 4, '2028-12-18', '57890330', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (863, 1, '2017-07-25', '57780725', '19:38:00');
+VALUES (863, 1, '2018-04-10', '57780725', '19:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (863, 2, '2021-02-27', '57820227', '17:24:00');
+VALUES (863, 2, '2021-11-02', '57820227', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (863, 3, '2024-08-28', '57850829', '20:15:00');
+VALUES (863, 3, '2025-05-27', '57850829', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (863, 4, '2028-04-01', '57890401', '17:15:00');
+VALUES (863, 4, '2028-12-19', '57890401', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (864, 1, '2017-07-26', '57780726', '19:39:00');
+VALUES (864, 1, '2018-04-11', '57780726', '19:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (864, 2, '2021-02-28', '57820228', '17:23:00');
+VALUES (864, 2, '2021-11-03', '57820228', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (864, 3, '2024-09-01', '57850901', '20:16:00');
+VALUES (864, 3, '2025-05-28', '57850901', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (864, 4, '2028-04-02', '57890402', '17:16:00');
+VALUES (864, 4, '2028-12-20', '57890402', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (865, 1, '2017-07-27', '57780727', '19:40:00');
+VALUES (865, 1, '2018-04-12', '57780727', '19:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (865, 2, '2021-02-28', '57820229', '17:22:00');
+VALUES (865, 2, '2021-11-04', '57820229', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (865, 3, '2024-09-02', '57850902', '20:16:00');
+VALUES (865, 3, '2025-05-29', '57850902', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (865, 4, '2028-04-03', '57890403', '17:16:00');
+VALUES (865, 4, '2028-12-21', '57890403', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (866, 1, '2017-07-28', '57780730', '19:42:00');
+VALUES (866, 1, '2018-04-15', '57780730', '19:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (866, 2, '2021-03-03', '57820303', '17:20:00');
+VALUES (866, 2, '2021-11-07', '57820303', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (866, 3, '2024-09-05', '57850905', '20:18:00');
+VALUES (866, 3, '2025-06-01', '57850905', '20:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (866, 4, '2028-04-06', '57890406', '17:18:00');
+VALUES (866, 4, '2028-12-24', '57890406', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (867, 1, '2017-08-01', '57780801', '19:43:00');
+VALUES (867, 1, '2018-04-16', '57780801', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (867, 2, '2021-03-04', '57820304', '17:19:00');
+VALUES (867, 2, '2021-11-08', '57820304', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (867, 3, '2024-09-06', '57850906', '20:19:00');
+VALUES (867, 3, '2025-06-02', '57850906', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (867, 4, '2028-04-07', '57890407', '17:18:00');
+VALUES (867, 4, '2028-12-25', '57890407', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (868, 1, '2017-08-02', '57780802', '19:43:00');
+VALUES (868, 1, '2018-04-17', '57780802', '19:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (868, 2, '2021-03-05', '57820305', '17:19:00');
+VALUES (868, 2, '2021-11-09', '57820305', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (868, 3, '2024-09-07', '57850907', '20:19:00');
+VALUES (868, 3, '2025-06-03', '57850907', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (868, 4, '2028-04-08', '57890408', '17:19:00');
+VALUES (868, 4, '2028-12-26', '57890408', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (869, 1, '2017-08-03', '57780803', '19:44:00');
+VALUES (869, 1, '2018-04-18', '57780803', '19:44:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (869, 2, '2021-03-06', '57820306', '17:18:00');
+VALUES (869, 2, '2021-11-10', '57820306', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (869, 3, '2024-09-08', '57850908', '20:20:00');
+VALUES (869, 3, '2025-06-04', '57850908', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (869, 4, '2028-04-09', '57890409', '17:20:00');
+VALUES (869, 4, '2028-12-27', '57890409', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (870, 1, '2017-08-04', '57780804', '19:45:00');
+VALUES (870, 1, '2018-04-19', '57780804', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (870, 2, '2021-03-07', '57820307', '17:18:00');
+VALUES (870, 2, '2021-11-11', '57820307', '17:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (870, 3, '2024-09-09', '57850909', '20:20:00');
+VALUES (870, 3, '2025-06-05', '57850909', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (870, 4, '2028-04-10', '57890410', '17:20:00');
+VALUES (870, 4, '2028-12-28', '57890410', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (871, 1, '2017-08-07', '57780807', '19:47:00');
+VALUES (871, 1, '2018-04-22', '57780807', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (871, 2, '2021-03-10', '57820310', '17:16:00');
+VALUES (871, 2, '2021-11-14', '57820310', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (871, 3, '2024-09-12', '57850912', '20:22:00');
+VALUES (871, 3, '2025-06-08', '57850912', '20:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (871, 4, '2028-04-13', '57890413', '17:22:00');
+VALUES (871, 4, '2028-12-31', '57890413', '17:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (872, 1, '2017-08-08', '57780808', '19:48:00');
+VALUES (872, 1, '2018-04-23', '57780808', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (872, 2, '2021-03-11', '57820311', '17:16:00');
+VALUES (872, 2, '2021-11-15', '57820311', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (872, 3, '2024-09-13', '57850913', '20:23:00');
+VALUES (872, 3, '2025-06-09', '57850913', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (872, 4, '2028-04-14', '57890414', '17:23:00');
+VALUES (872, 4, '2029-01-01', '57890414', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (873, 1, '2017-08-09', '57780809', '19:49:00');
+VALUES (873, 1, '2018-04-24', '57780809', '19:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (873, 2, '2021-03-12', '57820312', '17:15:00');
+VALUES (873, 2, '2021-11-16', '57820312', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (873, 3, '2024-09-14', '57850914', '20:23:00');
+VALUES (873, 3, '2025-06-10', '57850914', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (873, 4, '2028-04-15', '57890415', '17:23:00');
+VALUES (873, 4, '2029-01-02', '57890415', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (874, 1, '2017-08-10', '57780810', '19:50:00');
+VALUES (874, 1, '2018-04-25', '57780810', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (874, 2, '2021-03-13', '57820313', '17:15:00');
+VALUES (874, 2, '2021-11-17', '57820313', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (874, 3, '2024-09-15', '57850915', '20:24:00');
+VALUES (874, 3, '2025-06-11', '57850915', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (874, 4, '2028-04-16', '57890416', '17:24:00');
+VALUES (874, 4, '2029-01-03', '57890416', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (875, 1, '2017-08-11', '57780811', '19:50:00');
+VALUES (875, 1, '2018-04-26', '57780811', '19:50:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (875, 2, '2021-03-14', '57820314', '17:14:00');
+VALUES (875, 2, '2021-11-18', '57820314', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (875, 3, '2024-09-16', '57850916', '20:24:00');
+VALUES (875, 3, '2025-06-12', '57850916', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (875, 4, '2028-04-17', '57890417', '17:25:00');
+VALUES (875, 4, '2029-01-04', '57890417', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (876, 1, '2017-08-14', '57780814', '19:53:00');
+VALUES (876, 1, '2018-04-29', '57780814', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (876, 2, '2021-03-17', '57820317', '17:13:00');
+VALUES (876, 2, '2021-11-21', '57820317', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (876, 3, '2024-09-19', '57850919', '20:25:00');
+VALUES (876, 3, '2025-06-15', '57850919', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (876, 4, '2028-04-20', '57890420', '17:27:00');
+VALUES (876, 4, '2029-01-07', '57890420', '17:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (877, 1, '2017-08-15', '57780815', '19:54:00');
+VALUES (877, 1, '2018-04-30', '57780815', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (877, 2, '2021-03-18', '57820318', '17:13:00');
+VALUES (877, 2, '2021-11-22', '57820318', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (877, 3, '2024-09-20', '57850920', '20:25:00');
+VALUES (877, 3, '2025-06-16', '57850920', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (877, 4, '2028-04-21', '57890421', '17:28:00');
+VALUES (877, 4, '2029-01-08', '57890421', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (878, 1, '2017-08-16', '57780816', '19:54:00');
+VALUES (878, 1, '2018-05-01', '57780816', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (878, 2, '2021-03-19', '57820319', '17:13:00');
+VALUES (878, 2, '2021-11-23', '57820319', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (878, 3, '2024-09-21', '57850921', '20:26:00');
+VALUES (878, 3, '2025-06-17', '57850921', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (878, 4, '2028-04-22', '57890422', '17:29:00');
+VALUES (878, 4, '2029-01-09', '57890422', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (879, 1, '2017-08-17', '57780817', '19:55:00');
+VALUES (879, 1, '2018-05-02', '57780817', '19:55:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (879, 2, '2021-03-20', '57820320', '17:13:00');
+VALUES (879, 2, '2021-11-24', '57820320', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (879, 3, '2024-09-22', '57850922', '20:26:00');
+VALUES (879, 3, '2025-06-18', '57850922', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (879, 4, '2028-04-23', '57890423', '17:29:00');
+VALUES (879, 4, '2029-01-10', '57890423', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (880, 1, '2017-08-18', '57780818', '19:56:00');
+VALUES (880, 1, '2018-05-03', '57780818', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (880, 2, '2021-03-21', '57820321', '17:12:00');
+VALUES (880, 2, '2021-11-25', '57820321', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (880, 3, '2024-09-23', '57850923', '20:26:00');
+VALUES (880, 3, '2025-06-19', '57850923', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (880, 4, '2028-04-24', '57890424', '17:30:00');
+VALUES (880, 4, '2029-01-11', '57890424', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (881, 1, '2017-08-21', '57780821', '19:58:00');
+VALUES (881, 1, '2018-05-06', '57780821', '19:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (881, 2, '2021-03-24', '57820324', '17:12:00');
+VALUES (881, 2, '2021-11-28', '57820324', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (881, 3, '2024-09-26', '57850926', '20:27:00');
+VALUES (881, 3, '2025-06-22', '57850926', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (881, 4, '2028-04-27', '57890427', '17:33:00');
+VALUES (881, 4, '2029-01-14', '57890427', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (882, 1, '2017-08-22', '57780822', '19:59:00');
+VALUES (882, 1, '2018-05-07', '57780822', '19:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (882, 2, '2021-03-25', '57820325', '17:12:00');
+VALUES (882, 2, '2021-11-29', '57820325', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (882, 3, '2024-09-27', '57850927', '20:27:00');
+VALUES (882, 3, '2025-06-23', '57850927', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (882, 4, '2028-04-28', '57890428', '17:33:00');
+VALUES (882, 4, '2029-01-15', '57890428', '17:33:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (883, 1, '2017-08-23', '57780823', '20:00:00');
+VALUES (883, 1, '2018-05-08', '57780823', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (883, 2, '2021-03-26', '57820326', '17:12:00');
+VALUES (883, 2, '2021-11-30', '57820326', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (883, 3, '2024-09-28', '57850928', '20:27:00');
+VALUES (883, 3, '2025-06-24', '57850928', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (883, 4, '2028-04-28', '57890429', '17:34:00');
+VALUES (883, 4, '2029-01-16', '57890429', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (884, 1, '2017-08-24', '57780824', '20:01:00');
+VALUES (884, 1, '2018-05-09', '57780824', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (884, 2, '2021-03-27', '57820327', '17:12:00');
+VALUES (884, 2, '2021-12-01', '57820327', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (884, 3, '2024-09-28', '57850929', '20:27:00');
+VALUES (884, 3, '2025-06-25', '57850929', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (884, 4, '2028-05-01', '57890501', '17:35:00');
+VALUES (884, 4, '2029-01-17', '57890501', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (885, 1, '2017-08-25', '57780825', '20:02:00');
+VALUES (885, 1, '2018-05-10', '57780825', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (885, 2, '2021-03-28', '57820328', '17:12:00');
+VALUES (885, 2, '2021-12-02', '57820328', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (885, 3, '2024-09-28', '57850930', '20:27:00');
+VALUES (885, 3, '2025-06-26', '57850930', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (885, 4, '2028-05-02', '57890502', '17:36:00');
+VALUES (885, 4, '2029-01-18', '57890502', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (886, 1, '2017-08-28', '57780828', '20:04:00');
+VALUES (886, 1, '2018-05-13', '57780828', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (886, 2, '2021-04-01', '57820401', '17:12:00');
+VALUES (886, 2, '2021-12-05', '57820401', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (886, 3, '2024-10-03', '57851003', '20:28:00');
+VALUES (886, 3, '2025-06-29', '57851003', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (886, 4, '2028-05-05', '57890505', '17:38:00');
+VALUES (886, 4, '2029-01-21', '57890505', '17:38:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (887, 1, '2017-08-28', '57780829', '20:05:00');
+VALUES (887, 1, '2018-05-14', '57780829', '20:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (887, 2, '2021-04-02', '57820402', '17:12:00');
+VALUES (887, 2, '2021-12-06', '57820402', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (887, 3, '2024-10-04', '57851004', '20:28:00');
+VALUES (887, 3, '2025-06-30', '57851004', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (887, 4, '2028-05-06', '57890506', '17:39:00');
+VALUES (887, 4, '2029-01-22', '57890506', '17:39:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (888, 1, '2017-09-01', '57780901', '20:06:00');
+VALUES (888, 1, '2018-05-15', '57780901', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (888, 2, '2021-04-03', '57820403', '17:12:00');
+VALUES (888, 2, '2021-12-07', '57820403', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (888, 3, '2024-10-05', '57851005', '20:28:00');
+VALUES (888, 3, '2025-07-01', '57851005', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (888, 4, '2028-05-07', '57890507', '17:40:00');
+VALUES (888, 4, '2029-01-23', '57890507', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (889, 1, '2017-09-02', '57780902', '20:06:00');
+VALUES (889, 1, '2018-05-16', '57780902', '20:06:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (889, 2, '2021-04-04', '57820404', '17:12:00');
+VALUES (889, 2, '2021-12-08', '57820404', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (889, 3, '2024-10-06', '57851006', '20:27:00');
+VALUES (889, 3, '2025-07-02', '57851006', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (889, 4, '2028-05-08', '57890508', '17:41:00');
+VALUES (889, 4, '2029-01-24', '57890508', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (890, 1, '2017-09-03', '57780903', '20:07:00');
+VALUES (890, 1, '2018-05-17', '57780903', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (890, 2, '2021-04-05', '57820405', '17:12:00');
+VALUES (890, 2, '2021-12-09', '57820405', '17:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (890, 3, '2024-10-07', '57851007', '20:27:00');
+VALUES (890, 3, '2025-07-03', '57851007', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (890, 4, '2028-05-09', '57890509', '17:42:00');
+VALUES (890, 4, '2029-01-25', '57890509', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (891, 1, '2017-09-06', '57780906', '20:10:00');
+VALUES (891, 1, '2018-05-20', '57780906', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (891, 2, '2021-04-08', '57820408', '17:13:00');
+VALUES (891, 2, '2021-12-12', '57820408', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (891, 3, '2024-10-10', '57851010', '20:27:00');
+VALUES (891, 3, '2025-07-06', '57851010', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (891, 4, '2028-05-12', '57890512', '17:45:00');
+VALUES (891, 4, '2029-01-28', '57890512', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (892, 1, '2017-09-07', '57780907', '20:10:00');
+VALUES (892, 1, '2018-05-21', '57780907', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (892, 2, '2021-04-09', '57820409', '17:13:00');
+VALUES (892, 2, '2021-12-13', '57820409', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (892, 3, '2024-10-11', '57851011', '20:27:00');
+VALUES (892, 3, '2025-07-07', '57851011', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (892, 4, '2028-05-13', '57890513', '17:45:00');
+VALUES (892, 4, '2029-01-29', '57890513', '17:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (893, 1, '2017-09-08', '57780908', '20:11:00');
+VALUES (893, 1, '2018-05-22', '57780908', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (893, 2, '2021-04-10', '57820410', '17:13:00');
+VALUES (893, 2, '2021-12-14', '57820410', '17:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (893, 3, '2024-10-12', '57851012', '20:26:00');
+VALUES (893, 3, '2025-07-08', '57851012', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (893, 4, '2028-05-14', '57890514', '17:46:00');
+VALUES (893, 4, '2029-01-30', '57890514', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (894, 1, '2017-09-09', '57780909', '20:12:00');
+VALUES (894, 1, '2018-05-23', '57780909', '20:12:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (894, 2, '2021-04-11', '57820411', '17:14:00');
+VALUES (894, 2, '2021-12-15', '57820411', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (894, 3, '2024-10-13', '57851013', '20:26:00');
+VALUES (894, 3, '2025-07-09', '57851013', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (894, 4, '2028-05-15', '57890515', '17:47:00');
+VALUES (894, 4, '2029-01-31', '57890515', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (895, 1, '2017-09-10', '57780910', '20:13:00');
+VALUES (895, 1, '2018-05-24', '57780910', '20:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (895, 2, '2021-04-12', '57820412', '17:14:00');
+VALUES (895, 2, '2021-12-16', '57820412', '17:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (895, 3, '2024-10-14', '57851014', '20:26:00');
+VALUES (895, 3, '2025-07-10', '57851014', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (895, 4, '2028-05-16', '57890516', '17:48:00');
+VALUES (895, 4, '2029-02-01', '57890516', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (896, 1, '2017-09-13', '57780913', '20:15:00');
+VALUES (896, 1, '2018-05-27', '57780913', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (896, 2, '2021-04-15', '57820415', '17:15:00');
+VALUES (896, 2, '2021-12-19', '57820415', '17:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (896, 3, '2024-10-17', '57851017', '20:25:00');
+VALUES (896, 3, '2025-07-13', '57851017', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (896, 4, '2028-05-19', '57890519', '17:51:00');
+VALUES (896, 4, '2029-02-04', '57890519', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (897, 1, '2017-09-14', '57780914', '20:15:00');
+VALUES (897, 1, '2018-05-28', '57780914', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (897, 2, '2021-04-16', '57820416', '17:16:00');
+VALUES (897, 2, '2021-12-20', '57820416', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (897, 3, '2024-10-18', '57851018', '20:24:00');
+VALUES (897, 3, '2025-07-14', '57851018', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (897, 4, '2028-05-20', '57890520', '17:51:00');
+VALUES (897, 4, '2029-02-05', '57890520', '17:51:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (898, 1, '2017-09-15', '57780915', '20:16:00');
+VALUES (898, 1, '2018-05-29', '57780915', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (898, 2, '2021-04-17', '57820417', '17:16:00');
+VALUES (898, 2, '2021-12-21', '57820417', '17:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (898, 3, '2024-10-19', '57851019', '20:24:00');
+VALUES (898, 3, '2025-07-15', '57851019', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (898, 4, '2028-05-21', '57890521', '17:52:00');
+VALUES (898, 4, '2029-02-06', '57890521', '17:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (899, 1, '2017-09-16', '57780916', '20:17:00');
+VALUES (899, 1, '2018-05-30', '57780916', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (899, 2, '2021-04-18', '57820418', '17:17:00');
+VALUES (899, 2, '2021-12-22', '57820418', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (899, 3, '2024-10-20', '57851020', '20:23:00');
+VALUES (899, 3, '2025-07-16', '57851020', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (899, 4, '2028-05-22', '57890522', '17:53:00');
+VALUES (899, 4, '2029-02-07', '57890522', '17:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (900, 1, '2017-09-17', '57780917', '20:17:00');
+VALUES (900, 1, '2018-05-31', '57780917', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (900, 2, '2021-04-19', '57820419', '17:17:00');
+VALUES (900, 2, '2021-12-23', '57820419', '17:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (900, 3, '2024-10-21', '57851021', '20:23:00');
+VALUES (900, 3, '2025-07-17', '57851021', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (900, 4, '2028-05-23', '57890523', '17:54:00');
+VALUES (900, 4, '2029-02-08', '57890523', '17:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (901, 1, '2017-09-20', '57780920', '20:19:00');
+VALUES (901, 1, '2018-06-03', '57780920', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (901, 2, '2021-04-22', '57820422', '17:19:00');
+VALUES (901, 2, '2021-12-26', '57820422', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (901, 3, '2024-10-24', '57851024', '20:21:00');
+VALUES (901, 3, '2025-07-20', '57851024', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (901, 4, '2028-05-26', '57890526', '17:56:00');
+VALUES (901, 4, '2029-02-11', '57890526', '17:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (902, 1, '2017-09-21', '57780921', '20:20:00');
+VALUES (902, 1, '2018-06-04', '57780921', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (902, 2, '2021-04-23', '57820423', '17:19:00');
+VALUES (902, 2, '2021-12-27', '57820423', '17:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (902, 3, '2024-10-25', '57851025', '20:21:00');
+VALUES (902, 3, '2025-07-21', '57851025', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (902, 4, '2028-05-27', '57890527', '17:57:00');
+VALUES (902, 4, '2029-02-12', '57890527', '17:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (903, 1, '2017-09-22', '57780922', '20:20:00');
+VALUES (903, 1, '2018-06-05', '57780922', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (903, 2, '2021-04-24', '57820424', '17:20:00');
+VALUES (903, 2, '2021-12-28', '57820424', '17:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (903, 3, '2024-10-26', '57851026', '20:20:00');
+VALUES (903, 3, '2025-07-22', '57851026', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (903, 4, '2028-05-28', '57890528', '17:58:00');
+VALUES (903, 4, '2029-02-13', '57890528', '17:58:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (904, 1, '2017-09-23', '57780923', '20:21:00');
+VALUES (904, 1, '2018-06-06', '57780923', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (904, 2, '2021-04-25', '57820425', '17:21:00');
+VALUES (904, 2, '2021-12-29', '57820425', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (904, 3, '2024-10-27', '57851027', '20:20:00');
+VALUES (904, 3, '2025-07-23', '57851027', '20:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (904, 4, '2028-05-28', '57890529', '17:59:00');
+VALUES (904, 4, '2029-02-14', '57890529', '17:59:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (905, 1, '2017-09-24', '57780924', '20:21:00');
+VALUES (905, 1, '2018-06-07', '57780924', '20:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (905, 2, '2021-04-26', '57820426', '17:21:00');
+VALUES (905, 2, '2021-12-30', '57820426', '17:21:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (905, 3, '2024-10-28', '57851028', '20:19:00');
+VALUES (905, 3, '2025-07-24', '57851028', '20:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (905, 4, '2028-05-28', '57890530', '18:00:00');
+VALUES (905, 4, '2029-02-15', '57890530', '18:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (906, 1, '2017-09-27', '57780927', '20:23:00');
+VALUES (906, 1, '2018-06-10', '57780927', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (906, 2, '2021-04-28', '57820429', '17:23:00');
+VALUES (906, 2, '2022-01-02', '57820429', '17:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (906, 3, '2024-11-02', '57851102', '20:17:00');
+VALUES (906, 3, '2025-07-27', '57851102', '20:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (906, 4, '2028-06-03', '57890603', '18:02:00');
+VALUES (906, 4, '2029-02-18', '57890603', '18:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (907, 1, '2017-09-28', '57780928', '20:23:00');
+VALUES (907, 1, '2018-06-11', '57780928', '20:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (907, 2, '2021-05-01', '57820501', '17:24:00');
+VALUES (907, 2, '2022-01-03', '57820501', '17:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (907, 3, '2024-11-03', '57851103', '20:16:00');
+VALUES (907, 3, '2025-07-28', '57851103', '20:16:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (907, 4, '2028-06-04', '57890604', '18:03:00');
+VALUES (907, 4, '2029-02-19', '57890604', '18:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (908, 1, '2017-09-28', '57780929', '20:24:00');
+VALUES (908, 1, '2018-06-12', '57780929', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (908, 2, '2021-05-02', '57820502', '17:25:00');
+VALUES (908, 2, '2022-01-04', '57820502', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (908, 3, '2024-11-04', '57851104', '20:15:00');
+VALUES (908, 3, '2025-07-29', '57851104', '20:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (908, 4, '2028-06-05', '57890605', '18:04:00');
+VALUES (908, 4, '2029-02-20', '57890605', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (909, 1, '2017-09-28', '57780930', '20:24:00');
+VALUES (909, 1, '2018-06-13', '57780930', '20:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (909, 2, '2021-05-03', '57820503', '17:25:00');
+VALUES (909, 2, '2022-01-05', '57820503', '17:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (909, 3, '2024-11-05', '57851105', '20:14:00');
+VALUES (909, 3, '2025-07-30', '57851105', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (909, 4, '2028-06-06', '57890606', '18:04:00');
+VALUES (909, 4, '2029-02-21', '57890606', '18:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (910, 1, '2017-10-01', '57781001', '20:25:00');
+VALUES (910, 1, '2018-06-14', '57781001', '20:25:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (910, 2, '2021-05-04', '57820504', '17:26:00');
+VALUES (910, 2, '2022-01-06', '57820504', '17:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (910, 3, '2024-11-06', '57851106', '20:14:00');
+VALUES (910, 3, '2025-07-31', '57851106', '20:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (910, 4, '2028-06-07', '57890607', '18:05:00');
+VALUES (910, 4, '2029-02-22', '57890607', '18:05:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (911, 1, '2017-10-04', '57781004', '20:26:00');
+VALUES (911, 1, '2018-06-17', '57781004', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (911, 2, '2021-05-07', '57820507', '17:28:00');
+VALUES (911, 2, '2022-01-09', '57820507', '17:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (911, 3, '2024-11-09', '57851109', '20:11:00');
+VALUES (911, 3, '2025-08-03', '57851109', '20:11:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (911, 4, '2028-06-10', '57890610', '18:07:00');
+VALUES (911, 4, '2029-02-25', '57890610', '18:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (912, 1, '2017-10-05', '57781005', '20:26:00');
+VALUES (912, 1, '2018-06-18', '57781005', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (912, 2, '2021-05-08', '57820508', '17:29:00');
+VALUES (912, 2, '2022-01-10', '57820508', '17:29:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (912, 3, '2024-11-10', '57851110', '20:10:00');
+VALUES (912, 3, '2025-08-04', '57851110', '20:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (912, 4, '2028-06-11', '57890611', '18:08:00');
+VALUES (912, 4, '2029-02-26', '57890611', '18:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (913, 1, '2017-10-06', '57781006', '20:26:00');
+VALUES (913, 1, '2018-06-19', '57781006', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (913, 2, '2021-05-09', '57820509', '17:30:00');
+VALUES (913, 2, '2022-01-11', '57820509', '17:30:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (913, 3, '2024-11-11', '57851111', '20:09:00');
+VALUES (913, 3, '2025-08-05', '57851111', '20:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (913, 4, '2028-06-12', '57890612', '18:09:00');
+VALUES (913, 4, '2029-02-27', '57890612', '18:09:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (914, 1, '2017-10-07', '57781007', '20:27:00');
+VALUES (914, 1, '2018-06-20', '57781007', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (914, 2, '2021-05-10', '57820510', '17:31:00');
+VALUES (914, 2, '2022-01-12', '57820510', '17:31:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (914, 3, '2024-11-12', '57851112', '20:08:00');
+VALUES (914, 3, '2025-08-06', '57851112', '20:08:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (914, 4, '2028-06-13', '57890613', '18:10:00');
+VALUES (914, 4, '2029-02-28', '57890613', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (915, 1, '2017-10-08', '57781008', '20:27:00');
+VALUES (915, 1, '2018-06-21', '57781008', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (915, 2, '2021-05-11', '57820511', '17:32:00');
+VALUES (915, 2, '2022-01-13', '57820511', '17:32:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (915, 3, '2024-11-13', '57851113', '20:07:00');
+VALUES (915, 3, '2025-08-07', '57851113', '20:07:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (915, 4, '2028-06-14', '57890614', '18:10:00');
+VALUES (915, 4, '2029-03-01', '57890614', '18:10:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (916, 1, '2017-10-11', '57781011', '20:27:00');
+VALUES (916, 1, '2018-06-24', '57781011', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (916, 2, '2021-05-14', '57820514', '17:34:00');
+VALUES (916, 2, '2022-01-16', '57820514', '17:34:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (916, 3, '2024-11-16', '57851116', '20:04:00');
+VALUES (916, 3, '2025-08-10', '57851116', '20:04:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (916, 4, '2028-06-17', '57890617', '18:13:00');
+VALUES (916, 4, '2029-03-04', '57890617', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (917, 1, '2017-10-12', '57781012', '20:27:00');
+VALUES (917, 1, '2018-06-25', '57781012', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (917, 2, '2021-05-15', '57820515', '17:35:00');
+VALUES (917, 2, '2022-01-17', '57820515', '17:35:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (917, 3, '2024-11-17', '57851117', '20:03:00');
+VALUES (917, 3, '2025-08-11', '57851117', '20:03:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (917, 4, '2028-06-18', '57890618', '18:13:00');
+VALUES (917, 4, '2029-03-05', '57890618', '18:13:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (918, 1, '2017-10-13', '57781013', '20:27:00');
+VALUES (918, 1, '2018-06-26', '57781013', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (918, 2, '2021-05-16', '57820516', '17:36:00');
+VALUES (918, 2, '2022-01-18', '57820516', '17:36:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (918, 3, '2024-11-18', '57851118', '20:02:00');
+VALUES (918, 3, '2025-08-12', '57851118', '20:02:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (918, 4, '2028-06-19', '57890619', '18:14:00');
+VALUES (918, 4, '2029-03-06', '57890619', '18:14:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (919, 1, '2017-10-14', '57781014', '20:28:00');
+VALUES (919, 1, '2018-06-27', '57781014', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (919, 2, '2021-05-17', '57820517', '17:37:00');
+VALUES (919, 2, '2022-01-19', '57820517', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (919, 3, '2024-11-19', '57851119', '20:01:00');
+VALUES (919, 3, '2025-08-13', '57851119', '20:01:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (919, 4, '2028-06-20', '57890620', '18:15:00');
+VALUES (919, 4, '2029-03-07', '57890620', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (920, 1, '2017-10-15', '57781015', '20:28:00');
+VALUES (920, 1, '2018-06-28', '57781015', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (920, 2, '2021-05-18', '57820518', '17:37:00');
+VALUES (920, 2, '2022-01-20', '57820518', '17:37:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (920, 3, '2024-11-20', '57851120', '20:00:00');
+VALUES (920, 3, '2025-08-14', '57851120', '20:00:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (920, 4, '2028-06-21', '57890621', '18:15:00');
+VALUES (920, 4, '2029-03-08', '57890621', '18:15:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (921, 1, '2017-10-18', '57781018', '20:28:00');
+VALUES (921, 1, '2018-07-01', '57781018', '20:28:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (921, 2, '2021-05-21', '57820521', '17:40:00');
+VALUES (921, 2, '2022-01-23', '57820521', '17:40:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (921, 3, '2024-11-23', '57851123', '19:57:00');
+VALUES (921, 3, '2025-08-17', '57851123', '19:57:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (921, 4, '2028-06-24', '57890624', '18:17:00');
+VALUES (921, 4, '2029-03-11', '57890624', '18:17:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (922, 1, '2017-10-19', '57781019', '20:27:00');
+VALUES (922, 1, '2018-07-02', '57781019', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (922, 2, '2021-05-22', '57820522', '17:41:00');
+VALUES (922, 2, '2022-01-24', '57820522', '17:41:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (922, 3, '2024-11-24', '57851124', '19:56:00');
+VALUES (922, 3, '2025-08-18', '57851124', '19:56:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (922, 4, '2028-06-25', '57890625', '18:18:00');
+VALUES (922, 4, '2029-03-12', '57890625', '18:18:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (923, 1, '2017-10-20', '57781020', '20:27:00');
+VALUES (923, 1, '2018-07-03', '57781020', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (923, 2, '2021-05-23', '57820523', '17:42:00');
+VALUES (923, 2, '2022-01-25', '57820523', '17:42:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (923, 3, '2024-11-25', '57851125', '19:54:00');
+VALUES (923, 3, '2025-08-19', '57851125', '19:54:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (923, 4, '2028-06-26', '57890626', '18:19:00');
+VALUES (923, 4, '2029-03-13', '57890626', '18:19:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (924, 1, '2017-10-21', '57781021', '20:27:00');
+VALUES (924, 1, '2018-07-04', '57781021', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (924, 2, '2021-05-24', '57820524', '17:43:00');
+VALUES (924, 2, '2022-01-26', '57820524', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (924, 3, '2024-11-26', '57851126', '19:53:00');
+VALUES (924, 3, '2025-08-20', '57851126', '19:53:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (924, 4, '2028-06-27', '57890627', '18:20:00');
+VALUES (924, 4, '2029-03-14', '57890627', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (925, 1, '2017-10-22', '57781022', '20:27:00');
+VALUES (925, 1, '2018-07-05', '57781022', '20:27:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (925, 2, '2021-05-25', '57820525', '17:43:00');
+VALUES (925, 2, '2022-01-27', '57820525', '17:43:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (925, 3, '2024-11-27', '57851127', '19:52:00');
+VALUES (925, 3, '2025-08-21', '57851127', '19:52:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (925, 4, '2028-06-28', '57890628', '18:20:00');
+VALUES (925, 4, '2029-03-15', '57890628', '18:20:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (926, 1, '2017-10-25', '57781025', '20:26:00');
+VALUES (926, 1, '2018-07-08', '57781025', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (926, 2, '2021-05-28', '57820528', '17:46:00');
+VALUES (926, 2, '2022-01-30', '57820528', '17:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (926, 3, '2024-11-28', '57851130', '19:48:00');
+VALUES (926, 3, '2025-08-24', '57851130', '19:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (926, 4, '2028-07-02', '57890702', '18:22:00');
+VALUES (926, 4, '2029-03-18', '57890702', '18:22:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (927, 1, '2017-10-26', '57781026', '20:26:00');
+VALUES (927, 1, '2018-07-09', '57781026', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (927, 2, '2021-05-28', '57820529', '17:47:00');
+VALUES (927, 2, '2022-01-31', '57820529', '17:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (927, 3, '2024-12-01', '57851201', '19:47:00');
+VALUES (927, 3, '2025-08-25', '57851201', '19:47:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (927, 4, '2028-07-03', '57890703', '18:23:00');
+VALUES (927, 4, '2029-03-19', '57890703', '18:23:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (928, 1, '2017-10-27', '57781027', '20:26:00');
+VALUES (928, 1, '2018-07-10', '57781027', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (928, 2, '2021-05-28', '57820530', '17:48:00');
+VALUES (928, 2, '2022-02-01', '57820530', '17:48:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (928, 3, '2024-12-02', '57851202', '19:46:00');
+VALUES (928, 3, '2025-08-26', '57851202', '19:46:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (928, 4, '2028-07-04', '57890704', '18:24:00');
+VALUES (928, 4, '2029-03-20', '57890704', '18:24:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (929, 1, '2017-10-28', '57781028', '20:26:00');
+VALUES (929, 1, '2018-07-11', '57781028', '20:26:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (929, 2, '2021-12-01', '57821301', '17:49:00');
+VALUES (929, 2, '2022-02-02', '57821301', '17:49:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (929, 3, '2024-12-03', '57851203', '19:45:00');
+VALUES (929, 3, '2025-08-27', '57851203', '19:45:00');
 INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-VALUES (929, 4, '2028-07-05', '57890705', '18:24:00');
+VALUES (929, 4, '2029-03-21', '57890705', '18:24:00');
 SET FOREIGN_KEY_CHECKS = 1;

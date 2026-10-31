@@ -266,17 +266,55 @@ function encodedSenderName(value: string): string {
 		.join(" ");
 }
 
-function metadata(error: unknown): { name?: string; status?: number } {
+function metadata(error: unknown): {
+	name?: string;
+	status?: number;
+	requestId?: string;
+} {
 	if (typeof error !== "object" || error === null) return {};
 	const value = error as {
 		name?: string;
-		$metadata?: { httpStatusCode?: number };
+		$metadata?: { httpStatusCode?: number; requestId?: string };
 	};
-	return { name: value.name, status: value.$metadata?.httpStatusCode };
+	return {
+		name: value.name,
+		status: value.$metadata?.httpStatusCode,
+		requestId: value.$metadata?.requestId,
+	};
 }
 
-function requestError(error: unknown, mutation: boolean): SesError {
-	const { status } = metadata(error);
+function requestError(
+	error: unknown,
+	mutation: boolean,
+	operation:
+		| "get-contact"
+		| "create-contact"
+		| "update-contact"
+		| "before-send"
+		| "send-email",
+): SesError {
+	const { name, status, requestId } = metadata(error);
+	// Keep provider failures diagnosable without logging recipient data, request
+	// content, credentials, headers, or the original error/message/stack.
+	console.error("SES operation failed", {
+		operation,
+		code:
+			typeof name === "string" && /^[A-Za-z][A-Za-z0-9]{0,79}$/.test(name)
+				? name
+				: "UnknownError",
+		httpStatus:
+			typeof status === "number" &&
+			Number.isInteger(status) &&
+			status >= 100 &&
+			status <= 599
+				? status
+				: null,
+		requestId:
+			typeof requestId === "string" &&
+			/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(requestId)
+				? requestId
+				: null,
+	});
 	const rejected =
 		status !== undefined && status >= 400 && status < 500 && status !== 408;
 	return new SesError(
@@ -357,7 +395,7 @@ export class SesClient {
 			);
 		} catch (error) {
 			if (metadata(error).name === "NotFoundException") return null;
-			throw requestError(error, false);
+			throw requestError(error, false, "get-contact");
 		}
 		if (
 			!result ||
@@ -400,7 +438,7 @@ export class SesClient {
 				{ abortSignal: AbortSignal.timeout(15_000) },
 			);
 		} catch (error) {
-			throw requestError(error, true);
+			throw requestError(error, true, "create-contact");
 		}
 		return "subscribed";
 	}
@@ -424,7 +462,7 @@ export class SesClient {
 				{ abortSignal: AbortSignal.timeout(15_000) },
 			);
 		} catch (error) {
-			throw requestError(error, true);
+			throw requestError(error, true, "update-contact");
 		}
 	}
 
@@ -470,7 +508,7 @@ export class SesClient {
 				await this.config.beforeSend();
 			} catch (error) {
 				if (error instanceof SesSuppressedError) throw error;
-				throw new SesError("לא ניתן להשלים את פעולת הדיוור", "failed");
+				throw requestError(error, false, "before-send");
 			}
 		}
 		let result: { MessageId?: string };
@@ -496,7 +534,7 @@ export class SesClient {
 				{ abortSignal: AbortSignal.timeout(15_000) },
 			);
 		} catch (error) {
-			throw requestError(error, true);
+			throw requestError(error, true, "send-email");
 		}
 		if (
 			!result ||

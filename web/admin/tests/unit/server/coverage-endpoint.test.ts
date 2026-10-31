@@ -37,7 +37,7 @@ async function loadServer() {
 describe("/api/dev/coverage", () => {
 	beforeEach(() => {
 		appFetchMock.mockReset();
-		appFetchMock.mockReturnValue(new Response("app"));
+		appFetchMock.mockImplementation(() => new Response("app"));
 		vi.stubEnv("SKIP_AUTH", "true");
 	});
 

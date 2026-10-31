@@ -96,10 +96,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     /// <summary>
     /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
-    /// and edge-back history, Android predictive-Back registration, Windows
-    /// keyboard Back, and the capsule's enabled-state provider — through the
-    /// one coordinator. Only the division plugs differ: which transient
-    /// surfaces consume Back and what Back does to them.
+    /// and edge-back history, Android predictive-Back registration, and the
+    /// capsule's enabled-state provider — through the one coordinator. Only
+    /// the division plugs differ: which transient surfaces consume Back and
+    /// what Back does to them.
     /// </summary>
     private void SetupPlatformChrome()
     {
@@ -115,12 +115,12 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 BackSensitiveOverlays = [ReaderMenuOverlay, ExitFullScreenButton],
                 SearchSurface = ChapterSearch,
                 SelectionSurface = SelectionBar,
+                PerushimSheet = PerushimPanel,
             },
             new ReaderPlatformChromeActions
             {
                 OwnsReturnSurface = OwnsReaderReturnSurface,
                 TryHandleBack = TryHandleReaderBack,
-                SuppressFocus = () => ChapterSearch.IsSearchOpen,
             });
     }
 
@@ -690,7 +690,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (_pendingArticleId is int pendingArticleId)
         {
             _pendingArticleId = null;
-            await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+            await ShellAppNavigator.Instance.GoToAsync($"articleDetail?articleId={pendingArticleId}");
         }
     }
 
@@ -820,21 +820,42 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 return;
             }
-            AppLinkHelper.PendingTarget = null;
-            ChapterSearch.Close();
-            var shell = Shell.Current;
-            if (shell != null &&
-                !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+            try
             {
-                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+                ChapterSearch.Close();
+                var shell = Shell.Current;
+                if (shell != null &&
+                    !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+                {
+                    // A link is dependent navigation, not a repeated tap:
+                    // queue behind any in-flight transition so the
+                    // return-to-reader request cannot be deduplicated away.
+                    await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+                }
+                if (generation != _appLinkGeneration)
+                {
+                    // A newer link arrived while this one waited out a
+                    // transition or the initial load — it owns the reader now.
+                    return;
+                }
+                // The destination is reached: consume the pending target so a
+                // later reader creation cannot re-apply it. Clearing it only
+                // here also keeps the target recoverable when navigation fails.
+                AppLinkHelper.PendingTarget = null;
+                await _viewModel.NavigateToPerekAsync(target.PerekId);
+                // A link that landed while the load-failure panel was up replaces
+                // it with the freshly navigated perek.
+                CarouselLoadingOverlay.Hide();
+                if (target.ArticleId is int articleId && Shell.Current != null)
+                {
+                    await ShellAppNavigator.Instance.GoToQueuedAsync($"articleDetail?articleId={articleId}");
+                }
             }
-            await _viewModel.NavigateToPerekAsync(target.PerekId);
-            // A link that landed while the load-failure panel was up replaces
-            // it with the freshly navigated perek.
-            CarouselLoadingOverlay.Hide();
-            if (target.ArticleId is int articleId && Shell.Current != null)
+            #pragma warning disable S2221 // Deliberate failure boundary: app-link navigation failure is log-only
+            catch (Exception ex) //NOSONAR — app-link navigation failure is log-only.
             {
-                await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"App-link navigation failed: {ex}");
             }
         });
     }
@@ -1292,6 +1313,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private bool OwnsReaderReturnSurface() =>
         ExitFullScreenButton.IsVisible
         || ReaderMenuOverlay.IsOpen
+        || PerushimPanel.IsOpen
         || ChapterSearch.IsSearchOpen
         || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
             _chapterRecitationSelection, _focusedPasuk != null,
