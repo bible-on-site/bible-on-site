@@ -82,13 +82,34 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "bulletin-v${{ env.MODULE_VERSION }}" --pattern "*.zip" --dir "${{ env.LAMBDA_ZIP_OUTPUT_DIR }}"
+          RECOVERY_FILE_ID: ${{ steps.guard.outputs.recovery_file_id }}
+          RECOVERY_FILE_NAME: ${{ steps.guard.outputs.recovery_file_name }}
+          RECOVERY_FILE_DIGEST: ${{ steps.guard.outputs.recovery_file_digest }}
+          RECOVERY_FILE_SIZE: ${{ steps.guard.outputs.recovery_file_size }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RECOVERY_FILE_ID" ]; then
+            [[ "$RECOVERY_FILE_ID" =~ ^[1-9][0-9]*$ ]]
+            test "$RECOVERY_FILE_NAME" = "bulletin-lambda-v${MODULE_VERSION}.zip"
+            gh api "repos/$GITHUB_REPOSITORY/releases/assets/$RECOVERY_FILE_ID" -H 'Accept: application/octet-stream' > "$LAMBDA_ZIP_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+            node devops/github/release/recovery-request.mjs --verify-file --file "$LAMBDA_ZIP_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+          else
+            gh release download "bulletin-v${MODULE_VERSION}" --pattern '*.zip' --dir "$LAMBDA_ZIP_OUTPUT_DIR"
+          fi
 
       - name: Find Lambda ZIP
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_zip
+        env:
+          RECOVERY_FILE_NAME: ${{ steps.guard.outputs.recovery_file_name }}
         run: |
-          LAMBDA_ZIP=$(find "${{ env.LAMBDA_ZIP_OUTPUT_DIR }}" -name "*.zip" | head -1)
+          if [ -n "$RECOVERY_FILE_NAME" ]; then
+            test "$RECOVERY_FILE_NAME" = "bulletin-lambda-v${MODULE_VERSION}.zip"
+            LAMBDA_ZIP="$LAMBDA_ZIP_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+            test -f "$LAMBDA_ZIP"
+          else
+            LAMBDA_ZIP=$(find "${{ env.LAMBDA_ZIP_OUTPUT_DIR }}" -name "*.zip" | head -1)
+          fi
           echo "LAMBDA_ZIP=${LAMBDA_ZIP}" >> $GITHUB_OUTPUT
           echo "Found Lambda ZIP: ${LAMBDA_ZIP}"
 

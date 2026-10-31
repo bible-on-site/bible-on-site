@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { describe, type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+	applyReleaseRecovery,
 	baseRevision,
 	detectChanges,
 	isDataDeployChange,
@@ -29,6 +30,78 @@ import {
 
 const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
+
+describe("explicit service release recovery selection", () => {
+	test("harness and recovery tooling fixes validate normal master without a store release or version bump", () => {
+		const changes = detectChanges([
+			"app/BibleOnSite.Tests.MobileE2E/Platforms/MobilePlatformAdapter.cs",
+			"app/BibleOnSite.Tests.MobileE2E/Configuration/ConfigurationTests.cs",
+			".github/workflows/ci.yml",
+			".github/workflows/shared-release.yml",
+			"devops/github/ci/determine-changes.ts",
+			"devops/github/release/recovery-request.mjs",
+		]);
+		for (const [key, flags] of Object.entries(changes)) {
+			assert.equal(flags.module_changed, false, key);
+			assert.equal(flags.ci_changed, true, key);
+		}
+	});
+	test("none leaves every ordinary push/PR/dispatch flag unchanged", () => {
+		const source = detectChanges([
+			"web/api/src/main.rs",
+			"app/mobile-e2e/run.mjs",
+		]);
+		assert.deepEqual(applyReleaseRecovery(source, []), source);
+	});
+	for (const modules of [["admin"], ["bulletin"], ["admin", "bulletin"]]) {
+		test(`forces only selected ${modules.join("+")} normal module and check flags`, () => {
+			const original = detectChanges([]);
+			const recovery = applyReleaseRecovery(original, modules);
+			for (const [key, flags] of Object.entries(recovery))
+				assert.deepEqual(
+					flags,
+					{
+						module_changed: modules.includes(key),
+						ci_changed: modules.includes(key),
+					},
+					key,
+				);
+			assert.deepEqual(original, detectChanges([]));
+		});
+	}
+	test("keeps independently required checks while refusing every other recovery target", () => {
+		const original = detectChanges(["web/api/src/main.rs"]);
+		assert.deepEqual(
+			applyReleaseRecovery(original, ["admin"]).api,
+			original.api,
+		);
+		for (const modules of [
+			["website"],
+			["app"],
+			["api"],
+			["data"],
+			["admin", "admin"],
+			["admin", "website"],
+		])
+			assert.throws(() => applyReleaseRecovery(original, modules));
+	});
+	test("recovery helper changes require only the two consuming services without releasing", () => {
+		for (const file of [
+			"devops/github/release/recovery-request.mjs",
+			"devops/github/release/recovery-request.test.mjs",
+		]) {
+			for (const [key, flags] of Object.entries(detectChanges([file])))
+				assert.deepEqual(
+					flags,
+					{
+						module_changed: false,
+						ci_changed: key === "admin" || key === "bulletin",
+					},
+					key,
+				);
+		}
+	});
+});
 
 describe("detectChanges", () => {
 
@@ -1066,13 +1139,15 @@ describe("main", () => {
 					GITHUB_EVENT_NAME: eventName,
 					GITHUB_EVENT_PATH: eventPath,
 					GITHUB_OUTPUT: outputPath,
+					GITHUB_REF: "refs/heads/master",
+					GITHUB_SHA: git(clone, "rev-parse", "HEAD"),
 				},
 				clone,
 			);
 			const output = readFileSync(outputPath, "utf8");
 			assert.equal(
 				output.trim().split("\n").length,
-				Object.keys(MODULES).length * 2 + 2,
+				Object.keys(MODULES).length * 2 + 4,
 			);
 			return { changes, output };
 		} finally {
@@ -1230,10 +1305,24 @@ describe("main", () => {
 	}
 
 	test("workflow_dispatch compares with master", () => {
-		const { changes } = run("workflow_dispatch", () => ({}));
+		const { changes, output } = run("workflow_dispatch", () => ({}));
 		for (const flags of Object.values(changes)) {
 			assert.deepEqual(flags, { module_changed: false, ci_changed: false });
 		}
+		assert.match(output, /^admin_release_recovery=false$/m);
+		assert.match(output, /^bulletin_release_recovery=false$/m);
+	});
+	test("explicit master recovery rebuilds only the selected unchanged services", () => {
+		const { changes, output } = run("workflow_dispatch", () => ({
+			inputs: { release_recovery: "admin-and-bulletin" },
+		}));
+		for (const [key, flags] of Object.entries(changes))
+			assert.deepEqual(flags, {
+				module_changed: key === "admin" || key === "bulletin",
+				ci_changed: key === "admin" || key === "bulletin",
+			});
+		assert.match(output, /^admin_release_recovery=true$/m);
+		assert.match(output, /^bulletin_release_recovery=true$/m);
 	});
 });
 

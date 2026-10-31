@@ -38,6 +38,16 @@ on:
         required: false
         type: string
         default: "[]"
+      release_recovery_modules_json:
+        description: Validated explicit recovery module selection from main CI
+        required: false
+        type: string
+        default: "[]"
+      normal_master_ci_json:
+        description: Successful normal master push CI proof for the recovery source
+        required: false
+        type: string
+        default: "{}"
     outputs:
       released:
         description: Whether the module was successfully released (for version bump coordination)
@@ -98,6 +108,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      RELEASE_MODULE: ${{ inputs.module_name }}
+      RELEASE_RECOVERY_MODULES: ${{ inputs.release_recovery_modules_json }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -115,6 +127,9 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
+
+      - name: Validate release publication context
+        run: node devops/github/release/recovery-request.mjs --assert-current
 
       - name: Build CD Payload
         id: build_payload
@@ -233,6 +248,7 @@ jobs:
       - name: Push Tag
         if: steps.check_tag.outputs.TAG_EXISTS != 'true'
         run: |
+          node devops/github/release/recovery-request.mjs --assert-current
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin ${{ steps.check_tag.outputs.TAG_NAME }}
 
@@ -265,6 +281,7 @@ jobs:
           SOURCE_ATTEMPT=$(echo "$DELIVERY_PAYLOAD" | jq -r .ci_run_attempt)
           test "$(gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN" --jq .run_attempt)" = "$SOURCE_ATTEMPT"
           gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN/artifacts" --paginate --jq '.artifacts[]' > "$RUNNER_TEMP/release-artifacts.jsonl"
+          : > "$RUNNER_TEMP/release-pinned-artifacts.jsonl"
 
           # Pin each archive before downloading; never follow a replaced artifact name.
           # Release entries can share one archive under different globs (the iOS
@@ -299,6 +316,7 @@ jobs:
               ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
               gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
               printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
+              printf '%s\n' "$SOURCE" >> "$RUNNER_TEMP/release-pinned-artifacts.jsonl"
               FETCHED[$KEY]="$ARCHIVE"
             fi
 
@@ -309,6 +327,50 @@ jobs:
             ls -la "$PATH_DIR"
           done
 
+      - name: Create explicit recovery receipt
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true' && contains(fromJSON(inputs.release_recovery_modules_json), inputs.module_name)
+        id: recovery_receipt
+        env:
+          RELEASE_ARTIFACTS: ${{ inputs.artifacts_json }}
+          NORMAL_MASTER_CI: ${{ inputs.normal_master_ci_json }}
+          MODULE_DIRECTORY: ${{ inputs.module_directory }}
+          MODULE_VERSION: ${{ inputs.module_version }}
+          BASE_PAYLOAD: ${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}
+        run: |
+          set -euo pipefail
+          # These two recovery targets each attach exactly one current-run
+          # package. ZIP digest proves the Actions archive; the receipt helper
+          # separately streams/hashes the extracted package bytes.
+          test "$(jq '[.[] | select(.name != null and .name != "")] | length' <<< "$RELEASE_ARTIFACTS")" = 1
+          case "$RELEASE_MODULE" in
+            admin) FILE_NAME="bible-on-site-admin-v${MODULE_VERSION}.tar.gz" ;;
+            bulletin) FILE_NAME="bulletin-lambda-v${MODULE_VERSION}.zip" ;;
+            *) exit 1 ;;
+          esac
+          PATH_DIR=$(jq -r '.[] | select(.name != null and .name != "") | .path' <<< "$RELEASE_ARTIFACTS")
+          FILE_PATH="$PATH_DIR/$FILE_NAME"
+          test -f "$FILE_PATH"
+          test "$(jq -s 'length' "$RUNNER_TEMP/release-pinned-artifacts.jsonl")" = 1
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --jq '{runId:.id,runAttempt:.run_attempt,workflowId:.workflow_id}' > "$RUNNER_TEMP/release-current-ci.json"
+          jq -n --arg repo "$GITHUB_REPOSITORY" --arg sha "$GITHUB_SHA" \
+            --argjson requestedModules "$RELEASE_RECOVERY_MODULES" \
+            --arg moduleName "$RELEASE_MODULE" --arg moduleDirectory "$MODULE_DIRECTORY" --arg moduleVersion "$MODULE_VERSION" \
+            --argjson normalMasterCi "$NORMAL_MASTER_CI" \
+            --slurpfile ci "$RUNNER_TEMP/release-current-ci.json" \
+            --slurpfile artifact "$RUNNER_TEMP/release-pinned-artifacts.jsonl" \
+            --arg filePath "$FILE_PATH" --arg fileName "$FILE_NAME" \
+            '{repo:$repo,sha:$sha,requestedModules:$requestedModules,moduleName:$moduleName,moduleDirectory:$moduleDirectory,moduleVersion:$moduleVersion,ci:$ci[0],normalMasterCi:$normalMasterCi,artifact:($artifact[0]|{id,name,digest}),releaseFile:{path:$filePath,name:$fileName}}' \
+            > "$RUNNER_TEMP/recovery-receipt-input.json"
+          RECEIPT_NAME="release-recovery-${RELEASE_MODULE}.json"
+          PROOF=$(node devops/github/release/recovery-request.mjs --receipt \
+            --input "$RUNNER_TEMP/recovery-receipt-input.json" --out "$RUNNER_TEMP/$RECEIPT_NAME")
+          PAYLOAD=$(jq -c --argjson proof "$PROOF" '. + {recovery:$proof}' <<< "$BASE_PAYLOAD")
+          ARTIFACTS=$(jq -c --arg path "$RUNNER_TEMP" --arg name "$RECEIPT_NAME" \
+            '. + [{name:$name,path:$path,glob:$name}]' <<< "$RELEASE_ARTIFACTS")
+          echo "CD_PAYLOAD=$PAYLOAD" >> "$GITHUB_OUTPUT"
+          echo "ARTIFACTS_JSON=$ARTIFACTS" >> "$GITHUB_OUTPUT"
+
       - name: Prepare Release
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         id: prepare_release
@@ -316,10 +378,12 @@ jobs:
           # Notes are markdown built from PR titles; keep them out of the
           # script text so quotes and `$` cannot alter the shell command.
           RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
+          RELEASE_ARTIFACTS: ${{ steps.recovery_receipt.outputs.ARTIFACTS_JSON || inputs.artifacts_json }}
+          DELIVERY_PAYLOAD: ${{ steps.recovery_receipt.outputs.CD_PAYLOAD || steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}
         run: |
           set -e
 
-          ARTIFACTS='${{ inputs.artifacts_json }}'
+          ARTIFACTS="$RELEASE_ARTIFACTS"
           MODULE_NAME_CAP="$(echo '${{ inputs.module_name }}' | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
 
           # Build file patterns for release
@@ -353,7 +417,6 @@ jobs:
 
           BODY="${BODY}"$'\n\n'"$RELEASE_NOTES"
 
-          DELIVERY_PAYLOAD='${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}'
           BODY="${BODY}"$'\n\n'"<!-- release-delivery:${DELIVERY_PAYLOAD} -->"
           echo "BODY<<EOF" >> $GITHUB_OUTPUT
           echo "$BODY" >> $GITHUB_OUTPUT
@@ -383,13 +446,14 @@ jobs:
       - name: Verify and publish complete release
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         env:
-          RELEASE_ARTIFACTS: ${{ inputs.artifacts_json }}
+          RELEASE_ARTIFACTS: ${{ steps.recovery_receipt.outputs.ARTIFACTS_JSON || inputs.artifacts_json }}
           RELEASE_ID: ${{ steps.create_release.outputs.id }}
         run: |
           # The action returns the numeric ID of the draft it created/resumed.
           [[ "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]]
           gh api "repos/${{ github.repository }}/releases/$RELEASE_ID" > release.json
           node devops/github/release/release-assets.mjs --verify
+          node devops/github/release/recovery-request.mjs --assert-current
           gh api --method PATCH "repos/${{ github.repository }}/releases/$RELEASE_ID" -F draft=false > "$RUNNER_TEMP/published-release.json"
           jq -e '.draft == false' "$RUNNER_TEMP/published-release.json" > /dev/null
 
@@ -398,7 +462,7 @@ jobs:
         id: mark_released
         if: steps.check_tag.outputs.ANCESTOR != 'true' && steps.check_tag.outputs.NEEDS_BUMP != 'true' && (steps.check_tag.outputs.SKIP_RELEASE != 'true' || steps.check_tag.outputs.TAG_EXISTS == 'true')
         env:
-          NEW_PAYLOAD: ${{ steps.build_payload.outputs.CD_PAYLOAD }}
+          NEW_PAYLOAD: ${{ steps.recovery_receipt.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}
           ORIGINAL_PAYLOAD: ${{ steps.check_tag.outputs.CD_PAYLOAD }}
           SKIP_RELEASE: ${{ steps.check_tag.outputs.SKIP_RELEASE }}
         run: |

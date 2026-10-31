@@ -38,6 +38,12 @@ on:
   # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
     inputs:
+      release_recovery:
+        description: "Rebuild and release selected services after successful normal master CI for this exact commit"
+        required: false
+        type: choice
+        options: ["none", "admin", "bulletin", "admin-and-bulletin"]
+        default: "none"
       # e2e-impact (#2085): shadow computes selections for evidence; enforce
       # actually runs the selected subset in the Playwright suites. The mobile
       # suite has its own dispatch inputs on app-mobile-e2e.yml.
@@ -302,6 +308,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     outputs:
       website_module_changed: ${{ steps.determine.outputs.website_module_changed }}
       website_ci_changed: ${{ steps.determine.outputs.website_ci_changed }}
@@ -319,6 +326,11 @@ jobs:
       data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
+      release_recovery_requested: ${{ steps.recovery.outputs.recovery_requested }}
+      release_recovery_modules: ${{ steps.recovery.outputs.recovery_modules }}
+      normal_master_ci: ${{ steps.recovery.outputs.normal_master_ci }}
+      admin_release_recovery: ${{ steps.determine.outputs.admin_release_recovery }}
+      bulletin_release_recovery: ${{ steps.determine.outputs.bulletin_release_recovery }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -327,6 +339,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+      - name: Validate explicit release recovery
+        id: recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/release/recovery-request.mjs --preflight --out "$RUNNER_TEMP/recovery-master-ci.json"
       - name: Test module change routing
         run: node --test devops/github/ci/determine-changes.test.ts
       - name: Determine module changes
@@ -605,7 +622,7 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || needs.determine_changes.outputs.bulletin_release_recovery == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
@@ -676,7 +693,7 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || needs.determine_changes.outputs.admin_release_recovery == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
@@ -1435,6 +1452,9 @@ jobs:
 
     env:
       RUSTC_WRAPPER: sccache
+      # Recovery re-runs this service's complete E2E suite, independently of
+      # repository selection defaults; other modules retain their own flags.
+      FORCE_FULL_SUITE: ${{ needs.determine_changes.outputs.admin_release_recovery == 'true' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
     steps:
       - name: Checkout
         id: checkout
@@ -3694,7 +3714,7 @@ jobs:
     needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_api, package_api_arm64, package_app, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.bulletin_release_recovery == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -3706,11 +3726,13 @@ jobs:
       module_version: ${{ needs.package_bulletin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_bulletin.outputs.lambda_zip_artifact_name }}", "path": "web/bulletin/.release", "glob": "*.zip"}]'
       cd_event_type: deploy-bulletin
+      release_recovery_modules_json: ${{ needs.determine_changes.outputs.release_recovery_modules }}
+      normal_master_ci_json: ${{ needs.determine_changes.outputs.normal_master_ci }}
 
   release_admin:
     name: Release Admin
     needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_api, package_api_arm64, package_app, package_bulletin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.admin_release_recovery == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -3722,6 +3744,8 @@ jobs:
       module_version: ${{ needs.package_admin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release", "glob": "*.tar.gz"}]'
       cd_event_type: deploy-aws
+      release_recovery_modules_json: ${{ needs.determine_changes.outputs.release_recovery_modules }}
+      normal_master_ci_json: ${{ needs.determine_changes.outputs.normal_master_ci }}
 
   release_data:
     name: Release Data
@@ -3772,10 +3796,10 @@ jobs:
   # ====================================================================================
   bump_versions:
     name: Bump Versions
-    needs: [setup_env, release_website, release_api, release_app, release_admin, release_bulletin]
+    needs: [setup_env, determine_changes, release_website, release_api, release_app, release_admin, release_bulletin]
     # Note: Using always() and success checks as a workaround for reusable workflow result evaluation issues (see #1065)
     if: >-
-      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
+      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true')) &&
       ((needs.release_website.result == 'success' && (needs.release_website.outputs.released == 'true' || needs.release_website.outputs.needs_bump == 'true')) ||
        (needs.release_api.result == 'success' && (needs.release_api.outputs.released == 'true' || needs.release_api.outputs.needs_bump == 'true')) ||
        (needs.release_app.result == 'success' && (needs.release_app.outputs.released == 'true' || needs.release_app.outputs.needs_bump == 'true')) ||
