@@ -578,6 +578,9 @@ describe("Telegram enqueue and UI state", () => {
 			filename: "daily.pdf",
 		});
 		expect(state.jobs[0].caption).toContain("https://xn--febl3a.co.il/929/502");
+		expect(state.jobs[0].caption).toContain(
+			`https://admin.xn--febl3a.co.il/api/bulletin-documents/${date}/${createHash("sha256").update(pdf).digest("hex")}.pdf`,
+		);
 		expect(
 			JSON.parse(mocks.sqs.mock.calls[0][0].input.Entries[0].MessageBody),
 		).toEqual({ kind: "telegram.send", jobId: job.id });

@@ -146,7 +146,8 @@ describe("Telegram configuration and target verification", () => {
 		(invalid) => {
 			const fetchMock = provider();
 			expect(
-				() => new TelegramClient(invalid as unknown as typeof config, fetchMock),
+				() =>
+					new TelegramClient(invalid as unknown as typeof config, fetchMock),
 			).toThrow(TelegramError);
 			expect(fetchMock).not.toHaveBeenCalled();
 		},
@@ -609,6 +610,67 @@ describe("Telegram configuration and target verification", () => {
 });
 
 describe("one frozen PDF upload", () => {
+	it.each([
+		"306_מלכים_א_יט_306_אליהו_הנביא_בורח_מאיזבל,_מבקש_למות,_התגלו.pdf",
+		"306_מלכים_א_יט_306_אליהו_הנביא_בורח_מאיזבל,_מבקש_למות,_התגלות_ה'.pdf",
+	])(
+		"accepts the observed Telegram normalization with exact size and PDF type (%s)",
+		async (name) => {
+			const result = message();
+			result.document.file_name = name;
+			const fetchMock = provider(metadata(), () => json(result));
+			await expect(
+				new TelegramClient(config, fetchMock).sendDocument({
+					...documentRequest,
+					filename:
+						"306_מלכים א יט - 306 - אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה' אליו.pdf",
+				}),
+			).resolves.toEqual({ messageId: 42, fileId: "fixture_file_id" });
+			expect(fetchMock).toHaveBeenCalledTimes(5);
+		},
+	);
+	it.each([
+		"wrong.pdf",
+		"307_מלכים_א_כ_307_פרק_אחר_לגמרי_כאן.pdf",
+		"306.pdf",
+		"../chapter.pdf",
+		"bad\nname.pdf",
+		"chapter.txt",
+		"x".repeat(256),
+		7,
+	])(
+		"rejects unrelated, excessively shortened and unsafe receipt names (%s)",
+		async (name) => {
+			const result = message();
+			Object.assign(result.document, { file_name: name });
+			await outcome(
+				new TelegramClient(
+					config,
+					provider(metadata(), () => json(result)),
+				).sendDocument(documentRequest),
+				"uncertain",
+			);
+		},
+	);
+	it.each([
+		{ file_size: undefined },
+		{ mime_type: undefined },
+		{ file_size: PDF.length + 1 },
+		{ mime_type: "text/plain" },
+	])(
+		"requires exact type and size when Telegram normalizes the name (%j)",
+		async (change) => {
+			const result = message();
+			Object.assign(result.document, { file_name: "chapter_one.pdf" }, change);
+			await outcome(
+				new TelegramClient(
+					config,
+					provider(metadata(), () => json(result)),
+				).sendDocument({ ...documentRequest, filename: "chapter one.pdf" }),
+				"uncertain",
+			);
+		},
+	);
 	it("uploads exact saved bytes with plain caption and only the frozen target fields", async () => {
 		const fetchMock = provider();
 		const beforeSend = vi.fn(async () => {

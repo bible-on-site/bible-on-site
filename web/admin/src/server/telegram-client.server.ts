@@ -80,6 +80,35 @@ function username(value: unknown): value is string {
 		typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(value)
 	);
 }
+
+function documentNameMatches(actual: unknown, expected: string): boolean {
+	if (actual === undefined || actual === expected) return true;
+	if (
+		typeof actual !== "string" ||
+		actual.length > 255 ||
+		hasControl(actual) ||
+		/[\\/"]/.test(actual) ||
+		!actual.endsWith(".pdf")
+	)
+		return false;
+	// Telegram may replace punctuation/spaces and truncate long Unicode names.
+	// Keep chapter identity and a substantial prefix, rather than accepting an
+	// unrelated document just because the provider returned a successful status.
+	const fold = (name: string) =>
+		name
+			.slice(0, -4)
+			.normalize("NFC")
+			.replace(/[^\p{L}\p{N}]/gu, "")
+			.toLowerCase();
+	const wanted = fold(expected),
+		received = fold(actual);
+	return (
+		received === wanted ||
+		(expected.length > 60 &&
+			received.length >= 32 &&
+			wanted.startsWith(received))
+	);
+}
 function allowedChatType(
 	value: unknown,
 	audience: Audience,
@@ -396,7 +425,11 @@ export class TelegramClient {
 				!file ||
 				typeof file.file_id !== "string" ||
 				!/^[A-Za-z0-9_-]{1,255}$/.test(file.file_id) ||
-				(file.file_name !== undefined && file.file_name !== filename) ||
+				!documentNameMatches(file.file_name, filename) ||
+				(file.file_name !== undefined &&
+					file.file_name !== filename &&
+					(file.file_size !== pdf.length ||
+						file.mime_type !== "application/pdf")) ||
 				(file.file_size !== undefined && file.file_size !== pdf.length) ||
 				(file.mime_type !== undefined && file.mime_type !== "application/pdf")
 			)

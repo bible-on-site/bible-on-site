@@ -14,6 +14,7 @@ import {
 	validateTelegramQueueRequest,
 } from "~/lib/bulletin-telegram";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
+import { bulletinDocumentUrl } from "./bulletin-document.server";
 import { readPreparedBulletin } from "./daily-bulletins.server";
 import {
 	execute,
@@ -277,7 +278,7 @@ export async function enqueueBulletinTelegram(
 		/[\r\n/\\]/.test(prepared.filename)
 	)
 		throw new Error(FAILED);
-	const caption = `${prepared.source}\n${prepared.input.hebrewDate} (${value.date})\nלימוד יומי בתנ"ך על הפרק\nhttps://xn--febl3a.co.il/929/${prepared.input.perekId}`;
+	const caption = `${prepared.source}\n${prepared.input.hebrewDate} (${value.date})\nלימוד יומי בתנ"ך על הפרק\nhttps://xn--febl3a.co.il/929/${prepared.input.perekId}\n\nלהורדת העלון בשם המקורי:\n${bulletinDocumentUrl(value.date, pdf)}`;
 	if (
 		caption.length > 1024 ||
 		!Number.isSafeInteger(prepared.input.perekId) ||
