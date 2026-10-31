@@ -48,15 +48,36 @@ video {
 	height: auto;
 }
 
+/* Shared scales: one value per component size class, mode-independent.
+   Accent steps are fixed palette values; the role tokens below
+   (--link-accent, --link-accent-hover, --pasuk-num-color) pick a step
+   per color scheme and contrast mode. */
+:root {
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--radius-pill: 999px;
+	--accent-200: #a8b9ff;
+	--accent-300: #7eb0ff;
+	--accent-400: #4da3ff;
+	--accent-600: #1552ac;
+	--accent-700: #11469c;
+	--accent-800: #0d3a8c;
+	--accent-900: #1c2c5d;
+}
+
 :root {
 	--background: #ffffff;
 	--foreground: #171717;
 	--surface-elevated: #ffffff;
 	--surface-muted: #f8fafc;
 	--border-subtle: #e2e8f0;
-	--link-accent: #1552ac;
-	--pasuk-num-color: #1c2c5d;
+	--link-accent: var(--accent-600);
+	--link-accent-hover: var(--accent-700);
+	--pasuk-num-color: var(--accent-900);
 	--muted-text: #666666;
+	--skeleton-base: #e8ecf2;
+	--skeleton-highlight: #f8fafc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,9 +87,12 @@ video {
 		--surface-elevated: #1a1f2e;
 		--surface-muted: #12151c;
 		--border-subtle: #2d3548;
-		--link-accent: #7eb0ff;
-		--pasuk-num-color: #a8b9ff;
+		--link-accent: var(--accent-300);
+		--link-accent-hover: var(--accent-200);
+		--pasuk-num-color: var(--accent-200);
 		--muted-text: #9aa0a6;
+		--skeleton-base: #242a3a;
+		--skeleton-highlight: #2d3548;
 	}
 }
 
@@ -112,13 +136,15 @@ html[data-a11y-contrast="high"] {
 	--surface-elevated: #ffffff;
 	--surface-muted: #ffffff;
 	--border-subtle: #4d4d4d;
-	--link-accent: #0d3a8c;
+	--link-accent: var(--accent-800);
+	--link-accent-hover: var(--accent-900);
 	--pasuk-num-color: #000000;
 	--muted-text: #4d4d4d;
 	--hc-muted: #4d4d4d;
 	--hc-on-inverse: #ffffff;
 	--hc-accent: #3d2f8f;
 	--danger-color: #8b0000;
+	--skeleton-base: #d6d6d6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,13 +154,15 @@ html[data-a11y-contrast="high"] {
 		--surface-elevated: #000000;
 		--surface-muted: #0d0d0d;
 		--border-subtle: #b3b3b3;
-		--link-accent: #4da3ff;
+		--link-accent: var(--accent-400);
+		--link-accent-hover: var(--accent-300);
 		--pasuk-num-color: #ffffff;
 		--muted-text: #b3b3b3;
 		--hc-muted: #b3b3b3;
 		--hc-on-inverse: #ffffff;
 		--hc-accent: #b7adf0;
 		--danger-color: #ff8080;
+		--skeleton-base: #333333;
 	}
 }
 
@@ -217,7 +245,7 @@ html[data-a11y-contrast="high"] ::selection {
 	height: 2.75rem;
 	padding: 0;
 	border: 1px solid rgba(255, 255, 255, 0.65);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	color: #fff;
 }
 
@@ -249,7 +277,7 @@ html[data-a11y-contrast="high"] ::selection {
 	height: 2.75rem;
 	padding: 0;
 	border: 1px solid rgba(255, 255, 255, 0.65);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	color: #fff;
 	background: transparent;
 	cursor: pointer;
