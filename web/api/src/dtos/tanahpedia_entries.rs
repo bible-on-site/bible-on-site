@@ -1,4 +1,10 @@
-use async_graphql::SimpleObject;
+use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
+
+use crate::{
+    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    providers::Database,
+    services::reading_metrics_service,
+};
 
 /// Lightweight reference to a published Tanahpedia entry — the stable identity
 /// used by client routes and in-content links.
@@ -53,6 +59,7 @@ pub struct TanahpediaEntryOccurrence {
 /// An entry with its linked entities and Tanah occurrences — everything a
 /// reader page needs in a single round trip.
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct TanahpediaEntryDetail {
     pub id: String,
     pub unique_name: String,
@@ -61,6 +68,23 @@ pub struct TanahpediaEntryDetail {
     pub updated_at: String,
     pub entities: Vec<TanahpediaLinkedEntity>,
     pub occurrences: Vec<TanahpediaEntryOccurrence>,
+    /// Shared persisted reading metrics over the authored entry body
+    /// (issue #2607). `null` = unknown/not computed.
+    pub reading_metric: Option<ReadingMetric>,
+}
+
+#[ComplexObject]
+impl TanahpediaEntryDetail {
+    /// Ordered readable-block units over the entry body for word-weighted
+    /// reading-position progress (issue #2607). Resolved only when selected.
+    /// Empty when uncomputed.
+    async fn progress_units(&self, ctx: &Context<'_>) -> Result<Vec<ReadingProgressUnit>> {
+        let units =
+            reading_metrics_service::block_units_by_entry_id(ctx.data::<Database>()?, &self.id)
+                .await
+                .map_err(|e| e.extend())?;
+        Ok(units.into_iter().map(Into::into).collect())
+    }
 }
 
 /// An entity of a given type with the entries that describe it — zero, one or
@@ -122,4 +146,63 @@ pub struct TanahpediaSearchHit {
     /// whole-phrase 100/110) with the name fields (title, unique_name, alias
     /// names) at ×2 weight over body content.
     pub score: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+    use entities::tanahpedia::entry_metric_block;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    /// Detail DTO for the resolver-shape test — the complex `progress_units`
+    /// field must resolve through the real schema machinery (issue #2607).
+    struct Query;
+    #[Object]
+    impl Query {
+        async fn entry(&self) -> TanahpediaEntryDetail {
+            TanahpediaEntryDetail {
+                id: "entry-x".to_string(),
+                unique_name: "entry-x".to_string(),
+                title: "Entry".to_string(),
+                content: Some("<p>body</p>".to_string()),
+                updated_at: "2026-01-01".to_string(),
+                entities: vec![],
+                occurrences: vec![],
+                reading_metric: None,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn progress_units_maps_the_stored_block_rows() {
+        let unit = |block_idx, cumulative| entry_metric_block::Model {
+            entry_id: "entry-x".to_string(),
+            block_idx,
+            word_count: 10,
+            cumulative_words: cumulative,
+            calc_version: 1,
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entry_metric_block::Model, Vec<_>, _>([vec![
+                    unit(0, 10),
+                    unit(1, 20),
+                ]])
+                .into_connection(),
+        );
+        let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .data(db)
+            .finish();
+
+        let res = schema
+            .execute("{ entry { progressUnits { key wordCount cumulativeWords } } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let units = res.data.into_json().unwrap()["entry"]["progressUnits"].clone();
+        assert_eq!(units[0]["key"], "0");
+        assert_eq!(units[0]["wordCount"], 10);
+        assert_eq!(units[1]["cumulativeWords"], 20);
+    }
 }

@@ -714,4 +714,41 @@ public class TanahpediaServiceTests
 
         markers.Should().BeEmpty();
     }
+
+    [Fact]
+    public void EntryReadingMetricDto_ToModel_maps_the_persisted_metric()
+    {
+        var dto = new TanahpediaService.EntryReadingMetricDto
+        {
+            WordCount = 210,
+            EstimatedSeconds = 58,
+            WordsPerMinute = 220,
+            CalcVersion = 1,
+            SourceHash = "e".PadLeft(64, 'e'),
+        };
+
+        var metric = dto.ToModel();
+
+        metric.WordCount.Should().Be(210);
+        metric.EstimatedSeconds.Should().Be(58);
+        metric.WordsPerMinute.Should().Be(220);
+        metric.SourceHash.Should().HaveLength(64);
+    }
+
+    [Fact]
+    public void EntryReadingMetricDto_ToModel_defaults_a_missing_source_hash()
+    {
+        var dto = new TanahpediaService.EntryReadingMetricDto
+        {
+            WordCount = 210,
+            EstimatedSeconds = 58,
+            WordsPerMinute = 220,
+            CalcVersion = 1,
+            SourceHash = null,
+        };
+
+        var metric = dto.ToModel();
+
+        metric.SourceHash.Should().BeEmpty();
+    }
 }

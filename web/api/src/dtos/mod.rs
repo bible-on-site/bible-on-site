@@ -2,6 +2,7 @@ pub mod article;
 pub mod author;
 pub mod dedication;
 pub mod perek;
+pub mod reading_metric;
 pub mod sefer;
 pub mod starter;
 pub mod tanahpedia_entity;

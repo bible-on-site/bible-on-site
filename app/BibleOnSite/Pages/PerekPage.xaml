@@ -88,6 +88,19 @@
                 Margin="16,16,16,100"
                 ZIndex="100"/>
 
+        <!-- Word-weighted reading position over the stored pasuk metrics
+             (issue #2607): a hairline at the top of the reader viewport. -->
+        <ProgressBar x:Name="ReadingProgressBar"
+                   AutomationId="ReadingProgressBar"
+                   Grid.Row="1"
+                   ZIndex="50"
+                   HeightRequest="3"
+                   Margin="0"
+                   VerticalOptions="Start"
+                   Progress="{Binding ReadingProgress}"
+                   ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                   BackgroundColor="Transparent"/>
+
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
               ZIndex="0"
@@ -163,6 +176,15 @@
                                             <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
                                         </Label.Behaviors>
                                     </Label>
+                                    <!-- Reading-time badge over the whole chapter (issue #2607);
+                                         hidden when the stored metric is unknown or empty. -->
+                                    <Label AutomationId="PerekReadingTimeBadge"
+                                           Text="{Binding ReadingTimeBadge}"
+                                           IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
+                                           FontSize="12"
+                                           HorizontalTextAlignment="Center"
+                                           Padding="16,0,16,6"
+                                           TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
                                     <!-- Perek/sefer/helek dedications (#2731) — bound to the page's
                                          view model, which tracks the displayed perek -->
                                     <VerticalStackLayout Spacing="0"

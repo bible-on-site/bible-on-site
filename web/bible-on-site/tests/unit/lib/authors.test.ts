@@ -204,6 +204,32 @@ describe("authors service", () => {
 			expect(result).toEqual([]);
 		});
 
+		it("attaches stored reading metrics only where a metric row exists (#2607)", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{ id: 1, perek_id: 10, name: "Article 1", abstract: "Abs 1" },
+					{ id: 2, perek_id: 20, name: "Article 2", abstract: null },
+				])
+				// Second query: the stored metric rows (#2607).
+				.mockResolvedValueOnce([
+					{ article_id: 1, word_count: 300, estimated_seconds: 82 },
+				]);
+
+			const result = await getArticlesByAuthorId(5);
+
+			expect(mockQuery).toHaveBeenNthCalledWith(
+				2,
+				expect.stringContaining("tanah_article_metric"),
+				[1, 2],
+			);
+			expect(result[0].metric).toEqual({
+				wordCount: 300,
+				estimatedSeconds: 82,
+			});
+			// Unknown stays absent — not a fabricated null/zero.
+			expect(result[1]).not.toHaveProperty("metric");
+		});
+
 		it("only surfaces articles in the 929 chapter range", async () => {
 			mockQuery.mockResolvedValue([]);
 

@@ -236,6 +236,7 @@ fn create_notes_db(
     )?;
     insert_note_blobs(&tx, &extracted.notes)?;
     insert_perek_perush(&tx, &extracted.notes)?;
+    insert_note_metrics(&tx, &extracted.notes)?;
 
     tx.commit()?;
     conn.execute_batch("VACUUM")?;
@@ -258,6 +259,70 @@ fn insert_note_blobs(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
         perek_notes.sort_by_key(|n| (n.pasuk, n.perush_id, n.note_idx));
         let blob = note_blob::encode_perek_blob(&perek_notes)?;
         stmt.execute(rusqlite::params![perek_id, blob])?;
+    }
+    Ok(())
+}
+
+/// Write the shared reading-metrics rows (#2607) — the identical contract
+/// the MySQL backfill produces from the same note bodies: per-note word
+/// counts with cumulative_words inside each (perush, perek) scope ordered by
+/// (pasuk, note_idx), plus the perush×perek estimate row. source_hash parity
+/// lets the app detect a stale pack against the online copy.
+pub(crate) fn insert_note_metrics(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    // Group by (perush, perek); order members by (pasuk, note_idx) — the
+    // canonical scope order the MySQL contract uses.
+    let mut groups: BTreeMap<(i64, i64), Vec<&Note>> = BTreeMap::new();
+    for note in notes {
+        groups
+            .entry((note.perush_id, note.perek_id))
+            .or_default()
+            .push(note);
+    }
+
+    let mut note_stmt = tx.prepare(
+        "INSERT INTO tanah_note_metric
+         (perush_id, perek_id, pasuk, note_idx, word_count, cumulative_words, calc_version, source_hash)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+    )?;
+    let mut perush_stmt = tx.prepare(
+        "INSERT INTO tanah_perush_metric
+         (perush_id, perek_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )?;
+
+    for ((perush_id, perek_id), mut group) in groups {
+        group.sort_by_key(|n| (n.pasuk, n.note_idx));
+        let mut cumulative: i64 = 0;
+        let mut hashes: Vec<String> = Vec::with_capacity(group.len());
+        for note in group {
+            let plain = reading_metrics::html_to_plain_text(&note.note_content);
+            let word_count = reading_metrics::count_text_words(&plain);
+            let hash = reading_metrics::metric_source_hash(&plain);
+            cumulative += word_count;
+            note_stmt.execute(rusqlite::params![
+                note.perush_id,
+                note.perek_id,
+                note.pasuk,
+                note.note_idx,
+                word_count,
+                cumulative,
+                reading_metrics::READING_METRICS_CALC_VERSION,
+                hash,
+            ])?;
+            hashes.push(hash);
+        }
+        let group_hash = reading_metrics::metric_source_hash(&hashes.join("\n"));
+        perush_stmt.execute(rusqlite::params![
+            perush_id,
+            perek_id,
+            cumulative,
+            reading_metrics::estimate_reading_seconds(cumulative),
+            reading_metrics::READING_WORDS_PER_MINUTE,
+            reading_metrics::READING_METRICS_CALC_VERSION,
+            group_hash,
+        ])?;
     }
     Ok(())
 }
@@ -601,6 +666,46 @@ mod tests {
                 .collect()
         );
 
+        // Shared reading-metrics rows (#2607): fixture notes count
+        // "בראשית - בשביל התורה" → 3 words, "והארץ היתה תהו" → 3 words,
+        // "בראשית ברא - הפועל" → 3 words. (perush 1, perek 1) totals 6.
+        let note_metric: Vec<(i64, i64, i64)> = conn
+            .prepare(
+                "SELECT pasuk, word_count, cumulative_words FROM tanah_note_metric
+                 WHERE perush_id = 1 AND perek_id = 1 ORDER BY pasuk, note_idx",
+            )
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(note_metric, vec![(1, 3, 3), (2, 3, 6)]);
+
+        let perush_metric: (i64, i64) = conn
+            .query_row(
+                "SELECT word_count, estimated_seconds FROM tanah_perush_metric
+                 WHERE perush_id = 1 AND perek_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(perush_metric, (6, 2));
+
+        let group_hash: String = conn
+            .query_row(
+                "SELECT source_hash FROM tanah_perush_metric
+                 WHERE perush_id = 2 AND perek_id = 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            group_hash,
+            reading_metrics::metric_source_hash(&reading_metrics::metric_source_hash(
+                "בראשית ברא - הפועל"
+            ))
+        );
+
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -849,6 +954,82 @@ mod tests {
         clean_generated(&app_raw, &dump);
         clean_generated(&pad_dir, &dump);
         fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The metric-table DDL the notes schema ships — needed by the
+    /// constraint-collision tests that reach `insert_note_metrics`'s `?`
+    /// propagations.
+    const NOTE_METRICS_DDL: &str = r#"
+CREATE TABLE tanah_note_metric (
+  perush_id INTEGER NOT NULL,
+  perek_id INTEGER NOT NULL,
+  pasuk INTEGER NOT NULL,
+  note_idx INTEGER NOT NULL,
+  word_count INTEGER NOT NULL,
+  cumulative_words INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  PRIMARY KEY (perush_id, perek_id, pasuk, note_idx)
+);
+CREATE TABLE tanah_perush_metric (
+  perush_id INTEGER NOT NULL,
+  perek_id INTEGER NOT NULL,
+  word_count INTEGER,
+  estimated_seconds INTEGER,
+  words_per_minute INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (perush_id, perek_id)
+);
+"#;
+
+    fn metric_note() -> Note {
+        Note {
+            perush_id: 1,
+            perek_id: 1,
+            pasuk: 1,
+            note_idx: 0,
+            note_content: "בראשית - בשביל התורה".into(),
+        }
+    }
+
+    #[test]
+    fn insert_note_metrics_propagates_a_note_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(NOTE_METRICS_DDL).unwrap();
+        // A row the computed insert collides with on the note PK.
+        conn.execute(
+            "INSERT INTO tanah_note_metric
+             (perush_id, perek_id, pasuk, note_idx, word_count, cumulative_words, calc_version, source_hash)
+             VALUES (1, 1, 1, 0, 3, 3, 1, 'preexisting')",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_note_metrics(&tx, &[metric_note()]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
+    }
+
+    #[test]
+    fn insert_note_metrics_propagates_a_perush_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(NOTE_METRICS_DDL).unwrap();
+        // The note row lands cleanly; only the group row collides.
+        conn.execute(
+            "INSERT INTO tanah_perush_metric
+             (perush_id, perek_id, words_per_minute, calc_version, source_hash)
+             VALUES (1, 1, 220, 1, 'preexisting')",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_note_metrics(&tx, &[metric_note()]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
     }
 
     #[test]

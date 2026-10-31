@@ -115,6 +115,39 @@ public class Perek : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Persisted canonical reading metric for the whole chapter (issue #2607);
+    /// attached lazily from the packaged sqlite. Null when the pack predates
+    /// the metric tables — the badge simply hides.
+    /// </summary>
+    private ReadingMetric? _readingMetric;
+    public ReadingMetric? ReadingMetric
+    {
+        get => _readingMetric;
+        set
+        {
+            _readingMetric = value;
+            OnPropertyChanged(nameof(ReadingMetric));
+            OnPropertyChanged(nameof(ReadingTimeBadge));
+        }
+    }
+
+    /// <summary>Ordered pasuk word counts for word-weighted reading position.</summary>
+    private IReadOnlyList<ReadingProgressUnit> _progressUnits = [];
+    public IReadOnlyList<ReadingProgressUnit> ProgressUnits
+    {
+        get => _progressUnits;
+        set
+        {
+            _progressUnits = value;
+            OnPropertyChanged(nameof(ProgressUnits));
+        }
+    }
+
+    /// <summary>"זמן קריאה משוער: X" badge text or null when nothing to show.</summary>
+    public string? ReadingTimeBadge =>
+        Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);
+
     /// <summary>Creates independent reading state for a page on the navigation stack.</summary>
     public Perek CreateReaderCopy() => new()
     {
@@ -130,6 +163,8 @@ public class Perek : INotifyPropertyChanged
         SeferName = SeferName,
         SeferTanahUsName = SeferTanahUsName,
         Tseit = Tseit,
-        ArticlesCount = ArticlesCount
+        ArticlesCount = ArticlesCount,
+        ReadingMetric = ReadingMetric,
+        ProgressUnits = ProgressUnits
     };
 }

@@ -45,3 +45,39 @@ CREATE TABLE note_blob (
   perek_id INTEGER PRIMARY KEY, -- 929 global perek numbering (matches tanah_perek.id)
   data BLOB NOT NULL            -- PNB1 blob: zlib-compressed note records
 );
+
+--
+-- Shared reading-metrics contract (issue #2607): per-note word counts +
+-- perush×perek estimates, computed at pack generation by
+-- data/reading-metrics (the Rust port of web/shared/reading-metrics) so the
+-- offline pack mirrors the MySQL rows — source_hash parity included.
+-- cumulative_words scopes within (perush_id, perek_id), ordered by
+-- (pasuk, note_idx); tanah_perush_metric.source_hash is the sha256 over the
+-- member note hashes joined by newlines.
+--
+
+DROP TABLE IF EXISTS tanah_note_metric;
+CREATE TABLE tanah_note_metric (
+  perush_id INTEGER NOT NULL,
+  perek_id INTEGER NOT NULL,
+  pasuk INTEGER NOT NULL,
+  note_idx INTEGER NOT NULL,
+  word_count INTEGER NOT NULL,
+  cumulative_words INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  PRIMARY KEY (perush_id, perek_id, pasuk, note_idx)
+);
+
+DROP TABLE IF EXISTS tanah_perush_metric;
+CREATE TABLE tanah_perush_metric (
+  perush_id INTEGER NOT NULL,
+  perek_id INTEGER NOT NULL,
+  word_count INTEGER,
+  estimated_seconds INTEGER,
+  words_per_minute INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (perush_id, perek_id)
+);

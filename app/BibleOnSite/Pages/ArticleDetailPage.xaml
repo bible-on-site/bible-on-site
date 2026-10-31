@@ -87,6 +87,15 @@
                     </Label>
                 </VerticalStackLayout>
 
+                <!-- Reading-time badge over the full article body (issue #2607);
+                     hidden when the metric is unknown or verified-empty. -->
+                <Label Text="{Binding ReadingTimeBadge}"
+                       IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
+                       FontSize="12"
+                       AutomationId="ArticleDetailReadingTimeBadge"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+
                 <!-- Divider -->
                 <BoxView HeightRequest="1"
                          Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"

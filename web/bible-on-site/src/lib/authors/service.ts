@@ -1,5 +1,10 @@
 import { assetsUrl } from "../assets-url";
 import { query } from "../api-client";
+import {
+	getArticleMetrics,
+	metricOrFallback,
+	type ReadingMetric,
+} from "../reading-metrics";
 import type { AuthorArticle, AuthorDetails } from "./types";
 import { normalizeAuthorName } from "./url-utils";
 
@@ -108,12 +113,24 @@ export async function getArticlesByAuthorId(
 			[authorId],
 		);
 
-		return rows.map((row) => ({
+		const articles = rows.map((row) => ({
 			id: row.id,
 			perekId: row.perek_id,
 			name: row.name,
 			abstract: row.abstract,
 		}));
+		// Stored reading metrics decorate the abstract list (#2607) — the same
+		// optional-decoration contract as the article service: a failed metric
+		// read must not hide the loaded articles.
+		const metrics = await metricOrFallback(
+			`author ${authorId} article metrics`,
+			new Map<number, ReadingMetric>(),
+			() => getArticleMetrics(articles.map((a) => a.id)),
+		);
+		return articles.map((article) => {
+			const metric = metrics.get(article.id);
+			return metric ? { ...article, metric } : article;
+		});
 	} catch (error) {
 		console.warn(
 			`Failed to fetch articles for author ${authorId}:`,

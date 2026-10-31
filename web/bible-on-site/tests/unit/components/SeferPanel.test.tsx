@@ -38,6 +38,8 @@ jest.mock("@/lib/authors/url-utils", () => ({
 
 jest.mock("../../../src/app/929/[number]/actions", () => ({
 	getArticleForBook: jest.fn(),
+	getArticleProgressUnitsForBook: jest.fn(),
+	getNoteProgressUnitsForPerekBatch: jest.fn(),
 	getPerushNotesForPerekBatch: jest.fn(),
 }));
 
@@ -56,6 +58,8 @@ import {
 } from "@testing-library/react";
 import {
 	getArticleForBook,
+	getArticleProgressUnitsForBook,
+	getNoteProgressUnitsForPerekBatch,
 	getPerushNotesForPerekBatch,
 } from "../../../src/app/929/[number]/actions";
 import { SeferPanel } from "../../../src/app/929/[number]/components/SeferPanel";
@@ -77,6 +81,14 @@ const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
 const mockGetPerushNotesBatch =
 	getPerushNotesForPerekBatch as jest.MockedFunction<
 		typeof getPerushNotesForPerekBatch
+	>;
+const mockGetArticleProgressUnits =
+	getArticleProgressUnitsForBook as jest.MockedFunction<
+		typeof getArticleProgressUnitsForBook
+	>;
+const mockGetNoteProgressUnitsBatch =
+	getNoteProgressUnitsForPerekBatch as jest.MockedFunction<
+		typeof getNoteProgressUnitsForPerekBatch
 	>;
 
 const RASHI = { id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 };
@@ -125,6 +137,8 @@ beforeEach(() => {
 	sessionStorage.clear();
 	resetSeferPasukSelectionState();
 	mockGetPerushNotesBatch.mockResolvedValue({});
+	mockGetArticleProgressUnits.mockResolvedValue([]);
+	mockGetNoteProgressUnitsBatch.mockResolvedValue({});
 });
 
 describe("tabs and date header", () => {
@@ -674,5 +688,231 @@ describe("pending commentary regression", () => {
 		expect(await screen.findByText("מוקדש לבדיקה")).toBeTruthy();
 		expect(onNavigate).toHaveBeenCalledWith("7");
 		expect(mockGetArticleForBook).toHaveBeenCalledWith(7);
+	});
+});
+
+describe("reading metrics", () => {
+	it("warns but keeps the article when progress-unit loading fails", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		mockGetArticleProgressUnits.mockRejectedValue(new Error("metric down"));
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
+			fireEvent.click(screen.getByText("תקציר"));
+			expect(await screen.findByText("תוכן")).toBeTruthy();
+			expect(warn).toHaveBeenCalledWith(
+				"Failed to load article reading progress",
+				expect.objectContaining({ articleId: 7 }),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("warns but keeps the commentary when note progress units fail", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockRejectedValue(new Error("metric down"));
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			expect(await screen.findByText("הערה")).toBeTruthy();
+			expect(warn).toHaveBeenCalledWith(
+				"Failed to load commentary reading progress",
+				expect.objectContaining({ perekId: 1 }),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("shows the stored reading time on the deep perush header", async () => {
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" }],
+		});
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{
+						...RASHI,
+						metric: { wordCount: 300, estimatedSeconds: 82 },
+					},
+					IBN_EZRA,
+				]}
+				initialSlug={'רש"י'}
+			/>,
+		);
+		await screen.findByText("פסוק א");
+		expect(container.querySelector(".deepMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("shows the stored reading time for a single selected perush scope", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{
+						...RASHI,
+						metric: { wordCount: 300, estimatedSeconds: 82 },
+					},
+					IBN_EZRA,
+				]}
+			/>,
+		);
+		await screen.findByText("הערה");
+		expect(container.querySelector(".scopeMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("shows stored reading times beside perush names and article cards", async () => {
+		setSeferPerushSelection("בראשית", [1, 2]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>א</p>" }],
+			2: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>ב</p>" }],
+		});
+		const metric = { wordCount: 300, estimatedSeconds: 82 };
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{ ...RASHI, metric },
+					{ ...IBN_EZRA, metric },
+				]}
+				articles={[{ ...mockArticles[0], metric }]}
+			/>,
+		);
+		await screen.findByText("א");
+		// Two commentary perush-name badges (displayPerushim.length > 1)
+		// plus the article card badge mounted on the dormant tab.
+		expect(container.querySelectorAll(".commentaryPerushMetric")).toHaveLength(
+			2,
+		);
+		expect(container.querySelector(".articleCardMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("drops article progress units that resolve after unmount", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		let finishUnits!: (units: never[]) => void;
+		mockGetArticleProgressUnits.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					finishUnits = resolve;
+				}),
+		);
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		await screen.findByText("חזרה למאמרים →");
+		view.unmount();
+		await act(async () => {
+			finishUnits([]);
+		});
+	});
+
+	it("ignores note-unit results that land after the chapter changes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let finishOldUnits!: (batch: Record<number, never[]>) => void;
+		mockGetNoteProgressUnitsBatch
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishOldUnits = resolve;
+					}),
+			)
+			.mockResolvedValue({});
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} />);
+		view.rerender(<SeferPanel {...PROPS} perekId={2} />);
+		await flushAsync();
+		// The stale perek-1 units resolve after the generation rolled — they
+		// must be dropped, not merged into perek 2's state.
+		await act(async () => {
+			finishOldUnits({ 1: [] });
+		});
+	});
+
+	it("ignores a note-unit rejection that lands after the chapter changes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let failOldUnits!: (error: unknown) => void;
+		mockGetNoteProgressUnitsBatch
+			.mockImplementationOnce(
+				() =>
+					new Promise((_, reject) => {
+						failOldUnits = reject;
+					}),
+			)
+			.mockResolvedValue({});
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const view = await renderPanel(<SeferPanel {...PROPS} />);
+			view.rerender(<SeferPanel {...PROPS} perekId={2} />);
+			await flushAsync();
+			await act(async () => {
+				failOldUnits(new Error("late metric failure"));
+			});
+			expect(warn).not.toHaveBeenCalledWith(
+				"Failed to load commentary reading progress",
+				expect.anything(),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("weights the commentary progress bar by rendered stored notes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockResolvedValue({
+			1: [
+				{ key: "1:0", wordCount: 5, cumulativeWords: 5 },
+				{ key: "9:9", wordCount: 5, cumulativeWords: 10 },
+			],
+		});
+		// The progress component measures rendered units: jsdom lacks the
+		// Range layout methods and ResizeObserver it calls.
+		Range.prototype.getBoundingClientRect = () =>
+			({ top: 0, bottom: 10 }) as DOMRect;
+		Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+		global.ResizeObserver = jest.fn(() => ({
+			observe: jest.fn(),
+			unobserve: jest.fn(),
+			disconnect: jest.fn(),
+		})) as unknown as typeof ResizeObserver;
+		global.requestAnimationFrame = (cb: FrameRequestCallback) => {
+			cb(0);
+			return 0;
+		};
+		global.cancelAnimationFrame = jest.fn();
+		const { container } = await renderPanel(<SeferPanel {...PROPS} />);
+		expect(await screen.findByText("הערה")).toBeTruthy();
+		// Only the rendered note contributes: unit 9:9 is filtered out, so
+		// the bar still mounts with the single rendered unit's weight.
+		const bar = container.querySelector('[role="progressbar"]');
+		expect(bar).not.toBeNull();
+		expect(mockGetNoteProgressUnitsBatch).toHaveBeenCalledWith(1, [1]);
 	});
 });

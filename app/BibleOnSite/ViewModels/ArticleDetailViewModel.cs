@@ -115,6 +115,12 @@ public partial class ArticleDetailViewModel : ObservableObject
     public string AuthorName => Article?.Author?.Name ?? string.Empty;
 
     /// <summary>
+    /// "זמן קריאה משוער: X" badge over the full article body (issue #2607);
+    /// null when the metric is unknown — the badge hides entirely.
+    /// </summary>
+    public string? ReadingTimeBadge => Article?.ReadingTimeBadge;
+
+    /// <summary>
     /// Gets the author image URL.
     /// </summary>
     public string? AuthorImageUrl => Article?.Author?.ImageUrl;
@@ -140,6 +146,7 @@ public partial class ArticleDetailViewModel : ObservableObject
         OnPropertyChanged(nameof(AuthorName));
         OnPropertyChanged(nameof(AuthorImageUrl));
         OnPropertyChanged(nameof(ShareUrl));
+        OnPropertyChanged(nameof(ReadingTimeBadge));
     }
 
 #if MAUI
