@@ -37,16 +37,16 @@ public partial class DailyBulletinPage : ContentPage, IQueryAttributable
         }
 
         _pendingCardIndex = BulletinJoinCards.PositionForKey(key);
-        RevealPendingCard();
+        _ = RevealPendingCardAsync();
     }
 
     protected override void OnSizeAllocated(double width, double height)
     {
         base.OnSizeAllocated(width, height);
-        RevealPendingCard();
+        _ = RevealPendingCardAsync();
     }
 
-    private async void RevealPendingCard()
+    private async Task RevealPendingCardAsync()
     {
         if (_pendingCardIndex is not { } index
             || index >= JoinCards.Children.Count
