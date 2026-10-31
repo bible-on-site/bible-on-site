@@ -10,6 +10,11 @@ jest.mock("next/image", () => ({
 	),
 }));
 
+// Covered by its own suite; it fetches on mount.
+jest.mock("@/app/components/PushNotificationsToggle", () => ({
+	PushNotificationsToggle: () => null,
+}));
+
 import { AppSection } from "@/app/components/AppSection";
 
 describe("AppSection", () => {
@@ -32,9 +37,10 @@ describe("AppSection", () => {
 			"href",
 			expect.stringContaining("apps.apple.com"),
 		);
-		expect(
-			screen.getByRole("link", { name: "Google Play" }),
-		).toHaveAttribute("href", expect.stringContaining("play.google.com"));
+		expect(screen.getByRole("link", { name: "Google Play" })).toHaveAttribute(
+			"href",
+			expect.stringContaining("play.google.com"),
+		);
 		expect(
 			screen.getByRole("link", { name: "Microsoft Store" }),
 		).toHaveAttribute("href", expect.stringContaining("apps.microsoft.com"));
@@ -68,7 +74,9 @@ describe("AppSection", () => {
 		}));
 
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const { AppSection: AppSectionMocked } = require("@/app/components/AppSection");
+		const {
+			AppSection: AppSectionMocked,
+		} = require("@/app/components/AppSection");
 		render(<AppSectionMocked />);
 		// The null-href platform should be a <span>, not a link
 		expect(screen.queryByRole("link", { name: "Coming Soon" })).toBeNull();
