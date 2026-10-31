@@ -46,7 +46,7 @@ The shared queue and dead-letter queue use SQS-managed encryption, with no custo
 Runtime permissions are limited to:
 
 - `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:ChangeMessageVisibility` and `sqs:GetQueueAttributes` on the shared worker queue only. Batch APIs use the corresponding base IAM action, so `SendMessageBatch` requires `sqs:SendMessage`.
-- `ses:SendEmail` on the exact identity and configuration-set ARNs, with the exact `ses:FromAddress` condition.
+- `ses:SendEmail` on the exact identity, configuration-set and contact-list ARNs, with the exact `ses:FromAddress` condition. SES also authorizes the contact list when the request includes `ListManagementOptions`; contact read/write permissions alone do not cover that send. A controlled mailbox-simulator comparison confirmed that omitting the list succeeds while including it returns HTTP 403 against the contact-list ARN without this grant. Keep list management enabled so SES supplies unsubscribe links and applies topic preferences.
 - `ses:CreateContact`, `ses:UpdateContact` and `ses:GetContact` on the one contact-list ARN.
 - `ses:GetEmailIdentity` on the identity and `ses:GetAccount` on `*` for readiness checks. `GetAccount` has no resource-scoped ARN.
 

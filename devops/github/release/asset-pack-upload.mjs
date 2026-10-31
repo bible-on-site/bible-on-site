@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { apiAttempts, withApiRetries } from "./gh-api.mjs";
 import { appleReader, findApp } from "./testflight-build.mjs";
 
 /**
@@ -59,18 +60,35 @@ const UPLOAD_FAILURE =
 	/failed to upload asset pack|failed to get the list of asset packs/i;
 
 function execResult(result) {
-	if (result == null) return { status: 0, output: "" };
+	if (result == null) return { status: 0, stdout: "", stderr: "", output: "" };
 	if (typeof result === "string" || Buffer.isBuffer(result))
-		return { status: 0, output: result.toString() };
-	const output = [result.stdout, result.stderr, ...(result.output ?? [])]
-		.filter(Boolean)
-		.map((part) => part.toString())
-		.join("\n");
-	return { status: result.status ?? result.exitCode ?? 0, output };
+		return {
+			status: 0,
+			stdout: result.toString(),
+			stderr: "",
+			output: result.toString(),
+		};
+	const stdout = (result.stdout ?? result.output?.[1] ?? "").toString();
+	const stderr = (result.stderr ?? result.output?.[2] ?? "").toString();
+	return {
+		status: result.status ?? result.exitCode ?? 0,
+		stdout,
+		stderr,
+		// Combined stream for diagnostics; machine readers must use `stdout`
+		// alone so stderr warnings can never corrupt parsed payloads.
+		output: [stdout, stderr].filter(Boolean).join("\n"),
+	};
 }
 
 const defaultExec = (command, args) => {
-	const result = spawnSync(command, args, { encoding: "utf8" });
+	// Bounded, not default 1 MiB — the #2842 ENOBUFS killed receipt discovery
+	// on a 2.6 MB page. The real fix is that callers now request small
+	// payloads (`gh api --jq`); this cap is only a safety net for chatty
+	// tools like altool.
+	const result = spawnSync(command, args, {
+		encoding: "utf8",
+		maxBuffer: 16 * 1024 * 1024,
+	});
 	if (result.error) throw result.error;
 	process.stdout.write(result.stdout ?? "");
 	process.stderr.write(result.stderr ?? "");
@@ -325,12 +343,29 @@ function validReceiptEntry(entry) {
 	);
 }
 
-/** The newest published receipt wins: each deploy rewrites the full fleet map. */
+/**
+ * Prior-receipt discovery outcome. `available` carries the validated entries;
+ * `absent` means the search completed and no app release carries a receipt
+ * (explicit bootstrap); `unavailable` means the evidence could not be read —
+ * search incomplete, gh/download/network failure or a malformed receipt. Only
+ * `absent` may bootstrap uploads: an `unavailable` receipt must never justify
+ * publishing packs whose remote content cannot otherwise be verified.
+ */
 async function findPriorReceipt(github, repository, report) {
-	if (!github || !repository) return null;
+	if (!github || !repository)
+		return {
+			state: "unavailable",
+			entries: {},
+			reason: "no release repository context to search",
+		};
 	try {
 		const tag = await github.findReceiptAsset(repository);
-		if (!tag) return null;
+		if (!tag) {
+			report(
+				"No publication receipt on any app release; publishing under the explicit bootstrap path",
+			);
+			return { state: "absent", entries: {} };
+		}
 		const directory = mkdtempSync(path.join(tmpdir(), "pack-receipt-"));
 		try {
 			await github.downloadReceipt(repository, tag, directory);
@@ -349,42 +384,73 @@ async function findPriorReceipt(github, repository, report) {
 			report(
 				`Prior publication receipt: ${tag} (${Object.keys(entries).length} valid pack entries)`,
 			);
-			return entries;
+			return { state: "available", entries };
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}
 	} catch (error) {
+		const reason = error?.message ?? String(error);
 		report(
-			`::warning::No usable publication receipt found; matching by remote checksum only (${error.message})`,
+			`::warning::Publication receipt unavailable (${reason}); packs that need receipt evidence will block, not upload`,
 		);
-		return null;
+		return { state: "unavailable", entries: {}, reason };
 	}
 }
 
-const defaultGithub = (exec) => ({
+/** Most recent app releases are enough for any healthy receipt, but a full
+ * history scan must stay explicit when it has to give up. */
+const RECEIPT_PAGE_LIMIT = 25;
+
+/**
+ * `gh api --jq` filters server output inside `gh` itself: stdout stays a few
+ * hundred bytes per page no matter how large the release payload grows — the
+ * #2842 ENOBUFS was spawnSync's 1 MiB buffer vs a 2.6 MB first page. Errors
+ * keep stderr for the message while stdout carries only machine-readable
+ * JSON, so warnings cannot corrupt the scan.
+ */
+const RECEIPT_SCAN_JQ = `{count: length, tags: [.[] | select(.draft == false) | select((.tag_name // "") | startswith("app-v")) | select([.assets[]?.name] | index("${PUBLICATION_ASSET}") != null) | .tag_name]}`;
+
+/** Bounded transient retry shared by every gh call (output already parsed). */
+function ghCall(exec, args, what, retryDelayMs) {
+	return withApiRetries(
+		() => {
+			const { status, stdout, stderr } = execResult(exec("gh", args));
+			if (status !== 0)
+				throw new Error(`${what} failed: ${(stderr || stdout).trim()}`);
+			return { stdout, stderr };
+		},
+		apiAttempts,
+		retryDelayMs,
+	);
+}
+
+const defaultGithub = (exec, { retryDelayMs = 1500 } = {}) => ({
 	async findReceiptAsset(repository) {
-		for (let page = 1; page <= 3; page++) {
-			const { status, output } = execResult(
-				exec("gh", [
+		for (let page = 1; page <= RECEIPT_PAGE_LIMIT; page++) {
+			const { stdout } = ghCall(
+				exec,
+				[
 					"api",
 					`repos/${repository}/releases?per_page=100&page=${page}`,
-				]),
+					"--jq",
+					RECEIPT_SCAN_JQ,
+				],
+				`gh api releases page ${page}`,
+				retryDelayMs,
 			);
-			if (status !== 0)
-				throw new Error(`gh api releases failed: ${output.trim()}`);
-			const releases = JSON.parse(output);
-			for (const release of releases) {
-				if (release.draft || !release.tag_name?.startsWith("app-v")) continue;
-				if (release.assets?.some((asset) => asset.name === PUBLICATION_ASSET))
-					return release.tag_name;
-			}
-			if (releases.length < 100) return null;
+			const scan = JSON.parse(stdout);
+			if (scan.tags.length) return scan.tags[0];
+			// A short page is the end of the history — the search is complete.
+			if (scan.count < 100) return null;
 		}
-		return null;
+		throw new Error(
+			`publication receipt search incomplete: no receipt in the newest ${RECEIPT_PAGE_LIMIT * 100} releases`,
+		);
 	},
 	async downloadReceipt(repository, tag, directory) {
-		const { status, output } = execResult(
-			exec("gh", [
+		ghCall(
+			exec,
+			[
 				"release",
 				"download",
 				tag,
@@ -395,25 +461,18 @@ const defaultGithub = (exec) => ({
 				"--dir",
 				directory,
 				"--clobber",
-			]),
+			],
+			`gh release download ${tag}`,
+			retryDelayMs,
 		);
-		if (status !== 0)
-			throw new Error(`gh release download ${tag} failed: ${output.trim()}`);
 	},
 	async uploadReceipt(repository, tag, file) {
-		const { status, output } = execResult(
-			exec("gh", [
-				"release",
-				"upload",
-				tag,
-				file,
-				"--repo",
-				repository,
-				"--clobber",
-			]),
+		ghCall(
+			exec,
+			["release", "upload", tag, file, "--repo", repository, "--clobber"],
+			`gh release upload ${tag}`,
+			retryDelayMs,
 		);
-		if (status !== 0)
-			throw new Error(`gh release upload ${tag} failed: ${output.trim()}`);
 	},
 });
 
@@ -442,6 +501,7 @@ export function planPack(pack, remote, receiptEntry, localMd5 = null) {
 	if (!remote.pack)
 		return {
 			action: "upload",
+			evidence: "remote-missing",
 			previousTop: 0,
 			reason: "no asset-pack record on App Store Connect",
 		};
@@ -475,6 +535,7 @@ export function planPack(pack, remote, receiptEntry, localMd5 = null) {
 		);
 		return {
 			action: "upload",
+			evidence: "no-live-version",
 			previousTop: pending[0]?.number ?? 0,
 			reason: waiting
 				? "a reserved upload never completed; publishing a fresh version"
@@ -505,9 +566,36 @@ export function planPack(pack, remote, receiptEntry, localMd5 = null) {
 			reason: `matching live version ${top.number} is not yet ready for internal testing (${beta.state ?? "no internal-beta release"})`,
 		};
 	}
+	// Not matching — but "not proven identical" is not "proven different".
+	// Only these cases carry positive evidence for a new upload:
+	if (!servesIos(top))
+		return {
+			action: "upload",
+			evidence: "platform-unsupported",
+			reason: `live version ${top.number} cannot serve iOS`,
+			previousTop: top.number,
+		};
+	if (
+		receiptEntry?.versionId === top.id &&
+		receiptEntry.contentSha256 !== pack.contentSha256 &&
+		(!top.checksum ||
+			top.checksum.hash === receiptEntry.archiveSha256?.toLowerCase())
+	)
+		return {
+			action: "upload",
+			evidence: "receipt-differs",
+			reason: `live version ${top.number} provably carries different content`,
+			previousTop: top.number,
+		};
+	// Archive checksum differs or is absent and no trusted receipt ties this
+	// version to our content: the remote bytes are unverifiable — never
+	// proven changed. Whether this may still upload depends on how complete
+	// the receipt evidence is (the caller blocks it when the receipt itself
+	// could not be read).
 	return {
 		action: "upload",
-		reason: `live version ${top.number} carries different or unverifiable content`,
+		evidence: "unverifiable",
+		reason: `live version ${top.number} carries unverifiable content`,
 		previousTop: top.number,
 	};
 }
@@ -550,15 +638,25 @@ async function awaitDeliverableVersion(
 	for (let attempt = 1; ; attempt++) {
 		const remote = await readRemotePack(app, pack.id, read);
 		const top = liveTop(remote.versions);
-		// A version newer than whatever was live at decision time can only be the
-		// upload this run performed — but only when Apple exposes no checksum for
-		// it (a checksum mismatch proves foreign bytes). The reported file size
-		// must still agree, so an unattributed version cannot pass on timing.
+		// A version newer than whatever was live at decision time can only be
+		// the upload this run performed — but only when Apple exposes no
+		// checksum for it (a checksum mismatch proves foreign bytes). Timing
+		// alone is not provenance (#2842): the reported file size MUST match
+		// our archive, and it must be the ONLY checksum-less COMPLETE version
+		// above the decision top — a second unattributed version means a
+		// concurrent producer published in the same window and neither bytes
+		// nor receipt may be claimed for it.
 		const fresh =
 			minNumber != null &&
 			top?.number >= minNumber &&
 			top.checksum == null &&
-			(top.fileSize == null || top.fileSize === pack.archiveBytes);
+			top.fileSize === pack.archiveBytes &&
+			remote.versions.filter(
+				(version) =>
+					version.state === "COMPLETE" &&
+					version.number >= minNumber &&
+					version.checksum == null,
+			).length === 1;
 		const matching =
 			top != null &&
 			(fresh || (await liveVersionMatches(top, pack, receiptEntry)));
@@ -694,13 +792,17 @@ export async function uploadAssetPacks(
 		repository = process.env.GITHUB_REPOSITORY ?? null,
 		fetcher = fetch,
 		exec = defaultExec,
-		github = defaultGithub(exec),
+		githubPolicy = {},
+		github = defaultGithub(exec, githubPolicy),
 		verify = verifyAssetPacks,
 		attempts = 60,
 		sleep = defaultSleep,
 		report = console.log,
+		// Bounded retry policy for the read-only Apple lookups (#2842); tests
+		// inject sleeps/clocks here for deterministic retry coverage.
+		readPolicy = {},
 	},
-	read = appleReader(credentials, fetcher),
+	read = appleReader(credentials, fetcher, { report, ...readPolicy }),
 ) {
 	const archives = listArchives(directory);
 	if (archives.length === 0)
@@ -736,13 +838,19 @@ export async function uploadAssetPacks(
 	}
 
 	const prior = await findPriorReceipt(github, repository, report);
+	const priorEntries = prior.state === "available" ? prior.entries : null;
 	const withPaths = packs.map((pack) => ({
 		...pack,
 		archivePath: path.join(directory, pack.archive),
 	}));
 
 	// Decide the whole fleet before any write: a pack that can prove neither
-	// reuse nor a needed upload blocks the publish instead of half-applying it.
+	// reuse nor a needed upload blocks the publish instead of half-applying
+	// it. When the receipt could not be read at all, content evidence may be
+	// incomplete — a pack whose remote bytes are unverifiable must block
+	// rather than "upload just in case" (#2842: the ENOBUFS receipt failure
+	// turned every pack into an unneeded upload). A complete search that
+	// found no receipt is the explicit bootstrap path and may still upload.
 	const decisions = [];
 	for (const pack of withPaths) {
 		const remote = await readRemotePack(app, pack.id, read);
@@ -752,7 +860,16 @@ export async function uploadAssetPacks(
 		)
 			? await fileDigest(pack.archivePath, "md5")
 			: null;
-		const decision = planPack(pack, remote, prior?.[pack.id], localMd5);
+		const planned = planPack(pack, remote, priorEntries?.[pack.id], localMd5);
+		const decision =
+			planned.action === "upload" &&
+			planned.evidence === "unverifiable" &&
+			prior.state === "unavailable"
+				? {
+						action: "blocked",
+						reason: `${planned.reason}; publication receipt is unavailable (${prior.reason})`,
+					}
+				: planned;
 		decisions.push({ pack: { ...pack, packResourceId: remote.pack?.id }, decision });
 		report(
 			JSON.stringify({
@@ -780,7 +897,7 @@ export async function uploadAssetPacks(
 		}
 		// Reuse and settle both end at the same proof: the live version carries
 		// our bytes and is ready for internal testing.
-		const top = await awaitDeliverableVersion(app, pack, prior?.[pack.id], read, {
+		const top = await awaitDeliverableVersion(app, pack, priorEntries?.[pack.id], read, {
 			attempts,
 			sleep,
 			report,
@@ -810,7 +927,7 @@ export async function uploadAssetPacks(
 	}
 
 	const context = releaseContext(releaseTag);
-	const receipt = buildReceipt(withPaths, results, prior, context);
+	const receipt = buildReceipt(withPaths, results, priorEntries, context);
 	report(
 		JSON.stringify({
 			phase: "asset-pack-receipt",

@@ -200,6 +200,33 @@ describe("EntryAliasesPanel", () => {
 		).toBeInTheDocument();
 	});
 
+	it("warns when the save committed but the website invalidation did not apply", async () => {
+		mocks.saveEntryAlias.mockResolvedValue({
+			name: "משה",
+			targetCount: 1,
+			kind: "alias",
+			websiteFresh: false,
+		});
+		renderPanel();
+		fireEvent.click(
+			await screen.findByRole("button", { name: /הוסף שם חלופי/ }),
+		);
+		fireEvent.change(screen.getByLabelText("שם / כתובת"), {
+			target: { value: "משה" },
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeEnabled(),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "שמור כתובת" }));
+
+		expect(
+			await screen.findByText(/«משה» מפנה ישירות לערך היעד/),
+		).toBeInTheDocument();
+		expect(
+			await screen.findByText(/עדכון האתר הציבורי לא הוחל/),
+		).toBeInTheDocument();
+	});
+
 	it("merges in the existing targets when the typed name is shared", async () => {
 		mocks.checkPediaName.mockImplementation(
 			async ({ data }: { data: { name: string } }) =>

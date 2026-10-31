@@ -14,6 +14,42 @@ const template = YAML.parse(
 	),
 );
 
+function assertSesSendScope(statement) {
+	const arn = `arn:\${AWS::Partition}:ses:\${AWS::Region}:\${AWS::AccountId}:`;
+	assert.equal(statement.Effect, "Allow");
+	assert.equal(statement.Action, "ses:SendEmail", "no additional send APIs");
+	assert.deepEqual(statement.Resource, [
+		`${arn}identity/\${BulletinEmailIdentity}`,
+		`${arn}configuration-set/\${BulletinConfigurationSet}`,
+		`${arn}contact-list/\${BulletinContactList}`,
+	], "sending with list management needs exactly these three resources");
+	assert.deepEqual(statement.Condition, {
+		StringEquals: { "ses:FromAddress": "FromAddress" },
+	}, "the exact sender restriction must remain");
+}
+
+const sendStatement = template.Resources.BulletinAdminRuntimePolicy.Properties
+	.PolicyDocument.Statement.find(statement => statement.Sid === "SendFromBulletinIdentity");
+
+test("SES sending permits list management only for the bulletin resources and sender", () => {
+	assertSesSendScope(sendStatement);
+});
+
+test("SES scope guard rejects the missing list grant, wildcard resources and broader send APIs", () => {
+	const missingList = structuredClone(sendStatement);
+	missingList.Resource.pop();
+	assert.throws(() => assertSesSendScope(missingList), /exactly these three resources/);
+	const wildcard = structuredClone(sendStatement);
+	wildcard.Resource.push("*");
+	assert.throws(() => assertSesSendScope(wildcard), /exactly these three resources/);
+	const rawSend = structuredClone(sendStatement);
+	rawSend.Action = ["ses:SendEmail", "ses:SendRawEmail"];
+	assert.throws(() => assertSesSendScope(rawSend), /no additional send APIs/);
+	const anySender = structuredClone(sendStatement);
+	delete anySender.Condition;
+	assert.throws(() => assertSesSendScope(anySender), /exact sender restriction/);
+});
+
 // Bun preserves the scalar values of the !Ref and !GetAtt intrinsic tags.
 // SQS rejects a policy statement with multiple resources or another queue's ARN.
 function assertQueuePolicyScope(resource) {
@@ -226,4 +262,60 @@ test("Telegram grants only one parameter read to the existing execution role", (
 		telegramTemplate.Outputs.BotTokenContainerVariable.Value,
 		"BULLETIN_TELEGRAM_BOT_TOKEN",
 	);
+});
+
+test("the study-day schedule starts disabled, uses Jerusalem 10AM and only the existing queues", () => {
+	const schedule = YAML.parse(
+		readFileSync(
+			new URL(
+				"../docs/aws/cloudformation/daily-bulletin-schedule.yaml",
+				import.meta.url,
+			),
+			"utf8",
+		),
+	);
+	assert.deepEqual(
+		Object.values(schedule.Resources)
+			.map((resource) => resource.Type)
+			.sort(),
+		[
+			"AWS::IAM::Role",
+			"AWS::Scheduler::Schedule",
+			"AWS::Scheduler::ScheduleGroup",
+		].sort(),
+	);
+	assert.equal(schedule.Parameters.ScheduleState.Default, "DISABLED");
+	const properties = schedule.Resources.Schedule.Properties;
+	assert.equal(properties.ScheduleExpression, "cron(0 10 ? * SUN-THU *)");
+	assert.equal(properties.ScheduleExpressionTimezone, "Asia/Jerusalem");
+	// CloudFormation's Arn reader loses the custom GroupName after creation.
+	assert.equal(
+		schedule.Outputs.ScheduleArn.Value,
+		`arn:\${AWS::Partition}:scheduler:\${AWS::Region}:\${AWS::AccountId}:schedule/\${ScheduleGroup}/\${Schedule}`,
+	);
+	assert.equal(properties.FlexibleTimeWindow.Mode, "OFF");
+	assert.deepEqual(JSON.parse(properties.Target.Input), {
+		kind: "bulletin.schedule",
+		scheduledAt: "<aws.scheduler.scheduled-time>",
+	});
+	assert.equal(properties.Target.RetryPolicy.MaximumRetryAttempts, 0);
+	const role = schedule.Resources.SchedulerRole.Properties;
+	const trust = role.AssumeRolePolicyDocument.Statement[0];
+	assert.equal(trust.Principal.Service, "scheduler.amazonaws.com");
+	assert.deepEqual(trust.Condition, {
+		StringEquals: { "aws:SourceAccount": "AWS::AccountId" },
+		ArnEquals: { "aws:SourceArn": "ScheduleGroup.Arn" },
+	});
+	assert.deepEqual(role.Policies[0].PolicyDocument.Statement, [
+		{
+			Effect: "Allow",
+			Action: "sqs:SendMessage",
+			Resource: ["WorkerQueueArn", "DeadLetterQueueArn"],
+		},
+	]);
+	for (const name of ["WorkerQueueArn", "DeadLetterQueueArn"]) {
+		assert.deepEqual(schedule.Parameters[name].AllowedValues, [
+			schedule.Parameters[name].Default,
+		]);
+	}
 });

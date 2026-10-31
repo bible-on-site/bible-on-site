@@ -7,6 +7,11 @@
 engines:
   metric:
     enabled: false
+  # Executed on a verifier-owned MySQL 8.4 server. T-SQL SET directives,
+  # schema qualification and SQL Server compression do not apply to this fixture.
+  tsqllint:
+    exclude_paths:
+      - "devops/github/ci/native-api-fixture-rows.sql"
   # Prospector enforces D213 (summary on line two) while the repo's ruff
   # config enforces the contradictory D212 (summary on line one). The repo
   # gate wins; prospector is excluded on these files only — Bandit and the
@@ -99,4 +104,4 @@ exclude_paths:
   # object-spread/??/default-param syntax, so its "Unnecessary block"
   # findings are parse artifacts, not lone blocks. Still linted by the
   # repo's own biome/precommit.
-  - "web/bible-on-site/tests/util/coverage/coverage-universe.js"
+  - "web/bible-on-site/tests/util/coverage/coverage-universe.mjs"
