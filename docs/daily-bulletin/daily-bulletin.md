@@ -26,6 +26,12 @@ SES adds native unsubscribe controls using Easy DKIM and `ListManagementOptions`
 
 The additive migration creates settings, subscribers, jobs and per-recipient history. Apply and verify it before enabling the worker. Disable `BULLETIN_EMAIL_WORKER_ENABLED` and restore the preceding admin task definition to roll back execution; retain subscriber preferences, queues and audit data. The stack adds DKIM records without changing existing public routes. Smoove is no longer the delivery provider; its quota-exhausted partial list is unused and no Smoove campaign was sent during this migration.
 
+## WhatsApp group delivery
+
+The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive schema, cached connection checks, secret injection and private validation. The admin has an authenticated revision-checked test/real selector; test is the default and the real group remains unconfigured. Saved PDF bytes are posted once, with a durable job and immutable target/membership/hash. Accepted uploads remain visibly distinct from journal-confirmed sending. Uncertain outcomes never trigger another upload. Ordinary admin reads make no provider calls, and one existing SQS worker handles email and WhatsApp.
+
+The new controls have actual desktop/mobile [before and after captures](screenshots/README.md). Local implementation and native database validation do not establish production deployment or successful provider delivery. The public join carousel and native-app counterpart ([issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)) follow channel validation and must expose only public join links.
+
 ## Database deployment
 
 `data/mysql/tanah_daily_bulletin_upgrade.sql` is an additive, repeatable migration in the normal data deployment manifest. It retains article eligibility, prepared bulletins, and delivery records. It intentionally builds table DDL with `CONCAT`: the existing database deployment Lambda rewrites literal `CREATE TABLE` statements into destructive rebuilds, even with `IF NOT EXISTS`.
@@ -59,7 +65,7 @@ Its state table stored a date, Smoove campaign ID, Telegram success flag, and Wh
 
 - Complete final native unsubscribe and deployed-worker validation. SES production access is granted. Keep the audience set to test until the owner explicitly activates real sending and consent has been established.
 - Restore Telegram document posting and verify bot access to the channel.
-- Recover or replace the separate WhatsApp service and verify group delivery.
+- Complete the GREEN-API deployment and owner-only WhatsApp group-delivery validation.
 - Extend durable claims, provider IDs and ambiguous-outcome handling to Telegram and WhatsApp.
 - Add EventBridge scheduling in `Asia/Jerusalem`, holiday advance sends, and calendar regression tests.
 - Add failure monitoring and admin controls for reviewing/rebuilding unsent bulletins and retrying failed delivery.

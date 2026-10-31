@@ -27,8 +27,7 @@ test.describe("Articles Management", () => {
 		await expect(page.getByLabel("עדיפות")).toBeVisible();
 	});
 
-	test.skip("quick navigation to perek works", async ({ page }) => {
-		// TODO: Fix - navigation with window.location.href not working reliably in tests
+	test("quick navigation to perek works", async ({ page }) => {
 		await page.goto("/articles");
 
 		// Wait for page to load
@@ -41,10 +40,14 @@ test.describe("Articles Management", () => {
 		await perekInput.fill("1");
 
 		// Click the navigation button - this uses window.location so we need to wait for navigation
+		const navigationStarted = performance.now();
 		await Promise.all([
 			page.waitForURL(/\/articles\/perek\/1/, { timeout: 15000 }),
 			page.getByRole("button", { name: /עבור לפרק/ }).click(),
 		]);
+		await expect(page.getByRole("heading", { name: /פרק 1/ })).toBeVisible({
+			timeout: Math.max(1, 15000 - (performance.now() - navigationStarted)),
+		});
 	});
 
 	test("sefarim accordion shows Hebrew perek labels", async ({ page }) => {

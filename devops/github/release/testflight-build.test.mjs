@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
 	apiToken,
+	appleReader,
 	checkBuild,
 	checkUploadResult,
 	findBuild,
@@ -419,6 +420,133 @@ for (const [label, change] of [
 
 test("upload lookup denial never permits a retry or hides an HTTP failure", async () => {
 	await assert.rejects(uploadLookup(uploadResponse(), 403), /HTTP 403/);
+});
+
+// ---------- #2842: bounded retry for read-only Apple requests ----------
+
+const okResponse = (result = { data: [] }) => ({
+	ok: true,
+	status: 200,
+	json: async () => result,
+});
+const statusResponse = (status, headers = {}) => ({
+	ok: false,
+	status,
+	headers: { get: (name) => headers[name.toLowerCase()] ?? null },
+});
+
+function readWith(fetcher, policy = {}) {
+	const sleeps = [];
+	const reports = [];
+	const read = appleReader(credentials, fetcher, {
+		sleep: async (ms) => sleeps.push(ms),
+		random: () => 0,
+		report: (line) => reports.push(JSON.parse(line)),
+		...policy,
+	});
+	return { read, sleeps, reports };
+}
+
+test("appleReader retries a transient timeout then succeeds", async () => {
+	let calls = 0;
+	const { read, sleeps, reports } = readWith(async () => {
+		calls++;
+		if (calls === 1)
+			throw new DOMException(
+				"The operation was aborted due to timeout",
+				"TimeoutError",
+			);
+		return okResponse({ data: [{ id: "pack" }] });
+	});
+	assert.deepEqual(await read("backgroundAssets/1/versions", {}), {
+		data: [{ id: "pack" }],
+	});
+	assert.equal(calls, 2);
+	assert.deepEqual(sleeps, [1000]);
+	assert.equal(reports[0].phase, "apple-read-retry");
+	assert.equal(reports[0].attempt, 2);
+});
+
+test("appleReader honors Retry-After on throttled and server answers", async () => {
+	for (const [status, header, expected] of [
+		[429, "2", 2000],
+		[503, "1", 1000],
+		// A long server hint is honored up to the remaining budget instead of
+		// retrying inside the throttle window (Devin Review on #2847).
+		[429, "60", 60000],
+	]) {
+		let calls = 0;
+		const { read, sleeps } = readWith(async () => {
+			calls++;
+			if (calls === 1)
+				return statusResponse(status, { "retry-after": header });
+			return okResponse();
+		});
+		await read("apps", {});
+		assert.equal(calls, 2);
+		assert.deepEqual(sleeps, [expected]);
+	}
+});
+
+test("appleReader never retries permanent authorization or malformed answers", async () => {
+	for (const status of [400, 401, 403, 404, 422]) {
+		let calls = 0;
+		const { read } = readWith(async () => {
+			calls++;
+			return statusResponse(status);
+		});
+		await assert.rejects(read("apps", {}), (error) =>
+			error.message.includes(`HTTP ${status}`),
+		);
+		assert.equal(calls, 1);
+	}
+	let calls = 0;
+	const { read } = readWith(async () => {
+		calls++;
+		return okResponse({ data: {} });
+	});
+	await assert.rejects(read("apps", {}), /incomplete build lookup/);
+	assert.equal(calls, 1);
+});
+
+test("appleReader exhausts bounded retries and stays a failed read", async () => {
+	for (const fail of [
+		() => {
+			throw new TypeError("fetch failed");
+		},
+		() => statusResponse(500),
+	]) {
+		let calls = 0;
+		const { read } = readWith(async () => {
+			calls++;
+			return fail();
+		});
+		await assert.rejects(read("apps", {}));
+		assert.equal(calls, 3);
+	}
+});
+
+test("appleReader stops inside the overall time budget", async () => {
+	let now = 0;
+	let calls = 0;
+	const { read, sleeps } = readWith(
+		async () => {
+			calls++;
+			throw new TypeError("fetch failed");
+		},
+		{
+			retries: 10,
+			budgetMs: 2500,
+			now: () => now,
+			sleep: async (ms) => {
+				sleeps.push(ms);
+				now += ms;
+			},
+		},
+	);
+	await assert.rejects(read("apps", {}), /fetch failed/);
+	assert.equal(calls, 3);
+	assert.deepEqual(sleeps, [1000, 1500]);
 });
 
 const check = (states, options = {}) => {

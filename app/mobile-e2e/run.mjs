@@ -6,10 +6,13 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
+import { iosInteractionDiagnostics, sampleIosFallback } from "./ios-interaction-diagnostics.mjs";
+import { listenScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { installAppUnderTest } from "./android-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -62,24 +65,26 @@ await new Promise((resolvePort, reject) => {
   probe.on("error", reject);
   probe.listen(Number(appiumPort), "127.0.0.1", () => probe.close(resolvePort));
 });
-if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
-  // UiAutomator2 skips installation entirely with noReset, even when
-  // enforceAppInstall is set. Replace the APK while retaining the review data.
-  const installation = await execute(androidAdb, ["-s", process.env.MOBILE_UDID, "install", "-r", appPath],
-    { timeout: 180000 });
-  console.log(installation.stdout.trim());
+if (platform === "android") {
+  // `adb install` picks an IncFS incremental install whenever the binary and
+  // device support it; Xamarin mmaps assemblies.blob out of the staged APK and
+  // can SIGSEGV in libmonodroid open_from_bundles before IncFS materializes
+  // the page (#2773). The pilot installs the AUT on the deterministic
+  // --no-incremental path and marks it preinstalled so UiAutomator2 keeps
+  // reusing it under noReset — driver-initiated installs would be incremental
+  // again. MOBILE_KEEP_APP swaps the APK while retaining the review data.
+  const installation = await installAppUnderTest({ adb: androidAdb, udid: process.env.MOBILE_UDID,
+    appPath, packageId: "com.tanah.daily929", keepData: process.env.MOBILE_KEEP_APP === "1", execute });
+  console.log(installation.output);
 }
 let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
-const hangMonitor = platform === "ios" ? monitorNativeInteractions(async (command) => {
-  writeFileSync(resolve(artifacts, "native-hang-command.txt"), command);
-  // Commands can exceed the observation threshold and still finish within
-  // their interaction deadline. Capture through CoreSimulator without app
-  // process queries or debugger attachment; sample stacks only after failure.
-  const error = await captureNativeFrame("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot"],
-    resolve(artifacts, "native-interaction.png"), execute);
-  if (error) console.error("Could not capture the pending interaction frame:", error.message);
+const interactions = platform === "ios" ? iosInteractionDiagnostics({
+  artifacts, udid: process.env.MOBILE_UDID,
+  nativeLog: resolve(artifacts, "device-live.log"), execute,
 }) : undefined;
+const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
+  interactions.capture(command, request)) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
@@ -168,11 +173,20 @@ async function sampleIosApp(phase) {
     console.error("Could not sample the iOS app:", error);
   }
 }
+let failureObserverConfirmed = false;
+const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
+if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
+let failureMonitor;
 const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
+  failureMonitor = interactions ? await listenScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
+    const result = await interactions.failure(request, { signal });
+    if (result.status === "error") diagnosticsFailed = true;
+    return result;
+  }) : undefined;
   const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
     probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
@@ -182,7 +196,11 @@ try {
   test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
-      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
+      MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
+      MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
+      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}),
+      ...(platform === "android" ? { MOBILE_APP_PREINSTALLED: "1" } : {}),
+      APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
     stream.on("data", chunk => {
@@ -205,6 +223,13 @@ try {
   } catch (error) {
     diagnosticsFailed = true;
     console.error("Could not capture test-host shutdown stacks:", error);
+  }
+  try {
+    await phase("scenario-failure-monitor", () => failureMonitor?.stop());
+    failureObserverConfirmed = true;
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not finish scenario-failure handoff:", error);
   }
   try {
     await phase("native-hang-monitor", () => hangMonitor?.stop());
@@ -232,10 +257,13 @@ try {
       console.error("Could not capture Android crash diagnostics:", error.message);
     }
   }
-  if (platform === "ios" && process.exitCode !== 0) {
+  if (platform === "ios" && test && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
-    // Sample surviving failed/hung apps after tests, never alongside healthy runs.
-    await phase("ios-app-sampling", () => sampleIosApp("cleanup"));
+    // Sample surviving apps only if no earlier failure handoff could identify the original.
+    // An exited/unknown pinned PID must never fall back to a later scenario's app.
+    const outcome = await phase("ios-app-sampling", () =>
+      sampleIosFallback(failureMonitor, failureObserverConfirmed, () => sampleIosApp("cleanup")));
+    writeFileSync(resolve(artifacts, "native-cleanup-sampling.json"), JSON.stringify(outcome, null, 2));
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
   if (platform === "ios") {

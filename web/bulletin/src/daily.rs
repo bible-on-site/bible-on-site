@@ -76,6 +76,38 @@ fn normalize_html_text(html: &str) -> String {
         .collect()
 }
 
+// Preserve the archive's chapter-based naming convention. Sanitization affects
+// the download name only; scripture and stored chapter metadata stay intact.
+fn bulletin_filename(perek_id: i32, source: &str, header: &str) -> String {
+    let header = normalize_authored(header);
+    let name = if header.trim().is_empty() {
+        format!("{perek_id}_{source} - {perek_id}")
+    } else {
+        format!("{perek_id}_{source} - {perek_id} - {header}")
+    };
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || r#"<>:"/\|?*"#.contains(c) {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    // UTF-8's byte limit also fits Windows' UTF-16 unit limit. Reserve four
+    // bytes for .pdf and stop before a character that would cross the limit.
+    let mut stem = String::new();
+    for c in cleaned.chars() {
+        if stem.len() + c.len_utf8() > 251 {
+            break;
+        }
+        stem.push(c);
+    }
+    format!("{}.pdf", stem.trim_end_matches([' ', '.']))
+}
+
 const WEBSITE_ORIGIN: &str = "https://xn--febl3a.co.il";
 const LOGO_URL: &str = "https://bible-on-site-assets.s3.il-central-1.amazonaws.com/branding/daily-bulletin/logo-header-bfaa157e34c2.jpg";
 
@@ -232,7 +264,7 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
         cover_text: pdf::PdfCoverText::default(),
     };
     let bytes = pdf::build_daily_pdf(&req, fonts_dir, &hebrew_date, &dedications)?;
-    let filename = format!("{}-{}.pdf", input.date, source);
+    let filename = bulletin_filename(input.perek_id, &source, &chapter.header);
     Ok(DailyArtifacts {
         subject,
         source,
@@ -253,6 +285,74 @@ mod tests {
             perek_id: 502,
             article: None,
             dedications: vec![],
+        }
+    }
+
+    #[test]
+    fn file_names_match_archived_chapter_convention() {
+        assert_eq!(
+            bulletin_filename(1, "בראשית א", "בריאת העולם"),
+            "1_בראשית א - 1 - בריאת העולם.pdf"
+        );
+        let chapter = tanach::get_perek(305).unwrap();
+        assert_eq!(
+            bulletin_filename(305, "מלכים א יח", &chapter.header),
+            "305_מלכים א יח - 305 - אליהו הנביא נראה לאחאב, מעמד אליהו ונביאי הבעל בכרמל.pdf"
+        );
+        let chapter = tanach::get_perek(306).unwrap();
+        assert_eq!(
+            bulletin_filename(306, "מלכים א יט", &chapter.header),
+            "306_מלכים א יט - 306 - אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה' אליו.pdf"
+        );
+    }
+
+    #[test]
+    fn file_names_are_portable_without_mutating_headings() {
+        let header = "כותרת: עם / נתיב? \\ וקישור | ועוד* <טקסט>\n";
+        let original = header.to_string();
+        let name = bulletin_filename(5, "בראשית ה", header);
+        assert!(name.starts_with("5_בראשית ה - 5 - "));
+        assert!(
+            !name
+                .chars()
+                .any(|c| c.is_control() || r#"<>:"/\|?*"#.contains(c))
+        );
+        assert_eq!(header, original);
+        assert_eq!(bulletin_filename(1, "בראשית א", " "), "1_בראשית א - 1.pdf");
+        let long = bulletin_filename(1, "בראשית א", &"כותרת 🌍 ".repeat(100));
+        assert!(long.encode_utf16().count() <= 255);
+        assert!(long.len() <= 255, "{} UTF-8 bytes", long.len());
+        assert!(long.ends_with(".pdf"));
+    }
+
+    #[test]
+    fn file_name_byte_limit_preserves_complete_unicode_characters() {
+        let ascii = bulletin_filename(1, "x", &"a".repeat(300));
+        assert_eq!(ascii.len(), 255);
+        let header = format!("{}🌍", "a".repeat(240));
+        let unicode = bulletin_filename(1, "x", &header);
+        assert_eq!(unicode, format!("1_x - 1 - {}.pdf", "a".repeat(240)));
+    }
+
+    #[test]
+    fn every_canonical_chapter_has_a_portable_archive_name() {
+        for id in 1..=929 {
+            let chapter = tanach::get_perek(id).unwrap();
+            let source = format!(
+                "{} {}",
+                chapter.sefer_name,
+                tanach::perek_to_hebrew(chapter.perek_in_sefer)
+            );
+            let name = bulletin_filename(id, &source, &chapter.header);
+            assert!(name.starts_with(&format!("{id}_")));
+            assert!(name.ends_with(".pdf"));
+            assert!(name.encode_utf16().count() <= 255);
+            assert!(name.len() <= 255, "oversized chapter {id} filename");
+            assert!(
+                !name
+                    .chars()
+                    .any(|c| c.is_control() || r#"<>:"/\|?*"#.contains(c))
+            );
         }
     }
 

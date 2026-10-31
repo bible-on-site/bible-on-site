@@ -8,6 +8,7 @@ using Microsoft.Maui.Layouts;
 
 namespace BibleOnSite.Tests.Controls;
 
+[Collection("Application state")]
 public class ReaderFanMenuTests
 {
     /// <summary>
