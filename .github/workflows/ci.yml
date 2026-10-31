@@ -2162,13 +2162,17 @@ jobs:
         with:
           python-version: "3.15"
 
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python3 devops/prepare_recitation_assets.py --platform Android --cache-key
+
       - name: Restore original recitation audio cache
         id: recitation_audio
         uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare release recitation book packs
         run: python3 devops/prepare_recitation_assets.py --platform Android
@@ -2179,7 +2183,7 @@ jobs:
         if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: .cache/recitation-assets
+          path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       - name: Verify Android release package

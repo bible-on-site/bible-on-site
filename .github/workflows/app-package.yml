@@ -160,14 +160,19 @@ jobs:
         with:
           python-version: "3.15"
 
+      - name: Resolve immutable recitation audio cache key
+        if: ${{ !inputs.compile_only }}
+        id: recitation_audio_identity
+        run: python app/devops/prepare_recitation_assets.py --platform Windows --cache-key
+
       - name: Restore original recitation audio cache
         if: ${{ !inputs.compile_only }}
         id: recitation_audio
         uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.mp3
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-mp3-
 
       - name: Prepare lossless recitation book extension packages
         if: ${{ !inputs.compile_only }}
@@ -180,7 +185,7 @@ jobs:
         if: ${{ !inputs.compile_only && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: .cache/recitation-assets
+          path: .cache/recitation-assets/*.mp3
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       # PR gate (#2526): compile the real Windows TFM in Release — including
@@ -361,13 +366,17 @@ jobs:
         with:
           python-version: "3.15"
 
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python app/devops/prepare_recitation_assets.py --platform Android --cache-key
+
       - name: Restore original recitation audio cache
         id: recitation_audio
         uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare lossless recitation book extension packages
         run: python app/devops/prepare_recitation_assets.py --platform Android
@@ -378,7 +387,7 @@ jobs:
         if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: .cache/recitation-assets
+          path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       - name: Package AAB
@@ -672,13 +681,17 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python app/devops/prepare_recitation_assets.py --platform iOS --cache-key
+
       - name: Restore original recitation audio cache
         id: recitation_audio
         uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare lossless recitation book extension packages
         run: python app/devops/prepare_recitation_assets.py --platform iOS
@@ -689,7 +702,7 @@ jobs:
         if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: .cache/recitation-assets
+          path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       # The extension's DerivedData is keyed on its own sources: any hit means

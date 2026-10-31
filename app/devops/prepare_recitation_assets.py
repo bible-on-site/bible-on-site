@@ -89,6 +89,20 @@ def asset_download_url(url, origin=None):
     return f"{target.scheme}://{target.netloc}{urlsplit(url).path}"
 
 
+def audio_cache_key(platform, intermediate=None):
+    """Reuse audio across timing/catalog edits; invalidate only changed byte inventories."""
+    database = intermediate or ROOT / "data/recitation/recitation.sqlite"
+    with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
+        tracks = connection.execute("SELECT perek_id,audio_sha256 FROM recitation_track").fetchall()
+    if not tracks or any(not isinstance(sha, str) or len(sha) != 64
+                         or any(c not in "0123456789abcdef" for c in sha) for _, sha in tracks):
+        raise ValueError("Invalid audio identity inventory")
+    use_opus = platform in ("Android", "iOS")
+    hashes = {load_playback(pid, sha)["sha256"] if use_opus else sha for pid, sha in tracks}
+    identity = hashlib.sha256("\n".join(sorted(hashes)).encode("ascii")).hexdigest()
+    return f"recitation-audio-v2-{'opus' if use_opus else 'mp3'}-{identity}"
+
+
 def recording(track, cache, recordings=None):
     """Only the build fetches S3; immutable byte hashes are checked before packaging."""
     destination = cache / (track["audioSha256"] + ".mp3")
@@ -249,7 +263,16 @@ def main():
     parser.add_argument("--recordings", type=Path)
     parser.add_argument("--local-originals", action="store_true",
                         help="Use verified original MP3s from --recordings for local development")
+    parser.add_argument("--cache-key", action="store_true",
+                        help="Print the audio-only cache key and set the GitHub Actions key output; no downloads")
     args = parser.parse_args()
+    if args.cache_key:
+        key = audio_cache_key(args.platform)
+        if output := os.environ.get("GITHUB_OUTPUT"):
+            with Path(output).open("a", encoding="utf-8") as target:
+                target.write(f"key={key}\n")
+        print(key)
+        return
     prepare_assets(args.app_directory, args.platform, args.cache, args.recordings,
                    local_originals=args.local_originals)
 

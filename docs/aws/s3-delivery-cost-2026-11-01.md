@@ -103,9 +103,8 @@ returned zero `recitation-audio-v1-` entries at inspection; misses/eviction are
 possible, but this alone does not prove the billing source. Their combined
 cache action saved only after successful job completion. The four preparation
 paths now restore explicitly and save immediately after successful audio
-verification, before later compilation, signing or store steps can fail. They
-retain the same cache keys/path and skip an exact cache hit; no partial or
-failed audio preparation is saved. Android restore/setup now match its
+verification, before later compilation, signing or store steps can fail. No
+partial or failed audio preparation is saved. Android restore/setup now match its
 unconditional preparation step; `compile_only` describes the Windows-only
 compile gate. See the official
 [restore](https://github.com/actions/cache/blob/v6/restore/README.md) and
@@ -117,6 +116,25 @@ variable was absent at inspection. Empty/unset preserves existing S3 behavior.
 Canonical catalog URLs, paths, source identities, checksums, packaged bytes
 and offline playback stay the same. Corrupt CDN bytes fail integrity checks;
 there is no hidden direct-S3 retry masking a bad CDN.
+
+Recordings almost never change. `--cache-key` therefore derives a stable
+`recitation-audio-v2-mp3-<hash>` or `recitation-audio-v2-opus-<hash>` from the
+sorted set of actual audio hashes, not the SQLite file hash. Timing approvals,
+word edits, row order and duplicate chapter references do not churn the cache.
+New/changed audio bytes produce a new key; Android/iOS share the same Opus
+inventory. Prefix restore still reuses unchanged files after an inventory
+change, and every use rechecks file integrity. The cache includes only raw
+`*.mp3` or `*.ogg` files; version-specific catalogs and ZIP packs are regenerated
+and are not duplicated in GitHub cache storage.
+
+The local S3 mirror has no expiry. GitHub Actions caches remain subject to
+provider eviction/retention, so they are an optimization rather than a permanent
+content archive. Stable keys and active reuse avoid unnecessary new copies;
+cold/evicted CI downloads use the approved CDN. An additional GitHub release or
+artifact archive would duplicate existing store/release payloads and add
+version/retention management, so it is not required for this implementation.
+The CDN remains pass-through: the transfer savings do not require edge caching,
+and existing mutable filenames/query behavior remain compatible.
 
 ### Build downloads versus installed-app delivery
 

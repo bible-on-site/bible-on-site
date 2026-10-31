@@ -11,10 +11,65 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 import zipfile
 
-from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, asset_download_url, book_archive, playback_recording, prepare_assets, recording
+from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, asset_download_url, audio_cache_key, book_archive, main, playback_recording, prepare_assets, recording
 
 
 class RecitationAssetsTests(unittest.TestCase):
+    def audio_inventory(self):
+        database = self.root / "cache-identity.sqlite"
+        with closing(sqlite3.connect(database)) as connection:
+            connection.executescript("CREATE TABLE recitation_track(perek_id,audio_sha256,alignment_status);")
+            connection.executemany("INSERT INTO recitation_track VALUES (?,?,?)", [(1, self.sha, "pending"), (2, "a" * 64, "ready")])
+            connection.commit()
+        return database
+
+    def test_audio_cache_survives_timing_edits_order_and_duplicate_recordings(self):
+        database = self.audio_inventory()
+        original = audio_cache_key("Windows", database)
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute("UPDATE recitation_track SET alignment_status='ready'")
+            connection.execute("INSERT INTO recitation_track VALUES (3,?,'pending')", (self.sha,))
+            connection.commit()
+        self.assertEqual(audio_cache_key("Windows", database), original)
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute("UPDATE recitation_track SET audio_sha256=? WHERE perek_id=2", ("b" * 64,))
+            connection.commit()
+        self.assertNotEqual(audio_cache_key("Windows", database), original)
+
+    def test_mobile_cache_identity_follows_derived_bytes_and_is_shared_between_mobile_platforms(self):
+        database = self.audio_inventory()
+        with patch("prepare_recitation_assets.load_playback", return_value={"sha256": "c" * 64}) as playback:
+            android = audio_cache_key("Android", database)
+            self.assertEqual(audio_cache_key("iOS", database), android)
+            self.assertNotEqual(audio_cache_key("Windows", database), android)
+            self.assertEqual(playback.call_count, 4)
+        with patch("prepare_recitation_assets.load_playback", return_value={"sha256": "d" * 64}):
+            self.assertNotEqual(audio_cache_key("Android", database), android)
+
+    def test_invalid_or_absent_cache_inventory_fails_without_creating_a_database(self):
+        missing = self.root / "missing.sqlite"
+        with self.assertRaises(sqlite3.OperationalError):
+            audio_cache_key("Windows", missing)
+        self.assertFalse(missing.exists())
+        database = self.audio_inventory()
+        for statement in ["UPDATE recitation_track SET audio_sha256='invalid'", "DELETE FROM recitation_track"]:
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute(statement)
+                connection.commit()
+            with self.assertRaisesRegex(ValueError, "identity inventory"):
+                audio_cache_key("Windows", database)
+
+    def test_cache_key_cli_sets_only_the_action_output_without_preparing_or_downloading(self):
+        output = self.root / "action-output"
+        with patch("sys.argv", ["prepare_recitation_assets.py", "--platform", "Windows", "--cache-key"]), \
+                patch.dict("os.environ", {"GITHUB_OUTPUT": str(output)}), \
+                patch("prepare_recitation_assets.audio_cache_key", return_value="recitation-audio-v2-mp3-identity"), \
+                patch("prepare_recitation_assets.prepare_assets", side_effect=AssertionError("Unexpected preparation")), \
+                patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            main()
+        self.assertEqual(output.read_text(), "key=recitation-audio-v2-mp3-identity\n")
+        self.assertEqual(stdout.getvalue(), "recitation-audio-v2-mp3-identity\n")
+
     def test_opt_in_delivery_preserves_object_paths_and_original_fallback(self):
         source = "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"
         self.assertEqual(asset_download_url(source), source)
