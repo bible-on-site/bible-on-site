@@ -681,12 +681,18 @@ describe("[slug] page", () => {
 
 			const articleView = container.querySelector("#article-view");
 			expect(articleView).not.toBeNull();
-			// The command row leads the article, ahead of the metadata header.
-			expect(articleView?.firstElementChild?.tagName).toBe("FIELDSET");
+			// The command row trails the article: the main content stays on
+			// top on the standalone route (review ask).
 			const group = within(articleView as HTMLElement).getByRole("group", {
 				name: "פעולות מאמר",
 			});
-			expect(articleView?.firstElementChild).toBe(group);
+			expect(articleView?.lastElementChild).toBe(group.parentElement);
+			const header = articleView?.querySelector("header");
+			expect(
+				header != null &&
+					!!(header.compareDocumentPosition(group) &
+						Node.DOCUMENT_POSITION_FOLLOWING),
+			).toBe(true);
 			expect(
 				within(group)
 					.getByRole("link", { name: "חזרה לפרק" })
