@@ -145,7 +145,7 @@ Resources:
   # Lambda Function: ECR to ECS Deploy Trigger
   # =============================================================================
   #
-  # Lambda code (Python 3.12) - stored in: docs/aws/cloudformation/ecr-to-ecs-deploy/lambda.py
+  # Lambda code (Python 3.14) - inline below; scale-up proposal in ecr-ecs-auto-deploy/ecr-to-ecs-deploy-lambda.py
   #
   # The function:
   # 1. Receives ECR push events from EventBridge
@@ -157,7 +157,7 @@ Resources:
     Properties:
       FunctionName: ecr-to-ecs-deploy
       Description: Triggers ECS deployment when ECR image is pushed
-      Runtime: python3.12
+      Runtime: python3.14
       Handler: index.handler
       Timeout: 30
       Role: !GetAtt ECRDeployLambdaRole.Arn
