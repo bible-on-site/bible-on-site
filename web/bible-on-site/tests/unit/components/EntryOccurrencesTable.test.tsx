@@ -1,7 +1,31 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { EntryOccurrencesTable } from "../../../src/app/pedia/components/EntryOccurrencesTable";
+import { DEFAULT_DIVINE_NAME_MASKING } from "../../../src/lib/divine-name-masking";
+import {
+	normalizeDivineNameMasking,
+	saveDivineNameMaskingSettings,
+	subscribeDivineNameMasking,
+} from "../../../src/lib/divine-name-settings";
 import type { EntryTanahOccurrence } from "../../../src/lib/tanahpedia/service";
+
+jest.mock("../../../src/lib/divine-name-settings", () => {
+	const actual = jest.requireActual<
+		typeof import("../../../src/lib/divine-name-settings")
+	>("../../../src/lib/divine-name-settings");
+	return {
+		...actual,
+		subscribeDivineNameMasking: jest.fn(actual.subscribeDivineNameMasking),
+	};
+});
+
+const subscribe = jest.mocked(subscribeDivineNameMasking);
+
+beforeEach(() => {
+	localStorage.clear();
+	saveDivineNameMaskingSettings(DEFAULT_DIVINE_NAME_MASKING);
+	subscribe.mockClear();
+});
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -16,15 +40,23 @@ jest.mock("../../../src/data/perek-dto", () => ({
 		source: "שמואל ב ה",
 		pesukim: [
 			{
-				segments: [
-					{ type: "qri", value: "בָּא־" },
-					{ type: "qri", value: "לִירוּשָׁלִַם" },
-					{ type: "qri", value: "וְשָׁב" },
-					{ type: "ktiv", value: "ירושלם", qriOffset: 1 },
-					{ type: "qri", value: "יְרוּשָׁלַיִם", ktivOffset: -1 },
-					{ type: "stuma" },
-					{ type: "ptuha" },
-				],
+				segments:
+					perekId === 1
+						? [
+								{ type: "qri", value: "בָּא־" },
+								{ type: "qri", value: "אָב יְהוָה" },
+								{ type: "ktiv", value: "שדי", qriOffset: 1 },
+								{ type: "qri", value: "שַׁדַּי", ktivOffset: -1 },
+							]
+						: [
+								{ type: "qri", value: "בָּא־" },
+								{ type: "qri", value: "לִירוּשָׁלִַם" },
+								{ type: "qri", value: "וְשָׁב" },
+								{ type: "ktiv", value: "ירושלם", qriOffset: 1 },
+								{ type: "qri", value: "יְרוּשָׁלַיִם", ktivOffset: -1 },
+								{ type: "stuma" },
+								{ type: "ptuha" },
+							],
 			},
 		],
 	}),
@@ -61,6 +93,7 @@ it("groups repeated mentions in one verse and highlights only their recorded ran
 	).toEqual(["לִירוּשָׁלִַם", "ירושלם", "(יְרוּשָׁלַיִם)"]);
 	for (const match of container.querySelectorAll("strong"))
 		expect(match).toHaveClass("occurrence");
+	expect(subscribe).not.toHaveBeenCalled();
 });
 
 it("highlights the full text for whole-verse sources", () => {
@@ -81,4 +114,28 @@ it("ignores invalid verse references and omits an empty table", () => {
 		/>,
 	);
 	expect(container).toBeEmptyDOMElement();
+});
+
+it("keeps name preferences reactive without subscribing ordinary citation words", () => {
+	saveDivineNameMaskingSettings(normalizeDivineNameMasking({ enabled: false }));
+	const { container } = render(
+		<EntryOccurrencesTable occurrences={[{ ...reference(1), perekId: 1 }]} />,
+	);
+	const citation = container.querySelector(".citation");
+	expect(citation).toHaveTextContent("בָּא־אָב יְהוָה שדי (שַׁדַּי)");
+	expect(subscribe).toHaveBeenCalledTimes(3);
+	act(() =>
+		saveDivineNameMaskingSettings(
+			normalizeDivineNameMasking({
+				enabled: true,
+				yhwh: "custom",
+				yhwhCustom: "שם",
+				shaddai: "hyphen",
+			}),
+		),
+	);
+	expect(container.querySelector(".citation")).toBe(citation);
+	expect(citation).toHaveTextContent("בָּא־אָב שם שד-י (שד-י)");
+	expect(container.querySelector("strong")).toHaveTextContent("אָב שם");
+	expect(subscribe).toHaveBeenCalledTimes(3);
 });

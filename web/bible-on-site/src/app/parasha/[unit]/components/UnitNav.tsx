@@ -20,7 +20,7 @@ export function UnitNav({
 			{prev ? (
 				<Link
 					className={styles.unitNavLink}
-					href={`${PARASHA_DIVISION.rootPath}/${prev.unitId}`}
+					href={`${PARASHA_DIVISION.rootPath}/${prev.slug}`}
 				>
 					<span className={styles.unitNavDir}>פרשה קודמת</span>
 					<span className={styles.unitNavRef}>פרשת {prev.heading}</span>
@@ -31,7 +31,7 @@ export function UnitNav({
 			{next ? (
 				<Link
 					className={`${styles.unitNavLink} ${styles.unitNavNext}`}
-					href={`${PARASHA_DIVISION.rootPath}/${next.unitId}`}
+					href={`${PARASHA_DIVISION.rootPath}/${next.slug}`}
 				>
 					<span className={styles.unitNavDir}>פרשה הבאה</span>
 					<span className={styles.unitNavRef}>פרשת {next.heading}</span>

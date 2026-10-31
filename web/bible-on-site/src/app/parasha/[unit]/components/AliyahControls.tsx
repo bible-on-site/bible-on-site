@@ -1,6 +1,6 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnitAliyahContextOption } from "@/data/parasha/parasha-aliyot";
 import styles from "./aliyah-controls.module.css";
 
@@ -25,6 +25,10 @@ export function AliyahControls({
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
+	const [isInteractive, setInteractive] = useState(false);
+	useEffect(() => {
+		setInteractive(true);
+	}, []);
 
 	const [defaultContext, defaultScheme] = defaultKey.split(":");
 	const context =
@@ -38,9 +42,8 @@ export function AliyahControls({
 	// A variant belongs to one scheme of one context — a stale
 	// ?variant= that the current scheme never offered is ignored.
 	const urlVariant =
-		scheme.variants.find(
-			(v) => v.variantId === searchParams.get("variant"),
-		) ?? null;
+		scheme.variants.find((v) => v.variantId === searchParams.get("variant")) ??
+		null;
 	const urlSelection = {
 		contextId: context.contextId,
 		schemeId: scheme.schemeId,
@@ -55,12 +58,25 @@ export function AliyahControls({
 	// (dev servers may never apply it), while committed navigations —
 	// deep links, back/forward — resync the selection below.
 	const [selection, setSelection] = useState(urlSelection);
+	const appliedUrlSelection = useRef(urlSelection);
 	useEffect(() => {
-		setSelection({
+		// State already contains the initial URL selection. Hydration can replay
+		// a click before this effect, so only a changed URL may replace it.
+		const previous = appliedUrlSelection.current;
+		if (
+			previous.contextId === urlContextId &&
+			previous.schemeId === urlSchemeId &&
+			previous.variantId === urlVariantId
+		) {
+			return;
+		}
+		const next = {
 			contextId: urlContextId,
 			schemeId: urlSchemeId,
 			variantId: urlVariantId,
-		});
+		};
+		appliedUrlSelection.current = next;
+		setSelection(next);
 	}, [urlContextId, urlSchemeId, urlVariantId]);
 
 	const selectedKey = selection.variantId
@@ -115,9 +131,7 @@ export function AliyahControls({
 						// context or scheme switch: each variant exists inside
 						// exactly one scheme of one context.
 						const next =
-							option.schemes.find(
-								(s) => s.schemeId === selection.schemeId,
-							) ??
+							option.schemes.find((s) => s.schemeId === selection.schemeId) ??
 							option.schemes.find((s) => s.schemeId === "shabbat") ??
 							option.schemes[0];
 						select(option.contextId, next.schemeId);
@@ -143,7 +157,7 @@ export function AliyahControls({
 	const activeScheme = offeredScheme ?? scheme;
 
 	return (
-		<fieldset className={styles.controls}>
+		<fieldset className={styles.controls} disabled={!isInteractive}>
 			<legend className={styles.srOnly}>חלוקת עליות</legend>
 			<span className={styles.group}>
 				<span className={styles.groupLabel}>חלוקה:</span>
@@ -170,9 +184,7 @@ export function AliyahControls({
 						type="button"
 						className={styles.option}
 						aria-pressed={selection.variantId == null}
-						onClick={() =>
-							select(selection.contextId, selection.schemeId)
-						}
+						onClick={() => select(selection.contextId, selection.schemeId)}
 					>
 						נפוץ
 					</button>

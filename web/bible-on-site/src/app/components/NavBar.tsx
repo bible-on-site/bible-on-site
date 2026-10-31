@@ -72,6 +72,7 @@ export const NavBar = () => {
 						<Image
 							src="/images/logos/logo192.webp"
 							alt="עמוד ראשי"
+							unoptimized
 							width={72}
 							height={72}
 						/>

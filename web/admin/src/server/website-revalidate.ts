@@ -86,6 +86,21 @@ export type EntityChange =
 			uniqueNames: string[];
 			entityTypes?: string[];
 			refPerekIds?: number[];
+	  }
+	| {
+			kind: "dedication";
+			/** tanah_dedication.id — survives edits/deletes. */
+			id: number;
+			/** Old ∪ new assignments (#2731); the website maps them to scoped tags/paths. */
+			perekRanges?: { low: number; high: number }[];
+			seferIds?: number[];
+			helekIds?: number[];
+			parashaIds?: number[];
+			articleIds?: number[];
+			/** Canonical tanahpedia_entry ids of entry-scoped assignments. */
+			entryIds?: string[];
+			/** True when the dedication carries the whole-masora scope. */
+			masora?: boolean;
 	  };
 
 export interface RevalidateRequest {
@@ -167,6 +182,12 @@ export interface RevalidationFailure {
 	failedAt: string;
 	/** The requests still unapplied (retried on the next flush). */
 	requests: RevalidateRequest[];
+	/**
+	 * Some requests were skipped because the website endpoint is not
+	 * configured (`VITE_WEBSITE_URL`/`REVALIDATE_SECRET` unset) — a config
+	 * gap, not a transient delivery failure.
+	 */
+	unconfigured?: boolean;
 }
 
 /**
@@ -270,11 +291,19 @@ async function drain(): Promise<void> {
 			const failed = outcomes
 				.filter((o) => o.outcome === "failed")
 				.map((o) => o.post);
-			if (failed.length > 0) {
-				pendingRetry.push(...failed);
+			const skipped = outcomes
+				.filter((o) => o.outcome === "skipped")
+				.map((o) => o.post);
+			// Skipped requests are unapplied work too — an unconfigured endpoint
+			// must surface as stale content, and the requests ride the next
+			// flush so they deliver once the config exists (#2763).
+			const unapplied = [...failed, ...skipped];
+			if (unapplied.length > 0) {
+				pendingRetry.push(...unapplied);
 				lastFailure = {
 					failedAt: new Date().toISOString(),
 					requests: [...pendingRetry],
+					...(skipped.length > 0 ? { unconfigured: true } : {}),
 				};
 			} else {
 				lastFailure = null;
@@ -283,7 +312,7 @@ async function drain(): Promise<void> {
 				(outcome) => outcome.outcome === "applied",
 			);
 			for (const resolve of waiting?.resolvers ?? []) {
-				resolve(failed.length === 0 && applied);
+				resolve(unapplied.length === 0 && applied);
 			}
 		}
 		// Nothing flushed (e.g. an empty enqueue) — the generation's callers
@@ -465,6 +494,39 @@ export function authorChange(input: {
  * the entity types, synonyms and source perakim while the row still
  * exists — after the delete they are unresolvable.
  */
+/**
+ * A dedication create/update/delete (#2731). The caller supplies the old ∪
+ * new assignment set — gathered pre-commit on deletes, post-commit
+ * otherwise — and the website's dependency resolver maps it to the scoped
+ * dedication tags and pages.
+ */
+export function dedicationChange(input: {
+	id: number;
+	perekRanges?: { low: number; high: number }[];
+	seferIds?: number[];
+	helekIds?: number[];
+	parashaIds?: number[];
+	articleIds?: number[];
+	entryIds?: string[];
+	masora?: boolean;
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "dedication",
+				id: input.id,
+				...(input.perekRanges?.length ? { perekRanges: input.perekRanges } : {}),
+				...(input.seferIds?.length ? { seferIds: input.seferIds } : {}),
+				...(input.helekIds?.length ? { helekIds: input.helekIds } : {}),
+				...(input.parashaIds?.length ? { parashaIds: input.parashaIds } : {}),
+				...(input.articleIds?.length ? { articleIds: input.articleIds } : {}),
+				...(input.entryIds?.length ? { entryIds: input.entryIds } : {}),
+				...(input.masora ? { masora: true } : {}),
+			},
+		],
+	};
+}
+
 export function pediaEntryChange(input: {
 	uniqueName: string;
 	oldUniqueName?: string;
