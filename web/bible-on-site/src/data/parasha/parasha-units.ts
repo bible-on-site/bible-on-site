@@ -14,6 +14,7 @@ import {
 import { sefarim } from "../db/sefarim";
 import { getPerekByPerekId } from "../perek-dto";
 import divisionData from "./parasha-division.json";
+import { buildParashaSlugIndex } from "./parasha-slugs";
 
 /**
  * פרשה על הפרק — the synagogue Torah parasha reading division.
@@ -68,6 +69,10 @@ interface SourceHaftara {
 
 interface SourceParasha {
 	name: string;
+	/** Canonical public slug — plain unpointed Hebrew, ASCII hyphens (issue #2738). */
+	slug: string;
+	/** Researched lexical variants (nameAudit documents provenance). */
+	aliases?: string[];
 	sefer: string;
 	start: SourceVerse;
 	end: SourceVerse;
@@ -228,6 +233,10 @@ function deriveUnits(): ResolvedDivision {
 	const units: ReadingUnit[] = [];
 	const entries: ParashaEntry[] = [];
 	const orderBySefer = new Map<string, number>();
+	// Rebuild the slug index here too — validates every unit's canonical
+	// slug/aliases against its name and fails the import on collisions,
+	// so a bad shared-table edit can never reach the readers.
+	buildParashaSlugIndex(source.units);
 	source.units.forEach((parasha, index) => {
 		const order = (orderBySefer.get(parasha.sefer) ?? 0) + 1;
 		orderBySefer.set(parasha.sefer, order);
@@ -240,7 +249,9 @@ function deriveUnits(): ResolvedDivision {
 		units.push({
 			division: PARASHA_DIVISION.id,
 			unitId: index + 1,
-			slug: String(index + 1),
+			// The canonical Hebrew-name slug the shared table carries;
+			// parasha-slugs.ts validates it against the unit name at load.
+			slug: parasha.slug,
 			seferName: parasha.sefer,
 			order,
 			heading: parasha.name,

@@ -23,7 +23,47 @@ export const COLLECTION_TAGS = {
 	pediaEntityRefs: "tanahpedia-entity-refs",
 	pediaMentionRefs: "tanahpedia-mention-refs",
 	perekImages: "perek-images",
+	/**
+	 * Every cached dedication read — the operator escape hatch and the
+	 * dependency resolver's fallback (#2731). The bookshelf loader also
+	 * carries `dedicationsBookshelf` since it aggregates every scope.
+	 */
+	dedications: "dedications",
 } as const;
+
+/** The bookshelf's aggregate helek/sefer dedication view (homepage). */
+export const bookshelfDedicationsTag = "dedications:bookshelf";
+
+/** Dedications matching one perek's context (direct + sefer/helek ancestors). */
+export const perekDedicationsTag = (perekId: number) =>
+	`perek:${perekId}:dedications`;
+
+/** Dedications matching one sefer's context (direct + helek ancestor). */
+export const seferDedicationsTag = (seferId: number) =>
+	`sefer:${seferId}:dedications`;
+
+/** Perek-scoped dedication lines aggregated across one sefer's spreads. */
+export const seferPerekDedicationsTag = (seferId: number) =>
+	`sefer:${seferId}:perek-dedications`;
+
+/** Dedications matching one helek's context. */
+export const helekDedicationsTag = (helekId: number) =>
+	`helek:${helekId}:dedications`;
+
+/** Dedications matching one weekly parasha unit. */
+export const parashaDedicationsTag = (unitId: number) =>
+	`parasha:${unitId}:dedications`;
+
+/** Dedications matching one article (legacy article scope). */
+export const articleDedicationsTag = (articleId: number) =>
+	`article:${articleId}:dedications`;
+
+/** Dedications matching one Tanahpedia entry by canonical entry id. */
+export const entryDedicationsTag = (entryId: string) =>
+	`pedia-entry:${entryId}:dedications`;
+
+/** The single feature-level dedication set of מסורה על הפרק (#2731). */
+export const masoraDedicationsTag = "masora:dedications";
 
 /** Article row `id` — `/929/{perek}/{article}` and anywhere it is embedded. */
 export const articleTag = (articleId: number) => `article:${articleId}`;
@@ -82,7 +122,11 @@ export const mentionRefsTag = (perekId: number) =>
  * entity key (also part of the cache key so entries never collide — the
  * invocation args ride along in the key as well) and `tagsFor` returns
  * its collection + entity tags. A thrown loader error is never cached —
- * the next call re-runs the loader.
+ * the next call re-runs the loader. Entries hold no time bound: every
+ * consumer is a fully static route, so a positive `revalidate` here would
+ * propagate to each route's `initialRevalidateSeconds` and turn the
+ * reading surface into ISR; expiry is event-driven via `revalidateTag`
+ * (see src/lib/dedications/loaders.ts).
  */
 export function cachedPerKey<A extends unknown[], R>(
 	baseKey: string,

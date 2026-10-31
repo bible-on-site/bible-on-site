@@ -26,6 +26,8 @@ export default function MasoraLoadedSefer(props: {
 	perekSources: Record<number, string>;
 	articles: ArticleSummary[];
 	perushim: RangePerushSummary[];
+	/** Feature-level מסורה על הפרק dedication lines (#2731). */
+	coverDedications?: string[];
 	initialBookPage: BookPage | null;
 	initialContent?: {
 		scope: "torah";
@@ -110,6 +112,7 @@ export default function MasoraLoadedSefer(props: {
 			perekById={loaded}
 			articles={props.articles}
 			perushim={props.perushim}
+			coverDedications={props.coverDedications}
 			initialBookPage={props.initialBookPage}
 			initialContent={props.initialContent}
 			isVisible={props.isVisible}

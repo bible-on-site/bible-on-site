@@ -10,7 +10,7 @@ export const IOS_APP_BUNDLE_ID = "com.tanah.daily929";
 
 export function iosAppPids(launchctlList, bundleId = IOS_APP_BUNDLE_ID) {
   return launchctlList.split("\n")
-    .filter((line) => line.includes(bundleId))
+    .filter((line) => line.includes(`UIKitApplication:${bundleId}[`))
     .map((line) => line.trim().split(/\s+/)[0])
     .filter((pid) => /^[0-9]+$/.test(pid));
 }

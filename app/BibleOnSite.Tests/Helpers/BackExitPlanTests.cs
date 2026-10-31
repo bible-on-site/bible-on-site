@@ -13,7 +13,7 @@ public class BackExitPlanTests
 	public void Evaluate_WhenShellHandledBack_ReturnsConsume()
 	{
 		BackExitPlan.Evaluate(navigationInFlight: false, shellBack: () => true, flyoutPresented: false,
-				hasInAppHistory: false)
+				hasInAppHistory: false, rootBackMayExit: true)
 			.Should().Be(BackExitAction.Consume);
 	}
 
@@ -23,7 +23,7 @@ public class BackExitPlanTests
 		// A consumed press must not fall through to the exit confirmation even
 		// if the flyout happened to be open.
 		BackExitPlan.Evaluate(navigationInFlight: false, shellBack: () => true, flyoutPresented: true,
-				hasInAppHistory: true)
+				hasInAppHistory: true, rootBackMayExit: true)
 			.Should().Be(BackExitAction.Consume);
 	}
 
@@ -33,7 +33,7 @@ public class BackExitPlanTests
 		// The drawer layout owns the open flyout: keeping the press propagating
 		// lets its own back callback close the flyout rather than confirm exit.
 		BackExitPlan.Evaluate(navigationInFlight: false, shellBack: () => false, flyoutPresented: true,
-				hasInAppHistory: false)
+				hasInAppHistory: false, rootBackMayExit: true)
 			.Should().Be(BackExitAction.DeferToNative);
 	}
 
@@ -41,8 +41,21 @@ public class BackExitPlanTests
 	public void Evaluate_WhenUnhandledAtRoot_ReturnsConfirmExit()
 	{
 		BackExitPlan.Evaluate(navigationInFlight: false, shellBack: () => false, flyoutPresented: false,
-				hasInAppHistory: false)
+				hasInAppHistory: false, rootBackMayExit: true)
 			.Should().Be(BackExitAction.ConfirmExit);
+	}
+
+	[Fact]
+	public void Evaluate_WhenUnhandledAtRootWithoutExitCapableBack_ReturnsDeferToNative()
+	{
+		// iOS has no root Back source: the only consult reaching the hook there
+		// is the interactive-pop recognizer, which can stay enabled a beat
+		// after the stack already settled to the root. A stale gesture probe is
+		// not an exit intent — deferring lets the empty pop cancel instead of
+		// covering the page with the exit confirmation (#2701).
+		BackExitPlan.Evaluate(navigationInFlight: false, shellBack: () => false, flyoutPresented: false,
+				hasInAppHistory: false, rootBackMayExit: false)
+			.Should().Be(BackExitAction.DeferToNative);
 	}
 
 	[Fact]
@@ -53,7 +66,7 @@ public class BackExitPlanTests
 		// perform the pop itself. Treating that false as "at root" shows the
 		// exit confirmation and cancels the gesture's own pop.
 		BackExitPlan.Evaluate(navigationInFlight: false, shellBack: () => false, flyoutPresented: false,
-				hasInAppHistory: true)
+				hasInAppHistory: true, rootBackMayExit: true)
 			.Should().Be(BackExitAction.DeferToNative);
 	}
 
@@ -68,7 +81,7 @@ public class BackExitPlanTests
 		{
 			shellRan = true;
 			return false;
-		}, flyoutPresented: false, hasInAppHistory: true)
+		}, flyoutPresented: false, hasInAppHistory: true, rootBackMayExit: true)
 			.Should().Be(BackExitAction.Consume);
 		shellRan.Should().BeFalse("an in-flight navigation already owns the outcome of this press");
 	}

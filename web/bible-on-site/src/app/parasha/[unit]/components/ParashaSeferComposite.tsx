@@ -8,22 +8,22 @@ import {
 	useRef,
 	useState,
 } from "react";
+import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
+import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
+import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
+import type { ArticleSummary } from "@/lib/articles";
 import {
 	getStoredParashaViewMode,
 	setStoredParashaViewMode,
 } from "@/lib/perek-view-preference";
-import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
-import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
-import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
 import {
+	type ParashaBookUnit,
 	parashaBookExitPath,
 	parashaBookPageFromPath,
 	parashaBookPageFromQuery,
 	pathnameWithParashaBookQuery,
-	type ParashaBookUnit,
 } from "./parasha-book-utils";
 
 // Lazy-load the heavy Sefer (FlipBook) component so its JS bundle is not
@@ -68,6 +68,8 @@ export const ParashaSeferComposite = (props: {
 	perushim: RangePerushSummary[];
 	haftaraArticles: ArticleSummary[];
 	haftaraPerushim: RangePerushSummary[];
+	/** Parasha-scoped dedication lines per unit — once per Torah spread (#2731). */
+	dedicationsByUnit?: Record<number, string[]>;
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 	const router = useRouter();
@@ -80,9 +82,23 @@ export const ParashaSeferComposite = (props: {
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState("none");
+	const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	const handleToggle = useCallback(
 		(wantBook: boolean, immediately = false) => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
 			if (wantBook) {
 				setDisplay("initial");
 				setCurrentlyToggled(true);
@@ -95,7 +111,8 @@ export const ParashaSeferComposite = (props: {
 				if (immediately) {
 					setDisplay("none");
 				} else {
-					setTimeout(() => {
+					hideTimerRef.current = setTimeout(() => {
+						hideTimerRef.current = null;
 						setDisplay("none");
 					}, 300);
 				}
@@ -138,18 +155,11 @@ export const ParashaSeferComposite = (props: {
 			// keeps its flat-page meaning via the shared params.
 			const togglePath = wantBook
 				? pathname
-				: parashaBookExitPath(
-						window.location.pathname,
-						props.currentUnitId,
-					);
+				: parashaBookExitPath(window.location.pathname, props.currentUnitId);
 			const search = wantBook
 				? searchParams.toString()
 				: window.location.search;
-			const next = pathnameWithParashaBookQuery(
-				togglePath,
-				search,
-				wantBook,
-			);
+			const next = pathnameWithParashaBookQuery(togglePath, search, wantBook);
 			router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},
@@ -189,7 +199,11 @@ export const ParashaSeferComposite = (props: {
 	const haftaraPerush = searchParams.get("haftaraPerush");
 	const haftaraArticle = searchParams.get("haftaraArticle");
 	const initialContent = haftaraPerush
-		? { scope: "haftara" as const, kind: "perush" as const, slug: haftaraPerush }
+		? {
+				scope: "haftara" as const,
+				kind: "perush" as const,
+				slug: haftaraPerush,
+			}
 		: haftaraArticle
 			? {
 					scope: "haftara" as const,
@@ -227,6 +241,7 @@ export const ParashaSeferComposite = (props: {
 						perushim={props.perushim}
 						haftaraArticles={props.haftaraArticles}
 						haftaraPerushim={props.haftaraPerushim}
+						dedicationsByUnit={props.dedicationsByUnit}
 						initialBookPage={initialBookPage}
 						haftara={searchParams.get("haftara") != null}
 						initialContent={initialContent}
