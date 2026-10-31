@@ -11,16 +11,21 @@ internal sealed class PerushNoteChapter
     // Decoded text is cached per pasuk, not per cell: one zlib scan of the
     // chapter blob serves every perush cell of that pasuk. The LRU bounds the
     // decoded text to roughly two viewports so recycled cells stop rescanning.
+    // The lock guards only the LRU bookkeeping: the scan itself is a pure
+    // function of the immutable blob, so it runs outside the lock and each
+    // pasuk's Lazy shares a single scan between its concurrent misses — a
+    // fling's worth of commentary cells never serializes behind the cache.
     private const int PasukCacheCapacity = 24;
     private readonly object _cacheLock = new();
     private readonly LinkedList<int> _lruPesukim = new();
     private readonly Dictionary<int, PasukSlice> _pasukCache = new();
     private int _decodeScans;
 
-    private sealed class PasukSlice(LinkedListNode<int> node, Dictionary<int, List<string>> notes)
+    private sealed class PasukSlice(LinkedListNode<int> node, Func<Dictionary<int, List<string>>> decode)
     {
         internal LinkedListNode<int> Node { get; } = node;
-        internal Dictionary<int, List<string>> Notes { get; } = notes;
+        internal Lazy<Dictionary<int, List<string>>> Notes { get; } =
+            new(decode, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>Blob scans performed — diagnostics and tests watch this stay low.</summary>
@@ -44,16 +49,18 @@ internal sealed class PerushNoteChapter
 
     private List<string> NotesFor(int pasuk, int perushId)
     {
+        PasukSlice slice;
         lock (_cacheLock)
         {
-            if (!_pasukCache.TryGetValue(pasuk, out var slice))
+            if (_pasukCache.TryGetValue(pasuk, out var cached))
             {
-                var notes = PerushNoteBlob.Decode(_blob, (_, verse) => verse == pasuk)
-                    .GroupBy(n => n.PerushId)
-                    .ToDictionary(g => g.Key,
-                        g => g.OrderBy(n => n.NoteIdx).Select(n => n.Content).ToList());
-                ++_decodeScans;
-                slice = new PasukSlice(_lruPesukim.AddFirst(pasuk), notes);
+                _lruPesukim.Remove(cached.Node);
+                _lruPesukim.AddFirst(cached.Node);
+                slice = cached;
+            }
+            else
+            {
+                slice = new PasukSlice(_lruPesukim.AddFirst(pasuk), () => DecodePasuk(pasuk));
                 _pasukCache[pasuk] = slice;
                 if (_pasukCache.Count > PasukCacheCapacity)
                 {
@@ -62,13 +69,35 @@ internal sealed class PerushNoteChapter
                     _pasukCache.Remove(tail);
                 }
             }
-            else
-            {
-                _lruPesukim.Remove(slice.Node);
-                _lruPesukim.AddFirst(slice.Node);
-            }
-            return slice.Notes.GetValueOrDefault(perushId) ?? [];
         }
+        try
+        {
+            return slice.Notes.Value.GetValueOrDefault(perushId) ?? [];
+        }
+        catch //NOSONAR — the failure rethrows; the handler only evicts the pasuk's slice so retries rescan.
+        {
+            // A failed scan must not stay cached: evict the pasuk so the next
+            // caller retries (e.g. a transient OOM under scroll pressure). In
+            // the rare case a concurrent retry already cached a fresher slice,
+            // dropping it only costs one extra scan.
+            lock (_cacheLock)
+            {
+                _pasukCache.Remove(pasuk);
+                _lruPesukim.Remove(pasuk);
+            }
+            throw;
+        }
+    }
+
+    /// <summary>One blob scan for a single pasuk; the Lazy shares it between concurrent misses.</summary>
+    private Dictionary<int, List<string>> DecodePasuk(int pasuk)
+    {
+        var notes = PerushNoteBlob.Decode(_blob, (_, verse) => verse == pasuk)
+            .GroupBy(n => n.PerushId)
+            .ToDictionary(g => g.Key,
+                g => g.OrderBy(n => n.NoteIdx).Select(n => n.Content).ToList());
+        Interlocked.Increment(ref _decodeScans);
+        return notes;
     }
 
     internal List<PerushNoteDisplay> GetDisplays(int pasuk, IReadOnlyList<Perush> perushim,
