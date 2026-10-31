@@ -202,6 +202,7 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanahpedia-revision-api-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -474,10 +475,24 @@ Resources:
               Value: prod
             - Name: HOST
               Value: "0.0.0.0" # Required to accept connections from nginx
+            # API reaches the website task over Cloud Map service discovery
+            # to expire pedia caches after committed alias writes.
+            - Name: WEBSITE_URL
+              Value: http://website.bible-on-site.local:3000
           # Database credentials injected from SSM Parameter Store
+          # Each parameter must exist before the task starts — see the
+          # one-time prerequisites block at the bottom of this file.
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Shared with the website/admin tasks' REVALIDATE_SECRET
+            # (same parameter) — the x-revalidate-secret header.
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+            # Bearer token for the authorized Tanahpedia revision API
+            # (revision submissions, family writes, alias management).
+            - Name: TANAHPEDIA_REVISION_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanahpedia-revision-api-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -687,6 +702,12 @@ Outputs:
 #   # [a-zA-Z0-9-] string); a non-matching value disables the feature.
 #   aws ssm put-parameter --name bible-on-site-indexnow-key \
 #     --type SecureString --value "$(openssl rand -hex 16)" \
+#     --region il-central-1
+#
+#   # Bearer token authorizing the Tanahpedia revision API surface on the
+#   # api task (revision submits/applies, family writes, alias writes).
+#   aws ssm put-parameter --name bible-on-site-tanahpedia-revision-api-key \
+#     --type SecureString --value "$(openssl rand -hex 32)" \
 #     --region il-central-1
 #
 #   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
