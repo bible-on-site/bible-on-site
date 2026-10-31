@@ -39,7 +39,9 @@ describe("/api/push/subscription", () => {
 		beforeEach(() => mockConfigured.mockReturnValue(false));
 
 		it("hides the public key and refuses subscriptions", async () => {
-			expect(GET().status).toBe(404);
+			const response = GET();
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ publicKey: null });
 			expect((await POST(request("POST", subscription))).status).toBe(404);
 			expect(mockSave).not.toHaveBeenCalled();
 		});

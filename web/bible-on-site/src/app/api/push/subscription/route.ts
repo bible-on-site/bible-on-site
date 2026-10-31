@@ -29,14 +29,16 @@ async function readJson(request: Request): Promise<unknown> {
 /**
  * Daily perek push subscriptions (#1096).
  *
- * - `GET` returns the VAPID public key the browser subscribes with, or 404
- *   when the deployment has push turned off (the UI then hides itself).
+ * - `GET` returns the VAPID public key the browser subscribes with, or
+ *   `null` when the deployment has push turned off (the UI then hides
+ *   itself). It stays 200 so the home page logs no console error.
  * - `POST` stores a `PushSubscription.toJSON()` body (opt-in, idempotent).
  * - `DELETE` with `{ endpoint }` removes it (opt-out).
  */
 export function GET() {
-	if (!isWebPushConfigured()) return notConfigured();
-	return NextResponse.json({ publicKey: getVapidPublicKey() });
+	return NextResponse.json({
+		publicKey: isWebPushConfigured() ? getVapidPublicKey() : null,
+	});
 }
 
 export async function POST(request: Request) {

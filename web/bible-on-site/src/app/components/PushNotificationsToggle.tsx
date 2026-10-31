@@ -72,8 +72,9 @@ export function PushNotificationsToggle() {
 			const response = await fetch(SUBSCRIPTION_API);
 			if (!response.ok) return "hidden";
 			const { publicKey: key } = (await response.json()) as {
-				publicKey: string;
+				publicKey: string | null;
 			};
+			if (!key) return "hidden";
 			if (!isPushSupported())
 				return needsHomeScreenInstall() ? "ios-install" : "unsupported";
 			setPublicKey(key);
