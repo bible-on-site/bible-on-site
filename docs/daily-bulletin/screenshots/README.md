@@ -35,14 +35,38 @@ The local source artifacts are `.outputs/ses-email-before.html` and `.outputs/se
 node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '900,1100' --full-page --wait-for-selector .bulletin-verse-number file:///ABSOLUTE_WORKTREE_PATH/.outputs/ses-email-react-footer-complete.html docs/daily-bulletin/screenshots/email-after.png
 ```
 
-## App join carousel evidence (#2806)
+## WhatsApp panel evidence
 
-Real captures from the Android emulator (`1080 x 2400`) running the native עלון יומי join carousel.
+- [Desktop before](whatsapp-before.png) and [desktop after](whatsapp-after.png): 1440 x 1100 viewports.
+- [Phone before](whatsapp-before-mobile.png) and [phone after](whatsapp-after-mobile.png): 390 x 844 viewports.
+
+The baseline renders the committed `DailyBulletinPage` before the WhatsApp controls were added. The after captures render the modified component and the real `BulletinWhatsAppControls`. Both use the admin's actual React components, Tailwind CSS and TanStack Router, with only the server-function modules replaced by local fixture functions. These are full-page captures from fresh, isolated Chromium contexts, without a user browser profile.
+
+All content is synthetic: `reader@example.com`, a local sample bulletin and PDF, and a sample two-member test group with no provider identifiers. The real group is unconfigured, its option is disabled, and the saved WhatsApp audience is test. Existing email controls and the email preview remain visible. The test send button is shown only because the sample prepared PDF and cached connection verification satisfy the UI checks; every mutation function, including connection verification, throws in this preview.
+
+The preview runs on `127.0.0.1:3122` with environment-file loading and public-file serving disabled. The isolated Vite configuration refuses backend imports beyond the three explicitly mocked server-function modules. Playwright permits only local GET requests and rejects every external request, API request, server-function request and non-GET request. The capture report recorded zero external, provider or mutation requests, zero page errors and no horizontal overflow in all four captures. No account, database, worker, credential, AWS resource or provider was accessed.
+
+The ignored reproduction sources are `.outputs/whatsapp-visual/`; `capture-report.json` records the viewports and request checks. Start the isolated Vite configuration, then run `node .outputs/whatsapp-visual/capture.mjs`. The email iframe is scrolled into view before full-page capture so Chromium paints its local contents. Visual inspection confirmed readable Hebrew RTL controls, stacked group cards on a phone, the missing real-group message, and preserved email controls and preview.
+
+## Telegram controls evidence
+
+- [Before](telegram-before.png): the original actual DailyBulletinPage before Telegram controls were added, at 1440 x 1100. This baseline image is preserved unchanged.
+- [After](telegram-after.png): the current actual component with independent Telegram controls, saved test mode, a named private test destination and disabled public activation.
+- [Phone](telegram-after-mobile.png): the current component at 390 x 844, retaining the existing chapter, email controls and HTML preview.
+
+The refreshed after captures use the ignored local Vite harness in .outputs/telegram-visual/. They render the actual source components, admin Tailwind CSS and TanStack Router with memory history. Only server-function modules use fixture adapters. The saved bulletin, two example.com email recipients, 52 pending subscribers and private destination are synthetic display fixtures. The public handle is the owner-selected @alhaperek channel. These fixture values do not establish that any bot or destination is configured or verified.
+
+Every fixture mutation throws instead of sending, preparing or changing an audience. The preview disables environment-file loading and public-file serving and rejects backend imports beyond its three explicit server-function mocks. Fresh Chromium contexts have no user browser profile. Their request interceptor permits only local GET requests and refuses every external request, API/server-function request and non-GET request. The capture report records zero external, provider or mutation requests, zero page errors, no horizontal overflow and zero send clicks for both after captures. No database, AWS profile, token, provider API, authentication session or personal browser profile was accessed.
+
+The desktop and phone captures show target-neutral private-test wording, the correct public channel and the existing email actions. The iframe is scrolled into view before capture so Chromium paints its local sample contents. Reproduce the after captures from the repository root by starting the isolated Vite configuration on 127.0.0.1:3123 and then running node .outputs/telegram-visual/capture.mjs. The ignored capture-report.json records the checks and viewports. The original before capture remains the pre-Telegram baseline. The preview server was stopped after capture.
+
+## App join cards evidence (#2806)
+
+Real captures from Android emulators running the native עלון יומי join cards.
 
 - [Flyout before](app-bulletin-flyout-before.png): the app menu without a bulletin entry.
-- [Flyout after](app-bulletin-flyout-after.png): עלון יומי and its nested קבוצת ווטסאפ entry, mirroring the website navigation.
-- [Telegram card](app-bulletin-card-telegram.png): the first carousel card; הצטרפות opens the verified public channel `https://t.me/alhaperek`.
-- [WhatsApp card](app-bulletin-card-whatsapp.png): the second card, also reached by the קבוצת ווטסאפ deep link (`?channel=whatsapp`); הצטרפות opens the published `wa.me` join number with a prefilled join request.
-- [Email card](app-bulletin-card-email.png): the third card; הצטרפות opens the published subscription address with a join subject until the shared public signup API ships (see "Restore public email signup and channel/group join links" in `docs/daily-bulletin/daily-bulletin.md`).
+- [Flyout after](app-bulletin-flyout-after.png): the עלון יומי flyout entry, a single row like every other destination.
+- [Phone stacked](app-bulletin-phone-stacked.png): phone viewport — the three cards stack one above the other.
+- [Tablet side by side](app-bulletin-tablet-side-by-side.png): tablet viewport — the three cards lay out side by side.
 
-The carousel is RTL, shows the shared top bar, peeks the adjacent card on narrow screens and exposes `BulletinJoin{Telegram|Whatsapp|Email}` automation identifiers with Hebrew semantic descriptions on each join button. No private test groups, destination IDs or provider credentials appear in the captures.
+The cards mirror the website's join order — Telegram, WhatsApp, email — in RTL, show the shared top bar and expose `BulletinJoin{Telegram|Whatsapp|Email}` automation identifiers with Hebrew semantic descriptions on each join button. הצטרפות opens the verified public channel `https://t.me/alhaperek`, the published `wa.me` join number with a prefilled join request, and the published subscription address with a join subject until the shared public signup API ships (see "Restore public email signup and channel/group join links" in `docs/daily-bulletin/daily-bulletin.md`). No private test groups, destination IDs or provider credentials appear in the captures.

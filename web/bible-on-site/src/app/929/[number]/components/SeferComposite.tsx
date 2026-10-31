@@ -78,9 +78,23 @@ const ClientWrapper = (props: {
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState("none");
+	const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	const handleToggle = useCallback(
 		(wantBook: boolean, immediately = false) => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
 			if (wantBook) {
 				// Show the overlay immediately so the toggle animation is responsive.
 				setDisplay("initial");
@@ -96,7 +110,8 @@ const ClientWrapper = (props: {
 				if (immediately) {
 					setDisplay("none");
 				} else {
-					setTimeout(() => {
+					hideTimerRef.current = setTimeout(() => {
+						hideTimerRef.current = null;
 						setDisplay("none");
 					}, 300);
 				}
@@ -149,11 +164,7 @@ const ClientWrapper = (props: {
 			const search = wantBook
 				? searchParams.toString()
 				: window.location.search;
-			const next = pathnameWithBookQuery(
-				togglePath,
-				search,
-				wantBook,
-			);
+			const next = pathnameWithBookQuery(togglePath, search, wantBook);
 			router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},

@@ -18,6 +18,16 @@ const mocks = vi.hoisted(() => ({
 	emailRead: vi.fn(),
 	emailSend: vi.fn(),
 	audience: vi.fn(),
+	telegramRead: vi.fn(),
+	telegramQueue: vi.fn(),
+	telegramAudience: vi.fn(),
+	whatsapp: vi.fn(),
+}));
+vi.mock("~/components/BulletinWhatsAppControls", () => ({
+	BulletinWhatsAppControls: (props: unknown) => {
+		mocks.whatsapp(props);
+		return <div data-testid="whatsapp-controls" />;
+	},
 }));
 vi.mock("~/server/daily-bulletins", () => ({
 	getDailyBulletin: mocks.read,
@@ -27,6 +37,11 @@ vi.mock("~/server/bulletin-email", () => ({
 	getDailyBulletinEmail: mocks.emailRead,
 	queueDailyBulletinEmail: mocks.emailSend,
 	setDailyBulletinEmailAudience: mocks.audience,
+}));
+vi.mock("~/server/bulletin-telegram", () => ({
+	getDailyBulletinTelegram: mocks.telegramRead,
+	queueDailyBulletinTelegram: mocks.telegramQueue,
+	setDailyBulletinTelegramAudience: mocks.telegramAudience,
 }));
 vi.mock("@tanstack/react-router", () => ({
 	Link: ({ children }: { children: React.ReactNode }) => (
@@ -120,6 +135,7 @@ function confirmReal() {
 
 describe("daily bulletin preview and SES delivery", () => {
 	beforeEach(() => {
+		mocks.whatsapp.mockClear();
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date("2026-10-08T12:00:00Z"));
 		vi.spyOn(crypto, "randomUUID").mockReturnValue(FIRST_KEY);
@@ -141,11 +157,66 @@ describe("daily bulletin preview and SES delivery", () => {
 			serverState = { ...serverState, settings };
 			return Promise.resolve(settings);
 		});
+		mocks.telegramRead.mockReset().mockResolvedValue({
+			settings: { audience: "test", revision: 0 },
+			readiness: {
+				configured: false,
+				canSend: false,
+				canUseReal: false,
+				blockers: ["שירות הטלגרם טרם הוגדר"],
+			},
+			testTarget: null,
+			realTarget: null,
+			job: null,
+		});
+		mocks.telegramQueue.mockReset();
+		mocks.telegramAudience.mockReset();
 	});
 	afterEach(() => {
 		cleanup();
 		vi.useRealTimers();
 		vi.restoreAllMocks();
+	});
+	it("connects the saved PDF and sibling mutation locks to the WhatsApp controls", async () => {
+		let finish: (value: EmailJobSummary) => void = () => {};
+		mocks.emailSend.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		renderPage();
+		await loaded();
+		const props = () =>
+			mocks.whatsapp.mock.lastCall?.[0] as {
+				date: string;
+				prepared: boolean;
+				disabled: boolean;
+				onBusyChange: (value: boolean) => void;
+			};
+		expect(props()).toMatchObject({
+			date: saved.input.date,
+			prepared: true,
+			disabled: false,
+		});
+		await act(async () => props().onBusyChange(true));
+		expect(screen.getByLabelText("תאריך העלון")).toBeDisabled();
+		expect(send()).toBeDisabled();
+		await act(async () => props().onBusyChange(false));
+		expect(send()).toBeEnabled();
+		fireEvent.click(send());
+		await waitFor(() => expect(props().disabled).toBe(true));
+		await act(async () => finish(job()));
+		await waitFor(() => expect(props().disabled).toBe(false));
+	});
+	it("shows WhatsApp settings before preparation without authorizing a PDF send", async () => {
+		mocks.read.mockResolvedValue(null);
+		renderPage();
+		await screen.findByTestId("whatsapp-controls");
+		expect(mocks.whatsapp.mock.lastCall?.[0]).toMatchObject({
+			date: saved.input.date,
+			prepared: false,
+		});
+		expect(mocks.emailRead).not.toHaveBeenCalled();
 	});
 
 	it("prepares once and preserves chapter, PDF, email and channel previews", async () => {
@@ -155,6 +226,7 @@ describe("daily bulletin preview and SES delivery", () => {
 			expect(screen.getByRole("button", { name: "הכנת עלון" })).toBeEnabled(),
 		);
 		expect(mocks.emailRead).not.toHaveBeenCalled();
+		expect(mocks.telegramRead).not.toHaveBeenCalled();
 		fireEvent.click(screen.getByRole("button", { name: "הכנת עלון" }));
 		expect(await screen.findByText("מאמר: מאמר / מחבר")).toBeInTheDocument();
 		expect(mocks.prepare).toHaveBeenCalledExactlyOnceWith({
@@ -176,6 +248,58 @@ describe("daily bulletin preview and SES delivery", () => {
 		expect(screen.getByText('דוא"ל: טרם נשלח')).toBeInTheDocument();
 		expect(screen.getByText("טלגרם: נשלח")).toBeInTheDocument();
 		expect(screen.getByText("ווטסאפ: נדרשת בדיקה")).toBeInTheDocument();
+	});
+	it("locks the bulletin date and email actions while a private Telegram enqueue is pending", async () => {
+		let finish: (value: unknown) => void = () => {};
+		mocks.telegramRead.mockResolvedValue({
+			settings: { audience: "test", revision: 2 },
+			readiness: {
+				configured: true,
+				canSend: true,
+				canUseReal: false,
+				blockers: [],
+			},
+			testTarget: { title: "ערוץ ניסיון מקומי", username: null },
+			realTarget: null,
+			job: null,
+		});
+		mocks.telegramQueue.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		renderPage();
+		await loaded();
+		await screen.findByText("ערוץ ניסיון מקומי");
+		fireEvent.click(
+			screen.getByRole("button", { name: "שליחת ניסיון בטלגרם" }),
+		);
+		await waitFor(() =>
+			expect(screen.getByLabelText("תאריך העלון")).toBeDisabled(),
+		);
+		expect(send()).toBeDisabled();
+		expect(screen.getByLabelText("קהל השליחה")).toBeDisabled();
+		fireEvent.change(screen.getByLabelText("תאריך העלון"), {
+			target: { value: "2026-10-09" },
+		});
+		expect(screen.getByLabelText("תאריך העלון")).toHaveValue(saved.input.date);
+		await act(async () =>
+			finish({
+				id: "telegram-job",
+				date: saved.input.date,
+				audience: "test",
+				status: "queued",
+				createdAt: "2026-10-08T12:00:00Z",
+				sentAt: null,
+				error: null,
+			}),
+		);
+		await waitFor(() =>
+			expect(screen.getByLabelText("תאריך העלון")).toBeEnabled(),
+		);
+		expect(mocks.emailSend).not.toHaveBeenCalled();
+		expect(mocks.audience).not.toHaveBeenCalled();
+		expect(screen.getByText('דוא"ל: טרם נשלח')).toBeVisible();
 	});
 	it("reads a saved bulletin without preparing and handles a missing article", async () => {
 		mocks.read.mockResolvedValue({

@@ -23,6 +23,7 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import { runOutboxSweep } from "./outbox-deadline.server";
 import {
 	type SesAudience,
 	SesClient,
@@ -42,6 +43,45 @@ const UNCERTAIN = "תוצאת השליחה אינה ודאית. נדרשת בד�
 const SUPPRESSED = "השליחה נעצרה בעקבות שינוי במצב הדיוור או בהסכמת הנמען.";
 const QUEUE_FAILED =
 	"לא ניתן להעביר את כל הנמענים לתור. אפשר לנסות שוב באותה בקשה.";
+
+// SES publishes this plain-text control message when validating its SNS destination.
+// It is not an email event or a send request. Acknowledge only the exact message.
+const SES_SNS_VALIDATION_MESSAGE =
+	"Successfully validated SNS topic for Amazon SES event publishing.";
+
+const TELEGRAM_JOB_ID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function optionalTelegramDelivery() {
+	if (
+		[
+			"BULLETIN_TELEGRAM_BOT_TOKEN",
+			"BULLETIN_TELEGRAM_BOT_USERNAME",
+			"BULLETIN_TELEGRAM_TEST_CHAT_ID",
+		].some((name) => !process.env[name]?.trim())
+	)
+		return null;
+	return import("./telegram-delivery.server");
+}
+
+const WHATSAPP_JOB_ID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function optionalWhatsAppDelivery() {
+	if (
+		[
+			"INSTANCE_ID",
+			"API_TOKEN",
+			"API_URL",
+			"MEDIA_URL",
+			"SENDER_PHONE",
+			"TEST_GROUP_ID",
+			"TEST_PARTICIPANT_DIGEST",
+		].some((name) => !process.env[`BULLETIN_WHATSAPP_${name}`]?.trim())
+	)
+		return null;
+	return import("./whatsapp-delivery.server");
+}
 
 type RecipientStatus = EmailJobStatus | "bounced" | "complained";
 interface JobRow {
@@ -121,20 +161,23 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 	};
 }
 
-async function refreshJob(jobId: string): Promise<void> {
+async function refreshJob(jobId: string, signal?: AbortSignal): Promise<void> {
 	await transaction(async (connection) => {
+		signal?.throwIfAborted();
 		// Lock before counting: concurrent event handlers cannot publish stale totals.
 		const job = await txQueryOne<JobRow>(
 			connection,
 			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date FROM tanah_daily_bulletin_email_job j WHERE id = ? FOR UPDATE",
 			[jobId],
 		);
+		signal?.throwIfAborted();
 		if (!job) return;
 		const rows = await txQuery<CountRow>(
 			connection,
 			"SELECT status, COUNT(*) AS count FROM tanah_daily_bulletin_email_recipient WHERE job_id = ? GROUP BY status",
 			[jobId],
 		);
+		signal?.throwIfAborted();
 		const status = aggregate(countsMap(rows));
 		const error =
 			status === "uncertain" ? UNCERTAIN : status === "failed" ? FAILED : null;
@@ -143,6 +186,7 @@ async function refreshJob(jobId: string): Promise<void> {
 			"UPDATE tanah_daily_bulletin_email_job SET status = ?, last_error = ? WHERE id = ?",
 			[status, error, jobId],
 		);
+		signal?.throwIfAborted();
 		if (job.audience === "real") {
 			const channelStatus =
 				status === "delivered"
@@ -189,9 +233,12 @@ async function publishRecipients(
 	client: SQSClient,
 	queueUrl: string,
 	recipients: { id: number }[],
+	shutdown?: AbortSignal,
 ): Promise<void> {
+	const signal = shutdown ?? AbortSignal.timeout(15_000);
 	try {
 		for (let index = 0; index < recipients.length; index += 10) {
+			signal.throwIfAborted();
 			const entries = recipients.slice(index, index + 10).map(({ id }) => ({
 				Id: String(id),
 				MessageBody: JSON.stringify({ kind: "send", recipientId: Number(id) }),
@@ -201,8 +248,9 @@ async function publishRecipients(
 					QueueUrl: queueUrl,
 					Entries: entries,
 				}),
-				{ abortSignal: AbortSignal.timeout(15_000) },
+				{ abortSignal: signal },
 			);
+			signal.throwIfAborted();
 			const acknowledged = new Set(result.Successful?.map((entry) => entry.Id));
 			if (
 				result.Failed?.length ||
@@ -233,30 +281,41 @@ async function publishQueued(jobId: string): Promise<void> {
 async function reconcileEmailOutbox(
 	client: SQSClient,
 	queueUrl: string,
+	shutdown?: AbortSignal,
 ): Promise<void> {
-	// Recovery must not depend on the original SQS message still existing: it may
-	// already be in the DLQ after a database outage. Never requeue an expired claim.
-	const stale = await query<{ id: number; job_id: string }>(
-		`SELECT id, job_id FROM tanah_daily_bulletin_email_recipient WHERE status = 'sending'
+	await runOutboxSweep(shutdown, async (signal) => {
+		// Recovery must not depend on the original SQS message still existing: it may
+		// already be in the DLQ after a database outage. Never requeue an expired claim.
+		const stale = await query<{ id: number; job_id: string }>(
+			`SELECT id, job_id FROM tanah_daily_bulletin_email_recipient WHERE status = 'sending'
 		 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND) ORDER BY id LIMIT 100`,
-	);
-	const jobs = new Set<string>();
-	for (const row of stale) {
-		const changed = await execute(
-			`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
+		);
+		signal.throwIfAborted();
+		const jobs = new Set<string>();
+		for (const row of stale) {
+			signal.throwIfAborted();
+			const changed = await execute(
+				`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
 			 WHERE id = ? AND status = 'sending'
 			 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)`,
-			[UNCERTAIN, row.id],
+				[UNCERTAIN, row.id],
+			);
+			signal.throwIfAborted();
+			if (changed.affectedRows === 1) jobs.add(row.job_id);
+		}
+		for (const id of jobs) {
+			signal.throwIfAborted();
+			await refreshJob(id, signal);
+		}
+		signal.throwIfAborted();
+		// The committed rows form an outbox. Re-publishing is safe because send claims
+		// are atomic, and only queued recipients are ever eligible for this sweep.
+		const recipients = await query<{ id: number }>(
+			"SELECT id FROM tanah_daily_bulletin_email_recipient WHERE status = 'queued' ORDER BY id LIMIT 100",
 		);
-		if (changed.affectedRows === 1) jobs.add(row.job_id);
-	}
-	for (const id of jobs) await refreshJob(id);
-	// The committed rows form an outbox. Re-publishing is safe because send claims
-	// are atomic, and only queued recipients are ever eligible for this sweep.
-	const recipients = await query<{ id: number }>(
-		"SELECT id FROM tanah_daily_bulletin_email_recipient WHERE status = 'queued' ORDER BY id LIMIT 100",
-	);
-	await publishRecipients(client, queueUrl, recipients);
+		signal.throwIfAborted();
+		await publishRecipients(client, queueUrl, recipients, signal);
+	});
 }
 
 export async function enqueueBulletinEmail(
@@ -308,6 +367,29 @@ export async function enqueueBulletinEmail(
 		);
 		if (active)
 			throw new Error("יש בקשת שליחה פתוחה או שתוצאתה אינה ודאית לתאריך זה");
+		if (expected.audience === "real") {
+			const previous = await txQueryOne<{
+				status: string;
+				attempt_count: number;
+				provider_message_id: string | null;
+				sent_at: Date | string | null;
+				lease_token: string | null;
+				lease_until: Date | string | null;
+			}>(
+				connection,
+				"SELECT status, attempt_count, provider_message_id, sent_at, lease_token, lease_until FROM tanah_daily_bulletin_delivery WHERE bulletin_date = ? AND channel = 'email' FOR UPDATE",
+				[date],
+			);
+			if (
+				previous?.status !== "pending" ||
+				Number(previous.attempt_count) !== 0 ||
+				previous.provider_message_id !== null ||
+				previous.sent_at !== null ||
+				previous.lease_token !== null ||
+				previous.lease_until !== null
+			)
+				throw new Error("קיים ניסיון דיוור קודם לתאריך זה ונדרשת בדיקה");
+		}
 		const subscribers = await txQuery<{ id: number; email: string }>(
 			connection,
 			"SELECT id, email FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed' ORDER BY id FOR UPDATE",
@@ -327,6 +409,16 @@ export async function enqueueBulletinEmail(
 				"INSERT INTO tanah_daily_bulletin_email_recipient (job_id, subscriber_id, email) VALUES (?, ?, ?)",
 				[id, subscriber.id, subscriber.email.toLowerCase()],
 			);
+		}
+		if (expected.audience === "real") {
+			const reserved = await txExecute(
+				connection,
+				`UPDATE tanah_daily_bulletin_delivery SET status = ?, provider_message_id = ?
+				 WHERE bulletin_date = ? AND channel = 'email' AND status = 'pending' AND attempt_count = 0
+				 AND provider_message_id IS NULL AND sent_at IS NULL AND lease_token IS NULL AND lease_until IS NULL`,
+				["sending", `ses:${id}`, date],
+			);
+			if (reserved.affectedRows !== 1) throw new DeliverySuppressed();
 		}
 		const inserted = await txQueryOne<JobRow>(
 			connection,
@@ -583,7 +675,33 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 			try {
 				if (Date.now() >= nextSweep) {
 					nextSweep = Date.now() + 30_000;
-					await reconcileEmailOutbox(client, runtime.queueUrl);
+					await reconcileEmailOutbox(client, runtime.queueUrl, signal);
+					if (signal.aborted) break;
+					try {
+						const telegram = await optionalTelegramDelivery();
+						if (signal.aborted) break;
+						await telegram?.reconcileTelegramOutbox(
+							client,
+							runtime.queueUrl,
+							signal,
+						);
+					} catch {
+						if (!signal.aborted)
+							console.error("Telegram bulletin outbox reconciliation failed");
+					}
+					try {
+						const whatsapp = await optionalWhatsAppDelivery();
+						if (signal.aborted) break;
+						await whatsapp?.reconcileWhatsAppOutbox(
+							client,
+							runtime.queueUrl,
+							signal,
+						);
+					} catch {
+						// A missing migration/provider configuration must not block the existing email consumer.
+						if (!signal.aborted)
+							console.error("WhatsApp bulletin outbox reconciliation failed");
+					}
 				}
 				if (signal.aborted) break;
 				const result = await client.send(
@@ -607,6 +725,14 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					try {
 						payload = JSON.parse(message.Body);
 					} catch {
+						if (message.Body === SES_SNS_VALIDATION_MESSAGE)
+							await client.send(
+								new DeleteMessageCommand({
+									QueueUrl: runtime.queueUrl,
+									ReceiptHandle: message.ReceiptHandle,
+								}),
+								{ abortSignal: AbortSignal.timeout(15_000) },
+							);
 						continue;
 					}
 					let handled = false;
@@ -622,6 +748,61 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					) {
 						await processEmailRecipient(payload.recipientId);
 						handled = true;
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						payload.kind === "telegram.send"
+					) {
+						if (
+							Object.keys(payload).length === 2 &&
+							"jobId" in payload &&
+							typeof payload.jobId === "string" &&
+							TELEGRAM_JOB_ID.test(payload.jobId)
+						) {
+							const telegram = await optionalTelegramDelivery();
+							if (signal.aborted) break;
+							if (telegram)
+								handled = await telegram.processTelegramJob(
+									payload.jobId.toLowerCase(),
+									signal,
+								);
+						}
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						payload.kind === "whatsapp.send"
+					) {
+						if (
+							Object.keys(payload).length === 2 &&
+							"jobId" in payload &&
+							typeof payload.jobId === "string" &&
+							WHATSAPP_JOB_ID.test(payload.jobId)
+						) {
+							const whatsapp = await optionalWhatsAppDelivery();
+							if (signal.aborted) break;
+							if (whatsapp)
+								handled = await whatsapp.processWhatsAppJob(
+									payload.jobId.toLowerCase(),
+									signal,
+								);
+						}
+					} else if (
+						typeof payload === "object" &&
+						payload !== null &&
+						"kind" in payload &&
+						(payload.kind === "bulletin.schedule" ||
+							payload.kind === "bulletin.generate")
+					) {
+						const { processScheduledBulletin } = await import(
+							"./scheduled-bulletin.server"
+						);
+						if (signal.aborted) break;
+						handled = await processScheduledBulletin(payload, signal, {
+							client,
+							url: runtime.queueUrl,
+						});
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {

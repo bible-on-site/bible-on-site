@@ -1011,6 +1011,7 @@ public class PreferencesViewModelTests : IDisposable
     /// Extension-pack install/remove paths on <see cref="ExtensionPacksViewModel"/> using
     /// <see cref="PerushimNotesService.CreateForTesting"/> and a fake PAD service.
     /// </summary>
+    [Collection(PreferencesServiceCollection.Name)]
     public sealed class PreferencesViewModelPerushimTests : IDisposable
     {
         private readonly string _tempDir;

@@ -148,20 +148,8 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             Configuration.ArtifactDirectory, test);
         try
         {
-            try
-            {
-                body();
-            }
-            finally
-            {
-                // The per-command driver profile (counts/totals/max) rides the
-                // test's captured output into the trx artifact.
-                var profile = DriverTelemetry.Dump();
-                if (profile.Length > 0)
-                {
-                    Output.WriteLine(profile);
-                }
-            }
+            body();
+            WriteDriverTelemetry();
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
             CollectAppCoverage(test, "passed");
@@ -169,11 +157,27 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch
         {
-            CoverageEvidence.RecordSession(Driver?.SessionId);
-            CoverageEvidence.Finish("failed");
-            CollectAppCoverage(test, "failed");
-            SaveDiagnostics(test, "failed");
+            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine);
+            FailureDiagnostics.PreserveFailure(WriteDriverTelemetry, Output.WriteLine);
+            FailureDiagnostics.PreserveFailure(() =>
+            {
+                CoverageEvidence.RecordSession(Driver?.SessionId);
+                CoverageEvidence.Finish("failed");
+            }, Output.WriteLine);
+            FailureDiagnostics.PreserveFailure(() => CollectAppCoverage(test, "failed"), Output.WriteLine);
+            FailureDiagnostics.PreserveFailure(() => SaveDiagnostics(test, "failed"), Output.WriteLine);
             throw;
+        }
+    }
+
+    private void WriteDriverTelemetry()
+    {
+        // A failed scenario must retain its real exception even if its output
+        // sink closes. Passing scenarios still surface diagnostic failures.
+        var profile = DriverTelemetry.Dump();
+        if (profile.Length > 0)
+        {
+            Output.WriteLine(profile);
         }
     }
 

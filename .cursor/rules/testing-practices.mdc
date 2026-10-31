@@ -17,7 +17,7 @@ alwaysApply: true
 
 ## Coverage (Website)
 
-Use `/* istanbul ignore next */` for defensive/unreachable code; add a short reason. Custom handling in `tests/util/coverage/sanitize-coverage.js` makes SWC instrumentation respect these comments.
+Use `/* istanbul ignore next */` for defensive/unreachable code; add a short reason. Custom handling in `tests/util/coverage/sanitize-coverage.mjs` makes SWC instrumentation respect these comments.
 
 ## Commands by Module
 

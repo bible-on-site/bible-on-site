@@ -7,6 +7,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:BibleOnSite"
+    xmlns:controls="clr-namespace:BibleOnSite.Controls"
     xmlns:pages="clr-namespace:BibleOnSite.Pages"
     xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
     xmlns:fonts="clr-namespace:Fonts"
@@ -54,346 +55,88 @@
                                Margin="20"/>
                     </Grid>
 
+                    <!-- Destination rows share FlyoutMenuRow (#2766): on Windows
+                         its handler wraps the row in a native Button so the menu is
+                         reachable and activatable with keyboard/screen reader, with
+                         hover/pressed/focus visuals; touch platforms keep the
+                         identical tap layout. -->
                     <!-- על הפרק -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnAlHaperekTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.calendar_today_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="על הפרק"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="לימוד תנ&quot;ך יומי"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_today_24_regular}"
+                                            Title="על הפרק"
+                                            Subtitle="לימוד תנ&quot;ך יומי"
+                                            AutomationId="FlyoutAlHaperek"
+                                            Activated="OnAlHaperekTapped"/>
 
                     <!-- תנכפדיה -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnTanahpediaTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.library_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="תנכפדיה"
-                                   FontSize="16"
-                                   AutomationId="FlyoutTanahpedia"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="אנציקלופדיה לתנ&quot;ך"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.library_24_regular}"
+                                            Title="תנכפדיה"
+                                            Subtitle="אנציקלופדיה לתנ&quot;ך"
+                                            AutomationId="FlyoutTanahpedia"
+                                            Activated="OnTanahpediaTapped"/>
 
                     <!-- לוח לימוד יומי -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto"
-                          AutomationId="FlyoutLearningCalendar">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnLearningCalendarTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.calendar_month_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="לוח לימוד יומי"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="הפרק היומי בלוח השנה"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_month_24_regular}"
+                                            Title="לוח לימוד יומי"
+                                            Subtitle="הפרק היומי בלוח השנה"
+                                            AutomationId="FlyoutLearningCalendar"
+                                            Activated="OnLearningCalendarTapped"/>
 
                     <!-- מסורה על הפרק — opt-in entry gated by the מסורה preference (#2181) -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto"
-                          IsVisible="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=ShowMasoraEntry}">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnMasoraTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.split_horizontal_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="מסורה על הפרק"
-                                   AutomationId="FlyoutMasora"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="חלוקת פרשיות פתוחה וסתומה"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.split_horizontal_24_regular}"
+                                            Title="מסורה על הפרק"
+                                            Subtitle="חלוקת פרשיות פתוחה וסתומה"
+                                            AutomationId="FlyoutMasora"
+                                            IsVisible="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=ShowMasoraEntry}"
+                                            Activated="OnMasoraTapped"/>
 
                     <!-- פרשה על הפרק -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnParashaTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.book_open_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="פרשה על הפרק"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="קריאת התורה וההפטרה"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.book_open_24_regular}"
+                                            Title="פרשה על הפרק"
+                                            Subtitle="קריאת התורה וההפטרה"
+                                            AutomationId="FlyoutParasha"
+                                            Activated="OnParashaTapped"/>
 
                     <!-- רבנים -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnAuthorsTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.edit_person_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="רבנים"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="כותבים בתכנית"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.edit_person_24_regular}"
+                                            Title="רבנים"
+                                            Subtitle="כותבים בתכנית"
+                                            AutomationId="FlyoutAuthors"
+                                            Activated="OnAuthorsTapped"/>
 
-                    <!-- עלון יומי — join carousel (#2806), with the website's
-                         nested קבוצת ווטסאפ entry deep-linking that card -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnDailyBulletinTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.news_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="עלון יומי"
-                                   FontSize="16"
-                                   AutomationId="FlyoutDailyBulletin"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="במייל, בטלגרם ובווטסאפ"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
-
-                    <!-- קבוצת ווטסאפ — nested under עלון יומי like the website nav -->
-                    <Grid Padding="48,12,16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnWhatsAppGroupTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.chat_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="קבוצת ווטסאפ"
-                                   FontSize="14"
-                                   AutomationId="FlyoutWhatsAppGroup"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="18"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <!-- עלון יומי — join cards (#2806) -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.news_24_regular}"
+                                            Title="עלון יומי"
+                                            Subtitle="במייל, בטלגרם ובווטסאפ"
+                                            AutomationId="FlyoutDailyBulletin"
+                                            Activated="OnDailyBulletinTapped"/>
 
                     <!-- תנאי שימוש -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnTermsTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.shield_question_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="תנאי שימוש"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="הצהרות פרטיות ונגישות"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.shield_question_24_regular}"
+                                            Title="תנאי שימוש"
+                                            Subtitle="הצהרות פרטיות ונגישות"
+                                            AutomationId="FlyoutTerms"
+                                            Activated="OnTermsTapped"/>
 
                     <!-- העדפות -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnPreferencesTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.settings_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="העדפות"
-                                   AutomationId="FlyoutPreferences"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="הגדרות משתמש"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.settings_24_regular}"
+                                            Title="העדפות"
+                                            Subtitle="הגדרות משתמש"
+                                            AutomationId="FlyoutPreferences"
+                                            Activated="OnPreferencesTapped"/>
 
                     <!-- צור קשר -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnContactTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.contact_card_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="צור קשר"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="צוות התכנית"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.contact_card_24_regular}"
+                                            Title="צור קשר"
+                                            Subtitle="צוות התכנית"
+                                            AutomationId="FlyoutContact"
+                                            Activated="OnContactTapped"/>
 
                     <!-- תרומות -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnDonationsTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.money_hand_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="תרומות"
-                                   FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                            <Label Text="תמיכה בקיום התכנית"
-                                   FontSize="12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.money_hand_24_regular}"
+                                            Title="תרומות"
+                                            Subtitle="תמיכה בקיום התכנית"
+                                            AutomationId="FlyoutDonations"
+                                            Activated="OnDonationsTapped"/>
                 </VerticalStackLayout>
             </ScrollView>
         </DataTemplate>

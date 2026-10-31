@@ -1,4 +1,5 @@
 using BibleOnSite.Data;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -6,7 +7,7 @@ using BibleOnSite.ViewModels;
 namespace BibleOnSite.Controls;
 
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
-public partial class FloatingSearchBar : ContentView
+public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
 #pragma warning restore S2333
 {
     private readonly SearchViewModel _viewModel = new();

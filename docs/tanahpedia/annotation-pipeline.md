@@ -260,7 +260,7 @@ data/annotations/.venv/bin/pip install transformers==5.19.0
 
 # 2. Article input straight from the database (verbatim bytes — the
 #    export must not normalize; content_hash is the staleness key).
-node --import tsx devops/export-tanahpedia-articles.mts \
+node devops/export-tanahpedia-articles.mts \
     --out /tmp/tanahpedia-articles.json --env-file <module>/.dev.env
 
 # 3. Publish rows — detection + dictabert-ner re-type. Pasuk domain is

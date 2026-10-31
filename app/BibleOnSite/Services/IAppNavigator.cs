@@ -4,6 +4,15 @@ namespace BibleOnSite.Services;
 public interface IAppNavigator
 {
     Task GoToAsync(string route);
+    Task GoToAsync(string route, bool animate, IDictionary<string, object>? parameters);
+
+    /// <summary>
+    /// Dependent/programmatic navigation (app links): queues behind a
+    /// transition still in flight instead of being deduplicated like a
+    /// second user tap, so the request cannot vanish mid-sequence.
+    /// </summary>
+    Task GoToQueuedAsync(string route);
+
     Task DisplayAlertAsync(string title, string message, string cancel);
 
     /// <summary>
@@ -24,7 +33,62 @@ public sealed class ShellAppNavigator : IAppNavigator
 {
     public static IAppNavigator Instance { get; } = new ShellAppNavigator();
 
-    public Task GoToAsync(string route) => Shell.Current.GoToAsync(route);
+    /// <summary>Every navigation funnels through one serializer: the per-page
+    /// <see cref="Helpers.NavigationGate"/>s cannot see each other and the
+    /// direct Shell.Current.GoToAsync callers had no gate at all, so a second
+    /// GoToAsync could still reach UIKit while a transition was in flight —
+    /// which faults the navigation controller and is a fatal ObjC exception
+    /// on iOS (the TestFlight SIGABRT on repeated link taps).</summary>
+    private static readonly Helpers.NavigationGate Gate = new();
+
+    /// <summary>Liveness bound on the post-navigation settle wait — releases
+    /// the gate when Navigated never arrives (a cancelled or externally
+    /// pre-empted navigation), not a performance deadline.</summary>
+    private static readonly TimeSpan SettleBound = TimeSpan.FromMilliseconds(1500);
+
+    public Task GoToAsync(string route) =>
+        Gate.RunAsync(() => NavigateAndSettleAsync(route));
+
+    public Task GoToAsync(string route, bool animate, IDictionary<string, object>? parameters) =>
+        Gate.RunAsync(() => NavigateAndSettleAsync(route, animate, parameters));
+
+    public Task GoToQueuedAsync(string route) =>
+        Gate.RunQueuedAsync(() => NavigateAndSettleAsync(route));
+
+    private static Task NavigateAndSettleAsync(string route) =>
+        NavigateAndSettleAsync(route, true, null);
+
+    private static async Task NavigateAndSettleAsync(string route, bool animate,
+        IDictionary<string, object>? parameters)
+    {
+        var shell = Shell.Current;
+        var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnNavigated(object? sender, ShellNavigatedEventArgs e) => settled.TrySetResult();
+        shell.Navigated += OnNavigated;
+        try
+        {
+            // The 3-arg overload rejects a null query — dispatch on presence.
+            await (ToQuery(parameters) is { } query
+                ? shell.GoToAsync(route, animate, query)
+                : shell.GoToAsync(route, animate));
+            // iOS can resolve GoToAsync while the native transition still
+            // animates: release only once Shell reports Navigated so a rapid
+            // follow-up tap cannot collide with the in-flight transition.
+            await Task.WhenAny(settled.Task, Task.Delay(SettleBound));
+        }
+        finally
+        {
+            shell.Navigated -= OnNavigated;
+        }
+    }
+
+    private static ShellNavigationQueryParameters? ToQuery(IDictionary<string, object>? parameters) =>
+        parameters switch
+        {
+            null => null,
+            ShellNavigationQueryParameters query => query,
+            _ => new ShellNavigationQueryParameters(parameters)
+        };
 
     // Every blocking dialog flows through the shared dialog policy/presenter
     // (#2630) so callers cannot drift back to native defaults.
