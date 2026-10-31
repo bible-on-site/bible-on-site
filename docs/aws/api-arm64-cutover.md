@@ -88,3 +88,18 @@ artifacts or rewrite an immutable canonical version as rollback.
 AWS documents the [container health-check behavior](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html),
 [completed-deployment circuit-breaker target](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-circuit-breaker.html)
 and [immutable service revisions](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-revision.html).
+
+## Compute estimate
+
+The [official regional price offer](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/il-central-1/index.json)
+captured on November 1, 2026 was published October 19, with rates effective
+October 1. For one Linux On-Demand task at 0.25 vCPU and 0.5 GiB over 730 hours:
+
+| Architecture | USD per vCPU-hour | USD per GiB-hour | Monthly compute estimate |
+| --- | --- | --- | --- |
+| x86 | 0.05181440 | 0.00568960 | $11.53 |
+| ARM | 0.04145152 | 0.00455168 | $9.23 |
+
+The estimated compute reduction is $2.31 per month (20%). This excludes public
+IPv4, logs, networking, database charges, discounts and taxes. It describes
+list-price compute at the preserved size, rather than an observed account bill.
