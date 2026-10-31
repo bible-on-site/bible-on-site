@@ -66,7 +66,7 @@ partial class Build
             // Upload AAB
             using var aabStream = File.OpenRead(aabFile);
             var uploadRequest = service.Edits.Bundles.Upload(GooglePlayPackageName, edit.Id, aabStream, "application/octet-stream");
-            var uploadProgress = uploadRequest.Upload();
+            var uploadProgress = UploadWithResume(uploadRequest);
 
             if (uploadProgress.Status != UploadStatus.Completed)
             {
@@ -112,6 +112,36 @@ partial class Build
             service.Edits.Commit(GooglePlayPackageName, edit.Id).Execute();
             Serilog.Log.Information("Google Play listing sync complete");
         });
+
+    // A resumable session stays open server-side, so a request that stalls past
+    // the client deadline (run 40699641279 was canceled mid-upload) resumes
+    // from the confirmed byte offset instead of re-sending the whole bundle.
+    static IUploadProgress UploadWithResume(ResumableUpload uploadRequest, int maxAttempts = 3)
+    {
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            IUploadProgress? progress = null;
+            try
+            {
+                progress = attempt == 0 ? uploadRequest.Upload() : uploadRequest.Resume();
+            }
+            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException canceled)
+            {
+                // The library already records the cancel in GetProgress(); the
+                // loop below resumes the session.
+                Serilog.Log.Debug($"AAB upload request canceled: {canceled.Message}");
+            }
+            if (progress?.Status == UploadStatus.Completed)
+            {
+                return progress;
+            }
+            if (attempt + 1 < maxAttempts)
+            {
+                Serilog.Log.Warning($"AAB upload attempt {attempt + 1} interrupted ({progress?.Exception?.Message ?? "request canceled"}); resuming session");
+            }
+        }
+        return uploadRequest.GetProgress();
+    }
 
     static AndroidPublisherService CreatePlayService(AbsolutePath keyFile)
     {
