@@ -12,6 +12,7 @@ import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { installAppUnderTest } from "./android-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -64,12 +65,17 @@ await new Promise((resolvePort, reject) => {
   probe.on("error", reject);
   probe.listen(Number(appiumPort), "127.0.0.1", () => probe.close(resolvePort));
 });
-if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
-  // UiAutomator2 skips installation entirely with noReset, even when
-  // enforceAppInstall is set. Replace the APK while retaining the review data.
-  const installation = await execute(androidAdb, ["-s", process.env.MOBILE_UDID, "install", "-r", appPath],
-    { timeout: 180000 });
-  console.log(installation.stdout.trim());
+if (platform === "android") {
+  // `adb install` picks an IncFS incremental install whenever the binary and
+  // device support it; Xamarin mmaps assemblies.blob out of the staged APK and
+  // can SIGSEGV in libmonodroid open_from_bundles before IncFS materializes
+  // the page (#2773). The pilot installs the AUT on the deterministic
+  // --no-incremental path and marks it preinstalled so UiAutomator2 keeps
+  // reusing it under noReset — driver-initiated installs would be incremental
+  // again. MOBILE_KEEP_APP swaps the APK while retaining the review data.
+  const installation = await installAppUnderTest({ adb: androidAdb, udid: process.env.MOBILE_UDID,
+    appPath, packageId: "com.tanah.daily929", keepData: process.env.MOBILE_KEEP_APP === "1", execute });
+  console.log(installation.output);
 }
 let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
@@ -192,7 +198,9 @@ try {
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
       MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
-      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
+      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}),
+      ...(platform === "android" ? { MOBILE_APP_PREINSTALLED: "1" } : {}),
+      APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
     stream.on("data", chunk => {
