@@ -34,3 +34,28 @@ The local source artifacts are `.outputs/ses-email-before.html` and `.outputs/se
 ```powershell
 node web/admin/node_modules/playwright/cli.js screenshot --browser chromium --viewport-size '900,1100' --full-page --wait-for-selector .bulletin-verse-number file:///ABSOLUTE_WORKTREE_PATH/.outputs/ses-email-react-footer-complete.html docs/daily-bulletin/screenshots/email-after.png
 ```
+
+## WhatsApp panel evidence
+
+- [Desktop before](whatsapp-before.png) and [desktop after](whatsapp-after.png): 1440 x 1100 viewports.
+- [Phone before](whatsapp-before-mobile.png) and [phone after](whatsapp-after-mobile.png): 390 x 844 viewports.
+
+The baseline renders the committed `DailyBulletinPage` before the WhatsApp controls were added. The after captures render the modified component and the real `BulletinWhatsAppControls`. Both use the admin's actual React components, Tailwind CSS and TanStack Router, with only the server-function modules replaced by local fixture functions. These are full-page captures from fresh, isolated Chromium contexts, without a user browser profile.
+
+All content is synthetic: `reader@example.com`, a local sample bulletin and PDF, and a sample two-member test group with no provider identifiers. The real group is unconfigured, its option is disabled, and the saved WhatsApp audience is test. Existing email controls and the email preview remain visible. The test send button is shown only because the sample prepared PDF and cached connection verification satisfy the UI checks; every mutation function, including connection verification, throws in this preview.
+
+The preview runs on `127.0.0.1:3122` with environment-file loading and public-file serving disabled. The isolated Vite configuration refuses backend imports beyond the three explicitly mocked server-function modules. Playwright permits only local GET requests and rejects every external request, API request, server-function request and non-GET request. The capture report recorded zero external, provider or mutation requests, zero page errors and no horizontal overflow in all four captures. No account, database, worker, credential, AWS resource or provider was accessed.
+
+The ignored reproduction sources are `.outputs/whatsapp-visual/`; `capture-report.json` records the viewports and request checks. Start the isolated Vite configuration, then run `node .outputs/whatsapp-visual/capture.mjs`. The email iframe is scrolled into view before full-page capture so Chromium paints its local contents. Visual inspection confirmed readable Hebrew RTL controls, stacked group cards on a phone, the missing real-group message, and preserved email controls and preview.
+
+## Telegram controls evidence
+
+- [Before](telegram-before.png): the original actual DailyBulletinPage before Telegram controls were added, at 1440 x 1100. This baseline image is preserved unchanged.
+- [After](telegram-after.png): the current actual component with independent Telegram controls, saved test mode, a named private test destination and disabled public activation.
+- [Phone](telegram-after-mobile.png): the current component at 390 x 844, retaining the existing chapter, email controls and HTML preview.
+
+The refreshed after captures use the ignored local Vite harness in .outputs/telegram-visual/. They render the actual source components, admin Tailwind CSS and TanStack Router with memory history. Only server-function modules use fixture adapters. The saved bulletin, two example.com email recipients, 52 pending subscribers and private destination are synthetic display fixtures. The public handle is the owner-selected @alhaperek channel. These fixture values do not establish that any bot or destination is configured or verified.
+
+Every fixture mutation throws instead of sending, preparing or changing an audience. The preview disables environment-file loading and public-file serving and rejects backend imports beyond its three explicit server-function mocks. Fresh Chromium contexts have no user browser profile. Their request interceptor permits only local GET requests and refuses every external request, API/server-function request and non-GET request. The capture report records zero external, provider or mutation requests, zero page errors, no horizontal overflow and zero send clicks for both after captures. No database, AWS profile, token, provider API, authentication session or personal browser profile was accessed.
+
+The desktop and phone captures show target-neutral private-test wording, the correct public channel and the existing email actions. The iframe is scrolled into view before capture so Chromium paints its local sample contents. Reproduce the after captures from the repository root by starting the isolated Vite configuration on 127.0.0.1:3123 and then running node .outputs/telegram-visual/capture.mjs. The ignored capture-report.json records the checks and viewports. The original before capture remains the pre-Telegram baseline. The preview server was stopped after capture.

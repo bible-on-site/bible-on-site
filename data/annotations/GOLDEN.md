@@ -54,7 +54,7 @@ python encoders.py --all --out golden/encoder-metrics  # regenerate the artifact
 python publish.py --pasuk-out /tmp/mentions-pasuk.json
 python publish.py --articles /tmp/articles.json --article-out /tmp/mentions-article.json
 python publish.py --pasuk-out p.json --no-retype       # deterministic lexical rows
-node ../devops/import-tanahpedia-mentions.mts --decorations /tmp/mentions-pasuk.json --dry-run
+node ../../devops/import-tanahpedia-mentions.mts --decorations /tmp/mentions-pasuk.json --dry-run
 ```
 
 ## Metrics (per the issue's acceptance list)

@@ -1,5 +1,6 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Models;
+using BibleOnSite.Services;
 
 namespace BibleOnSite.Helpers;
 
@@ -156,7 +157,7 @@ public sealed class ReaderChrome
     // Seam so tests observe the article navigation target without Shell
     // (same pattern as ReaderScrollTop.AnimateScroll).
     internal static Func<int, Task> OpenArticle { get; set; } =
-        articleId => Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+        articleId => ShellAppNavigator.Instance.GoToAsync($"articleDetail?articleId={articleId}");
 
     // Seam so tests observe the scroll-to-start delegation without a realized
     // scroll surface (the helper itself is covered by ReaderScrollTopTests).

@@ -69,7 +69,7 @@ describe("merge-coverage buildMergeArgs (#2670)", () => {
 		const args = JSON.parse(runMerger("null")) as string[];
 
 		// sanitizeCoverage projects every collected record onto the canonical
-		// instrumented map (coverage-universe.js) and drops records that name
+		// instrumented map (coverage-universe.mjs) and drops records that name
 		// no real src file — the e2e report's coordinate space is already
 		// trusted, so the merge is a plain union. No hits-only/denominator
 		// pinning remains (#2670).
