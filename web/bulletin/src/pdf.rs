@@ -996,7 +996,9 @@ mod tests {
             "<p><span style='font-weight: bold'>כאשר <span>פנימי</span></span> רגיל <span style='font-style: italic; text-decoration: underline line-through'>דגש</span></p>",
         );
         assert!(source.contains("#text(weight: 700)[כאשר פנימי]; רגיל"));
-        assert!(source.contains("#text(font: \"Taamey Frank CLM\", style: \"italic\")[#underline[#strike[דגש];];];"));
+        assert!(source.contains(
+            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[#underline[#strike[דגש];];];"
+        ));
         assert!(
             !to_typst("<span style='background:url(x); font-weight:expression(x)'>בטוח</span>")
                 .contains("#text(")
