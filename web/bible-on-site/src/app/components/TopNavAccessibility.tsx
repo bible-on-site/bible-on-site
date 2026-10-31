@@ -30,6 +30,9 @@ import { hasReaderSettingsGear, isReaderPathname } from "./TopNavSearch";
 import styles from "./top-nav-accessibility.module.css";
 
 const PANEL_ID = "top-nav-accessibility-panel";
+const UNDO_TIMEOUT_MS = 10_000;
+
+type ResetSnapshot = { settings: ReaderSettings; a11y: SiteA11ySettings };
 
 const sameSettings = (a: ReaderSettings, b: ReaderSettings) =>
 	a.fontStep === b.fontStep &&
@@ -52,7 +55,8 @@ const sameA11y = (a: SiteA11ySettings, b: SiteA11ySettings) =>
  * (site-a11y-settings.ts) — the reader-settings schema only owns scripture
  * display fields (#2767). The reset restores both the display adjustments
  * and the site toggles — unrelated preferences, recitation settings and
- * user data are untouched. The last item is the maintained הצהרת נגישות
+ * user data are untouched. A reset acts immediately and offers a timed
+ * ביטול האיפוס (undo) instead of a confirm step. The last item is the maintained הצהרת נגישות
  * link (issue #2396).
  */
 export function TopNavAccessibility() {
@@ -65,10 +69,13 @@ export function TopNavAccessibility() {
 		DEFAULT_SITE_A11Y_SETTINGS,
 	);
 	const [announce, setAnnounce] = useState("");
+	const [undoSnapshot, setUndoSnapshot] = useState<ResetSnapshot | null>(null);
+	const [undoPaused, setUndoPaused] = useState(false);
 	const [lastPathname, setLastPathname] = useState(pathname);
 	const [openedPathname, setOpenedPathname] = useState<string | null>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
+	const resetRef = useRef<HTMLButtonElement>(null);
 
 	// Route changes dismiss the popover (same convention as NavBar).
 	if (pathname !== lastPathname) {
@@ -77,6 +84,12 @@ export function TopNavAccessibility() {
 		// usePathname catches up. Preserve that opening on the same route.
 		if (openedPathname !== pathname) setOpen(false);
 		setAnnounce("");
+	}
+
+	// The undo offer lives only while the menu that made it is open.
+	if (!open && undoSnapshot) {
+		setUndoSnapshot(null);
+		setUndoPaused(false);
 	}
 
 	const close = useCallback((restoreFocus = true) => {
@@ -136,6 +149,14 @@ export function TopNavAccessibility() {
 		};
 	}, [open, close]);
 
+	// Expiry pauses while the undo button is hovered or focused, so a slow
+	// pointer or screen-reader user is not cut off mid-action.
+	useEffect(() => {
+		if (!undoSnapshot || undoPaused) return;
+		const timer = setTimeout(() => setUndoSnapshot(null), UNDO_TIMEOUT_MS);
+		return () => clearTimeout(timer);
+	}, [undoSnapshot, undoPaused]);
+
 	useEffect(() => {
 		if (open)
 			panelRef.current
@@ -144,6 +165,7 @@ export function TopNavAccessibility() {
 	}, [open]);
 
 	const update = (patch: Partial<ReaderSettings>) => {
+		setUndoSnapshot(null);
 		const next = { ...settings, ...patch };
 		setStoredReaderSettings(next);
 		applyReaderSettings(next);
@@ -151,27 +173,43 @@ export function TopNavAccessibility() {
 	};
 
 	const updateA11y = (patch: Partial<SiteA11ySettings>) => {
+		setUndoSnapshot(null);
 		const next = { ...a11y, ...patch };
 		setStoredSiteA11ySettings(next);
 		applySiteA11ySettings(next);
 		setA11y(next);
 	};
 
+	const save = (nextSettings: ReaderSettings, nextA11y: SiteA11ySettings) => {
+		setStoredReaderSettings(nextSettings);
+		applyReaderSettings(nextSettings);
+		setSettings(nextSettings);
+		setStoredSiteA11ySettings(nextA11y);
+		applySiteA11ySettings(nextA11y);
+		setA11y(nextA11y);
+	};
+
 	const reset = () => {
 		const atDefault =
 			sameSettings(settings, DEFAULT_READER_SETTINGS) &&
 			sameA11y(a11y, DEFAULT_SITE_A11Y_SETTINGS);
-		setStoredReaderSettings(DEFAULT_READER_SETTINGS);
-		applyReaderSettings(DEFAULT_READER_SETTINGS);
-		setSettings(DEFAULT_READER_SETTINGS);
-		setStoredSiteA11ySettings(DEFAULT_SITE_A11Y_SETTINGS);
-		applySiteA11ySettings(DEFAULT_SITE_A11Y_SETTINGS);
-		setA11y(DEFAULT_SITE_A11Y_SETTINGS);
+		setUndoSnapshot(atDefault ? null : { settings, a11y });
+		setUndoPaused(false);
+		save(DEFAULT_READER_SETTINGS, DEFAULT_SITE_A11Y_SETTINGS);
 		setAnnounce(
 			atDefault
 				? "התאמות הנגישות כבר נמצאות בברירת המחדל"
 				: "התאמות הנגישות אופסו לברירת המחדל",
 		);
+	};
+
+	const undoReset = (snapshot: ResetSnapshot) => {
+		save(snapshot.settings, snapshot.a11y);
+		setUndoSnapshot(null);
+		setUndoPaused(false);
+		setAnnounce("התאמות הנגישות הקודמות שוחזרו");
+		// The undo button unmounts; keep focus inside the menu.
+		resetRef.current?.focus();
 	};
 
 	// Docking priority: next to the reader preferences gear where that gear
@@ -307,12 +345,30 @@ export function TopNavAccessibility() {
 							/>
 						</label>
 					</div>
-					<button type="button" className={styles.reset} onClick={reset}>
+					<button
+						ref={resetRef}
+						type="button"
+						className={styles.reset}
+						onClick={reset}
+					>
 						איפוס התאמות נגישות
 					</button>
 					<p role="status" className={styles.status}>
 						{announce}
 					</p>
+					{undoSnapshot && (
+						<button
+							type="button"
+							className={styles.undo}
+							onClick={() => undoReset(undoSnapshot)}
+							onFocus={() => setUndoPaused(true)}
+							onBlur={() => setUndoPaused(false)}
+							onMouseEnter={() => setUndoPaused(true)}
+							onMouseLeave={() => setUndoPaused(false)}
+						>
+							ביטול האיפוס
+						</button>
+					)}
 					<Link href="/accessibility" className={styles.statement}>
 						הצהרת נגישות
 					</Link>
