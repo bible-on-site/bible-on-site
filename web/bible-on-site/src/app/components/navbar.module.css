@@ -14,10 +14,11 @@
 
 .menuBtn {
   position: absolute;
-  top: 1.25rem;
-  right: 1.25rem;
-  width: 2rem;
-  height: 2rem;
+  /* 44px hit area; the 2rem bars stay where they were (1.25rem inset). */
+  top: 0.875rem;
+  right: 0.875rem;
+  width: 2.75rem;
+  height: 2.75rem;
   cursor: pointer;
   z-index: 10000;
   background-color: transparent;
@@ -129,7 +130,7 @@
   display: flex;
   flex-wrap: wrap;
   /* Keep each icon centered on its label's text line: the img has a fixed
-     16px height, so the default stretch can't size it to the taller label
+     1em height, so the default stretch can't size it to the taller label
      line and it would stay pinned to the row's top edge. */
   align-items: center;
   width: 100%;
@@ -140,12 +141,21 @@
   margin: 0.5rem;
 }
 
-/* Ensure menu icons maintain their aspect ratio */
+/* Icons scale with their label's font size and keep their aspect ratio */
 .menuItem img {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 1em;
+  height: 1em;
   object-fit: contain;
+}
+
+/* The whole rest of the row is the link, at least 44px tall to tap. */
+.menuItem > a {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-height: 44px;
+  margin-block: 0;
 }
 
 .menuItemLabel {
