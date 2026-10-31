@@ -11,7 +11,10 @@ spliced over the spoken בַּת. The archival original, its hash and the publis
 S3 object are unchanged. Full source/edit/donor provenance, verification notes
 and remaining acceptance steps are in `edition.json`.
 
-Status: edition proposed and verified by direct listening. Acceptance still
+Status: edition regenerated after review found the first build rendered בןבן
+— its donor window had run past בֶּן into בְּתוּאֵל's opening. The regenerated
+edition splices בֶּן alone (50.42-50.74 s, pinned by Whisper word timestamps)
+and is verified by direct listening and re-transcription. Acceptance still
 requires rerunning the unchanged full-quality alignment pipeline on the
 edition's own source hash plus canonical/timing and packaging verification —
 see `edition.json.remaining`.
