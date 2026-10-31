@@ -73,7 +73,7 @@ function renderPage() {
 
 async function newForm() {
 	renderPage();
-	await screen.findByText("מוקדש לשרה (לעילוי נשמת)");
+	await screen.findByText("לעילוי נשמת שרה");
 	await waitFor(() =>
 		expect(screen.getByRole("button", { name: "ערוך" })).toBeEnabled(),
 	);
@@ -169,10 +169,10 @@ describe("DedicationsPage", () => {
 		]);
 		renderPage();
 		expect(
-			await screen.findByText("מוקדש לשרה (לעילוי נשמת)"),
+			await screen.findByText("לעילוי נשמת שרה"),
 		).toBeInTheDocument();
 		expect(screen.getByText("מתמשך")).toBeInTheDocument();
-		const expiredRow = screen.getByText("מוקדש לדוד").closest("tr");
+		const expiredRow = screen.getByText("דוד").closest("tr");
 		expect(expiredRow).toHaveClass("opacity-60");
 		expect(
 			within(expiredRow as HTMLElement).getByText("2026-01-01 00:00:00 (פג)"),
@@ -208,20 +208,20 @@ describe("DedicationsPage", () => {
 
 	it("creates a dedication with purposes, UTC expiry and a perek range then refreshes the list", async () => {
 		const client = renderPage();
-		await screen.findByText("מוקדש לשרה (לעילוי נשמת)");
+		await screen.findByText("לעילוי נשמת שרה");
 		await waitFor(() =>
 			expect(screen.getByRole("button", { name: "ערוך" })).toBeEnabled(),
 		);
 		const invalidate = vi.spyOn(client, "invalidateQueries");
 		fireEvent.click(screen.getByRole("button", { name: "הקדשה חדשה" }));
-		expect(screen.getByText("מוקדש ל...")).toBeInTheDocument();
+		expect(screen.getByText("...")).toBeInTheDocument();
 		fireEvent.change(screen.getByLabelText("מוקדש ל"), {
 			target: { value: "רחל" },
 		});
 		fireEvent.click(screen.getByRole("checkbox", { name: "לעילוי נשמת" }));
 		fireEvent.click(screen.getByRole("checkbox", { name: "לרפואה" }));
 		fireEvent.click(screen.getByRole("checkbox", { name: "לעילוי נשמת" }));
-		expect(screen.getByText("מוקדש לרחל (לרפואה)")).toBeInTheDocument();
+		expect(screen.getByText("לרפואת רחל")).toBeInTheDocument();
 		fireEvent.change(screen.getByLabelText("תוקף ההקדשה (UTC, ריק = מתמשך)"), {
 			target: { value: "2027-02-03T04:05" },
 		});
@@ -456,6 +456,6 @@ describe("DedicationsPage", () => {
 		renderPage();
 		fireEvent.click(await screen.findByRole("button", { name: "מחק" }));
 		expect(await screen.findByText("Delete failed")).toBeInTheDocument();
-		expect(screen.getByText("מוקדש לשרה (לעילוי נשמת)")).toBeInTheDocument();
+		expect(screen.getByText("לעילוי נשמת שרה")).toBeInTheDocument();
 	});
 });

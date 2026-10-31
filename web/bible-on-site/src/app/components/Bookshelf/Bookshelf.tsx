@@ -30,8 +30,8 @@ const SIZE_SAFETY_FACTOR = 1.15; // Extra margin for 3D perspective effects
 export type BookshelfProps = {
 	onSeferClick?: (seferName: string, perekFrom: number) => void;
 	/**
-	 * Dedication lines by sefer/helek name (#2731): sefer dedications pin
-	 * vertically to the physical left of each spine, helek dedications sit
+	 * Dedication lines by sefer/helek name (#2731): sefer dedications share
+	 * the spine's title line, pinned to its end, helek dedications sit
 	 * beside their helek heading. Empty/missing maps render a plain shelf.
 	 */
 	dedications?: BookshelfDedicationLines;
@@ -257,7 +257,7 @@ type BookBlockProps = {
 	onClick?: () => void;
 	/** Whether this book is today's sefer (shows bookmark ribbon) */
 	isToday?: boolean;
-	/** Sefer-scoped dedication lines — pinned to the spine's physical left. */
+	/** Sefer-scoped dedication lines — pinned to the end of the spine title line. */
 	dedications?: string[];
 };
 
@@ -270,6 +270,7 @@ function BookBlock({
 	dedications,
 }: BookBlockProps) {
 	const baseColor = seferColors.get(sefer.name) ?? "hsl(0, 0%, 50%)";
+	const hasDedications = dedications !== undefined && dedications.length > 0;
 	const spineColor = darkenColor(baseColor, 8);
 
 	const blockStyle = {
@@ -328,18 +329,28 @@ function BookBlock({
 						transform: `translateZ(${sqSize * (BOOK_DEPTH - 1)}px)`,
 					}}
 				>
-					<div className={styles.spineText}>{sefer.displayName}</div>
-					{dedications && dedications.length > 0 && (
-						<div
-							className={styles.spineDedication}
-							style={{ fontSize: `${Math.max(6, sqSize * 0.5)}px` }}
-						>
-							{dedications.map((line, index) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
-								<p key={index}>{line}</p>
-							))}
-						</div>
-					)}
+					<div
+						className={styles.spineLine}
+						style={{
+							width: `${sqSize * BOOK_HEIGHT}px`,
+							height: `${sqSize * BOOK_WIDTH}px`,
+							gap: `${sqSize * 0.4}px`,
+							paddingInlineStart: `${sqSize * 0.4}px`,
+							// Keep the end-pinned caption clear of today's ribbon.
+							paddingInlineEnd: `${sqSize * (isToday && hasDedications ? 3.2 : 0.4)}px`,
+						}}
+					>
+						<span className={styles.spineText}>{sefer.displayName}</span>
+						{hasDedications && (
+							<span
+								className={styles.spineDedication}
+								style={{ fontSize: `${Math.max(6, sqSize * 0.5)}px` }}
+								title={dedications.join("\n")}
+							>
+								{dedications.join(" · ")}
+							</span>
+						)}
+					</div>
 					{isToday && (
 						<div
 							className={styles.bookmarkRibbon}
@@ -526,14 +537,15 @@ function SingleShelf({
 					/>
 					{positions.map(({ sefer, x }) => (
 						<BookBlock
-						key={sefer.name}
-						sefer={sefer}
-						x={x}
-						sqSize={sqSize}
+							key={sefer.name}
+							sefer={sefer}
+							x={x}
+							sqSize={sqSize}
 							dedications={seferDedications?.[sefer.name]}
 							onClick={() => {
 								const isToday = sefer.name === todaySeferName;
-								const targetPerek = isToday && todaysPerekId ? todaysPerekId : sefer.perekFrom;
+								const targetPerek =
+									isToday && todaysPerekId ? todaysPerekId : sefer.perekFrom;
 								onSeferClick?.(sefer.name, targetPerek);
 							}}
 							isToday={sefer.name === todaySeferName}
@@ -616,55 +628,55 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 		return (
 			<div className={styles.root}>
 				<div className={styles.multiShelfContainer}>
-				<SingleShelf
-					positions={torahData.positions}
-					shelfWidth={torahData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={torahData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="תורה"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-					seferDedications={dedications?.bySefer}
-					helekDedications={dedications?.byHelek.תורה}
-				/>
-				<SingleShelf
-					positions={neviimRishonimData.positions}
-					shelfWidth={neviimRishonimData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={neviimRishonimData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="נביאים: ראשונים + גדולים"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-					seferDedications={dedications?.bySefer}
-					helekDedications={dedications?.byHelek.נביאים}
-				/>
-				<SingleShelf
-					positions={treiAsarData.positions}
-					shelfWidth={treiAsarData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={treiAsarData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="נביאים (המשך): תרי עשר"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-					seferDedications={dedications?.bySefer}
-					helekDedications={dedications?.byHelek.נביאים}
-				/>
-				<SingleShelf
-					positions={ketuvimData.positions}
-					shelfWidth={ketuvimData.totalWidth}
-					sqSize={sqSize}
-					shelfStartX={ketuvimData.shelfStartX}
-					onSeferClick={onSeferClick}
-					label="כתובים"
-					todaySeferName={todaySeferName}
-					todaysPerekId={todaysPerekId}
-					seferDedications={dedications?.bySefer}
-					helekDedications={dedications?.byHelek.כתובים}
-				/>
-			</div>
+					<SingleShelf
+						positions={torahData.positions}
+						shelfWidth={torahData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={torahData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="תורה"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+						seferDedications={dedications?.bySefer}
+						helekDedications={dedications?.byHelek.תורה}
+					/>
+					<SingleShelf
+						positions={neviimRishonimData.positions}
+						shelfWidth={neviimRishonimData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={neviimRishonimData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="נביאים: ראשונים + גדולים"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+						seferDedications={dedications?.bySefer}
+						helekDedications={dedications?.byHelek.נביאים}
+					/>
+					<SingleShelf
+						positions={treiAsarData.positions}
+						shelfWidth={treiAsarData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={treiAsarData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="נביאים (המשך): תרי עשר"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+						seferDedications={dedications?.bySefer}
+						helekDedications={dedications?.byHelek.נביאים}
+					/>
+					<SingleShelf
+						positions={ketuvimData.positions}
+						shelfWidth={ketuvimData.totalWidth}
+						sqSize={sqSize}
+						shelfStartX={ketuvimData.shelfStartX}
+						onSeferClick={onSeferClick}
+						label="כתובים"
+						todaySeferName={todaySeferName}
+						todaysPerekId={todaysPerekId}
+						seferDedications={dedications?.bySefer}
+						helekDedications={dedications?.byHelek.כתובים}
+					/>
+				</div>
 			</div>
 		);
 	}
@@ -678,40 +690,38 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 
 	return (
 		<div className={styles.root}>
-		<SingleShelf
-			positions={allBooksData.positions}
-			shelfWidth={allBooksData.totalWidth}
-			sqSize={sqSize}
-			shelfStartX={allBooksData.shelfStartX}
-			onSeferClick={onSeferClick}
-			helekLabels={allBooksData.helekLabels}
-			todaySeferName={todaySeferName}
-			todaysPerekId={todaysPerekId}
-			seferDedications={dedications?.bySefer}
-		/>
-		{shelfHelekSpans.some(
-			(span) => (dedications?.byHelek[span.helek] ?? []).length > 0,
-		) && (
-			<div
-				className={styles.helekDedicationStrip}
-				style={{ width: `${sqSize * allBooksData.totalWidth}px` }}
-			>
-				{shelfHelekSpans.map((span) => (
-					<div
-						key={span.helek}
-						className={styles.helekDedicationGroup}
-						style={{ flexBasis: `${sqSize * (span.endX - span.startX)}px` }}
-					>
-						{(dedications?.byHelek[span.helek] ?? []).map(
-							(line, index) => (
+			<SingleShelf
+				positions={allBooksData.positions}
+				shelfWidth={allBooksData.totalWidth}
+				sqSize={sqSize}
+				shelfStartX={allBooksData.shelfStartX}
+				onSeferClick={onSeferClick}
+				helekLabels={allBooksData.helekLabels}
+				todaySeferName={todaySeferName}
+				todaysPerekId={todaysPerekId}
+				seferDedications={dedications?.bySefer}
+			/>
+			{shelfHelekSpans.some(
+				(span) => (dedications?.byHelek[span.helek] ?? []).length > 0,
+			) && (
+				<div
+					className={styles.helekDedicationStrip}
+					style={{ width: `${sqSize * allBooksData.totalWidth}px` }}
+				>
+					{shelfHelekSpans.map((span) => (
+						<div
+							key={span.helek}
+							className={styles.helekDedicationGroup}
+							style={{ flexBasis: `${sqSize * (span.endX - span.startX)}px` }}
+						>
+							{(dedications?.byHelek[span.helek] ?? []).map((line, index) => (
 								// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
 								<p key={index}>{line}</p>
-							),
-						)}
-					</div>
-				))}
-			</div>
-		)}
+							))}
+						</div>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }
