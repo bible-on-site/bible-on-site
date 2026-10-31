@@ -634,6 +634,8 @@ describe("one frozen PDF upload", () => {
 		"307_מלכים_א_כ_307_פרק_אחר_לגמרי_כאן.pdf",
 		"306.pdf",
 		"../chapter.pdf",
+		"bad\\name.pdf",
+		'bad"name.pdf',
 		"bad\nname.pdf",
 		"chapter.txt",
 		"x".repeat(256),

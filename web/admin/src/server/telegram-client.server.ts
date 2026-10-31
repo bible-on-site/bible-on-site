@@ -87,7 +87,9 @@ function documentNameMatches(actual: unknown, expected: string): boolean {
 		typeof actual !== "string" ||
 		actual.length > 255 ||
 		hasControl(actual) ||
-		/[\\/"]/.test(actual) ||
+		actual.includes("\\") ||
+		actual.includes("/") ||
+		actual.includes('"') ||
 		!actual.endsWith(".pdf")
 	)
 		return false;
@@ -103,7 +105,7 @@ function documentNameMatches(actual: unknown, expected: string): boolean {
 	const wanted = fold(expected),
 		received = fold(actual);
 	return (
-		received === wanted ||
+		(received.length > 0 && received === wanted) ||
 		(expected.length > 60 &&
 			received.length >= 32 &&
 			wanted.startsWith(received))
