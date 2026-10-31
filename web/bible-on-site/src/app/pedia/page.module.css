@@ -86,8 +86,10 @@
   text-decoration: none;
 }
 
-.breadcrumbLink:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .breadcrumbLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .sectionTitle {
@@ -127,9 +129,11 @@
     box-shadow 0.2s ease;
 }
 
-.categoryCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .categoryCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .categoryCardEmpty {
@@ -138,9 +142,11 @@
   border: 1px dashed #d1d5db;
 }
 
-.categoryCardEmpty:hover {
-  transform: none;
-  box-shadow: none;
+@media (hover: hover) {
+  .categoryCardEmpty:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .comingSoonBadge {
@@ -174,8 +180,10 @@
   transition: background 0.15s ease;
 }
 
-.subcategoryCard:hover {
-  background: #dce6fa;
+@media (hover: hover) {
+  .subcategoryCard:hover {
+    background: #dce6fa;
+  }
 }
 
 .subcategoryCardEmpty {
@@ -183,8 +191,10 @@
   border-right-color: #d1d5db;
 }
 
-.subcategoryCardEmpty:hover {
-  background: #f3f4f6;
+@media (hover: hover) {
+  .subcategoryCardEmpty:hover {
+    background: #f3f4f6;
+  }
 }
 
 .subcategoryName {
@@ -236,8 +246,10 @@
   transition: background 0.15s ease;
 }
 
-.recentLink:hover {
-  background: #e8f0fe;
+@media (hover: hover) {
+  .recentLink:hover {
+    background: #e8f0fe;
+  }
 }
 
 .backLinkWrapper {
@@ -256,9 +268,11 @@
   transition: all 0.2s ease;
 }
 
-.backLink:hover {
-  background: #2a3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .backLink:hover {
+    background: #2a3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 /* Entity type page */
@@ -288,8 +302,10 @@
   font-weight: 600;
 }
 
-.entityEntryLink:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .entityEntryLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .entityEntryList {
@@ -396,9 +412,11 @@
   padding: 0 1px;
 }
 
-.entryContent sup a:hover,
-.homepageContent sup a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .entryContent sup a:hover,
+  .homepageContent sup a:hover {
+    text-decoration: underline;
+  }
 }
 
 /* הערות שוליים — כל הסימונים הדקורטיביים (אות האזכור, תווית ההערה, חץ החזרה)
@@ -510,8 +528,10 @@
   transition: background 0.15s ease;
 }
 
-.entityBadge:hover {
-  background: #d2e3fc;
+@media (hover: hover) {
+  .entityBadge:hover {
+    background: #d2e3fc;
+  }
 }
 
 .emptyState {
@@ -665,10 +685,12 @@
     color 0.15s ease;
 }
 
-.todayLink:hover {
-  color: #3730a3;
-  border-bottom-style: solid;
-  border-bottom-color: #3730a3;
+@media (hover: hover) {
+  .todayLink:hover {
+    color: #3730a3;
+    border-bottom-style: solid;
+    border-bottom-color: #3730a3;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -736,8 +758,10 @@
     border-right-color: var(--accent-300);
   }
 
-  .subcategoryCard:hover {
-    background: #232a45;
+  @media (hover: hover) {
+    .subcategoryCard:hover {
+      background: #232a45;
+    }
   }
 
   .subcategoryCardEmpty {
@@ -745,12 +769,14 @@
     border-right-color: #3b4256;
   }
 
-  .subcategoryCardEmpty:hover {
-    background: #1a1f2e;
-  }
+  @media (hover: hover) {
+    .subcategoryCardEmpty:hover {
+      background: #1a1f2e;
+    }
 
-  .recentLink:hover {
-    background: #232a45;
+    .recentLink:hover {
+      background: #232a45;
+    }
   }
 
   .backLink {
@@ -758,8 +784,10 @@
     color: #16213d;
   }
 
-  .backLink:hover {
-    background: #c7d2fe;
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #c7d2fe;
+    }
   }
 
   .entityItem {
@@ -798,8 +826,10 @@
     color: #a5b4fc;
   }
 
-  .entityBadge:hover {
-    background: #2d3a5c;
+  @media (hover: hover) {
+    .entityBadge:hover {
+      background: #2d3a5c;
+    }
   }
 
   .emptyState {
@@ -841,8 +871,15 @@
     color: #a5b4fc;
   }
 
-  .todayLink:hover {
-    color: #c7d2fe;
-    border-bottom-color: #c7d2fe;
+  @media (hover: hover) {
+    .todayLink:hover {
+      color: #c7d2fe;
+      border-bottom-color: #c7d2fe;
+    }
   }
+}
+
+.categoryCard:active,
+.subcategoryCard:active {
+  scale: var(--press-scale);
 }

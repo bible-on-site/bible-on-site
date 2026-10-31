@@ -87,8 +87,10 @@
 	}
 }
 
-.panelTab:hover {
-	--tab-fill: #e8e0cc;
+@media (hover: hover) {
+	.panelTab:hover {
+		--tab-fill: #e8e0cc;
+	}
 }
 
 .panelTab:focus-visible {
@@ -222,8 +224,10 @@
 	color: #fffdf5;
 }
 
-.perushTag:hover {
-	border-color: var(--hc-muted, #8b7355);
+@media (hover: hover) {
+	.perushTag:hover {
+		border-color: var(--hc-muted, #8b7355);
+	}
 }
 
 .perushTag:focus-visible {
@@ -255,8 +259,10 @@
 	cursor: pointer;
 }
 
-.scopeToggle:hover {
-	background: #e8e0cc;
+@media (hover: hover) {
+	.scopeToggle:hover {
+		background: #e8e0cc;
+	}
 }
 
 .scopeToggle:focus-visible {
@@ -306,8 +312,10 @@
 	white-space: nowrap;
 }
 
-.deepBack:hover {
-	background: #f0ead8;
+@media (hover: hover) {
+	.deepBack:hover {
+		background: #f0ead8;
+	}
 }
 
 /* Grouped commentary: pasuk groups in canonical order; inside each, the
@@ -351,9 +359,11 @@
 	margin-bottom: 6px;
 }
 
-.commentaryPasuk:hover {
-	color: #5a4a2e;
-	text-decoration: underline;
+@media (hover: hover) {
+	.commentaryPasuk:hover {
+		color: #5a4a2e;
+		text-decoration: underline;
+	}
 }
 
 .commentaryPasuk:focus-visible {
@@ -489,9 +499,11 @@
 		box-shadow 0.15s;
 }
 
-.articleCard:hover {
-	border-color: var(--hc-muted, #8b7355);
-	box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+@media (hover: hover) {
+	.articleCard:hover {
+		border-color: var(--hc-muted, #8b7355);
+		box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+	}
 }
 
 .articleCard:focus-visible {
@@ -578,8 +590,10 @@
 	white-space: nowrap;
 }
 
-.fullscreenToggle:hover {
-	background: #e8e0cc;
+@media (hover: hover) {
+	.fullscreenToggle:hover {
+		background: #e8e0cc;
+	}
 }
 
 .fullscreenToggle:focus-visible {
@@ -595,8 +609,10 @@
 		color: var(--hc-muted, #cbb98c);
 	}
 
-	.panelTab:hover {
-		--tab-fill: #342c1e;
+	@media (hover: hover) {
+		.panelTab:hover {
+			--tab-fill: #342c1e;
+		}
 	}
 
 	.panelTab[aria-selected="true"] {
@@ -641,8 +657,10 @@
 		color: transparent;
 	}
 
-	.perushTag:hover {
-		border-color: var(--hc-muted, #8b7355);
+	@media (hover: hover) {
+		.perushTag:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.perushTagItem[data-selected] .perushTagCheck,
@@ -670,11 +688,13 @@
 		color: var(--hc-muted, #cbb98c);
 	}
 
-	.scopeToggle:hover,
-	.deepBack:hover,
-	.noteRetry:hover,
-	.fullscreenToggle:hover {
-		background: #342c1e;
+	@media (hover: hover) {
+		.scopeToggle:hover,
+		.deepBack:hover,
+		.noteRetry:hover,
+		.fullscreenToggle:hover {
+			background: #342c1e;
+		}
 	}
 
 	.deepName,
@@ -697,8 +717,10 @@
 		color: var(--hc-muted, #b8a578);
 	}
 
-	.commentaryPasuk:hover {
-		color: var(--hc-muted, #cbb98c);
+	@media (hover: hover) {
+		.commentaryPasuk:hover {
+			color: var(--hc-muted, #cbb98c);
+		}
 	}
 
 	.articleCard {
@@ -706,8 +728,10 @@
 		border-color: #4a4030;
 	}
 
-	.articleCard:hover {
-		border-color: var(--hc-muted, #8b7355);
+	@media (hover: hover) {
+		.articleCard:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.panelArticleOverlay {
@@ -733,4 +757,14 @@
 	.commentaryGroup[data-pasuk-highlight="fading"] {
 		transition: none;
 	}
+}
+
+.panelTab:active,
+.perushTag:active,
+.scopeToggle:active,
+.deepBack:active,
+.noteRetry:active,
+.fullscreenToggle:active,
+.articleCard:active {
+	scale: var(--press-scale);
 }

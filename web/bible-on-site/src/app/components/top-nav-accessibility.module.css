@@ -75,8 +75,10 @@
 	cursor: pointer;
 }
 
-.reset:hover {
-	background: var(--surface-muted, #e9eff8);
+@media (hover: hover) {
+	.reset:hover {
+		background: var(--surface-muted, #e9eff8);
+	}
 }
 
 .reset:focus-visible,
@@ -112,12 +114,18 @@
 	text-align: center;
 }
 
-.statement:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.statement:hover {
+		text-decoration: underline;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.panel {
 		scroll-behavior: auto;
 	}
+}
+
+.reset:active {
+	scale: var(--press-scale);
 }

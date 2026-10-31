@@ -39,10 +39,17 @@
 	font-weight: 600;
 }
 
-.navButton:hover,
-.todayButton:hover,
-.picker:hover {
-	border-color: var(--link-accent);
+@media (hover: hover) {
+	.navButton:hover:not(:disabled),
+	.todayButton:hover,
+	.picker:hover {
+		border-color: var(--link-accent);
+	}
+}
+
+.navButton:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .navButton:focus-visible,
@@ -129,9 +136,11 @@ button.cell {
 	cursor: pointer;
 }
 
-button.cell:hover {
-	border-color: var(--link-accent);
-	background: var(--surface-elevated);
+@media (hover: hover) {
+	button.cell:hover {
+		border-color: var(--link-accent);
+		background: var(--surface-elevated);
+	}
 }
 
 .dayNumber {
@@ -349,8 +358,10 @@ button.miniCell {
 	cursor: pointer;
 }
 
-button.miniCell:hover {
-	border-color: var(--link-accent);
+@media (hover: hover) {
+	button.miniCell:hover {
+		border-color: var(--link-accent);
+	}
 }
 
 .miniMergedCell {
@@ -401,8 +412,10 @@ button.miniCell:hover {
 	cursor: pointer;
 }
 
-.downloadButton:hover:not(:disabled) {
-	border-color: var(--link-accent);
+@media (hover: hover) {
+	.downloadButton:hover:not(:disabled) {
+		border-color: var(--link-accent);
+	}
 }
 
 .downloadButton:focus-visible {
@@ -411,7 +424,7 @@ button.miniCell:hover {
 }
 
 .downloadButton:disabled {
-	cursor: default;
+	cursor: not-allowed;
 	opacity: 0.65;
 }
 
@@ -433,4 +446,12 @@ button.miniCell:hover {
 
 .downloadError {
 	color: var(--danger-color, #c0392b);
+}
+
+.navButton:active:not(:disabled),
+.todayButton:active,
+button.cell:active,
+button.miniCell:active,
+.downloadButton:active:not(:disabled) {
+	scale: var(--press-scale);
 }

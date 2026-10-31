@@ -111,9 +111,11 @@
 	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
-.tanahpediaLink:hover {
-	border-bottom-style: solid;
-	border-bottom-color: var(--link-accent-hover);
+@media (hover: hover) {
+	.tanahpediaLink:hover {
+		border-bottom-style: solid;
+		border-bottom-color: var(--link-accent-hover);
+	}
 }
 
 @media (prefers-color-scheme: dark) {
@@ -145,8 +147,10 @@
 	max-width: 48%;
 }
 
-.unitNavLink:hover {
-	background-color: rgba(21, 82, 172, 0.06);
+@media (hover: hover) {
+	.unitNavLink:hover {
+		background-color: rgba(21, 82, 172, 0.06);
+	}
 }
 
 .unitNavNext {

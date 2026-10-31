@@ -27,8 +27,10 @@
   text-decoration: none;
 }
 
-.breadcrumb li a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .breadcrumb li a:hover {
+    text-decoration: underline;
+  }
 }
 
 /* #9a92d1 measured 2.84:1 on white — below AA even for large text; the
@@ -85,10 +87,12 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.authorCard:hover {
-  border-color: var(--accent-900);
-  box-shadow: 0 4px 12px rgba(28, 44, 93, 0.12);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .authorCard:hover {
+    border-color: var(--accent-900);
+    box-shadow: 0 4px 12px rgba(28, 44, 93, 0.12);
+    transform: translateY(-2px);
+  }
 }
 
 .authorImageContainer {
@@ -194,8 +198,10 @@
     border-color: #2d3548;
   }
 
-  .authorCard:hover {
-    border-color: var(--accent-200);
+  @media (hover: hover) {
+    .authorCard:hover {
+      border-color: var(--accent-200);
+    }
   }
 
   .authorImageContainer {
@@ -206,4 +212,8 @@
   .authorPlaceholder {
     color: var(--muted-text, #64748b);
   }
+}
+
+.authorCard:active {
+  scale: var(--press-scale);
 }

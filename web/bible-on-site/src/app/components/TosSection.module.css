@@ -98,8 +98,10 @@
   text-decoration: none;
 }
 
-.tosList a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .tosList a:hover {
+    text-decoration: underline;
+  }
 }
 
 /* Responsive header margin */
