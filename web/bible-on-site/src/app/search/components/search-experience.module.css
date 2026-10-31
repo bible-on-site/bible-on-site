@@ -43,8 +43,10 @@
   white-space: nowrap;
 }
 
-.searchButton:hover {
-  opacity: 0.9;
+@media (hover: hover) {
+  .searchButton:hover {
+    opacity: 0.9;
+  }
 }
 
 .searchButton:focus-visible {
@@ -150,8 +152,10 @@
   border-radius: 0.375rem;
 }
 
-.resultLink:hover {
-  background: var(--surface-muted);
+@media (hover: hover) {
+  .resultLink:hover {
+    background: var(--surface-muted);
+  }
 }
 
 .resultLink:focus-visible {
@@ -182,4 +186,9 @@
 .emptyState {
   color: var(--muted-text);
   padding: 1rem 0;
+}
+
+.searchButton:active,
+.filterChip:not(:has(input:disabled)):active {
+  scale: var(--press-scale);
 }
