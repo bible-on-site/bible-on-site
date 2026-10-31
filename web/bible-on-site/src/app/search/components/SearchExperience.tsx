@@ -9,6 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { Skeleton } from "@/app/components/Skeleton";
 import {
 	parseSearchTypes,
 	SEARCH_LIMIT_DEFAULT,
@@ -21,6 +22,7 @@ import {
 import styles from "./search-experience.module.css";
 
 const DEBOUNCE_MS = 300;
+const RESULT_SKELETON_KEYS = ["a", "b", "c", "d", "e"];
 const CLIENT_CACHE_MAX = 30;
 
 /** Canonical params key: dedupes equivalent states (all-types = no type). */
@@ -422,6 +424,15 @@ export function SearchExperience({
 						הקלידו מונח חיפוש כדי למצוא פרקים, פסוקים, פירושים, רבנים, מאמרים
 						וערכי תנכפדיה.
 					</p>
+				) : status === "loading" ? (
+					<ul className={styles.resultList} aria-hidden="true">
+						{RESULT_SKELETON_KEYS.map((key) => (
+							<li key={key} className={styles.resultLink}>
+								<Skeleton width="35%" height="1em" />
+								<Skeleton width="85%" className={styles.skeletonSnippet} />
+							</li>
+						))}
+					</ul>
 				) : null}
 			</div>
 		</div>

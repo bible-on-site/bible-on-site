@@ -86,6 +86,23 @@
   transform: translateY(-1px);
 }
 
+/* Loading placeholder card: same box as a real card, not interactive. */
+.skeletonItem {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Mirrors .articleAbstract's padding and 1.5 line rhythm (0.9rem text). */
+.skeletonAbstract {
+  inline-size: 100%;
+  padding: 18px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+}
+
 /* When carousel item is a button (in-place open in flipbook), match link appearance */
 button.carouselItem {
   appearance: none;
