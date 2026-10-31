@@ -1,7 +1,7 @@
 namespace BibleOnSite.Models;
 
 /// <summary>
-/// One daily-bulletin join card in the עלון יומי carousel (#2806): channel
+/// One daily-bulletin join card on the עלון יומי page (#2806): channel
 /// branding, Hebrew copy, the public join target and the error shown when the
 /// external app cannot be opened.
 /// </summary>
@@ -93,8 +93,8 @@ public static class BulletinJoinCards
     ];
 
     /// <summary>
-    /// Resolves a ?channel= deep-link key (e.g. the flyout קבוצת ווטסאפ entry)
-    /// to a carousel position; unknown keys land on the first card.
+    /// Resolves a ?channel= deep-link key to a card index; unknown keys land
+    /// on the first card.
     /// </summary>
     public static int PositionForKey(string? key)
     {

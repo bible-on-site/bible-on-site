@@ -8,7 +8,7 @@ using Moq;
 namespace BibleOnSite.Tests.ViewModels;
 
 /// <summary>
-/// עלון יומי join carousel (#2806): exactly the website's three public
+/// עלון יומי join cards (#2806): exactly the website's three public
 /// channels — Telegram, WhatsApp and email — launching through ILauncher and
 /// surfacing failures visibly.
 /// </summary>
