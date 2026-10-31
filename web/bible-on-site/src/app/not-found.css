@@ -1,3 +1,3 @@
 body:has(.not-found-layout) .top-nav {
-  background-color: #1552ac;
+  background-color: var(--accent-600);
 }
