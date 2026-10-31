@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
@@ -213,6 +214,20 @@ partial class Build
                 aab.CopyToDirectory(ArtifactsDirectory, ExistsPolicy.FileOverwrite);
                 Serilog.Log.Information($"Copied {aab.Name} to {ArtifactsDirectory}");
             }
+
+            // Play Console wants the unstripped .so set (ABI dirs at zip root)
+            // for native crash symbolication; the AAB itself ships stripped libs.
+            var objDir = MainProject.Parent / "obj" / Configuration;
+            var sharedLibsDir = objDir
+                .GlobDirectories("**/app_shared_libraries")
+                .FirstOrDefault();
+            Assert.NotNull(
+                sharedLibsDir,
+                $"app_shared_libraries not found under {objDir}");
+            var symbolsZip = ArtifactsDirectory /
+                $"{aabFiles.First().Name.Replace("-Signed.aab", "")}-native-symbols.zip";
+            ZipFile.CreateFromDirectory(sharedLibsDir.ToString(), symbolsZip.ToString());
+            Serilog.Log.Information($"Created native symbols zip {symbolsZip.Name}");
         }
         else
         {

@@ -420,7 +420,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
+          path: |
+            ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
+            ${{ env.APP_DIRECTORY }}/.artifacts/*-native-symbols.zip
           retention-days: 30
           if-no-files-found: error
           include-hidden-files: true
