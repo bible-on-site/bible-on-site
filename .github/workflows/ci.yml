@@ -3624,10 +3624,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_changes, cross_module_ci, package_website]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_api, package_api_arm64, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3644,10 +3644,10 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version != '' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3662,10 +3662,10 @@ jobs:
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_changes, cross_module_ci, package_app]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_api, package_api_arm64, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3690,10 +3690,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_api, package_api_arm64, package_app, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3708,8 +3708,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_changes, cross_module_ci, package_admin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_api, package_api_arm64, package_app, package_bulletin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
