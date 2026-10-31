@@ -9,8 +9,8 @@ import { unstable_cache } from "next/cache";
 import {
 	articleDedicationsTag,
 	bookshelfDedicationsTag,
-	cachedPerKey,
 	COLLECTION_TAGS,
+	cachedPerKey,
 	entryDedicationsTag,
 	helekDedicationsTag,
 	masoraDedicationsTag,
@@ -28,7 +28,7 @@ import {
 	seferIdByPerekId,
 	seferPerekIds,
 } from "./service";
-import { formatDedication, type Dedication } from "./types";
+import { type Dedication, formatDedication } from "./types";
 
 /**
  * Dedication expiry is clock-driven, but these entries deliberately carry
@@ -48,8 +48,7 @@ import { formatDedication, type Dedication } from "./types";
  * expire the entry or the flat heading keeps serving it stale. */
 function perekContextTags(perekId: number): string[] {
 	const seferId = seferIdByPerekId(perekId);
-	const helekId =
-		seferId === undefined ? undefined : helekIdBySeferId(seferId);
+	const helekId = seferId === undefined ? undefined : helekIdBySeferId(seferId);
 	return [
 		COLLECTION_TAGS.dedications,
 		perekDedicationsTag(perekId),
@@ -91,16 +90,17 @@ export const getSeferDedications = cachedPerKey(
  * whole perek range replaces a per-perek fan-out; each dedication's line
  * attaches to exactly the perakim its matched PEREK scopes cover (the
  * resolver already returns only scopes applicable to the requested range),
- * so perek-range changes expire the entry through one aggregate sefer tag.
- * This keeps even תהילים (150 perakim) below Next's 128-tag limit.
+ * so perek-range changes expire the entry through its book aggregate tag.
+ * One tag per chapter exceeds Next.js's tag limit for Psalms and silently
+ * loses invalidation for its final chapters. The dependency resolver emits
+ * this aggregate tag for every intersected sefer, alongside the flat tags.
  */
 export const getSeferPerekDedicationLines = cachedPerKey(
-	"sefer-perek-dedication-lines",
+	// Tags are not part of unstable_cache's identity. Give this tag contract
+	// a fresh key so persisted entries cannot retain the old truncated tags.
+	"sefer-perek-dedication-lines-v2",
 	(seferId: number) => String(seferId),
-	(key) => [
-		COLLECTION_TAGS.dedications,
-		seferPerekDedicationsTag(Number(key)),
-	],
+	(key) => [COLLECTION_TAGS.dedications, seferPerekDedicationsTag(Number(key))],
 	async (seferId: number): Promise<Record<number, string[]>> => {
 		const perekIds = seferPerekIds(seferId);
 		const dedications = await resolveDedications({ perekIds });

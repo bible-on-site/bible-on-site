@@ -36,7 +36,13 @@
  *
  * Paths are resolved against the caller's working directory.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,12 +114,13 @@ export function mergeLcovTexts(
 				// BRDA block/branch indices are the instrumenter's own
 				// coordinates — the same tuple can name a different arm in
 				// another build, so untrusted branch hits never merge.
+				const canonicalDefinitions = rec.fn;
 				for (const [name, h] of foreign.fnda) {
 					// A function is provably the same only when the untrusted
 					// block declared it at the exact FN "line,name" the
 					// canonical build declared.
 					const proven = [...foreign.fn].some(
-						(def) => def.endsWith(`,${name}`) && rec.fn.has(def),
+						(def) => def.endsWith(`,${name}`) && canonicalDefinitions.has(def),
 					);
 					if (proven) rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, h));
 				}
@@ -156,11 +163,17 @@ export function mergeLcovTexts(
 			if (!target) continue;
 			if (line.startsWith("DA:")) {
 				const [ln, hits] = line.slice(3).split(",");
-				target.da.set(Number(ln), Math.max(target.da.get(Number(ln)) ?? 0, Number(hits)));
+				target.da.set(
+					Number(ln),
+					Math.max(target.da.get(Number(ln)) ?? 0, Number(hits)),
+				);
 			} else if (line.startsWith("BRDA:")) {
 				const [ln, block, branch, hits] = line.slice(5).split(",");
 				const key = `${ln},${block},${branch}`;
-				target.brda.set(key, Math.max(target.brda.get(key) ?? 0, Number(hits) || 0));
+				target.brda.set(
+					key,
+					Math.max(target.brda.get(key) ?? 0, Number(hits) || 0),
+				);
 			} else if (line.startsWith("FNDA:")) {
 				const comma = line.indexOf(",", 5);
 				const hits = Number(line.slice(5, comma));
@@ -176,17 +189,25 @@ export function mergeLcovTexts(
 	const chunks: string[] = [];
 	for (const [path, rec] of [...files.entries()].sort()) {
 		// A file block with no records at all has nothing to report.
-		if (!rec.da.size && !rec.brda.size && !rec.fnda.size && !rec.fn.size) continue;
+		if (!rec.da.size && !rec.brda.size && !rec.fnda.size && !rec.fn.size)
+			continue;
 		const lines: string[] = [`TN:`, `SF:${path}`];
 		for (const fn of [...rec.fn].sort()) lines.push(`FN:${fn}`);
-		for (const [name, hits] of [...rec.fnda.entries()].sort()) lines.push(`FNDA:${hits},${name}`);
-		for (const [ln, hits] of [...rec.da.entries()].sort((a, b) => a[0] - b[0])) {
+		for (const [name, hits] of [...rec.fnda.entries()].sort())
+			lines.push(`FNDA:${hits},${name}`);
+		for (const [ln, hits] of [...rec.da.entries()].sort(
+			(a, b) => a[0] - b[0],
+		)) {
 			lines.push(`DA:${ln},${hits}`);
 		}
-		for (const [key, hits] of [...rec.brda.entries()].sort()) lines.push(`BRDA:${key},${hits}`);
+		for (const [key, hits] of [...rec.brda.entries()].sort())
+			lines.push(`BRDA:${key},${hits}`);
 		const lh = [...rec.da.values()].filter((h) => h > 0).length;
 		const brh = [...rec.brda.values()].filter((h) => h > 0).length;
-		lines.push(`FNF:${rec.fn.size}`, `FNH:${[...rec.fnda.values()].filter((h) => h > 0).length}`);
+		lines.push(
+			`FNF:${rec.fn.size}`,
+			`FNH:${[...rec.fnda.values()].filter((h) => h > 0).length}`,
+		);
 		lines.push(`BRF:${rec.brda.size}`, `BRH:${brh}`);
 		lines.push(`LF:${rec.da.size}`, `LH:${lh}`, "end_of_record");
 		chunks.push(lines.join("\n"));
@@ -222,10 +243,15 @@ function main(): void {
 		process.exit(1);
 	}
 
-	const required = [...(flags.get("require") ?? []), ...(flags.get("hits-only") ?? [])];
+	const required = [
+		...(flags.get("require") ?? []),
+		...(flags.get("hits-only") ?? []),
+	];
 	const missing = required.filter((p) => !existsSync(resolve(p)));
 	if (missing.length > 0) {
-		console.error(`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`);
+		console.error(
+			`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`,
+		);
 		process.exit(1);
 	}
 

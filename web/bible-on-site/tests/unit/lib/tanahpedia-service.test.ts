@@ -100,10 +100,21 @@ describe("tanahpedia service", () => {
 			.mockRejectedValueOnce(new Error("metric timeout"))
 			.mockResolvedValueOnce([]);
 
-		const entry = await getEntryByUniqueName("אברהם");
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const entry = await getEntryByUniqueName("אברהם");
 
-		expect(entry).not.toBeNull();
-		expect(entry).not.toHaveProperty("metric");
+			expect(entry).not.toBeNull();
+			expect(entry).not.toHaveProperty("metric");
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(
+				"Reading metric read failed; continuing without estimates:",
+				"entry entry-abraham",
+				"metric timeout",
+			);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it("returns null when a unique entry name is not found", async () => {
@@ -682,9 +693,7 @@ describe("tanahpedia service", () => {
 			.mockImplementation(() => undefined);
 		mockQuery.mockRejectedValueOnce("raw failure");
 
-		await expect(getEntityReferencesForPerek(99)).rejects.toBe(
-			"raw failure",
-		);
+		await expect(getEntityReferencesForPerek(99)).rejects.toBe("raw failure");
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
 			"Failed to fetch entity references for perek 99:",
 			"raw failure",

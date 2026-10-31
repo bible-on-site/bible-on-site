@@ -9,7 +9,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 // already lost the session server-side, so a replacement has nothing to race.
 // A dropped adb transport is deliberately NOT death — the server-side session
 // may still be tearing down, so DeviceTransportLoss keeps it ambiguous.
-// Assertion and timeout failures never match.
+// Ordinary element-wait timeouts never match. XCUITest's proxy-command timeout
+// is different: Appium ends and removes that session before returning it.
 internal static class DeviceSessionDeath
 {
     private static readonly string[] Signatures =
@@ -23,6 +24,7 @@ internal static class DeviceSessionDeath
         "econnrefused",
         "connection refused",
         "to webdriveragent",
+        "The driver did not receive any response from the '",
     ];
 
     public static bool Matches(Exception exception) =>

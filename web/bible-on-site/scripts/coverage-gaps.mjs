@@ -20,20 +20,27 @@ const filters = process.argv.slice(2);
 const txt = fs.readFileSync(LCOV_PATH, "utf8");
 let shown = 0;
 
-for (const block of txt.split("end_of_record")) {
-	const sf = /SF:(.*)/.exec(block);
+for (const block of txt.split(/^end_of_record\r?$/m)) {
+	const sf = /^SF:(.*)$/m.exec(block);
 	if (!sf) continue;
 	const file = sf[1].replace(/\\/g, "/");
 	const rel = file.split("web/bible-on-site/")[1] ?? file;
 	if (filters.length > 0 && !filters.some((f) => rel.includes(f))) continue;
 
-	const linesFound = +(/LF:(\d+)/.exec(block)?.[1] ?? 0);
-	const linesHit = +(/LH:(\d+)/.exec(block)?.[1] ?? 0);
+	const linesFound = +(/^LF:(\d+)\r?$/m.exec(block)?.[1] ?? 0);
+	const linesHit = +(/^LH:(\d+)\r?$/m.exec(block)?.[1] ?? 0);
 	const missedLines = [
-		...new Set([...block.matchAll(/DA:(\d+),0/g)].map((m) => +m[1])),
+		...new Set(
+			[...block.matchAll(/^DA:(\d+),0(?:,[^\r\n]*)?\r?$/gm)].map((m) => +m[1]),
+		),
 	].sort((a, b) => a - b);
+	// LCOV uses '-' when the branch expression was never evaluated.
 	const missedBranchLines = [
-		...new Set([...block.matchAll(/BRDA:(\d+),\d+,\d+,0/g)].map((m) => +m[1])),
+		...new Set(
+			[...block.matchAll(/^BRDA:(\d+),\d+,\d+,(?:0|-)\r?$/gm)].map(
+				(m) => +m[1],
+			),
+		),
 	].sort((a, b) => a - b);
 
 	if (missedLines.length === 0 && missedBranchLines.length === 0) continue;

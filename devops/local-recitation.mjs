@@ -90,6 +90,15 @@ export async function configureRecordings({
 	return selected;
 }
 
+/**
+ * Prepare originals for a supported local app target.
+ * @param {object} [options]
+ * @param {"Android" | "iOS" | "Windows"} [options.platform]
+ * @param {string} [options.appDirectory]
+ * @param {string} [options.recordings]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {(command: string, args: string[], options: import("node:child_process").SpawnSyncOptions) => {status: number | null, error?: Error}} [options.run]
+ */
 export function prepareRecitation({
 	platform,
 	appDirectory = defaultAppDirectory,
