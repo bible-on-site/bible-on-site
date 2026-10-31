@@ -189,6 +189,16 @@ public class CommentaryMemoryTests
     }
 
     [Fact]
+    public void NotesForAPerushAbsentFromThePasukReturnsEmpty()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([new(1, 1, 0, "a1")]));
+        var notesFor = typeof(PerushNoteChapter).GetMethod("NotesFor",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var notes = (List<string>)notesFor.Invoke(chapter, [1, 999])!;
+        notes.Should().BeEmpty("a perush id with no notes in the pasuk must yield an empty list, not null");
+    }
+
+    [Fact]
     public void AddingACommentaryPreservesExistingDisplayObjects()
     {
         var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([new(1, 1, 0, "A"), new(2, 1, 0, "B")]));
