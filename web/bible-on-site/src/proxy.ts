@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import bookPageSlugs from "@/data/book-page-slugs.json";
+import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 import { indexNowKey } from "@/lib/seo/indexnow";
 import {
 	pediaPathFromLegacy,
@@ -57,6 +58,45 @@ export function canonicalPediaTarget(url: URL): string | null {
 		: null;
 }
 
+/**
+ * Canonical `/פרשה` target for a request, or `null` when it is already
+ * canonical (or not a parasha route).
+ *
+ * Public parasha URLs are the canonical Hebrew-name slugs (issue
+ * #2738): numeric unit ids, researched aliases (`שלח לך`, `פרשת X`
+ * forms, maqaf/niqqud/space variants), and the ASCII `/parasha` route
+ * dir all permanent-redirect to `/פרשה/{slug}`. Segments arrive
+ * URI-decoded once (the caller decodes the whole pathname in one step,
+ * mirroring the noindex check below); the target path keeps decoded
+ * Hebrew segments and `new URL` percent-encodes them exactly once.
+ * Unresolvable segments under the ASCII root still consolidate to the
+ * Hebrew root so the 404 surfaces on the canonical host path, while
+ * unknowns already under `/פרשה` fall through to the router's 404 —
+ * never a redirect loop. Book-chrome three-segment paths
+ * (`/פרשה/{sefer}/{cover-slug}`) are untouched here.
+ */
+export function canonicalParashaTarget(segments: string[]): string | null {
+	const [root, second, ...rest] = segments;
+	if (root !== "פרשה" && root !== "parasha") return null;
+
+	if (root === "parasha") {
+		// The ASCII route dir is internal: consolidate every depth to the
+		// public Hebrew root, canonicalizing a unit segment when it resolves.
+		if (segments.length === 1) return "/פרשה";
+		const resolved =
+			segments.length === 2 ? resolveParashaSegment(second) : null;
+		return resolved
+			? `/פרשה/${resolved.slug}`
+			: `/פרשה/${[second, ...rest].join("/")}`;
+	}
+
+	// Hebrew root: only unit paths (exactly two segments) can redirect.
+	if (segments.length !== 2) return null;
+	const resolved = resolveParashaSegment(second);
+	if (!resolved || resolved.kind === "canonical") return null;
+	return `/פרשה/${resolved.slug}`;
+}
+
 export async function proxy(
 	request: NextRequest,
 ): Promise<NextResponse | undefined> {
@@ -101,6 +141,13 @@ export async function proxy(
 		segments = decodeURIComponent(pathname).split("/").filter(Boolean);
 	} catch {
 		return undefined;
+	}
+	const parashaTarget = canonicalParashaTarget(segments);
+	if (parashaTarget) {
+		const destination = new URL(parashaTarget, request.nextUrl);
+		// Reader-mode and content-selection params survive the redirect.
+		destination.search = request.nextUrl.search;
+		return NextResponse.redirect(destination, 308);
 	}
 	const isParasha = segments[0] === "פרשה" || segments[0] === "parasha";
 	const isBookChrome =

@@ -20,6 +20,11 @@ import {
  *
  * `initialContent` seeds the selection when the page loads directly on
  * a content deep link (e.g. `/מסורה/5?book&perush=רש"י`).
+ *
+ * `segments` adapts the URL's unit segment for divisions whose public
+ * path carries a canonical slug instead of the decimal unitId (פרשה,
+ * issue #2738): `unitIdFor` parses a route segment, `segmentFor` writes
+ * one.
  */
 export function useUnitBookContentNavigation(
 	rootPath: string,
@@ -30,6 +35,10 @@ export function useUnitBookContentNavigation(
 		kind: UnitBookContentKind;
 		slug: string;
 	} | null,
+	segments?: {
+		unitIdFor: (segment: string) => number | null;
+		segmentFor: (unitId: number) => string;
+	},
 ) {
 	const [content, setContent] = useState<UnitBookContent | null>(() => {
 		if (!initialContent) return null;
@@ -50,6 +59,7 @@ export function useUnitBookContentNavigation(
 				unitBookContentFromRoute(
 					location.pathname + location.search,
 					roots.current,
+					segments?.unitIdFor,
 				),
 			);
 		// Register before FlipBook's passive effect installs its capture
@@ -59,7 +69,7 @@ export function useUnitBookContentNavigation(
 			mounted.current = false;
 			window.removeEventListener("popstate", restore, true);
 		};
-	}, []);
+	}, [segments?.unitIdFor]);
 
 	// Depend on the selection's fields rather than the object identity:
 	// callers build `initialContent` inline each render, and an
@@ -87,15 +97,22 @@ export function useUnitBookContentNavigation(
 			kind?: UnitBookContentKind,
 			slug?: string,
 		) => {
-			writeUnitBookContentHistory(rootPath, targetUnitId, scope, kind, slug);
+			writeUnitBookContentHistory(
+				rootPath,
+				segments?.segmentFor(targetUnitId) ?? targetUnitId,
+				scope,
+				kind,
+				slug,
+			);
 			setContent(
 				unitBookContentFromRoute(
 					location.pathname + location.search,
 					roots.current,
+					segments?.unitIdFor,
 				),
 			);
 		},
-		[rootPath],
+		[rootPath, segments],
 	);
 
 	const onPageFlipped = useCallback(() => {
@@ -118,7 +135,7 @@ export function useUnitBookContentNavigation(
 				const slug = perush ?? article;
 				writeUnitBookContentHistory(
 					rootPath,
-					deepLink.unitId,
+					segments?.segmentFor(deepLink.unitId) ?? deepLink.unitId,
 					scope,
 					perush ? "perush" : "article",
 					slug,
@@ -129,10 +146,11 @@ export function useUnitBookContentNavigation(
 				unitBookContentFromRoute(
 					location.pathname + location.search,
 					roots.current,
+					segments?.unitIdFor,
 				),
 			);
 		});
-	}, [rootPath]);
+	}, [rootPath, segments]);
 
 	return { content, navigate, onPageFlipped };
 }

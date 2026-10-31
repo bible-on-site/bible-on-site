@@ -342,6 +342,26 @@
 	letter-spacing: 0.04em;
 }
 
+/* Sefer dedication on the front cover (#2731) — a quiet memorial block
+   below the edition line, sized to the cover like the rest. */
+.coverDedication {
+	color: rgb(255 255 255 / 0.8);
+	font-size: clamp(0.55rem, 3.2cqi, 0.95rem);
+	font-weight: 400;
+	margin: 0.9em 0 0;
+	letter-spacing: 0.03em;
+	line-height: 1.4;
+	max-width: 85%;
+}
+
+/* The chapter dedication under the in-book perek header (#2731). */
+.perekDedication {
+	font-size: 0.78rem;
+	color: #6b5232;
+	margin-top: 1px;
+	line-height: 1.4;
+}
+
 .perekText {
 	direction: rtl;
 	/* Taamey D (traditional te'amim face) is the default perek font; reader
@@ -549,15 +569,6 @@
 	font: inherit;
 	text-decoration: underline;
 	cursor: pointer;
-}
-
-.downloadError {
-	margin: 0;
-	padding: 4px 10px;
-	border-radius: 6px;
-	background: #7f1d1d;
-	color: #fff;
-	font-size: 13px;
 }
 
 .perekText [data-sefer-pasuk][data-pasuk-highlight="fading"],

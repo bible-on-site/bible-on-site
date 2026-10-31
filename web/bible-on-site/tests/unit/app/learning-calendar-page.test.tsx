@@ -10,12 +10,12 @@ jest.mock("next/navigation", () => ({
 }));
 
 import { LearningCalendar } from "@/app/calendar/components/LearningCalendar";
-import { resetCalendarPdfAssetCache } from "@/lib/download/calendar-pdf-client";
 import {
 	getCycle,
 	getCycleStartMonth,
 	nextMonth,
 } from "@/data/learning-schedule";
+import { resetCalendarPdfAssetCache } from "@/lib/download/calendar-pdf-client";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -114,6 +114,195 @@ describe("LearningCalendar", () => {
 		).toBeInTheDocument();
 	});
 
+	it("keeps rapid next/previous navigation while the URL replacement is pending", () => {
+		// Next exposes the old URL until navigation commits; wrapper identity
+		// must not turn that unchanged URL into a new month selection.
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ month: "578703" }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("4");
+		rerender(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("4");
+
+		fireEvent.click(screen.getByRole("button", { name: "חודש קודם" }));
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("3");
+		expect(mockReplace.mock.calls.map(([url]) => url)).toEqual([
+			"?month=578704",
+			"?month=578703",
+		]);
+	});
+
+	it.each([
+		{
+			view: "year",
+			select: "שנתי",
+			next: "שנה הבאה",
+			month: "578612",
+			cycle: null,
+		},
+		{
+			view: "cycle",
+			select: "מחזור מלא",
+			next: "מחזור הבא",
+			month: "578512",
+			cycle: "5",
+		},
+	])(
+		"composes a pending $view view with navigation",
+		({ view, select, next, month, cycle }) => {
+			(useSearchParams as jest.Mock).mockImplementation(
+				() => new URLSearchParams({ month: "578512", campaign: "keep" }),
+			);
+			render(<LearningCalendar {...cycleStartProps} />);
+			fireEvent.click(screen.getByRole("button", { name: select }));
+			fireEvent.click(screen.getByRole("button", { name: next }));
+
+			const params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+			expect(params.get("view")).toBe(view);
+			expect(params.get("month")).toBe(month);
+			expect(params.get("cycle")).toBe(cycle);
+			expect(params.get("campaign")).toBe("keep");
+		},
+	);
+
+	it("composes every pending calendar field without dropping unrelated query keys", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() =>
+				new URLSearchParams({ month: "578512", cycle: "4", campaign: "keep" }),
+		);
+		render(<LearningCalendar {...cycleStartProps} />);
+		for (const name of [
+			"חודש הבא",
+			"שנתי",
+			"שנה הבאה",
+			"מחזור מלא",
+			"מחזור הבא",
+		]) {
+			fireEvent.click(screen.getByRole("button", { name }));
+		}
+
+		const params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+		expect(Object.fromEntries(params)).toEqual({
+			month: "578701",
+			cycle: "5",
+			campaign: "keep",
+			view: "cycle",
+		});
+	});
+
+	it.each(["שנתי", "מחזור מלא"])(
+		"external query changes replace the pending %s view with URL defaults",
+		(view) => {
+			let query = "month=578512&campaign=keep";
+			(useSearchParams as jest.Mock).mockImplementation(
+				() => new URLSearchParams(query),
+			);
+			const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+			fireEvent.click(screen.getByRole("button", { name: view }));
+			if (view === "מחזור מלא") {
+				fireEvent.click(screen.getByRole("button", { name: "מחזור הבא" }));
+				expect(
+					screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+				).toHaveValue("5");
+			}
+
+			query = "month=578601&campaign=external";
+			rerender(<LearningCalendar {...cycleStartProps} />);
+			expect(screen.getByRole("button", { name: "חודשי" })).toHaveAttribute(
+				"aria-pressed",
+				"true",
+			);
+			expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+			expect(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+			).toHaveValue("4");
+			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+			let params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+			expect(Object.fromEntries(params)).toEqual({
+				month: "578602",
+				campaign: "external",
+			});
+
+			query = "month=578512&campaign=keep";
+			rerender(<LearningCalendar {...cycleStartProps} />);
+			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+			params = new URLSearchParams(mockReplace.mock.lastCall[0].slice(1));
+			expect(Object.fromEntries(params)).toEqual({
+				month: "578601",
+				campaign: "keep",
+			});
+		},
+	);
+
+	it("an external month restores the implicit cycle while keeping the URL's cycle view", () => {
+		let query = "month=578512&view=cycle";
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams(query),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור הבא" }));
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("5");
+
+		query = "month=578601&view=cycle";
+		rerender(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("button", { name: "מחזור מלא" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("4");
+	});
+
+	it("accepts external URL changes and back/forward navigation after a pending local change", () => {
+		let month = "578703";
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ month }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+
+		for (const target of ["578705", "578703", "578705"]) {
+			month = target;
+			rerender(<LearningCalendar {...cycleStartProps} />);
+			expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue(
+				String(Number(target.slice(4))),
+			);
+		}
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps default-month navigation when search params have no month", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams(),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		rerender(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+		expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5786");
+	});
+
+	it("returns to the current initial month when an external URL removes month", () => {
+		let month: string | null = "578703";
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams(month === null ? {} : { month }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("3");
+
+		month = null;
+		rerender(<LearningCalendar {...cycleStartProps} initialMonth={11} />);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("11");
+		expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5785");
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
 	it("navigates to the previous month across a leap-year boundary", () => {
 		render(
 			<LearningCalendar
@@ -131,11 +320,11 @@ describe("LearningCalendar", () => {
 	});
 
 	it("restores the viewed month from the ?month= query param", () => {
-		setSearchParam("577502");
+		setSearchParam("577504");
 		render(<LearningCalendar {...cycleStartProps} />);
 
 		expect(
-			screen.getByRole("heading", { name: /חשוון ה'תשע/ }),
+			screen.getByRole("heading", { name: /טבת ה'תשע/ }),
 		).toBeInTheDocument();
 	});
 
@@ -186,7 +375,7 @@ describe("LearningCalendar", () => {
 		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
 		fireEvent.click(screen.getByRole("button", { name: "היום" }));
 
-		expect(mockReplace).toHaveBeenLastCalledWith("?month=578512", {
+		expect(mockReplace).toHaveBeenLastCalledWith("?month=578512&cycle=4", {
 			scroll: false,
 		});
 	});
@@ -263,7 +452,7 @@ describe("LearningCalendar", () => {
 		});
 	});
 
-	it("extends the cycle picker past confirmed data for a projected month", () => {
+	it("includes projected cycles once today has reached them", () => {
 		// The month after cycle 11's start lies entirely inside the cycle, so it
 		// anchors the picker on the projected cycle rather than cycle 10's tail.
 		const projected = nextMonth(getCycleStartMonth(getCycle(11)));
@@ -271,7 +460,11 @@ describe("LearningCalendar", () => {
 			<LearningCalendar
 				initialYear={projected.year}
 				initialMonth={projected.month}
-				todayDateNumber={57851207}
+				todayDateNumber={
+					getCycle(11).start.year * 10000 +
+					getCycle(11).start.getUniformMonth() * 100 +
+					getCycle(11).start.day
+				}
 			/>,
 		);
 
@@ -286,7 +479,181 @@ describe("LearningCalendar", () => {
 		expect(screen.getByText(/מחזור י"א \(משוער\):/)).toBeInTheDocument();
 	});
 
+	it("navigates to the previous year while retaining the calendar query", () => {
+		setSearchParam("578512", { view: "year", campaign: "keep" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "שנה קודמת" }));
+		expect(mockReplace).toHaveBeenLastCalledWith(
+			"?month=578412&view=year&campaign=keep",
+			{ scroll: false },
+		);
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"ה'תשפ\"ד",
+		);
+	});
+
+	it("keeps the majority cycle when the following cycle begins late in the month", () => {
+		setSearchParam("580309");
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={58030925} />,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("8");
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ח'",
+		);
+	});
+
+	it("keeps pending month navigation when the live day changes inside the same window", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ month: "578512", campaign: "keep" }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+		rerender(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57851208} />,
+		);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("1");
+		expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5786");
+	});
+
+	it("drops pending fields when a live default-month change resets the visible selection", () => {
+		(useSearchParams as jest.Mock).mockImplementation(
+			() => new URLSearchParams({ campaign: "keep" }),
+		);
+		const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
+		rerender(
+			<LearningCalendar
+				initialYear={5786}
+				initialMonth={2}
+				todayDateNumber={57860201}
+			/>,
+		);
+		expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("2");
+		fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+		const params = new URLSearchParams(mockReplace.mock.calls.at(-1)?.[0]);
+		expect(params.get("month")).toBeNull();
+		expect(params.get("campaign")).toBe("keep");
+		expect(params.get("view")).toBe("year");
+	});
+	it("labels the full cycle's partial first and last months from their calendar months", () => {
+		setSearchParam("578512", { view: "cycle", cycle: "4" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		const headings = screen.getAllByRole("heading", { level: 3 });
+		expect(headings[0]).toHaveTextContent("אלול ה'תשפ\"ה");
+		expect(headings[headings.length - 1]).toHaveTextContent("ניסן ה'תשפ\"ט");
+	});
+	it("ignores cycle zero and uses the month-derived cycle", () => {
+		setSearchParam("578512", { view: "cycle", cycle: "0" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("4");
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ד'",
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("navigates to the previous cycle while retaining the committed query", () => {
+		setSearchParam("578512", { view: "cycle", cycle: "4", campaign: "keep" });
+		render(<LearningCalendar {...cycleStartProps} />);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור קודם" }));
+		expect(mockReplace).toHaveBeenLastCalledWith(
+			"?month=578512&view=cycle&cycle=3&campaign=keep",
+			{ scroll: false },
+		);
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ג'",
+		);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("3");
+	});
+
+	it("uses today's cycle when browsing a month before the programme started", () => {
+		setSearchParam("577501");
+		render(<LearningCalendar {...cycleStartProps} />);
+		const picker = screen.getByRole("combobox", { name: "בחירת מחזור לימוד" });
+		expect(picker).toHaveValue("");
+		expect(screen.getByRole("option", { name: "-" })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+		expect(picker).toHaveValue("4");
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור ד'",
+		);
+	});
+
+	it("uses the first cycle and returns to today before any cycle has started", () => {
+		setSearchParam("577501");
+		render(
+			<LearningCalendar {...cycleStartProps} todayDateNumber={57750101} />,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+		expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"מחזור א'",
+		);
+		fireEvent.click(screen.getByRole("button", { name: "היום" }));
+		expect(mockReplace).toHaveBeenLastCalledWith(
+			"?month=577501&view=cycle&cycle=1",
+			{ scroll: false },
+		);
+		expect(
+			screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+		).toHaveValue("1");
+	});
 	describe("view modes", () => {
+		it("limits shared links, pickers and navigation to the cycle after today's", () => {
+			setSearchParam("590001", { view: "cycle", cycle: "999" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			const picker = screen.getByRole("combobox", {
+				name: "בחירת מחזור לימוד",
+			});
+			expect(picker).toHaveValue("5");
+			expect(picker.querySelectorAll("option")).toHaveLength(5);
+			expect(screen.getByRole("button", { name: "מחזור הבא" })).toBeDisabled();
+			expect(screen.getByRole("button", { name: /הורדת PDF/ })).toBeDisabled();
+			fireEvent.click(screen.getByRole("button", { name: "היום" }));
+			expect(picker).toHaveValue("4");
+			expect(screen.getByRole("button", { name: /הורדת PDF/ })).toBeEnabled();
+		});
+
+		it("keeps history readable while blocking its export", () => {
+			setSearchParam("578301", { view: "cycle", cycle: "3" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			expect(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+			).toHaveValue("3");
+			expect(screen.getByRole("button", { name: /הורדת PDF/ })).toBeDisabled();
+			expect(screen.getByRole("status")).toHaveTextContent(
+				"החל משנה לפני תחילתו",
+			);
+		});
+
+		it("opens the next cycle and all of its supported future years at the anniversary", () => {
+			setSearchParam("579101", { view: "year" });
+			const props = { ...cycleStartProps, todayDateNumber: 57880708 };
+			const { rerender } = render(<LearningCalendar {...props} />);
+			expect(screen.getByRole("button", { name: /הורדת PDF/ })).toBeDisabled();
+			rerender(<LearningCalendar {...props} todayDateNumber={57880709} />);
+			expect(screen.getByRole("button", { name: /הורדת PDF/ })).toBeEnabled();
+		});
+
+		it("ends month/year navigation at the end of the next cycle", () => {
+			setSearchParam("590001");
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+			expect(screen.getByRole("combobox", { name: "שנה" })).toHaveValue("5793");
+			expect(screen.getByRole("combobox", { name: "חודש" })).toHaveValue("2");
+			expect(screen.getByRole("button", { name: "חודש הבא" })).toBeDisabled();
+			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+			expect(container.querySelectorAll("h3")).toHaveLength(2);
+			expect(screen.getByRole("button", { name: "שנה הבאה" })).toBeDisabled();
+		});
+
 		it("renders a view toggle with monthly/yearly/full-cycle options", () => {
 			render(<LearningCalendar {...cycleStartProps} />);
 
@@ -346,23 +713,17 @@ describe("LearningCalendar", () => {
 				{ scroll: false },
 			);
 			// אלול 5785 belongs to cycle 4; the heading shows the full range.
-			expect(container.querySelector("h2")?.textContent).toMatch(
-				/מחזור ד'/,
-			);
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור ד'/);
 			expect(container.querySelectorAll("h3").length).toBeGreaterThan(30);
 		});
 
 		it("shows a single selected-cycle description in full-cycle view (#2725)", () => {
 			setSearchParam("578512", { view: "cycle", cycle: "4" });
-			const { container } = render(
-				<LearningCalendar {...cycleStartProps} />,
-			);
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
 
 			// The h2 is the one authoritative description with the range —
 			// nothing beside the picker repeats it.
-			expect(container.querySelector("h2")?.textContent).toMatch(
-				/מחזור ד':/,
-			);
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור ד':/);
 			expect(screen.getAllByText(/מחזור ד':/)).toHaveLength(1);
 			expect(
 				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
@@ -379,9 +740,7 @@ describe("LearningCalendar", () => {
 				expect.stringContaining("cycle=5"),
 				{ scroll: false },
 			);
-			expect(container.querySelector("h2")?.textContent).toMatch(
-				/מחזור ה'/,
-			);
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור ה'/);
 		});
 
 		it("navigates to the next year in yearly view", () => {
@@ -409,9 +768,7 @@ describe("LearningCalendar", () => {
 				expect.stringContaining("cycle=2"),
 				{ scroll: false },
 			);
-			expect(container.querySelector("h2")?.textContent).toMatch(
-				/מחזור ב'/,
-			);
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור ב'/);
 		});
 
 		it("disables previous-cycle navigation on the first cycle", () => {
@@ -438,6 +795,11 @@ describe("LearningCalendar", () => {
 	});
 
 	describe("PDF download action (#2621, #2622)", () => {
+		const pdfProps = {
+			initialYear: 5786,
+			initialMonth: 1,
+			todayDateNumber: 57860115,
+		};
 		const MANIFEST_URL =
 			"https://assets.example/generated/calendar-pdf/manifest.json";
 
@@ -468,18 +830,18 @@ describe("LearningCalendar", () => {
 		});
 
 		it("names the selected month on the download action", () => {
-			render(<LearningCalendar {...cycleStartProps} />);
+			render(<LearningCalendar {...pdfProps} />);
 
 			expect(
 				screen.getByRole("button", {
-					name: /הורדת PDF: אלול ה'תשפ/,
+					name: /הורדת PDF: תשרי ה'תשפ/,
 				}),
 			).toBeInTheDocument();
 		});
 
 		it("names the selected year in yearly view", () => {
-			setSearchParam("578512", { view: "year" });
-			render(<LearningCalendar {...cycleStartProps} />);
+			setSearchParam("578601", { view: "year" });
+			render(<LearningCalendar {...pdfProps} />);
 
 			expect(
 				screen.getByRole("button", { name: /הורדת PDF: שנת ה'תשפ/ }),
@@ -487,8 +849,8 @@ describe("LearningCalendar", () => {
 		});
 
 		it("names the selected cycle in full-cycle view", () => {
-			setSearchParam("578512", { view: "cycle", cycle: "4" });
-			render(<LearningCalendar {...cycleStartProps} />);
+			setSearchParam("578601", { view: "cycle", cycle: "4" });
+			render(<LearningCalendar {...pdfProps} />);
 
 			expect(
 				screen.getByRole("button", { name: /הורדת PDF: מחזור ד'/ }),
@@ -496,9 +858,7 @@ describe("LearningCalendar", () => {
 		});
 
 		it("fetches nothing while the calendar is browsed", () => {
-			render(
-				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
-			);
+			render(<LearningCalendar {...pdfProps} pdfManifestUrl={MANIFEST_URL} />);
 
 			fireEvent.click(screen.getByRole("button", { name: "חודש הבא" }));
 			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
@@ -514,19 +874,17 @@ describe("LearningCalendar", () => {
 				url === MANIFEST_URL
 					? Promise.resolve(
 							manifestWith({
-								"month:578512": {
+								"month:578601": {
 									object: "generated/calendar-pdf/objects/x.pdf",
 									sha256: "x",
 									bytes: 10,
-									filename: "learning-calendar-578512.pdf",
+									filename: "learning-calendar-578601.pdf",
 								},
 							}),
 						)
 					: Promise.reject(new Error("unexpected fetch")),
 			);
-			render(
-				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
-			);
+			render(<LearningCalendar {...pdfProps} pdfManifestUrl={MANIFEST_URL} />);
 
 			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
 
@@ -539,7 +897,7 @@ describe("LearningCalendar", () => {
 			expect(anchor.href).toBe(
 				"https://assets.example/generated/calendar-pdf/objects/x.pdf",
 			);
-			expect(anchor.download).toBe("learning-calendar-578512.pdf");
+			expect(anchor.download).toBe("learning-calendar-578601.pdf");
 		});
 
 		it("resolves a full-cycle selection to its cycle artifact", async () => {
@@ -560,17 +918,15 @@ describe("LearningCalendar", () => {
 						)
 					: Promise.reject(new Error("unexpected fetch")),
 			);
-			setSearchParam("578512", { view: "cycle", cycle: "4" });
-			render(
-				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
-			);
+			setSearchParam("578601", { view: "cycle", cycle: "4" });
+			render(<LearningCalendar {...pdfProps} pdfManifestUrl={MANIFEST_URL} />);
 
 			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
 
 			await waitFor(() => expect(clickSpy).toHaveBeenCalled());
-			expect(
-				(clickSpy.mock.contexts[0] as HTMLAnchorElement).href,
-			).toBe("https://assets.example/generated/calendar-pdf/objects/cycle4.pdf");
+			expect((clickSpy.mock.contexts[0] as HTMLAnchorElement).href).toBe(
+				"https://assets.example/generated/calendar-pdf/objects/cycle4.pdf",
+			);
 			expect(global.fetch).toHaveBeenCalledTimes(1);
 		});
 
@@ -586,7 +942,7 @@ describe("LearningCalendar", () => {
 							status: 200,
 							headers: new Headers({
 								"Content-Disposition":
-									'attachment; filename="learning-calendar-578512.pdf"',
+									'attachment; filename="learning-calendar-578601.pdf"',
 							}),
 							blob: () =>
 								Promise.resolve(
@@ -594,9 +950,7 @@ describe("LearningCalendar", () => {
 								),
 						} as Response),
 			);
-			render(
-				<LearningCalendar {...cycleStartProps} pdfManifestUrl={MANIFEST_URL} />,
-			);
+			render(<LearningCalendar {...pdfProps} pdfManifestUrl={MANIFEST_URL} />);
 
 			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
 
@@ -606,9 +960,9 @@ describe("LearningCalendar", () => {
 			expect(global.fetch).toHaveBeenCalledWith(
 				expect.stringContaining("/api/calendar-pdf"),
 			);
-			expect(
-				(clickSpy.mock.contexts[0] as HTMLAnchorElement).href,
-			).toBe("blob:mock");
+			expect((clickSpy.mock.contexts[0] as HTMLAnchorElement).href).toBe(
+				"blob:mock",
+			);
 		});
 	});
 });

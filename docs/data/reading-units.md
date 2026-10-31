@@ -31,8 +31,10 @@ Canonical website source: `web/bible-on-site/src/lib/reading/contract.ts`
   filling skipped text, no collapsing repeats.
 - **`ReadingUnit`** — `{ division, unitId, slug, seferName, order,
   heading, ranges, auxiliaryReadings?, closingBreak? }`. `unitId` is a
-  stable contiguous id within the division; `slug` is the decimal
-  `unitId`; `order` is 1-based within the parent sefer; `heading` is the
+  stable contiguous id within the division; `slug` is the canonical URL
+  segment — the decimal `unitId` for מסורה, the Hebrew parasha name
+  (hyphen-joined, e.g. `לך-לך`) for פרשה (issue #2738); `order` is
+  1-based within the parent sefer; `heading` is the
   unit's display identity inside the division's own hierarchy — for
   מסורה units the sefer name plus the parasha ordinal
   ("בראשית פרשה ח"), with no conventional perek/pasuk references.
@@ -108,7 +110,13 @@ verbatim by the website (`src/data/parasha/parasha-units.ts`) and by the
 SQLite exporter (`reading_units.rs::derive_parasha_units`), so all
 consumers resolve identical units:
 - Exactly the five Torah sefarim carry primary units: **54 parashiot**
-  with positional decimal `unitId`s/`slug`s and per-sefer `order`.
+  with positional decimal `unitId`s and per-sefer `order`. Each unit's
+  `slug` is the canonical Hebrew name (plain unpointed words joined by
+  ASCII hyphens — `לך-לך`, `אחרי-מות`, `וזאת-הברכה`); the table's
+  `aliases` hold researched lexical variants (Sefaria Terms API, per
+  `nameAudit`) and every unit accepts the shared `פרשת {name}` prefix,
+  while numeric ids and aliases permanent-redirect to the canonical
+  slug (issue #2738).
   Joined pairs (ויקהל–פקודי, תזריע–מצורע, אחרי מות–קדושים, בהר–בחוקותי,
   מטות–מסעי, נצבים–וילך) stay **separate unit identities** — the
   `joinedReadings` table records the combination for display, never

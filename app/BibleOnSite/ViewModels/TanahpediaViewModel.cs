@@ -126,7 +126,16 @@ public partial class TanahpediaViewModel : ObservableObject
         {
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
-        await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        try
+        {
+            await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Category navigation failed for {route}: {ex}");
+        }
     }
 
     /// <summary>Opens an entry by its canonical unique name.</summary>
@@ -138,8 +147,17 @@ public partial class TanahpediaViewModel : ObservableObject
             return;
         }
 
-        await _navigationGate.RunAsync(() =>
-            _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+        try
+        {
+            await _navigationGate.RunAsync(() =>
+                _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Entry navigation failed for {uniqueName}: {ex}");
+        }
     }
 }
 

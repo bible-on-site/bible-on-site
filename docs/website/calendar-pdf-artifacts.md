@@ -43,6 +43,35 @@ retiring a public key requires an explicit manifest change.
 
 ## Consumers (#2622)
 
+### Calendar visibility and export eligibility
+
+The calendar page is statically generated. Its browser component computes
+today's Jerusalem/nightfall-aware Hebrew date on hydration, refreshes it
+while the page is open and on focus/visibility changes, and supplies that
+live date to the calendar policy. A deployment date is never used as today.
+
+The native calendar refreshes its date on return from the reader, app resume
+and minute ticks while visible. Refresh keeps the viewed period, updates the
+cycle bounds and export command, and runs again before Today or PDF export.
+
+The website and app show every historical cycle, the current cycle and
+exactly one next cycle. Cycle selectors, shared links, month/year selectors
+and navigation stop at that next cycle's end. Boundary-month dates beyond
+that end have no chapter assignment in the visible calendar.
+
+PDF export permits the current cycle and, inclusively from the same Hebrew
+month/day one year before its start, the entire next cycle. This unlocks
+its supported future month/year exports too. A month/year spanning a cycle
+boundary is exportable only when every included scheduled cycle is eligible;
+it cannot expose a later cycle. Hebrew-year anniversaries preserve month
+names across leap years and constrain missing days/Adar I.
+
+The controls disable ineligible exports, and `/api/calendar-pdf` returns 404
+before fetching the manifest for an ineligible request. The API stays dynamic
+so direct API calls and clients using this route receive the same live check.
+The generated artifact catalog remains deterministic and independent of the
+clock. Already-published S3 objects and their existing public URLs are retained.
+
 Downloads are **on demand**: nothing fetches a PDF — or even the manifest —
 until the user activates Download.
 

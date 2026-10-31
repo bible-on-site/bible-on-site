@@ -25,6 +25,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     // Articles view state is owned by the shared reader chrome (#2573).
     private ReaderChrome _chrome = null!;
 
+    // Native safe-area + Back plumbing is owned by the shared platform
+    // chrome coordinator (#2573).
+    private ReaderPlatformChrome _platformChrome = null!;
+
     // Guard: ignore CurrentItemChanged events fired by the CarouselView during
     // initial collection assignment — the ViewModel already holds the unit.
     private bool _carouselInitializing;
@@ -39,9 +43,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     public MasoraPage()
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = new MasoraViewModel();
         BindingContext = _viewModel;
         FinishSetup();
@@ -50,9 +51,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     public MasoraPage(MasoraViewModel viewModel)
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         FinishSetup();
@@ -67,7 +65,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupUnitPickerEvents();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
-        WireReaderBackChrome();
+        SetupPlatformChrome();
     }
 
     /// <summary>
@@ -109,20 +107,32 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     }
 
     /// <summary>
-    /// The capsule Back owns the fullscreen return affordance (#2467): it
-    /// stays enabled while the floating exit control is up — the same
-    /// surface <see cref="TryHandleReaderBack"/> serves.
+    /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
+    /// and edge-back history, Android predictive-Back registration, and the
+    /// capsule's enabled-state provider — through the one coordinator.
+    /// Masora's transient return surfaces are fullscreen and the perushim
+    /// sheet (#2766): the capsule stays enabled while either is up — the
+    /// same surfaces <see cref="TryHandleReaderBack"/> serves (#2467).
     /// </summary>
-    private void WireReaderBackChrome()
+    private void SetupPlatformChrome()
     {
-        NormalNavigationBar.BackStateProvider = () => ExitFullScreenButton.IsVisible;
-        ExitFullScreenButton.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(IsVisible))
+        _platformChrome = new ReaderPlatformChrome(
+            new ReaderPlatformChromeSurfaces
             {
-                NormalNavigationBar.RefreshBackState();
-            }
-        };
+                Page = this,
+                Root = MainGrid,
+                NavigationBar = NormalNavigationBar,
+                BottomBar = BottomBar,
+                FanMenu = FanMenu,
+                Carousel = MasoraCarousel,
+                BackSensitiveOverlays = [ExitFullScreenButton],
+                PerushimSheet = PerushimPanel,
+            },
+            new ReaderPlatformChromeActions
+            {
+                OwnsReturnSurface = () => ExitFullScreenButton.IsVisible || PerushimPanel.IsOpen,
+                TryHandleBack = TryHandleReaderBack,
+            });
     }
 
     /// <summary>
@@ -335,17 +345,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-#if ANDROID
-        RegisterReaderBack();
-#endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
-#endif
-#if IOS
-        ApplyBottomBarSafeArea();
-        SizeChanged -= OnPageSizeChanged;
-        SizeChanged += OnPageSizeChanged;
-#endif
+        _platformChrome.Appearing();
 
         if (_viewModel.Unit == null && !_isLoading)
         {
@@ -355,7 +355,11 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
+        _platformChrome.ScheduleHistoryRefresh();
     }
+
+    private void OnReaderListLoaded(object? sender, EventArgs e) =>
+        _platformChrome.ReaderSurfaceRealized();
 
     /// <summary>Loads the initial unit and snaps the carousel to it.</summary>
     private async Task LoadInitialUnitAsync()
@@ -425,12 +429,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     protected override void OnDisappearing()
     {
-#if ANDROID
-        UnregisterReaderBack();
-#endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
-#endif
+        _platformChrome.Disappearing();
         base.OnDisappearing();
     }
 
@@ -559,59 +558,20 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the unit picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
         { _chrome.ExitFullScreen(); return true; }
+        if (MasoraUnitPickerPopup.IsVisible)
+        { MasoraUnitPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         return false;
     }
 
     #endregion
 
-#if IOS
-    /// <summary>
-    /// MAUI pads every Layout inside the device safe area by default
-    /// (SafeAreaEdges = Container), and each Layout pads independently -
-    /// clearing it only on MainGrid just moves the padding to ContentArea,
-    /// which is what produced the empty landscape side bands (#1308).
-    /// Keep the root's top inset so the reader toolbar stays below the status
-    /// bar and notch. Its bottom edge also respects the home indicator, with
-    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
-    /// and descendant layouts unpadded so landscape content spans the width.
-    /// Views inside scroll views (the carousel cells and pasukim lists) never
-    /// apply safe-area padding, so only the direct layout chain needs this.
-    /// </summary>
-    private void ConfigureReaderSafeArea()
-    {
-        ReaderSafeArea.Configure(MainGrid);
-    }
-
-    private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-
-    private void ApplyBottomBarSafeArea()
-    {
-        double bottom = 0;
-        var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
-            .OfType<UIKit.UIWindowScene>()
-            .FirstOrDefault()?.Windows
-            .FirstOrDefault(w => w.IsKeyWindow);
-        if (window != null)
-        {
-            bottom = window.SafeAreaInsets.Bottom;
-        }
-
-        // Shift the bars down over the home-indicator inset and pull the page
-        // up underneath so no gap shows (tester-confirmed combination).
-        // With no inset (iPad, landscape) the same assignments restore the
-        // layout defaults, so an inset disappearing never leaves stale values.
-        // #2721: without this the fan's satellites stay laid out over the inset
-        // area their accessibility bounds report - taps land on the shifted
-        // geometry instead of the rendered buttons.
-        var totalHeight = Controls.ReaderBottomBar.TotalHeight + bottom;
-        BottomBar.TranslationY = bottom;
-        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-        BottomBar.HeightRequest = totalHeight;
-        FanMenu.SetBottomInset(bottom);
-        this.Padding = new Thickness(0, 0, 0, -bottom);
-        Resources["BottomBarTotalHeight"] = totalHeight;
-    }
-#endif
 }

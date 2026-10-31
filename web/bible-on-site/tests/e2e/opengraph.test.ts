@@ -90,7 +90,7 @@ test.describe("Open Graph metadata", () => {
 		["rabbis blessing", "/rabbis-blessing"],
 		["accessibility", "/accessibility"],
 		["parasha landing", `/${encodeURIComponent("פרשה")}`],
-		["parasha unit", `/${encodeURIComponent("פרשה")}/1`],
+		["parasha unit", `/${encodeURIComponent("פרשה")}/${encodeURIComponent("בראשית")}`],
 	];
 
 	for (const [label, path] of websiteRoutes) {
