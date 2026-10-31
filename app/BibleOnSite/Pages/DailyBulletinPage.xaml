@@ -27,11 +27,12 @@
             </controls:SharedTopBar.CenterContent>
         </controls:SharedTopBar>
 
-        <!-- Join carousel (#2806): three channel-branded cards mirroring the
+        <!-- Join cards (#2806): three channel-branded cards mirroring the
              website's עלון יומי surface — Telegram, WhatsApp and email, in
-             that order. Peek insets reveal the next card on narrow screens;
-             the dots show position for non-swipe navigation cues. -->
-        <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto" Padding="0,12,0,16">
+             that order. The wrapping row stacks the cards one above the
+             other on small screens and lays them side by side on tablet
+             and desktop widths, like the website's join surface. -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*" Padding="0,12,0,16">
             <Label Grid.Row="0"
                    Text="לימוד הפרק היומי במייל, בטלגרם ובווטסאפ"
                    FontSize="16"
@@ -39,83 +40,78 @@
                    Padding="24,4"
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
 
-            <CarouselView Grid.Row="1"
-                          x:Name="BulletinCarousel"
-                          ItemsSource="{Binding Cards}"
-                          Position="{Binding Position, Mode=TwoWay}"
-                          Loop="False"
-                          PeekAreaInsets="32"
-                          Margin="0,4">
-                <CarouselView.ItemTemplate>
-                    <DataTemplate x:DataType="models:BulletinJoinCard">
-                        <Border StrokeShape="RoundRectangle 12"
-                                Stroke="{StaticResource Gray200}"
-                                StrokeThickness="1"
-                                BackgroundColor="White"
-                                Margin="4,0"
-                                Padding="0"
-                                MaximumWidthRequest="420"
-                                HorizontalOptions="Center">
-                            <Border.Shadow>
-                                <Shadow Brush="Black" Offset="0,2" Radius="8" Opacity="0.12"/>
-                            </Border.Shadow>
-                            <Grid RowDefinitions="Auto,*,Auto">
-                                <!-- Channel-branded band -->
-                                <Border Grid.Row="0"
-                                        StrokeShape="RoundRectangle 12,12,0,0"
-                                        BackgroundColor="{Binding BrandColor}"
-                                        Padding="20"
-                                        HeightRequest="120">
-                                    <Image Source="{Binding Icon}"
-                                           HeightRequest="64"
-                                           WidthRequest="64"
-                                           Aspect="AspectFit"
-                                           HorizontalOptions="Center"
-                                           VerticalOptions="Center"/>
-                                </Border>
-                                <VerticalStackLayout Grid.Row="1"
-                                                     Padding="20"
-                                                     Spacing="8"
-                                                     VerticalOptions="Start">
-                                    <Label Text="{Binding Title}"
-                                           FontSize="20"
-                                           FontAttributes="Bold"
-                                           HorizontalTextAlignment="Center"
-                                           TextColor="#303030"/>
-                                    <Label Text="{Binding Description}"
-                                           FontSize="15"
-                                           HorizontalTextAlignment="Center"
-                                           LineBreakMode="WordWrap"
-                                           TextColor="{StaticResource Gray600}"/>
-                                </VerticalStackLayout>
-                                <Button Grid.Row="2"
-                                        Text="{Binding JoinLabel}"
-                                        Command="{Binding BindingContext.JoinCommand, Source={x:Reference BulletinCarousel}}"
-                                        CommandParameter="{Binding .}"
-                                        AutomationId="{Binding AutomationId}"
-                                        SemanticProperties.Description="{Binding SemanticDescription}"
-                                        BackgroundColor="{Binding BrandColor}"
-                                        TextColor="White"
-                                        FontSize="16"
-                                        FontAttributes="Bold"
-                                        CornerRadius="8"
-                                        HeightRequest="48"
-                                        Margin="20,0,20,20"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </CarouselView.ItemTemplate>
-            </CarouselView>
-
-            <IndicatorView Grid.Row="2"
-                           ItemsSource="{Binding Cards}"
-                           Position="{Binding Position, Mode=TwoWay}"
-                           IndicatorsShape="Circle"
-                           IndicatorSize="9"
-                           IndicatorColor="{StaticResource Gray300}"
-                           SelectedIndicatorColor="{StaticResource Primary}"
-                           HorizontalOptions="Center"
-                           Margin="0,8,0,0"/>
+            <ScrollView Grid.Row="1" x:Name="CardsScroll">
+                <FlexLayout x:Name="JoinCards"
+                            Wrap="Wrap"
+                            Direction="Row"
+                            JustifyContent="Center"
+                            AlignItems="Start"
+                            BindableLayout.ItemsSource="{Binding Cards}"
+                            MaximumWidthRequest="1400"
+                            HorizontalOptions="Center"
+                            Margin="0,4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="models:BulletinJoinCard">
+                            <Border StrokeShape="RoundRectangle 12"
+                                    Stroke="{StaticResource Gray200}"
+                                    StrokeThickness="1"
+                                    BackgroundColor="White"
+                                    Margin="8"
+                                    Padding="0"
+                                    FlexLayout.Basis="240"
+                                    FlexLayout.Grow="1"
+                                    MaximumWidthRequest="420">
+                                <Border.Shadow>
+                                    <Shadow Brush="Black" Offset="0,2" Radius="8" Opacity="0.12"/>
+                                </Border.Shadow>
+                                <Grid RowDefinitions="Auto,*,Auto">
+                                    <!-- Channel-branded band -->
+                                    <Border Grid.Row="0"
+                                            StrokeShape="RoundRectangle 12,12,0,0"
+                                            BackgroundColor="{Binding BrandColor}"
+                                            Padding="20"
+                                            HeightRequest="120">
+                                        <Image Source="{Binding Icon}"
+                                               HeightRequest="64"
+                                               WidthRequest="64"
+                                               Aspect="AspectFit"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"/>
+                                    </Border>
+                                    <VerticalStackLayout Grid.Row="1"
+                                                         Padding="20"
+                                                         Spacing="8"
+                                                         VerticalOptions="Start">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="20"
+                                               FontAttributes="Bold"
+                                               HorizontalTextAlignment="Center"
+                                               TextColor="#303030"/>
+                                        <Label Text="{Binding Description}"
+                                               FontSize="15"
+                                               HorizontalTextAlignment="Center"
+                                               LineBreakMode="WordWrap"
+                                               TextColor="{StaticResource Gray600}"/>
+                                    </VerticalStackLayout>
+                                    <Button Grid.Row="2"
+                                            Text="{Binding JoinLabel}"
+                                            Command="{Binding BindingContext.JoinCommand, Source={x:Reference JoinCards}}"
+                                            CommandParameter="{Binding .}"
+                                            AutomationId="{Binding AutomationId}"
+                                            SemanticProperties.Description="{Binding SemanticDescription}"
+                                            BackgroundColor="{Binding BrandColor}"
+                                            TextColor="White"
+                                            FontSize="16"
+                                            FontAttributes="Bold"
+                                            CornerRadius="8"
+                                            HeightRequest="48"
+                                            Margin="20,0,20,20"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+            </ScrollView>
         </Grid>
     </Grid>
 </ContentPage>
