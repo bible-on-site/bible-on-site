@@ -1,5 +1,12 @@
 "use client";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useId,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
 	DEFAULT_DIVINE_NAME_MASKING,
@@ -81,6 +88,49 @@ const MASK_NAMES: Record<DivineNameKey, string> = {
 	shaddai: "שדי",
 };
 
+type DisclosureKey = "spacing" | "masking" | "bookmarks";
+
+/** Header button that reveals a group of secondary settings on demand. */
+function Disclosure({
+	label,
+	open,
+	onToggle,
+	children,
+}: {
+	label: string;
+	open: boolean;
+	onToggle: () => void;
+	children: ReactNode;
+}) {
+	const bodyId = useId();
+	return (
+		<div className={styles.disclosure}>
+			<button
+				type="button"
+				className={styles.disclosureToggle}
+				aria-expanded={open}
+				aria-controls={bodyId}
+				onClick={onToggle}
+			>
+				{label}
+				<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+					<path
+						d="M4 6l4 4 4-4"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.8"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			</button>
+			<div id={bodyId} className={styles.disclosureBody} hidden={!open}>
+				{children}
+			</div>
+		</div>
+	);
+}
+
 export default function ReaderSettings() {
 	const [display, setDisplay] = useState<ReaderState>(DEFAULT_READER_SETTINGS);
 	const [recitation, setRecitation] = useState<RecitationSettings>(
@@ -94,6 +144,14 @@ export default function ReaderSettings() {
 	);
 	const [section, setSection] = useState<SettingsSection>("display");
 	const [scoped, setScoped] = useState(false);
+	// Lives on the always-mounted root so reopening keeps the reader's groups.
+	const [expanded, setExpanded] = useState<Record<DisclosureKey, boolean>>({
+		spacing: false,
+		masking: false,
+		bookmarks: false,
+	});
+	const toggleExpanded = (key: DisclosureKey) =>
+		setExpanded((current) => ({ ...current, [key]: !current[key] }));
 	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 	const dialog = useRef<HTMLDialogElement>(null);
 	const titleId = useId();
@@ -305,36 +363,6 @@ export default function ReaderSettings() {
 									/>
 								</label>
 								<label>
-									ריווח אופקי<output>{display.wordStep + 1}</output>
-									<input
-										aria-label="ריווח אופקי"
-										type="range"
-										min="0"
-										max={PEREK_WORD_SPACINGS.length - 1}
-										step="1"
-										value={display.wordStep}
-										onChange={(e) =>
-											updateDisplay({ wordStep: Number(e.target.value) })
-										}
-									/>
-									<small>רווח בין מילים</small>
-								</label>
-								<label>
-									ריווח אנכי<output>{display.lineStep + 1}</output>
-									<input
-										aria-label="ריווח אנכי"
-										type="range"
-										min="0"
-										max={PEREK_LINE_HEIGHTS.length - 1}
-										step="1"
-										value={display.lineStep}
-										onChange={(e) =>
-											updateDisplay({ lineStep: Number(e.target.value) })
-										}
-									/>
-									<small>רווח בין שורות</small>
-								</label>
-								<label>
 									גופן פסוקים
 									<select
 										aria-label="גופן פסוקים"
@@ -351,10 +379,43 @@ export default function ReaderSettings() {
 									</select>
 									<small>גופן טעמים מסורתי</small>
 								</label>
-								<fieldset
-									className={styles.maskingGroup}
-									disabled={!masking.enabled}
+								<Disclosure
+									label="ריווח"
+									open={expanded.spacing}
+									onToggle={() => toggleExpanded("spacing")}
 								>
+									<label>
+										ריווח אופקי<output>{display.wordStep + 1}</output>
+										<input
+											aria-label="ריווח אופקי"
+											type="range"
+											min="0"
+											max={PEREK_WORD_SPACINGS.length - 1}
+											step="1"
+											value={display.wordStep}
+											onChange={(e) =>
+												updateDisplay({ wordStep: Number(e.target.value) })
+											}
+										/>
+										<small>רווח בין מילים</small>
+									</label>
+									<label>
+										ריווח אנכי<output>{display.lineStep + 1}</output>
+										<input
+											aria-label="ריווח אנכי"
+											type="range"
+											min="0"
+											max={PEREK_LINE_HEIGHTS.length - 1}
+											step="1"
+											value={display.lineStep}
+											onChange={(e) =>
+												updateDisplay({ lineStep: Number(e.target.value) })
+											}
+										/>
+										<small>רווח בין שורות</small>
+									</label>
+								</Disclosure>
+								<fieldset className={styles.maskingGroup}>
 									<legend>
 										<label>
 											הסתר שם השם
@@ -372,56 +433,64 @@ export default function ReaderSettings() {
 										הצגת שמות ה' בכתיב מקוצר (למשל ה' וא-להים). ההגדרה חלה על
 										התצוגה בלבד
 									</small>
-									{(Object.keys(MASK_OPTIONS) as DivineNameKey[]).map(
-										(name) => (
-											<fieldset key={name} className={styles.nameFieldset}>
-												<legend>{MASK_NAMES[name]}</legend>
-												<div className={styles.nameOptions}>
-													{MASK_OPTIONS[name].map(({ option, label }) => (
-														<label key={option}>
+									<Disclosure
+										label="כתיב השמות"
+										open={expanded.masking}
+										onToggle={() => toggleExpanded("masking")}
+									>
+										<fieldset
+											className={styles.choices}
+											disabled={!masking.enabled}
+										>
+											{(Object.keys(MASK_OPTIONS) as DivineNameKey[]).map(
+												(name) => (
+													<fieldset key={name} className={styles.nameFieldset}>
+														<legend>{MASK_NAMES[name]}</legend>
+														<div className={styles.nameOptions}>
+															{MASK_OPTIONS[name].map(({ option, label }) => (
+																<label key={option}>
+																	<input
+																		type="radio"
+																		name={`mask-${name}`}
+																		value={option}
+																		checked={masking[name] === option}
+																		onChange={() =>
+																			updateMaskingChoice({
+																				[name]: option,
+																			} as Partial<DivineNameMaskingSettings>)
+																		}
+																	/>
+																	{label}
+																</label>
+															))}
+														</div>
+														{MASK_OPTIONS[name].some((o) => o.custom) && (
 															<input
-																type="radio"
-																name={`mask-${name}`}
-																value={option}
-																checked={masking[name] === option}
-																onChange={() =>
+																aria-label={`כתיב חלופי עבור ${MASK_NAMES[name]}`}
+																className={styles.customText}
+																type="text"
+																dir="rtl"
+																placeholder="כתיב חלופי"
+																value={
+																	masking[
+																		`${name}Custom` as keyof DivineNameMaskingSettings
+																	] as string
+																}
+																disabled={masking[name] !== "custom"}
+																onChange={(e) =>
 																	updateMaskingChoice({
-																		[name]: option,
+																		[`${name}Custom`]: e.target.value,
 																	} as Partial<DivineNameMaskingSettings>)
 																}
 															/>
-															{label}
-														</label>
-													))}
-												</div>
-												{MASK_OPTIONS[name].some((o) => o.custom) && (
-													<input
-														aria-label={`כתיב חלופי עבור ${MASK_NAMES[name]}`}
-														className={styles.customText}
-														type="text"
-														dir="rtl"
-														placeholder="כתיב חלופי"
-														value={
-															masking[
-																`${name}Custom` as keyof DivineNameMaskingSettings
-															] as string
-														}
-														disabled={masking[name] !== "custom"}
-														onChange={(e) =>
-															updateMaskingChoice({
-																[`${name}Custom`]: e.target.value,
-															} as Partial<DivineNameMaskingSettings>)
-														}
-													/>
-												)}
-											</fieldset>
-										),
-									)}
+														)}
+													</fieldset>
+												),
+											)}
+										</fieldset>
+									</Disclosure>
 								</fieldset>
-								<fieldset
-									className={styles.maskingGroup}
-									disabled={!bookmarks.enabled}
-								>
+								<fieldset className={styles.maskingGroup}>
 									<legend>
 										<label>
 											סימניות פרקים
@@ -436,87 +505,100 @@ export default function ReaderSettings() {
 										</label>
 									</legend>
 									<small>לשוניות פרקים בשולי הספר לניווט מהיר</small>
-									<label>
-										מיקום
-										<select
-											aria-label="מיקום סימניות"
-											value={bookmarks.placement}
-											onChange={(e) =>
-												updateBookmarksChoice({
-													placement: e.target
-														.value as SeferBookmarkSettings["placement"],
-												})
-											}
+									<Disclosure
+										label="אפשרויות סימניות"
+										open={expanded.bookmarks}
+										onToggle={() => toggleExpanded("bookmarks")}
+									>
+										<fieldset
+											className={styles.choices}
+											disabled={!bookmarks.enabled}
 										>
-											<option value="sides">שני הצדדים</option>
-											<option value="right">ימין</option>
-											<option value="left">שמאל</option>
-											<option value="top">עליון</option>
-											<option value="bottom">תחתון</option>
-											<option value="top-bottom">עליון ותחתון</option>
-										</select>
-									</label>
-									<label>
-										כיוון
-										<select
-											aria-label="כיוון סימניות"
-											value={bookmarks.orientation}
-											onChange={(e) =>
-												updateBookmarksChoice({
-													orientation: e.target
-														.value as SeferBookmarkSettings["orientation"],
-												})
-											}
-										>
-											<option value="perpendicular">מאונך לשולי הספר</option>
-											<option value="parallel">מקביל לשולי הספר</option>
-										</select>
-									</label>
-									<label>
-										קיבוע
-										<select
-											aria-label="קיבוע סימניות"
-											value={bookmarks.attachment}
-											onChange={(e) =>
-												updateBookmarksChoice({
-													attachment: e.target
-														.value as SeferBookmarkSettings["attachment"],
-												})
-											}
-										>
-											<option value="leaf">מסתובב עם הדף</option>
-											<option value="pinned">קבוע לספר</option>
-										</select>
-									</label>
-									<label>
-										סדר
-										<select
-											aria-label="סדר סימניות"
-											value={bookmarks.order}
-											onChange={(e) =>
-												updateBookmarksChoice({
-													order: e.target
-														.value as SeferBookmarkSettings["order"],
-												})
-											}
-										>
-											<option value="page">לפי סדר הפרקים</option>
-											<option value="reverse-page">סדר הפוך</option>
-											<option value="title">לפי שם הפרק</option>
-										</select>
-									</label>
-									<label>
-										<input
-											type="checkbox"
-											checked={bookmarks.upcomingOnly}
-											onChange={(e) =>
-												updateBookmarksChoice({
-													upcomingOnly: e.target.checked,
-												})
-											}
-										/>
-										הצג רק פרקים הבאים
-									</label>
+											<label>
+												מיקום
+												<select
+													aria-label="מיקום סימניות"
+													value={bookmarks.placement}
+													onChange={(e) =>
+														updateBookmarksChoice({
+															placement: e.target
+																.value as SeferBookmarkSettings["placement"],
+														})
+													}
+												>
+													<option value="sides">שני הצדדים</option>
+													<option value="right">ימין</option>
+													<option value="left">שמאל</option>
+													<option value="top">עליון</option>
+													<option value="bottom">תחתון</option>
+													<option value="top-bottom">עליון ותחתון</option>
+												</select>
+											</label>
+											<label>
+												כיוון
+												<select
+													aria-label="כיוון סימניות"
+													value={bookmarks.orientation}
+													onChange={(e) =>
+														updateBookmarksChoice({
+															orientation: e.target
+																.value as SeferBookmarkSettings["orientation"],
+														})
+													}
+												>
+													<option value="perpendicular">
+														מאונך לשולי הספר
+													</option>
+													<option value="parallel">מקביל לשולי הספר</option>
+												</select>
+											</label>
+											<label>
+												קיבוע
+												<select
+													aria-label="קיבוע סימניות"
+													value={bookmarks.attachment}
+													onChange={(e) =>
+														updateBookmarksChoice({
+															attachment: e.target
+																.value as SeferBookmarkSettings["attachment"],
+														})
+													}
+												>
+													<option value="leaf">מסתובב עם הדף</option>
+													<option value="pinned">קבוע לספר</option>
+												</select>
+											</label>
+											<label>
+												סדר
+												<select
+													aria-label="סדר סימניות"
+													value={bookmarks.order}
+													onChange={(e) =>
+														updateBookmarksChoice({
+															order: e.target
+																.value as SeferBookmarkSettings["order"],
+														})
+													}
+												>
+													<option value="page">לפי סדר הפרקים</option>
+													<option value="reverse-page">סדר הפוך</option>
+													<option value="title">לפי שם הפרק</option>
+												</select>
+											</label>
+											<label>
+												<input
+													type="checkbox"
+													checked={bookmarks.upcomingOnly}
+													onChange={(e) =>
+														updateBookmarksChoice({
+															upcomingOnly: e.target.checked,
+														})
+													}
+												/>
+												הצג רק פרקים הבאים
+											</label>
+										</fieldset>
+									</Disclosure>
 								</fieldset>
 							</section>
 						) : (

@@ -14,7 +14,7 @@
 .errorCode {
   font-size: 6rem;
   font-weight: 800;
-  color: #1552ac;
+  color: var(--accent-600);
   margin: 0;
   line-height: 1;
   opacity: 0.15;
@@ -23,7 +23,7 @@
 .pasuk {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 12px 0;
   line-height: 1.6;
 }
@@ -42,10 +42,10 @@
 .backLink {
   display: inline-block;
   padding: 12px 32px;
-  background: #1c2c5d;
+  background: var(--accent-900);
   color: #fff;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: all 0.2s ease;
 }
@@ -67,11 +67,11 @@
 
 @media (prefers-color-scheme: dark) {
   .errorCode {
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .pasuk {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .source {
@@ -79,7 +79,7 @@
   }
 
   .backLink {
-    background: #a8b9ff;
+    background: var(--accent-200);
     color: #16213d;
   }
 

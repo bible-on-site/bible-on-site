@@ -59,3 +59,14 @@ The refreshed after captures use the ignored local Vite harness in .outputs/tele
 Every fixture mutation throws instead of sending, preparing or changing an audience. The preview disables environment-file loading and public-file serving and rejects backend imports beyond its three explicit server-function mocks. Fresh Chromium contexts have no user browser profile. Their request interceptor permits only local GET requests and refuses every external request, API/server-function request and non-GET request. The capture report records zero external, provider or mutation requests, zero page errors, no horizontal overflow and zero send clicks for both after captures. No database, AWS profile, token, provider API, authentication session or personal browser profile was accessed.
 
 The desktop and phone captures show target-neutral private-test wording, the correct public channel and the existing email actions. The iframe is scrolled into view before capture so Chromium paints its local sample contents. Reproduce the after captures from the repository root by starting the isolated Vite configuration on 127.0.0.1:3123 and then running node .outputs/telegram-visual/capture.mjs. The ignored capture-report.json records the checks and viewports. The original before capture remains the pre-Telegram baseline. The preview server was stopped after capture.
+
+## App join cards evidence (#2806)
+
+Real captures from Android emulators running the native עלון יומי join cards.
+
+- [Flyout before](app-bulletin-flyout-before.png): the app menu without a bulletin entry.
+- [Flyout after](app-bulletin-flyout-after.png): the עלון יומי flyout entry, a single row like every other destination.
+- [Phone stacked](app-bulletin-phone-stacked.png): phone viewport — the three cards stack one above the other.
+- [Tablet side by side](app-bulletin-tablet-side-by-side.png): tablet viewport — the three cards lay out side by side.
+
+The cards mirror the website's join order — Telegram, WhatsApp, email — in RTL, show the shared top bar and expose `BulletinJoin{Telegram|Whatsapp|Email}` automation identifiers with Hebrew semantic descriptions on each join button. הצטרפות opens the verified public channel `https://t.me/alhaperek`, the published `wa.me` join number with a prefilled join request, and the published subscription address with a join subject until the shared public signup API ships (see "Restore public email signup and channel/group join links" in `docs/daily-bulletin/daily-bulletin.md`). No private test groups, destination IDs or provider credentials appear in the captures.

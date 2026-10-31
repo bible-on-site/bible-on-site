@@ -20,6 +20,9 @@ partial class Build
     [Parameter("Path to AAB file for Google Play upload")]
     readonly string? AabPath;
 
+    [Parameter("Path to native debug symbols zip for Google Play upload")]
+    readonly string? AndroidSymbolsPath;
+
     [Parameter("Path to Google Play service account JSON file")]
     readonly string? GooglePlayKeyFile;
 
@@ -66,7 +69,7 @@ partial class Build
             // Upload AAB
             using var aabStream = File.OpenRead(aabFile);
             var uploadRequest = service.Edits.Bundles.Upload(GooglePlayPackageName, edit.Id, aabStream, "application/octet-stream");
-            var uploadProgress = uploadRequest.Upload();
+            var uploadProgress = UploadWithResume(uploadRequest);
 
             if (uploadProgress.Status != UploadStatus.Completed)
             {
@@ -74,7 +77,33 @@ partial class Build
             }
 
             var bundle = uploadRequest.ResponseBody;
+            Assert.True(bundle.VersionCode.HasValue, "Bundle upload returned no version code");
             Serilog.Log.Information($"Uploaded bundle with version code: {bundle.VersionCode}");
+
+            // Upload native debug symbols for the version code just uploaded
+            if (!string.IsNullOrEmpty(AndroidSymbolsPath))
+            {
+                var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+                Assert.FileExists(symbolsFile, $"Native symbols file not found: {symbolsFile}");
+                using var symbolsStream = File.OpenRead(symbolsFile);
+                var symbolsUpload = service.Edits.Deobfuscationfiles.Upload(
+                    GooglePlayPackageName,
+                    edit.Id,
+                    (int)bundle.VersionCode.Value,
+                    EditsResource.DeobfuscationfilesResource.UploadMediaUpload.DeobfuscationFileTypeEnum.NativeCode,
+                    symbolsStream,
+                    "application/octet-stream");
+                var symbolsProgress = symbolsUpload.Upload();
+                if (symbolsProgress.Status != UploadStatus.Completed)
+                {
+                    Assert.Fail($"Native symbols upload failed: {symbolsProgress.Exception?.Message}");
+                }
+                Serilog.Log.Information($"Uploaded native debug symbols for version code {bundle.VersionCode}");
+            }
+            else
+            {
+                Serilog.Log.Warning("No native debug symbols provided; Play Console will report them missing");
+            }
 
             // Assign to track
             var trackUpdate = new Track
@@ -112,6 +141,36 @@ partial class Build
             service.Edits.Commit(GooglePlayPackageName, edit.Id).Execute();
             Serilog.Log.Information("Google Play listing sync complete");
         });
+
+    // A resumable session stays open server-side, so a request that stalls past
+    // the client deadline (run 40699641279 was canceled mid-upload) resumes
+    // from the confirmed byte offset instead of re-sending the whole bundle.
+    static IUploadProgress UploadWithResume(ResumableUpload uploadRequest, int maxAttempts = 3)
+    {
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            IUploadProgress? progress = null;
+            try
+            {
+                progress = attempt == 0 ? uploadRequest.Upload() : uploadRequest.Resume();
+            }
+            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException canceled)
+            {
+                // The library already records the cancel in GetProgress(); the
+                // loop below resumes the session.
+                Serilog.Log.Debug($"AAB upload request canceled: {canceled.Message}");
+            }
+            if (progress?.Status == UploadStatus.Completed)
+            {
+                return progress;
+            }
+            if (attempt + 1 < maxAttempts)
+            {
+                Serilog.Log.Warning($"AAB upload attempt {attempt + 1} interrupted ({progress?.Exception?.Message ?? "request canceled"}); resuming session");
+            }
+        }
+        return uploadRequest.GetProgress();
+    }
 
     static AndroidPublisherService CreatePlayService(AbsolutePath keyFile)
     {
