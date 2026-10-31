@@ -152,7 +152,7 @@ Resources:
     Properties:
       FunctionName: bible-on-site-db-populator
       Description: Populates RDS MySQL database with SQL files from S3
-      Runtime: python3.11
+      Runtime: python3.14
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300 # 5 minutes
@@ -303,7 +303,7 @@ Outputs:
 #    b. Deploy:
 #       aws lambda create-function \
 #         --function-name bible-on-site-db-populator \
-#         --runtime python3.11 \
+#         --runtime python3.14 \
 #         --handler index.handler \
 #         --zip-file fileb://lambda.zip \
 #         --role <LAMBDA_ROLE_ARN> \
