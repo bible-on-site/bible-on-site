@@ -127,6 +127,16 @@ describe("SearchExperience", () => {
 		global.fetch = realFetch;
 	});
 
+	it("shows result skeletons while the first fetch is pending", async () => {
+		mockFetch.mockReturnValue(new Promise(() => {}));
+		const { container } = renderSearch({ initialQuery: "את" });
+		await act(async () => {});
+		expect(screen.getByRole("status")).toHaveTextContent("מחפש...");
+		expect(
+			container.querySelectorAll("[data-skeleton]").length,
+		).toBeGreaterThan(0);
+	});
+
 	it("renders the SSR results on first paint", () => {
 		renderSearch({
 			initialQuery: "את",

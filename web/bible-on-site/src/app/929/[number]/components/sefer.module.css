@@ -70,7 +70,7 @@
 
 .perekTextScrollWrapper::-webkit-scrollbar-thumb {
 	background-color: #90a4ae;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	border: 3px solid var(--scrollbarBG);
 }
 
@@ -111,7 +111,7 @@
 	display: block;
 	width: 100%;
 	height: auto;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 }
 
 .perekIllustrationFigure figcaption {
@@ -396,7 +396,7 @@
    verse-highlight accent so the two states stay visually distinct. */
 .pasukNum[data-pasuk-selected] {
 	background: var(--pasuk-num-color, #1c2c5d);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	box-shadow:
 		0 0 0 2px
 		color-mix(in srgb, var(--pasuk-num-color, #1c2c5d) 30%, transparent);
@@ -411,7 +411,7 @@
 		transparent
 	);
 	border: 1px solid var(--hc-muted, #d4d7e3);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	bottom: 10px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	display: flex;
@@ -429,7 +429,7 @@
 .pasukSelectionButton {
 	background: none;
 	border: 1px solid var(--pasuk-num-color, #1c2c5d);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	color: var(--pasuk-num-color, #1c2c5d);
 	cursor: pointer;
 	font: inherit;
@@ -453,7 +453,7 @@
 .perekText [id^="pasuk-"][data-pasuk-highlight] {
 	background: rgba(254, 243, 199, 0.95);
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 }
 .perekTextHeader h1 {
 	/* The original #9a92d1 measured 2.84:1 — the deeper indigo passes the
@@ -483,7 +483,7 @@
 }
 .tanahpediaLink:hover {
 	border-bottom-style: solid;
-	border-bottom-color: var(--link-accent, #1552ac);
+	border-bottom-color: var(--link-accent-hover);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -551,7 +551,7 @@
 	}
 
 	.tanahpediaLink:hover {
-		border-bottom-color: var(--link-accent, #7eb0ff);
+		border-bottom-color: var(--link-accent-hover);
 	}
 }
 

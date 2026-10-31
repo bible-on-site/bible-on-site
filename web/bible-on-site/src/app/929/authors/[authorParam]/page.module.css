@@ -23,7 +23,7 @@
 }
 
 .breadcrumb li a {
-  color: #1c2c5d;
+  color: var(--accent-900);
   text-decoration: none;
 }
 
@@ -55,7 +55,7 @@
   flex-shrink: 0;
   width: 180px;
   height: 180px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: linear-gradient(135deg, #f0f0f5, #e5e7eb);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -86,7 +86,7 @@
 .authorName {
   font-size: 2rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 16px 0;
   line-height: 1.2;
 }
@@ -104,7 +104,7 @@
   margin-top: 32px;
   padding: 24px;
   background: var(--surface-elevated);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--border-subtle);
 }
@@ -115,7 +115,7 @@
   gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #1c2c5d;
+  border-bottom: 2px solid var(--accent-900);
 }
 
 .sectionIcon {
@@ -125,7 +125,7 @@
 .sectionTitle {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0;
   letter-spacing: 0.02em;
 }
@@ -146,7 +146,7 @@
 .notFoundTitle {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 16px 0;
 }
 
@@ -187,7 +187,7 @@
   .authorName,
   .sectionTitle,
   .articleName {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .breadcrumb li.active,
@@ -219,7 +219,7 @@
   }
 
   .articleCard:hover {
-    border-color: #a8b9ff;
+    border-color: var(--accent-200);
   }
 
   .articleMeta {

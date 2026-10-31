@@ -1,6 +1,6 @@
 /* Set the nav background color for perek pages */
 body:has(.perek-layout) .top-nav {
-  background-color: #1552ac;
+  background-color: var(--accent-600);
 }
 
 /* Contain horizontal overflow (issue #1270) so the page does not scroll horizontally */
