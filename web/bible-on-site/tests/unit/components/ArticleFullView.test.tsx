@@ -146,12 +146,12 @@ describe("ArticleFullView", () => {
 		render(
 			<ArticleFullView
 				article={baseArticle}
-				dedicationLines={['מוקדש לראובן (לע"נ)']}
+				dedicationLines={['לע"נ ראובן']}
 				onBack={jest.fn()}
 				fullPage
 			/>,
 		);
-		expect(screen.getByText('מוקדש לראובן (לע"נ)')).toBeTruthy();
+		expect(screen.getByText('לע"נ ראובן')).toBeTruthy();
 	});
 
 	it("renders nothing extra when no dedication lines apply", () => {

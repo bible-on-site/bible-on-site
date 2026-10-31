@@ -96,9 +96,10 @@ export const getSeferDedications = cachedPerKey(
  * this aggregate tag for every intersected sefer, alongside the flat tags.
  */
 export const getSeferPerekDedicationLines = cachedPerKey(
-	// Tags are not part of unstable_cache's identity. Give this tag contract
-	// a fresh key so persisted entries cannot retain the old truncated tags.
-	"sefer-perek-dedication-lines-v2",
+	// The key is the cache identity: bump it whenever the tag contract or
+	// the cached line wording (formatDedication) changes, so persisted
+	// entries cannot retain stale tags or copy.
+	"sefer-perek-dedication-lines-v3",
 	(seferId: number) => String(seferId),
 	(key) => [COLLECTION_TAGS.dedications, seferPerekDedicationsTag(Number(key))],
 	async (seferId: number): Promise<Record<number, string[]>> => {
