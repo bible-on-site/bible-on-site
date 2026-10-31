@@ -71,6 +71,7 @@ describe("web-push service", () => {
 	describe("isPushServiceEndpoint", () => {
 		it.each([
 			FCM,
+			"https://jmt17.google.com/fcm/send/x",
 			"https://updates.push.services.mozilla.com/wpush/v2/x",
 			"https://wns2-par02p.notify.windows.com/w/?token=x",
 			"https://web.push.apple.com/QGx",
@@ -82,6 +83,7 @@ describe("web-push service", () => {
 			"http://fcm.googleapis.com/fcm/send/abc",
 			"https://evil.example/fcm.googleapis.com",
 			"https://fcm.googleapis.com.evil.example/x",
+			"https://mail.google.com/x",
 			"not a url",
 			42,
 		])("rejects %s", (url) => {
