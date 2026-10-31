@@ -43,7 +43,7 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 
 /* Override border-radius: flat bottom to sit flush against book edge */
 .flipbook-toolbar {
-	border-radius: 8px 8px 0 0;
+	border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 /* Page indicator - bible-on-site customizations */
