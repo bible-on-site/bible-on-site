@@ -355,8 +355,12 @@ export const saveEntryAlias = createServerFn({ method: "POST" })
 			};
 		});
 
-		await revalidateWebsite(pediaInvalidation(pediaEntryPath(name)));
-		return saved;
+		// Surface the invalidation outcome so the editor can warn when the
+		// public site still serves the previous name/content (#2763).
+		const websiteFresh = await revalidateWebsite(
+			pediaInvalidation(pediaEntryPath(name)),
+		);
+		return { ...saved, websiteFresh };
 	});
 
 /**
@@ -399,8 +403,10 @@ export const removeEntryFromAlias = createServerFn({ method: "POST" })
 			return { name, remainingTargets: targets.length };
 		});
 
-		await revalidateWebsite(pediaInvalidation(pediaEntryPath(name)));
-		return result;
+		const websiteFresh = await revalidateWebsite(
+			pediaInvalidation(pediaEntryPath(name)),
+		);
+		return { ...result, websiteFresh };
 	});
 
 /** Deletes the name entirely — every entry's association with it. */
@@ -421,8 +427,10 @@ export const deleteAliasName = createServerFn({ method: "POST" })
 			return { name, removedTargets: targets.length };
 		});
 
-		await revalidateWebsite(pediaInvalidation(pediaEntryPath(name)));
-		return removed;
+		const websiteFresh = await revalidateWebsite(
+			pediaInvalidation(pediaEntryPath(name)),
+		);
+		return { ...removed, websiteFresh };
 	});
 
 /**

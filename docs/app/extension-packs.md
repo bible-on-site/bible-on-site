@@ -30,9 +30,12 @@ runtimes where managed packs cannot exist (see below). Release artifacts are
 checked by `verify_recitation_assets.py` (AAB modules/manifests, IPA embedded
 downloader extension, per-pack `Manifest.json`/source-payload match, `.aar`
 extracted via `aa` and hashed against the catalog, staged release payload match,
-MSIX archives). The `.aar` files upload to App Store Connect separately from
-the IPA (`cd-app.yml`, `xcrun altool --upload-asset-pack` on an Xcode 26+
-toolchain).
+MSIX archives). The same verification emits `asset-packs.json` — the verified
+pack plan recording each pack's `Manifest.json`, per-file SHA-256 map,
+content fingerprint, and archive digest — which rides the release beside the
+`.aar` files. The `.aar` files are published to App Store Connect separately
+from the IPA (`cd-app.yml`, `xcrun altool --upload-asset-pack` on an Xcode 26+
+toolchain) — see reuse below.
 
 ## Install paths
 
@@ -57,8 +60,10 @@ toolchain).
 
 All pack data is **app-release-coupled**: catalogs are bundled with the app, and
 pack bytes ride the same release (inside the AAB for Android; as Apple-hosted
-`.aar` archives uploaded to App Store Connect by `cd-app.yml` for iOS). There is
-no independent server-side pack update channel.
+`.aar` archives for iOS). There is no independent server-side pack update
+channel — but on iOS the *pack version* is not app-build-coupled: unchanged
+payloads reuse the existing App Store Connect version instead of minting a new
+one (see "Release-time pack reuse" below).
 
 Managed Background Assets require **iOS 26 / macOS 26** — plus the app-group
 entitlement, which unsigned simulator/dev builds lack. On runtimes without
@@ -72,7 +77,83 @@ and the optional search-index companion is best-effort: if it is absent the
 index rebuilds on device, as with an older pack that never carried it.
 
 - App update → store delivers updated packs (PAD packs and Apple-hosted asset
-  packs version with the app; both stores re-download changed packs automatically).
+  packs both re-download changed packs automatically; on iOS only the packs
+  whose content actually changed received a new App Store Connect version — see
+  reuse below).
+
+## Release-time pack reuse (implemented for #2794)
+
+Apple asset-pack **versions** are independent resources: a version stays live on
+its distribution channel (internal TestFlight, external TestFlight, App Store)
+until a newer version supersedes it there. Rebuilding the app therefore does not
+require re-uploading unchanged packs — Apple serves the existing version to new
+builds on the same channel. The deploy keeps that property deliberately:
+
+| Platform | What repeats every release | What is reused |
+| -------- | -------------------------- | -------------- |
+| iOS (Apple-hosted) | `ba-package` archives are rebuilt and the plan re-verified every package run; the deploy step always re-queries App Store Connect | Pack **versions** and uploads are skipped per pack whose live version provably carries the same bytes; only changed packs upload |
+| Android (PAD) | Every AAB embeds all required `perushim_notes`/`recitation_*` modules — PAD has no independent pack releases | Nothing is omitted; unchanged zips are just identical module contents inside the new AAB |
+| Windows | Required zips stay bundled inside each MSIX | Nothing to reuse — the package is self-contained |
+| GitHub fallback | Every `app-v*` release republishes `.aar`, plan, and raw payload assets for older-runtime HTTPS delivery | Not applicable — old-release assets are never deleted or relocated |
+
+The mechanism, end to end:
+
+1. **Verified plan** (`verify_recitation_assets.py` → `asset-packs.json`):
+   each pack's fingerprint combines its `Manifest.json` bytes with the sorted
+   per-file SHA-256 list — a schema/manifest change, a notes-DB or
+   search-index change (perushim ships both in one pack), or a single changed
+   audio byte shifts exactly that pack's identity. Archive timestamps and app
+   version numbers do not participate.
+2. **Publish decision** (`asset-pack-upload.mjs`): the deploy restores the plan
+   with the `.aar` assets, re-hashes every archive against the recorded digest
+   (a swapped archive aborts before any API call), then for each pack reads
+   App Store Connect — pack record, all versions, and the `ASSET` upload-file
+   checksums of the live (newest `COMPLETE`) version plus anything in flight.
+   Reuse requires *all* of: live version exists, its checksum (or a prior
+   receipt's version+content tie) matches this pack, and its internal beta
+   release is `READY_FOR_TESTING`. Proven differences — missing pack, a receipt
+   tying the live version to other content, wrong platform — upload a fresh
+   version. Remote bytes that are *unverifiable* (checksum differs or is absent
+   with no receipt tie) upload only when receipt evidence is complete: a
+   finished empty search is the explicit bootstrap path, but a discovery
+   failure (spawn/`ENOBUFS`, `gh` error, incomplete history, malformed
+   receipt) blocks the publish instead of justifying uploads on missing
+   evidence. A version without a resource id blocks the publish before any
+   upload.
+3. **Idempotent reconciliation**: a `PROCESSING` version already carrying our
+   bytes is waited out and reconciled, never duplicated — interrupted runs
+   converge on the next attempt (a stranded `AWAITING_UPLOAD` reservation has
+   no bytes yet, so it is simply superseded by a fresh upload). Decisions for
+   the whole fleet are made before the first upload.
+4. **Verification**: every pack — reused, reconciled, or uploaded — ends at the
+   same proof: the live version carries our bytes and is ready for internal
+   testing. The step reports `uploaded / reused / reconciled / blocked` per
+   pack; "reused" is never reported as "uploaded".
+5. **Publication receipt** (`asset-pack-publication.json` on the release):
+   per pack it records the content fingerprint, archive digest, Apple pack and
+   version ids/numbers, all three channel release linkages, the action taken,
+   and `producedBy`/`consumedBy` provenance — so a reused pack's original
+   producer release stays visible and a later deploy can prove reuse even when
+   Apple exposes no checksum for a version. Discovery scans release pages via
+   `gh api --jq` (bounded output regardless of payload size — #2842 ENOBUFS),
+   distinguishes *no receipt exists* (bootstrap) from *receipt unreadable*
+   (blocked), and never synthesizes a receipt after a failed read. Read-only
+   App Store Connect lookups retry transient timeout/network and
+   throttling/5xx answers inside a bounded budget; permanent 4xx or malformed
+   answers fail immediately.
+
+Release-side consequences that must keep holding:
+
+- An app-only milestone (no payload change) performs zero `altool` uploads and
+  creates zero new pack versions; a one-book recitation change uploads exactly
+  one `.aar`.
+- The receipt's `versionId` tie is the fallback when Apple withholds upload
+  metadata — content equality is never inferred from a pack identifier, a
+  version number, or "latest" alone.
+- Older app builds on the same channel keep working: publishing a changed pack
+  version supersedes only that pack's channel pointer, and the on-device
+  generation-scoped extraction (`asset_packs/{version}-{build}`) re-extracts
+  instead of trusting stale files.
 - Commentary: `TryUpgradeFromPadAsync` compares `build_timestamp` on every init and
   replaces the local DB when the store copy is newer. The bundled catalog is
   refreshed by hash comparison on every `PerushimCatalogService.InitializeAsync`.
@@ -131,7 +212,10 @@ Unit-level (CI, mocked `IPadDeliveryService`): install permutations, per-book
 scope, cancellation/resume, corrupt-pack rejection, update reuse, restart/offline
 use, removal semantics — `RecitationServiceTests`, `PerushimNotesServiceTests`,
 `NotesDeliveryTests`, `AssetPackCacheTests`, `PerushimAttributionTests`, and
-`ExtensionPackLifecycleTests`.
+`ExtensionPackLifecycleTests`. Release-time reuse is covered by
+`asset-pack-upload.test.mjs` (reuse/upload/settle/block decisions, interrupted
+upload reconciliation, plan-digest guards) and
+`test_verify_recitation_assets.py` (plan emission and fingerprint sensitivity).
 
 Not exercised anywhere:
 

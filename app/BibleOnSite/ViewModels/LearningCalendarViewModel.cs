@@ -729,7 +729,16 @@ public partial class LearningCalendarViewModel : ObservableObject
             return;
         }
 
-        await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
+        try
+        {
+            await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Reader navigation failed for perekId {perekId}: {ex}");
+        }
     }
 
     public bool CanExportPdf => _policy?.CanExport(ViewMode switch
