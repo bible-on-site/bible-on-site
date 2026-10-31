@@ -26,6 +26,7 @@ public static class AccessibleItemText
 
         var builder = new StringBuilder(text.Length);
         var pendingSpace = false;
+        Span<char> utf16 = stackalloc char[2];
         foreach (var rune in text.EnumerateRunes())
         {
             if (IsPrivateUse(rune.Value))
@@ -45,7 +46,7 @@ public static class AccessibleItemText
                 pendingSpace = false;
             }
 
-            builder.Append(rune.ToString());
+            builder.Append(utf16[..rune.EncodeToUtf16(utf16)]);
         }
 
         return builder.ToString();
