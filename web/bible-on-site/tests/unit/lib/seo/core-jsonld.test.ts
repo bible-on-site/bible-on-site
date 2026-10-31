@@ -53,6 +53,7 @@ function perushDetail(over: Partial<PerushDetail> = {}): PerushDetail {
 	return {
 		id: 3,
 		name: 'רש"י',
+		parshanId: 55,
 		parshanName: "רבי שלמה יצחקי",
 		parshanBirthYear: 1040,
 		notes: [],

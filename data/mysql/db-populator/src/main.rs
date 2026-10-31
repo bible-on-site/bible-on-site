@@ -297,6 +297,14 @@ async fn main() -> Result<()> {
         // tables and adds the scope link tables; runs after the Tanahpedia
         // structure so the entry link FK resolves.
         apply_dedication_upgrade(&mut conn, base_path).await?;
+
+        let external_reference_path = base_path.join("../external_reference_structure.sql");
+        execute_script(
+            &mut conn,
+            &external_reference_path,
+            "external-reference-structure",
+        )
+        .await?;
     }
 
     if !cli.skip_data {

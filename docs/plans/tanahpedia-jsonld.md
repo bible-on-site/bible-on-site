@@ -53,7 +53,7 @@ Two tiers:
    - `absUrl(path)` / `id(path, frag)` → canonical URL / stable `@id`
    - `organizationNode()`, `websiteNode()`, `breadcrumbNode(items)`, plus entity builders
    - `hasContent(html)` → strip tags+whitespace, non-empty (gates content-derived fields)
-   - `sameAsFor(kind, id)` → looks up external refs (see §7); returns `undefined` when none
+   - `sameAsFor(kind, id)` → looks up external refs (see §7); returns `[]` when none
 4. New server component `src/app/components/JsonLd.tsx` → renders the `<script>` tag.
 5. Root layout: fix `lang="he"` + `dir="rtl"`; emit the site graph once —
    `Organization` (logo, social `sameAs`) + `WebSite` (+ `SearchAction` when site search exists).
@@ -124,22 +124,25 @@ A single **polymorphic** table serves all three subject kinds, so Tanahpedia ent
 | `PARSHAN` | `parshan` | smallint | historical commentators (Rashi/Ramban…) — mostly have wiki pages |
 | `TANAH_AUTHOR` | `tanah_author` | int | modern 929 essayists — **privacy-sensitive** (see below) |
 
-**Proposed schema** (`data/mysql/external_reference_structure.sql`, populated by the Rust `db-populator`):
+**Shipped schema** (`data/mysql/external_reference_structure.sql`, additive `CREATE TABLE IF NOT EXISTS`;
+the composite primary key is the uniqueness rule, so no surrogate id or timestamps):
 
 ```sql
-CREATE TABLE `external_reference` (
-  `id` char(36) NOT NULL,
+CREATE TABLE IF NOT EXISTS `external_reference` (
   `subject_kind` enum('TANAHPEDIA_ENTITY','PARSHAN','TANAH_AUTHOR') NOT NULL,
   `subject_id` varchar(36) NOT NULL,          -- holds UUID or numeric id as text
   `source` enum('WIKIDATA','WIKIPEDIA_HE','WIKIPEDIA_EN','SEFARIA','OFFICIAL') NOT NULL,
   `url` varchar(1024) NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_subject_source` (`subject_kind`,`subject_id`,`source`)
+  PRIMARY KEY (`subject_kind`,`subject_id`,`source`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
+- **Seed** (`data/mysql/external_reference_data.sql`, data-deploy manifest, after `perushim_data.sql`):
+  Avot/Imahot entities upserted by unique `PERSON` name; top parshanim rebuilt by name on every
+  deploy because `parshan.id` is regenerated in first-seen order. No `TANAH_AUTHOR` rows.
+  The `db-populator` creates the table locally; content comes from the data deploy / `sync-from-prod`.
+- **Reader**: `sameAsFor(kind, subjectId)` in `web/bible-on-site/src/lib/seo/same-as.ts` returns
+  `[]` on a missing table (`isMissingMysqlSchema`), so it is safe ahead of the schema deploy.
 - JSON-LD builder: one lookup by `(kind, subject_id)` → `sameAs: [urls]`; omitted when none.
 - **Polymorphic tradeoff**: DRY + single lookup + one admin surface; cost = no cross-table
   FK (enforced at app layer) and it spans data domains (tanahpedia + perushim + tanah core),
