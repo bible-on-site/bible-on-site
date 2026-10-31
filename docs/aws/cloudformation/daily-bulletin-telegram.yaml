@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Optional exact-parameter access for Telegram token injection by the existing admin ECS execution role. Does not create a token, task, queue, or posting target.
+
+Parameters:
+  AdminExecutionRoleName:
+    Type: String
+    Default: ecsTaskExecutionRole
+    AllowedPattern: "[A-Za-z0-9+=,.@_-]+"
+    MaxLength: 64
+    Description: Existing role from the current admin task definition's executionRoleArn, not taskRoleArn. Deploy only if it lacks this exact parameter access.
+
+Resources:
+  TelegramBotTokenInjectionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: DailyBulletinTelegramTokenInjection
+      Roles:
+        - !Ref AdminExecutionRoleName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadOnlyTelegramTokenForContainerStartup
+            Effect: Allow
+            Action:
+              - ssm:GetParameters
+            Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-telegram-bot-token"
+
+Outputs:
+  BotTokenParameterArn:
+    Description: Existing operator-created SecureString ARN for the admin container's secrets valueFrom. Never a token value.
+    Value: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-telegram-bot-token"
+  BotTokenContainerVariable:
+    Value: BULLETIN_TELEGRAM_BOT_TOKEN
+  AdminExecutionRoleName:
+    Value: !Ref AdminExecutionRoleName
