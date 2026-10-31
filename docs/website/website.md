@@ -190,8 +190,9 @@ Readers can opt in to a browser notification with the daily perek (#1096).
   (`data/mysql/tanah_web_push_upgrade.sql`, data-deploy manifest), keyed by
   the sha256 of the endpoint. A row is the opt-in, and there is no other
   personal data. The website DB user needs `INSERT`/`DELETE`/`SELECT` on it.
-- **API**: `GET /api/push/subscription` returns the public key (404 while
-  push is unconfigured, which hides the UI), `POST` stores a
+- **API**: `GET /api/push/subscription` returns the public key (`null` while
+  push is unconfigured, which hides the UI; 200 so pages log no console
+  error), `POST` stores a
   `PushSubscription.toJSON()` body, `DELETE {endpoint}` removes it. Only
   endpoints on known browser push services (FCM, Mozilla, WNS, Apple) are
   accepted, so the sender never POSTs to arbitrary URLs.
