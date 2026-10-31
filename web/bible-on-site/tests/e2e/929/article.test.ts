@@ -74,21 +74,30 @@ test.describe("Article page", () => {
 		});
 		await expect(commandRow).toBeVisible();
 
-		// The row leads the article — above the author/title header.
+		// The row trails the article — the main content stays on top
+		// (review ask: on the standalone route the commands sit at the
+		// bottom).
 		const ordering = await articleView.evaluate((article) => {
-			const [first] = Array.from(article.children);
+			const children = Array.from(article.children);
 			const row = article.querySelector('[data-flipbook-no-flip]');
 			const header = article.querySelector("header");
+			const body = article.querySelector('[class*="articleBody"]');
+			const follows = (before: Element | null, after: Element | null) =>
+				before != null &&
+				after != null &&
+				!!(before.compareDocumentPosition(after) &
+					Node.DOCUMENT_POSITION_FOLLOWING);
 			return {
-				rowFirst: first === row,
-				rowBeforeHeader:
-					row != null &&
-					header != null &&
-					!!(row.compareDocumentPosition(header) &
-						Node.DOCUMENT_POSITION_FOLLOWING),
+				rowLast: children[children.length - 1] === row?.parentElement,
+				rowAfterHeader: follows(header, row),
+				rowAfterBody: follows(body, row),
 			};
 		});
-		expect(ordering).toEqual({ rowFirst: true, rowBeforeHeader: true });
+		expect(ordering).toEqual({
+			rowLast: true,
+			rowAfterHeader: true,
+			rowAfterBody: true,
+		});
 
 		// Return is a real link to the perek route; share is a command button.
 		await expect(

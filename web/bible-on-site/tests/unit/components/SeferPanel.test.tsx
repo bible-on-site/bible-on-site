@@ -423,12 +423,15 @@ describe("article fullscreen", () => {
 			if (sibling !== dialog) expect(sibling).toHaveAttribute("inert");
 		}
 		expect(dialog).not.toHaveAttribute("inert");
+		// The page behind the modal stops scrolling.
+		expect(document.body.style.overflow).toBe("hidden");
 		fireEvent.keyDown(document, { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 		expect(view.container.firstElementChild).not.toHaveAttribute("inert");
 		for (const sibling of document.body.children) {
 			expect(sibling).not.toHaveAttribute("inert");
 		}
+		expect(document.body.style.overflow).toBe("");
 	});
 
 	it("ignores non-Escape keys and closes on the overlay's own control", async () => {
@@ -441,6 +444,7 @@ describe("article fullscreen", () => {
 		await screen.findByRole("dialog");
 		fireEvent.keyDown(document, { key: "x" });
 		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "x" });
 		expect(dialog).toBeTruthy();
 		fireEvent.click(
 			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
@@ -528,6 +532,11 @@ describe("article fullscreen", () => {
 		expect(
 			within(dialog).getByRole("heading", { name: "מאמר ראשון" }),
 		).toBeTruthy();
+		// Closing works even with no body scroller to snapshot.
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 	});
 
 	it("mirrors the embedded reading position into fullscreen (#2786)", async () => {
@@ -548,6 +557,28 @@ describe("article fullscreen", () => {
 		expect(
 			dialog.querySelector<HTMLElement>("[data-article-body]")?.scrollTop,
 		).toBe(120);
+	});
+
+	it("restores the fullscreen reading position back to the embedded body (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		const dialogBody = dialog.querySelector<HTMLElement>("[data-article-body]");
+		expect(dialogBody).not.toBeNull();
+		// biome-ignore lint/style/noNonNullAssertion: asserted above
+		dialogBody!.scrollTop = 88;
+		// Escape raised inside the dialog closes it (the document listener is
+		// the fallback for focus outside the dialog).
+		fireEvent.keyDown(dialog, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(
+			view.container.querySelector<HTMLElement>("[data-article-body]")
+				?.scrollTop,
+		).toBe(88);
 	});
 
 	it("returns to the articles grid from fullscreen, not just out of it (#2786)", async () => {
