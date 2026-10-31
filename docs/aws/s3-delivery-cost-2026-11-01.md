@@ -118,6 +118,26 @@ Canonical catalog URLs, paths, source identities, checksums, packaged bytes
 and offline playback stay the same. Corrupt CDN bytes fail integrity checks;
 there is no hidden direct-S3 retry masking a bad CDN.
 
+### Build downloads versus installed-app delivery
+
+The 496 recordings / 22 books validation describes **build-machine outputs**:
+fetch source audio, verify it and assemble book archives for distribution. It
+does not add a CDN/S3 recording downloader to the installed mobile app.
+
+Android Release installs book packs through Play Asset Delivery. Apple uses
+managed Background Assets when available, with an existing versioned GitHub
+release-payload fallback. Neither recording path has an AWS/CDN fallback to
+disable. `AudioUrl` in the catalog is canonical source metadata; playback reads
+verified local files installed from a book archive.
+
+Windows currently bundles its book archives as assets inside the main MSIX,
+rather than independently downloading store extension packs. Dorad requested
+[#2923](https://github.com/bible-on-site/bible-on-site/issues/2923), labeled
+`Devin Backlog`, to implement the Microsoft Store equivalent. AWS-backed
+resources are permitted as a last resort **for Windows only**. This PR keeps
+that runtime architecture unchanged; its repository variable is passed only
+to Python preparation steps on build machines.
+
 ## Options and expected gain
 
 | Option | Gain | Risk / decision |
