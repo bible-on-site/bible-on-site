@@ -21,19 +21,19 @@
   },
   "edition": {
     "file": "28_record_corrected.mp3",
-    "sha256": "a1a5f96591792aad7e3fb905a5a663557d4b6fdf879a4d7ab26869aa7323775b",
-    "durationSec": 255.425,
+    "sha256": "2450c3dbe5a2a369aaa276670a9ca60d95a7156083b5a281970af54a6a20dbfd",
+    "durationSec": 255.582,
     "encoder": "libmp3lame, 64 kbps, mono, 44100 Hz (same parameters as the original)",
     "createdUtc": "2026-10-31",
-    "revision": "Regenerated after review found the first edition rendered בןבן: its splice had taken donor audio past בֶּן's end into בְּתוּאֵל's opening (~50.86-51.27 s). Donor window is now pinned to בֶּן alone (Whisper word timestamps on the original: 50.42-50.74 s).",
+    "revision": "Third build. First rendered בןבן (donor ran past בֶּן into בְּתוּאֵל); second clipped יִשְׁמָעֵאל's tail (in-joint at 91.19 s sat inside the word's final vowel). Donor stays pinned to בֶּן alone (50.42-50.74 s); the in-joint now lands a little after יִשְׁמָעֵאל completes (~91.33 s), at 91.34 s, per review.",
     "note": "Full-length corrected edition derived from the verified original. One additional MP3 encode generation applies to the whole file; the archival original is untouched and remains the source of record."
   },
   "edits": [
     {
       "type": "donor-splice",
       "target": {
-        "removedSec": [91.19, 91.60],
-        "content": "בַּת complete (vowel ~91.20-91.36, ת closure ~91.36-91.45, ת release ~91.455-91.52) plus the inter-word gap to אַבְרָהָם"
+        "removedSec": [91.34, 91.60],
+        "content": "בַּת (consonant+vowel burst ~91.44-91.52) plus the inter-word gap to אַבְרָהָם. יִשְׁמָעֵאל's tail completes ~91.33 s and is fully preserved before the in-joint."
       },
       "donor": {
         "insertedSec": [50.42, 50.74],
@@ -48,7 +48,7 @@
     "Edition SHA-256 bound above; original SHA-256 verified against the published S3 object before editing.",
     "Isolated corrected syllable listened to directly: heard as בֶּן, not בַּת.",
     "Whole pasuk 9 of the regenerated edition listened to end to end: '…מָחֲלַת בַּת־יִשְׁמָעֵאל בֶּן־אַבְרָהָם אֲחוֹת נְבָיוֹת עַל־נָשָׁיו לוֹ לְאִשָּׁה' — exactly one בֶּן, no remnant of בַּת, no audible splice artifact.",
-    "Whisper word timestamps re-run on the regenerated edition: בֶּן lands at ~91.22-91.48 s followed directly by אַבְרָהָם at ~91.48 s — a single token, no doubled בןבן.",
+    "Whisper word timestamps re-run on the regenerated edition: יִשְׁמָעֵאל completes at ~91.34 s (full tail, nothing clipped), בֶּן 91.34-91.66 s, אַבְרָהָם follows — a single token, no doubled בןבן.",
     "Secondary report inspected: עֵשָׂו at the start of the same verse completes its final ו sound naturally before אֶל־יִשְׁמָעֵאל — not clipped in the source.",
     "Joint-continuity measured: peak/RMS across both splice joints matches surrounding speech (no clicks)."
   ],
