@@ -1,7 +1,7 @@
 """Lambda function for deploying SQL data to RDS MySQL.
 
 This Lambda is deployed as: bible-on-site-db-populator
-Runtime: Python 3.11
+Runtime: Python 3.14
 Handler: index.handler
 
 Deployment:
