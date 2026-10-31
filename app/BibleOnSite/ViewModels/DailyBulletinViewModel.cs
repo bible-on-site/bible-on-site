@@ -7,7 +7,7 @@ using Microsoft.Maui.ApplicationModel;
 namespace BibleOnSite.ViewModels;
 
 /// <summary>
-/// עלון יומי join carousel (#2806): the three public bulletin channels —
+/// עלון יומי join cards (#2806): the three public bulletin channels —
 /// Telegram, WhatsApp and email — in the website's card order. Cards launch
 /// the external app through <see cref="ILauncher"/> and surface an in-app
 /// alert when the destination is unavailable or the launch fails.
@@ -30,12 +30,8 @@ public partial class DailyBulletinViewModel : ObservableObject
         _navigator = navigator;
     }
 
-    /// <summary>The three join cards; bound both to the carousel and the indicator.</summary>
+    /// <summary>The three join cards; bound to the page's wrapping card layout.</summary>
     public IReadOnlyList<BulletinJoinCard> Cards => BulletinJoinCards.All;
-
-    /// <summary>The focused card — synced two-way with the carousel/indicator.</summary>
-    [ObservableProperty]
-    private int _position;
 
     /// <summary>
     /// Opens the card's public join destination. A failed or unavailable
