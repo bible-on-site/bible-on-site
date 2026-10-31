@@ -417,4 +417,144 @@ describe("TopNavAccessibility", () => {
 			unmount();
 		}
 	});
+
+	describe("undo after reset", () => {
+		const resetButton = () =>
+			screen.getByRole("button", { name: "איפוס התאמות נגישות" });
+		const undoButton = () =>
+			screen.queryByRole("button", { name: "ביטול האיפוס" });
+		const liveRegion = () =>
+			panel()?.querySelector('p[role="status"]') as HTMLElement;
+
+		const seedAndReset = () => {
+			localStorage.setItem(
+				READER_SETTINGS_STORAGE_KEY,
+				JSON.stringify({
+					fontStep: 7,
+					lineStep: 4,
+					wordStep: 3,
+					fontId: 1,
+					v: 2,
+				}),
+			);
+			localStorage.setItem(
+				SITE_A11Y_STORAGE_KEY,
+				JSON.stringify({ contrast: true, links: false, v: 1 }),
+			);
+			render(<TopNavAccessibility />);
+			fireEvent.click(trigger());
+			fireEvent.click(resetButton());
+		};
+
+		afterEach(() => {
+			jest.useRealTimers();
+		});
+
+		it("restores the pre-reset settings, re-applies them and announces it", () => {
+			seedAndReset();
+			expect(storedA11y()).toMatchObject({ contrast: false });
+
+			// biome-ignore lint/style/noNonNullAssertion: offered right after a non-default reset
+			fireEvent.click(undoButton()!);
+
+			expect(storedSettings()).toMatchObject({
+				fontStep: 7,
+				lineStep: 4,
+				wordStep: 3,
+				fontId: 1,
+			});
+			expect(storedA11y()).toMatchObject({ contrast: true, links: false });
+			expect(
+				document.documentElement.style.getPropertyValue("--perek-font-scale"),
+			).toBe(String(PEREK_FONT_SCALES[7]));
+			expect(document.documentElement.dataset.a11yContrast).toBe("high");
+			expect(
+				screen.getByRole("checkbox", { name: "ניגודיות גבוהה" }),
+			).toBeChecked();
+			expect(liveRegion()).toHaveTextContent("שוחזרו");
+			expect(undoButton()).not.toBeInTheDocument();
+			expect(resetButton()).toHaveFocus();
+		});
+
+		it("expires the offer after the timeout, keeping the reset", () => {
+			jest.useFakeTimers();
+			seedAndReset();
+			expect(undoButton()).toBeInTheDocument();
+
+			act(() => {
+				jest.advanceTimersByTime(10_000);
+			});
+
+			expect(undoButton()).not.toBeInTheDocument();
+			expect(storedA11y()).toMatchObject({ contrast: false });
+			expect(liveRegion()).toHaveTextContent("אופסו לברירת המחדל");
+		});
+
+		it("pauses expiry while the undo button is focused or hovered", () => {
+			jest.useFakeTimers();
+			seedAndReset();
+
+			// biome-ignore lint/style/noNonNullAssertion: offered right after a non-default reset
+			fireEvent.focus(undoButton()!);
+			act(() => {
+				jest.advanceTimersByTime(30_000);
+			});
+			expect(undoButton()).toBeInTheDocument();
+
+			// biome-ignore lint/style/noNonNullAssertion: still offered while paused
+			fireEvent.blur(undoButton()!);
+			// biome-ignore lint/style/noNonNullAssertion: still offered while paused
+			fireEvent.mouseEnter(undoButton()!);
+			act(() => {
+				jest.advanceTimersByTime(30_000);
+			});
+			expect(undoButton()).toBeInTheDocument();
+
+			// biome-ignore lint/style/noNonNullAssertion: still offered while paused
+			fireEvent.mouseLeave(undoButton()!);
+			act(() => {
+				jest.advanceTimersByTime(10_000);
+			});
+			expect(undoButton()).not.toBeInTheDocument();
+		});
+
+		it("offers no undo when the settings were already at default", () => {
+			render(<TopNavAccessibility />);
+			fireEvent.click(trigger());
+			fireEvent.click(resetButton());
+			expect(undoButton()).not.toBeInTheDocument();
+		});
+
+		it("drops the offer once a setting is changed after the reset", () => {
+			seedAndReset();
+			fireEvent.click(
+				screen.getByRole("checkbox", { name: "קו תחתון לקישורים" }),
+			);
+			expect(undoButton()).not.toBeInTheDocument();
+
+			fireEvent.click(resetButton());
+			expect(undoButton()).toBeInTheDocument();
+			fireEvent.change(screen.getByRole("slider", { name: "גודל גופן" }), {
+				target: { value: "5" },
+			});
+			expect(undoButton()).not.toBeInTheDocument();
+		});
+
+		it("drops the offer when the menu closes", () => {
+			seedAndReset();
+			fireEvent.keyDown(document, { key: "Escape" });
+			fireEvent.click(trigger());
+			expect(undoButton()).not.toBeInTheDocument();
+			expect(storedA11y()).toMatchObject({ contrast: false });
+		});
+
+		it("keeps the statement link last while the undo is offered", () => {
+			seedAndReset();
+			const focusables = Array.from(
+				panel()?.querySelectorAll("input, select, button, a[href]") ?? [],
+			);
+			expect(focusables.at(-2)).toHaveTextContent("ביטול האיפוס");
+			expect(focusables.at(-1)).toHaveAttribute("href", "/accessibility");
+		});
+	});
 });

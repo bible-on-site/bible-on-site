@@ -79,7 +79,35 @@
 	background: var(--surface-muted, #e9eff8);
 }
 
+.reset:active {
+	background: var(--border-subtle, #e1e7f0);
+}
+
+/* Timed undo offered right after a reset (act-now + undo instead of a
+   confirm step). Link-styled so it reads as secondary to the reset. */
+.undo {
+	display: block;
+	margin: 4px 0 0;
+	padding: 4px 0;
+	border: 0;
+	background: none;
+	color: var(--link-accent, #1552ac);
+	font: inherit;
+	font-weight: 600;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.undo:hover {
+	text-decoration-thickness: 2px;
+}
+
+.undo:active {
+	opacity: 0.7;
+}
+
 .reset:focus-visible,
+.undo:focus-visible,
 .controls input:focus-visible,
 .controls select:focus-visible,
 .statement:focus-visible {
