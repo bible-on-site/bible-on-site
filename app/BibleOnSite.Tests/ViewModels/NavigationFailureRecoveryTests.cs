@@ -10,6 +10,7 @@ using Moq.Protected;
 
 namespace BibleOnSite.Tests.ViewModels;
 
+/// <summary>A failed platform transition must leave the current page usable and allow a later attempt.</summary>
 [Collection(PreferencesServiceCollection.Name)]
 public sealed class NavigationFailureRecoveryTests : IDisposable
 {
@@ -49,7 +50,7 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
         Destination destination, bool asynchronousFailure)
     {
         var navigator = new Mock<IAppNavigator>(MockBehavior.Strict);
-        var (command, parameter, route) = CreateCommand(destination, navigator.Object);
+        var (command, parameter, route, assertState) = CreateCommand(destination, navigator.Object);
         var failure = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var sequence = navigator.SetupSequence(n => n.GoToAsync(route));
         if (asynchronousFailure)
@@ -73,11 +74,14 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
 
         firstAttempt.IsCompletedSuccessfully.Should().BeTrue("bound command failures must be contained");
         command.IsRunning.Should().BeFalse();
+        command.CanExecute(parameter).Should().BeTrue();
+        assertState();
         navigator.Verify(n => n.GoToAsync(route), Times.Once);
 
         await command.ExecuteAsync(parameter);
 
         command.IsRunning.Should().BeFalse();
+        assertState();
         navigator.Verify(n => n.GoToAsync(route), Times.Exactly(2),
             "a failed attempt must release the command and any view-model navigation gate");
         navigator.VerifyNoOtherCalls();
@@ -91,7 +95,8 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
         var share = new Mock<IShare>(MockBehavior.Strict);
         var navigator = new Mock<IAppNavigator>(MockBehavior.Strict);
         var model = new ArticleDetailViewModel(navigator.Object, share.Object);
-        model.SetArticle(CreateArticle());
+        var article = CreateArticle();
+        model.SetArticle(article);
         var requests = new List<ShareTextRequest>();
         var failure = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         share.Setup(s => s.RequestAsync(It.IsAny<ShareTextRequest>()))
@@ -113,8 +118,13 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
         firstAttempt.IsCompletedSuccessfully.Should().BeTrue();
         requests.Should().ContainSingle();
         model.ShareCommand.IsRunning.Should().BeFalse();
+        model.ShareCommand.CanExecute(null).Should().BeTrue();
+        AssertArticleState(model, article);
 
         await model.ShareCommand.ExecuteAsync(null);
+
+        model.ShareCommand.IsRunning.Should().BeFalse();
+        AssertArticleState(model, article);
 
         requests.Should().HaveCount(2);
         foreach (var request in requests)
@@ -207,10 +217,12 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
         notifications.Should().BeEmpty("radio deselection is a no-op, including preference notifications");
     }
 
-    private (IAsyncRelayCommand Command, object? Parameter, string Route) CreateCommand(
+    private (IAsyncRelayCommand Command, object? Parameter, string Route, Action AssertState) CreateCommand(
         Destination destination, IAppNavigator navigator)
     {
         var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        preferences.FontFactor = 1.25;
+        preferences.RecitationVolume = 0.35;
         var recitation = new RecitationService(_files.Object, _delivery.Object);
         var database = new LocalDatabaseService(_files.Object);
         var perekData = new PerekDataService(database);
@@ -220,7 +232,7 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
             var notes = PerushimNotesService.CreateForTesting(_delivery.Object,
                 Path.Join(Path.GetTempPath(), Path.GetRandomFileName()));
             var settings = new PreferencesViewModel(preferences, notes, recitation, navigator);
-            return destination switch
+            (IAsyncRelayCommand Command, object? Parameter, string Route) selected = destination switch
             {
                 Destination.Display => (settings.OpenDisplayCommand, null, "DisplayPreferencesPage"),
                 Destination.Perek => (settings.OpenPerekCommand, null, "PerekPreferencesPage"),
@@ -229,57 +241,141 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
                 Destination.Sound => (settings.OpenSoundCommand, null, "SoundPreferencesPage"),
                 _ => (settings.OpenSupportCommand, null, "SupportPreferencesPage")
             };
+            return (selected.Command, selected.Parameter, selected.Route, () =>
+            {
+                settings.FontFactor.Should().Be(1.25);
+                preferences.FontFactor.Should().Be(1.25);
+            });
         }
 
         if (destination is Destination.RecitationSound or Destination.RecitationPacks)
         {
             var settings = new RecitationPreferencesViewModel(recitation, preferences, navigator);
-            return destination == Destination.RecitationSound
-                ? (settings.OpenSoundCommand, null, "SoundPreferencesPage?focus=recitation")
-                : (settings.OpenExtensionPacksCommand, null, "ExtensionPacksPage");
+            IAsyncRelayCommand command = destination == Destination.RecitationSound
+                ? settings.OpenSoundCommand : settings.OpenExtensionPacksCommand;
+            var route = destination == Destination.RecitationSound
+                ? "SoundPreferencesPage?focus=recitation" : "ExtensionPacksPage";
+            return (command, null, route, () =>
+            {
+                settings.Volume.Should().Be(0.35);
+                preferences.RecitationVolume.Should().Be(0.35);
+            });
         }
 
         if (destination is Destination.ArticleBack or Destination.ArticleAuthor)
         {
             var detail = new ArticleDetailViewModel(navigator, new Mock<IShare>(MockBehavior.Strict).Object);
-            detail.SetArticle(CreateArticle());
-            return destination == Destination.ArticleBack
-                ? (detail.GoBackCommand, null, "..")
-                : (detail.GoToAuthorCommand, null, "ArticlesPage?authorId=3&authorName=Test%20Author");
+            var article = CreateArticle();
+            detail.SetArticle(article);
+            IAsyncRelayCommand command = destination == Destination.ArticleBack
+                ? detail.GoBackCommand : detail.GoToAuthorCommand;
+            var route = destination == Destination.ArticleBack
+                ? ".." : "ArticlesPage?authorId=3&authorName=Test%20Author";
+            return (command, null, route, () => AssertArticleState(detail, article));
+        }
+
+        if (destination == Destination.Article)
+        {
+            var listing = new ArticlesViewModel(new StarterService(_client, _files.Object),
+                perekData, navigator, new ArticleService(_client));
+            var article = CreateArticle();
+            listing.Articles.Add(article);
+            return (listing.OpenArticleCommand, article, "articleDetail?articleId=7&perekId=42", () =>
+            {
+                listing.Articles.Should().ContainSingle().Which.Should().BeSameAs(article);
+                listing.IsLoading.Should().BeFalse();
+            });
+        }
+
+        if (destination == Destination.Parasha)
+        {
+            var listing = new ParashaListViewModel(new ParashaDataService(database), perekData, navigator);
+            var unit = new ParashaUnit
+            {
+                UnitId = 12, Slug = "test", SeferName = "Test", Heading = "Test", TorahRange = new ScriptureRange()
+            };
+            var group = new ParashaSeferGroup("Test") { unit };
+            listing.Groups.Add(group);
+            return (listing.OpenParashaCommand, unit, "ParashaPage?unitId=12", () =>
+            {
+                listing.Groups.Should().ContainSingle().Which.Should().BeSameAs(group);
+                group.Should().ContainSingle().Which.Should().BeSameAs(unit);
+                listing.IsLoading.Should().BeFalse();
+            });
         }
 
         var landing = new TanahpediaViewModel(_pedia.Object, navigator);
-        var entry = new TanahpediaEntryViewModel(_pedia.Object, navigator, perekData, _dedications.Object);
+        var recent = new TanahpediaEntry { UniqueName = "Current", Title = "Current entry" };
+        landing.RecentEntries.Add(recent);
+        Action assertLandingState = () =>
+        {
+            landing.RecentEntries.Should().ContainSingle().Which.Should().BeSameAs(recent);
+            landing.HasError.Should().BeFalse();
+        };
+        var category = new TanahpediaEntityTypeViewModel(_pedia.Object, navigator)
+        {
+            CategoryKey = "PERSON", EntityType = "PERSON"
+        };
+        var title = category.Title;
+        var entry = new TanahpediaEntryViewModel(_pedia.Object, navigator, perekData, _dedications.Object)
+        {
+            UniqueName = "Current", Title = "Current entry", Content = "<p>Current content</p>"
+        };
+        Action assertEntryState = () =>
+        {
+            entry.UniqueName.Should().Be("Current");
+            entry.Title.Should().Be("Current entry");
+            entry.Content.Should().Be("<p>Current content</p>");
+            entry.HasEntryHistory.Should().BeFalse();
+        };
         return destination switch
         {
-            Destination.Article => (new ArticlesViewModel(new StarterService(_client, _files.Object),
-                perekData, navigator, new ArticleService(_client)).OpenArticleCommand,
-                CreateArticle(), "articleDetail?articleId=7&perekId=42"),
             Destination.LandingCategory => (landing.OpenCategoryCommand,
                 new TanahpediaCategoryItem { Category = TanahpediaTaxonomy.Find("KING")! },
-                "tanahpediaCategory?key=KING&entityType=PERSON&sub=KING"),
+                "tanahpediaCategory?key=KING&entityType=PERSON&sub=KING", assertLandingState),
             Destination.LandingEntry => (landing.OpenEntryCommand, "entry / name",
-                "tanahpediaEntry?uniqueName=entry%20%2F%20name"),
-            Destination.CategoryEntry => (new TanahpediaEntityTypeViewModel(_pedia.Object, navigator).OpenEntryCommand,
-                "entry / name", "tanahpediaEntry?uniqueName=entry%20%2F%20name"),
-            Destination.EntryCategory => (entry.OpenEntityCategoryCommand,
-                new TanahpediaLinkedEntity { EntityType = "PERSON" }, "tanahpediaCategory?key=PERSON&entityType=PERSON"),
-            Destination.EntryBack => (entry.GoBackCommand, null, ".."),
-            Destination.CalendarReader => (new LearningCalendarViewModel(new PerekScheduleService(database),
-                perekData, navigator).OpenPerekCommand, new CalendarCellViewModel { PerekId = 305 },
-                AppRoutes.CalendarReader + "?perekId=305"),
-            Destination.Parasha => (new ParashaListViewModel(new ParashaDataService(database), perekData, navigator)
-                .OpenParashaCommand, new ParashaUnit
+                "tanahpediaEntry?uniqueName=entry%20%2F%20name", assertLandingState),
+            Destination.CategoryEntry => (category.OpenEntryCommand, "entry / name",
+                "tanahpediaEntry?uniqueName=entry%20%2F%20name", () =>
                 {
-                    UnitId = 12, Slug = "test", SeferName = "Test", Heading = "Test", TorahRange = new ScriptureRange()
-                }, "ParashaPage?unitId=12"),
+                    category.CategoryKey.Should().Be("PERSON");
+                    category.EntityType.Should().Be("PERSON");
+                    category.Title.Should().Be(title);
+                }),
+            Destination.EntryCategory => (entry.OpenEntityCategoryCommand,
+                new TanahpediaLinkedEntity { EntityType = "PERSON", EntityName = "Current person" },
+                "tanahpediaCategory?key=PERSON&entityType=PERSON", assertEntryState),
+            Destination.EntryBack => (entry.GoBackCommand, null, "..", assertEntryState),
+            Destination.CalendarReader => CreateCalendarReaderCommand(database, perekData, navigator),
             _ => throw new ArgumentOutOfRangeException(nameof(destination))
         };
+    }
+
+    private static (IAsyncRelayCommand Command, object? Parameter, string Route, Action AssertState)
+        CreateCalendarReaderCommand(LocalDatabaseService database, PerekDataService perekData, IAppNavigator navigator)
+    {
+        var calendar = new LearningCalendarViewModel(new PerekScheduleService(database), perekData, navigator);
+        var cell = new CalendarCellViewModel { PerekId = 305 };
+        calendar.Cells.Add(cell);
+        return (calendar.OpenPerekCommand, cell, AppRoutes.CalendarReader + "?perekId=305", () =>
+        {
+            calendar.Cells.Should().ContainSingle().Which.Should().BeSameAs(cell);
+            cell.PerekId.Should().Be(305);
+            calendar.IsLoading.Should().BeFalse();
+        });
+    }
+
+    private static void AssertArticleState(ArticleDetailViewModel model, Article article)
+    {
+        model.Article.Should().BeSameAs(article);
+        model.HasContent.Should().BeTrue();
+        model.IsLoading.Should().BeFalse();
     }
 
     private static Article CreateArticle() => new()
     {
         Id = 7, PerekId = 42, AuthorId = 3, Abstract = "Test article", Name = "Test article",
+        ArticleContent = "<p>Current article content</p>",
         Author = new Author { Id = 3, Name = "Test Author", Details = "Test biography" }
     };
 

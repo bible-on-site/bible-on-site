@@ -121,7 +121,7 @@ Jest reporters run in a separate process from the tests themselves. The `global.
 2. **Warmup**: Global setup warms up the server to ensure coverage is collected for key pages
 3. **Execution**: Playwright tests run against the instrumented dev server
 4. **Collection**: Per-test, `window.__coverage__` (browser) and `GET /api/dev/coverage` (server's `global.__coverage__`) drain through `sanitizeCoverage`; global teardown drains the server counters one last time
-5. **Projection**: `sanitizeCoverage` rewrites every record onto the canonical instrumented map ([coverage-universe.js](../../../../web/bible-on-site/tests/util/coverage/coverage-universe.js)) and drops records that name no real instrumentable src file (#2670)
+5. **Projection**: `sanitizeCoverage` rewrites every record onto the canonical instrumented map ([coverage-universe.mjs](../../../../web/bible-on-site/tests/util/coverage/coverage-universe.mjs)) and drops records that name no real instrumentable src file (#2670)
 6. **Reporting**: Monocart reporter generates LCOV from Istanbul coverage data
 
 ### Key Files
@@ -129,7 +129,7 @@ Jest reporters run in a separate process from the tests themselves. The `global.
 - [next.config.mjs](../../../../web/bible-on-site/next.config.mjs) - Next.js SWC plugin configuration
 - [playwright-global-setup.js](../../../../web/bible-on-site/playwright-global-setup.js) - Warms up server for coverage
 - [playwright-global-teardown-coverage.js](../../../../web/bible-on-site/playwright-global-teardown-coverage.js) - Final server `__coverage__` drain via `/api/dev/coverage`
-- [tests/util/coverage/coverage-universe.js](../../../../web/bible-on-site/tests/util/coverage/coverage-universe.js) - Canonical instrumented map per src file + variant-hit projection (#2670)
+- [tests/util/coverage/coverage-universe.mjs](../../../../web/bible-on-site/tests/util/coverage/coverage-universe.mjs) - Canonical instrumented map per src file + variant-hit projection (#2670)
 - [playwright.base.config.ts](../../../../web/bible-on-site/playwright.base.config.ts) - Monocart reporter configuration
 
 ### E2E coverage variance

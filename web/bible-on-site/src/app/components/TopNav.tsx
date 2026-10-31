@@ -21,6 +21,7 @@ export function TopNav() {
 					src="/images/logos/logo-white-letters-69.webp"
 					alt='תנ"ך על הפרק'
 					loading="eager"
+					unoptimized
 					width={69}
 					height={50}
 					style={{ width: 72, height: "auto" }}

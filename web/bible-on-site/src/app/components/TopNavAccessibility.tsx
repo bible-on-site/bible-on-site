@@ -61,16 +61,21 @@ export function TopNavAccessibility() {
 	const [settings, setSettings] = useState<ReaderSettings>(
 		DEFAULT_READER_SETTINGS,
 	);
-	const [a11y, setA11y] = useState<SiteA11ySettings>(DEFAULT_SITE_A11Y_SETTINGS);
+	const [a11y, setA11y] = useState<SiteA11ySettings>(
+		DEFAULT_SITE_A11Y_SETTINGS,
+	);
 	const [announce, setAnnounce] = useState("");
 	const [lastPathname, setLastPathname] = useState(pathname);
+	const [openedPathname, setOpenedPathname] = useState<string | null>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 
 	// Route changes dismiss the popover (same convention as NavBar).
 	if (pathname !== lastPathname) {
 		setLastPathname(pathname);
-		setOpen(false);
+		// A click can already belong to the browser's destination before
+		// usePathname catches up. Preserve that opening on the same route.
+		if (openedPathname !== pathname) setOpen(false);
 		setAnnounce("");
 	}
 
@@ -191,7 +196,10 @@ export function TopNavAccessibility() {
 				aria-haspopup="dialog"
 				aria-expanded={open}
 				aria-controls={open ? PANEL_ID : undefined}
-				onClick={() => setOpen((v) => !v)}
+				onClick={() => {
+					setOpenedPathname(window.location.pathname);
+					setOpen((v) => !v);
+				}}
 			>
 				{/* Always visible at first paint — eager so the icon can never
 				    arrive after paint and feed a layout-shift candidate. */}
@@ -293,7 +301,9 @@ export function TopNavAccessibility() {
 							<input
 								type="checkbox"
 								checked={a11y.links}
-								onChange={(event) => updateA11y({ links: event.target.checked })}
+								onChange={(event) =>
+									updateA11y({ links: event.target.checked })
+								}
 							/>
 						</label>
 					</div>
