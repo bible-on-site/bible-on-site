@@ -104,4 +104,4 @@ exclude_paths:
   # object-spread/??/default-param syntax, so its "Unnecessary block"
   # findings are parse artifacts, not lone blocks. Still linted by the
   # repo's own biome/precommit.
-  - "web/bible-on-site/tests/util/coverage/coverage-universe.js"
+  - "web/bible-on-site/tests/util/coverage/coverage-universe.mjs"
