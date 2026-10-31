@@ -24,8 +24,10 @@
   transition: color 0.1s linear;
 }
 
-.footerLink:hover {
-  color: #fff;
+@media (hover: hover) {
+  .footerLink:hover {
+    color: #fff;
+  }
 }
 
 .separator {
@@ -53,8 +55,10 @@
   transition: opacity 0.1s linear;
 }
 
-.githubLink:hover {
-  opacity: 1;
+@media (hover: hover) {
+  .githubLink:hover {
+    opacity: 1;
+  }
 }
 
 /* Make GitHub icon visible on dark background */
@@ -64,6 +68,8 @@
   transition: filter 0.1s linear;
 }
 
-.githubLink:hover .githubIcon {
-  filter: brightness(0) invert(1);
+@media (hover: hover) {
+  .githubLink:hover .githubIcon {
+    filter: brightness(0) invert(1);
+  }
 }
