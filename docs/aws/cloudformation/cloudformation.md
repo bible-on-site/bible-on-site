@@ -257,12 +257,15 @@ validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/
   aliases, so no DNS/ACM change is needed to validate
 - `Managed-CachingDisabled` cache policy + `Managed-AllViewerExceptHostHeader`
   origin request policy (pass-through to the canonical nginx vhost)
-- Dedicated standard-access-log S3 bucket (parameter-gated) for request-mix
-  evidence
+- No access-log bucket: nginx logs cover forwarded origin requests and
+  CloudWatch standard metrics cover edge request/byte/error totals
 
 > **Note**: Validation-only candidate. See
 > [edge-rollout-validation.md](../edge-rollout-validation.md) for the full
 > plan, staged migration and rollback. No production routing is changed.
+> The candidate hostname is public. The live DNS and cost findings in
+> [edge-research-2026-10-27.md](../edge-research-2026-10-27.md) are preconditions
+> for any later rollout, including explicit API/admin DNS isolation.
 
 ## Data Flow: ECR → ECS → nginx → Internet
 
