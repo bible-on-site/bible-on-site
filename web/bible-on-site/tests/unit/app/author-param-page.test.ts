@@ -28,7 +28,6 @@ jest.mock("next/link", () => ({
 jest.mock("../../../src/lib/authors", () => ({
 	getAllAuthorSlugs: jest.fn(),
 	getArticlesByAuthorId: jest.fn(),
-	getAuthorById: jest.fn(),
 	getAuthorByName: jest.fn(),
 	authorNameToSlug: (name: string) => name,
 }));
@@ -41,15 +40,11 @@ import AuthorPage, {
 import {
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
-	getAuthorById,
 	getAuthorByName,
 } from "../../../src/lib/authors";
 
 const mockGetAllAuthorSlugs = getAllAuthorSlugs as jest.MockedFunction<
 	typeof getAllAuthorSlugs
->;
-const mockGetAuthorById = getAuthorById as jest.MockedFunction<
-	typeof getAuthorById
 >;
 const mockGetAuthorByName = getAuthorByName as jest.MockedFunction<
 	typeof getAuthorByName
@@ -57,6 +52,8 @@ const mockGetAuthorByName = getAuthorByName as jest.MockedFunction<
 const mockGetArticlesByAuthorId = getArticlesByAuthorId as jest.MockedFunction<
 	typeof getArticlesByAuthorId
 >;
+
+const SLUG = encodeURIComponent("הרב לדוגמא");
 
 describe("[authorParam] page", () => {
 	beforeEach(() => {
@@ -88,8 +85,8 @@ describe("[authorParam] page", () => {
 	});
 
 	describe("generateMetadata", () => {
-		it("returns author name in title when found by numeric ID", async () => {
-			mockGetAuthorById.mockResolvedValue({
+		it("returns author name and profile metadata when found", async () => {
+			mockGetAuthorByName.mockResolvedValue({
 				id: 1,
 				name: "הרב לדוגמא",
 				details: "תיאור ארוך מאוד",
@@ -97,7 +94,7 @@ describe("[authorParam] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ authorParam: "1" }),
+				params: Promise.resolve({ authorParam: SLUG }),
 			});
 
 			expect(result).toEqual(
@@ -118,7 +115,7 @@ describe("[authorParam] page", () => {
 					],
 				}),
 			);
-			expect(mockGetAuthorById).toHaveBeenCalledWith(1);
+			expect(mockGetAuthorByName).toHaveBeenCalledWith("הרב לדוגמא");
 		});
 
 		it("returns author name in title when found by name slug", async () => {
@@ -158,7 +155,7 @@ describe("[authorParam] page", () => {
 
 		it("truncates long details to 160 chars for description", async () => {
 			const longDetails = "א".repeat(200);
-			mockGetAuthorById.mockResolvedValue({
+			mockGetAuthorByName.mockResolvedValue({
 				id: 1,
 				name: "הרב לדוגמא",
 				details: longDetails,
@@ -166,7 +163,7 @@ describe("[authorParam] page", () => {
 			});
 
 			const result = await generateMetadata({
-				params: Promise.resolve({ authorParam: "1" }),
+				params: Promise.resolve({ authorParam: SLUG }),
 			});
 
 			expect(result.description).toHaveLength(160);
@@ -175,7 +172,7 @@ describe("[authorParam] page", () => {
 
 	describe("AuthorPage (default export)", () => {
 		it("renders author with image, details, and articles", async () => {
-			mockGetAuthorById.mockResolvedValue({
+			mockGetAuthorByName.mockResolvedValue({
 				id: 1,
 				name: "הרב לדוגמא",
 				details: "תיאור הרב",
@@ -191,7 +188,7 @@ describe("[authorParam] page", () => {
 			]);
 
 			const jsx = await AuthorPage({
-				params: Promise.resolve({ authorParam: "1" }),
+				params: Promise.resolve({ authorParam: SLUG }),
 			});
 			render(jsx);
 
@@ -223,7 +220,7 @@ describe("[authorParam] page", () => {
 		});
 
 		it("renders valid chapter articles when other records reference invalid chapters", async () => {
-			mockGetAuthorById.mockResolvedValue({
+			mockGetAuthorByName.mockResolvedValue({
 				id: 1,
 				name: "הרב לדוגמא",
 				details: "",
@@ -239,7 +236,7 @@ describe("[authorParam] page", () => {
 			);
 
 			render(
-				await AuthorPage({ params: Promise.resolve({ authorParam: "1" }) }),
+				await AuthorPage({ params: Promise.resolve({ authorParam: SLUG }) }),
 			);
 
 			expect(screen.getByText("מאמרים (2)")).toBeTruthy();
@@ -251,7 +248,7 @@ describe("[authorParam] page", () => {
 		});
 
 		it("renders the empty state when every article has an invalid chapter reference", async () => {
-			mockGetAuthorById.mockResolvedValue({
+			mockGetAuthorByName.mockResolvedValue({
 				id: 1,
 				name: "הרב לדוגמא",
 				details: "",
@@ -267,11 +264,21 @@ describe("[authorParam] page", () => {
 			]);
 
 			render(
-				await AuthorPage({ params: Promise.resolve({ authorParam: "1" }) }),
+				await AuthorPage({ params: Promise.resolve({ authorParam: SLUG }) }),
 			);
 
 			expect(screen.getByText("אין מאמרים עדיין")).toBeTruthy();
 			expect(screen.queryByText("Invalid chapter article")).toBeNull();
+		});
+
+		it("resolves a numeric param by name only, without an id lookup", async () => {
+			mockGetAuthorByName.mockResolvedValue(null);
+
+			await expect(
+				AuthorPage({ params: Promise.resolve({ authorParam: "1" }) }),
+			).rejects.toThrow("NEXT_NOT_FOUND");
+
+			expect(mockGetAuthorByName).toHaveBeenCalledWith("1");
 		});
 
 		it("calls notFound when author is missing", async () => {
