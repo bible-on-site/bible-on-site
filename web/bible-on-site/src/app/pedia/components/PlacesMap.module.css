@@ -2,7 +2,7 @@
   width: 100%;
   height: min(420px, 55vh);
   min-height: 280px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid #e2e8f0;
   z-index: 0;
@@ -59,7 +59,7 @@
   min-height: 280px;
   padding: 24px;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #f8fafc;
   color: #475569;
   text-align: center;

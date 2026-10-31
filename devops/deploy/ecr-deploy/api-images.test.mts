@@ -193,12 +193,22 @@ class Registry {
 						},
 					],
 				};
-			if (command instanceof DescribeImagesCommand)
+			if (command instanceof DescribeImagesCommand) {
+				const tag = command.input.imageIds?.[0]?.imageTag;
+				if (tag) {
+					const image = this.images.get(tag);
+					return {
+						imageDetails: image
+							? [{ imageTags: [tag], imageDigest: image.digest }]
+							: [],
+					};
+				}
 				return {
 					imageDetails: [...this.images.keys(), ...this.extraTags].map(
 						(tag) => ({ imageTags: [tag] }),
 					),
 				};
+			}
 			if (command instanceof BatchGetImageCommand) {
 				const tag = command.input.imageIds?.[0]?.imageTag;
 				assert.ok(tag);
@@ -245,7 +255,14 @@ class Registry {
 				this.images.set(tag, { manifest, mediaType, digest: digest(manifest) });
 				if (this.newerBeforeLatest && tag === `v${version}`)
 					this.extraTags.push("v0.1.97");
-				return { image: { imageId: { imageTag: tag, imageDigest: expected } } };
+				return {
+					image: {
+						repositoryName,
+						imageId: { imageTag: tag, imageDigest: expected },
+						imageManifest: manifest,
+						imageManifestMediaType: mediaType,
+					},
+				};
 			}
 			throw new Error(`Unexpected SDK command ${String(command)}`);
 		},
@@ -796,6 +813,163 @@ test("a late index promotion is rechecked immediately before latest changes", as
 		assert.ok(!registry.puts.includes("latest"));
 		assert.equal(registry.images.get("latest")?.digest, established.digest);
 	}));
+
+test("verifies a retag using its write receipt and tag metadata despite a stale manifest read", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		const previous = child({
+			...prepared.images[0],
+			configDigest: digest("previous release config"),
+		});
+		registry.images.set("latest", previous);
+		const transport = registry.client;
+		const metadataTags: string[] = [];
+		let staleReads = 0;
+		const client = {
+			send: async (command: unknown) => {
+				if (
+					command instanceof BatchGetImageCommand &&
+					command.input.imageIds?.[0]?.imageTag === "latest" &&
+					registry.puts.includes("latest")
+				) {
+					staleReads++;
+					return {
+						images: [
+							{
+								imageId: { imageTag: "latest", imageDigest: previous.digest },
+								imageManifest: previous.manifest,
+								imageManifestMediaType: previous.mediaType,
+							},
+						],
+					};
+				}
+				if (command instanceof DescribeImagesCommand) {
+					const tag = command.input.imageIds?.[0]?.imageTag;
+					if (tag) metadataTags.push(tag);
+				}
+				return Reflect.apply(transport.send, transport, [command]);
+			},
+		} as unknown as ECRClient;
+		const result = await publishAPIImages(prepared, {
+			...registry.options(prepared),
+			client,
+		});
+		assert.equal(result.canonicalDigest, child(prepared.images[0]).digest);
+		assert.equal(registry.images.get("latest")?.digest, result.canonicalDigest);
+		assert.deepEqual(metadataTags, [`v${version}`, "latest"]);
+		assert.equal(staleReads, 0);
+		assert.deepEqual(registry.puts, [`v${version}`, "latest"]);
+	}));
+
+const badWriteReceipts: [
+	string,
+	(image: Record<string, unknown>) => unknown,
+][] = [
+	["missing image", () => undefined],
+	["wrong repository", (image) => ({ ...image, repositoryName: "other" })],
+	[
+		"wrong tag",
+		(image) => ({
+			...image,
+			imageId: { ...(image.imageId as object), imageTag: "other" },
+		}),
+	],
+	[
+		"wrong digest",
+		(image) => ({
+			...image,
+			imageId: { ...(image.imageId as object), imageDigest: digest("other") },
+		}),
+	],
+	["wrong manifest", (image) => ({ ...image, imageManifest: "{}" })],
+	[
+		"wrong media type",
+		(image) => ({ ...image, imageManifestMediaType: OCI_INDEX }),
+	],
+];
+for (const [name, corrupt] of badWriteReceipts) {
+	test(`rejects a latest write receipt with ${name} before metadata verification`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			const transport = registry.client;
+			let latestMetadataReads = 0;
+			const client = {
+				send: async (command: unknown) => {
+					if (
+						command instanceof DescribeImagesCommand &&
+						command.input.imageIds?.[0]?.imageTag === "latest"
+					)
+						latestMetadataReads++;
+					const result = await Reflect.apply(transport.send, transport, [
+						command,
+					]);
+					if (
+						command instanceof PutImageCommand &&
+						command.input.imageTag === "latest"
+					)
+						return {
+							image: corrupt(
+								(result as { image: Record<string, unknown> }).image,
+							),
+						};
+					return result;
+				},
+			} as unknown as ECRClient;
+			await assert.rejects(
+				publishAPIImages(prepared, { ...registry.options(prepared), client }),
+				/Registry write receipt does not match the exact image for latest/,
+			);
+			assert.equal(latestMetadataReads, 0);
+			assert.equal(registry.puts.filter((tag) => tag === "latest").length, 1);
+		}));
+}
+
+const badTagMetadata: [string, (expected: string) => unknown][] = [
+	["missing response", () => undefined],
+	["missing image", () => []],
+	[
+		"ambiguous images",
+		(expected) => [
+			{ imageTags: ["latest"], imageDigest: expected },
+			{ imageTags: ["latest"], imageDigest: expected },
+		],
+	],
+	["missing tag", (expected) => [{ imageDigest: expected }]],
+	[
+		"wrong tag",
+		(expected) => [{ imageTags: ["other"], imageDigest: expected }],
+	],
+	[
+		"wrong digest",
+		() => [{ imageTags: ["latest"], imageDigest: digest("other") }],
+	],
+];
+for (const [name, corrupt] of badTagMetadata) {
+	test(`rejects ${name} in latest metadata without retrying the write or read`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			const transport = registry.client;
+			let metadataReads = 0;
+			const client = {
+				send: async (command: unknown) => {
+					if (
+						command instanceof DescribeImagesCommand &&
+						command.input.imageIds?.[0]?.imageTag === "latest"
+					) {
+						metadataReads++;
+						return { imageDetails: corrupt(child(prepared.images[0]).digest) };
+					}
+					return Reflect.apply(transport.send, transport, [command]);
+				},
+			} as unknown as ECRClient;
+			await assert.rejects(
+				publishAPIImages(prepared, { ...registry.options(prepared), client }),
+				/Registry tag metadata does not preserve the exact digest for latest/,
+			);
+			assert.equal(metadataReads, 1);
+			assert.equal(registry.puts.filter((tag) => tag === "latest").length, 1);
+		}));
+}
 
 class RacingLegacyRelease extends ExistingRelease {
 	private calls = 0;
