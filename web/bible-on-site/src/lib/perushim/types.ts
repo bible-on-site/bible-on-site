@@ -32,6 +32,7 @@ export interface PerushNote {
 export interface PerushDetail {
 	id: number;
 	name: string;
+	parshanId: number;
 	parshanName: string;
 	/** Parshan birth year when known (e.g. from Sefaria). */
 	parshanBirthYear?: number;

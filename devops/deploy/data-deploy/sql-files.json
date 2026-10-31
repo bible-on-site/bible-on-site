@@ -21,5 +21,7 @@
 	"tanahpedia_jerusalem_occurrences_data.sql",
 	"tanah_reading_metrics_upgrade.sql",
 	"tanah_dedication_upgrade.sql",
-	"tanah_dedication_data.sql"
+	"tanah_dedication_data.sql",
+	"external_reference_structure.sql",
+	"external_reference_data.sql"
 ]
