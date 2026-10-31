@@ -28,6 +28,8 @@
 	cursor: pointer;
 }
 
-.pasukButton:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.pasukButton:hover {
+		text-decoration: underline;
+	}
 }

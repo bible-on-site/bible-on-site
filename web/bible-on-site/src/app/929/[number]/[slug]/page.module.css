@@ -57,8 +57,10 @@
   transition: color 0.2s;
 }
 
-.authorLink:hover .authorName {
-  color: #1552ac;
+@media (hover: hover) {
+	.authorLink:hover .authorName {
+	  color: #1552ac;
+	}
 }
 
 .articleTitle {
@@ -131,9 +133,11 @@
   transition: border-color 0.2s ease;
 }
 
-.articleBody a:global(.tanahpedia-mention):hover {
-  border-bottom-style: solid;
-  border-bottom-color: var(--link-accent, #1552ac);
+@media (hover: hover) {
+	.articleBody a:global(.tanahpedia-mention):hover {
+	  border-bottom-style: solid;
+	  border-bottom-color: var(--link-accent, #1552ac);
+	}
 }
 
 @counter-style article-hebrew-alpha {
@@ -200,9 +204,11 @@
   transition: all 0.2s;
 }
 
-.backLink:hover {
-  background: #f3f4f6;
-  border-color: #1c2c5d;
+@media (hover: hover) {
+	.backLink:hover {
+	  background: #f3f4f6;
+	  border-color: #1c2c5d;
+	}
 }
 
 /* When .backLink is used as a button (e.g. in flipbook article view) */
@@ -373,9 +379,14 @@ button.backLink {
     color: #a8b9ff;
   }
 
-  .authorLink:hover .authorName,
   .articleBody a {
     color: var(--link-accent, #7eb0ff);
+  }
+
+  @media (hover: hover) {
+  	.authorLink:hover .authorName {
+	    color: var(--link-accent, #7eb0ff);
+	  }
   }
 
   .articleBody a:global(.tanahpedia-mention) {
@@ -392,9 +403,11 @@ button.backLink {
     background: #1a1f2e;
   }
 
-  .backLink:hover {
-    background: #232a45;
-    border-color: #a8b9ff;
+  @media (hover: hover) {
+  	.backLink:hover {
+	    background: #232a45;
+	    border-color: #a8b9ff;
+	  }
   }
 
   .parshanName {

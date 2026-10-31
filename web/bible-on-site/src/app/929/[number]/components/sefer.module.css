@@ -435,12 +435,14 @@
 	font: inherit;
 	padding: 2px 8px;
 }
-.pasukSelectionButton:hover {
-	background: color-mix(
-		in srgb,
-		var(--pasuk-num-color, #1c2c5d) 8%,
-		transparent
-	);
+@media (hover: hover) {
+	.pasukSelectionButton:hover {
+		background: color-mix(
+			in srgb,
+			var(--pasuk-num-color, #1c2c5d) 8%,
+			transparent
+		);
+	}
 }
 /* Destination verse after perush→perek pasuk navigation (same look as the
    reader's hash-selected verse). Division book pages anchor pesukim by id
@@ -481,9 +483,11 @@
 	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
-.tanahpediaLink:hover {
-	border-bottom-style: solid;
-	border-bottom-color: var(--link-accent, #1552ac);
+@media (hover: hover) {
+	.tanahpediaLink:hover {
+		border-bottom-style: solid;
+		border-bottom-color: var(--link-accent, #1552ac);
+	}
 }
 
 @media (prefers-color-scheme: dark) {
@@ -525,12 +529,14 @@
 		color: var(--pasuk-num-color, #a8b9ff);
 	}
 
-	.pasukSelectionButton:hover {
-		background: color-mix(
-			in srgb,
-			var(--pasuk-num-color, #a8b9ff) 12%,
-			transparent
-		);
+	@media (hover: hover) {
+		.pasukSelectionButton:hover {
+			background: color-mix(
+				in srgb,
+				var(--pasuk-num-color, #a8b9ff) 12%,
+				transparent
+			);
+		}
 	}
 
 	.perekText [data-sefer-pasuk][data-pasuk-highlight],
@@ -550,8 +556,10 @@
 		color: var(--hc-accent, #b7adf0);
 	}
 
-	.tanahpediaLink:hover {
-		border-bottom-color: var(--link-accent, #7eb0ff);
+	@media (hover: hover) {
+		.tanahpediaLink:hover {
+			border-bottom-color: var(--link-accent, #7eb0ff);
+		}
 	}
 }
 

@@ -62,8 +62,10 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	color: #0f172a;
 }
 
-.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
-	border-color: rgb(255 255 255 / 0.4);
+@media (hover: hover) {
+	.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
+		border-color: rgb(255 255 255 / 0.4);
+	}
 }
 
 .flipbook-toolbar input.flipbook-toolbar-indicator:focus {
@@ -99,8 +101,10 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 		color: #f0ebe3;
 	}
 
-	.toc-link:hover {
-		background-color: rgba(255, 255, 255, 0.06);
+	@media (hover: hover) {
+		.toc-link:hover {
+			background-color: rgba(255, 255, 255, 0.06);
+		}
 	}
 
 	.toc-dots {
@@ -141,11 +145,16 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	color: rgb(255 255 255 / 0.95);
 }
 
-.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark:hover,
 .he-book
 	.sefer-bookmarks.flipbook-bookmarks
 	.flipbook-bookmark[aria-current="page"] {
 	background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
+}
+
+@media (hover: hover) {
+	.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark:hover {
+		background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
+	}
 }
 
 /* White inner frame — the same convention the cover's inset border uses —

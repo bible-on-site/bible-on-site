@@ -64,8 +64,10 @@
 	margin-right: 0.4em;
 }
 
-.contactList li a:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.contactList li a:hover {
+		text-decoration: underline;
+	}
 }
 
 .separator {

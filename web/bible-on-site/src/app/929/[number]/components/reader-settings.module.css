@@ -22,8 +22,10 @@
 	cursor: pointer;
 	box-shadow: 0 1px 3px #0002;
 }
-.button:hover {
-	background: #e9eff8;
+@media (hover: hover) {
+	.button:hover {
+		background: #e9eff8;
+	}
 }
 .button:focus-visible {
 	outline: 2px solid #1552ac;
@@ -204,8 +206,10 @@
 		color: #a8b9ff;
 	}
 
-	.button:hover {
-		background: #232a45;
+	@media (hover: hover) {
+		.button:hover {
+			background: #232a45;
+		}
 	}
 
 	.panel {
@@ -257,4 +261,8 @@
 
 .panelHeader + .section {
 	margin-top: 16px;
+}
+
+.button:active {
+	scale: var(--press-scale);
 }
