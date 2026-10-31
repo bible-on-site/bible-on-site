@@ -356,7 +356,16 @@ public partial class ArticlesViewModel : ObservableObject
         }
 
         // Navigate to article detail page
-        await _navigator.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");
+        try
+        {
+            await _navigator.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Article navigation failed for {article.Id}: {ex}");
+        }
     }
 #endif
 }

@@ -161,12 +161,21 @@ public partial class ArticleDetailViewModel : ObservableObject
             return;
         }
 
-        await _share.RequestAsync(new ShareTextRequest
+        try
         {
-            Text = $"{ArticleName} - {AuthorName}",
-            Uri = ShareUrl,
-            Title = "שתף מאמר"
-        });
+            await _share.RequestAsync(new ShareTextRequest
+            {
+                Text = $"{ArticleName} - {AuthorName}",
+                Uri = ShareUrl,
+                Title = "שתף מאמר"
+            });
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: share failure must not crash the command
+        catch (Exception ex) //NOSONAR — share failure must not crash the command.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Article share failed for {Article?.Id}: {ex}");
+        }
     }
 
     /// <summary>
@@ -175,7 +184,16 @@ public partial class ArticleDetailViewModel : ObservableObject
     [RelayCommand]
     public async Task GoBackAsync()
     {
-        await _navigator.GoToAsync("..");
+        try
+        {
+            await _navigator.GoToAsync("..");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Back navigation failed: {ex}");
+        }
     }
 
     /// <summary>
@@ -189,9 +207,18 @@ public partial class ArticleDetailViewModel : ObservableObject
             return;
         }
 
-        var authorId = Article.Author.Id;
-        var authorName = Uri.EscapeDataString(Article.Author.Name);
-        await _navigator.GoToAsync($"ArticlesPage?authorId={authorId}&authorName={authorName}");
+        try
+        {
+            var authorId = Article.Author.Id;
+            var authorName = Uri.EscapeDataString(Article.Author.Name);
+            await _navigator.GoToAsync($"ArticlesPage?authorId={authorId}&authorName={authorName}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Author navigation failed for {Article?.Author?.Id}: {ex}");
+        }
     }
 #endif
 }

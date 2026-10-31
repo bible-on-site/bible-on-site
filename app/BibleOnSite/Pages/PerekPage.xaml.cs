@@ -6,9 +6,6 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
-#if IOS
-using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
-#endif
 
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
@@ -38,6 +35,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     // Articles view state is owned by the shared reader chrome (#2573).
     private ReaderChrome _chrome = null!;
 
+    // Native safe-area + Back plumbing is owned by the shared platform
+    // chrome coordinator (#2573).
+    private ReaderPlatformChrome _platformChrome = null!;
+
     // Guard: ignore CurrentItemChanged events fired by the CarouselView during
     // initial collection assignment.  Without this, the handler resets the
     // position to bereshit-1 right after we placed it at today's perek.
@@ -63,9 +64,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         DebugLog.Write("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         DebugLog.Write("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
@@ -77,16 +75,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
-        WireReaderBackChrome();
+        SetupPlatformChrome();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
     public PerekPage(PerekViewModel viewModel)
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         SetupReaderChrome();
@@ -96,33 +91,37 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SubscribeAppLinks();
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
-        WireReaderBackChrome();
+        SetupPlatformChrome();
     }
 
-    private void WireReaderBackChrome()
+    /// <summary>
+    /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
+    /// and edge-back history, Android predictive-Back registration, and the
+    /// capsule's enabled-state provider — through the one coordinator. Only
+    /// the division plugs differ: which transient surfaces consume Back and
+    /// what Back does to them.
+    /// </summary>
+    private void SetupPlatformChrome()
     {
-        // The capsule Back owns return affordances now (#2467): at this root
-        // page it stays enabled while a transient surface (focused pasuk,
-        // reader menu, search, selection, fullscreen) would consume Back —
-        // the same surfaces TryHandleReaderBack serves. The hamburger keeps
-        // its single job and is never repurposed into a close control.
-        NormalNavigationBar.BackStateProvider = OwnsReaderReturnSurface;
-        // Overlay visibility flips outside UpdateSelectionBar (item taps and
-        // the scrim close the menu without it), so paint changes ride the
-        // same IsVisible notifications the Android back callback uses.
-        ReaderMenuOverlay.PropertyChanged += OnReaderSurfaceVisibilityChanged;
-        ExitFullScreenButton.PropertyChanged += OnReaderSurfaceVisibilityChanged;
-    }
-
-    private void OnReaderSurfaceVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(IsVisible))
-        {
-            NormalNavigationBar.RefreshBackState();
-#if ANDROID
-            UpdateReaderBack();
-#endif
-        }
+        _platformChrome = new ReaderPlatformChrome(
+            new ReaderPlatformChromeSurfaces
+            {
+                Page = this,
+                Root = MainGrid,
+                NavigationBar = NormalNavigationBar,
+                BottomBar = BottomBar,
+                FanMenu = FanMenu,
+                Carousel = PerekCarousel,
+                BackSensitiveOverlays = [ReaderMenuOverlay, ExitFullScreenButton],
+                SearchSurface = ChapterSearch,
+                SelectionSurface = SelectionBar,
+                PerushimSheet = PerushimPanel,
+            },
+            new ReaderPlatformChromeActions
+            {
+                OwnsReturnSurface = OwnsReaderReturnSurface,
+                TryHandleBack = TryHandleReaderBack,
+            });
     }
 
     /// <summary>
@@ -174,9 +173,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             ChapterSearch.Close();
         }
         Shell.SetNavBarIsVisible(this, false);
-#if ANDROID
-        UpdateReaderBack();
-#endif
+        _platformChrome.RefreshNativeBack();
     }
 
     /// <summary>
@@ -515,12 +512,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     protected override void OnDisappearing()
     {
         FinishSearchIntroduction();
-#if ANDROID
-        UnregisterReaderBack();
-#endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
-#endif
+        _platformChrome.Disappearing();
         if (!_preserveSearchOnDisappear)
         {
             ChapterSearch.Close();
@@ -536,10 +528,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         MainActivity.TouchReleased -= OnTouchReleased;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
-#endif
-#if IOS
-        // A page pushed above gets its native edge-back back (#2432).
-        RestoreIosInteractiveBack();
 #endif
         base.OnDisappearing();
     }
@@ -584,17 +572,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         DebugLog.Write("[Startup] PerekPage appearing");
         base.OnAppearing();
-#if ANDROID
-        RegisterReaderBack();
-#endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
-#endif
+        _platformChrome.Appearing();
         SubscribeRecitation();
-#if IOS
-        // Native history must be ready before asynchronous reader positioning.
-        ConfigureIosReaderHistory();
-#endif
         await InitializeRecitationAsync();
         DebugLog.Write("[Startup] PerekPage recitation initialized");
 #if ANDROID
@@ -602,11 +581,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-#endif
-#if IOS
-        ApplyBottomBarSafeArea();
-        SizeChanged -= OnPageSizeChanged;
-        SizeChanged += OnPageSizeChanged;
 #endif
         // If no perek is loaded, load perek based on preference (today's or last learnt)
         if (_viewModel.Perek == null && !_isLoading)
@@ -664,18 +638,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
-#if IOS
-        Dispatcher.Dispatch(ConfigureIosReaderHistory);
-#endif
+        _platformChrome.ScheduleHistoryRefresh();
     }
 
-    private void OnReaderListLoaded(object? sender, EventArgs e)
-    {
-#if IOS
-        // Newly realized verse lists must yield the edge gesture to history.
-        ConfigureIosReaderHistory();
-#endif
-    }
+    private void OnReaderListLoaded(object? sender, EventArgs e) =>
+        _platformChrome.ReaderSurfaceRealized();
 
     /// <summary>
     /// Runs the full first-load sequence for this reader: resolve the perek to
@@ -742,7 +709,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (_pendingArticleId is int pendingArticleId)
         {
             _pendingArticleId = null;
-            await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+            await ShellAppNavigator.Instance.GoToAsync($"articleDetail?articleId={pendingArticleId}");
         }
     }
 
@@ -872,21 +839,42 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 return;
             }
-            AppLinkHelper.PendingTarget = null;
-            ChapterSearch.Close();
-            var shell = Shell.Current;
-            if (shell != null &&
-                !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+            try
             {
-                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+                ChapterSearch.Close();
+                var shell = Shell.Current;
+                if (shell != null &&
+                    !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+                {
+                    // A link is dependent navigation, not a repeated tap:
+                    // queue behind any in-flight transition so the
+                    // return-to-reader request cannot be deduplicated away.
+                    await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+                }
+                if (generation != _appLinkGeneration)
+                {
+                    // A newer link arrived while this one waited out a
+                    // transition or the initial load — it owns the reader now.
+                    return;
+                }
+                // The destination is reached: consume the pending target so a
+                // later reader creation cannot re-apply it. Clearing it only
+                // here also keeps the target recoverable when navigation fails.
+                AppLinkHelper.PendingTarget = null;
+                await _viewModel.NavigateToPerekAsync(target.PerekId);
+                // A link that landed while the load-failure panel was up replaces
+                // it with the freshly navigated perek.
+                CarouselLoadingOverlay.Hide();
+                if (target.ArticleId is int articleId && Shell.Current != null)
+                {
+                    await ShellAppNavigator.Instance.GoToQueuedAsync($"articleDetail?articleId={articleId}");
+                }
             }
-            await _viewModel.NavigateToPerekAsync(target.PerekId);
-            // A link that landed while the load-failure panel was up replaces
-            // it with the freshly navigated perek.
-            CarouselLoadingOverlay.Hide();
-            if (target.ArticleId is int articleId && Shell.Current != null)
+            #pragma warning disable S2221 // Deliberate failure boundary: app-link navigation failure is log-only
+            catch (Exception ex) //NOSONAR — app-link navigation failure is log-only.
             {
-                await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"App-link navigation failed: {ex}");
             }
         });
     }
@@ -932,52 +920,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetAnalyticsScreenForPerek();
     }
 
-#if IOS
-    /// <summary>
-    /// MAUI pads every Layout inside the device safe area by default
-    /// (SafeAreaEdges = Container), and each Layout pads independently —
-    /// clearing it only on MainGrid just moves the padding to ContentArea,
-    /// which is what produced the empty landscape side bands (#1308).
-    /// Keep the root's top inset so the reader toolbar stays below the status
-    /// bar and notch. Its bottom edge also respects the home indicator, with
-    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
-    /// and descendant layouts unpadded so landscape content spans the width.
-    /// Views inside scroll views (the carousel cells and pasukim lists) never
-    /// apply safe-area padding, so only the direct layout chain needs this.
-    /// </summary>
-    private void ConfigureReaderSafeArea()
-    {
-        ReaderSafeArea.Configure(MainGrid);
-    }
 
-    private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-
-    private void ApplyBottomBarSafeArea()
-    {
-        double bottom = 0;
-        var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
-            .OfType<UIKit.UIWindowScene>()
-            .FirstOrDefault()?.Windows
-            .FirstOrDefault(w => w.IsKeyWindow);
-        if (window != null)
-        {
-            bottom = window.SafeAreaInsets.Bottom;
-        }
-
-        // Shift the bars down over the home-indicator inset and pull the page
-        // up underneath so no gap shows (tester-confirmed combination).
-        // With no inset (iPad, landscape) the same assignments restore the
-        // layout defaults, so an inset disappearing never leaves stale values.
-        var totalHeight = 90 + bottom;
-        BottomBar.TranslationY = bottom;
-        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-        BottomBar.HeightRequest = totalHeight;
-        FanMenu.SetBottomInset(bottom);
-        this.Padding = new Thickness(0, 0, 0, -bottom);
-        Resources["BottomBarTotalHeight"] = totalHeight;
-    }
-
-#endif
 
     /// <summary>
     /// The reader reports its own logical screen (AlHaperek/{perekId}) from
@@ -1389,6 +1332,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private bool OwnsReaderReturnSurface() =>
         ExitFullScreenButton.IsVisible
         || ReaderMenuOverlay.IsOpen
+        || PerushimPanel.IsOpen
         || ChapterSearch.IsSearchOpen
         || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
             _chapterRecitationSelection, _focusedPasuk != null,

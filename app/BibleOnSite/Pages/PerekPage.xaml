@@ -7,6 +7,7 @@
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:Name="PerekPageRoot"
@@ -48,6 +49,7 @@
                    HorizontalOptions="Fill"
                    Margin="4,0"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                   ToolTipProperties.Text="חיפוש (Ctrl+F)"
                    Clicked="OnPerekSourceClicked"/>
                 <Border x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
                         HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
@@ -130,9 +132,25 @@
                           Margin="0">
                 <CarouselView.ItemTemplate>
                     <DataTemplate x:DataType="models:Perek">
-                        <!-- Full perek page: header + CollectionView of pasukim -->
+                        <!-- Full perek page: header + CollectionView of pasukim.
+                             On Windows the column caps at ReaderColumnMaxWidth and
+                             centers (#2766) — full-bleed text on a maximized
+                             monitor is unreadable; touch platforms fill. -->
                         <Grid RowDefinitions="Auto,*"
                               AutomationProperties.ExcludedWithChildren="{Binding IsOffscreenCarouselPage}">
+                            <!-- Default must be PositiveInfinity — an explicit -1
+                                 collapses the element on mobile (it counts as a set
+                                 maximum, not as "unset"). -->
+                            <Grid.MaximumWidthRequest>
+                                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                                    <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
+                                </OnPlatform>
+                            </Grid.MaximumWidthRequest>
+                            <Grid.HorizontalOptions>
+                                <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                                    <On Platform="Windows" Value="Center"/>
+                                </OnPlatform>
+                            </Grid.HorizontalOptions>
                             <!-- Perek Header (Row 0) with קריינות play button -->
                             <Grid Grid.Row="0">
                                 <VerticalStackLayout>
@@ -398,6 +416,8 @@
                 <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="PrevPerekButton"
                         AutomationId="PrevPerekButton"
+                        SemanticProperties.Description="הפרק הקודם"
+                        ToolTipProperties.Text="הפרק הקודם"
                         Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                         Command="{Binding LoadPreviousCommand}"
                         Clicked="OnMenuItemClicked"/>
@@ -405,6 +425,8 @@
                 <!-- Today's perek (top-left satellite) -->
                 <controls:ReaderFanMenuSatellite x:Name="TodayButton"
                         AutomationId="TodayButton"
+                        SemanticProperties.Description="הפרק של היום"
+                        ToolTipProperties.Text="הפרק של היום"
                         Text="{x:Static fonts:FluentUI.calendar_date_24_regular}"
                         Command="{Binding LoadTodayCommand}"
                         Clicked="OnMenuItemClicked"/>
@@ -412,12 +434,16 @@
                 <!-- Perek Picker (top-right satellite) -->
                 <controls:ReaderFanMenuSatellite x:Name="PerekPickerButton"
                         AutomationId="PerekPickerButton"
+                        SemanticProperties.Description="בחירת פרק"
+                        ToolTipProperties.Text="בחירת פרק"
                         Text="{x:Static fonts:FluentUI.library_24_regular}"
                         Clicked="OnPerekPickerClicked"/>
 
                 <!-- Next perek (bottom-right satellite). Disabled at perek 929 via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="NextPerekButton"
                         AutomationId="NextPerekButton"
+                        SemanticProperties.Description="הפרק הבא"
+                        ToolTipProperties.Text="הפרק הבא"
                         Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                         ScaleX="-1"
                         Command="{Binding LoadNextCommand}"

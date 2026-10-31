@@ -71,9 +71,10 @@ API startup also launches the article-search worker unconditionally. It runs
 three `CREATE TABLE IF NOT EXISTS` statements, may retrain/write derived
 search tables, and periodically drains/reconciles the search queue. HTTP
 read-only probes do not make an API task read-only. Qualify the complete
-worker against an isolated database; use DB-enforced SELECT-only credentials
-for any deliberately limited production-data read test, recording that the
-worker cannot be fully qualified under those grants. A normal production
+worker against a separate MySQL server. A separate schema or SELECT-only
+credentials on the production server are insufficient: the worker's named
+`article_search_retrain` lock is server-wide and can contend with production.
+Do not connect an API candidate to that server, even for HTTP read probes. A normal production
 `DB_URL` must not be cloned into another investigation task on the assumption
 that startup only reads.
 
@@ -137,9 +138,17 @@ figures (verified against the published rates here). The default **20 GB
 of Fargate ephemeral storage is included at no additional charge**; only
 configured storage above that allowance is billed. Architecture does not
 change that allowance or public IPv4, CloudWatch Logs, and data-transfer
-pricing. Publishing additional image children can increase ECR storage and
-build costs, so $6.55 is the gross compute saving, not a guaranteed net bill
-reduction. See [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/).
+pricing. This public repository's standard GitHub-hosted amd64 and ARM64
+build runners are free; adding a native ARM build does not add billed build
+minutes. See [GitHub's standard runner pricing](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+Additional ECR layers cost $0.10/GB-month in this region: 1 GB adds $0.10/month,
+and 10 GB adds $1/month. The API image is about 15 MiB compressed, so its
+additional image storage is small compared with the estimated $2.31/month
+API compute saving. Retained layers and Actions artifact/cache storage still
+need measurement; the current evidence supports likely net savings, with
+qualification and rollback as the remaining migration gates. See
+[AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/) and
+[ECR pricing](https://aws.amazon.com/ecr/pricing/).
 **Admin caveat:**
 ARM on-demand ($9.23) costs *more* than today's x86 Spot ($3.46) - admin
 must migrate onto Spot ARM capacity, or the move is a cost regression.
@@ -282,6 +291,454 @@ needed, not before. Both sub-phases keep amd64 published. Digests identify
 immutable content, but the retention prerequisite above is what preserves
 that content for recovery.
 
+### API release preparation (2026-10-29)
+
+The current implementation prepares the API first. Its regular packaging job
+builds and verifies both final images on native runners. Published releases
+retain the existing amd64 archive name and add an ARM64 archive; deployment
+verifies both published SHA256 digests and matching source/version labels.
+The publisher stages immutable `v<version>-amd64` and `v<version>-arm64`
+children. With `API_MULTIARCH_RELEASES` unset or `false`, canonical version
+and `latest` still resolve to the amd64 image. No service architecture changes.
+
+Before merging, verify the API ECR repository uses `IMMUTABLE_WITH_EXCLUSION`
+with only exact `latest` mutable. Authenticated inspection found no API
+lifecycle policy; preserve that retention, rather than applying the reference
+file's former fictional 15-image policy. Do not deploy the reference template.
+An established multi-architecture `latest` cannot be downgraded by turning
+the flag off or replaying a legacy single-image release. Enabling index
+publication requires a new version; an immutable amd64 version cannot be
+rewritten as an index.
+
+The API adds `/health/ready` for database/search-worker readiness while keeping
+`/health` unchanged. Local full worker and HTTP checks pass against disposable
+MySQL servers. Native ARM CI and representative isolated Fargate comparisons
+remain required before a production cutover. ECS readiness, circuit-breaker,
+and architecture changes belong to that later qualified step; they are not
+part of this release preparation. Preserve the healthy 0.1.95 full task
+definition and image as rollback, since older images lack this new endpoint.
+
+### Local full-corpus qualification (2026-10-29)
+
+The public API supplied a frozen corpus of 2,681 articles, 68 authors,
+35 books and 929 chapters without database credentials, private content or
+production writes. The isolated test adds one clearly synthetic article and
+author plus dedication/coverage edge rows. Public HTML/name/abstract bytes,
+nulls and reference closure were checked after import. Raw data and operational
+artifacts remain private; these are temporary qualification inputs.
+
+At the existing 0.25 vCPU/512 MiB limit, the original actual API image answered
+liveness in 0.819 seconds but failed the unchanged 30-second readiness gate.
+A separately labeled diagnostic run became ready after 84.240 seconds:
+model construction took about 36 seconds and 2,682 individual document commits
+spent 43.289 seconds in SQL. No other server-wide lock owner was present.
+This failed baseline remains recorded; the deadline was not increased.
+
+The revised LSA projection traverses contiguous output coordinates while
+preserving every scalar accumulation's order, seed, vocabulary, dimensions
+and scaling. Its measured projection fell from 17.994 to 0.789 seconds; full
+basis/model/document embeddings and six query score/ranking sets were bitwise
+identical. Documents, model state and epoch stamps now publish in one SQLx
+transaction on the retained named-lock session. Real MySQL tests prove that
+an error or cancellation during the second document write preserves every
+prior publication byte, releases the session, and leaves a warm reader usable.
+
+The combined actual-Dockerfile image passed the same full-corpus cold gate in
+26.586 seconds. Document SQL took 1.699 seconds, and warm readiness took
+1.519 seconds while a separate test session held the retraining lock. The
+hard limits remained 0.25 vCPU/512 MiB; process high-water RSS was about
+216.45 MiB and there was no OOM. That revision's normal validation passed 297 unit tests,
+two mandatory MySQL tests and 59 HTTP E2E tests; merged API line coverage was
+13,241/13,392 (98.872%), above the unchanged 97% gate. Local image labels
+explicitly identify the working tree; final native CI must bind published
+images to the committed source. These are local amd64 results, not ARM or
+Fargate performance evidence.
+
+### Production-version repeat and further CPU headroom (2026-10-29)
+
+The preceding cold/warm measurements used MySQL 8.4.13. A seed image pinned to
+the official MySQL 8.4.9 amd64 child was then rehearsed to match production's
+version. Its authenticated TCP/corpus-marker startup missed the unchanged
+30-second database gate at 0.5 vCPU/1 GiB. At the valid Fargate size of
+1 vCPU/2 GiB, it passed in 23.075 seconds. These are temporary database
+resources; API and production resource limits remain unchanged. At the
+published regional rates, that temporary server costs $0.0631936/hour of
+compute, excluding public IPv4, logs, image storage and client tasks.
+
+The API's first repeat against 8.4.9 missed its unchanged 30-second cold gate.
+A separately labeled diagnostic became ready in 30.531 seconds, which remains
+a failure. Another diagnostic became ready in 27.304 seconds; that single pass
+does not erase the failure or establish reliable startup. The exact ordered
+2,682 input rows and all public name/abstract/content hashes matched the prior
+fixture, as did the resulting stored model. The CPU sample found no aggregate
+VM starvation or OOM: training took 20.502 seconds, with the task using its
+expected quarter-CPU quota. Subsequent public-data, seven dedication-scope,
+queued-update and real-MySQL timestamp/atomic rollback/cancellation checks
+passed. The new failure is retained and blocks qualification.
+
+Two additional CPU changes retain the model contract. The compressed matrix
+accumulates contiguous term rows, preserving every cell's original addition
+order, then transposes without arithmetic. Normalization bypasses per-character
+NFD only for identity-decomposition ASCII and regular Hebrew letters; all
+other characters keep the original fallback. On pinned Rust 1.99.1, both
+normalization modes matched over all 1,112,064 Unicode scalar values in two
+contexts and every one of the public corpus's 8,043 name/abstract/plain-text
+fields. Focused tests cover boundary blocks, duplicate/cancelling terms,
+spacing, quotes, final letters and Unicode decomposition/case.
+
+At 0.25 vCPU/512 MiB, the combined standalone profiler completed in
+13.951 seconds, with 228.4 MiB process high-water RSS. Its complete basis,
+persisted model, document embeddings and all tested query score/ranking bytes
+match the original frozen baseline exactly. This is an amd64 algorithm proof,
+not an API startup or ARM/Fargate result. Training now explicitly orders rows
+by ID; this preserves the observed fixture order and prevents query-plan
+changes from silently changing the model's input sequence.
+
+The actual rebuilt Dockerfile image then passed two independent fresh-table
+cold starts against MySQL 8.4.9 in **18.025 and 18.472 seconds**, using the
+unchanged 30-second gate and 0.25 vCPU/512 MiB API limits. Warm readiness with
+an independently held retraining lock passed in 1.234 seconds. Input bytes
+and the stored model remained identical. The largest public HTML, all 929
+chapter labels, covering-source TIMESTAMP, all seven dedication scopes,
+expiry handling, 120 bounded HTTP requests, exact-holder release and queued
+update checks passed. Both API candidates and the holder were cleaned up.
+
+Fresh normal validation passed 301 unit tests, the nextest run, two mandatory
+real-MySQL regressions and 59 HTTP E2E tests; all 18 report-watcher regressions
+also passed. Merged API line coverage is 13,312/13,463 (98.878%), above the
+unchanged 97% gate. Normal cargo-make lint, strict all-target Clippy and
+rustfmt passed. These remain local amd64 results with honest working-tree
+image/source labels. Final committed-source native CI, published archive
+provenance and isolated AWS comparison remain gates before ARM migration.
+
+The unexecuted AWS comparison plan uses a separate MySQL server and sequential
+amd64/ARM64 API services at those same limits. It uses an owned temporary
+cluster with Container Insights explicitly disabled: the production cluster's
+Insights setting is enabled and remains untouched. Request `--include SETTINGS`
+when inspecting a cluster; omitted settings do not mean disabled. Existing
+roles, network rules and the strict SSH probe path are reused. Standard ECS
+service metrics report observed sample maxima; they are not continuous peak
+measurements. All temporary resources must be removed after qualification.
+
+### Cold-start contention repeat (2026-10-29)
+
+The preceding ordinary cold and warm results do not establish empty-index
+recovery after a missed lock. A separate full-corpus case acquired the exact
+server-wide lock before API startup. The API missed it at +0.893 seconds,
+returned readiness 503, and the holder released it at +2.735 seconds. The
+worker next acquired it at +15.922 seconds. Training completed at +27.440
+seconds, but transactional publication was unfinished at the original
+30-second deadline. The API stayed unready, with no OOM; the attempt is RED.
+All owned API/holder/schema/user resources were cleaned up. No production
+server or content was changed; writes were confined to the owned local fixture.
+
+Fresh uncached API fixture credentials require TLS with the current SQLx
+feature set. The final measured case proved a nonempty SSL cipher on the
+API's own first connection; no separate client primed that account's auth
+cache. Earlier harness/authentication/port errors are retained separately
+and are not startup timing passes. This fixture transport requirement does
+not change the separate db-populator tool's enabled features.
+
+A private scalar-reference prototype groups four independent Gram cells
+under one term scan and uses contiguous scratch columns for the same
+two-pass orthonormalization. Every cell retains its original addition and
+update order; no reduction is reassociated. At 0.25 vCPU/512 MiB, the complete
+standalone run took 11.087 seconds, compared with the prior 13.951 seconds.
+The Gram phase was 1.494 seconds and orthonormalization 0.280 seconds. All
+25 release-mode tests passed, including partial blocks, zero/signed-zero,
+ill-conditioned matrices and the full 144-column width. Complete basis,
+model, embeddings and six query score/ranking outputs remain bitwise equal
+to the frozen original baseline. Scratch columns add about 1.47 MiB for
+this corpus during that phase.
+
+This remains an algorithm measurement. The actual rebuilt API image must
+pass the original cold-held 30-second case, ordinary cold/warm contracts,
+normal tests, coverage and committed native CI before delivery. The fixed
+15-second worker tick, lock timeout, API limits and readiness deadline are
+unchanged. ARM/Fargate qualification remains blocked until those gates pass.
+
+### Bounded atomic publication (2026-10-29)
+
+The actual image containing the Gram/column-layout change passed an ordinary
+cold start in 17.793 seconds, but its cold-held repeat remained RED. On the
+retained Docker-start clock, the second lock attempt was at +15.390 seconds,
+training completed at +25.444, the transaction began at +27.218, and COMMIT
+was at +30.136. The worker logged its rebuild at +30.319, before loading
+the in-memory snapshot and beyond the original deadline. The 2,682 document statements occupied 1.986 seconds from the first
+to last completion, with 1.847 seconds summed query time. The state-blob write
+took 0.786 seconds. A final evidence-writer defect lost the invocation-relative
+probe JSON and CPU/host counters; these were not reconstructed. Immutable
+Docker start and retained logs conservatively establish the failed gate.
+Cleanup was independently verified, and remaining repeats were stopped.
+
+A subsequent private MySQL 8.4.9 regression exposed a separate correctness
+bug: full retraining upserted current documents but left removed/out-of-range
+rows behind, then stamped those old vectors with the new model epoch. After
+three source articles, deleting one produced two trained but three stored
+rows; moving another outside chapter 1-929 left two stale stamped rows;
+an empty source corpus still left all three. This is a failed baseline.
+
+The correction deletes only the derived document table's rows inside the
+existing lock-owning publication transaction, then inserts the complete new
+snapshot, state and epoch stamp before committing. Source articles and the
+incremental queue-upsert path are unchanged. Parameterized statements group
+at most 64 rows and conservatively budget 256 KiB of SQL/binary bindings.
+A single larger row uses the original scalar path, preserving its existing
+capacity. An explicit ordinal orders writes, including repeated IDs; the
+same authoritative source-membership predicate and server-side content hash
+remain in use.
+
+Private validation passed 306 unit tests and four real MySQL regressions
+through the existing mandatory coverage entry point. Separate exact filters
+run timestamps, full-retrain deletion/move/empty, batch parity/atomicity and
+session-lock cleanup sequentially, preserve prior profiles with `--no-clean`,
+and fail if any selected regression is missing. Binary NUL/non-UTF8/empty
+values, partial batches, duplicate order, omitted source rows and a 300 KiB
+scalar fallback match the original scalar bytes. A second-batch error and
+actual in-flight cancellation restore every prior model/document byte and
+timestamp and release the lock without leftover SQL. The deletion/move/empty
+cases now store exactly three/two/one/zero eligible rows. Strict all-target
+Clippy and formatting passed. The normal 59 HTTP and 18 report-watcher tests
+also passed. Combined API line coverage is 13,834/13,987 = 98.90613%, above
+the unchanged 97% gate.
+
+The actual bounded-publication image
+`d5f578578a386a3781ba398096683c0f58b42dca4bc568116d122435ab035024`
+still failed the original cold-held readiness gate. On its immutable
+invocation clock the next acquisition was +15.898 seconds, training finished
+at +25.626, and the transaction began at +27.314. Forty-two bounded document
+statements completed by +28.218, state publication by +28.992, and COMMIT at
++29.092. The worker's rebuild log at +29.212 preceded snapshot loading; model
+and document queries completed at +29.318 and +29.531. Readiness remained 503
+at +29.986. The process was alive without OOM, and cleanup/lock release were
+verified. Query completion is not proof that the snapshot was adopted; the
+post-fetch path was diagnosed before another repair was chosen.
+
+One explicitly diagnostic follow-up kept the same source, image, limits and
+immutable 30-second verdict, then made exactly one later readiness request.
+The original gate failed; that later request was healthy at +33.114 seconds
+and does not qualify the image. Before cleanup, all 2,682 document IDs and
+vector/term/content hashes matched the scalar snapshot, as did the complete
+model hash. There were no epoch mismatches, invalid vectors, malformed or
+out-of-range terms among 871,549 decoded pairs, or rejection/decode warnings.
+The late healthy response confirms eventual snapshot adoption. This isolates
+the remaining failure to completion latency rather than a rejected snapshot.
+Per-file cgroup-v1 counters were retained; exact owned cleanup and server-wide
+lock release passed. No qualification retry or timeout change was made.
+
+These results do not qualify a production image or ARM. The adopted source
+still needs a passing actual-image cold-held/ordinary/warm suite, committed
+native builds, canonical release verification and paired isolated AWS trial.
+The original 30-second readiness gate, 15-second tick, lock timeout and task
+resource limits remain unchanged.
+
+### Cold lock wake-up and current local qualification (2026-10-29)
+
+The cold-held failure included a released lock sitting idle until the next
+15-second worker tick. After the root cause and connection tradeoff were
+presented, Dorad explicitly authorized a one-time first-cold-start server
+lock wait of up to 15 seconds. The 30-second readiness deadline, worker tick,
+0.25 vCPU/512 MiB limits and pool size remain unchanged. Warm starts, manual
+retraining and later cold-recovery attempts retain immediate lock probes.
+
+The ordinary loader still takes its reload mutex before a pool checkout.
+Cold initialization uses that same order and reloads through the physical
+lock-owning session, so a one-connection pool cannot deadlock. After obtaining
+the lock, it first adopts a compatible publication from the preceding owner
+instead of training it twice. Failure preserves the existing fresh-connection
+reload after releasing the session and mutex. Cancellation protection is set
+before issuing GET_LOCK, including a grant whose response never reaches the
+cancelled client.
+
+The actual Dockerfile image is
+`1b9043703b5275a2edafacaf44ef384f2999a0d8607ed71021c23bb2246996ad`,
+with 132 production inputs bound to source hash
+`d37499849f1d44d457478236e89ea719bcb725a4bfb9d66a8d45991b740f5e96`.
+It uses honest working-tree labels and is not a canonical release artifact.
+On the original immutable invocation clock, the exact fresh API session was
+positively waiting on the named lock, readiness was 503, and the independent
+holder was released at +2.308 seconds. Readiness succeeded at +11.408 seconds,
+inside the unchanged 30-second gate. All 2,682 stored documents and the model
+matched the scalar baseline, including 871,549 valid term pairs; no epoch or
+vector errors, OOM, evidence loss or cleanup errors occurred.
+
+Two separately invoked ordinary cold cases passed at 9.190 and 9.289 seconds.
+Warm readiness while another session retained the lock passed at 0.906 seconds.
+The largest article hash, all 929 chapter labels, timestamp mapping, all seven
+dedication scopes/expiry cases, 132 bounded HTTP requests and the existing
+worker queue deadline passed. The queued synthetic update was visible in
+11.926 seconds. Local checks passed 311 unit tests, five explicitly selected
+real MySQL 8.4.9 regressions, strict all-target Clippy and formatting. All
+59 normal HTTP tests passed without skips or retries. The combined API report
+covers 14,255/14,419 lines (98.86261%), above the unchanged 97% gate; every
+mandatory MySQL test has positive recorded coverage hits.
+
+These are local amd64 observations, not ARM/Fargate evidence. The prior failed
+gates remain retained. An additional canonical 0.1.95 warm-compatibility check
+proved positive search and unchanged data/state hashes, but its larger public
+query failed the original two-second request limit, with a 2.188-second pool
+acquisition. Its complete compatibility gate remains failed; the root cause
+of that delay was not established. Before ARM cutover, the normal x86 phase
+must establish a fully qualified current amd64 image and complete rollback
+definition. Current committed native builds, release provenance, isolated AWS
+comparison and final review remain gates; production is still x86.
+
+### Combined dependency cleanup and runtime equivalence (2026-10-29)
+
+The same release incorporates the validated dependency cleanup from
+[#2828](https://github.com/bible-on-site/bible-on-site/pull/2828): the API no
+longer declares the unused cargo-make CLI as a Rust dev-dependency, removing
+103 orphan lockfile packages. No retained package versions are changed.
+Normal/build package and feature graphs are identical for Linux amd64,
+Linux ARM64 and Windows. CI still installs the explicitly pinned CLI;
+its upstream ZIP compatibility limitation and Renovate tracking remain
+recorded in [#2826](https://github.com/bible-on-site/bible-on-site/issues/2826).
+This removes the unused API dependency graph; it does not claim the external
+CLI is universally patched.
+
+The combined actual Dockerfile image is
+`4c7b8f28c204b6641ef65bbcddbb87ade30e9e211bdc222f3ccf94c54acdc5bf`,
+bound to 132 production inputs with source hash
+`b79154cc6c4a8f36d3e8115996dc2b0b7645ef4786cd728a8a000ef1c96f97f6`.
+The rebuilt server is byte-identical to the qualified image above. Its 520
+runtime filesystem entries (content, types, permissions, ownership, links
+and extended attributes) and runtime configuration are also identical;
+the comparison excludes Docker-injected host files, build timestamps and
+provenance labels. This supports reusing the preceding local runtime
+observations, rather than claiming they were repeated on a new binary.
+The combined graph passes all 311 unit tests, strict all-target Clippy and
+formatting. The preceding coverage and real-MySQL/HTTP results apply to
+unchanged Rust/test sources. Current-head CI/native release verification
+and isolated AWS qualification remain required.
+
+### Native Fargate paired qualification (2026-10-29)
+
+Both native API candidates were executed in an owned, isolated Fargate cluster
+in `il-central-1b`, using the same frozen public corpus and MySQL 8.4.9 seed.
+The API stayed at 256 CPU units/512 MiB and the separate fixture database at
+1024 CPU units/2048 MiB. Container Insights was disabled on this temporary
+cluster. No production service, database, route, DNS, IAM or existing security
+group was changed. Production API/admin/website still use x86 task definitions.
+
+The native candidate payloads bind all 132 production API inputs to the
+qualified scalar implementation. They are research images in a separate ECR
+repository, excluded from production deployment events; they do not establish
+canonical release provenance or qualify a production cutover by themselves.
+
+| Runtime case | x86 | ARM64 |
+| --- | --- | --- |
+| Fresh database TLS/corpus readiness | 17.372 s | 16.738 s |
+| Cold API with independently held search lock | 15.926 s | 17.177 s |
+| Exact holder released after positive pending-wait/503 proof | 1.447 s | 1.998 s |
+| Ordinary cold API with derived tables absent | 15.139 s | 9.910 s |
+| Warm API while another session retained the lock | 1.603 s | 1.756 s |
+| Reuse of the other architecture's persisted snapshot | 1.514 s | 2.027 s |
+
+The model and all 2,682 document content/vector/term fingerprints match the
+original scalar baseline exactly on both architectures. Each cross-architecture
+warm start preserved the model and document bytes. An early harness assumption
+rejected the synthetic article's valid empty sparse-term list; its exact
+baseline length and hash prove that zero terms is correct. The original failed
+harness record remains retained. Startup anchors use AWS response timestamps,
+including timestamp quantization and request time, mapped conservatively to a
+monotonic clock. A detected laptop clock offset is excluded from the verdict.
+No startup clock was reset and the readiness deadline stayed 30 seconds.
+
+Each architecture then ran the identical recorded probe: five independent
+functional projections once each, 12 warmups, six minutes at one request per
+second with concurrency one, and 24 burst requests at concurrency four. All
+402 traced HTTP requests per leg returned 200; each retained its two-second
+limit. Article HTML/hash, all chapter labels, search IDs/scores, starter counts,
+and dedication timestamp/scope/expiry responses matched exactly between legs.
+The largest article contained 561,258 UTF-8 bytes.
+
+| Observation from the paired trial | x86 | ARM64 |
+| --- | --- | --- |
+| Standard ECS average CPU utilization | 2.530% | 1.392% |
+| Largest standard one-minute CPU datapoint | 11.185% | 1.506% |
+| Standard ECS average memory utilization | 10.812% | 10.716% |
+| Largest standard one-minute memory datapoint | 11.914% | 11.719% |
+| Steady article request p95 | 126.803 ms | 91.809 ms |
+| Steady search request p95, Shabbat | 23.075 ms | 22.352 ms |
+| Steady search request p95, Bereshit | 25.725 ms | 22.253 ms |
+| Steady dedication request p95 | 71.486 ms | 28.457 ms |
+
+These are five complete standard one-minute metric buckets per architecture,
+aligned to the actual server-side request trace. Their maxima are observed
+one-minute datapoints, not continuous peaks. This is one sequential paired
+trial, not an SLA, peak-load capacity claim or proof of a general speedup.
+
+The functional collector originally combined five root projections into one
+parallel GraphQL request before load. On a fresh x86 process, opening extra
+SQL pool connections produced a 2.210-second server response, failing its
+original two-second limit. The paired protocol instead performs the planned
+independent projections sequentially; it does not retry a data request, prime
+GraphQL before the contract check, change the pool, or relax any deadline.
+The original compound-query failure remains a recorded limitation. The final
+four-concurrent burst still exercises cold extra pool connections and passes
+on both architectures. The exact old and final probe sources and failed
+outcomes are retained privately.
+
+An ARM synthetic-only queued update became searchable in 11.061 seconds,
+within the existing 30-second worker check. All 2,681 public article hashes
+were unchanged, the queue drained, and document content/model epochs agreed.
+A replacement ARM task became ready in 2.010 seconds while 31 observed old-task
+readiness checks remained 200; it reused the updated persisted model. The old
+task subsequently stopped normally, but the original no-container-healthcheck
+service did not report ECS `COMPLETED` within the unchanged 90-second deployment
+observation. That overall trial remains failed. ECS readiness signaling and a
+complete steady deployment remain a separate gate; task `RUNNING` or HTTP
+readiness alone does not satisfy it.
+
+A separate fresh ARM outage trial passed: after stopping only its disposable
+database, the same API task kept liveness 200 and returned readiness 503 within
+0.412 seconds. Its preceding cold start passed in 15.294 seconds with the
+same exact model/document fingerprints. All tasks from those completed trials
+were confirmed stopped. Nonrunning resource journals and candidate images are
+retained until qualification ends.
+
+A second isolated trial added an ECS container check against the actual
+`/health/ready` endpoint, using the existing BusyBox executable (no image or
+server-command change). The exact command returned exit 0 for HTTP 200 and
+exit 1 for HTTP 503 in the qualified Alpine runtime. ECS on native ARM then
+positively reported `HEALTHY`; initial API readiness was 16.248 seconds and
+the initial deployment reached `COMPLETED`. Its rolling replacement was ready
+in 2.492 seconds, ECS reported it healthy, and the old task stopped normally
+with exit 0. At the last observation, 89.094 seconds after replacement
+readiness, the service had desired/running 1, pending 0 and no failed tasks,
+but still reported `IN_PROGRESS`. That rolling-completion gate remains failed,
+including after adding the readiness signal. It is not evidence that simply
+adding a health check fixes the control-plane completion delay. No observation
+budget was extended. All owned tasks from this trial were confirmed stopped.
+After reviewing that measured state and cost exposure, Dorad explicitly
+approved one fresh isolated trial with a 180-second rolling-deployment
+observation. That trial passed: initial API readiness was **14.969 seconds**,
+the replacement was ready in **2.603 seconds**, and the old task stayed ready
+through replacement readiness. ECS reported the replacement `HEALTHY`; the
+old task was observed `STOPPED` by 58.639 seconds after replacement readiness.
+The service then reported **`COMPLETED` at 103.463 seconds**, with desired/running
+1, pending 0 and no failed tasks. Sampled new-task readiness remained 200
+through completion, with each request retaining its two-second limit.
+
+Only the rolling control-plane observation changed from 90 to 180 seconds,
+under that explicit exception. API startup stayed at 30 seconds, requests at
+two seconds, initial deployment observation and cleanup at 90 seconds, and
+CPU/memory limits were unchanged. The earlier 90-second failures remain
+recorded; they are not relabeled passes. All API and database tasks from the
+approved trial were confirmed stopped, and its model/document fingerprints
+matched the same scalar baseline. This qualifies one isolated ECS rolling
+trial with the readiness check; it does not prove production traffic routing,
+canonical release provenance or an architecture cutover. Applying that check
+to production still requires specific AWS change approval.
+
+Canonical publication and platform pulls, a fully qualified current x86
+rollback definition, ECS readiness/circuit-breaker behavior, normal release
+continuity, and current-head CI/coverage/all review channels still gate a
+production ARM change. Website/admin require their own remaining checks. The
+observed API headroom supports continuing qualification; it does not mean that
+any production service has migrated or that the small published-rate saving
+outweighs an unresolved compatibility gate.
+
 ## Isolated candidate design (phase 2 - requires authorized AWS access)
 
 Multi-arch manifests do not select Graviton by themselves. Definitions without
@@ -295,22 +752,30 @@ Do not equate regional prices or an On-Demand launch with ARM Spot placement.
    policies. Require one COMPLETED deployment, pending 0, and no concurrent
    release. Save the private baseline outside Git without printing secrets.
    Audit startup/background side effects **before registration or launch**.
-   API must have a separately scoped isolated DB secret for full worker tests,
-   or a DB-enforced SELECT-only secret for explicitly limited read tests.
+   API needs fresh fixture credentials for a separate MySQL server for full
+   worker tests; another schema or read-only account on production does not
+   isolate the server-wide search lock. Remove every production DB/revision-
+   key secret reference and use fresh fixture-only values supplied privately.
    If that prerequisite is unavailable, stop without launching API.
 2. Clone each full current definition, strip AWS response metadata, and
    register an isolated candidate under a new family. Change only family,
    `runtimePlatform`, and image to the qualified ARM64 child digest. Preserve
-   roles, resources, logs, environments and unrelated secret references. For
-   API, explicitly replace its DB_URL secret reference with the approved
-   isolated/read-only one and record that controlled deviation; never retain
-   production write credentials merely to keep the clone byte-identical.
+   roles, resources, logs, environments and unrelated secret references where
+   the reviewed service-specific isolation permits them. For API, construct
+   an allowlisted temporary definition with the same image CMD and resource
+   limits, existing execution role and log group, no task role or production
+   secret references, and fresh isolated DB/revision-key credentials. Audit
+   these controlled deviations instead of preserving production credentials.
    Any required new secret/IAM access needs its own precise authorization. Network
    configuration belongs to `run-task`; copy the service's subnets, security
    groups and public-IP setting separately rather than inventing new ones.
-3. Only after the startup/isolation gate passes, run a standalone candidate
-   with no service/discovery registration and no
-   router/DNS change. Use On-Demand `FARGATE` for website/API. Test admin
+3. Only after the startup/isolation gate passes, run website/admin as
+   standalone candidates with no service/discovery registration or router/DNS
+   change. The separately reviewed paired API protocol may use exact owned
+   temporary services in a new isolated cluster for standard ECS service
+   metrics and rolling-worker tests; it adds no production service, load
+   balancer, discovery or DNS registration. Keep its Container Insights
+   explicitly disabled. Use On-Demand `FARGATE` for website/API. Test admin
    separately using **only `FARGATE_SPOT`**, with explicit weight 1; record
    the returned task's actual capacity provider, ARM64 architecture, image
    digest, exit status and placement failures. Do not silently substitute
@@ -329,9 +794,14 @@ Do not equate regional prices or an On-Demand launch with ARM Spot placement.
    isolated test database and candidate website target, or separate explicit
    approval of the exact production mutation; cloning production credentials
    does not make a write test isolated.
-6. Stop candidate tasks, confirm STOPPED, deregister their temporary candidate
-   revisions, and record cleanup. Preserve required image evidence/recovery
-   artifacts and logs. Do not delete production task definitions or images.
+6. Scale exact owned temporary API services to zero, wait for their workers
+   to stop, and delete those services without force. Stop owned client/holder
+   and database tasks, confirm STOPPED, then deregister and delete only their
+   exact temporary task-definition revisions once INACTIVE; deregistration
+   alone retains fixture credentials. Remove the journaled temporary seed
+   manifest graph, prove the owned repository and cluster empty, and delete
+   them without force. Record cleanup and preserve evidence/recovery images
+   and logs. Do not delete production task definitions or images.
 
 ### Probe prerequisites and qualification gates
 
@@ -508,7 +978,7 @@ aws ecs register-task-definition \
   --cli-input-json file:///tmp/td-candidate.json --region il-central-1
 
 # Website/API candidate: FARGATE means On-Demand, not Spot.
-# API registration/launch is forbidden until its isolated/read-only DB secret
+# API registration/launch is forbidden until its separate-server DB secret
 # has passed the earlier startup-isolation gate; the production DB_URL is unsafe.
 # Copy the actual service's network settings into the private network JSON.
 aws ecs run-task --cluster bible-on-site-cluster \
@@ -605,7 +1075,8 @@ production configuration was changed by this audit.
   candidates; do not add IAM, SSM registration or ingress as an implicit fix.
 - Public price feeds were reread: all four on-demand and four Spot rates
   matched the table. At the live resource sizes, gross compute savings remain
-  approximately $6.55/month, before extra image storage/build overhead.
+  approximately $6.55/month, before small incremental image storage; the
+  standard public-repository build runners are free.
 - Local amd64 rehearsal built the real admin image and website dependency
   stage. Admin authentication redirect and unauthenticated server-function
   protection passed at 0.25 vCPU/512 MiB. Native SWC compilation and Sharp

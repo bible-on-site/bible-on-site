@@ -466,8 +466,17 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
-        await _navigationGate.RunAsync(() =>
-            _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+        try
+        {
+            await _navigationGate.RunAsync(() =>
+                _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Entry navigation failed for {uniqueName}: {ex}");
+        }
     }
 
     /// <summary>
@@ -505,7 +514,16 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
-        await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        try
+        {
+            await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Category navigation failed for {route}: {ex}");
+        }
     }
 
     /// <summary>
@@ -515,18 +533,27 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [RelayCommand]
     public async Task GoBackAsync()
     {
-        await _goBackGate.RunAsync(async () =>
+        try
         {
-            if (_entryHistory.Count > 0)
+            await _goBackGate.RunAsync(async () =>
             {
-                UniqueName = _entryHistory.Pop();
-                OnPropertyChanged(nameof(HasEntryHistory));
-                await SwitchToCurrentEntryAsync();
-                return;
-            }
+                if (_entryHistory.Count > 0)
+                {
+                    UniqueName = _entryHistory.Pop();
+                    OnPropertyChanged(nameof(HasEntryHistory));
+                    await SwitchToCurrentEntryAsync();
+                    return;
+                }
 
-            await _navigator.GoToAsync("..");
-        });
+                await _navigator.GoToAsync("..");
+            });
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Back navigation failed: {ex}");
+        }
     }
 }
 

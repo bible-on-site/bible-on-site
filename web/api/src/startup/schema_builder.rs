@@ -447,7 +447,7 @@ mod tests {
         assert!(one.errors.is_empty(), "{:?}", one.errors);
         let one_json = one.data.into_json().unwrap();
         assert_eq!(one_json["perekByPerekId"]["perekId"], 1);
-        assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א'");
+        assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א");
         assert_eq!(
             one_json["perekByPerekId"]["readingMetric"]["wordCount"],
             361

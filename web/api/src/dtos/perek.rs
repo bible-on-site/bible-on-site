@@ -139,9 +139,15 @@ impl From<Model> for Perek {
         // Compute compiled_source from sefer_name, additional_letter, and perek_in_context
         let compiled_source = value.sefer_name.as_ref().map(|sefer_name| {
             let perek_num = value.perek_in_context.unwrap_or(1);
-            let perek_heb = number_to_hebrew(perek_num);
+            let perek_heb =
+                number_to_hebrew(perek_num).replace(['\'', '"', '\u{05f3}', '\u{05f4}'], "");
             match &value.additional_letter {
-                Some(letter) => format!("{} {} {}", sefer_name, letter, perek_heb),
+                Some(letter) => format!(
+                    "{} {} {}",
+                    sefer_name,
+                    letter.replace(['\'', '"', '\u{05f3}', '\u{05f4}'], ""),
+                    perek_heb
+                ),
                 None => format!("{} {}", sefer_name, perek_heb),
             }
         });
@@ -323,6 +329,18 @@ mod tests {
                 .as_deref()
                 .is_some_and(|s| s.starts_with("Genesis II "))
         );
+    }
+
+    #[test]
+    fn compiled_source_uses_plain_hebrew_letters_and_accepts_legacy_marks() {
+        for (perek, expected) in [(1, "א"), (15, "טו"), (16, "טז"), (117, "קיז")] {
+            let mut model = perek_model();
+            model.sefer_name = Some("שמואל".to_string());
+            model.additional_letter = Some("ב\u{05f3}".to_string());
+            model.perek_in_context = Some(perek);
+            let dto = Perek::from(model);
+            assert_eq!(dto.compiled_source, Some(format!("שמואל ב {expected}")));
+        }
     }
 
     #[test]

@@ -173,7 +173,7 @@ export async function getECRConfig(): Promise<ECRConfig> {
 		if (!accountId) {
 			throw new Error("Failed to get AWS Account ID from STS");
 		}
-		console.info(`Using AWS Account ID: ${accountId}`);
+		console.info("AWS Account ID resolved from STS.");
 	}
 
 	if (useEnvCredentials) {

@@ -6,6 +6,7 @@ declare global {
 		readonly VITE_AWS_REGION: string;
 		readonly VITE_S3_BUCKET: string;
 		readonly VITE_WEBSITE_URL: string;
+	readonly VITE_PUBLIC_WEBSITE_URL: string;
 	}
 
 	interface ImportMeta {

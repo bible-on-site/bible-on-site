@@ -161,7 +161,7 @@ if (!data) {
 }
 ```
 
-**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.js` that:
+**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.mjs` that:
 
 1. Parses source files for `/* istanbul ignore next */` comments
 2. Marks statements, branches, and functions on the following line as covered

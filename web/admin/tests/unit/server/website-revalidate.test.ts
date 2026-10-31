@@ -170,9 +170,32 @@ describe("revalidateWebsite", () => {
 		).resolves.toBe(false);
 		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(warnSpy).toHaveBeenCalled();
-		// Unconfigured is the documented no-op, not a surfaced failure.
-		expect(lastRevalidationFailure()).toBeNull();
+		// Unconfigured still leaves unapplied work — the editor must see the
+		// stale content, flagged as a config gap rather than a failed post.
+		expect(lastRevalidationFailure()).toMatchObject({
+			requests: [{ tag: "articles" }],
+			unconfigured: true,
+		});
 		warnSpy.mockRestore();
+	});
+
+	it("delivers skipped requests on the next flush once configured", async () => {
+		delete process.env.VITE_WEBSITE_URL;
+		delete process.env.REVALIDATE_SECRET;
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		await flush(revalidateWebsite([{ tag: "articles" }]));
+
+		process.env.VITE_WEBSITE_URL = "https://site.test/";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
+		await expect(
+			flush(revalidateWebsite([{ tag: "authors" }])),
+		).resolves.toBe(true);
+
+		// The backlog post precedes the new one.
+		expect(fetchSpy).toHaveBeenCalledTimes(2);
+		expect(calledUrls()[0].searchParams.get("tag")).toBe("articles");
+		expect(calledUrls()[1].searchParams.get("tag")).toBe("authors");
+		expect(lastRevalidationFailure()).toBeNull();
 	});
 
 	it("reports failure without throwing when the site rejects", async () => {
