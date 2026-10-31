@@ -69,7 +69,8 @@ public sealed class ReportingLifecycleProbe(ITestOutputHelper output)
                     stack = Environment.StackTrace,
                 }));
                 gate.Wait();
-            }) { Name = "Intentional foreground leak regression" }.Start();
+            })
+            { Name = "Intentional foreground leak regression" }.Start();
         }
     }
 

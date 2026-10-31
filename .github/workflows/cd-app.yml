@@ -268,7 +268,9 @@ jobs:
     name: Deploy to App Store (TestFlight)
     if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
-      contents: read
+      # contents:write publishes the asset-pack publication receipt beside the
+      # release assets; the receipt is the provenance record reused packs need.
+      contents: write
       actions: read
       deployments: write
     runs-on: macos-15
@@ -319,10 +321,17 @@ jobs:
         run: |
           # Releases from before the Background Assets migration carry no .aar
           # files; their ODR-era builds need none, so skip quietly for those.
-          AAR_COUNT=$(gh release view "app-v${{ env.MODULE_VERSION }}" --json assets --jq '[.assets[].name | select(endswith(".aar"))] | length')
+          ASSETS_JSON=$(gh release view "app-v${{ env.MODULE_VERSION }}" --json assets)
+          AAR_COUNT=$(jq '[.assets[].name | select(endswith(".aar"))] | length' <<<"$ASSETS_JSON")
           echo "aar_count=$AAR_COUNT" >> "$GITHUB_OUTPUT"
           if [ "$AAR_COUNT" -gt 0 ]; then
             gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aar" --dir "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" --clobber
+            # asset-packs.json is the CI-verified pack plan; it rides with the
+            # .aar assets so reuse can be decided here without rebuilding. Older
+            # releases lack it and fall back to uploading every pack.
+            if [ "$(jq '[.assets[].name | select(. == "asset-packs.json")] | length' <<<"$ASSETS_JSON")" -gt 0 ]; then
+              gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "asset-packs.json" --dir "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" --clobber
+            fi
           fi
 
       - name: Find IPA file
@@ -398,13 +407,18 @@ jobs:
           UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
-      - name: Upload managed asset packs to App Store Connect
+      - name: Publish managed asset packs to App Store Connect
         if: ${{ steps.guard.outputs.deploy == 'true' && steps.assetpacks.outputs.aar_count != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Managed Background Assets travel beside the IPA: each .aar was built
           # by xcrun ba-package and uploaded to the app release by CI. altool
           # authenticates with the same AuthKey in ~/private_keys provisioned
           # above and associates each pack with the app's numeric Apple ID.
+          # The verified pack plan lets unchanged packs reuse their existing
+          # App Store Connect version instead of uploading duplicates; the run
+          # writes a publication receipt back onto the release.
           # --upload-asset-pack exists only in the Xcode 26+ altool; macos-15
           # still defaults xcode-select to Xcode 16, so switch toolchains first.
           XCODE_PATH=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
@@ -414,7 +428,8 @@ jobs:
           fi
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
-          node "$RUNNER_TEMP/asset-pack-upload.mjs" "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks"
+          node "$RUNNER_TEMP/asset-pack-upload.mjs" "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" \
+            --release "app-v${{ env.MODULE_VERSION }}" --repository "${{ github.repository }}"
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}

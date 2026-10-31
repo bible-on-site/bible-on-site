@@ -105,10 +105,7 @@ fn search_tokens(phrase: &str) -> Vec<String> {
     if normalized.is_empty() {
         return Vec::new();
     }
-    normalized
-        .split(' ')
-        .map(str::to_string)
-        .collect()
+    normalized.split(' ').map(str::to_string).collect()
 }
 
 /// Score a single normalized word against a single normalized term — the
@@ -147,7 +144,10 @@ fn score_normalized(normalized: &str, query: &str) -> i32 {
     if format!(" {normalized} ").contains(&format!(" {phrase} ")) {
         return 100;
     }
-    let words: Vec<&str> = normalized.split(' ').filter(|word| !word.is_empty()).collect();
+    let words: Vec<&str> = normalized
+        .split(' ')
+        .filter(|word| !word.is_empty())
+        .collect();
     let scores: Vec<i32> = phrase
         .split(' ')
         .filter(|term| !term.is_empty())
@@ -298,7 +298,9 @@ pub async fn search_entries(
     let terms = search_tokens(phrase);
     if terms.is_empty()
         || terms.len() > MAX_TERMS
-        || terms.iter().any(|term| term.chars().count() > MAX_TERM_CHARS)
+        || terms
+            .iter()
+            .any(|term| term.chars().count() > MAX_TERM_CHARS)
     {
         return Ok(Vec::new());
     }
@@ -391,8 +393,8 @@ pub async fn search_entries(
         .into_iter()
         .filter_map(|row| {
             let aliases = aliases_by_entry.get(&row.id).cloned().unwrap_or_default();
-            let title_score = search_score(&row.title, phrase)
-                .max(search_score(&row.unique_name, phrase));
+            let title_score =
+                search_score(&row.title, phrase).max(search_score(&row.unique_name, phrase));
             let synonym_score = aliases
                 .iter()
                 .map(|name| search_score(name, phrase))
@@ -454,23 +456,28 @@ mod tests {
             .collect()
     }
 
-    fn candidate(id: &str, unique_name: &str, title: &str, content: Option<&str>) -> BTreeMap<String, Value> {
+    fn candidate(
+        id: &str,
+        unique_name: &str,
+        title: &str,
+        content: Option<&str>,
+    ) -> BTreeMap<String, Value> {
         mock_row([
             ("id", id.into()),
             ("unique_name", unique_name.into()),
             ("title", title.into()),
-            ("content", match content {
-                Some(body) => Value::String(Some(body.to_string())),
-                None => Value::String(None),
-            }),
+            (
+                "content",
+                match content {
+                    Some(body) => Value::String(Some(body.to_string())),
+                    None => Value::String(None),
+                },
+            ),
         ])
     }
 
     fn alias(entry_id: &str, name: &str) -> BTreeMap<String, Value> {
-        mock_row([
-            ("entry_id", entry_id.into()),
-            ("name", name.into()),
-        ])
+        mock_row([("entry_id", entry_id.into()), ("name", name.into())])
     }
 
     fn db_with(
@@ -479,12 +486,12 @@ mod tests {
     ) -> Database {
         Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>(
-                    [candidates],
-                )
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>(
-                    [aliases],
-                )
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    candidates,
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    aliases,
+                ])
                 .into_connection(),
         )
     }
@@ -512,7 +519,9 @@ mod tests {
         assert!(gate.starts_with("(?:"));
         assert!(gate.ends_with(')'));
         assert!(gate.contains('|'));
-        assert!(gate.contains("א") && gate.contains("ב") && gate.contains("ג") && gate.contains("ד"));
+        assert!(
+            gate.contains("א") && gate.contains("ב") && gate.contains("ג") && gate.contains("ד")
+        );
     }
 
     #[test]
@@ -535,9 +544,8 @@ mod tests {
 
     #[tokio::test]
     async fn search_entries_rejects_out_of_range_arguments() {
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
-        );
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let long = "א".repeat(MAX_SEARCH_PHRASE_CHARS + 1);
         assert!(search_entries(&db, &long, None, None).await.is_err());
         assert!(search_entries(&db, "משה", Some(0), None).await.is_err());
@@ -548,23 +556,39 @@ mod tests {
     async fn search_entries_returns_empty_for_blank_or_huge_queries() {
         // No appended mock results: a DB hit would error, proving the guard
         // short-circuits before the query.
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        assert!(
+            search_entries(&db, "   ", None, None)
+                .await
+                .unwrap()
+                .is_empty()
         );
-        assert!(search_entries(&db, "   ", None, None).await.unwrap().is_empty());
-        let many_terms = (0..17).map(|i| format!("מ{i}")).collect::<Vec<_>>().join(" ");
-        assert!(search_entries(&db, &many_terms, None, None).await.unwrap().is_empty());
+        let many_terms = (0..17)
+            .map(|i| format!("מ{i}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            search_entries(&db, &many_terms, None, None)
+                .await
+                .unwrap()
+                .is_empty()
+        );
         let long_term = "א".repeat(MAX_TERM_CHARS + 1);
-        assert!(search_entries(&db, &long_term, None, None).await.unwrap().is_empty());
+        assert!(
+            search_entries(&db, &long_term, None, None)
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
     async fn search_entries_title_hit_needs_no_body() {
-        let db = db_with(
-            vec![candidate("e1", "משה-רבנו", "משה רבנו", None)],
-            vec![],
-        );
-        let hits = search_entries(&db, "משה רבנו", Some(10), None).await.unwrap();
+        let db = db_with(vec![candidate("e1", "משה-רבנו", "משה רבנו", None)], vec![]);
+        let hits = search_entries(&db, "משה רבנו", Some(10), None)
+            .await
+            .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].unique_name, "משה-רבנו");
         assert_eq!(hits[0].score, 220, "title equality is name-weighted ×2");
@@ -576,7 +600,12 @@ mod tests {
         // "בינ נון" matches only the alias, not the title — the excerpt is the
         // alias list and the score is the alias's name weight.
         let db = db_with(
-            vec![candidate("e1", "יהושע-בן-נון", "יהושע בן נון", Some("<p>מושלם</p>"))],
+            vec![candidate(
+                "e1",
+                "יהושע-בן-נון",
+                "יהושע בן נון",
+                Some("<p>מושלם</p>"),
+            )],
             vec![alias("e1", "בינ נון")],
         );
         let hits = search_entries(&db, "בינ נון", None, None).await.unwrap();
@@ -636,7 +665,12 @@ mod tests {
         // The gate is a superset — rows whose only match was a stray chunk get
         // filtered out by the score > 0 rule.
         let db = db_with(
-            vec![candidate("e1", "שלמה", "שלמה המלך", Some("<p>בנה את הבית</p>"))],
+            vec![candidate(
+                "e1",
+                "שלמה",
+                "שלמה המלך",
+                Some("<p>בנה את הבית</p>"),
+            )],
             vec![],
         );
         let hits = search_entries(&db, "אברם", None, None).await.unwrap();
@@ -658,9 +692,8 @@ mod tests {
 
     #[tokio::test]
     async fn search_entries_rejects_unknown_category() {
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
-        );
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         assert!(matches!(
             search_entries(&db, "משה", None, Some(vec!["WIZARD".to_string()])).await,
             Err(ServiceError::BadRequest(_))
@@ -700,10 +733,14 @@ mod tests {
 
         let log = conn.into_transaction_log();
         let sql = format!("{:?}", log[0]);
-        assert!(sql.contains("tanahpedia_entry_entity ee"), "scope joins linked entities: {sql}");
+        assert!(
+            sql.contains("tanahpedia_entry_entity ee"),
+            "scope joins linked entities: {sql}"
+        );
         assert!(sql.contains("en.entity_type"), "base type predicate: {sql}");
         assert!(
-            sql.contains("tanahpedia_person_role_prophet") && sql.contains("tanahpedia_person_role_king"),
+            sql.contains("tanahpedia_person_role_prophet")
+                && sql.contains("tanahpedia_person_role_king"),
             "role keys narrow to the person role tables: {sql}"
         );
         assert!(
@@ -714,7 +751,10 @@ mod tests {
             sql.contains("tanahpedia_animal_purity") && sql.contains("ac.purity"),
             "TAHOR narrows to the animal-purity classification: {sql}"
         );
-        assert!(sql.contains("PERSON") && sql.contains("BEHEMA"), "keys bind: {sql}");
+        assert!(
+            sql.contains("PERSON") && sql.contains("BEHEMA"),
+            "keys bind: {sql}"
+        );
     }
 
     #[tokio::test]
@@ -729,7 +769,9 @@ mod tests {
             .into_connection();
         let db = Database::from_connection(conn.clone());
 
-        search_entries(&db, "משה רבנו", None, Some(vec![])).await.unwrap();
+        search_entries(&db, "משה רבנו", None, Some(vec![]))
+            .await
+            .unwrap();
 
         let log = conn.into_transaction_log();
         let sql = format!("{:?}", log[0]);

@@ -27,7 +27,7 @@ jest.mock("next/link", () => ({
 
 jest.mock("next/navigation", () => ({
 	useSearchParams: () => new URLSearchParams(),
-	usePathname: () => "/פרשה/1",
+	usePathname: () => "/פרשה/בראשית",
 	useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
 	notFound: () => {
 		throw new Error("NEXT_NOT_FOUND");
@@ -81,7 +81,7 @@ const perekOnePasukCount = getPerekByPerekId(1).pesukim.length;
 const mockWholePerekUnit: ReadingUnit = {
 	division: "parasha",
 	unitId: 1,
-	slug: "1",
+	slug: "בראשית",
 	seferName: "בראשית",
 	order: 1,
 	heading: "בראשית",
@@ -107,16 +107,16 @@ import ParashaUnitPage, { generateMetadata } from "@/app/parasha/[unit]/page";
 describe("פרשה unit page — whole-perek range", () => {
 	it("keeps its own canonical URL without noindex", async () => {
 		const metadata = await generateMetadata({
-			params: Promise.resolve({ unit: "1" }),
+			params: Promise.resolve({ unit: "בראשית" }),
 		});
-		expect(metadata.alternates?.canonical).toBe("/פרשה/1");
+		expect(metadata.alternates?.canonical).toBe("/פרשה/בראשית");
 		expect(metadata.title).toContain("פרשת בראשית");
 		expect(metadata.robots).toBeUndefined();
 	});
 
 	it("falls back to the unit's first range perek for Haftarah sections", async () => {
 		const jsx = await ParashaUnitPage({
-			params: Promise.resolve({ unit: "1" }),
+			params: Promise.resolve({ unit: "בראשית" }),
 		});
 		render(jsx);
 		// No auxiliary readings → the Haftarah perushim section scopes to

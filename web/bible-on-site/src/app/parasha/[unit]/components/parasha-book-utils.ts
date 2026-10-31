@@ -3,6 +3,10 @@ import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 import type { UnitBoundaryMarker } from "@/app/components/reading/UnitTextBody";
 import bookPageSlugs from "@/data/book-page-slugs.json";
 import divisionData from "@/data/parasha/parasha-division.json";
+import {
+	parashaCanonicalSlug,
+	resolveParashaSegment,
+} from "@/data/parasha/parasha-slugs";
 import type { AuxiliaryReading, ScriptureRange } from "@/lib/reading/contract";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 
@@ -28,6 +32,8 @@ export interface ParashaBookHaftara extends AuxiliaryReading {
 
 export interface ParashaBookUnit {
 	unitId: number;
+	/** Canonical public slug — the unit URL's path segment (issue #2738). */
+	slug: string;
 	name: string;
 	order: number;
 	/** Scripture reference span of the primary range, formatted server-side. */
@@ -144,8 +150,8 @@ export function buildParashaPageSemantics(
 /**
  * URL <-> leaf mapping for the פרשה book. A parasha's Torah spread —
  * its text page and the facing commentary blank — shares
- * `/פרשה/{unitId}?book`; the Haftarah spread shares
- * `/פרשה/{unitId}?book&haftara`. Book chrome reuses the shared
+ * `/פרשה/{slug}?book`; the Haftarah spread shares
+ * `/פרשה/{slug}?book&haftara`. Book chrome reuses the shared
  * cover/contents/back slugs under `/פרשה/{sefer}/{slug}?book`.
  */
 export function buildParashaHistoryMapper(
@@ -169,7 +175,7 @@ export function buildParashaHistoryMapper(
 			const adjusted = pageIndex - PARASHA_CONTENT_OFFSET;
 			const unitIdx = Math.floor(adjusted / PAGES_PER_UNIT);
 			const unit = units[Math.min(unitIdx, units.length - 1)];
-			return `${PARASHA_ROOT}/${unit.unitId}?book${
+			return `${PARASHA_ROOT}/${unit.slug}?book${
 				adjusted % PAGES_PER_UNIT >= HAFTARA_TEXT_OFFSET ? "&haftara" : ""
 			}`;
 		},
@@ -182,11 +188,14 @@ export function buildParashaHistoryMapper(
 			if (bookPage === "front") return FRONT_COVER_INDEX;
 			if (bookPage === "toc") return TOC_SPREAD_INDEX;
 			if (bookPage === "back") return backCoverIndex;
-			const match = decodeURIComponent(pathname).match(
-				/\/(?:פרשה|parasha)\/(\d+)/,
-			);
-			if (match) {
-				const unitId = Number.parseInt(match[1], 10);
+			const segments = decodeURIComponent(pathname)
+				.split("/")
+				.filter(Boolean);
+			if (
+				segments.length === 2 &&
+				(segments[0] === "פרשה" || segments[0] === "parasha")
+			) {
+				const unitId = resolveParashaSegment(segments[1])?.unitId;
 				const idx = units.findIndex((unit) => unit.unitId === unitId);
 				if (idx >= 0) {
 					return (
@@ -254,12 +263,17 @@ export function parashaBookExitPath(
 	fallbackUnitId: number,
 ): string {
 	if (parashaBookPageFromPath(pathname)) {
-		return `${PARASHA_ROOT}/${fallbackUnitId}`;
+		return `${PARASHA_ROOT}/${parashaCanonicalSlug(fallbackUnitId)}`;
 	}
-	const match = decodeURIComponent(pathname).match(/\/(?:פרשה|parasha)\/(\d+)/);
-	return match
-		? `${PARASHA_ROOT}/${match[1]}`
-		: `${PARASHA_ROOT}/${fallbackUnitId}`;
+	const segments = decodeURIComponent(pathname).split("/").filter(Boolean);
+	const resolved =
+		segments.length === 2 &&
+		(segments[0] === "פרשה" || segments[0] === "parasha")
+			? resolveParashaSegment(segments[1])
+			: null;
+	return resolved
+		? `${PARASHA_ROOT}/${resolved.slug}`
+		: `${PARASHA_ROOT}/${parashaCanonicalSlug(fallbackUnitId)}`;
 }
 
 /** Title of a flat parasha unit page, matching generateMetadata. */

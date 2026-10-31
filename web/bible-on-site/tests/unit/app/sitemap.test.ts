@@ -14,6 +14,7 @@ import {
 	type SitemapConfig,
 	TOTAL_PERAKIM,
 } from "@/app/sitemap";
+import { getAllParashaUnits } from "@/data/parasha/parasha-units";
 import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
 
 jest.mock("@/lib/seo/perek-images-data", () => ({
@@ -135,11 +136,19 @@ describe("sitemap", () => {
 			const entries = generateParashaUnitEntries(mockConfig);
 			expect(entries).toHaveLength(54);
 			expect(entries.map((entry) => entry.url)).toEqual(
-				Array.from(
-					{ length: 54 },
-					(_, index) => `https://example.com/פרשה/${index + 1}`,
+				getAllParashaUnits().map(
+					(unit) => `https://example.com/פרשה/${unit.slug}`,
 				),
 			);
+			// Canonical Hebrew-name slugs only (issue #2738) — no numeric
+			// ids, aliases, ASCII root, or query variants.
+			expect(
+				entries.every((entry) =>
+					/^https:\/\/example\.com\/פרשה\/[א-ת-]+$/.test(
+						decodeURIComponent(entry.url),
+					),
+				),
+			).toBe(true);
 		});
 	});
 

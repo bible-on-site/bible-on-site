@@ -151,6 +151,7 @@ jest.mock("@/app/929/[number]/components/sefer-document-title", () => ({
 
 import { setUnitOpenPerush } from "@/app/components/reading/unit-book-navigation";
 import ParashaSefer from "@/app/parasha/[unit]/components/ParashaSefer";
+import { parashaUnitDocumentTitle } from "@/app/parasha/[unit]/components/parasha-book-utils";
 import type {
 	BookPage,
 	ParashaBookUnit,
@@ -178,6 +179,7 @@ const perek = (pesukim: number): Perek => ({
 const units: ParashaBookUnit[] = [
 	{
 		unitId: 1,
+		slug: "בראשית",
 		name: "בראשית",
 		order: 1,
 		refSpan: "בראשית א א - ו ח",
@@ -199,6 +201,7 @@ const units: ParashaBookUnit[] = [
 	},
 	{
 		unitId: 2,
+		slug: "נח",
 		name: "נח",
 		order: 2,
 		refSpan: "בראשית ו ט - יא לב",
@@ -282,7 +285,7 @@ describe("ParashaSefer", () => {
 		mockSummariesBatch.mockReset().mockReturnValue(new Promise(() => {}));
 		mockSetSeferDocumentTitle.mockClear();
 		mockReleaseSeferDocumentTitle.mockClear();
-		history.replaceState(null, "", "/פרשה/1?book");
+		history.replaceState(null, "", "/פרשה/בראשית?book");
 	});
 
 	it("lays out cover, contents, and Torah + Haftarah spreads per parasha", () => {
@@ -451,6 +454,34 @@ describe("ParashaSefer", () => {
 		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
 	});
 
+	it("clears the selection when popstate lands on an unresolvable unit segment", () => {
+		// `unitIdFor`'s null arm: a /פרשה book route whose segment claims
+		// no unit parses as no selection instead of latching a numeric
+		// fallback (issue #2738).
+		render(
+			<ParashaSefer
+				{...baseProps()}
+				initialContent={{ scope: "torah", kind: "perush", slug: 'רש"י' }}
+			/>,
+		);
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		act(() => {
+			history.pushState(null, "", "/פרשה/לא-פרשה?book");
+			window.dispatchEvent(new Event("popstate"));
+		});
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+	});
+
+	it("falls back to the decimal id when the current unit is outside the book", () => {
+		// Defensive end of the slug lookup: a currentUnitId no rendered
+		// unit claims can't produce a Hebrew slug — routes and the flat
+		// title degrade to the id rather than crashing the book.
+		render(<ParashaSefer {...baseProps()} currentUnitId={99} isVisible={false} />);
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalledWith(
+			parashaUnitDocumentTitle(""),
+		);
+	});
+
 	it("marks text pages for the facing blank's pasuk navigation", () => {
 		render(<ParashaSefer {...baseProps()} />);
 		// Each text section carries the pane key ({unitId}:{scope}) the
@@ -508,17 +539,17 @@ describe("ParashaSefer", () => {
 		);
 		expect(
 			getHref({ pageIndex: 3, semanticName: "א", title: "פרשת בראשית" }),
-		).toBe("/פרשה/1?book");
+		).toBe("/פרשה/בראשית?book");
 		// The blank shares the Torah spread's route; the Haftarah spread
 		// rides on &haftara.
 		expect(getHref({ pageIndex: 4, semanticName: "", title: "" })).toBe(
-			"/פרשה/1?book",
+			"/פרשה/בראשית?book",
 		);
 		expect(
 			getHref({ pageIndex: 5, semanticName: "", title: "הפטרת בראשית" }),
-		).toBe("/פרשה/1?book&haftara");
+		).toBe("/פרשה/בראשית?book&haftara");
 		expect(getHref({ pageIndex: 7, semanticName: "ב", title: "פרשת נח" })).toBe(
-			"/פרשה/2?book",
+			"/פרשה/נח?book",
 		);
 		expect(getHref({ pageIndex: 11, semanticName: "", title: "" })).toBe(
 			"/פרשה/בראשית/גב?book",
@@ -594,6 +625,7 @@ describe("ParashaSefer", () => {
 		// still yields a stable anchor instead of crashing the book.
 		const emptyUnit: ParashaBookUnit = {
 			unitId: 3,
+			slug: "ריק",
 			name: "ריק",
 			order: 3,
 			refSpan: "",
