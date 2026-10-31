@@ -38,6 +38,11 @@ public sealed class DeviceSessionDeathTests
     }
 
     [Fact]
+    public void MatchesTheProxyTimeoutThatEndsTheAppiumSession() =>
+        Assert.True(DeviceSessionDeath.Matches(new WebDriverTimeoutException(
+            "The driver did not receive any response from the 'findElements' command within 120000 ms")));
+
+    [Fact]
     public void RejectsNonDriverFailuresEvenWithTransportWording() =>
         Assert.False(DeviceSessionDeath.Matches(new InvalidOperationException("socket hang up")));
 }

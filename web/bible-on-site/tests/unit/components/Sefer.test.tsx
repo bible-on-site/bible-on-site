@@ -908,7 +908,7 @@ describe("Sefer component", () => {
 		expect(result).toEqual({ ext: "pdf", data: "base64data" });
 	});
 
-	it("onDownloadSefer returns null on error", async () => {
+	it("onDownloadSefer resolves to null when the export is unavailable, and renders no app-side alert", async () => {
 		mockDownloadSefer.mockResolvedValue({ error: "not_implemented" });
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
@@ -917,9 +917,9 @@ describe("Sefer component", () => {
 		await act(async () => {
 			expect(await config.onDownloadSefer()).toBeNull();
 		});
-		expect(screen.getByRole("alert")).toHaveTextContent(
-			"יצירת קובץ ה-PDF נכשלה",
-		);
+		// Errors surface inside the library's menu (role=alert on its own
+		// element); the app no longer renders a duplicate alert of its own.
+		expect(screen.queryByRole("alert")).toBeNull();
 	});
 
 	it.each([undefined, [], [1, 2]])(
@@ -952,23 +952,34 @@ describe("Sefer component", () => {
 		},
 	);
 
-	it("shows a visible download error and clears it on a successful retry", async () => {
+	it("rejects a failed range export so the menu can show its error and retry", async () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = () =>
 			capturedFlipBookProps.downloadConfig as {
 				onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
+				onDownloadError: (error: unknown) => unknown;
 			};
 		mockDownloadPageRanges.mockResolvedValueOnce({
 			error: "service_unavailable",
 			message: "לא ניתן היה לטעון את האיור של בראשית ב",
 		});
+		let failure: unknown;
 		await act(async () => {
-			expect(
-				await config().onDownloadPageRange([3], [], { seferName: "בראשית" }),
-			).toBeNull();
+			failure = await config()
+				.onDownloadPageRange([3], [], { seferName: "בראשית" })
+				.then(
+					() => null,
+					(e) => e,
+				);
 		});
-		expect(screen.getByRole("alert")).toHaveTextContent(
+		// The rejection carries the action's safe message; the library shows it
+		// through onDownloadError inside the open menu with a retry path.
+		expect(failure).toBeInstanceOf(Error);
+		expect(config().onDownloadError(failure)).toBe(
 			"לא ניתן היה לטעון את האיור של בראשית ב",
+		);
+		expect(config().onDownloadError(new Error("internal"))).toBe(
+			"יצירת קובץ ה-PDF נכשלה. נסו להוריד שוב בעוד רגע.",
 		);
 
 		localStorage.setItem(
@@ -984,7 +995,6 @@ describe("Sefer component", () => {
 				data: "ok",
 			});
 		});
-		expect(screen.queryByRole("alert")).toBeNull();
 		expect(mockDownloadPageRanges).toHaveBeenLastCalledWith([3], [], {
 			seferName: "בראשית",
 			divineNameMasking: expect.objectContaining({
