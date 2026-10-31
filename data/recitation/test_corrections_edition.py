@@ -55,13 +55,14 @@ class EditionManifestTests(unittest.TestCase):
                 self.assertAlmostEqual(data["edition"]["durationSec"], expected, delta=0.15)
 
     def test_edition_duration_matches_ffprobe_when_available(self):
-        if not shutil.which("ffprobe"):
+        ffprobe = shutil.which("ffprobe")
+        if not ffprobe:
             self.skipTest("ffprobe not on PATH")
         for manifest in editions():
             edition = json.loads(manifest.read_text(encoding="utf-8"))["edition"]
             artifact = manifest.parent / edition["file"]
             out = subprocess.run(  # nosec B603: resolved ffprobe, fixed argv.  # nosemgrep
-                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                [ffprobe, "-v", "error", "-show_entries", "format=duration",
                  "-of", "csv=p=0", str(artifact)],
                 check=True, capture_output=True, text=True).stdout.strip()
             with self.subTest(edition=edition["file"]):
