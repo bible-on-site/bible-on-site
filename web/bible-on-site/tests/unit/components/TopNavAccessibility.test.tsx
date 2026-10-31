@@ -40,6 +40,7 @@ const storedA11y = () =>
 describe("TopNavAccessibility", () => {
 	beforeEach(() => {
 		mockPathname = "/";
+		window.history.replaceState(null, "", "/");
 		localStorage.clear();
 		document.documentElement.removeAttribute("style");
 		delete document.documentElement.dataset.tanakhFont;
@@ -148,7 +149,9 @@ describe("TopNavAccessibility", () => {
 
 		render(<TopNavAccessibility />);
 		fireEvent.click(trigger());
-		expect(screen.getByRole("checkbox", { name: "ניגודיות גבוהה" })).toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: "ניגודיות גבוהה" }),
+		).toBeChecked();
 		fireEvent.click(
 			screen.getByRole("button", { name: "איפוס התאמות נגישות" }),
 		);
@@ -335,6 +338,45 @@ describe("TopNavAccessibility", () => {
 		rerender(<TopNavAccessibility />);
 
 		expect(panel()).not.toBeInTheDocument();
+	});
+
+	it.each([
+		"/",
+		"/לוח",
+		"/%D7%9C%D7%95%D7%97",
+		"/929/%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA/%D7%AA%D7%95%D7%9B%D7%9F",
+		"/calendar?date=2026-10-30",
+	])(
+		"preserves an opening for destination %s while the route hook catches up",
+		(destination) => {
+			mockPathname = "/accessibility";
+			window.history.replaceState(null, "", "/accessibility");
+			const { rerender } = render(<TopNavAccessibility />);
+			window.history.pushState(null, "", destination);
+			fireEvent.click(trigger());
+			expect(panel()).toBeInTheDocument();
+			expect(trigger()).toHaveAttribute("aria-expanded", "true");
+
+			mockPathname = new URL(destination, window.location.href).pathname;
+			expect(window.location.pathname).toBe(mockPathname);
+			rerender(<TopNavAccessibility />);
+			expect(panel()).toBeInTheDocument();
+			expect(trigger()).toHaveAttribute("aria-expanded", "true");
+		},
+	);
+
+	it("dismisses an opening when the browser and route hook move to a later page", () => {
+		mockPathname = "/accessibility";
+		window.history.replaceState(null, "", "/accessibility");
+		const { rerender } = render(<TopNavAccessibility />);
+		fireEvent.click(trigger());
+		expect(panel()).toBeInTheDocument();
+
+		window.history.pushState(null, "", "/");
+		mockPathname = "/";
+		rerender(<TopNavAccessibility />);
+		expect(panel()).not.toBeInTheDocument();
+		expect(trigger()).toHaveAttribute("aria-expanded", "false");
 	});
 
 	it("docks next to the reader preferences gear on reader routes", () => {
