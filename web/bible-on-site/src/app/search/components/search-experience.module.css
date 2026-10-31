@@ -176,6 +176,11 @@
   line-height: 1.6;
 }
 
+.skeletonSnippet {
+  margin-block: calc(0.125rem + 0.4em) 0.4em;
+  font-size: 0.9375rem;
+}
+
 .resultSnippet mark {
   color: inherit;
   font-weight: 700;

@@ -20,6 +20,9 @@ partial class Build
     [Parameter("Path to AAB file for Google Play upload")]
     readonly string? AabPath;
 
+    [Parameter("Path to native debug symbols zip for Google Play upload")]
+    readonly string? AndroidSymbolsPath;
+
     [Parameter("Path to Google Play service account JSON file")]
     readonly string? GooglePlayKeyFile;
 
@@ -74,7 +77,33 @@ partial class Build
             }
 
             var bundle = uploadRequest.ResponseBody;
+            Assert.True(bundle.VersionCode.HasValue, "Bundle upload returned no version code");
             Serilog.Log.Information($"Uploaded bundle with version code: {bundle.VersionCode}");
+
+            // Upload native debug symbols for the version code just uploaded
+            if (!string.IsNullOrEmpty(AndroidSymbolsPath))
+            {
+                var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+                Assert.FileExists(symbolsFile, $"Native symbols file not found: {symbolsFile}");
+                using var symbolsStream = File.OpenRead(symbolsFile);
+                var symbolsUpload = service.Edits.Deobfuscationfiles.Upload(
+                    GooglePlayPackageName,
+                    edit.Id,
+                    (int)bundle.VersionCode.Value,
+                    EditsResource.DeobfuscationfilesResource.UploadMediaUpload.DeobfuscationFileTypeEnum.NativeCode,
+                    symbolsStream,
+                    "application/octet-stream");
+                var symbolsProgress = symbolsUpload.Upload();
+                if (symbolsProgress.Status != UploadStatus.Completed)
+                {
+                    Assert.Fail($"Native symbols upload failed: {symbolsProgress.Exception?.Message}");
+                }
+                Serilog.Log.Information($"Uploaded native debug symbols for version code {bundle.VersionCode}");
+            }
+            else
+            {
+                Serilog.Log.Warning("No native debug symbols provided; Play Console will report them missing");
+            }
 
             // Assign to track
             var trackUpdate = new Track

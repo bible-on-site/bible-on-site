@@ -822,6 +822,13 @@ describe("LearningCalendar", () => {
 			} as Response;
 		}
 
+		// The full-cycle view renders thousands of day buttons; a role query
+		// computes every one's accessible name (~350 ms of the test's critical
+		// path), so the full-cycle tests address the action directly.
+		function pdfButton(container: HTMLElement): Element {
+			return q(container, '[aria-label^="הורדת PDF"]');
+		}
+
 		beforeEach(() => {
 			resetCalendarPdfAssetCache();
 			global.fetch = jest.fn();
@@ -850,11 +857,9 @@ describe("LearningCalendar", () => {
 
 		it("names the selected cycle in full-cycle view", () => {
 			setSearchParam("578601", { view: "cycle", cycle: "4" });
-			render(<LearningCalendar {...pdfProps} />);
+			const { container } = render(<LearningCalendar {...pdfProps} />);
 
-			expect(
-				screen.getByRole("button", { name: /הורדת PDF: מחזור ד'/ }),
-			).toBeInTheDocument();
+			expect(pdfButton(container)).toHaveAccessibleName(/הורדת PDF: מחזור ד'/);
 		});
 
 		it("fetches nothing while the calendar is browsed", () => {
@@ -919,9 +924,11 @@ describe("LearningCalendar", () => {
 					: Promise.reject(new Error("unexpected fetch")),
 			);
 			setSearchParam("578601", { view: "cycle", cycle: "4" });
-			render(<LearningCalendar {...pdfProps} pdfManifestUrl={MANIFEST_URL} />);
+			const { container } = render(
+				<LearningCalendar {...pdfProps} pdfManifestUrl={MANIFEST_URL} />,
+			);
 
-			fireEvent.click(screen.getByRole("button", { name: /הורדת PDF/ }));
+			fireEvent.click(pdfButton(container));
 
 			await waitFor(() => expect(clickSpy).toHaveBeenCalled());
 			expect((clickSpy.mock.contexts[0] as HTMLAnchorElement).href).toBe(
