@@ -82,10 +82,12 @@
   text-align: center;
 }
 
-.carouselItem:hover {
-  border-color: var(--hc-muted, #8b7355);
-  box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .carouselItem:hover {
+    border-color: var(--hc-muted, #8b7355);
+    box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+    transform: translateY(-1px);
+  }
 }
 
 .perushIcon {
@@ -145,8 +147,10 @@
   transition: background 0.15s;
 }
 
-.backButton:hover {
-  background: #f0ead8;
+@media (hover: hover) {
+  .backButton:hover {
+    background: #f0ead8;
+  }
 }
 
 .fullViewTitle {
@@ -204,9 +208,11 @@
   display: inline-block;
 }
 
-.pasukLink:hover {
-  color: #5a4a2e;
-  text-decoration: underline;
+@media (hover: hover) {
+  .pasukLink:hover {
+    color: #5a4a2e;
+    text-decoration: underline;
+  }
 }
 
 /* Body text justified like the perek pesukim (.perekText); the last line of
@@ -272,8 +278,10 @@
   display: inline-block;
 }
 
-.shareButton:hover {
-  background: #e8e0cc;
+@media (hover: hover) {
+  .shareButton:hover {
+    background: #e8e0cc;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -294,8 +302,10 @@
     color: var(--hc-muted, #b8a578);
   }
 
-  .pasukLink:hover {
-    color: var(--hc-muted, #cbb98c);
+  @media (hover: hover) {
+    .pasukLink:hover {
+      color: var(--hc-muted, #cbb98c);
+    }
   }
 
   .pasukGroup[data-pasuk-highlight] {
@@ -317,8 +327,10 @@
     border-color: #4a4030;
   }
 
-  .carouselItem:hover {
-    border-color: var(--hc-muted, #8b7355);
+  @media (hover: hover) {
+    .carouselItem:hover {
+      border-color: var(--hc-muted, #8b7355);
+    }
   }
 
   .noteCount {
@@ -332,9 +344,11 @@
     color: var(--hc-muted, #cbb98c);
   }
 
-  .backButton:hover,
-  .shareButton:hover {
-    background: #2a241a;
+  @media (hover: hover) {
+    .backButton:hover,
+    .shareButton:hover {
+      background: #2a241a;
+    }
   }
 
   .shareButton {
@@ -344,4 +358,10 @@
   .noteContent {
     color: #e8eaed;
   }
+}
+
+.carouselItem:active,
+.backButton:active,
+.shareButton:active {
+  scale: var(--press-scale);
 }

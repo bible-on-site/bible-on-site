@@ -80,10 +80,12 @@
   gap: 8px;
 }
 
-.carouselItem:hover {
-  border-color: #1c2c5d;
-  box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .carouselItem:hover {
+    border-color: #1c2c5d;
+    box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
+    transform: translateY(-1px);
+  }
 }
 
 /* When carousel item is a button (in-place open in flipbook), match link appearance */
@@ -211,8 +213,10 @@ button.carouselItem {
     border-color: #2d3548;
   }
 
-  .carouselItem:hover {
-    border-color: #a8b9ff;
+  @media (hover: hover) {
+    .carouselItem:hover {
+      border-color: #a8b9ff;
+    }
   }
 
   .authorImage {
@@ -222,4 +226,8 @@ button.carouselItem {
   .articleAbstract {
     color: #d7dae0;
   }
+}
+
+.carouselItem:active {
+  scale: var(--press-scale);
 }

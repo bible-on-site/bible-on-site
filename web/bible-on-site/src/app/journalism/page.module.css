@@ -39,9 +39,11 @@
   position: relative;
 }
 
-.masonryItem:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .masonryItem:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .itemImage {
@@ -86,9 +88,11 @@
   transition: all 0.2s ease;
 }
 
-.backLink:hover {
-  background: #2a3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .backLink:hover {
+    background: #2a3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 /* Masonry items as buttons */
@@ -152,8 +156,10 @@
   z-index: 1;
 }
 
-.modalClose:hover {
-  transform: scale(1.1);
+@media (hover: hover) {
+  .modalClose:hover {
+    transform: scale(1.1);
+  }
 }
 
 .modalNav {
@@ -176,8 +182,10 @@
   line-height: 1;
 }
 
-.modalNav:hover {
-  background: rgba(255, 255, 255, 0.3);
+@media (hover: hover) {
+  .modalNav:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
 }
 
 .modalNavPrev {
@@ -248,7 +256,15 @@
     color: #16213d;
   }
 
-  .backLink:hover {
-    background: #c7d2fe;
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #c7d2fe;
+    }
   }
+}
+
+.masonryItem:active,
+.modalClose:active,
+.modalNav:active {
+  scale: var(--press-scale);
 }
