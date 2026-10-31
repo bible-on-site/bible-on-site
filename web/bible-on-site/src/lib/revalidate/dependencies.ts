@@ -480,8 +480,6 @@ async function resolveAuthor(
 		addTag(sink, authorTag(normalizeAuthorName(name)));
 		addPath(sink, `/929/authors/${authorNameToSlug(name)}`);
 	}
-	// Legacy numeric-param author pages still resolve on demand.
-	addTag(sink, authorTag(String(change.id)));
 	addTag(sink, authorArticlesTag(change.id));
 
 	// The author's name/details render inside every one of their article

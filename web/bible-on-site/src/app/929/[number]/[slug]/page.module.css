@@ -13,7 +13,7 @@
   scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
@@ -41,7 +41,7 @@
   border-radius: 50%;
   overflow: hidden;
   background: #f3f4f6;
-  border: 2px solid #1c2c5d;
+  border: 2px solid var(--accent-900);
 }
 
 .authorImg {
@@ -53,18 +53,18 @@
 .authorName {
   font-size: 1rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   transition: color 0.2s;
 }
 
 .authorLink:hover .authorName {
-  color: #1552ac;
+  color: var(--accent-600);
 }
 
 .articleTitle {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0;
   line-height: 1.4;
 }
@@ -89,7 +89,7 @@
 .articleBody h2,
 .articleBody h3,
 .articleBody h4 {
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 1.5em 0 0.5em;
 }
 
@@ -133,7 +133,7 @@
 
 .articleBody a:global(.tanahpedia-mention):hover {
   border-bottom-style: solid;
-  border-bottom-color: var(--link-accent, #1552ac);
+  border-bottom-color: var(--link-accent-hover);
 }
 
 @counter-style article-hebrew-alpha {
@@ -187,14 +187,14 @@
 }
 
 .backLink {
-  color: #1c2c5d;
+  color: var(--accent-900);
   text-decoration: none;
   font-size: 0.95rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: #ffffff;
   border: 1px solid #e5e7eb;
   transition: all 0.2s;
@@ -202,7 +202,7 @@
 
 .backLink:hover {
   background: #f3f4f6;
-  border-color: #1c2c5d;
+  border-color: var(--accent-900);
 }
 
 /* When .backLink is used as a button (e.g. in flipbook article view) */
@@ -242,7 +242,7 @@ button.backLink {
   scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
@@ -257,7 +257,7 @@ button.backLink {
 .perushTitle {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
 }
 
@@ -277,8 +277,8 @@ button.backLink {
 .note {
   padding: 16px;
   background: #f9fafb;
-  border-radius: 8px;
-  border-right: 4px solid #1c2c5d;
+  border-radius: var(--radius-md);
+  border-right: 4px solid var(--accent-900);
 }
 
 .noteHighlight {
@@ -296,7 +296,7 @@ button.backLink {
 .notePasuk {
   display: inline-block;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin-left: 8px;
   font-size: 1.05rem;
 }
@@ -359,7 +359,7 @@ button.backLink {
 
   .authorImage {
     background: #2d3548;
-    border-color: #a8b9ff;
+    border-color: var(--accent-200);
   }
 
   .authorName,
@@ -370,7 +370,7 @@ button.backLink {
   .perushTitle,
   .notePasuk,
   .backLink {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .authorLink:hover .authorName,
@@ -394,7 +394,7 @@ button.backLink {
 
   .backLink:hover {
     background: #232a45;
-    border-color: #a8b9ff;
+    border-color: var(--accent-200);
   }
 
   .parshanName {

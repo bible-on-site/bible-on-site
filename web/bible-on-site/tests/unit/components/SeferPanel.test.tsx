@@ -289,6 +289,28 @@ describe("grouped commentary", () => {
 		}
 	});
 
+	it("shows commentary skeletons while the batch is pending", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let resolve!: (
+			notes: Awaited<ReturnType<typeof getPerushNotesForPerekBatch>>,
+		) => void;
+		mockGetPerushNotesBatch.mockReturnValue(
+			new Promise((r) => {
+				resolve = r;
+			}),
+		);
+		const { container } = await renderPanel(<SeferPanel {...PROPS} />);
+		expect(screen.getByText("מתחבר לפירוש...")).toBeTruthy();
+		expect(
+			container.querySelector('[aria-busy="true"] [data-skeleton]'),
+		).not.toBeNull();
+		await act(async () => {
+			resolve({ 1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" }] });
+		});
+		expect(screen.getByText("פסוק א")).toBeTruthy();
+		expect(screen.queryByText("מתחבר לפירוש...")).toBeNull();
+	});
+
 	it("shows the empty state when nothing is selected", async () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
 		expect(screen.getByText(/לא נבחרו פרשנים/)).toBeTruthy();
