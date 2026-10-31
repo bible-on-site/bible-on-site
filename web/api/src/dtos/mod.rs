@@ -4,6 +4,7 @@ pub mod dedication;
 pub mod perek;
 pub mod sefer;
 pub mod starter;
+pub mod tanahpedia_aliases;
 pub mod tanahpedia_entity;
 pub mod tanahpedia_entries;
 pub mod tanahpedia_entry_revision;

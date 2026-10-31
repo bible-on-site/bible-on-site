@@ -1,6 +1,6 @@
 /* Set the nav background color for tanahpedia pages */
 body:has(.tanahpedia-layout) .top-nav {
-  background-color: #1552ac;
+  background-color: var(--accent-600);
 }
 
 /* Full page width like perek layout */

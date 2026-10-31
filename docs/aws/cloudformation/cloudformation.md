@@ -27,6 +27,28 @@ Sensitive values are masked with placeholders. To retrieve actual values:
 | `<EC2_PUBLIC_IP>` | `aws ec2 describe-instances --instance-ids i-0d811651c11294634 --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
 | `<KEY_PAIR_FINGERPRINT>` | `aws ec2 describe-key-pairs --key-names nginx --query "KeyPairs[0].KeyFingerprint" --output text --region il-central-1` |
 
+## Lambda Python Runtimes
+
+The Python Lambdas (`bible-on-site-db-populator`, `ecr-to-ecs-deploy`) target
+`python3.14`, the latest generally available Lambda Python runtime (Amazon Linux
+2023, deprecation scheduled for 2029-06-30). `python3.15` is still in public
+preview and is not covered by the Lambda SLA, so do not use it for production.
+The data-deploy recovery tests in `ci-data-deploy.yml` run on Python 3.14.
+
+The live functions are created outside CloudFormation. After explicit approval
+of the AWS change, upgrade each one in `il-central-1`, recording the previous
+runtime for rollback:
+
+```bash
+aws lambda get-function-configuration --function-name <NAME> --query Runtime --region il-central-1
+aws lambda update-function-configuration --function-name <NAME> --runtime python3.14 --region il-central-1
+aws lambda wait function-updated --function-name <NAME> --region il-central-1
+```
+
+Verify with the next data CD (`bible-on-site-db-populator`) or ECR push
+(`ecr-to-ecs-deploy`) and the function's CloudWatch logs. Roll back by running
+`update-function-configuration` with the recorded runtime.
+
 ## Templates
 
 ### 1. `vpc-networking.yaml`
@@ -90,6 +112,11 @@ EC2 instance running nginx as reverse proxy.
 - Routes to ECS via Cloud Map DNS (`website.bible-on-site.local`)
 - VPC DNS resolver (`172.31.0.2`) for service discovery
 
+Replacement sizing/architecture (t4g Graviton candidates, validation harness,
+staged DNS canary and EIP cutover) is analyzed in
+[../router-replacement-validation.md](../router-replacement-validation.md) —
+issue #2561.
+
 > **Note**: Key pair and SSL certificates must be set up manually.
 
 ### 5. `github-oidc.yaml`
@@ -117,7 +144,7 @@ Automatic ECS deployment when ECR images are pushed.
 - EventBridge Rules: Listen for ECR push events (tag: `latest`)
   - `ecr-push-bible-on-site-website` → triggers on `bible-on-site` repo
   - `ecr-push-bible-on-site-api` → triggers on `bible-on-site-api` repo
-- Lambda Function: `ecr-to-ecs-deploy` (Python 3.12)
+- Lambda Function: `ecr-to-ecs-deploy` (Python 3.14)
 - IAM Roles: `ECRDeployLambdaRole`, `EventBridgeECSDeployRole`
 
 **Flow:** ECR Push → EventBridge → Lambda → ECS UpdateService (forceNewDeployment)
@@ -208,7 +235,7 @@ Lambda function for deploying SQL data to RDS MySQL.
 
 **Components:**
 - S3 Bucket: `bible-on-site-data-deploy` (SQL file staging)
-- Lambda Function: `bible-on-site-db-populator` (Python 3.11)
+- Lambda Function: `bible-on-site-db-populator` (Python 3.14)
 - Security Group: `data-deploy-lambda-sg` (VPC access)
 - IAM Role: `DataDeployLambdaRole` (SSM read, S3 read)
 
@@ -230,12 +257,15 @@ validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/
   aliases, so no DNS/ACM change is needed to validate
 - `Managed-CachingDisabled` cache policy + `Managed-AllViewerExceptHostHeader`
   origin request policy (pass-through to the canonical nginx vhost)
-- Dedicated standard-access-log S3 bucket (parameter-gated) for request-mix
-  evidence
+- No access-log bucket: nginx logs cover forwarded origin requests and
+  CloudWatch standard metrics cover edge request/byte/error totals
 
 > **Note**: Validation-only candidate. See
 > [edge-rollout-validation.md](../edge-rollout-validation.md) for the full
 > plan, staged migration and rollback. No production routing is changed.
+> The candidate hostname is public. The live DNS and cost findings in
+> [edge-research-2026-10-27.md](../edge-research-2026-10-27.md) are preconditions
+> for any later rollout, including explicit API/admin DNS isolation.
 
 ## Data Flow: ECR → ECS → nginx → Internet
 

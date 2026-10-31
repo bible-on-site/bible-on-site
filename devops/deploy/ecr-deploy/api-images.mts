@@ -9,6 +9,7 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import {
 	BatchGetImageCommand,
+	DescribeImagesCommand,
 	DescribeRepositoriesCommand,
 	type ECRClient,
 	PutImageCommand,
@@ -376,7 +377,7 @@ async function putImage(
 	tag: string,
 	image: RegistryImage,
 ): Promise<void> {
-	await client.send(
+	const receipt = await client.send(
 		new PutImageCommand({
 			repositoryName,
 			imageTag: tag,
@@ -385,9 +386,35 @@ async function putImage(
 			imageDigest: image.digest,
 		}),
 	);
-	const stored = await readImage(client, repositoryName, tag);
-	if (stored?.digest !== image.digest)
-		throw new Error(`Registry did not preserve the exact digest for ${tag}`);
+	const written = receipt.image;
+	if (
+		written?.repositoryName !== repositoryName ||
+		written.imageId?.imageTag !== tag ||
+		written.imageId?.imageDigest !== image.digest ||
+		written.imageManifest !== image.manifest ||
+		written.imageManifestMediaType !== image.mediaType
+	)
+		throw new Error(
+			`Registry write receipt does not match the exact image for ${tag}`,
+		);
+	// BatchGetImage's manifest-by-tag path can return the previous image after
+	// a successful retag. Verify the exact write acknowledgement above and the
+	// tag's metadata here, without sleeping, retrying or accepting another digest.
+	const result = await client.send(
+		new DescribeImagesCommand({
+			repositoryName,
+			imageIds: [{ imageTag: tag }],
+		}),
+	);
+	const stored = result.imageDetails;
+	if (
+		stored?.length !== 1 ||
+		!stored[0].imageTags?.includes(tag) ||
+		stored[0].imageDigest !== image.digest
+	)
+		throw new Error(
+			`Registry tag metadata does not preserve the exact digest for ${tag}`,
+		);
 }
 
 async function immutableImage(
