@@ -90,6 +90,12 @@
   }
 }
 
+/* Loading placeholder card: same box as a real card, not interactive. */
+.skeletonItem {
+  cursor: default;
+  pointer-events: none;
+}
+
 .perushIcon {
   margin-bottom: 2px;
   opacity: 0.7;
