@@ -15,7 +15,14 @@ Parameters:
       - t3.micro
       - t3.small
       - t3.medium
-    Description: EC2 instance type
+      - t4g.micro
+      - t4g.small
+      - t4g.medium
+    Description: |
+      EC2 instance type. t4g.* values are arm64 Graviton candidates under
+      evaluation for #2561 (see ../../router-replacement-validation.md); they
+      require the arm64 AMI parameter below and a separately built, validated
+      replacement instance — never a stop/resize of the live router.
 
   KeyPairName:
     Type: String
@@ -36,10 +43,12 @@ Parameters:
 
   # Using Amazon Linux 2023 AMI for il-central-1
   # To get latest: aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --region il-central-1
+  # For a t4g/arm64 candidate (#2561) use the arm64 parameter instead:
+  #   /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
   AmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
-    Description: Amazon Linux 2023 AMI ID (auto-updated via SSM parameter)
+    Description: Amazon Linux 2023 AMI ID (auto-updated via SSM parameter; arm64 SSM path required for t4g candidates)
 
 Metadata:
   Documentation: |
@@ -392,7 +401,8 @@ Outputs:
 # measured memory/connection headroom, an approved traffic migration and a
 # retained working router for rollback. An EIP reassociation can also interrupt
 # existing connections; do not describe it as a zero-downtime cutover.
-# See ../../cost-risk-audit-2026-10-23.md and issue #2561.
+# See ../../cost-risk-audit-2026-10-23.md, ../../router-replacement-validation.md
+# and issue #2561.
 #
 # =============================================================================
 
