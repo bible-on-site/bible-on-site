@@ -26,7 +26,7 @@
 	min-width: 2.5rem;
 	height: 2.5rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 	font-size: 1.1rem;
@@ -67,7 +67,7 @@
 .picker {
 	height: 2.5rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 	font-size: 0.95rem;
@@ -125,7 +125,7 @@
 	min-height: 4.5rem;
 	padding: 0.3rem 0.15rem 0.4rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-muted);
 	color: var(--foreground);
 	font: inherit;
@@ -170,7 +170,7 @@ button.cell {
 	font-weight: 700;
 	color: var(--muted-text);
 	border: 1px solid var(--border-subtle);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	padding: 0 0.45rem;
 	line-height: 1.5;
 }
@@ -224,7 +224,7 @@ button.cell {
 .legendSwatch {
 	width: 0.9rem;
 	height: 0.9rem;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-subtle);
 	display: inline-block;
 }
@@ -292,7 +292,7 @@ button.cell {
 	height: 2.4rem;
 	padding: 0 1rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 	font-size: 0.95rem;
@@ -314,7 +314,7 @@ button.cell {
 
 .miniMonth {
 	border: 1px solid var(--border-subtle);
-	border-radius: 10px;
+	border-radius: var(--radius-md);
 	padding: 0.5rem;
 	background: var(--surface-muted);
 }
@@ -345,7 +345,7 @@ button.cell {
 	align-items: center;
 	justify-content: center;
 	min-height: 1.6rem;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	font: inherit;
 	font-size: 0.75rem;
 	background: var(--surface-elevated);
@@ -403,7 +403,7 @@ button.miniCell {
 	gap: 0.4rem;
 	min-height: 2.5rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--primary-color, #1668dc);
 	font-size: 0.95rem;

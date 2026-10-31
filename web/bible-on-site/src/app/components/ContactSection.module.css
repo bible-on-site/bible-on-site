@@ -3,7 +3,7 @@
 	text-align: center;
 	width: 100%;
 	z-index: 2;
-	background-color: #1552ac;
+	background-color: var(--accent-600);
 	background-image: url(/root/dots-primary-dark.webp);
 	background-repeat: repeat;
 	background-size: 6px;

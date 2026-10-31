@@ -10,7 +10,7 @@
 	flex: 1;
 	min-width: 0;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	padding: 5px 3px;
 	margin: 0;
 	color: var(--muted-text, #637598);
@@ -58,7 +58,7 @@ button.heading {
 	max-width: 250px;
 	padding: 6px 10px;
 	border: 1px solid #e4e8ef;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: #fff;
 	box-shadow: 0 3px 10px #20396018;
 	color: #526789;
@@ -84,7 +84,7 @@ button.heading {
 	min-height: 32px;
 	min-width: 32px;
 	border: 0;
-	border-radius: 20px;
+	border-radius: var(--radius-pill);
 	padding: 0;
 	background: transparent;
 	color: inherit;
@@ -112,7 +112,7 @@ button.heading {
 	border: 0;
 	padding: 0;
 	margin: 0;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: inherit;
 	font: inherit;
@@ -207,13 +207,13 @@ button.heading {
 
 	.headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
 		background: #232a45;
-		color: #a8b9ff;
+		color: var(--accent-200);
 	}
 
 	@media (hover: hover) {
 		.headerRow:has([data-chapter-play]:hover) [data-chapter-play] {
 			background: #232a45;
-			color: #a8b9ff;
+			color: var(--accent-200);
 		}
 	}
 
@@ -228,7 +228,7 @@ button.heading {
 	}
 
 	.toggle[aria-pressed="true"] {
-		color: #a8b9ff;
+		color: var(--accent-200);
 		background: #232a45;
 	}
 
@@ -240,14 +240,14 @@ button.heading {
 	}
 
 	.word[data-recitation-active="true"] {
-		color: #a8b9ff;
+		color: var(--accent-200);
 		background: #232a45;
 	}
 
 	@media (hover: hover) {
 		.word[role="button"]:hover,
 		.pasuk[role="button"]:hover {
-			color: #a8b9ff;
+			color: var(--accent-200);
 			background: #232a45;
 		}
 	}

@@ -242,7 +242,6 @@ describe("resolveEntityChanges", () => {
 				"authors",
 				"author:רשי",
 				"author:ישן",
-				"author:3",
 				"author:3:articles",
 				"article:12",
 				"perek:5:articles",
@@ -272,10 +271,11 @@ describe("resolveEntityChanges", () => {
 			expect.arrayContaining([
 				"authors",
 				"author:רשי",
-				"author:3",
 				"author:3:articles",
 			]),
 		);
+		// Author pages are addressed by name only: no numeric-id page tag.
+		expect(out.tags).not.toContain("author:3");
 	});
 
 	it("resolves a live pedia entry including synonyms, old name and category", async () => {
