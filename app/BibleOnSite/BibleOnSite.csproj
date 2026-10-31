@@ -58,11 +58,17 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.227</ApplicationDisplayVersion>
-		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
-		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000227</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">227</ApplicationVersion>
+		<ApplicationDisplayVersion>5.1.0</ApplicationDisplayVersion>
+		<!-- Platform build number = major*10^7 + minor*10^5 + patch (5.1.0 -> 50100000) for
+		     every store that accepts large integers: Android versionCode (continuing Play
+		     Store's 40000017 base) and Apple CFBundleVersion, which must never regress
+		     across marketing versions, including on minor bumps where the patch resets. -->
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100000</ApplicationVersion>
+		<!-- Windows MSIX merges the display version and this value into a 4-part version.
+		     The Microsoft Store reserves the revision component, so it stays 0 (the Nuke
+		     packer also pins it); the leading marketing version keeps packages strictly
+		     increasing (5.1.0.0 > 5.0.224.0). -->
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">0</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
