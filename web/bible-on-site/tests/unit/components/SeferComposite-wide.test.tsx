@@ -154,6 +154,71 @@ describe("SeferComposite (wide screen)", () => {
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 
+	it("keeps a rapidly reopened book visible after the previous close delay", async () => {
+		jest.useFakeTimers();
+		try {
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => fireEvent.click(toggle));
+			const book = screen.getByTestId("sefer");
+			const mount = book.getAttribute("data-mount");
+			fireEvent.click(toggle);
+			act(() => jest.advanceTimersByTime(100));
+			await act(async () => fireEvent.click(toggle));
+			expect(book).toBeVisible();
+			act(() => jest.advanceTimersByTime(300));
+			expect(toggle).toBeChecked();
+			expect(document.documentElement).toHaveAttribute("data-book-view");
+			expect(book).toBeVisible();
+			expect(book.getAttribute("data-mount")).toBe(mount);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("retains the existing 300ms close delay", async () => {
+		jest.useFakeTimers();
+		try {
+			render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => fireEvent.click(toggle));
+			const overlay = screen.getByTestId("sefer").parentElement;
+			fireEvent.click(toggle);
+			expect(toggle).not.toBeChecked();
+			expect(document.documentElement).not.toHaveAttribute("data-book-view");
+			act(() => jest.advanceTimersByTime(299));
+			expect(overlay).toHaveStyle({ display: "initial" });
+			act(() => jest.advanceTimersByTime(1));
+			expect(overlay).toHaveStyle({ display: "none" });
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("releases a pending close timer when the reader unmounts", async () => {
+		jest.useFakeTimers();
+		try {
+			const { unmount } = render(
+				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+			);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => fireEvent.click(toggle));
+			const initialTimers = jest.getTimerCount();
+			fireEvent.click(toggle);
+			expect(jest.getTimerCount()).toBe(initialTimers + 1);
+			unmount();
+			expect(jest.getTimerCount()).toBe(initialTimers);
+			expect(screen.queryByTestId("sefer")).toBeNull();
+			expect(document.documentElement).not.toHaveAttribute("data-book-view");
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it("reopens an already mounted book after closing it", async () => {
 		jest.useFakeTimers();
 		try {
