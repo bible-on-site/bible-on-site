@@ -42,7 +42,7 @@
 
 .breadcrumb li a {
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-decoration: underline;
   color: var(--link-accent, #0066cc);
   transition:
@@ -73,7 +73,7 @@
   border: none;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font: inherit;
   color: inherit;
   transition: background-color 0.2s ease;
@@ -127,7 +127,7 @@
   margin-top: 0;
   background-color: #fff;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   min-width: 150px;
@@ -400,11 +400,11 @@
   }
 
   .breadcrumb li a {
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .breadcrumb li a:hover {
-    color: #a8b9ff;
+    color: var(--accent-200);
     background-color: #232a45;
   }
 
@@ -431,12 +431,12 @@
 
   .drop ul li a:hover {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .drop ul li a:focus {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .small {
@@ -450,7 +450,7 @@
   .drop .tanahpedia-category-parent:hover,
   .drop .tanahpedia-category-parent:focus {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .drop .tanahpedia-nested li a {
@@ -460,6 +460,6 @@
   .drop .tanahpedia-nested li a:hover,
   .drop .tanahpedia-nested li a:focus {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 }
