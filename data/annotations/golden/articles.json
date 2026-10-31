@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "domain": "article",
+  "description": "Curated held-out golden cases for the article-domain baseline (issue #2516). Content is authored HTML exercising the matching rules on realistic fragments; `surface` is the exact substring the mention occupies (fused prefixes included, as the contract stores it); `expected: held` means an ordinary/homograph surface a curator would suppress — emitting it held is correct, emitting it auto is a precision failure, not emitting it at all is also acceptable. `article_id` is a synthetic key — only the contract shape matters here.",
+  "categories": {
+    "prefixes": "Fused inseparable prefixes stripped for the intended name.",
+    "quoted-scripture": "Vocalized pasuk text quoted inside article prose.",
+    "anchors": "Names inside existing <a> must never be re-decorated.",
+    "homographs": "Common words that collide with name spellings — correct handling is held, never a link.",
+    "multi-word": "Compound names incl. maqaf-joined surfaces.",
+    "coverage-gap": "Names outside the pasuk-corpus gazetteer (recall floor).",
+    "skip-zones": "<script>/<style> interiors excluded.",
+    "ambiguity": "Same spelling different referent (ישראל nation, כנען the land).",
+    "spelling": "Defective spelling vs canonical entry name (ירושלם/ירושלים).",
+    "utf16": "Astral characters shift span offsets by UTF-16 code units.",
+    "ordinary-nouns": "Plain prose with no intended mentions at all."
+  },
+  "cases": [
+    {
+      "id": "art-prefixes",
+      "categories": ["prefixes", "homographs"],
+      "article_id": 9001,
+      "content": "<p>ויאמר אל לוט ולאברם לך ממקומך</p>",
+      "note": "אל the preposition is a homograph (name El) — held is correct; לוט and ולאברם are real mentions.",
+      "mentions": [
+        { "surface": "אל", "name": "אל", "type": "PERSON", "expected": "held" },
+        { "surface": "לוט", "name": "לוט", "type": "PERSON" },
+        { "surface": "ולאברם", "name": "אברם", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "art-quoted-pasuk",
+      "categories": ["quoted-scripture", "prefixes", "homographs"],
+      "article_id": 9002,
+      "content": "<p>כמו שנאמר: <q>וַיֹּאמֶר יְהוָה֙ אֶל־אַבְרָ֔ם לֶךְ־לְךָ֛</q> כך דרשו</p>",
+      "note": "Mixed prose + quoted vocalized pasuk; אֶל־ is the preposition — held.",
+      "mentions": [
+        { "surface": "יְהוָה֙", "name": "יהוה", "type": "PERSON" },
+        { "surface": "אֶל", "name": "אל", "type": "PERSON", "expected": "held" },
+        { "surface": "אַבְרָ֔ם", "name": "אברם", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "art-existing-anchors",
+      "categories": ["anchors", "homographs"],
+      "article_id": 9003,
+      "content": "<p>כבר קישרנו <a href='/pedia/אברם'>אברם</a> וגם <a href='/929/12'>פרק יב</a> ועכשיו נזכיר לוט</p>",
+      "note": "אברם inside the existing anchor must not be re-decorated (invalid nested markup); כבר is an ordinary word held as a homograph.",
+      "mentions": [
+        { "surface": "כבר", "name": "כבר", "type": "PLACE", "expected": "held" },
+        { "surface": "לוט", "name": "לוט", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "art-held-homographs",
+      "categories": ["homographs"],
+      "article_id": 9004,
+      "content": "<p>המלך דוד אמר שם מלך אחר</p>",
+      "note": "מלך/אמר/שם/אחר are ordinary words colliding with name spellings — all held; דוד is a real mention.",
+      "mentions": [
+        { "surface": "המלך", "name": "מלך", "type": "PERSON", "expected": "held" },
+        { "surface": "דוד", "name": "דוד", "type": "PERSON" },
+        { "surface": "אמר", "name": "אמר", "type": "PERSON", "expected": "held" },
+        { "surface": "שם", "name": "שם", "type": "PERSON", "expected": "held" },
+        { "surface": "מלך", "name": "מלך", "type": "PERSON", "expected": "held", "occurrence": 1 },
+        { "surface": "אחר", "name": "אחר", "type": "PERSON", "expected": "held" }
+      ]
+    },
+    {
+      "id": "art-multiword-maqaf",
+      "categories": ["multi-word", "homographs"],
+      "article_id": 9005,
+      "content": "<p>עלה אברם לבית־אל וישב שם</p>",
+      "note": "לבית־אל is one mention of בית אל carrying a fused ל prefix and maqaf; שם the adverb is held.",
+      "mentions": [
+        { "surface": "אברם", "name": "אברם", "type": "PERSON" },
+        { "surface": "לבית־אל", "name": "בית אל", "type": "PLACE" },
+        { "surface": "שם", "name": "שם", "type": "PERSON", "expected": "held" }
+      ]
+    },
+    {
+      "id": "art-coverage-gap",
+      "categories": ["coverage-gap", "ambiguity"],
+      "article_id": 9006,
+      "content": "<p>רשי מפרש כי לוט נלכד עם סדם</p>",
+      "note": "רשי is a rabbinic figure outside the pasuk-corpus gazetteer — recall gap; מפרש strips to the homograph פרש — held.",
+      "mentions": [
+        { "surface": "רשי", "name": "רשי", "type": "PERSON" },
+        { "surface": "מפרש", "name": "פרש", "type": "PERSON", "expected": "held" },
+        { "surface": "לוט", "name": "לוט", "type": "PERSON" },
+        { "surface": "סדם", "name": "סדם", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "art-missing-multiword",
+      "categories": ["multi-word", "coverage-gap", "homographs"],
+      "article_id": 9007,
+      "content": "<p>אברם נולד באור כשדים וגדל בחרן</p>",
+      "note": "אור כשדים is not a gazetteer name (the lemma chain never joined it in pesukim) — the compound fragments into held+auto pieces; וגדל is a homograph held.",
+      "mentions": [
+        { "surface": "אברם", "name": "אברם", "type": "PERSON" },
+        { "surface": "באור כשדים", "name": "אור כשדים", "type": "PLACE" },
+        { "surface": "וגדל", "name": "גדל", "type": "PERSON", "expected": "held" },
+        { "surface": "בחרן", "name": "חרן", "type": "PLACE" }
+      ]
+    },
+    {
+      "id": "art-script-style",
+      "categories": ["skip-zones", "homographs"],
+      "article_id": 9008,
+      "content": "<p>דוד מלך</p><style>.a{b:c}</style><script>משה</script><p>נעמי</p>",
+      "note": "script/style interiors are never decorated.",
+      "mentions": [
+        { "surface": "דוד", "name": "דוד", "type": "PERSON" },
+        { "surface": "מלך", "name": "מלך", "type": "PERSON", "expected": "held" },
+        { "surface": "נעמי", "name": "נעמי", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "art-preposition",
+      "categories": ["ordinary-nouns", "homographs"],
+      "article_id": 9009,
+      "content": "<p>אל השדה יצא האיש בבקר</p>",
+      "note": "Pure ordinary prose — אל the preposition is the only homograph, held.",
+      "mentions": [
+        { "surface": "אל", "name": "אל", "type": "PERSON", "expected": "held" }
+      ]
+    },
+    {
+      "id": "art-nation-place",
+      "categories": ["ambiguity", "prefixes", "spelling"],
+      "article_id": 9010,
+      "content": "<p>בני ישראל יצאו ממצרים לארץ כנען וישבו בירושלם</p>",
+      "note": "ישראל the nation; מצרים/כנען/ירושלם the lands; ירושלם's canonical key is ירושלים; בני is a homograph (name Bani) held.",
+      "mentions": [
+        { "surface": "בני", "name": "בני", "type": "PERSON", "expected": "held" },
+        { "surface": "ישראל", "name": "ישראל", "type": "NATION" },
+        { "surface": "ממצרים", "name": "מצרים", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "surface": "כנען", "name": "כנען", "type": "PLACE", "type_alternates": ["NATION"] },
+        { "surface": "בירושלם", "name": "ירושלים", "type": "PLACE", "name_alternates": ["ירושלם"] }
+      ]
+    },
+    {
+      "id": "art-utf16-astral",
+      "categories": ["utf16", "homographs"],
+      "article_id": 9011,
+      "content": "<p>😀 אמר לאברם</p>",
+      "note": "The astral emoji shifts mention offsets by one UTF-16 code unit; אמר is a homograph held.",
+      "mentions": [
+        { "surface": "אמר", "name": "אמר", "type": "PERSON", "expected": "held" },
+        { "surface": "לאברם", "name": "אברם", "type": "PERSON" }
+      ]
+    },
+    {
+      "id": "art-other-ordinary",
+      "categories": ["ordinary-nouns", "homographs"],
+      "article_id": 9012,
+      "content": "<p>האיש הלך לביתו ושתה מים ואכל לחם</p>",
+      "note": "Zero real mentions; אכל/חם (eat/bread) strip to homograph names — held.",
+      "mentions": [
+        { "surface": "ואכל", "name": "אכל", "type": "PERSON", "expected": "held" },
+        { "surface": "לחם", "name": "חם", "type": "PERSON", "expected": "held" }
+      ]
+    }
+  ]
+}

@@ -48,15 +48,36 @@ video {
 	height: auto;
 }
 
+/* Shared scales: one value per component size class, mode-independent.
+   Accent steps are fixed palette values; the role tokens below
+   (--link-accent, --link-accent-hover, --pasuk-num-color) pick a step
+   per color scheme and contrast mode. */
+:root {
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--radius-pill: 999px;
+	--accent-200: #a8b9ff;
+	--accent-300: #7eb0ff;
+	--accent-400: #4da3ff;
+	--accent-600: #1552ac;
+	--accent-700: #11469c;
+	--accent-800: #0d3a8c;
+	--accent-900: #1c2c5d;
+}
+
 :root {
 	--background: #ffffff;
 	--foreground: #171717;
 	--surface-elevated: #ffffff;
 	--surface-muted: #f8fafc;
 	--border-subtle: #e2e8f0;
-	--link-accent: #1552ac;
-	--pasuk-num-color: #1c2c5d;
+	--link-accent: var(--accent-600);
+	--link-accent-hover: var(--accent-700);
+	--pasuk-num-color: var(--accent-900);
 	--muted-text: #666666;
+	--skeleton-base: #e8ecf2;
+	--skeleton-highlight: #f8fafc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,9 +87,12 @@ video {
 		--surface-elevated: #1a1f2e;
 		--surface-muted: #12151c;
 		--border-subtle: #2d3548;
-		--link-accent: #7eb0ff;
-		--pasuk-num-color: #a8b9ff;
+		--link-accent: var(--accent-300);
+		--link-accent-hover: var(--accent-200);
+		--pasuk-num-color: var(--accent-200);
 		--muted-text: #9aa0a6;
+		--skeleton-base: #242a3a;
+		--skeleton-highlight: #2d3548;
 	}
 }
 
@@ -91,6 +115,98 @@ body {
 a {
 	color: inherit;
 	text-decoration: none;
+}
+
+/* ── Site accessibility preferences (issue #2767) ──────────────────────
+   Applied by the pre-paint bootstrap / accessibility menu as data
+   attributes on <html>; every surface that consumes the design tokens —
+   and every literal converted to an a11y fallback var — follows. */
+
+/* ניגודיות גבוהה: coordinated palette, not a page filter — the brand
+   surfaces keep their identity while text contrast targets the enhanced
+   WCAG 1.4.6-style band (≥7:1 ordinary text, ≥4.5:1 large text). The
+   --hc-* vars exist only under this attribute, so fallbacks elsewhere
+   keep the default rendering untouched:
+   --hc-muted       themed secondary text (perush browns, status green)
+   --hc-on-inverse  light text on hardcoded dark surfaces (footer)
+   --hc-accent      decorative accent headings (sefer h1 purple) */
+html[data-a11y-contrast="high"] {
+	--background: #ffffff;
+	--foreground: #000000;
+	--surface-elevated: #ffffff;
+	--surface-muted: #ffffff;
+	--border-subtle: #4d4d4d;
+	--link-accent: var(--accent-800);
+	--link-accent-hover: var(--accent-900);
+	--pasuk-num-color: #000000;
+	--muted-text: #4d4d4d;
+	--hc-muted: #4d4d4d;
+	--hc-on-inverse: #ffffff;
+	--hc-accent: #3d2f8f;
+	--danger-color: #8b0000;
+	--skeleton-base: #d6d6d6;
+}
+
+@media (prefers-color-scheme: dark) {
+	html[data-a11y-contrast="high"] {
+		--background: #000000;
+		--foreground: #ffffff;
+		--surface-elevated: #000000;
+		--surface-muted: #0d0d0d;
+		--border-subtle: #b3b3b3;
+		--link-accent: var(--accent-400);
+		--link-accent-hover: var(--accent-300);
+		--pasuk-num-color: #ffffff;
+		--muted-text: #b3b3b3;
+		--hc-muted: #b3b3b3;
+		--hc-on-inverse: #ffffff;
+		--hc-accent: #b7adf0;
+		--danger-color: #ff8080;
+		--skeleton-base: #333333;
+	}
+}
+
+/* Selection follows the same palette so highlighted text keeps the
+   enhanced contrast instead of the OS-default wash. */
+html[data-a11y-contrast="high"] ::selection {
+	background: #0d3a8c;
+	color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+	html[data-a11y-contrast="high"] ::selection {
+		background: #4da3ff;
+		color: #000000;
+	}
+}
+
+/* קו תחתון לקישורים — and an implied baseline inside ניגודיות גבוהה:
+   the HC link accents stay below 3:1 against the surrounding text color,
+   so a persistent underline is the reliable non-color cue (1.4.1). The
+   selector deliberately outranks module-level `text-decoration: none`
+   rules, including portaled/dynamic content. Excluded: icon-only anchors
+   whose sole element child is an img/svg — a bare icon gains nothing
+   from underlining and keeps its existing hit-area styling. */
+:is(
+		html[data-a11y-links="underlined"],
+		html[data-a11y-contrast="high"]
+	)
+	a[href]:not(:has(> :is(img, svg):only-child)) {
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+@media (forced-colors: active) {
+	/* Forced-colors mode (e.g. Windows High Contrast): the OS palette wins
+	   and the global `a { color: inherit }` would otherwise hide link
+	   identity — hand links back the system link color plus a persistent
+	   non-color cue. Neither preference overrides OS accessibility. */
+	a[href] {
+		color: LinkText;
+	}
+	a[href]:not(:has(> :is(img, svg):only-child)) {
+		text-decoration: underline;
+	}
 }
 
 @media (prefers-color-scheme: dark) {
@@ -129,7 +245,7 @@ a {
 	height: 2.75rem;
 	padding: 0;
 	border: 1px solid rgba(255, 255, 255, 0.65);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	color: #fff;
 }
 
@@ -161,7 +277,7 @@ a {
 	height: 2.75rem;
 	padding: 0;
 	border: 1px solid rgba(255, 255, 255, 0.65);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	color: #fff;
 	background: transparent;
 	cursor: pointer;

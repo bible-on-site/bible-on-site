@@ -5,6 +5,16 @@ on:
       module_directory:
         required: true
         type: string
+      perushim_data_artifact:
+        description: "perushim SQL artifact to load into the local SSG database ('' = build against prod RDS directly)"
+        required: false
+        type: string
+        default: ''
+      image_arch:
+        description: Native architecture; ARM64 is enabled only for API
+        required: false
+        type: string
+        default: amd64
     secrets:
       # AWS credentials for SSG builds (website only) - used to fetch DB_URL from SSM
       # and dynamically whitelist runner IP in RDS security group
@@ -29,6 +39,7 @@ env:
   IS_NPM: ${{ inputs.module_directory == 'web/bible-on-site' }}
   IS_CARGO: ${{ inputs.module_directory == 'web/api' }}
   SHARED_ROOT_DIR: web
+  IMAGE_ARCH: ${{ inputs.image_arch }}
   MODULE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'website' || 'api' }}
   MODULE_NAME_CAPITALIZED: ${{ inputs.module_directory == 'web/bible-on-site' && 'Website' || 'API' }}
   DOCKER_IMAGE_NAME: ${{ inputs.module_directory == 'web/bible-on-site' && 'bible-on-site' || 'bible-on-site-api' }}
@@ -45,7 +56,7 @@ jobs:
   package:
     needs: setup_env
     name: Package
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.image_arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     outputs:
       module_version: ${{ steps.get_module_version.outputs.MODULE_VERSION }}
       docker_artifact_name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}
@@ -54,6 +65,14 @@ jobs:
         uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require a supported native image architecture
+        run: |
+          case "$IMAGE_ARCH" in
+            amd64) test "$(uname -m)" = x86_64 ;;
+            arm64) test "$IS_CARGO" = true; test "$(uname -m)" = aarch64 ;;
+            *) echo 'Unsupported image architecture'; exit 1 ;;
+          esac
 
       # Free disk space before build - the Website SSG build generates 1000+ static pages
       # and retains sizeable build/dependency layers on disk
@@ -64,7 +83,8 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          # The action's bulk package list includes Chrome, absent on ARM runners.
+          large-packages: ${{ runner.arch == 'X64' }}
           docker-images: true
           swap-storage: true
 
@@ -72,10 +92,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
-        if: ${{ env.IS_NPM == 'true' }}
         uses: actions/setup-node@v7
         with:
-          node-version-file: ${{ env.MODULE_DIRECTORY }}/package.json
+          node-version-file: ${{ env.IS_NPM == 'true' && format('{0}/package.json', env.MODULE_DIRECTORY) || 'devops/package.json' }}
 
       - name: Restore bun store cache
         if: ${{ env.IS_NPM == 'true' }}
@@ -107,7 +126,8 @@ jobs:
       - uses: taiki-e/install-action@v2
         if: ${{ env.IS_CARGO == 'true' }}
         with:
-          tool: cargo-make, tomato-toml, semver-bump
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, tomato-toml, semver-bump
 
       - name: Get Module Version
         id: get_module_version
@@ -124,11 +144,13 @@ jobs:
         id: prepare_dockerizing
         run: |
           mkdir -p ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_module_version.outputs.MODULE_VERSION }}.tar"
+          ARCH_SUFFIX=""
+          if [ "$IMAGE_ARCH" = arm64 ]; then ARCH_SUFFIX="-arm64"; fi
+          DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ steps.get_module_version.outputs.MODULE_VERSION }}${ARCH_SUFFIX}.tar"
           DOCKER_IMAGE_TAR_GZ_NAME="${DOCKER_IMAGE_TAR_NAME}.gz"
           DOCKER_IMAGE_TAR_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}"
           DOCKER_IMAGE_TAR_GZ_PATH="${DOCKER_IMAGE_TAR_PATH}.gz"
-          DOCKER_ARTIFACT_NAME="${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}"
+          DOCKER_ARTIFACT_NAME="${{ env.DOCKER_IMAGE_NAME }}-docker-${{ github.run_id }}${ARCH_SUFFIX}"
           echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_GZ_NAME=${DOCKER_IMAGE_TAR_GZ_NAME}" >> $GITHUB_OUTPUT
           echo "DOCKER_IMAGE_TAR_PATH=${DOCKER_IMAGE_TAR_PATH}" >> $GITHUB_OUTPUT
@@ -182,33 +204,94 @@ jobs:
 
           echo "✓ Fetched DB_URL from SSM and security group $RDS_SG from RDS"
 
-      - name: Get runner public IP
+      - name: Grant owned runner access to RDS
         if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
-        id: runner_ip
-        run: echo "ip=$(curl -s ifconfig.me)" >> $GITHUB_OUTPUT
-
-      - name: Whitelist runner IP in RDS security group
-        if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
-        run: |
-          echo "Adding runner IP ${{ steps.runner_ip.outputs.ip }} to RDS security group ${{ steps.rds_creds.outputs.rds_sg }}..."
-          aws ec2 authorize-security-group-ingress \
-            --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
-            --protocol tcp --port 3306 \
-            --cidr ${{ steps.runner_ip.outputs.ip }}/32 \
-            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]'
+        env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          RDS_BUILD_ACCESS_LEASE: ${{ runner.temp }}/rds-build-access.json
+          RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
+        run: node devops/github/ci/rds-build-access.mjs grant
 
       - name: Test RDS connectivity
         if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        env:
+          PROD_DB_URL: ${{ steps.rds_creds.outputs.db_url }}
         run: |
           # Wait for security group rule to propagate
           sleep 10
           # Extract host from DB_URL
-          DB_HOST=$(echo "${{ steps.rds_creds.outputs.db_url }}" | sed -E 's|mysql://[^@]+@([^:]+):.*|\1|')
+          DB_HOST=$(node devops/github/ci/rds-build-access.mjs host)
           echo "Testing connectivity to $DB_HOST:3306..."
           # Test TCP connection
-          timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done"
+          timeout 30 bash -c 'until nc -z "$1" 3306; do echo "Waiting for RDS..."; sleep 2; done' _ "$DB_HOST"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
+
+      # --- Local SSG database (website only) ---
+      # Bake SSG pages from the post-deploy data state: a prod RDS dump minus the
+      # dynamic content tables, plus a replay of the deploy manifest carrying the
+      # fresh perushim artifact. Falls back to querying prod RDS when no perushim
+      # artifact is available (e.g. an expired baseline).
+      - name: Set up local MySQL for SSG build data
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact != '' }}
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: test_123
+          distribution: "mysql"
+          auto-start: true
+
+      - name: Download perushim SQL (same run)
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact == 'perushim-data-sql' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: perushim-data-sql
+          path: data/mysql
+
+      - name: Download perushim SQL master baseline
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact == 'perushim-data-sql.master' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ inputs.perushim_data_artifact }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d data/mysql
+
+      - name: Dump production data into local MySQL
+        if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact != '' && steps.rds_creds.outputs.db_url != '' }}
+        id: dump_prod
+        env:
+          PROD_DB_URL: ${{ steps.rds_creds.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          read -r DB_HOST DB_PORT DB_USER DB_NAME <<<"$(python3 -c 'from urllib.parse import urlparse; import os; u=urlparse(os.environ["PROD_DB_URL"]); print(u.hostname, u.port or 3306, u.username, u.path.lstrip("/").split("?")[0])')"
+          export MYSQL_PWD="$(python3 -c 'from urllib.parse import urlparse, unquote; import os; print(unquote(urlparse(os.environ["PROD_DB_URL"]).password or ""))')"
+          # parshan/perush/note are redeployed from the manifest below, so the
+          # dump carries every static, tanahpedia and metrics table as it runs on prod.
+          mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
+            --single-transaction --quick --no-tablespaces --column-statistics=0 \
+            --set-gtid-purged=OFF --default-character-set=utf8mb4 \
+            --databases "$DB_NAME" \
+            --ignore-table="$DB_NAME.parshan" --ignore-table="$DB_NAME.perush" --ignore-table="$DB_NAME.note" \
+            | sed -e 's/DEFINER[ ]*=[ ]*[^ ]* / /g' \
+            | mysql -h 127.0.0.1 -u root -ptest_123
+          unset MYSQL_PWD
+          echo "local_db_url=mysql://root:test_123@127.0.0.1:3306/$DB_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Replay the deploy manifest on the local dump
+        if: ${{ env.IS_NPM == 'true' && steps.dump_prod.outputs.local_db_url != '' }}
+        env:
+          LOCAL_DB_URL: ${{ steps.dump_prod.outputs.local_db_url }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pymysql
+          python3 devops/deploy/data-deploy/validate_lambda_parser.py \
+            --db "$LOCAL_DB_URL"
+      # --- End Local SSG database ---
+
       - name: Merge and audit approved recitation timings
         if: ${{ env.IS_NPM == 'true' }}
         run: |
@@ -233,21 +316,29 @@ jobs:
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
         shell: bash
         env:
-          DB_URL: ${{ steps.rds_creds.outputs.db_url || '' }}
+          DB_URL: ${{ steps.dump_prod.outputs.local_db_url || steps.rds_creds.outputs.db_url || '' }}
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           CACHE_ARGS=()
+          LABEL_ARGS=()
+          if [ "$IS_CARGO" = true ]; then
+            LABEL_ARGS+=(--label "org.opencontainers.image.revision=$GITHUB_SHA"
+              --label "org.opencontainers.image.version=${{ steps.get_module_version.outputs.MODULE_VERSION }}")
+          fi
           if [ "$IS_NPM" = true ]; then
             # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
             BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
           else
             # type=gha cache needs the docker-container builder (docker driver cannot export it).
-            CACHE_ARGS+=(--cache-from "type=gha,scope=${MODULE_NAME}" --cache-to "type=gha,mode=max,scope=${MODULE_NAME}")
+            CACHE_SCOPE="${MODULE_NAME}${{ inputs.image_arch == 'arm64' && '-arm64' || '' }}"
+            CACHE_ARGS+=(--cache-from "type=gha,scope=${CACHE_SCOPE}" --cache-to "type=gha,mode=max,scope=${CACHE_SCOPE}")
             BUILD_COMMAND=(docker buildx build --builder "${{ steps.buildx_gha.outputs.name }}" --load --progress=plain)
           fi
           "${BUILD_COMMAND[@]}" \
+            --platform "linux/$IMAGE_ARCH" \
             --network=host \
+            "${LABEL_ARGS[@]}" \
             "${CACHE_ARGS[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg DB_URL="${DB_URL}" \
@@ -255,6 +346,17 @@ jobs:
             -f ${{ env.MODULE_DIRECTORY }}/Dockerfile \
             -t ${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Pull the isolated API fixture image
+        if: ${{ env.IS_CARGO == 'true' }}
+        run: docker pull mysql:8.4
+
+      - name: Verify the packaged API against its own disposable database
+        if: ${{ env.IS_CARGO == 'true' }}
+        run: >-
+          node devops/github/ci/verify-native-image.mjs --service api
+          --image "${{ env.DOCKER_IMAGE_NAME }}:v${{ steps.get_module_version.outputs.MODULE_VERSION }}"
+          --arch "$IMAGE_ARCH" --expected-version "${{ steps.get_module_version.outputs.MODULE_VERSION }}"
 
       - name: Verify public content and recitation in the packaged website
         if: ${{ env.IS_NPM == 'true' }}
@@ -295,14 +397,13 @@ jobs:
             -o ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
 
       # --- RDS Cleanup (runs even if build fails) ---
-      - name: Remove runner IP from RDS security group
-        if: ${{ always() && env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' && steps.runner_ip.outputs.ip != '' }}
-        run: |
-          echo "Removing runner IP ${{ steps.runner_ip.outputs.ip }} from RDS security group..."
-          aws ec2 revoke-security-group-ingress \
-            --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
-            --protocol tcp --port 3306 \
-            --cidr ${{ steps.runner_ip.outputs.ip }}/32
+      - name: Remove only this build's RDS access rule
+        if: ${{ always() && env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          RDS_BUILD_ACCESS_LEASE: ${{ runner.temp }}/rds-build-access.json
+          RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
+        run: node devops/github/ci/rds-build-access.mjs cleanup
       # --- End RDS Cleanup ---
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}

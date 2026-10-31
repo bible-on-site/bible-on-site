@@ -11,21 +11,21 @@ jest.mock("next/cache", () => ({
 }));
 
 jest.mock("../../../src/lib/tanahpedia/service", () => ({
-	getEntityReferencesForPerek: jest.fn(),
-	getMentionReferencesForPerek: jest.fn(),
+	getEntityReferencesForPereks: jest.fn(),
+	getMentionReferencesForPereks: jest.fn(),
 }));
 
 import { fetchAllEntityRefs } from "../../../src/lib/tanahpedia/perek-entity-refs";
 import {
-	getEntityReferencesForPerek,
-	getMentionReferencesForPerek,
+	getEntityReferencesForPereks,
+	getMentionReferencesForPereks,
 } from "../../../src/lib/tanahpedia/service";
 
-const mockEntityRefs = getEntityReferencesForPerek as jest.MockedFunction<
-	typeof getEntityReferencesForPerek
+const mockEntityRefs = getEntityReferencesForPereks as jest.MockedFunction<
+	typeof getEntityReferencesForPereks
 >;
-const mockMentionRefs = getMentionReferencesForPerek as jest.MockedFunction<
-	typeof getMentionReferencesForPerek
+const mockMentionRefs = getMentionReferencesForPereks as jest.MockedFunction<
+	typeof getMentionReferencesForPereks
 >;
 
 describe("fetchAllEntityRefs", () => {
@@ -34,6 +34,7 @@ describe("fetchAllEntityRefs", () => {
 	it("combines curated entity refs and mention decorations per perek", async () => {
 		mockEntityRefs.mockResolvedValue([
 			{
+				perekId: 12,
 				entityId: "e1",
 				entityName: "משה",
 				entityType: "PERSON",
@@ -45,6 +46,7 @@ describe("fetchAllEntityRefs", () => {
 		]);
 		mockMentionRefs.mockResolvedValue([
 			{
+				perekId: 12,
 				entityId: "e2",
 				entityName: "אהרן",
 				entityType: "PERSON",
