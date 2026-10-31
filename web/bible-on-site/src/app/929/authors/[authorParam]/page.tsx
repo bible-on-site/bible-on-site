@@ -16,6 +16,7 @@ import {
 } from "../../../../lib/revalidate/tags";
 import { authorPath, buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
+import { sameAsFor } from "../../../../lib/seo/same-as";
 import { JsonLd } from "../../../components/JsonLd";
 import { AuthorArticlesTable } from "./AuthorArticlesTable";
 import styles from "./page.module.css";
@@ -122,6 +123,7 @@ export default async function AuthorPage({
 		({ perekId }) =>
 			Number.isInteger(perekId) && perekId >= 1 && perekId <= 929,
 	);
+	const authorSameAs = await sameAsFor("TANAH_AUTHOR", author.id);
 	const rows = articles.map((article) => {
 		const perek = getPerekByPerekId(article.perekId);
 		return { ...article, sefer: perek.sefer, source: perek.source };
@@ -133,6 +135,7 @@ export default async function AuthorPage({
 				data={buildAuthorGraph({
 					author,
 					slug: authorNameToSlug(author.name),
+					sameAs: authorSameAs,
 				})}
 			/>
 			<header className={styles.authorHeader}>

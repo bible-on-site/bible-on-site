@@ -46,6 +46,7 @@ import {
 import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
+import { sameAsFor } from "../../../../lib/seo/same-as";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import {
@@ -415,10 +416,17 @@ export default async function ArticlePage({
 	if (!perushDetail) {
 		notFound();
 	}
+	const parshanSameAs = await sameAsFor("PARSHAN", perushDetail.parshanId);
 
 	return (
 		<>
-			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
+			<JsonLd
+				data={buildPerushGraph({
+					perush: perushDetail,
+					perekObj,
+					sameAs: parshanSameAs,
+				})}
+			/>
 			<ScrollToSlug targetId="perush-view" />
 			<Suspense fallback={null}>
 				<ScrollToPerushPasukNote />
