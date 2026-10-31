@@ -269,9 +269,16 @@ jobs:
           set -euo pipefail
           read -r DB_HOST DB_PORT DB_USER DB_NAME <<<"$(python3 -c 'from urllib.parse import urlparse; import os; u=urlparse(os.environ["PROD_DB_URL"]); print(u.hostname, u.port or 3306, u.username, u.path.lstrip("/").split("?")[0])')"
           export MYSQL_PWD="$(python3 -c 'from urllib.parse import urlparse, unquote; import os; print(unquote(urlparse(os.environ["PROD_DB_URL"]).password or ""))')"
+          # setup-mysql's client defaults trust its local CA. RDS needs its own
+          # CA bundle and hostname verification, without changing local imports.
+          RDS_CA_BUNDLE="$RUNNER_TEMP/rds-ca-bundle.pem"
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem \
+            --output "$RDS_CA_BUNDLE"
           # parshan/perush/note are redeployed from the manifest below, so the
           # dump carries every static, tanahpedia and metrics table as it runs on prod.
           mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
+            --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
             --single-transaction --quick --no-tablespaces --column-statistics=0 \
             --set-gtid-purged=OFF --default-character-set=utf8mb4 \
             --databases "$DB_NAME" \
