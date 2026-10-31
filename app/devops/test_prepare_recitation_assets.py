@@ -11,10 +11,70 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 import zipfile
 
-from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, book_archive, prepare_assets, recording
+from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, asset_download_url, book_archive, playback_recording, prepare_assets, recording
 
 
 class RecitationAssetsTests(unittest.TestCase):
+    def test_opt_in_delivery_preserves_object_paths_and_original_fallback(self):
+        source = "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"
+        self.assertEqual(asset_download_url(source), source)
+        self.assertEqual(asset_download_url(source, ""), source)
+        self.assertEqual(asset_download_url(source, "https://d123.cloudfront.net/"),
+                         "https://d123.cloudfront.net/recordings/1_record.mp3")
+        for origin in ["http://cdn.example", "https://user:pass@cdn.example", "https://cdn.example/path",
+                       "https://cdn.example/?key=value", "https://cdn.example/#x", "https://cdn.example:8443"]:
+            with self.subTest(origin=origin), self.assertRaisesRegex(ValueError, "bare HTTPS"):
+                asset_download_url(source, origin)
+
+    def test_cdn_fetch_keeps_checksum_and_canonical_descriptor(self):
+        track = {**self.track, "audioUrl": "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"}
+        response = io.BytesIO(self.audio)
+        response.status = 200
+        with patch.dict("os.environ", {"RECITATION_ASSETS_ORIGIN": "https://d123.cloudfront.net"}), \
+                patch("prepare_recitation_assets.open_https", return_value=response) as transport:
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+            transport.assert_called_once_with("https://d123.cloudfront.net/recordings/1_record.mp3")
+        self.assertEqual(track["audioUrl"], "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3")
+        self.assertEqual(track["audioSha256"], self.sha)
+        with patch("prepare_recitation_assets.open_https", side_effect=AssertionError("cached byte download")):
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+
+    def test_cdn_corruption_still_fails_without_caching_or_direct_s3_fallback(self):
+        track = {**self.track, "audioUrl": "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"}
+        response = io.BytesIO(b"corrupted")
+        response.status = 200
+        with patch.dict("os.environ", {"RECITATION_ASSETS_ORIGIN": "https://d123.cloudfront.net"}), \
+                patch("prepare_recitation_assets.open_https", return_value=response) as transport:
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                recording(track, self.cache)
+            transport.assert_called_once()
+        self.assertEqual(list(self.cache.iterdir()), [])
+
+    def test_cdn_delivers_derived_playback_with_the_same_size_and_hash_checks(self):
+        track = {**self.track, "audioUrl": "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"}
+        audio = b"OggS derived playback"
+        sha = hashlib.sha256(audio).hexdigest()
+        metadata = {"sha256": sha, "sizeBytes": len(audio), "key": f"recordings/opus-24k/{sha}.ogg"}
+        with patch.dict("os.environ", {"RECITATION_ASSETS_ORIGIN": "https://d123.cloudfront.net"}), \
+                patch("prepare_recitation_assets.load_playback", return_value=metadata), \
+                patch("prepare_recitation_assets.open_https") as transport:
+            response = io.BytesIO(b"bad playback")
+            response.status = 200
+            transport.return_value = response
+            with self.assertRaisesRegex(ValueError, "Derived playback checksum"):
+                playback_recording(track, self.cache)
+            self.assertEqual(list(self.cache.iterdir()), [])
+            response = io.BytesIO(audio)
+            response.status = 200
+            transport.return_value = response
+            self.assertEqual(playback_recording(track, self.cache).read_bytes(), audio)
+            self.assertEqual(transport.call_args.args, (f"https://d123.cloudfront.net/{metadata['key']}",))
+            transport.reset_mock()
+            playback_recording(track, self.cache)
+            transport.assert_not_called()
+        self.assertEqual(track["audioSha256"], self.sha)
+        self.assertEqual(track["playback"]["sha256"], sha)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -7,6 +7,7 @@ import errno
 import hashlib
 from http.client import HTTPException, IncompleteRead, RemoteDisconnected
 import json
+import os
 from pathlib import Path
 import shutil
 import sqlite3
@@ -59,6 +60,7 @@ def transient_download_error(error):
 
 def download_original(url, temporary, perek_id):
     """Restart an interrupted GET; never append partial bytes or retry bad content."""
+    url = asset_download_url(url, os.environ.get("RECITATION_ASSETS_ORIGIN"))
     for attempt in range(DOWNLOAD_ATTEMPTS):
         try:
             with open_https(url) as source, temporary.open("wb") as target:
@@ -74,6 +76,17 @@ def download_original(url, temporary, perek_id):
             print(f'{perek_id}: transient recording download failure; retry {attempt + 2}/{DOWNLOAD_ATTEMPTS} in {delay}s',
                   file=sys.stderr, flush=True)
             time.sleep(delay)
+
+
+def asset_download_url(url, origin=None):
+    """Optionally change build delivery origin without changing canonical URLs or hashes."""
+    if not origin:
+        return url
+    target = urlsplit(origin)
+    if (target.scheme != "https" or not target.hostname or target.username or target.password
+            or target.path not in ("", "/") or target.query or target.fragment or target.port not in (None, 443)):
+        raise ValueError("RECITATION_ASSETS_ORIGIN must be a bare HTTPS delivery origin")
+    return f"{target.scheme}://{target.netloc}{urlsplit(url).path}"
 
 
 def recording(track, cache, recordings=None):

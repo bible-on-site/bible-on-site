@@ -259,6 +259,17 @@ validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/
 > [edge-rollout-validation.md](../edge-rollout-validation.md) for the full
 > plan, staged migration and rollback. No production routing is changed.
 
+### Asset-only candidate: `cloudfront-assets.yaml`
+
+Reference-only proposal for an additive CloudFront pay-as-you-go endpoint in
+front of the existing public assets bucket. It has no aliases, OAC, bucket/IAM
+changes or automatic ECS/URL activation. Success caching is disabled and error
+TTLs are explicitly zero. A custom origin policy forwards CORS inputs and all
+query parameters. This is separate from the full-website edge candidate above.
+See the [S3 bill reassessment and approval-gated runbook](../s3-delivery-cost-2026-11-01.md)
+for costs, compatibility checks, CLI request generation and rollback. Never
+deploy this reference file as a CloudFormation stack.
+
 ## Data Flow: ECR → ECS → nginx → Internet
 
 1. **GitHub Actions** pushes Docker images to **ECR** (via OIDC role)

@@ -171,6 +171,8 @@ jobs:
       - name: Prepare lossless recitation book extension packages
         if: ${{ !inputs.compile_only }}
         run: python app/devops/prepare_recitation_assets.py --platform Windows
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       # PR gate (#2526): compile the real Windows TFM in Release — including
       # #if WINDOWS code and XamlC — without signing or packaging.
@@ -361,6 +363,8 @@ jobs:
 
       - name: Prepare lossless recitation book extension packages
         run: python app/devops/prepare_recitation_assets.py --platform Android
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -662,6 +666,8 @@ jobs:
 
       - name: Prepare lossless recitation book extension packages
         run: python app/devops/prepare_recitation_assets.py --platform iOS
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       # The extension's DerivedData is keyed on its own sources: any hit means
       # the .appex is already built and the xcodebuild step below is skipped.
