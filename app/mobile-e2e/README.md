@@ -24,7 +24,7 @@ threads or mutable command arguments; even a PID-limited `ps` stalled past five
 seconds on a loaded Mac. The native ownership regression also rejects an argv
 prefix impersonating the app. This avoids expensive process snapshots. Confirmed already-stopped apps are accepted; transport
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
-The existing 15-second session-delete and 15-minute pilot limits remain intact.
+The existing 15-second session-delete limit and the pilot deadline (below) remain intact.
 
 CI runs the iOS suite across a dynamically planned set of independent
 `xcode-27` runners, each with one simulator and one shared Appium session
@@ -33,11 +33,13 @@ statically, resolves the diff against the published coverage baseline, and
 partitions the selected cases with a deterministic longest-processing-time
 assignment balanced by the baseline's rolling per-case runtimes — unmeasured
 cases take a fixed fallback weight and never narrow membership. The shard
-count follows the selected work (case-time budget, bounded by runner
-capacity), so a small selection stays on one runner and a legitimately empty
-selection starts no simulator at all. Each runner executes exactly the case
-manifest it was assigned — it never re-selects — and each pilot keeps its
-15-minute deadline. A final merge requires each shard's executed manifest to
+count is the fewest runners whose estimated work fits a 26-minute per-runner
+capacity (bounded by four): macOS runners are the queued, scarce resource and
+each extra shard repeats about six minutes of setup, so today's full suite runs
+on one runner and a legitimately empty selection starts no simulator at all.
+Each runner executes exactly the case manifest it was assigned — it never
+re-selects — under a deadline of 1.5 × its planned estimate + 5 minutes,
+clamped to 15–45 minutes. A final merge requires each shard's executed manifest to
 match its assignment, requires successful evidence for the whole planned run
 set exactly once, rejects duplicates, and combines native line coverage and
 execution/automation evidence. Only a full successful union can replace a
@@ -77,7 +79,8 @@ endpoint for this pilot, so startup exercises offline behavior without relying
 on production or an external API. The build restores any local API override
 after packaging. Canonical content comes from the existing packaged database.
 
-The pilot runs under an independent 15-minute wall-clock supervisor, including
+The pilot runs under an independent wall-clock supervisor (15 minutes, or the
+planned shard deadline above), including
 local harness builds and Appium setup. Cancellation stops the owned process
 group and escalates after three seconds, including child processes left behind
 by a terminated wrapper. Windows uses the in-box `taskkill /T` tree kill as

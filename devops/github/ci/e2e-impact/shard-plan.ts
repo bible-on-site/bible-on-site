@@ -10,7 +10,10 @@
  *
  * Shard count is chosen from the work, not from a fixed partition:
  *   ceil(total estimated case ms / per-shard target ms), clamped to
- *   [1, min(maxShards, case count)]. A post-pass folds a shard whose
+ *   [1, min(maxShards, case count)]. The target is a runner's capacity, not a
+ *   speed goal: macOS runners are the scarce, queued resource, and every extra
+ *   shard repeats ~6 minutes of setup, so the plan uses the fewest shards whose
+ *   pilots fit the supervisor's scaled deadline. A post-pass folds a shard whose
  *   assignment is thinner than MIN_SHARD_MS into the least-loaded peer —
  *   a shard carrying seconds of tests still costs the full job setup
  *   (restore caches, workload, build, simulator boot), so it would only
@@ -38,7 +41,7 @@ export interface ShardAssignment {
 
 export interface PlanConfig {
 	maxShards: number;
-	/** Per-shard case-time budget the shard count aims for. */
+	/** Per-shard case-time capacity; the plan uses the fewest shards that fit it. */
 	targetMs: number;
 	/**
 	 * Estimated cost of one additional shard job (caches, workload, build,
@@ -73,7 +76,8 @@ export interface IosShardPlan {
 }
 
 export const DEFAULT_MAX_SHARDS = 4;
-export const DEFAULT_TARGET_MS = 12 * 60_000;
+// Keep 1.5 × target + 5m (supervise.mjs pilotTimeoutMs) within its 45m cap.
+export const DEFAULT_TARGET_MS = 26 * 60_000;
 /** Job bring-up measured from runs: caches, workload, app build, sim boot. */
 export const DEFAULT_SETUP_MS = 18 * 60_000;
 export const DEFAULT_FALLBACK_MS = 120_000;

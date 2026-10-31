@@ -776,9 +776,10 @@ jobs:
       - name: Run iOS runner shard
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         id: pilot-ios
-        # The independent supervisor stops the full process tree at 15 minutes;
+        # The independent supervisor stops the full process tree at its deadline
+        # (15 minutes, scaled with a planned shard's estimate up to 45 minutes);
         # this outer limit also bounds a blocked supervisor or runner step.
-        timeout-minutes: 20
+        timeout-minutes: 50
         env:
           # A planned leg always enforces its shard manifest — the partition is
           # the assignment, not a narrowing hint. Android legs keep shadow-mode
