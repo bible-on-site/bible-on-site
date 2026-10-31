@@ -54,9 +54,10 @@ function setup(env: Env = {}) {
 	};
 	const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
 		if (!init) {
-			return configured
-				? { ok: true, json: async () => ({ publicKey: "AQID" }) }
-				: { ok: false };
+			return {
+				ok: true,
+				json: async () => ({ publicKey: configured ? "AQID" : null }),
+			};
 		}
 		return { ok: init.method === "POST" ? postOk : deleteOk };
 	});
@@ -114,6 +115,13 @@ describe("PushNotificationsToggle", () => {
 			await renderToggle();
 			expect(screen.queryByRole("status")).not.toBeInTheDocument();
 		});
+	});
+
+	it("renders nothing when the status check returns an error", async () => {
+		setup();
+		global.fetch = jest.fn().mockResolvedValue({ ok: false });
+		await renderToggle();
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
 	});
 
 	it("renders nothing when the status check fails", async () => {
