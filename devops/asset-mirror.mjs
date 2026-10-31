@@ -4,6 +4,23 @@ import { homedir } from "node:os";
 import path from "node:path";
 
 const localHosts = new Set(["localhost", "127.0.0.1", "[::1]", "rustfs"]);
+const letters = "abcdefghijklmnopqrstuvwxyz";
+const digits = "0123456789";
+const alphanumeric = letters + digits;
+const consistsOf = (value, characters) => value.length > 0 && [...value].every((character) => characters.includes(character));
+
+function validBucket(bucket) {
+	return typeof bucket === "string" && bucket.length >= 3 && bucket.length <= 63
+		&& !bucket.includes("..") && alphanumeric.includes(bucket[0]) && alphanumeric.includes(bucket.at(-1))
+		&& consistsOf(bucket, `${alphanumeric}.-`);
+}
+
+function validRegion(region) {
+	if (typeof region !== "string" || region.length > 64) return false;
+	const parts = region.split("-");
+	return parts.length >= 3 && parts[0].length === 2 && consistsOf(parts[0], letters)
+		&& parts.slice(1, -1).every((part) => consistsOf(part, letters)) && consistsOf(parts.at(-1), digits);
+}
 
 export function localAssetEnvironment(env = process.env) {
 	return {
@@ -17,10 +34,10 @@ export function localAssetEnvironment(env = process.env) {
 
 /** Keep the download cache outside checkouts so worktrees reuse unchanged bytes. */
 export function assetMirrorDirectory(bucket, region, root = path.join(homedir(), ".cache", "bible-on-site", "s3-mirrors")) {
-	if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) || bucket.includes("..")) {
+	if (!validBucket(bucket)) {
 		throw new Error("Invalid source asset bucket");
 	}
-	if (!/^[a-z]{2}(?:-[a-z]+)+-\d+$/.test(region)) throw new Error("Invalid source region");
+	if (!validRegion(region)) throw new Error("Invalid source region");
 	return path.join(path.resolve(root), region, bucket);
 }
 
@@ -64,7 +81,7 @@ export function assertLocalAssetTarget(endpoint, sourceBucket, targetBucket) {
 	if (target.protocol !== "http:" || !localHosts.has(target.hostname) || target.username || target.password || target.pathname !== "/" || target.search || target.hash) {
 		throw new Error("Asset mirror target must be a local HTTP RustFS endpoint");
 	}
-	if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(targetBucket) || targetBucket === sourceBucket || targetBucket.includes("..")) {
+	if (!validBucket(targetBucket) || targetBucket === sourceBucket) {
 		throw new Error("Asset mirror needs a distinct development bucket");
 	}
 	return target;

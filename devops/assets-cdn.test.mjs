@@ -72,4 +72,5 @@ test("invalid CLI and unstable creation references fail before AWS access", () =
 	for (const args of [[], ["--apply"], ["--kind"], ["--kind", "unknown"], ["--kind", "distribution"], ["--kind", "distribution", "--policy-id", "wrong", "--reference", "stable"]]) assert.throws(() => parseArgs(args));
 	for (const reference of ["", "../path", "contains spaces", "a".repeat(129)]) assert.throws(() => distributionRequest(id, reference), /reference/);
 	assert.equal(parseArgs(["--kind", "policy"]).kind, "policy");
+	for (const policyId of [id.replace("11111111", "g1111111"), id.replace("11111111", "1111111-"), "a".repeat(100_000)]) assert.throws(() => distributionRequest(policyId, "stable"), /UUID/);
 });

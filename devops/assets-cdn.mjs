@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ACCOUNT = "250598594267";
+// Public account identifier for the wrong-account safety check, not a credential.
+export const ACCOUNT = "250598594267"; // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 export const BUCKET = "bible-on-site-assets";
 export const REGION = "il-central-1";
 export const DISABLED_CACHE = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad";
@@ -31,7 +32,9 @@ export function assertOriginPolicy(config) {
 
 /** CLI request only: no existing bucket, IAM, DNS, router or ECS resource changes. */
 export function distributionRequest(policyId, reference) {
-	if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(policyId ?? "")) throw new Error("--policy-id must be a CloudFront policy UUID");
+	const groups = typeof policyId === "string" && policyId.length === 36 ? policyId.toLowerCase().split("-") : [];
+	const lengths = [8, 4, 4, 4, 12];
+	if (groups.length !== 5 || groups.some((group, index) => group.length !== lengths[index] || [...group].some((character) => !"0123456789abcdef".includes(character)))) throw new Error("--policy-id must be a CloudFront policy UUID");
 	if (!/^[a-zA-Z0-9_-]{1,128}$/.test(reference ?? "")) throw new Error("--reference is required and must be a stable alphanumeric creation reference");
 	return {
 		DistributionConfig: {

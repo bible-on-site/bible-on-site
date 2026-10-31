@@ -94,8 +94,8 @@ test("unsafe endpoints, bucket names and traversal are rejected before any AWS c
 	for (const endpoint of ["https://bucket.s3.amazonaws.com", "http://example.com", "http://localhost:4566/path", "http://user:password@localhost:4566", "http://localhost/?x=1", "http://localhost/#x"]) {
 		assert.throws(() => syncLocalAssetMirror({ ...options, endpoint }), /local HTTP/);
 	}
-	for (const sourceBucket of ["../assets", "prod/child", "prod..assets", "a"]) assert.throws(() => assetMirrorDirectory(sourceBucket, options.region), /source asset bucket/);
-	for (const region of ["../region", "il/central", ""]) assert.throws(() => assetMirrorDirectory("prod-assets", region), /source region/);
+	for (const sourceBucket of ["../assets", "prod/child", "prod..assets", "a", "-prod", "prod-", "a".repeat(100_000)]) assert.throws(() => assetMirrorDirectory(sourceBucket, options.region), /source asset bucket/);
+	for (const region of ["../region", "il/central", "", "il--1", "il-central-x", "i-central-1", "il-Central-1", "il-" + "central-".repeat(10_000) + "1"]) assert.throws(() => assetMirrorDirectory("prod-assets", region), /source region/);
 	for (const targetBucket of [options.sourceBucket, "../dev", "dev..assets"]) assert.throws(() => syncLocalAssetMirror({ ...options, targetBucket }), /distinct development bucket/);
 	assert.notEqual(assetMirrorDirectory("prod-assets", options.region, options.cacheRoot), assetMirrorDirectory("other-assets", options.region, options.cacheRoot));
 });
