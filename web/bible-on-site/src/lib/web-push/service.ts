@@ -29,7 +29,6 @@ export interface DailySendResult {
 // Chrome on desktop currently issues jmt17.google.com/fcm/send/... endpoints.
 const PUSH_SERVICE_HOST =
 	/^(?:fcm\.googleapis\.com|android\.googleapis\.com|jmt\d+\.google\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.notify\.windows\.com|web\.push\.apple\.com)$/;
-const BASE64URL = /^[A-Za-z0-9_-]+={0,2}$/;
 const MAX_ENDPOINT_LENGTH = 1024;
 const SEND_BATCH_SIZE = 50;
 const DAILY_TTL_SECONDS = 12 * 60 * 60;
@@ -43,7 +42,8 @@ function isBase64Url(value: unknown, maxLength: number): value is string {
 		typeof value === "string" &&
 		value.length > 0 &&
 		value.length <= maxLength &&
-		BASE64URL.test(value)
+		// Browsers emit canonical unpadded base64url; a round trip rejects anything else.
+		Buffer.from(value, "base64url").toString("base64url") === value
 	);
 }
 

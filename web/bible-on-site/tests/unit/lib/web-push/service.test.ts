@@ -110,6 +110,8 @@ describe("web-push service", () => {
 			{ endpoint: FCM, keys: null },
 			{ endpoint: FCM, keys: { p256dh: "has space", auth: "x" } },
 			{ endpoint: FCM, keys: { p256dh: "x", auth: "" } },
+			{ endpoint: FCM, keys: { p256dh: "BNcR_x-1", auth: "tBH-8w==" } },
+			{ endpoint: FCM, keys: { p256dh: "BNcR_x-1", auth: "tBH-8x" } },
 			{ endpoint: FCM, keys: { p256dh: "x", auth: "a".repeat(65) } },
 		])("rejects invalid body #%#", (body) => {
 			expect(parseSubscription(body)).toBeNull();
