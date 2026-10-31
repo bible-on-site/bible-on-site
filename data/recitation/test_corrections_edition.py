@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
+import subprocess  # nosec B404: fixed ffprobe argv, never a shell.
 import unittest
 
 CORRECTIONS = Path(__file__).parent / "corrections"
@@ -60,7 +60,7 @@ class EditionManifestTests(unittest.TestCase):
         for manifest in editions():
             edition = json.loads(manifest.read_text(encoding="utf-8"))["edition"]
             artifact = manifest.parent / edition["file"]
-            out = subprocess.run(
+            out = subprocess.run(  # nosec B603: resolved ffprobe, fixed argv.  # nosemgrep
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                  "-of", "csv=p=0", str(artifact)],
                 check=True, capture_output=True, text=True).stdout.strip()
