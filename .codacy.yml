@@ -54,6 +54,7 @@ exclude_paths:
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
   - "data/mysql/tanah_perek_images_structure.sql"
+  - "data/mysql/external_reference_structure.sql"
   - "data/mysql/tanah_truncate.sql"
   # Same class of T-SQL-dialect false positive: "Use of unicode characters in
   # a non unicode string" demands N'...', but MySQL literals already take the
@@ -62,6 +63,7 @@ exclude_paths:
   - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_dedication_upgrade.sql"
   - "data/mysql/tanah_dedication_data.sql"
+  - "data/mysql/external_reference_data.sql"
   - "data/mysql/tanahpedia_entry_synonym_data.sql"
   - "data/mysql/tanahpedia_family_edge_lab_data.sql"
   - "data/mysql/tanahpedia_family_jacob_data.sql"
