@@ -125,8 +125,11 @@ partial class Build
             {
                 progress = attempt == 0 ? uploadRequest.Upload() : uploadRequest.Resume();
             }
-            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException)
+            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException canceled)
             {
+                // The library already records the cancel in GetProgress(); the
+                // loop below resumes the session.
+                Serilog.Log.Debug($"AAB upload request canceled: {canceled.Message}");
             }
             if (progress?.Status == UploadStatus.Completed)
             {
