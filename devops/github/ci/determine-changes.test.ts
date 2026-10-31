@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
 	mkdirSync,
 	mkdtempSync,
@@ -9,17 +9,24 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, test } from "node:test";
+import { describe, type TestContext, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
 	applyReleaseRecovery,
 	baseRevision,
 	detectChanges,
 	isDataDeployChange,
 	isSchemaOnlyDataChange,
+	listChangedFiles,
 	MODULES,
 	type ModuleKey,
 	main,
 } from "./determine-changes.ts";
+import {
+	DOCSTRING_PYTHON,
+	isPublishDocstringOnlyChange,
+	PUBLISH_SOURCE_PATH,
+} from "./publish-docstring.mts";
 
 const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
@@ -97,11 +104,96 @@ describe("explicit service release recovery selection", () => {
 });
 
 describe("detectChanges", () => {
+
+	describe("documentation preserves every migration routing decision", () => {
+		for (const migrations of [
+			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+			],
+		]) {
+			test(migrations.join(" + "), () => {
+				const files = ["data/annotations/GOLDEN.md", ...migrations];
+				assert.deepEqual(detectChanges(files).data, {
+					module_changed: true,
+					ci_changed: true,
+				});
+				assert.equal(
+					isSchemaOnlyDataChange(files),
+					isSchemaOnlyDataChange(migrations),
+				);
+				assert.equal(isDataDeployChange(files), false);
+			});
+		}
+	});
+	test("the annotation evaluation guide selects data checks without delivery", () => {
+		const files = ["data/annotations/GOLDEN.md"];
+		const changes = detectChanges(files);
+		assert.deepEqual(changes.data, { module_changed: false, ci_changed: true });
+		for (const [key, flags] of Object.entries(changes)) {
+			if (key !== "data")
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: false },
+					key,
+				);
+		}
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isSchemaOnlyDataChange(files), false);
+	});
+
+	test("the guide exception preserves real annotation inputs and exact path boundaries", () => {
+		for (const file of [
+			"data/annotations/publish.py",
+			"data/annotations/golden/metrics-baseline.json",
+			"data/annotations/GOLDEN.md.bak",
+			"data/annotations/nested/GOLDEN.md",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).data,
+				{ module_changed: true, ci_changed: false },
+				file,
+			);
+			assert.deepEqual(
+				detectChanges(["data/annotations/GOLDEN.md", file]).data,
+				{ module_changed: true, ci_changed: true },
+				file,
+			);
+		}
+	});
+
+	test("the guide does not turn a manual migration into a full data deployment", () => {
+		const files = [
+			"data/annotations/GOLDEN.md",
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+		];
+		assert.deepEqual(detectChanges(files).data, {
+			module_changed: true,
+			ci_changed: true,
+		});
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			]),
+			false,
+		);
+	});
+
 	test("native image validation changes select all three services without a release", () => {
 		for (const file of [
 			".github/workflows/architecture-validation.yml",
 			"devops/github/ci/verify-native-image.mjs",
 			"devops/github/ci/verify-native-image.test.mjs",
+			"devops/github/ci/native-api-fixture.mjs",
+			"devops/github/ci/native-api-fixture.test.mjs",
+			"devops/github/ci/native-api-fixture.sql",
+			"devops/github/ci/native-api-fixture-rows.sql",
+			"devops/github/ci/verify-api-native.mjs",
+			"devops/github/ci/verify-api-native.test.mjs",
 			"devops/github/ci/verify-website-native.mjs",
 		]) {
 			const changes = detectChanges([file]);
@@ -115,6 +207,28 @@ describe("detectChanges", () => {
 					`${file} -> ${key}`,
 				);
 			}
+		}
+	});
+
+	test("API publication contracts and dependency changes gate recovery without data delivery", () => {
+		for (const file of [
+			"devops/github/ci/release-coverage.mjs",
+			"devops/github/release/api-image-assets.mjs",
+			"devops/github/release/api-image-assets.test.mjs",
+			"devops/github/release/check-deployment.mjs",
+			"devops/github/release/check-deployment.test.mjs",
+			"devops/github/release/release-provenance.mjs",
+			"devops/package.json",
+			"devops/bun.lock",
+		]) {
+			const changes = detectChanges([file]);
+			assert.deepEqual(
+				changes.data,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
+			assert.equal(isDataDeployChange([file]), false, file);
+			assert.equal(changes.api.module_changed, false, file);
 		}
 	});
 
@@ -422,6 +536,8 @@ describe("detectChanges", () => {
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/.covignore.mjs",
 		"web/bible-on-site/shared/typing/coverage.d.ts",
+		// Standalone report inspection never ships in the website.
+		"web/bible-on-site/scripts/coverage-gaps.mjs",
 	]) {
 		test(`${path} runs website checks without a release`, () => {
 			assert.deepEqual(changed([path], "website"), [
@@ -445,7 +561,6 @@ describe("detectChanges", () => {
 		"web/bible-on-site/public/icons/search.svg",
 		"web/bible-on-site/scripts/start-server.mjs",
 		"web/bible-on-site/scripts/generate-client-catalog.mjs",
-		"web/bible-on-site/scripts/coverage-gaps.mjs",
 		"web/bible-on-site/shared/typing/other.d.ts",
 		"web/bible-on-site/tests2/util/helper.ts",
 	]) {
@@ -550,6 +665,22 @@ describe("detectChanges", () => {
 		);
 	});
 
+	test("pending API release tooling selects API checks without unrelated delivery", () => {
+		for (const file of [
+			"devops/github/ci/pending-api-release.mjs",
+			"devops/github/ci/pending-api-release.test.mjs",
+		]) {
+			const changes = detectChanges([file]);
+			for (const [key, flags] of Object.entries(changes)) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "api" },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.equal(isDataDeployChange([file]), false, file);
+		}
+	});
 	test("module directories match path segments, not prefixes", () => {
 		const changes = detectChanges(["web/api-docs/readme.md", "appendix.md"]);
 		assert.equal(changes.api.module_changed, false);
@@ -579,6 +710,42 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the calendar converter repair requires data checks and a guarded manual deployment", () => {
+		const files = [
+			"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs",
+			"devops/study-calendar-repair.mjs",
+		];
+		assert.equal(isSchemaOnlyDataChange(files), true);
+		assert.equal(detectChanges(files).data.module_changed, true);
+		assert.equal(detectChanges(files).perushim_pipeline.module_changed, false);
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+			]),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			]),
+			true,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([...files, "data/mysql/tanah_test_data.sql"]),
+			false,
+		);
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...files,
+				"data/sefaria/pipelines/perushim-view/src/main.rs",
+			]),
+			false,
+		);
+	});
+
 	for (const [name, files, expected] of [
 		["no data changes", [], false],
 		[
@@ -624,6 +791,63 @@ describe("isSchemaOnlyDataChange", () => {
 			"bulletin upgrade alone stays manual",
 			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
 			true,
+		],
+		[
+			"WhatsApp upgrade and bootstrap preservation stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"devops/deploy/data-deploy/sql-files.json",
+				"web/admin/src/server/whatsapp-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"WhatsApp upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"],
+			true,
+		],
+		[
+			"WhatsApp upgrade cannot hide content changes",
+			[
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_dedication_data.sql",
+			],
+			false,
+		],
+		[
+			"Telegram upgrade alone stays manual",
+			["data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"],
+			true,
+		],
+		[
+			"Telegram upgrade with preservation fixture stays manual",
+			[
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"web/admin/src/server/telegram-delivery.server.ts",
+			],
+			true,
+		],
+		[
+			"all bulletin migrations with preservation fixture stay manual",
+			[
+				"data/mysql/tanah_daily_bulletin_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+			],
+			true,
+		],
+		[
+			"Telegram upgrade cannot hide a full content rebuild",
+			[
+				"data/mysql/tanah_daily_bulletin_telegram_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+				"data/mysql/tanah_static_structure.sql",
+			],
+			false,
 		],
 		[
 			"bootstrap changes alone retain normal deployment behavior",
@@ -717,9 +941,11 @@ describe("isSchemaOnlyDataChange", () => {
 	});
 });
 
-test("SES infrastructure changes select data checks without releasing content", () => {
+test("bulletin infrastructure changes select data checks without releasing content", () => {
 	for (const file of [
 		"docs/aws/cloudformation/daily-bulletin-ses.yaml",
+		"docs/aws/cloudformation/daily-bulletin-whatsapp.yaml",
+		"docs/aws/cloudformation/daily-bulletin-telegram.yaml",
 		"devops/daily-bulletin-infra.test.mjs",
 		"web/bulletin/assets/email/manifest.json",
 		"web/bulletin/scripts/prepare-email-assets.mjs",
@@ -821,12 +1047,19 @@ describe("main", () => {
 	 * Builds origin history `base -> (api change) -> (website change)` on master,
 	 * then runs `main` in a depth-1 clone of HEAD, like actions/checkout. PRs
 	 * use a synthetic merge whose first parent has newer release-only bumps.
+	 * Queue runs keep master at root and put both entries on the queue branch.
 	 */
 	function run(
 		eventName: string,
-		event: (shas: { root: string; replaced: string; base: string }) => object,
+		event: (shas: {
+			root: string;
+			replaced: string;
+			base: string;
+			head: string;
+		}) => object,
 		changedPath = "web/bible-on-site/src/page.tsx",
 		changeKind: "write" | "delete" = "write",
+		ancestorPath = "web/api/src/main.rs",
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -845,7 +1078,10 @@ describe("main", () => {
 			git(work, "checkout", "--quiet", "-b", "replaced");
 			const replaced = commit(work, "web/admin/src/main.tsx");
 			git(work, "checkout", "--quiet", "master");
-			const base = commit(work, "web/api/src/main.rs");
+			if (eventName === "merge_group") {
+				git(work, "checkout", "--quiet", "-b", "gh-readonly-queue/master/tail");
+			}
+			const base = commit(work, ancestorPath);
 			if (eventName === "pull_request") {
 				git(work, "checkout", "--quiet", "-b", "feature");
 				commit(work, "web/bible-on-site/src/page.tsx");
@@ -868,6 +1104,16 @@ describe("main", () => {
 			} else {
 				commit(work, changedPath);
 			}
+			const head = git(work, "rev-parse", "HEAD");
+			if (eventName === "merge_group") {
+				assert.equal(git(work, "rev-parse", "master"), root);
+				assert.equal(git(work, "rev-parse", "HEAD^"), base);
+				assert.equal(git(work, "diff", "--name-only", base, head), changedPath);
+				assert.deepEqual(
+					git(work, "diff", "--name-only", root, head).split("\n"),
+					[ancestorPath, changedPath].sort(),
+				);
+			}
 			// Use the Git transport so background maintenance cannot race a loose-object copy.
 			git(directory, "clone", "--quiet", "--no-local", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
@@ -884,7 +1130,10 @@ describe("main", () => {
 			);
 			const eventPath = join(directory, "event.json");
 			const outputPath = join(directory, "output.txt");
-			writeFileSync(eventPath, JSON.stringify(event({ root, replaced, base })));
+			writeFileSync(
+				eventPath,
+				JSON.stringify(event({ root, replaced, base, head })),
+			);
 			const changes = main(
 				{
 					GITHUB_EVENT_NAME: eventName,
@@ -933,6 +1182,28 @@ describe("main", () => {
 		assert.match(output, /^admin_module_changed=false$/m);
 		assert.match(output, /^bulletin_module_changed=false$/m);
 	});
+
+	for (const changeKind of ["write", "delete"] as const) {
+		test(
+			"an annotation guide " + changeKind + " emits CI-only data outputs",
+			() => {
+				const { changes, output } = run(
+					"push",
+					({ base }) => ({ before: base }),
+					"data/annotations/GOLDEN.md",
+					changeKind,
+				);
+				assert.deepEqual(changes.data, {
+					module_changed: false,
+					ci_changed: true,
+				});
+				assert.match(output, /^data_module_changed=false$/m);
+				assert.match(output, /^data_ci_changed=true$/m);
+				assert.match(output, /^data_deploy_changed=false$/m);
+				assert.match(output, /^data_schema_only_changed=false$/m);
+			},
+		);
+	}
 
 	test("a timing-only master push schedules native packaging with unchanged app version", () => {
 		const { changes, output } = run(
@@ -989,12 +1260,49 @@ describe("main", () => {
 		websiteOnly(run("push", () => ({ before: "0".repeat(40) })).changes);
 	});
 
-	test("merge_group compares with the queue base", () => {
-		websiteOnly(
-			run("merge_group", ({ base }) => ({ merge_group: { base_sha: base } }))
-				.changes,
+	test("HEADGREEN tail validates the app entry ahead of a breadcrumb-only entry", () => {
+		// #2797 -> #2804: payload base d56ae2f already contained the app entry,
+		// while head 45b8990 added only the breadcrumb fix. That delta cannot
+		// authorize skipping app checks for the combined tail HEADGREEN validates.
+		const { changes, output } = run(
+			"merge_group",
+			({ base, head }) => ({
+				action: "checks_requested",
+				merge_group: {
+					base_sha: base,
+					head_sha: head,
+					base_ref: "refs/heads/master",
+					head_ref: "refs/heads/gh-readonly-queue/master/tail",
+				},
+			}),
+			"web/bible-on-site/src/app/components/BreadcrumbDropdown.tsx",
+			"write",
+			"app/BibleOnSite/AppShell.xaml.cs",
 		);
+		for (const [key, flags] of Object.entries(changes)) {
+			assert.deepEqual(flags, { module_changed: false, ci_changed: true }, key);
+		}
+		assert.match(output, /^data_schema_only_changed=false$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
 	});
+
+	for (const path of [
+		"data/mysql/tanahpedia_alter_mention_decoration.sql",
+		"devops/deploy/data-deploy/index.mts",
+	]) {
+		test(`merge_group validates without delivery intent for ${path}`, () => {
+			const { changes, output } = run(
+				"merge_group",
+				({ base }) => ({ merge_group: { base_sha: base } }),
+				path,
+			);
+			for (const flags of Object.values(changes)) {
+				assert.deepEqual(flags, { module_changed: false, ci_changed: true });
+			}
+			assert.match(output, /^data_schema_only_changed=false$/m);
+			assert.match(output, /^data_deploy_changed=false$/m);
+		});
+	}
 
 	test("workflow_dispatch compares with master", () => {
 		const { changes, output } = run("workflow_dispatch", () => ({}));
@@ -1016,4 +1324,590 @@ describe("main", () => {
 		assert.match(output, /^admin_release_recovery=true$/m);
 		assert.match(output, /^bulletin_release_recovery=true$/m);
 	});
+});
+
+describe("merge-group workflow contract", () => {
+	const ci = readFileSync(
+		new URL("../../../.github/workflows/ci.yml", import.meta.url),
+		"utf8",
+	).replace(/\r/g, "");
+	const job = (name: string) => {
+		const section = ci.split(`\n  ${name}:\n`)[1];
+		assert.ok(section, `Missing job ${name}`);
+		return section.split(/\n {2}[a-z][a-z0-9_]*:\n/)[0];
+	};
+	const condition = (name: string) => {
+		const value = job(name).match(/^ {4}if: (.+)$/m)?.[1];
+		assert.ok(value, `Missing condition for ${name}`);
+		return value;
+	};
+
+	test("routing regressions run before selection on every event without package dependencies", () => {
+		const steps = job("determine_changes");
+		const setup = steps.indexOf("uses: actions/setup-node@");
+		const regression = steps.indexOf(
+			"run: node --test devops/github/ci/determine-changes.test.ts",
+		);
+		const selection = steps.indexOf(
+			"run: node devops/github/ci/determine-changes.ts",
+		);
+		assert.ok(setup >= 0 && regression > setup && selection > regression);
+		const nextStep = steps.indexOf("\n      - ", selection);
+		const routingSteps = steps.slice(0, nextStep < 0 ? steps.length : nextStep);
+		assert.doesNotMatch(routingSteps, /^ {4}if:|^ {8}if:/m);
+	});
+
+	test("combined queue heads force full Playwright and mobile suites", () => {
+		assert.ok(
+			ci.includes(
+				`FORCE_FULL_SUITE: \${{ github.event_name == 'merge_group' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}`,
+			),
+		);
+		assert.ok(
+			job("app_mobile_e2e").includes(
+				`force_full_suite: \${{ github.event_name == 'merge_group' }}`,
+			),
+		);
+	});
+
+	test("a missing queue Mongo image is exported and loaded by both consumers without registry publication", () => {
+		assert.ok(
+			job("determine_docker_image_availability").includes(
+				`can_publish_sefaria_mongo: \${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}`,
+			),
+		);
+		const producer = job("build_sefaria_mongo_docker");
+		assert.ok(
+			producer.includes(
+				"needs.determine_changes.outputs.data_ci_changed == 'true'",
+			),
+		);
+		assert.ok(
+			producer.includes(
+				"can_publish_sefaria_mongo == 'true' && 'type=registry,compression=zstd,force-compression=true,oci-mediatypes=true' || 'type=docker,dest=/tmp/sefaria-mongo-image.tar'",
+			),
+		);
+		assert.ok(producer.includes("can_publish_sefaria_mongo != 'true'"));
+		assert.ok(
+			producer.includes(`name: \${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}`),
+		);
+		for (const name of ["data_ci", "perushim_data"]) {
+			const consumer = job(name);
+			assert.ok(consumer.includes("build_sefaria_mongo_docker"), name);
+			assert.ok(
+				consumer.includes(
+					`outputs.is_sefaria_mongo_available }}" != "true" ] && [ "\${{ needs.determine_docker_image_availability.outputs.can_publish_sefaria_mongo }}" != "true"`,
+				),
+				name,
+			);
+			assert.ok(
+				consumer.includes(
+					`gh run download \${{ github.run_id }} -n \${{ env.SEFARIA_MONGO_IMAGE_ARTIFACT_NAME }}`,
+				),
+				name,
+			);
+			assert.ok(
+				consumer.includes("docker load --input /tmp/sefaria-mongo-image.tar"),
+				name,
+			);
+		}
+	});
+
+	test("queue perushim and native audio producers have matching required gates", () => {
+		assert.ok(
+			job("perushim_data").includes(
+				"(github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true')",
+			),
+		);
+		assert.ok(
+			condition("app_ios_ci").includes(
+				"(github.event_name == 'pull_request' || github.event_name == 'merge_group')",
+			),
+		);
+		const prerequisites = job("cross_module_ci")
+			.split("        run: |\n")[1]
+			.split("\n      - name: Checkout")[0]
+			.split("\n")
+			.map((line) => line.slice(10))
+			.join("\n");
+		const bash =
+			process.platform === "win32"
+				? join(
+						process.env.ProgramFiles ?? "C:\\Program Files",
+						"Git",
+						"bin",
+						"bash.exe",
+					)
+				: "bash";
+		const scenarios: { label: string; succeeds: boolean; script: string }[] = [];
+		const evaluate = (
+			event: string,
+			failedJob?: string,
+			ciChanged = true,
+			baselineAvailable = true,
+			succeeds = false,
+			versions = { amd64: "0.1.96", arm64: "0.1.96" },
+			prerequisiteSource = prerequisites,
+		) => {
+			const script = prerequisiteSource.replace(
+				/\$\{\{ ([^}]+) \}\}/g,
+				(_match, expression: string) => {
+					if (expression === "github.event_name") return event;
+					if (expression.endsWith(".result")) {
+						return expression === `needs.${failedJob}.result`
+							? "skipped"
+							: "success";
+					}
+					if (expression === "needs.package_api.outputs.module_version")
+						return versions.amd64;
+					if (expression === "needs.package_api_arm64.outputs.module_version")
+						return versions.arm64;
+					if (expression.includes("_ci_changed")) return String(ciChanged);
+					if (expression.includes("_module_changed")) return "false";
+					if (expression.includes(".outputs.is_"))
+						return String(baselineAvailable);
+					throw new Error(`Unexpected prerequisite expression: ${expression}`);
+				},
+			);
+			scenarios.push({ label: `${event}/${failedJob ?? "all"}`, succeeds, script });
+		};
+		evaluate("merge_group", undefined, true, true, true);
+		// Paired-image guards may arrive independently of the queue fixture.
+		// Keep output substitution strict and exercise missing/mismatched versions.
+		const versionGate = prerequisites + `
+if [ -z "\${{ needs.package_api.outputs.module_version }}" ] ||
+   [ "\${{ needs.package_api.outputs.module_version }}" != "\${{ needs.package_api_arm64.outputs.module_version }}" ]; then
+  exit 1
+fi
+`;
+		for (const [amd64, arm64] of [
+			["0.1.96", "0.1.96"],
+			["0.1.96", "0.1.95"],
+			["", ""],
+			["", "0.1.96"],
+			["0.1.96", ""],
+		] as const) {
+			evaluate("merge_group", undefined, true, true,
+				amd64 !== "" && amd64 === arm64, { amd64, arm64 }, versionGate);
+		}
+		assert.throws(
+			() => evaluate("merge_group", undefined, true, true, false, undefined,
+				prerequisites + "\n${{ needs.unknown.outputs.module_version }}"),
+			/Unexpected prerequisite expression/,
+		);
+		for (const name of [
+			"website_performance",
+			"website_e2e",
+			"api_e2e",
+			"app_ci",
+			"admin_ci",
+			"bulletin_ci",
+			"data_ci",
+			"app_mobile_e2e",
+			"app_ios_ci",
+			"perushim_data",
+			"package_ios_pr",
+			"package_windows_pr",
+			"package_api",
+			"package_bulletin",
+			"package_admin",
+			"validate_website_architectures",
+			"validate_api_architectures",
+			"validate_admin_architectures",
+			"recitation_ci",
+			"deploy_verifier",
+			"calendar_pdf_artifacts",
+		]) {
+			evaluate("merge_group", name);
+		}
+		// Baseline recovery alone never selects the PR native-audio producer.
+		evaluate("pull_request", "app_ios_ci", false, false, true);
+		for (const event of ["push", "workflow_dispatch"]) {
+			for (const name of ["app_ios_ci", "perushim_data"]) {
+				evaluate(event, name, true, true, true);
+			}
+		}
+		// Run the real shell gates in isolated subshells without paying native Bash
+		// startup once for each scenario, which exceeded the unchanged 5s deadline.
+		const result = spawnSync(bash, ["--noprofile", "--norc", "-s"], {
+			input: scenarios.map(({ script }, index) =>
+				`( set -e\n${script}\n)\nprintf 'GATE_RESULT_${index}=%s\\n' "$?"`,
+			).join("\n"),
+			encoding: "utf8",
+		});
+		assert.ifError(result.error);
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		const outcomes = [...result.stdout.matchAll(/^GATE_RESULT_(\d+)=(\d+)$/gm)];
+		assert.equal(outcomes.length, scenarios.length, result.stdout + result.stderr);
+		for (const [index, scenario] of scenarios.entries()) {
+			assert.equal(Number(outcomes[index][1]), index);
+			assert.equal(Number(outcomes[index][2]) === 0, scenario.succeeds,
+				`${scenario.label}: ${result.stdout}${result.stderr}`);
+		}
+
+	});
+
+	test("queue validation cannot run production website packaging or release jobs", () => {
+		for (const name of [
+			"package_website",
+			"release_website",
+			"release_api",
+			"release_app",
+			"release_admin",
+			"release_bulletin",
+			"release_data",
+		]) {
+			assert.ok(condition(name).includes("github.event_name == 'push'"), name);
+			assert.ok(
+				condition(name).includes(
+					"needs.setup_env.outputs.is_master_branch == 'true'",
+				),
+				name,
+			);
+		}
+		assert.ok(
+			ci.includes(
+				`IS_MASTER_BRANCH: \${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}`,
+			),
+		);
+	});
+});
+
+const publisherSource = readFileSync(
+	new URL("../../../data/annotations/publish.py", import.meta.url),
+	"utf8",
+).replace(
+	"node devops/export-tanahpedia-articles.mts",
+	"node --import tsx devops/export-tanahpedia-articles.mts",
+);
+const correctedPublisher = publisherSource.replace(
+	"node --import tsx devops/export-tanahpedia-articles.mts",
+	"node devops/export-tanahpedia-articles.mts",
+);
+const publisherDocEnd = publisherSource.indexOf('\n"""') + 4;
+assert.ok(publisherDocEnd > 3);
+const publisherBody = publisherSource.slice(publisherDocEnd);
+
+function astDocProof(before: string, after: string): boolean {
+	const result = execFileSync(
+		DOCSTRING_PYTHON,
+		[
+			"-I",
+			"-S",
+			fileURLToPath(new URL("./publish-docstring-proof.py", import.meta.url)),
+		],
+		{
+			input: JSON.stringify({
+				base: Buffer.from(before).toString("base64"),
+				head: Buffer.from(after).toString("base64"),
+			}),
+			encoding: "utf8",
+		},
+	);
+	return result.trim() === "true";
+}
+
+describe("publisher docstring AST proof", () => {
+	test("actual publisher help documents commands from the repository root", () => {
+		const root = fileURLToPath(new URL("../../../", import.meta.url));
+		const help = execFileSync(
+			DOCSTRING_PYTHON,
+			[
+				fileURLToPath(
+					new URL("../../../data/annotations/publish.py", import.meta.url),
+				),
+				"--help",
+			],
+			{ cwd: root, encoding: "utf8" },
+		);
+		assert.match(help, /Gated production run from the repository root/);
+		assert.match(help, /node devops\/export-tanahpedia-articles\.mts/);
+		assert.match(help, /python data\/annotations\/publish\.py --pasuk-out/);
+		assert.doesNotMatch(help, /--import tsx|python publish\.py/);
+	});
+
+	test("requires the real standard-library interpreter used by CI", () => {
+		assert.match(
+			execFileSync(DOCSTRING_PYTHON, ["-I", "-S", "--version"], {
+				encoding: "utf8",
+			}),
+			/Python 3\./,
+		);
+	});
+	for (const [label, doc] of [
+		[
+			"native Node command",
+			correctedPublisher.slice(0, correctedPublisher.indexOf('\n"""') + 4),
+		],
+		["UTF8 columns", '"""תיעוד יצוא ללא שינוי בקוד"""'],
+		[
+			"CRLF docstring",
+			publisherSource.slice(0, publisherDocEnd).split("\n").join("\r\n"),
+		],
+		[
+			"escaped delimiter",
+			String.raw`"""Text with an escaped delimiter \""" remains documentation.
+"""`,
+		],
+		["implicit literal concatenation", '"""First part""" """second part"""'],
+	]) {
+		test("accepts only the leading documentation change: " + label, () => {
+			assert.equal(astDocProof(publisherSource, doc + publisherBody), true);
+		});
+	}
+	for (const [label, source] of [
+		["missing docstring", publisherBody],
+		["unterminated docstring", '"""not closed'],
+		["computed expression", '"""one""" + """two"""' + publisherBody],
+		["f-string expression", 'f"""not a module docstring"""' + publisherBody],
+		["bytes expression", 'b"""not text"""' + publisherBody],
+		["invalid Python", correctedPublisher + "\nif (\n"],
+		[
+			"body code",
+			correctedPublisher +
+				"\nraise RuntimeError('must never execute source')\n",
+		],
+		[
+			"body comment",
+			correctedPublisher +
+				"\n# Source outside the module docstring stays delivery-affecting.\n",
+		],
+	]) {
+		test("retains delivery for " + label, () =>
+			assert.equal(astDocProof(publisherSource, source), false),
+		);
+	}
+	test("requires the audited body even when both revisions share a new __doc__ consumer", () => {
+		const consumption = "\nPAYLOAD = __doc__\n";
+		assert.equal(
+			astDocProof(
+				publisherSource + consumption,
+				correctedPublisher + consumption,
+			),
+			false,
+		);
+	});
+	test("preserves all source bytes outside the docstring, including line endings", () => {
+		assert.equal(
+			astDocProof(publisherSource, correctedPublisher.split("\n").join("\r\n")),
+			false,
+		);
+	});
+});
+
+function publisherFixture(
+	t: TestContext,
+	{
+		before = publisherSource,
+		after = correctedPublisher,
+		extra = [],
+		modeChange = false,
+		shallow = true,
+	}: {
+		before?: string | null;
+		after?: string | null;
+		extra?: string[];
+		modeChange?: boolean;
+		shallow?: boolean;
+	} = {},
+) {
+	const root = mkdtempSync(join(tmpdir(), "publisher-routing-"));
+	t.after(() => {
+		assert.equal(dirname(root), tmpdir());
+		rmSync(root, { recursive: true, force: true });
+	});
+	const work = join(root, "work"),
+		origin = join(root, "origin.git"),
+		clone = join(root, "clone");
+	const git = (cwd: string, ...args: string[]) =>
+		execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+	const write = (path: string, body: string) => {
+		mkdirSync(dirname(join(work, path)), { recursive: true });
+		writeFileSync(join(work, path), body);
+	};
+	mkdirSync(work);
+	git(work, "init", "--quiet", "--initial-branch=master");
+	git(work, "config", "user.name", "CI fixture");
+	git(work, "config", "user.email", "ci-fixture@example.invalid");
+	git(work, "config", "core.autocrlf", "false");
+	write("README.md", "initial history\n");
+	git(work, "add", ".");
+	git(work, "commit", "--quiet", "-m", "Root history");
+	write("README.md", "source-proof fixture\n");
+	if (before !== null) write(PUBLISH_SOURCE_PATH, before);
+	git(work, "add", ".");
+	git(work, "commit", "--quiet", "-m", "Base source");
+	const baseSha = git(work, "rev-parse", "HEAD");
+	if (after === null) rmSync(join(work, PUBLISH_SOURCE_PATH));
+	else write(PUBLISH_SOURCE_PATH, after);
+	for (const path of extra) write(path, "changed input\n");
+	git(work, "add", ".");
+	if (modeChange) git(work, "update-index", "--chmod=+x", PUBLISH_SOURCE_PATH);
+	git(work, "commit", "--quiet", "--allow-empty", "-m", "Head source");
+	const headSha = git(work, "rev-parse", "HEAD");
+	git(root, "clone", "--quiet", "--no-local", "--bare", work, origin);
+	git(origin, "config", "uploadpack.allowAnySHA1InWant", "true");
+	git(
+		root,
+		"clone",
+		"--quiet",
+		...(shallow ? ["--depth=1"] : []),
+		`file://${origin.split("\\").join("/")}`,
+		clone,
+	);
+	return {
+		root,
+		clone,
+		baseSha,
+		headSha,
+		git: (...args: string[]) => git(clone, ...args),
+		run: () => {
+			const eventPath = join(root, "event.json"),
+				outputPath = join(root, "output.txt");
+			writeFileSync(eventPath, JSON.stringify({ before: baseSha }));
+			const changes = main(
+				{
+					GITHUB_EVENT_NAME: "push",
+					GITHUB_EVENT_PATH: eventPath,
+					GITHUB_OUTPUT: outputPath,
+				},
+				clone,
+			);
+			return { changes, output: readFileSync(outputPath, "utf8") };
+		},
+	};
+}
+
+describe("publisher docstring release routing", () => {
+	test("uses immutable base/head blobs in a shallow checkout and selects checks only", (t) => {
+		const fixture = publisherFixture(t);
+		assert.equal(fixture.git("rev-parse", "--is-shallow-repository"), "true");
+		// Uncommitted code is deliberately unrelated: proof must use the tested Git blobs.
+		writeFileSync(
+			join(fixture.clone, PUBLISH_SOURCE_PATH),
+			"raise RuntimeError('working tree is not the source')\n",
+		);
+		const { changes, output } = fixture.run();
+		assert.deepEqual(changes.data, { module_changed: false, ci_changed: true });
+		assert.match(output, /^data_module_changed=false$/m);
+		assert.match(output, /^data_ci_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+		assert.match(output, /^data_schema_only_changed=false$/m);
+		assert.equal(fixture.git("rev-parse", "--is-shallow-repository"), "true");
+	});
+	for (const [label, options] of [
+		["deleted source", { after: null }],
+		["new source", { before: null }],
+		["file mode change", { modeChange: true }],
+		["changed implementation", { after: correctedPublisher + "\nVALUE = 1\n" }],
+		[
+			"ambiguous expression",
+			{ after: '"""one""" + """two"""' + publisherBody },
+		],
+	] as const) {
+		test("keeps normal delivery for " + label, (t) => {
+			const fixture = publisherFixture(t, options);
+			assert.equal(
+				isPublishDocstringOnlyChange({ ...fixture, cwd: fixture.clone }),
+				false,
+			);
+			assert.deepEqual(fixture.run().changes.data, {
+				module_changed: true,
+				ci_changed: false,
+			});
+		});
+	}
+	test("missing interpreter or unreadable immutable blob cannot prove a safe exclusion", (t) => {
+		const fixture = publisherFixture(t);
+		assert.equal(
+			isPublishDocstringOnlyChange({
+				...fixture,
+				cwd: fixture.clone,
+				python: join(fixture.root, "missing-python"),
+			}),
+			false,
+		);
+		assert.equal(
+			isPublishDocstringOnlyChange({
+				...fixture,
+				cwd: fixture.clone,
+				baseSha: "0".repeat(40),
+			}),
+			false,
+		);
+	});
+	for (const [label, extra, schemaOnly, pipeline] of [
+		[
+			"manual migration",
+			"data/mysql/tanahpedia_alter_mention_decoration.sql",
+			true,
+			false,
+		],
+		[
+			"real SQL payload",
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			false,
+			false,
+		],
+		[
+			"real pipeline source",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			false,
+			true,
+		],
+	] as const) {
+		test("preserves " + label + " alongside a proven docstring change", (t) => {
+			const fixture = publisherFixture(t, { extra: [extra] });
+			const { changes, output } = fixture.run();
+			assert.deepEqual(changes.data, {
+				module_changed: true,
+				ci_changed: true,
+			});
+			assert.equal(changes.perushim_pipeline.module_changed, pipeline);
+			assert.ok(
+				output
+					.split(/\r?\n/)
+					.includes(`data_schema_only_changed=${schemaOnly}`),
+			);
+		});
+	}
+	test("helper and regression edits select the required data checks without delivery", () => {
+		for (const file of [
+			"devops/github/ci/publish-docstring.mts",
+			"devops/github/ci/publish-docstring-proof.py",
+			"devops/github/ci/determine-changes.test.ts",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).data,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
+			assert.equal(isDataDeployChange([file]), false);
+		}
+	});
+});
+
+describe("existing full Git history", () => {
+	for (const kind of ["sha", "parent", "branch"] as const) {
+		test("stays full when resolving " + kind + " event bases", (t) => {
+			const fixture = publisherFixture(t, { shallow: false });
+			const count = fixture.git("rev-list", "--count", "HEAD");
+			assert.equal(
+				fixture.git("rev-parse", "--is-shallow-repository"),
+				"false",
+			);
+			const base =
+				kind === "sha"
+					? { kind, sha: fixture.baseSha }
+					: kind === "branch"
+						? { kind, branch: "master" }
+						: { kind };
+			listChangedFiles(base, fixture.clone);
+			assert.equal(
+				fixture.git("rev-parse", "--is-shallow-repository"),
+				"false",
+			);
+			assert.equal(fixture.git("rev-list", "--count", "HEAD"), count);
+		});
+	}
 });

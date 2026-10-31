@@ -49,7 +49,10 @@ public sealed class IosBackNavigationTests
                 var name when name == DriverCommand.GetElementAttribute => "true",
                 var name when name == DriverCommand.GetElementRect => new Dictionary<string, object>
                 {
-                    ["x"] = 0, ["y"] = 62, ["width"] = 48, ["height"] = 56
+                    ["x"] = 0,
+                    ["y"] = 62,
+                    ["width"] = 48,
+                    ["height"] = 56
                 },
                 _ => null
             };

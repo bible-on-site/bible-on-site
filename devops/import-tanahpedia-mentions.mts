@@ -22,9 +22,8 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { websiteMysql } from "./website-mysql.mts";
 
 function parseFlags(argv: string[]) {
 	const flags = new Map<string, string>();
@@ -46,7 +45,8 @@ function loadDbUrl(envFile: string): string {
 			process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
 		}
 	}
-	if (!process.env.DB_URL) throw new Error("DB_URL not set and no env file provided");
+	if (!process.env.DB_URL)
+		throw new Error("DB_URL not set and no env file provided");
 	return process.env.DB_URL;
 }
 
@@ -100,8 +100,15 @@ export function rowId(key: string): string {
 }
 
 const SOURCE_FIELDS = [
-	"source_kind", "perek_id", "pasuk_number", "segment_start", "segment_end",
-	"article_id", "content_hash", "span_start", "span_end",
+	"source_kind",
+	"perek_id",
+	"pasuk_number",
+	"segment_start",
+	"segment_end",
+	"article_id",
+	"content_hash",
+	"span_start",
+	"span_end",
 ] as const;
 
 /**
@@ -134,10 +141,10 @@ async function main() {
 	const dryRun = flags.has("dry-run");
 	const supersedeModel = flags.get("supersede-model");
 	const envFile = flags.get("env-file") ?? ".dev.env";
-	const requireFromModule = createRequire(resolve(process.cwd(), "package.json"));
-	const mysql =
-		requireFromModule("mysql2/promise") as typeof import("mysql2/promise");
-	const rows = JSON.parse(readFileSync(decorationsFile, "utf8")) as DecorationRow[];
+	const mysql = websiteMysql();
+	const rows = JSON.parse(
+		readFileSync(decorationsFile, "utf8"),
+	) as DecorationRow[];
 	// Validate the supersede scope before connecting so a bad flag fails
 	// without touching the database.
 	const supersede =
@@ -172,9 +179,14 @@ async function main() {
 						confidence = ?, source_hash = ?, ${SOURCE_FIELDS.map((f) => `\`${f}\` = ?`).join(", ")}
 					WHERE dedupe_key = ?`,
 					[
-						row.surface, row.intended_name, row.entity_type,
-						row.disambiguation ?? null, row.confidence ?? null, row.source_hash,
-						...SOURCE_FIELDS.map((f) => row[f] ?? null), key,
+						row.surface,
+						row.intended_name,
+						row.entity_type,
+						row.disambiguation ?? null,
+						row.confidence ?? null,
+						row.source_hash,
+						...SOURCE_FIELDS.map((f) => row[f] ?? null),
+						key,
 					],
 				);
 				updated++;
@@ -186,11 +198,17 @@ async function main() {
 						 acceptance, model_revision, source_hash)
 					VALUES (?, ?, ${SOURCE_FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
-						rowId(key), key,
+						rowId(key),
+						key,
 						...SOURCE_FIELDS.map((f) => row[f] ?? null),
-						row.surface, row.intended_name, row.entity_type,
-						row.disambiguation ?? null, row.confidence ?? null,
-						row.acceptance ?? "auto", row.model_revision, row.source_hash,
+						row.surface,
+						row.intended_name,
+						row.entity_type,
+						row.disambiguation ?? null,
+						row.confidence ?? null,
+						row.acceptance ?? "auto",
+						row.model_revision,
+						row.source_hash,
 					],
 				);
 				inserted++;
@@ -214,7 +232,14 @@ async function main() {
 		await conn.end();
 	}
 	console.log(
-		JSON.stringify({ inserted, updated, preserved, superseded, total: rows.length, dryRun }),
+		JSON.stringify({
+			inserted,
+			updated,
+			preserved,
+			superseded,
+			total: rows.length,
+			dryRun,
+		}),
 	);
 }
 

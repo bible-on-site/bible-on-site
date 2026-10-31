@@ -582,13 +582,48 @@ describe("cached loader tag contracts", () => {
 		]);
 	});
 
+	it.each(["בראשית", "תהילים"])(
+		"tags the %s spread map within the framework limit",
+		async (name) => {
+			stubTables({});
+			const { getSeferPerekDedicationLines } = await import(
+				"../../../src/lib/dedications/loaders"
+			);
+			const seferId = seferIdByName(name);
+			if (seferId === undefined) throw new Error(`Unknown sefer: ${name}`);
+			await getSeferPerekDedicationLines(seferId);
+			const tags = stampedTags(
+				"sefer-perek-dedication-lines-v2",
+				String(seferId),
+			);
+			expect(tags.length).toBeLessThanOrEqual(128);
+			expect(tags).toEqual([
+				"dedications",
+				`sefer:${seferId}:perek-dedications`,
+			]);
+			const { resolveEntityChanges } = await import(
+				"../../../src/lib/revalidate/dependencies"
+			);
+			for (const perekId of seferPerekIds(seferId)) {
+				const invalidation = await resolveEntityChanges([
+					{
+						kind: "dedication",
+						id: 7,
+						perekRanges: [{ low: perekId, high: perekId }],
+					},
+				]);
+				expect(invalidation.tags.some((tag) => tags.includes(tag))).toBe(true);
+			}
+		},
+	);
+
 	it("tags the sefer spread map with one aggregate tag and the global fallback", async () => {
 		stubTables({});
 		const { getSeferPerekDedicationLines } = await import(
 			"../../../src/lib/dedications/loaders"
 		);
 		await getSeferPerekDedicationLines(BERESHIT_SEFER_ID);
-		const tags = stampedTags("sefer-perek-dedication-lines", "1");
+		const tags = stampedTags("sefer-perek-dedication-lines-v2", "1");
 		expect(tags).toEqual(["dedications", "sefer:1:perek-dedications"]);
 	});
 
@@ -597,7 +632,14 @@ describe("cached loader tag contracts", () => {
 		// to exceed Next's 128-tag limit, dropping tags near this last perek.
 		expect(seferPerekIds(25)).toHaveLength(150);
 		stubTables({
-			perek: [{ perek_id_low: 717, perek_id_high: 717, dedication_id: 10, expires_at: null }],
+			perek: [
+				{
+					perek_id_low: 717,
+					perek_id_high: 717,
+					dedication_id: 10,
+					expires_at: null,
+				},
+			],
 			dedication: [{ id: 10, subject: "last chapter", expires_at: null }],
 		});
 		const { getPerekDedications, getSeferPerekDedicationLines } = await import(
@@ -607,10 +649,12 @@ describe("cached loader tag contracts", () => {
 			717: ["מוקדש לlast chapter"],
 		});
 		await getPerekDedications(717);
-		const tags = stampedTags("sefer-perek-dedication-lines", "25");
+		const tags = stampedTags("sefer-perek-dedication-lines-v2", "25");
 		expect(tags).toEqual(["dedications", "sefer:25:perek-dedications"]);
 		expect(tags.length).toBeLessThanOrEqual(128);
-		expect(stampedOpts("sefer-perek-dedication-lines", "25")?.revalidate).toBe(false);
+		expect(
+			stampedOpts("sefer-perek-dedication-lines-v2", "25")?.revalidate,
+		).toBe(false);
 
 		const { resolveEntityChanges } = await import(
 			"../../../src/lib/revalidate/dependencies"
@@ -624,11 +668,15 @@ describe("cached loader tag contracts", () => {
 		expect(tags.filter((tag) => invalidation.tags.includes(tag))).toEqual([
 			"sefer:25:perek-dedications",
 		]);
-		expect(stampedTags("perek-dedications", "717").filter((tag) => invalidation.tags.includes(tag))).toEqual([
-			"perek:717:dedications",
-		]);
+		expect(
+			stampedTags("perek-dedications", "717").filter((tag) =>
+				invalidation.tags.includes(tag),
+			),
+		).toEqual(["perek:717:dedications"]);
 		expect(invalidation.paths).toHaveLength(150);
-		expect(invalidation.paths).toEqual(expect.arrayContaining(["/929/568", "/929/717"]));
+		expect(invalidation.paths).toEqual(
+			expect.arrayContaining(["/929/568", "/929/717"]),
+		);
 		expect(invalidation.urls).toEqual(invalidation.paths);
 	});
 

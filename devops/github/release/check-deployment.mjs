@@ -9,7 +9,7 @@ import {
 	readRecoveryAsset,
 	verifyRecoveryDeployment,
 } from "./recovery-request.mjs";
-import { releasePayload } from "./release-provenance.mjs";
+import { apiImageArtifacts, releasePayload } from "./release-provenance.mjs";
 
 const api = (endpoint) => ghApi(endpoint);
 const directories = {
@@ -268,12 +268,14 @@ export function checkDeployment(
 		throw new Error(
 			"Recovery provenance requires an explicit manual CI source",
 		);
+	const platformArtifacts = apiImageArtifacts(provenance);
 	checkQuality(root, runId, runAttempt, request);
 	return {
 		deploy: true,
 		ref,
 		version,
 		runAttempt,
+		...(platformArtifacts ? { apiArm64: true } : {}),
 		...(recoveryFile ? { recoveryFile } : {}),
 	};
 }
@@ -325,7 +327,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\n`,
 	);
 	if (result.recoveryFile)
 		appendFileSync(

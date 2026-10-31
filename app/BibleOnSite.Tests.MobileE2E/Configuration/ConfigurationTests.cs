@@ -37,6 +37,7 @@ public sealed class ConfigurationTests
         Assert.Equal("com.tanah.daily929", options[$"appium:{appIdKey}"]);
         Assert.Equal(false, options["appium:noReset"]);
         Assert.Equal(platform == MobilePlatform.Android, options["appium:fullReset"]);
+        Assert.Equal(false, options["appium:forceAppLaunch"]);
         if (platform == MobilePlatform.IOS)
         {
             Assert.Equal(true, options["appium:enforceAppInstall"]);
@@ -71,5 +72,22 @@ public sealed class ConfigurationTests
             Assert.False(options.ContainsKey("appium:settings"));
         }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AndroidPreinstalledSessionReusesTheHarnessInstall(bool keepForReview)
+    {
+        var configuration = new MobileTestConfiguration(MobilePlatform.Android, "/test/app", "emulator-5554",
+            "/test/artifacts", new("http://localhost:4723"))
+        {
+            AppPreinstalled = true,
+            KeepAppForReview = keepForReview
+        };
+        var options = MobilePlatformAdapter.For(MobilePlatform.Android).CreateOptions(configuration).ToDictionary();
+        Assert.Equal(true, options["appium:noReset"]);
+        Assert.Equal(false, options["appium:fullReset"]);
+        Assert.Equal(true, options["appium:forceAppLaunch"]);
     }
 }
