@@ -365,6 +365,15 @@
 	margin-bottom: 10px;
 }
 
+.skeletonPasuk {
+	margin-bottom: 6px;
+}
+
+/* One skeleton bar per .noteContent line box (line-height 1.7). */
+.skeletonLine {
+	margin-block: calc((1lh - 0.8em) / 2);
+}
+
 .commentaryPerush + .commentaryPerush {
 	border-top: 1px dashed #e0d8c0;
 	padding-top: 8px;
