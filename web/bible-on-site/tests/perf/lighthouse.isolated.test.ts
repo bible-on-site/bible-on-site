@@ -8,7 +8,11 @@ import {
 	saveLighthouseReport,
 	writePerformanceIndex,
 } from "../../scripts/performance-report.mjs";
-import { getLighthouseMeasure, reportBenchmark } from "../util/benchmark";
+import {
+	getLighthouseMeasure,
+	reportBenchmark,
+	webVitalsMeasure,
+} from "../util/benchmark";
 import { test as base, expect } from "../util/playwright/test-fixture";
 
 type DeviceStrategy = "mobile" | "desktop";
@@ -535,8 +539,8 @@ test.describe("Lighthouse", () => {
 						const audit = lhr.audits[metric.id];
 						const value = audit?.numericValue ?? 0;
 
-						// Use 'ratio' for CLS (unitless), 'time_ms' for timing metrics
-						const measure = metric.name === "CLS" ? "ratio" : "time_ms";
+						// Use 'cls_ratio' for CLS (unitless), 'time_ms' for timing metrics
+						const measure = webVitalsMeasure(metric.name);
 						reportBenchmark({
 							name: lighthouseBenchmarkName(
 								path,
@@ -588,9 +592,13 @@ test.describe("Lighthouse", () => {
 						// Report to Bencher using unified measure names based on numericUnit.
 						// This groups audits by scale (time_ms, bytes, count, score) to prevent
 						// sparse matrices in Bencher reports.
+						// `cls_ratio` is only for the real CLS value: when the audit
+						// lacks a numericValue the fallback below emits its 0-1 score,
+						// which must not feed the static CLS boundary.
 						const measure =
-							auditId === "cumulative-layout-shift"
-								? "ratio"
+							auditId === "cumulative-layout-shift" &&
+							audit.numericValue !== undefined
+								? "cls_ratio"
 								: getLighthouseMeasure(audit.numericUnit);
 						const benchmarkValue =
 							audit.numericValue !== undefined ? audit.numericValue : score;

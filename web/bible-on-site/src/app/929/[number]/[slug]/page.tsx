@@ -15,6 +15,12 @@ import {
 	getArticleSummariesByPerekId,
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
+import {
+	getArticleDedications,
+	getSeferDedications,
+	getSeferPerekDedicationLines,
+} from "../../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../../lib/dedications/service";
 import { demoteHeadings } from "../../../../lib/html-headings";
 import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import {
@@ -42,6 +48,10 @@ import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { ArticlesSection } from "../components/ArticlesSection";
@@ -271,6 +281,17 @@ export default async function ArticlePage({
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
+	// Dedications (#2731): the book keeps the sefer+helek cover set and the
+	// perek-scoped spread lines regardless of the route it opens from — the
+	// article/perush routes share the same `SeferComposite` mount contract
+	// as the flat perek page.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
+
 	if (isArticle) {
 		// Handle article view; mention decorations (#2516) resolve against
 		// live entries per render — the returned copy carries them.
@@ -283,6 +304,11 @@ export default async function ArticlePage({
 		// Mention decorations (#2516) resolve against live entries per
 		// render; unresolved targets stay plain text.
 		article = await decorateArticleContent(article);
+
+		// The article's own dedication scope renders under its title (#2731).
+		const articleDedicationLines = dedicationLines(
+			await getArticleDedications(article.id),
+		);
 
 		return (
 			<>
@@ -315,6 +341,7 @@ export default async function ArticlePage({
 							<span className={styles.authorName}>{article.authorName}</span>
 						</Link>
 						<h1 className={styles.articleTitle}>{article.name}</h1>
+						<DedicationLines lines={articleDedicationLines} />
 						<ReadingTime
 							estimatedSeconds={article.metric?.estimatedSeconds}
 							className={styles.readingTime}
@@ -345,6 +372,8 @@ export default async function ArticlePage({
 						perekIds={perekIds}
 						entityRefsByPerek={entityRefsByPerek}
 						imagesByPerek={seferImages}
+						seferDedications={seferDedicationLines}
+						perekDedications={perekDedications}
 						initialSlug={slug}
 					/>
 				</Suspense>
@@ -456,6 +485,8 @@ export default async function ArticlePage({
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 					imagesByPerek={seferImages}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 					initialSlug={slug}
 				/>
 			</Suspense>

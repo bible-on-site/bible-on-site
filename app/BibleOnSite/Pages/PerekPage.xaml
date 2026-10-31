@@ -7,6 +7,7 @@
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
              xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.PerekPage"
              x:Name="PerekPageRoot"
@@ -48,6 +49,7 @@
                    HorizontalOptions="Fill"
                    Margin="4,0"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                   ToolTipProperties.Text="חיפוש (Ctrl+F)"
                    Clicked="OnPerekSourceClicked"/>
                 <Border x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
                         HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
@@ -84,8 +86,7 @@
         <!-- Exit Full Screen Button (floating, draggable, hidden by default) -->
         <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton" Grid.Row="1"
                 Margin="16,16,16,100"
-                ZIndex="100"
-                ExitRequested="OnExitFullScreenClicked"/>
+                ZIndex="100"/>
 
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
@@ -118,33 +119,67 @@
                           Margin="0">
                 <CarouselView.ItemTemplate>
                     <DataTemplate x:DataType="models:Perek">
-                        <!-- Full perek page: header + CollectionView of pasukim -->
+                        <!-- Full perek page: header + CollectionView of pasukim.
+                             On Windows the column caps at ReaderColumnMaxWidth and
+                             centers (#2766) — full-bleed text on a maximized
+                             monitor is unreadable; touch platforms fill. -->
                         <Grid RowDefinitions="Auto,*"
                               AutomationProperties.ExcludedWithChildren="{Binding IsOffscreenCarouselPage}">
+                            <!-- Default must be PositiveInfinity — an explicit -1
+                                 collapses the element on mobile (it counts as a set
+                                 maximum, not as "unset"). -->
+                            <Grid.MaximumWidthRequest>
+                                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                                    <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
+                                </OnPlatform>
+                            </Grid.MaximumWidthRequest>
+                            <Grid.HorizontalOptions>
+                                <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                                    <On Platform="Windows" Value="Center"/>
+                                </OnPlatform>
+                            </Grid.HorizontalOptions>
                             <!-- Perek Header (Row 0) with קריינות play button -->
                             <Grid Grid.Row="0">
-                                <Label AutomationId="PerekHeader"
-                                       Text="{Binding Header}"
-                                       FontSize="22"
-                                       FontAttributes="Bold"
-                                       HorizontalTextAlignment="Center"
-                                       Padding="16,12"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
-                                    <Label.Triggers>
-                                        <!-- Keep wrapped header text clear of the floating play button -->
-                                        <DataTrigger TargetType="Label"
-                                                     Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
-                                                     Value="True">
-                                            <Setter Property="Padding" Value="56,12"/>
-                                        </DataTrigger>
-                                    </Label.Triggers>
-                                    <Label.GestureRecognizers>
-                                        <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
-                                    </Label.GestureRecognizers>
-                                    <Label.Behaviors>
-                                        <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
-                                    </Label.Behaviors>
-                                </Label>
+                                <VerticalStackLayout>
+                                    <Label AutomationId="PerekHeader"
+                                           Text="{Binding Header}"
+                                           FontSize="22"
+                                           FontAttributes="Bold"
+                                           HorizontalTextAlignment="Center"
+                                           Padding="16,12"
+                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
+                                        <Label.Triggers>
+                                            <!-- Keep wrapped header text clear of the floating play button -->
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
+                                                         Value="True">
+                                                <Setter Property="Padding" Value="56,12"/>
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                        <Label.GestureRecognizers>
+                                            <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
+                                        </Label.GestureRecognizers>
+                                        <Label.Behaviors>
+                                            <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                                        </Label.Behaviors>
+                                    </Label>
+                                    <!-- Perek/sefer/helek dedications (#2731) — bound to the page's
+                                         view model, which tracks the displayed perek -->
+                                    <VerticalStackLayout Spacing="0"
+                                                         Padding="16,0,16,8"
+                                                         BindableLayout.ItemsSource="{Binding BindingContext.DedicationLines, Source={x:Reference PerekPageRoot}}"
+                                                         IsVisible="{Binding BindingContext.HasDedications, Source={x:Reference PerekPageRoot}}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Label Text="{Binding .}"
+                                                       FontSize="13"
+                                                       FontAttributes="Italic"
+                                                       HorizontalTextAlignment="Center"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
                                 <!-- קריינות: plays the whole perek; shown when the global
                                      קריינות preference is on and this perek has audio -->
                                 <Button x:Name="HeaderPlayButton"
@@ -337,13 +372,11 @@
             <controls:ReaderArticlesView Grid.Row="2"
                             x:Name="ArticlesCollection"
                             EmptyText="אין מאמרים לפרק זה"
-                            SelectedArticleId="{Binding SelectedArticleId}"
-                            ArticleSelected="OnArticleSelected"/>
+                            SelectedArticleId="{Binding SelectedArticleId}"/>
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"
-                                IsOpenChanged="OnPerushimSheetOpenChanged"/>
+        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"/>
 
         <!-- Reader options menu - dropdown anchored under the ⋮ button -->
         <controls:ReaderMenuPanel x:Name="ReaderMenuOverlay" Grid.Row="1" ZIndex="160"
@@ -353,19 +386,16 @@
 
         <!-- Bottom Navigation Bar - OVERLAY floating at bottom -->
         <controls:ReaderBottomBar x:Name="BottomBar" Grid.Row="1"
-              ZIndex="100"
-              PerushimToggleRequested="OnPerushimChevronClicked"
-              TextModeRequested="OnTextButtonClicked"
-              ArticlesRequested="OnArticlesButtonClicked"
-              FullScreenRequested="OnFullScreenClicked"/>
+              ZIndex="100"/>
 
         <!-- Circular navigation fan - shared layer (scrim + satellites + FAB) -->
-        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150"
-                                Opening="OnFanMenuOpening">
+        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150">
             <controls:ReaderFanMenu.Satellites>
                 <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="PrevPerekButton"
                         AutomationId="PrevPerekButton"
+                        SemanticProperties.Description="הפרק הקודם"
+                        ToolTipProperties.Text="הפרק הקודם"
                         Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                         Command="{Binding LoadPreviousCommand}"
                         Clicked="OnMenuItemClicked"/>
@@ -373,6 +403,8 @@
                 <!-- Today's perek (top-left satellite) -->
                 <controls:ReaderFanMenuSatellite x:Name="TodayButton"
                         AutomationId="TodayButton"
+                        SemanticProperties.Description="הפרק של היום"
+                        ToolTipProperties.Text="הפרק של היום"
                         Text="{x:Static fonts:FluentUI.calendar_date_24_regular}"
                         Command="{Binding LoadTodayCommand}"
                         Clicked="OnMenuItemClicked"/>
@@ -380,12 +412,16 @@
                 <!-- Perek Picker (top-right satellite) -->
                 <controls:ReaderFanMenuSatellite x:Name="PerekPickerButton"
                         AutomationId="PerekPickerButton"
+                        SemanticProperties.Description="בחירת פרק"
+                        ToolTipProperties.Text="בחירת פרק"
                         Text="{x:Static fonts:FluentUI.library_24_regular}"
                         Clicked="OnPerekPickerClicked"/>
 
                 <!-- Next perek (bottom-right satellite). Disabled at perek 929 via Command.CanExecute. -->
                 <controls:ReaderFanMenuSatellite x:Name="NextPerekButton"
                         AutomationId="NextPerekButton"
+                        SemanticProperties.Description="הפרק הבא"
+                        ToolTipProperties.Text="הפרק הבא"
                         Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
                         ScaleX="-1"
                         Command="{Binding LoadNextCommand}"

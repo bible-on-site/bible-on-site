@@ -46,10 +46,12 @@ export interface CalendarPdfRequest {
 export function CalendarPdfDownload({
 	request,
 	scopeLabel,
+	unavailableReason,
 }: {
 	request: CalendarPdfRequest;
 	/** Concise selected period, e.g. "אלול ה'תשפ\"ה", "שנת ה'תשפ\"ה", "מחזור ד'". */
 	scopeLabel: string;
+	unavailableReason?: string;
 }) {
 	const [phase, setPhase] = useState<
 		"idle" | "preparing" | "downloading" | "done" | "error"
@@ -66,6 +68,7 @@ export function CalendarPdfDownload({
 	}, []);
 
 	const begin = useCallback(() => {
+		if (unavailableReason) return;
 		const id = ++requestId.current;
 		const label = scopeLabel;
 		const req = request;
@@ -131,7 +134,7 @@ export function CalendarPdfDownload({
 				setStatusText(`הורדת PDF של ${label} נכשלה — נסו שוב`);
 			}
 		})();
-	}, [request, scopeLabel]);
+	}, [request, scopeLabel, unavailableReason]);
 
 	const busy = phase === "preparing" || phase === "downloading";
 	return (
@@ -140,7 +143,8 @@ export function CalendarPdfDownload({
 				type="button"
 				className={styles.downloadButton}
 				onClick={begin}
-				disabled={busy}
+				disabled={busy || !!unavailableReason}
+				title={unavailableReason}
 				aria-busy={busy}
 				aria-label={`הורדת PDF: ${scopeLabel}`}
 			>
@@ -170,7 +174,7 @@ export function CalendarPdfDownload({
 					phase === "error" ? styles.downloadError : ""
 				}`}
 			>
-				{statusText}
+				{unavailableReason ?? statusText}
 			</span>
 		</span>
 	);

@@ -1,29 +1,44 @@
 import { getAllMasoraUnits } from "@/data/masora/masora-units";
+import { parashaCanonicalSlug } from "@/data/parasha/parasha-slugs";
 import {
 	getAllParashaUnits,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug, normalizeAuthorName } from "@/lib/authors";
+import {
+	HELEK_SEFER_IDS,
+	seferIdByPerekId,
+	seferPerekIds,
+} from "@/lib/dedications/service";
 import { isMissingMysqlSchema } from "@/lib/mysql-errors";
-import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { canonicalPasukCount } from "@/lib/reading/queries";
-import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
-import type { CategoryKey } from "@/lib/tanahpedia/types";
+import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import type {
 	ArticleCoveringSpan,
 	EntityChange,
 } from "@/lib/revalidate/contract";
 import {
+	articleDedicationsTag,
 	articleTag,
 	authorArticlesTag,
 	authorTag,
+	bookshelfDedicationsTag,
 	COLLECTION_TAGS,
 	entityRefsTag,
+	entryDedicationsTag,
+	helekDedicationsTag,
 	masoraArticlesTag,
+	masoraDedicationsTag,
 	parashaArticlesTag,
+	parashaDedicationsTag,
 	perekArticlesTag,
+	perekDedicationsTag,
+	seferDedicationsTag,
+	seferPerekDedicationsTag,
 } from "@/lib/revalidate/tags";
+import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
+import type { CategoryKey } from "@/lib/tanahpedia/types";
 
 /**
  * The website-owned dependency index: maps a committed entity change to
@@ -92,10 +107,13 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.authors,
 		COLLECTION_TAGS.pediaEntityRefs,
 		COLLECTION_TAGS.pediaMentionRefs,
+		COLLECTION_TAGS.dedications,
 	]);
 	sink.patterns.add("/pedia/[slug]");
 	sink.paths.add("/pedia");
 	sink.paths.add("/929/authors");
+	sink.paths.add("/");
+	sink.paths.add("/bookshelf");
 }
 
 function categoryPath(entityType: string): string | null {
@@ -279,7 +297,9 @@ function addUnitDeps(sink: Sink, unit: UnitRef) {
 		/* istanbul ignore next -- every parasha index entry sets scope explicitly */
 		const scope = unit.scope ?? "torah";
 		addTag(sink, parashaArticlesTag(unit.unitId, scope));
-		addPath(sink, `/parasha/${unit.unitId}`);
+		// The route-dir path carries the canonical Hebrew slug — its
+		// dynamic param is the slug, not the unitId (issue #2738).
+		addPath(sink, `/parasha/${parashaCanonicalSlug(unit.unitId)}`);
 	} else {
 		addTag(sink, masoraArticlesTag(unit.unitId));
 		addPath(sink, `/masora/${unit.unitId}`);
@@ -318,9 +338,7 @@ async function refPereksForEntities(entityIds: string[]): Promise<number[]> {
 }
 
 /** Entity types linked to the given entities (for category-page deps). */
-async function entityTypesForEntities(
-	entityIds: string[],
-): Promise<string[]> {
+async function entityTypesForEntities(entityIds: string[]): Promise<string[]> {
 	/* istanbul ignore next -- callers always pass a non-empty entity id list */
 	if (entityIds.length === 0) return [];
 	const rows = await query<{ entity_type: string }>(
@@ -433,10 +451,7 @@ async function resolveArticle(
 		);
 		if (author[0]) {
 			addTag(sink, authorTag(normalizeAuthorName(author[0].name)));
-			addPath(
-				sink,
-				`/929/authors/${authorNameToSlug(author[0].name)}`,
-			);
+			addPath(sink, `/929/authors/${authorNameToSlug(author[0].name)}`);
 		}
 	}
 	// The supplied spans are the destroyed side; the live rows complete the
@@ -465,8 +480,6 @@ async function resolveAuthor(
 		addTag(sink, authorTag(normalizeAuthorName(name)));
 		addPath(sink, `/929/authors/${authorNameToSlug(name)}`);
 	}
-	// Legacy numeric-param author pages still resolve on demand.
-	addTag(sink, authorTag(String(change.id)));
 	addTag(sink, authorArticlesTag(change.id));
 
 	// The author's name/details render inside every one of their article
@@ -524,18 +537,12 @@ async function resolvePediaEntity(
 		refPereksForEntities([change.entityId]),
 		entityTypesForEntities([change.entityId]),
 	]);
-	const names = new Set([
-		...(change.entryUniqueNames ?? []),
-		...linkedEntries,
-	]);
+	const names = new Set([...(change.entryUniqueNames ?? []), ...linkedEntries]);
 	const types = new Set([
 		...(change.entityType ? [change.entityType] : []),
 		...entityTypes,
 	]);
-	const pereks = new Set([
-		...(change.refPerekIds ?? []),
-		...refPerekIds,
-	]);
+	const pereks = new Set([...(change.refPerekIds ?? []), ...refPerekIds]);
 	// Synonyms of linked entries point at pages whose bodies render entity
 	// data — resolve them while the links exist.
 	if (names.size > 0) {
@@ -560,6 +567,117 @@ function resolvePediaEntries(
 		change.entityTypes ?? [],
 		change.refPerekIds ?? [],
 	);
+}
+
+// --- dedication resolution (#2731) ------------------------------------------
+//
+// Each surface displays only its own scope level (a sefer dedication lives
+// on the bookshelf spine and the sefer cover, a perek dedication at the
+// perek heading), so a change invalidates just the consumers of the scopes
+// it carries. Rendered pages expire through the scoped cache tags their
+// renders collected; paths feed IndexNow where the HTML itself changed
+// (the flat perek heading, parasha and pedia entry pages are indexed;
+// masora units are deliberately noindex).
+
+/** Expire the bookshelf: helek headings and sefer spines render these. */
+function addBookshelfDeps(sink: Sink) {
+	addTag(sink, bookshelfDedicationsTag);
+	addPath(sink, "/");
+	addPath(sink, "/bookshelf");
+}
+
+async function resolveDedication(
+	sink: Sink,
+	change: Extract<EntityChange, { kind: "dedication" }>,
+) {
+	let scoped = false;
+
+	const perekIds = new Set<number>();
+	for (const range of change.perekRanges ?? []) {
+		for (let perekId = range.low; perekId <= range.high; perekId++) {
+			perekIds.add(perekId);
+		}
+	}
+	const affectedSefarim = new Set<number>();
+	for (const perekId of perekIds) {
+		addTag(sink, perekDedicationsTag(perekId));
+		addPath(sink, `/929/${perekId}`);
+		scoped = true;
+		const seferId = seferIdByPerekId(perekId);
+		if (seferId !== undefined) affectedSefarim.add(seferId);
+	}
+	// Every route of an intersected sefer renders its whole spread map.
+	// Expand each book once, including when the ranges overlap or repeat.
+	for (const seferId of affectedSefarim) {
+		addTag(sink, seferPerekDedicationsTag(seferId));
+		for (const mateId of seferPerekIds(seferId)) {
+			addPath(sink, `/929/${mateId}`);
+		}
+	}
+	for (const seferId of change.seferIds ?? []) {
+		addTag(sink, seferDedicationsTag(seferId));
+		addBookshelfDeps(sink);
+		// Ancestor scope: every flat perek page of the sefer renders the
+		// line in its heading — those routes changed (cache expiry already
+		// flows through the ancestor tags the loaders collect; the paths
+		// feed IndexNow).
+		for (const perekId of seferPerekIds(seferId)) {
+			addPath(sink, `/929/${perekId}`);
+		}
+		scoped = true;
+	}
+	for (const helekId of change.helekIds ?? []) {
+		addTag(sink, helekDedicationsTag(helekId));
+		addBookshelfDeps(sink);
+		for (const seferId of HELEK_SEFER_IDS[helekId] ?? []) {
+			for (const perekId of seferPerekIds(seferId)) {
+				addPath(sink, `/929/${perekId}`);
+			}
+		}
+		scoped = true;
+	}
+	for (const parashaId of change.parashaIds ?? []) {
+		addTag(sink, parashaDedicationsTag(parashaId));
+		addPath(sink, `/parasha/${parashaId}`);
+		scoped = true;
+	}
+	for (const articleId of change.articleIds ?? []) {
+		addTag(sink, articleDedicationsTag(articleId));
+		const article = await query<{ perek_id: number }>(
+			`SELECT perek_id FROM tanah_article WHERE id = ?`,
+			[articleId],
+		);
+		if (article[0]) {
+			addPath(sink, `/929/${article[0].perek_id}/${articleId}`);
+		}
+		scoped = true;
+	}
+	for (const entryId of change.entryIds ?? []) {
+		addTag(sink, entryDedicationsTag(entryId));
+		const entry = await query<{ unique_name: string }>(
+			`SELECT unique_name FROM tanahpedia_entry WHERE id = ?`,
+			[entryId],
+		);
+		if (entry[0]) {
+			addPath(sink, `/pedia/${entry[0].unique_name}`);
+		}
+		scoped = true;
+	}
+	if (change.masora === true) {
+		addTag(sink, masoraDedicationsTag);
+		scoped = true;
+	}
+
+	if (!scoped) {
+		// No assignment payload (unknown shape or a delete without the
+		// pre-commit snapshot): expire every dedication surface rather
+		// than under-invalidate.
+		addTag(sink, COLLECTION_TAGS.dedications);
+		addTag(sink, bookshelfDedicationsTag);
+		addTag(sink, masoraDedicationsTag);
+		addPath(sink, "/");
+		addPath(sink, "/bookshelf");
+	}
 }
 
 /**
@@ -588,6 +706,9 @@ export async function resolveEntityChanges(
 				break;
 			case "pedia-entries":
 				resolvePediaEntries(sink, change);
+				break;
+			case "dedication":
+				await resolveDedication(sink, change);
 				break;
 		}
 	}
