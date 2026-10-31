@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.96"
+version = "0.1.97"
 edition = "2024"
 
 [dependencies]
@@ -49,7 +49,6 @@ percent-encoding = "2.3.2"
 
 [dev-dependencies]
 cargo-llvm-cov = "0.9.1"
-cargo-make = "0.37.24"
 sea-orm = { version = "2.0.4", default-features = false, features = ["mock"] }
 
 [[bin]]
