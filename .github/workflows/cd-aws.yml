@@ -30,6 +30,7 @@ jobs:
       DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || (github.event.client_payload.module_directory == 'web/admin' && 'bible-on-site-admin' || 'bible-on-site-api') }}
       DOCKER_IMAGE_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      API_PUBLISH_INDEX: ${{ vars.API_MULTIARCH_RELEASES || 'false' }}
       # AWS Configuration
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -47,6 +48,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_MODULE: ${{ github.event.client_payload.module_name }}
         run: node devops/github/release/check-deployment.mjs
+
+      - name: Validate API publication mode
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' }}
+        run: |
+          case "$API_PUBLISH_INDEX" in true|false) ;; *) echo 'Invalid API_MULTIARCH_RELEASES value'; exit 1 ;; esac
+          if [ "$API_PUBLISH_INDEX" = true ] && [ "${{ steps.guard.outputs.api_arm64 }}" != true ]; then
+            echo 'Index publication requires both archives from published API provenance'
+            exit 1
+          fi
 
       - name: Checkout artifact source
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -88,9 +98,11 @@ jobs:
       - name: Setup crane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: imjasonh/setup-crane@v0.7
+        with:
+          version: v0.22.1
 
       - name: Login to ECR
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ steps.guard.outputs.deploy == 'true' && !(env.MODULE_NAME == 'api' && steps.guard.outputs.api_arm64 == 'true') }}
         run: |
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | crane auth login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
@@ -102,6 +114,7 @@ jobs:
           DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar"
           DOCKER_IMAGE_TAR_GZ_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}.gz"
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_ARM64_TAR_GZ_PATH=${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}-arm64.tar.gz" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Image
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -109,15 +122,41 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "${{ env.MODULE_NAME }}-v${{ env.MODULE_VERSION }}" --pattern "${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar.gz" --dir "${{ env.DOCKER_IMAGE_OUTPUT_DIR }}"
 
+      - name: Restore the published API ARM64 archive
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' && steps.guard.outputs.api_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release download "api-v$MODULE_VERSION"
+          --pattern "bible-on-site-api-v$MODULE_VERSION-arm64.tar.gz"
+          --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+
+      - name: Verify both API release archive digests and source
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' && steps.guard.outputs.api_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
+        run: node devops/github/release/api-image-assets.mjs
+
       - name: Deploy to ECR
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        env:
+          API_RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
+          API_HAS_ARM64: ${{ steps.guard.outputs.api_arm64 }}
+          API_ARM64_ARCHIVE: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_ARM64_TAR_GZ_PATH }}
         run: |
+          PLATFORM_ARGS=()
+          if [ "$MODULE_NAME" = api ] && [ "$API_HAS_ARM64" = true ]; then
+            PLATFORM_ARGS+=(--docker-image-arm64 "$GITHUB_WORKSPACE/$API_ARM64_ARCHIVE" --source-ref "$API_RELEASE_SOURCE")
+            if [ "$API_PUBLISH_INDEX" = true ]; then PLATFORM_ARGS+=(--publish-index); fi
+          fi
           bun run deploy:ecr -- \
             --module-name ${{ env.MODULE_NAME }} \
             --module-version "${{ env.MODULE_VERSION }}" \
-            --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"
+            --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}" \
+            "${PLATFORM_ARGS[@]}"
         # Note: ECS deployment is automatically triggered by EventBridge when
         # the 'latest' tag is pushed to ECR. See: ecr-ecs-auto-deploy.yaml
 

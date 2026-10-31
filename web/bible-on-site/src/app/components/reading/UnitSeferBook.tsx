@@ -1,7 +1,6 @@
 "use client";
 
 import type {
-	CoverConfig,
 	FlipBookHandle,
 	HistoryMapper,
 	PageSemantics,
@@ -20,39 +19,15 @@ import {
 	TocButton,
 	Toolbar,
 } from "html-flip-book-react/toolbar";
-import dynamic from "next/dynamic";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { BookshelfModal } from "@/app/components/Bookshelf";
+import { FlipBook } from "@/app/components/reading/FlipBook";
 import { getSeferColor } from "@/data/sefer-colors";
 import { SeferCoverContent } from "./SeferCoverContent";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
 import "html-flip-book-react/styles.css";
 import "@/app/929/[number]/components/sefer.css";
-
-/** Props we pass to FlipBook; matches html-flip-book-react FlipBookProps for typing dynamic() */
-type FlipBookProps = {
-	handlers?: { onPageFlipping?: () => void; onPageFlipped?: () => void };
-	className: string;
-	pages: React.ReactNode[];
-	pageSemantics?: PageSemantics;
-	direction?: "rtl" | "ltr";
-	leavesBuffer?: number;
-	of?: string | number;
-	coverConfig?: CoverConfig;
-	historyMapper?: HistoryMapper;
-	initialTurnedLeaves?: number[];
-	pageShadow?: boolean;
-	snapshotDuringFlip?: boolean;
-	tocPageIndex?: number;
-	mouseModeStorageKey?: string;
-};
-
-const FlipBook = dynamic<
-	FlipBookProps & { ref?: React.RefObject<FlipBookHandle | null> }
->(() => import("html-flip-book-react").then((mod) => mod.FlipBook), {
-	ssr: false,
-});
 
 const FRONT_COVER_INDEX = 0;
 const COVER_INTERIOR_INDEX = 1;

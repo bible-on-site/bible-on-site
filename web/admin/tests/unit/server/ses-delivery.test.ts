@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 	telegramProcess: vi.fn(),
 	telegramSweep: vi.fn(),
 	whatsappSweep: vi.fn(),
+	scheduledProcess: vi.fn(),
 }));
 vi.mock("~/server/db", () => mocks);
 vi.mock("~/server/daily-bulletins.server", () => ({
@@ -71,6 +72,9 @@ vi.mock("~/server/whatsapp-delivery.server", () => ({
 vi.mock("~/server/telegram-delivery.server", () => ({
 	processTelegramJob: mocks.telegramProcess,
 	reconcileTelegramOutbox: mocks.telegramSweep,
+}));
+vi.mock("~/server/scheduled-bulletin.server", () => ({
+	processScheduledBulletin: mocks.scheduledProcess,
 }));
 vi.mock("node:timers/promises", () => ({ setTimeout: mocks.delay }));
 vi.mock("@aws-sdk/client-sqs", () => ({
@@ -1392,7 +1396,71 @@ describe("summary and queue loop", () => {
 		expect(row.status).toBe("delivered");
 		expect(mocks.sqs.mock.calls[1][0].kind).toBe("delete");
 	});
+	it("acknowledges the exact SES SNS validation control message without dispatching work", async () => {
+		const c = new AbortController();
+		mocks.sqs.mockImplementation(async (command) => {
+			if (command.kind === "receive")
+				return {
+					Messages: [
+						{
+							Body: "Successfully validated SNS topic for Amazon SES event publishing.",
+							ReceiptHandle: "validation-receipt",
+						},
+					],
+				};
+			c.abort();
+			return {};
+		});
+		await startEmailWorker(c.signal);
+		const commands = mocks.sqs.mock.calls.map(([command]) => command);
+		expect(commands.map((command) => command.kind)).toEqual([
+			"receive",
+			"delete",
+		]);
+		expect(commands[1].input).toEqual({
+			QueueUrl: config.queueUrl,
+			ReceiptHandle: "validation-receipt",
+		});
+		expect(mocks.parse).not.toHaveBeenCalled();
+		expect(mocks.sendOne).not.toHaveBeenCalled();
+		expect(mocks.telegramProcess).not.toHaveBeenCalled();
+		expect(mocks.whatsappProcess).not.toHaveBeenCalled();
+		expect(mocks.scheduledProcess).not.toHaveBeenCalled();
+	});
+	it("retains a validation control message when acknowledgement fails", async () => {
+		const c = new AbortController();
+		mocks.sqs.mockImplementation(async (command) => {
+			if (command.kind === "receive")
+				return {
+					Messages: [
+						{
+							Body: "Successfully validated SNS topic for Amazon SES event publishing.",
+							ReceiptHandle: "validation-receipt",
+						},
+					],
+				};
+			throw new Error("delete unavailable");
+		});
+		mocks.delay.mockImplementationOnce(async () => {
+			c.abort();
+		});
+		await startEmailWorker(c.signal);
+		expect(mocks.sqs.mock.calls.map(([command]) => command.kind)).toEqual([
+			"receive",
+			"delete",
+		]);
+		expect(mocks.delay).toHaveBeenCalledWith(1000, undefined, {
+			signal: c.signal,
+		});
+		expect(mocks.parse).not.toHaveBeenCalled();
+		expect(mocks.sendOne).not.toHaveBeenCalled();
+		expect(mocks.destroy).toHaveBeenCalled();
+	});
 	it.each([
+		"Successfully validated SNS topic for Amazon SES event publishing. ",
+		"Successfully validated SNS topic for Amazon SES event publishing.\n",
+		"Successfully validated SNS topic for Amazon SES event publishing. send",
+		'"Successfully validated SNS topic for Amazon SES event publishing."',
 		"not-json",
 		"{}",
 		'{"kind":"send","recipientId":0}',
@@ -1950,6 +2018,72 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		}
 	});
 
+	it.each(["bulletin.schedule", "bulletin.generate"])(
+		"acknowledges %s only after its durable handler completes",
+		async (kind) => {
+			const controller = new AbortController();
+			const body = JSON.stringify({
+				kind,
+				scheduledAt: "2026-10-29T08:00:00Z",
+				...(kind === "bulletin.generate" ? { date: "2026-10-29" } : {}),
+			});
+			const gate = deferred<boolean>();
+			mocks.scheduledProcess.mockReturnValueOnce(gate.promise);
+			messages(controller, [body]);
+			const running = startEmailWorker(controller.signal);
+			await vi.waitFor(() =>
+				expect(mocks.scheduledProcess).toHaveBeenCalledOnce(),
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(false);
+			expect(mocks.scheduledProcess).toHaveBeenCalledWith(
+				JSON.parse(body),
+				controller.signal,
+				{ client: expect.anything(), url: expect.stringContaining("sqs.") },
+			);
+			gate.resolve(true);
+			await running;
+			expect(
+				mocks.sqs.mock.calls
+					.filter(([command]) => command.kind === "delete")
+					.map(([command]) => command.input.ReceiptHandle),
+			).toEqual(["receipt-0"]);
+			expect(mocks.parse).not.toHaveBeenCalled();
+		},
+	);
+	it("retains a rejected scheduled message and continues native SES processing", async () => {
+		const row = seed("test", "accepted");
+		mocks.parse.mockReturnValue(delivery());
+		mocks.scheduledProcess.mockResolvedValueOnce(false);
+		const controller = new AbortController();
+		messages(controller, [
+			'{"kind":"bulletin.schedule","scheduledAt":"invalid"}',
+			'{"eventType":"Delivery"}',
+		]);
+		await startEmailWorker(controller.signal);
+		expect(row.status).toBe("delivered");
+		expect(
+			mocks.sqs.mock.calls
+				.filter(([command]) => command.kind === "delete")
+				.map(([command]) => command.input.ReceiptHandle),
+		).toEqual(["receipt-1"]);
+	});
+	it("retains a failed scheduled attempt rather than acknowledging partial fan-out", async () => {
+		const controller = new AbortController();
+		mocks.scheduledProcess.mockRejectedValueOnce(
+			new Error("sanitized scheduling failure"),
+		);
+		messages(controller, [
+			'{"kind":"bulletin.schedule","scheduledAt":"2026-10-29T08:00:00Z"}',
+		]);
+		mocks.delay.mockImplementationOnce(async () => controller.abort());
+		await startEmailWorker(controller.signal);
+		expect(
+			mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+		).toBe(false);
+		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
 	it("dispatches both configured channels and native email through one queue without crossing jobs", async () => {
 		configureTelegram();
 		for (const name of [
