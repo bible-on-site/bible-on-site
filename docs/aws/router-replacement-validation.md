@@ -118,8 +118,8 @@ Separate instance in the **same VPC** (any public subnet — VPC DNS
 | SG | `nginx-router-sg` equivalent: 22 (SSH), 80, 443 ingress; egress open |
 | Software | `dnf install nginx certbot python3-certbot-nginx` (+ `nginx-mod-http-geoip` only if live uses it) |
 | Config | byte-identical `router.conf` + `nginx -t` against the complete installed config, per [router README](cloudformation/ec2-nginx/router/README.md) — dedicated temp dirs, explicit worker user, never a minimal standalone test config |
-| Certificates | copy `/etc/letsencrypt` verbatim first (exact SAN set). For durable parallel running prefer **certbot `--dns-route53`** — `certbot-dns-route53` via dnf `python3-certbot-dns-route53` if packaged on AL2023, else pip (DNS-01 works regardless of where A records point; needs a Route53 IAM policy — separate approval). http-01 renewal only succeeds on whichever instance DNS targets, so it is acceptable for a short canary but not a long parallel window |
-| Renewal | same cron `certbot renew --quiet`; on candidate use `--dry-run` to prove issuance works before trusting it |
+| Certificates | copy `/etc/letsencrypt` verbatim first (exact SAN set). For durable parallel running adopt **certbot `--dns-route53`** — `certbot-dns-route53` via dnf `python3-certbot-dns-route53` if packaged on AL2023, else pip (DNS-01 works regardless of where A records point; needs a Route53 IAM policy — separate approval). Copying the tree preserves each lineage's *saved* HTTP-01 authenticator in `/etc/letsencrypt/renewal/*.conf`, so installing the plugin is not enough: reissue or reconfigure every copied lineage for DNS-01 (`certbot --cert-name <name> --dns-route53 -d <sans> -i dns-route53 --reinstall` or edit the lineage's renewal conf) and verify each persisted conf shows `authenticator = dns-route53` before the canary. Under weighted DNS an HTTP-01 challenge can resolve to *either* router — the one that did not initiate the renewal has no matching token — so HTTP-01 renewal is unreliable on **both** routers for the entire parallel window, not just a long one |
+| Renewal | same cron `certbot renew --quiet`; on candidate prove the *persisted* path, not an override — plain `certbot renew --dry-run` uses each lineage's saved authenticator, which is exactly what the cron job will run. A `--dns-route53` override dry-run alone does not establish that the unattended job uses DNS-01; run it only after the lineage confs above are updated, on both active routers |
 | Cloud Map | verify `dig website.bible-on-site.local @172.31.0.2` + `api.`/`admin.` resolve to live ECS task IPs |
 | Public IP | allocate a **second EIP** for the candidate (temp cost ~$3.65/mo) — do not touch 51.85.17.212 |
 | Observability | same access/error log paths + release-probe log; install nothing that changes router.conf semantics |
@@ -139,17 +139,23 @@ node web/bible-on-site/scripts/verify-canonical-hosts.mjs \
 node devops/latency-baseline.mjs --json
 ```
 
-`edge-compat-check.mjs` (#2508) already encodes the full public-host baseline
-matrix — every scheme/host redirect, encoded Hebrew paths, `?book`/`?_rsc`
+`edge-compat-check.mjs` (#2508) already encodes the full public-host contract
+— every scheme/host redirect, encoded Hebrew paths, `?book`/`?_rsc`
 queries, robots/sitemap byte parity, canonical/title equality — but its CLI
 requires `--candidate` and runs CloudFront-specific edge assertions, so it
-cannot be pointed at a bare IP today. The candidate-validation PR should add a
-`--baseline-only` flag (or a thin `router-compat-check.mjs` reusing its
-baseline group) and then run it under the same resolver override; that reuses
-the asserted contract with no duplicated case list.
+cannot be pointed at a bare IP today. A `--baseline-only` flag that reuses
+only `runBaseline` is **not** sufficient: host statuses/redirects live there,
+but the deep-link and response-parity cases live in `runPaired`
+(`PAIRED_CASES`), so a candidate that broke e.g. the `/929/315/` redirect or
+served a different `sitemap.xml` would still pass. The candidate-validation
+PR should instead expose an injectable connection target — per-target DNS
+override or `--resolve`-style host:port pinning — and run `PAIRED_CASES`
+against the production router and the candidate, dropping only the
+CloudFront-specific assertions. That reuses the asserted contract with no
+duplicated case list and covers every item in the required coverage below.
 
-Required coverage (all in the harness baseline group, per the audit's probe
-list): `.co.il`/`.com` × bare/www/api/admin × http/https; HTTP→HTTPS and
+Required coverage (all already asserted by the harness's baseline + paired
+groups, per the audit's probe list): `.co.il`/`.com` × bare/www/api/admin × http/https; HTTP→HTTPS and
 www→canonical redirects preserving path+query; trailing-slash 308;
 percent-encoded Hebrew commentary paths and raw-Hebrew request targets;
 `?book`/`?bookPage`/`?_rsc` queries; `robots.txt`/`sitemap.xml` byte parity;
@@ -252,8 +258,10 @@ enter that state without the approved window.
    zero memory regression — and collect Step-0 evidence in parallel to judge
    whether `t4g.micro` (−59.6%) is also safe to offer as an option.
 3. **Adopt certbot DNS-01 (Route53 plugin)** on the candidate so certificate
-   renewal never depends on which instance DNS points to; needs a scoped
-   Route53 IAM policy (part of the approval ask).
+   renewal never depends on which instance DNS points to — and reconfigure
+   each copied lineage's saved authenticator (the renewal conf, not just the
+   plugin install); needs a scoped Route53 IAM policy (part of the approval
+   ask).
 4. **Canary via Route53 weights with a health-check failback**, cut over by
    reassociating the existing EIP during a low-traffic window, and keep the
    old router running through a separately approved observation window.
@@ -271,6 +279,8 @@ enter that state without the approved window.
       `verify-public-content.mjs`, `verify-canonical-hosts.mjs`, and
       `latency-baseline.mjs` paired runs.
 - [ ] Burst/memory/OOM/conntrack/ENA evidence at March-2026-class load.
-- [ ] Certbot `--dry-run` proof (+ DNS-01 IAM policy if adopted).
+- [ ] Certbot proof using each lineage's *persisted* renewal config — plain
+      `certbot renew --dry-run`, the exact command the cron job runs — on both
+      routers (+ DNS-01 IAM policy if adopted).
 - [ ] Measured cost actuals (not estimates) once the candidate has run.
 - [ ] Explicit Dorad approval of the live-migration PR describing steps 3–6.
