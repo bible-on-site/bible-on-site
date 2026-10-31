@@ -2163,7 +2163,8 @@ jobs:
           python-version: "3.15"
 
       - name: Restore original recitation audio cache
-        uses: actions/cache@v6
+        id: recitation_audio
+        uses: actions/cache/restore@v6
         with:
           path: .cache/recitation-assets
           key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
@@ -2173,6 +2174,13 @@ jobs:
         run: python3 devops/prepare_recitation_assets.py --platform Android
         env:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
+
+      - name: Save verified recitation audio cache
+        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/recitation-assets
+          key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       - name: Verify Android release package
         run: |

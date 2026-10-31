@@ -7,11 +7,44 @@ full-website/nginx edge candidate in
 [#2676](https://github.com/bible-on-site/bible-on-site/pull/2676) and
 [#2788](https://github.com/bible-on-site/bible-on-site/pull/2788).
 
-**Status:** implementation and read-only research only. No distribution, policy,
-repository variable, DNS, bucket setting or production task was changed during
-this investigation. Root AGENTS.md requires Dorad's approval of the specific PR
-and current AWS changes before merge. Live activation also requires approval of
-the exact steps below. Do not enable auto-merge or deploy reference templates.
+**Approval:** Dorad explicitly approved
+[#2921](https://github.com/bible-on-site/bible-on-site/pull/2921), merge after
+passing checks and the staged asset-CDN/build rollout on November 1 in this
+chat: "Approve everything, no ask". Root AGENTS.md still governs other AWS PRs
+and materially different changes. Do not enable auto-merge or deploy reference
+templates.
+
+## Accepted rollout state
+
+The additive distribution is deployed. All 19 paired source/CDN checks passed:
+metadata, CORS/preflight, exact ranges, query rejection and repeated uncached
+errors. A separate short-lived signed response-override query also returned
+identical 206 bytes, Content-Disposition and Cache-Control from both endpoints;
+no signed URL/token was printed or saved. Cold downloads through the CDN
+successfully prepared all 496 recordings in 22 Windows packs (980,081,247 bytes)
+and 22 Android packs (430,379,577 bytes). Offline rebuilds with the CDN setting
+unset produced identical catalogs and pack hashes. Source URLs remained S3.
+Repository variable `ASSETS_BASE_URL` is now set to the accepted CDN origin for
+build downloads; it was absent before rollout. Website/admin origins were not
+changed. Workflow changes take effect after merge; PR CI can exercise them
+before merge.
+
+| Resource | Accepted value |
+| --- | --- |
+| AWS account / source region | `250598594267` / `il-central-1` |
+| Distribution | `E1WMX9UV9D2726` |
+| Assets delivery origin | `https://dpcnux643agl3.cloudfront.net` |
+| Origin request policy | `73124065-4c86-4344-8292-29c890dda481` |
+| Stable creation reference | `bible-assets-readonly-20261101` |
+| Website aliases | None |
+
+The existing bucket policy and CORS match the saved pre-rollout baseline.
+Public website and legacy S3 probes still return 200. No DNS, nginx, ECS, IAM,
+database or object-content change was made. The approved creation payloads were
+applied through the AWS SDK after the CLI's create-policy call could not reach
+its endpoint; preflight and schema checks were retained and duplicate inventory
+was rechecked before creation. Baseline/configuration and compatibility reports
+are saved privately outside the repository.
 
 ## Billing evidence
 
@@ -67,7 +100,17 @@ use and does not write production assets.
 
 Native release builds already cache SHA-verified audio. The GitHub cache API
 returned zero `recitation-audio-v1-` entries at inspection; misses/eviction are
-possible, but this alone does not prove the billing source. All four release
+possible, but this alone does not prove the billing source. Their combined
+cache action saved only after successful job completion. The four preparation
+paths now restore explicitly and save immediately after successful audio
+verification, before later compilation, signing or store steps can fail. They
+retain the same cache keys/path and skip an exact cache hit; no partial or
+failed audio preparation is saved. Android restore/setup now match its
+unconditional preparation step; `compile_only` describes the Windows-only
+compile gate. See the official
+[restore](https://github.com/actions/cache/blob/v6/restore/README.md) and
+[save](https://github.com/actions/cache/blob/v6/save/README.md) action contracts.
+All four release
 preparation steps can now use repository variable `ASSETS_BASE_URL`, passed as
 `RECITATION_ASSETS_ORIGIN`, for original MP3 and derived Opus downloads. The
 variable was absent at inspection. Empty/unset preserves existing S3 behavior.
@@ -163,10 +206,12 @@ The paired read-only checker tests JPEG, MP3, WebP and JSON: HEAD, exact 32-byte
 Range/206 with and without Origin, OPTIONS, rejected version query and two
 consecutive missing-object reads. It checks bytes, metadata, CORS parity,
 CloudFront identity and absent cache evidence. A server ignoring Range is
-cancelled before a full download. Source probes passed on the research date;
-no live CDN candidate has been tested. Also verify full MP3 and derived Opus
-SHA-256/size, browser audio seeking, query response overrides and CORS order
-before opting in. Do not replace production objects to test freshness.
+cancelled before a full download. The accepted candidate passed these probes
+and a positive signed query response override. Also verify full MP3 and derived
+Opus SHA-256/size and package identities before build opt-in. Browser audio
+seeking and CORS order remain gates for a future browser-URL rollout; build
+downloads are packaged for offline playback. Do not replace production objects
+to test freshness.
 
 Only after the candidate passes, set the build-only repository variable:
 
