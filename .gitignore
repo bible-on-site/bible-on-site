@@ -42,3 +42,4 @@ nul
 # QA service (present on qa-bot branch; ignore when untracked on other branches)
 web/qa-service/
 /app/.dev.env.local
+.junit-report/

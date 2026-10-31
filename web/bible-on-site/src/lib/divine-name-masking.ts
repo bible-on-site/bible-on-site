@@ -354,6 +354,23 @@ export function maskDivineNameValue(
 }
 
 /**
+ * Whether any supported masking preference can change this text. Reuse the
+ * same word matcher and space/maqaf boundaries as maskDivineNameText, without
+ * consulting the current/default preference: names left as-is must remain
+ * reactive when the reader later changes that preference.
+ */
+export function containsDivineName(text: string): boolean {
+	let start = 0;
+	for (let i = 0; i <= text.length; i++) {
+		if (i < text.length && text[i] !== " " && text[i] !== MAQAF) continue;
+		if (i > start && matchDivineName(text.slice(start, i)) !== null)
+			return true;
+		start = i + 1;
+	}
+	return false;
+}
+
+/**
  * Masks every divine-name word in a multi-word string (pasuk previews,
  * free-text quotes). Splits on spaces and maqaf so maqaf-joined compounds
  * are handled word-by-word; non-matching pieces pass through untouched.

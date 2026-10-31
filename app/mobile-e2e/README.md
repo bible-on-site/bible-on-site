@@ -3,10 +3,14 @@
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires every applicable result through the main CI gate. Tests
-on an individual device run sequentially. The first session installs and resets
-the app; later scenarios restart its process with their launch environment.
-The install and built search index survive these restarts. Appium operates
-the simulator headlessly.
+on an individual device run sequentially. On Android the pilot installs the
+app itself with a deterministic `adb install --no-incremental` — IncFS
+incremental installs can crash Xamarin in libmonodroid's open_from_bundles
+(#2773) — and sessions reuse that install under noReset; a driver-initiated
+install has no incremental opt-out. On iOS the first session installs and
+resets the app. Later scenarios restart the app's process with their launch
+environment. The install and built search index survive these restarts.
+Appium operates the simulator headlessly.
 
 WDA releases its session without terminating the app through XCTest. That
 termination path can stall `DELETE /session` after all assertions pass and
@@ -287,8 +291,8 @@ locally, download the run's `app-mobile-e2e-plan.<run-id>.ios` artifact and
 set `MOBILE_E2E_SELECTION` to the shard's `shards/shard-N.json`.
 
 Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
-after a local run. The runner installs the current build while preserving that
-data; normal runs still reset the app. The floating search scenarios cover a
+after a local run. The runner reinstalls the current build while preserving
+that data; normal runs replace the package entirely. The floating search scenarios cover a
 misspelled chapter reference, unpointed verse text, and inline commentary jumps.
 Android system Back and the iOS edge-back gesture restore the original query,
 filters, results, and list position. Verse results remain usable while the first

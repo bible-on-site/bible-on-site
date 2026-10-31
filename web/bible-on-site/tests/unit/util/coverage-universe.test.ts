@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-// coverage-universe.js / sanitize-coverage.js are true ESM (no jest
+// coverage-universe.mjs / sanitize-coverage.mjs are true ESM (no jest
 // transform), so — like merge-coverage.test.ts — each case drives the real
 // modules in a short-lived node subprocess and asserts on its JSON output.
 const UNIVERSE_URL = pathToFileURL(
-	join(__dirname, "../../util/coverage/coverage-universe.js"),
+	join(__dirname, "../../util/coverage/coverage-universe.mjs"),
 ).href;
 const SANITIZE_URL = pathToFileURL(
-	join(__dirname, "../../util/coverage/sanitize-coverage.js"),
+	join(__dirname, "../../util/coverage/sanitize-coverage.mjs"),
 ).href;
 const SWC_URL = pathToFileURL(require.resolve("@swc/core")).href;
 const PACKAGE_DIR = resolve(__dirname, "../../..");
@@ -35,8 +35,8 @@ const describeSwc = swcAvailable ? describe : describe.skip;
 // --findRelatedTests links them to these tests. The branch never runs —
 // jest's transforms do not cover the ESM helpers.
 if (process.env.JEST_IMPORT_MTS_HELPERS === "1") {
-	require("../../util/coverage/coverage-universe.js");
-	require("../../util/coverage/sanitize-coverage.js");
+	require("../../util/coverage/coverage-universe.mjs");
+	require("../../util/coverage/sanitize-coverage.mjs");
 }
 
 let workDir: string;
@@ -93,6 +93,7 @@ function runHelper(source: string, ...args: string[]): unknown {
 	if (result.status !== 0) {
 		throw new Error(`helper failed: ${result.stderr || result.error}`);
 	}
+	expect(result.stderr).not.toContain("MODULE_TYPELESS_PACKAGE_JSON");
 	return JSON.parse(result.stdout);
 }
 
@@ -296,5 +297,78 @@ process.stdout.write(JSON.stringify({
 		expect(result.variant).toEqual(result.canonical);
 		// Hits still land on canonical coordinates — coverage is preserved.
 		expect(result.hitStmts).toBeGreaterThan(0);
+	});
+});
+
+describeSwc("native coverage reporter module boundary", () => {
+	it("reports executed fixture coverage without typeless-module warnings", () => {
+		const artifacts = join(PACKAGE_DIR, ".artifacts");
+		mkdirSync(artifacts, { recursive: true });
+		const reportRoot = mkdtempSync(join(artifacts, "native-coverage-"));
+		if (
+			!resolve(reportRoot).startsWith(
+				`${resolve(artifacts)}${process.platform === "win32" ? "\\" : "/"}native-coverage-`,
+			)
+		) {
+			throw new Error("Unsafe native coverage fixture cleanup");
+		}
+		const reporter = join(PACKAGE_DIR, "tests/util/jest/coverage/index.js");
+		try {
+			const sourcePath = join(reportRoot, "src/alpha.ts");
+			mkdirSync(join(reportRoot, "src"));
+			writeFileSync(
+				sourcePath,
+				"export function increment(value: number) { return value > 0 ? value + 1 : 0; }\n",
+			);
+			const runner = join(reportRoot, "report.cjs");
+			writeFileSync(
+				runner,
+				`
+const fs = require('node:fs');
+const path = require('node:path');
+const swc = require('@swc/core');
+const Reporter = require(${JSON.stringify(reporter)});
+async function main() {
+  const source = ${JSON.stringify(sourcePath)};
+  const compiled = path.resolve('compiled.cjs');
+  const output = swc.transformSync(fs.readFileSync(source, 'utf8'), {
+    filename: source,
+    jsc: { target: 'es2023', parser: { syntax: 'typescript', tsx: true },
+      transform: { react: { runtime: 'automatic' }, hidden: { jest: true } },
+      experimental: { plugins: [['swc-plugin-coverage-instrument', { unstableExclude: [] }]] } },
+    module: { type: 'commonjs' }, sourceMaps: 'inline',
+  });
+  fs.writeFileSync(compiled, output.code);
+  const { increment } = require(compiled);
+  const values = [increment(2), increment(-1)];
+  fs.mkdirSync('.coverage/unit', { recursive: true });
+  fs.writeFileSync('.coverage/unit/istanbul-coverage.json', JSON.stringify(globalThis.__coverage__));
+  await new Reporter({}, { outputDir: '.coverage/unit', reports: ['lcovonly'] }).onRunComplete(new Set(), {});
+  const lcov = fs.readFileSync('.coverage/unit/lcov.info', 'utf8');
+  console.log(JSON.stringify({ values, hasSource: lcov.replaceAll('\\\\', '/').includes('src/alpha.ts'),
+    positiveLines: [...lcov.matchAll(/^DA:\\d+,[1-9]\\d*/gm)].length,
+    rawRemoved: !fs.existsSync('.coverage/unit/istanbul-coverage.json') }));
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });
+`,
+			);
+			const result = spawnSync(process.execPath, [runner], {
+				cwd: reportRoot,
+				encoding: "utf8",
+				env: process.env,
+			});
+			expect(result.status).toBe(0);
+			const lastLine = result.stdout.trim().split(/\r?\n/).at(-1);
+			const summary = JSON.parse(lastLine ?? "{}");
+			expect(summary).toMatchObject({
+				values: [3, 0],
+				hasSource: true,
+				rawRemoved: true,
+			});
+			expect(summary.positiveLines).toBeGreaterThan(0);
+			expect(result.stderr).not.toContain("MODULE_TYPELESS_PACKAGE_JSON");
+		} finally {
+			rmSync(reportRoot, { recursive: true, force: true });
+		}
 	});
 });

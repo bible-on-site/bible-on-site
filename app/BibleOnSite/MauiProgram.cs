@@ -60,6 +60,11 @@ public static class MauiProgram
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
                 handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
+#if WINDOWS
+                // Native Button host gives flyout rows keyboard focus,
+                // Enter/Space activation and hover/focus visuals (#2766).
+                handlers.AddHandler<FlyoutMenuRow, FlyoutMenuRowHandler>();
+#endif
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
 				// Keep the Items2 handlers (.NET 10 default) but pin every native
