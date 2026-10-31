@@ -343,10 +343,13 @@ async function publishQueued(
 
 export async function enqueueBulletinWhatsApp(
 	request: WhatsAppQueueRequest,
+	options: { refreshRealTarget?: boolean } = {},
 ): Promise<WhatsAppJobSummary> {
 	const value = validateWhatsAppQueueRequest(request);
 	const runtime = loadWhatsAppRuntime();
 	if (!runtime) throw new Error("שירות הווטסאפ טרם הוגדר");
+	if (options.refreshRealTarget && value.expectedAudience !== "real")
+		throw new WhatsAppSuppressedError();
 	const key =
 		value.expectedAudience === "real" ? "production" : value.requestKey;
 	const prior = await transaction((connection) =>
@@ -380,6 +383,13 @@ export async function enqueueBulletinWhatsApp(
 		throw new Error(FAILED);
 	const caption = `${prepared.source}\n${prepared.input.hebrewDate} (${value.date})\nלימוד יומי בתנ"ך על הפרק\nhttps://xn--febl3a.co.il/929/${prepared.input.perekId}`;
 	if (caption.length > 1024) throw new Error(FAILED);
+	// Scheduled sends may outlive the ten-minute metadata cache. Refresh only
+	// their real destination, before reserving public history or creating a job.
+	if (options.refreshRealTarget) {
+		const targets = await readWhatsAppTargets(runtime);
+		if (!usableWhatsAppTarget(runtime, "real", targets.real))
+			await verifyWhatsAppTarget(runtime, "real");
+	}
 	const job = await transaction(async (connection) => {
 		const existing = await existingRequest(connection, value, key);
 		if (existing) return existing;

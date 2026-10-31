@@ -20,7 +20,17 @@
     <Compile Include="../BibleOnSite.E2eCoverage/CoverageEndpoint.cs" Link="CoverageEndpoint.cs" />
     <Compile Include="../BibleOnSite.E2eCoverage/Recorder.cs" Link="Recorder.cs" />
     <ProjectReference Include="../devops/_build.csproj" />
+    <ProjectReference Include="../devops.Tests.Probes/devops.Tests.Probes.csproj" ReferenceOutputAssembly="false" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
 
+  <Target Name="CopyCoverageEndpointProbe" AfterTargets="Build">
+    <MSBuild Projects="../devops.Tests.Probes/devops.Tests.Probes.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="CoverageEndpointProbeAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <CoverageEndpointProbeFiles Include="@(CoverageEndpointProbeAssembly);@(CoverageEndpointProbeAssembly->'%(RootDir)%(Directory)%(Filename).deps.json');@(CoverageEndpointProbeAssembly->'%(RootDir)%(Directory)%(Filename).runtimeconfig.json')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CoverageEndpointProbeFiles)" DestinationFolder="$(OutDir)coverage-scheduling-probe" />
+  </Target>
 </Project>

@@ -162,9 +162,7 @@ test.describe("Accessibility statement page", () => {
 					exact: true,
 				}),
 			).toHaveCount(0);
-			await expect(
-				page.getByRole("link", { name: "חיפוש" }),
-			).toHaveCount(0);
+			await expect(page.getByRole("link", { name: "חיפוש" })).toHaveCount(0);
 
 			const box = await trigger.boundingBox();
 			expect(box).not.toBeNull();
@@ -229,12 +227,8 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 	const openMenu = async (page: Page) => {
 		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
-		// Route hydration can lag first paint in dev — Enter toggles, so retry
-		// only while the popover is still closed.
-		await expect(async () => {
-			if ((await menu.count()) === 0) await trigger.press("Enter");
-			await expect(menu).toBeVisible({ timeout: 750 });
-		}).toPass();
+		await trigger.press("Enter");
+		await expect(menu).toBeVisible({ timeout: 750 });
 		return menu;
 	};
 
@@ -308,13 +302,12 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		// Opt-in: every a[href] gains the persistent cue, including the
 		// marker and the menu's own statement link.
 		const menu = await openMenu(page);
-		await menu
-			.getByRole("checkbox", { name: "קו תחתון לקישורים" })
-			.check();
+		await menu.getByRole("checkbox", { name: "קו תחתון לקישורים" }).check();
 		await expect(marker).toHaveCSS("text-decoration-line", /underline/);
-		await expect(
-			menu.getByRole("link", { name: "הצהרת נגישות" }),
-		).toHaveCSS("text-decoration-line", /underline/);
+		await expect(menu.getByRole("link", { name: "הצהרת נגישות" })).toHaveCSS(
+			"text-decoration-line",
+			/underline/,
+		);
 	});
 
 	test("reset clears both site toggles and preserves unrelated data", async ({
@@ -326,13 +319,9 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		);
 		const menu = await openMenu(page);
 		await menu.getByRole("checkbox", { name: "ניגודיות גבוהה" }).check();
-		await menu
-			.getByRole("checkbox", { name: "קו תחתון לקישורים" })
-			.check();
+		await menu.getByRole("checkbox", { name: "קו תחתון לקישורים" }).check();
 
-		await menu
-			.getByRole("button", { name: "איפוס התאמות נגישות" })
-			.click();
+		await menu.getByRole("button", { name: "איפוס התאמות נגישות" }).click();
 		const html = page.locator("html");
 		await expect(html).not.toHaveAttribute("data-a11y-contrast", "high");
 		await expect(html).not.toHaveAttribute("data-a11y-links", "underlined");
@@ -427,9 +416,8 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		// The global `a { color: inherit }` would hide link identity under
 		// forced colors — the media query hands it back LinkText + underline.
 		const [linkColor, bodyColor] = await page.evaluate(() => [
-			getComputedStyle(
-				document.querySelector('a[href^="mailto:"]') as Element,
-			).color,
+			getComputedStyle(document.querySelector('a[href^="mailto:"]') as Element)
+				.color,
 			getComputedStyle(document.body).color,
 		]);
 		expect(linkColor).not.toBe(bodyColor);
@@ -444,9 +432,7 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		test.slow();
 		await page.goto("/");
 		const menu = await openMenu(page);
-		await menu
-			.getByRole("checkbox", { name: "קו תחתון לקישורים" })
-			.check();
+		await menu.getByRole("checkbox", { name: "קו תחתון לקישורים" }).check();
 		await expect(page.locator("html")).toHaveAttribute(
 			"data-a11y-links",
 			"underlined",
@@ -497,9 +483,8 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 	test("viewport meta never blocks pinch-zoom (SC 1.4.4)", async ({ page }) => {
 		await page.goto("/");
 		const content =
-			(await page
-				.locator('meta[name="viewport"]')
-				.getAttribute("content")) ?? "";
+			(await page.locator('meta[name="viewport"]').getAttribute("content")) ??
+			"";
 		expect(content).not.toMatch(/user-scalable\s*=\s*(no|0)/);
 		expect(content).not.toMatch(/maximum-scale\s*=\s*1(\.0)?\b/);
 	});
