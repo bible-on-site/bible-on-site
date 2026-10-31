@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
+import { type FrameMetrics, reduceFrameSamples } from "../util/frame-metrics";
 
 /**
  * Performance regression test: rapid page flips in the sefer (FlipBook) view.
@@ -73,13 +74,6 @@ declare global {
 	}
 }
 
-interface FrameMetrics {
-	frames: number;
-	blockedMs: number;
-	longFrames: number;
-	longtaskMs: number;
-}
-
 /**
  * Relative CPU-speed factor: a fixed arithmetic spin measured on this
  * testbed vs the reference duration.  Shared-CPU CI runners are slower
@@ -98,12 +92,33 @@ async function cpuSpeedFactor(page: Page): Promise<number> {
 	return Math.max(0.5, ms / CALIBRATION_REFERENCE_MS);
 }
 
-/** Wait for the FlipBook toolbar to appear (signals the book has mounted). */
+/** Wait for the initialized spread and navigation controls to reach the screen. */
 async function waitForFlipBook(page: Page): Promise<void> {
-	await page.waitForSelector(".flipbook-toolbar", { timeout: 30_000 });
-	// Settle for leaves-buffer mounting and listener attachment; the
-	// workload's own click-spacing adds more before the first flip lands.
-	await page.waitForTimeout(600);
+	await page.waitForFunction(() => {
+		const next = document.querySelector<HTMLButtonElement>(
+			"button.flipbook-toolbar-next",
+		);
+		if (!next || next.disabled) return false;
+		const controls = next.getBoundingClientRect();
+		if (controls.width <= 0 || controls.height <= 0) return false;
+		const pages = document.querySelectorAll(".he-book .page.current-page");
+		return (
+			pages.length === 2 &&
+			[...pages].every((page) => {
+				const bounds = page.getBoundingClientRect();
+				return bounds.width > 40 && bounds.height > 40;
+			}) &&
+			!document.querySelector(".he-book .page--flipping")
+		);
+	});
+	// Two animation frames give the initialized geometry a paint opportunity;
+	// there is no fixed settling delay once the real reader is ready.
+	await page.evaluate(
+		() =>
+			new Promise<void>((resolve) => {
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+			}),
+	);
 }
 
 /**
@@ -147,28 +162,35 @@ async function startFrameProbe(page: Page): Promise<void> {
 
 /** Stop the probe and reduce its samples into metrics. */
 async function stopFrameProbe(page: Page): Promise<FrameMetrics> {
-	return page.evaluate((budgetMs) => {
+	const samples = await page.evaluate(() => {
 		const probe = window.__flipProbe;
 		window.__flipProbe = undefined;
-		if (!probe)
-			return { frames: 0, blockedMs: 0, longFrames: 0, longtaskMs: 0 };
+		if (!probe) return { frames: [], longtaskMs: 0 };
 		cancelAnimationFrame(probe.raf);
-		probe.observer?.disconnect();
-		let blockedMs = 0;
-		let longFrames = 0;
-		for (const gap of probe.frames) {
-			if (gap > budgetMs) {
-				blockedMs += gap - budgetMs;
-				if (gap > 50) longFrames += 1;
-			}
+		// A long task can finish just before this evaluation, with its delivery
+		// still queued. Disconnecting first would silently drop that sample.
+		for (const entry of probe.observer?.takeRecords() ?? []) {
+			probe.longtaskMs += entry.duration;
 		}
+		probe.observer?.disconnect();
 		return {
-			frames: probe.frames.length,
-			blockedMs,
-			longFrames,
+			frames: probe.frames,
 			longtaskMs: probe.longtaskMs,
 		};
-	}, FRAME_GAP_BUDGET_MS);
+	});
+	return reduceFrameSamples(samples, FRAME_GAP_BUDGET_MS);
+}
+
+/** The book writes the numeric chapter URL only after committing a spread. */
+function committedChapterId(page: Page): number {
+	const match = /^\/(?:929|dev\/sefer)\/(\d+)$/.exec(
+		new URL(page.url()).pathname,
+	);
+	expect(
+		match,
+		"the mid-book workload has a numeric chapter URL",
+	).not.toBeNull();
+	return Number(match?.[1]);
 }
 
 /**
@@ -178,6 +200,7 @@ async function stopFrameProbe(page: Page): Promise<FrameMetrics> {
 async function rapidFlips(page: Page, n: number): Promise<number> {
 	const nextBtn = page.locator("button.flipbook-toolbar-next");
 	await expect(nextBtn).toBeVisible({ timeout: 5_000 });
+	const initialChapter = committedChapterId(page);
 
 	const start = Date.now();
 	for (let i = 0; i < n; i++) {
@@ -186,18 +209,25 @@ async function rapidFlips(page: Page, n: number): Promise<number> {
 		// may coalesce into a single event.
 		await page.waitForTimeout(120);
 	}
-	// Wait for the last animation to finish (flip animations are ~400ms)
+	// Keep the 600ms sampling window, then require the final animation to finish.
+	// A full turn takes about 800ms; the window alone can observe a partial turn.
 	await page.waitForTimeout(600);
+	await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
+	expect(
+		committedChapterId(page),
+		"rapid next clicks must commit a later spread before measuring completes",
+	).toBeGreaterThan(initialChapter);
 	return Date.now() - start;
 }
 
-/** Right edge of the visible right-hand page (RTL forward-drag origin). */
+/** RTL turns start at the left outer edge for forward, right for backward. */
 async function pageEdge(
 	page: Page,
-): Promise<{ edge: number; y: number; spine: number } | null> {
-	return page.evaluate(() => {
-		const pages = [...document.querySelectorAll(".he-book .page")];
-		let right: {
+	forward: boolean,
+): Promise<{ edge: number; y: number; destination: number } | null> {
+	return page.evaluate((turnForward) => {
+		const pages = [...document.querySelectorAll(".he-book .page.current-page")];
+		let target: {
 			x: number;
 			w: number;
 			h: number;
@@ -206,38 +236,48 @@ async function pageEdge(
 		for (const p of pages) {
 			const r = p.getBoundingClientRect();
 			if (r.width < 40 || r.height < 40) continue;
-			if (!right || r.x + r.width > right.x + right.w)
-				right = { x: r.x, w: r.width, h: r.height, y: r.y };
+			if (
+				!target ||
+				(turnForward ? r.x < target.x : r.x + r.width > target.x + target.w)
+			) {
+				target = { x: r.x, w: r.width, h: r.height, y: r.y };
+			}
 		}
-		return right
-			? {
-					edge: right.x + right.w - 10,
-					y: right.y + right.h * 0.55,
-					spine: right.x,
-				}
-			: null;
-	});
+		if (!target) return null;
+		const edge = turnForward ? target.x + 10 : target.x + target.w - 10;
+		return {
+			edge,
+			y: target.y + target.h * 0.55,
+			// Cross the spine (half of the full fold), so release commits
+			// by distance even when CPU load makes the gesture slow.
+			destination: edge + target.w * (turnForward ? 1.4 : -1.4),
+		};
+	}, forward);
 }
 
 /** Perform `n` pointer drag-turns (forward, then alternating back). */
 async function dragTurns(page: Page, n: number): Promise<void> {
 	for (let i = 0; i < n; i++) {
-		const target = await pageEdge(page);
+		const forward = i % 2 === 0;
+		const initialChapter = committedChapterId(page);
+		const target = await pageEdge(page, forward);
 		if (!target) throw new Error("no visible page to drag");
 		const steps = 14;
 		await page.mouse.move(target.edge, target.y);
 		await page.mouse.down();
 		for (let s = 1; s <= steps; s++) {
 			await page.mouse.move(
-				target.edge + ((target.spine - target.edge) * 0.75 * s) / steps,
+				target.edge + ((target.destination - target.edge) * s) / steps,
 				target.y,
 			);
 			await page.waitForTimeout(11);
 		}
 		await page.mouse.up();
 		await page.waitForTimeout(700);
-		// Alternate back so the next drag has a forward leaf available.
-		if (i % 2 === 1) await page.locator("button.flipbook-toolbar-prev").click();
+		expect(
+			committedChapterId(page),
+			`${forward ? "forward" : "backward"} RTL drag must commit its spread`,
+		).toBe(initialChapter + (forward ? 1 : -1));
 	}
 }
 

@@ -10,7 +10,7 @@
 		"build:release-smoke": "dotnet run --project ../devops -- CompileAndroidReleaseSmoke",
 		"release-smoke": "node release-smoke.mjs",
 		"test": "node supervise.mjs run.mjs",
-		"test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs native-hang-monitor.test.mjs test-host-diagnostics.test.mjs android-readiness.test.mjs android-crash-diagnostics.test.mjs android-pilot.test.mjs android-snapshot-check.test.mjs shards.test.mjs merge-runner-shards.test.mjs appium-matrix.test.mjs ios-build-artifact.test.mjs ios-app-cleanup.test.mjs ios-processes.test.mjs supervise.test.mjs configure-avd-display.test.mjs sign-simulator-app.test.mjs ios-sim-state.test.mjs silent-failures.test.mjs release-smoke.test.mjs",
+		"test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs native-hang-monitor.test.mjs test-host-diagnostics.test.mjs android-readiness.test.mjs android-crash-diagnostics.test.mjs android-pilot.test.mjs android-snapshot-check.test.mjs shards.test.mjs merge-runner-shards.test.mjs appium-matrix.test.mjs ios-build-artifact.test.mjs ios-app-cleanup.test.mjs ios-processes.test.mjs supervise.test.mjs configure-avd-display.test.mjs sign-simulator-app.test.mjs ios-sim-state.test.mjs silent-failures.test.mjs release-smoke.test.mjs android-install.test.mjs",
 		"android:ready": "node android-ready.mjs",
 		"ios:sign": "node sign-simulator-app.mjs",
 		"ios:wda": "node prepare-wda.mjs",

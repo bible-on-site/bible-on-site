@@ -18,11 +18,8 @@ import {
 	getTanahpediaCategoryCounts,
 	listTanahpediaEntriesForAdmin,
 } from "~/server/tanahpedia/entries";
+import { WEBSITE_BASE } from "~/lib/website-base";
 
-const WEBSITE_BASE =
-	typeof import.meta.env.VITE_WEBSITE_URL === "string"
-		? import.meta.env.VITE_WEBSITE_URL.replace(/\/$/, "")
-		: "http://localhost:3001";
 
 type TanahpediaSearch = {
 	category?: CategoryKey;
