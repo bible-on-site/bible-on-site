@@ -8,14 +8,14 @@
 .pageTitle {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
   text-align: center;
 }
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0 0 32px 0;
   text-align: center;
 }
@@ -30,7 +30,7 @@
   display: block;
   break-inside: avoid;
   margin-bottom: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: #fff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -78,10 +78,10 @@
 .backLink {
   display: inline-block;
   padding: 12px 32px;
-  background: #1c2c5d;
+  background: var(--accent-900);
   color: #fff;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: all 0.2s ease;
 }
@@ -127,7 +127,7 @@
   width: auto;
   height: auto;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
@@ -140,7 +140,7 @@
   border-radius: 50%;
   border: none;
   background: #fff;
-  color: #1c2c5d;
+  color: var(--accent-900);
   font-size: 1.2rem;
   font-weight: 700;
   cursor: pointer;
@@ -232,11 +232,11 @@
 
 @media (prefers-color-scheme: dark) {
   .pageTitle {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .pageSubtitle {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .masonryItem {
@@ -244,7 +244,7 @@
   }
 
   .backLink {
-    background: #a8b9ff;
+    background: var(--accent-200);
     color: #16213d;
   }
 

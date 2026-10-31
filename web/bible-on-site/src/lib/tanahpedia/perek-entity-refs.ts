@@ -1,52 +1,51 @@
+import { isMissingMysqlSchema } from "@/lib/mysql-errors";
 import {
-	cachedPerKey,
 	COLLECTION_TAGS,
+	cachedPerKey,
 	entityRefsTag,
 	mentionRefsTag,
 } from "@/lib/revalidate/tags";
 import {
-	getEntityReferencesForPerek,
-	getMentionReferencesForPerek,
+	getEntityReferencesForPereks,
+	getMentionReferencesForPereks,
 	type PerekEntityReference,
+	type PerekScopedEntityReference,
 } from "./service";
-import { isMissingMysqlSchema } from "@/lib/mysql-errors";
+
+// Each entry retains its collection tag and every requested chapter tag,
+// comfortably below Next's 128-tag limit without widening its query scope.
+const REFERENCE_BATCH_SIZE = 64;
+const keyOf = (ids: number[]) => ids.join(",");
 
 const getCachedEntityRefs = cachedPerKey(
-	"tanahpedia-entity-refs",
-	(perekId: number) => String(perekId),
+	"tanahpedia-entity-refs-batch",
+	keyOf,
 	(key) => [
 		COLLECTION_TAGS.pediaEntityRefs,
-		entityRefsTag(Number(key)),
+		...key.split(",").map((id) => entityRefsTag(Number(id))),
 	],
-	(perekId: number) => getEntityReferencesForPerek(perekId),
+	(ids: number[]) => getEntityReferencesForPereks(ids),
 );
 
-// Mention decorations (#2516) resolve against live entries at presentation
-// time — the cache expires on entry lifecycle events via the broad
-// `tanahpedia-mention-refs` tag (name-keyed resolution has no per-perek
-// scope) and the per-perek `perek:{id}:mention-refs` tag.
+// Live name resolution keeps the existing collection-level invalidation;
+// every chapter in this exact batch also keeps its scoped mention tag.
 const getCachedMentionRefs = cachedPerKey(
-	"tanahpedia-mention-refs",
-	(perekId: number) => String(perekId),
+	"tanahpedia-mention-refs-batch",
+	keyOf,
 	(key) => [
 		COLLECTION_TAGS.pediaMentionRefs,
-		mentionRefsTag(Number(key)),
+		...key.split(",").map((id) => mentionRefsTag(Number(id))),
 	],
-	(perekId: number) => getMentionReferencesForPerek(perekId),
+	(ids: number[]) => getMentionReferencesForPereks(ids),
 );
 
-/**
- * The decoration families degrade only while their schema is absent (the
- * #2516 upgrade window): every other failure rejects inside the cache, so
- * nothing stale is stored — the next request retries instead of serving a
- * permanently cached empty decoration set.
- */
+/** Missing schemas degrade outside the cache so recovery always retries. */
 async function refsOrEmpty(
-	cached: (perekId: number) => Promise<PerekEntityReference[]>,
-	perekId: number,
-): Promise<PerekEntityReference[]> {
+	cached: (ids: number[]) => Promise<PerekScopedEntityReference[]>,
+	ids: number[],
+): Promise<PerekScopedEntityReference[]> {
 	try {
-		return await cached(perekId);
+		return await cached(ids);
 	} catch (error) {
 		if (isMissingMysqlSchema(error)) return [];
 		throw error;
@@ -57,17 +56,40 @@ async function refsOrEmpty(
 export async function fetchAllEntityRefs(
 	perekIds: number[],
 ): Promise<Record<number, PerekEntityReference[]>> {
-	const [allRefs, allMentions] = await Promise.all([
-		Promise.all(perekIds.map((id) => refsOrEmpty(getCachedEntityRefs, id))),
-		Promise.all(perekIds.map((id) => refsOrEmpty(getCachedMentionRefs, id))),
-	]);
+	// Canonicalize both the cache definition and its invocation arguments:
+	// unstable_cache includes JSON.stringify(args) in the stored cache key.
+	const ids = [...new Set(perekIds)].sort((a, b) => a - b);
+	const requested = new Set(ids);
+	const batches: number[][] = [];
+	for (let i = 0; i < ids.length; i += REFERENCE_BATCH_SIZE) {
+		batches.push(ids.slice(i, i + REFERENCE_BATCH_SIZE));
+	}
+	const rows = await Promise.all(
+		batches.map(async (batch) => {
+			const [curated, mentions] = await Promise.all([
+				refsOrEmpty(getCachedEntityRefs, batch),
+				refsOrEmpty(getCachedMentionRefs, batch),
+			]);
+			// Curated refs win overlapping segments. Preserve the service's
+			// order within each family, including manual-mention precedence.
+			return [...curated, ...mentions];
+		}),
+	);
 	const result: Record<number, PerekEntityReference[]> = {};
-	for (let i = 0; i < perekIds.length; i++) {
-		// Curated entity refs come first — getSegmentRuns resolves the first
-		// ref covering a segment, so human-curated links win over decorations.
-		const combined = [...allRefs[i], ...allMentions[i]];
-		if (combined.length > 0) {
-			result[perekIds[i]] = combined;
+	for (const batch of rows) {
+		for (const row of batch) {
+			if (!requested.has(row.perekId)) continue;
+			const refs = result[row.perekId] ?? [];
+			refs.push({
+				entityId: row.entityId,
+				entityName: row.entityName,
+				entityType: row.entityType,
+				entryUniqueName: row.entryUniqueName,
+				pasukNumber: row.pasukNumber,
+				segmentStart: row.segmentStart,
+				segmentEnd: row.segmentEnd,
+			});
+			result[row.perekId] = refs;
 		}
 	}
 	return result;

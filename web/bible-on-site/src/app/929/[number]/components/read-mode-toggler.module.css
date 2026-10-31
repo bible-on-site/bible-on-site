@@ -16,7 +16,7 @@
   width: 110px;
   height: 50px;
   background-color: #bbf7d0; /* Green when toggled */
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   transition: background-color 300ms;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -27,7 +27,7 @@
   width: 40px;
   height: 40px;
   background: rgba(0, 0, 0, 0.5); /* Darker when toggled */
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   top: 5px;
   left: 5px;
   transition: transform 600ms ease, width 300ms, background-color 300ms;

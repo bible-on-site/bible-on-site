@@ -18,12 +18,12 @@
 .breadcrumb li:not(:last-child)::after {
   content: ">";
   margin: 0 8px;
-  color: #999;
+  color: var(--muted-text, #999);
   font-weight: normal;
 }
 
 .breadcrumb li a {
-  color: #1c2c5d;
+  color: var(--accent-900);
   text-decoration: none;
 }
 
@@ -31,8 +31,9 @@
   text-decoration: underline;
 }
 
+/* Same 2.84:1 → passing fix as the authors index breadcrumb (#2767). */
 .breadcrumb li.active {
-  color: #9a92d1;
+  color: var(--hc-accent, #6f63b8);
   font-weight: 600;
 }
 
@@ -54,7 +55,7 @@
   flex-shrink: 0;
   width: 180px;
   height: 180px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: linear-gradient(135deg, #f0f0f5, #e5e7eb);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -74,7 +75,7 @@
   align-items: center;
   justify-content: center;
   font-size: 64px;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
 }
 
 .authorInfo {
@@ -85,7 +86,7 @@
 .authorName {
   font-size: 2rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 16px 0;
   line-height: 1.2;
 }
@@ -103,7 +104,7 @@
   margin-top: 32px;
   padding: 24px;
   background: var(--surface-elevated);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--border-subtle);
 }
@@ -114,7 +115,7 @@
   gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #1c2c5d;
+  border-bottom: 2px solid var(--accent-900);
 }
 
 .sectionIcon {
@@ -124,7 +125,7 @@
 .sectionTitle {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0;
   letter-spacing: 0.02em;
 }
@@ -132,7 +133,7 @@
 .emptyState {
   text-align: center;
   padding: 32px;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   font-size: 0.95rem;
 }
 
@@ -145,13 +146,13 @@
 .notFoundTitle {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 16px 0;
 }
 
 .notFoundText {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
 }
 
@@ -179,14 +180,14 @@
   }
 
   .breadcrumb li:not(:last-child)::after {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .breadcrumb li a,
   .authorName,
   .sectionTitle,
   .articleName {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .breadcrumb li.active,
@@ -200,7 +201,7 @@
   }
 
   .authorPlaceholder {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .authorDetails {
@@ -218,10 +219,10 @@
   }
 
   .articleCard:hover {
-    border-color: #a8b9ff;
+    border-color: var(--accent-200);
   }
 
   .articleMeta {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 }

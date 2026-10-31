@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
+import { canExportCalendarPeriod } from "@/data/learning-calendar-policy";
 import { assetsUrl } from "@/lib/assets-url";
-import { resolveCalendarArtifactRequest } from "@/lib/download/calendar-artifacts";
+import {
+	parseCalendarArtifactKey,
+	resolveCalendarArtifactRequest,
+} from "@/lib/download/calendar-artifacts";
 import { getCalendarPdfManifest } from "@/lib/download/calendar-pdf-manifest";
+import { getCurrentDate } from "@/util/date";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +32,16 @@ export async function GET(request: Request) {
 	const resolved = resolveCalendarArtifactRequest(searchParams);
 	if (!resolved.ok) {
 		return NextResponse.json({ error: resolved.error }, { status: 400 });
+	}
+	const period = parseCalendarArtifactKey(resolved.key);
+	if (
+		!period ||
+		!canExportCalendarPeriod(period, constructTsetAwareHDate(getCurrentDate()))
+	) {
+		return NextResponse.json(
+			{ error: "calendar PDF is outside the current export window" },
+			{ status: 404 },
+		);
 	}
 
 	const manifest = await getCalendarPdfManifest();

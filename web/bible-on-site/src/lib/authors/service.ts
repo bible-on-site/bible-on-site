@@ -62,38 +62,6 @@ export function getAuthorImageUrl(authorId: number): string {
 }
 
 /**
- * Fetch author by ID with full details
- */
-export async function getAuthorById(id: number): Promise<AuthorDetails | null> {
-	try {
-		const rows = await query<AuthorRow>(
-			`SELECT id, name, details
-			 FROM tanah_author
-			 WHERE id = ?`,
-			[id],
-		);
-
-		if (rows.length === 0) {
-			return null;
-		}
-
-		const row = rows[0];
-		return {
-			id: row.id,
-			name: row.name,
-			details: row.details || "",
-			imageUrl: getAuthorImageUrl(row.id),
-		};
-	} catch (error) {
-		console.warn(
-			`Failed to fetch author ${id}:`,
-			error instanceof Error ? error.message : error,
-		);
-		throw error;
-	}
-}
-
-/**
  * Fetch all articles by an author
  */
 export async function getArticlesByAuthorId(
@@ -117,26 +85,6 @@ export async function getArticlesByAuthorId(
 	} catch (error) {
 		console.warn(
 			`Failed to fetch articles for author ${authorId}:`,
-			error instanceof Error ? error.message : error,
-		);
-		throw error;
-	}
-}
-
-/**
- * Get all author IDs for static generation
- */
-export async function getAllAuthorIds(): Promise<number[]> {
-	try {
-		const rows = await query<{ id: number }>(
-			`SELECT a.id FROM tanah_author a
-			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id AND art.perek_id BETWEEN 1 AND 929)
-			 ORDER BY a.id`,
-		);
-		return rows.map((row) => row.id);
-	} catch (error) {
-		console.warn(
-			"Failed to fetch author IDs:",
 			error instanceof Error ? error.message : error,
 		);
 		throw error;

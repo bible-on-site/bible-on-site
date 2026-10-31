@@ -4,6 +4,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.ArticleDetailPage"
              x:DataType="viewmodels:ArticleDetailViewModel"
              Title="{Binding ArticleName}"
@@ -11,44 +12,50 @@
              Shell.NavBarIsVisible="False">
 
     <Grid RowDefinitions="Auto,*">
-        <!-- Header with back button, title, and share button -->
-        <Grid Grid.Row="0"
-              Padding="8,8,8,4"
-              ColumnDefinitions="Auto,*,Auto"
-              BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-            <Button Grid.Column="0"
-                    x:Name="BackButton"
-                    Text="→"
-                    FontSize="24"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
-                    Command="{Binding GoBackCommand}"
-                    SemanticProperties.Description="חזור"/>
-
-            <Label Grid.Column="1"
-                   Text="{Binding ArticleName}"
-                   FontSize="16"
-                   FontAttributes="Bold"
-                   VerticalTextAlignment="Center"
-                   LineBreakMode="TailTruncation"
-                   MaxLines="1"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-
-            <Button Grid.Column="2"
-                    Text="{x:Static fonts:FluentUI.share_android_24_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="22"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
-                    Command="{Binding ShareCommand}"
-                    SemanticProperties.Description="שתף"/>
-        </Grid>
+        <!-- The shared navigation capsule (#2467): hamburger at the far-right
+             edge, Back immediately beside it, title pill, and the article's
+             share action in the trailing slot. -->
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="ArticleDetailMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="{Binding ArticleName}"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+            <controls:SharedTopBar.TrailingContent>
+                <Button Text="{x:Static fonts:FluentUI.share_android_24_regular}"
+                        FontFamily="FluentIcons"
+                        FontSize="22"
+                        WidthRequest="40"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                        Command="{Binding ShareCommand}"
+                        VerticalOptions="Center"
+                        SemanticProperties.Description="שתף"/>
+            </controls:SharedTopBar.TrailingContent>
+        </controls:SharedTopBar>
 
         <!-- Content -->
         <ScrollView x:Name="ArticleScroll"
                     Grid.Row="1"
                     Padding="16,0">
             <VerticalStackLayout Spacing="16">
+                <VerticalStackLayout.MaximumWidthRequest>
+                    <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                    <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                        <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                    </OnPlatform>
+                </VerticalStackLayout.MaximumWidthRequest>
+                <VerticalStackLayout.HorizontalOptions>
+                    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                        <On Platform="Windows" Value="Center"/>
+                    </OnPlatform>
+                </VerticalStackLayout.HorizontalOptions>
                 <!-- Author section -->
                 <VerticalStackLayout HorizontalOptions="Center"
                                      Spacing="8"

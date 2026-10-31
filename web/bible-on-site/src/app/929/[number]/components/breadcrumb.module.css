@@ -36,28 +36,28 @@
   font-size: 16px;
   line-height: 1;
   margin: 0 8px;
-  color: #999;
+  color: var(--muted-text, #999);
   font-weight: normal;
 }
 
 .breadcrumb li a {
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-decoration: underline;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
   transition:
     color 0.2s ease,
     background-color 0.2s ease;
 }
 
 .breadcrumb li a:hover {
-  color: #0052a3;
+  color: var(--link-accent, #0052a3);
   text-decoration: underline;
   background-color: #f0f0f0;
 }
 
 .breadcrumb li a:focus {
-  outline: 2px solid #0066cc;
+  outline: 2px solid var(--link-accent, #0066cc);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -73,7 +73,7 @@
   border: none;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font: inherit;
   color: inherit;
   transition: background-color 0.2s ease;
@@ -84,7 +84,7 @@
 }
 
 .active > button:focus {
-  outline: 2px solid #0066cc;
+  outline: 2px solid var(--link-accent, #0066cc);
   outline-offset: 2px;
 }
 
@@ -127,7 +127,7 @@
   margin-top: 0;
   background-color: #fff;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   min-width: 150px;
@@ -177,19 +177,19 @@
 
 .drop ul li a:hover {
   background-color: #f5f5f5;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
 }
 
 .drop ul li a:focus {
   outline: none;
   background-color: #e6f2ff;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
 }
 
 .small {
   font-size: 9px;
   margin-right: 4px;
-  color: #666;
+  color: var(--muted-text, #666);
   transition:
     transform 0.2s ease,
     margin 0.2s ease;
@@ -362,7 +362,7 @@
 .drop .tanahpedia-category-parent:hover,
 .drop .tanahpedia-category-parent:focus {
   background-color: #f5f5f5;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
 }
 
 .drop .tanahpedia-nested {
@@ -387,7 +387,7 @@
 .drop .tanahpedia-nested li a:hover,
 .drop .tanahpedia-nested li a:focus {
   background-color: #f0f6ff;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -396,15 +396,15 @@
   }
 
   .breadcrumb > li:not(:last-child):after {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .breadcrumb li a {
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .breadcrumb li a:hover {
-    color: #a8b9ff;
+    color: var(--accent-200);
     background-color: #232a45;
   }
 
@@ -431,16 +431,16 @@
 
   .drop ul li a:hover {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .drop ul li a:focus {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .small {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .drop .tanahpedia-category-parent {
@@ -450,7 +450,7 @@
   .drop .tanahpedia-category-parent:hover,
   .drop .tanahpedia-category-parent:focus {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .drop .tanahpedia-nested li a {
@@ -460,6 +460,6 @@
   .drop .tanahpedia-nested li a:hover,
   .drop .tanahpedia-nested li a:focus {
     background-color: #232a45;
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 }

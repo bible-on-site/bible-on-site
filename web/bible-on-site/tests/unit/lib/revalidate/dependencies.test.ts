@@ -21,9 +21,7 @@ jest.mock("../../../../src/data/parasha/parasha-units", () => ({
 		{ unitId: 2, ranges: [{ perekId: 500, startPasuk: 1, endPasuk: 10 }] },
 	],
 	parashaAuxiliaryRanges: (unit: { unitId: number }) =>
-		unit.unitId === 1
-			? [{ perekId: 6, startPasuk: 1, endPasuk: 8 }]
-			: [],
+		unit.unitId === 1 ? [{ perekId: 6, startPasuk: 1, endPasuk: 8 }] : [],
 }));
 jest.mock("../../../../src/data/masora/masora-units", () => ({
 	getAllMasoraUnits: () => [
@@ -42,6 +40,7 @@ jest.mock("../../../../src/lib/authors", () => ({
 }));
 
 import { query } from "../../../../src/lib/api-client";
+import { SEFER_NAME_BY_ID } from "../../../../src/lib/dedications/service";
 import { resolveEntityChanges } from "../../../../src/lib/revalidate/dependencies";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -63,15 +62,11 @@ function stubDb(handlers: {
 }) {
 	mockQuery.mockImplementation(async (sql: string) => {
 		if (/FROM tanah_author/.test(sql))
-			return handlers.authorName
-				? [{ name: handlers.authorName }]
-				: [];
-		if (/covering_source cs/.test(sql))
-			return handlers.authorCovering ?? [];
+			return handlers.authorName ? [{ name: handlers.authorName }] : [];
+		if (/covering_source cs/.test(sql)) return handlers.authorCovering ?? [];
 		if (/FROM tanah_article_covering_source/.test(sql))
 			return handlers.articleCovering ?? [];
-		if (/FROM tanah_article\s/.test(sql))
-			return handlers.authorArticles ?? [];
+		if (/FROM tanah_article\s/.test(sql)) return handlers.authorArticles ?? [];
 		if (/FROM tanahpedia_entry e\s+JOIN tanahpedia_entry_entity/.test(sql))
 			return (handlers.entityEntries ?? []).map((unique_name) => ({
 				unique_name,
@@ -137,7 +132,7 @@ describe("resolveEntityChanges", () => {
 				"/929/7",
 				"/929/7/12",
 				"/929/authors/slug:רשי",
-				"/parasha/1",
+				"/parasha/בראשית",
 				"/masora/1",
 			]),
 		);
@@ -188,8 +183,7 @@ describe("resolveEntityChanges", () => {
 				throw Object.assign(new Error("missing table"), {
 					code: "ER_NO_SUCH_TABLE",
 				});
-			if (/FROM tanah_article\s/.test(sql))
-				return [{ id: 12, perek_id: 5 }];
+			if (/FROM tanah_article\s/.test(sql)) return [{ id: 12, perek_id: 5 }];
 			return [];
 		});
 		const out = await resolveEntityChanges([
@@ -205,15 +199,34 @@ describe("resolveEntityChanges", () => {
 		);
 	});
 
+	it.each(["article", "author"] as const)(
+		"propagates a non-schema %s covering lookup failure instead of acknowledging incomplete invalidation",
+		async (kind) => {
+			const failure = Object.assign(new Error("covering lookup unavailable"), {
+				code: "ER_CONNECTION_LOST",
+			});
+			mockQuery.mockImplementation(async (sql: string) => {
+				if (sql.includes("covering_source")) throw failure;
+				return [];
+			});
+			const change =
+				kind === "article"
+					? { kind, id: 12, perekIds: [5] }
+					: { kind, id: 3, name: "רשי" };
+			await expect(resolveEntityChanges([change])).rejects.toBe(failure);
+			expect(
+				mockQuery.mock.calls.some(([sql]) => sql.includes("covering_source")),
+			).toBe(true);
+		},
+	);
+
 	it("skips author page deps when the author row no longer exists", async () => {
 		stubDb({ authorName: null });
 		const out = await resolveEntityChanges([
 			{ kind: "article", id: 1, perekIds: [5], authorIds: [9] },
 		]);
 		expect(out.tags).toContain("author:9:articles");
-		expect(
-			out.paths.some((p) => p.startsWith("/929/authors/")),
-		).toBe(false);
+		expect(out.paths.some((p) => p.startsWith("/929/authors/"))).toBe(false);
 	});
 
 	it("resolves an author rename to old+new pages and every article surface", async () => {
@@ -229,7 +242,6 @@ describe("resolveEntityChanges", () => {
 				"authors",
 				"author:רשי",
 				"author:ישן",
-				"author:3",
 				"author:3:articles",
 				"article:12",
 				"perek:5:articles",
@@ -244,7 +256,7 @@ describe("resolveEntityChanges", () => {
 				"/929/authors/slug:ישן",
 				"/929/5",
 				"/929/5/12",
-				"/parasha/1",
+				"/parasha/בראשית",
 				"/masora/1",
 			]),
 		);
@@ -259,10 +271,11 @@ describe("resolveEntityChanges", () => {
 			expect.arrayContaining([
 				"authors",
 				"author:רשי",
-				"author:3",
 				"author:3:articles",
 			]),
 		);
+		// Author pages are addressed by name only: no numeric-id page tag.
+		expect(out.tags).not.toContain("author:3");
 	});
 
 	it("resolves a live pedia entry including synonyms, old name and category", async () => {
@@ -362,10 +375,7 @@ describe("resolveEntityChanges", () => {
 			]),
 		);
 		expect(out.tags).toEqual(
-			expect.arrayContaining([
-				"perek:12:entity-refs",
-				"perek:5:entity-refs",
-			]),
+			expect.arrayContaining(["perek:12:entity-refs", "perek:5:entity-refs"]),
 		);
 	});
 
@@ -400,9 +410,7 @@ describe("resolveEntityChanges", () => {
 			{ kind: "article", id: 12, perekIds: [5] },
 			{ kind: "article", id: 12, perekIds: [5] },
 		]);
-		expect(
-			out.tags.filter((t) => t === "article:12"),
-		).toHaveLength(1);
+		expect(out.tags.filter((t) => t === "article:12")).toHaveLength(1);
 	});
 
 	it("falls back to collection-level invalidation on fan-out overflow", async () => {
@@ -410,9 +418,7 @@ describe("resolveEntityChanges", () => {
 		const out = await resolveEntityChanges([
 			{ kind: "pedia-entries", uniqueNames },
 		]);
-		expect(out.patterns).toEqual([
-			{ path: "/pedia/[slug]", type: "page" },
-		]);
+		expect(out.patterns).toEqual([{ path: "/pedia/[slug]", type: "page" }]);
 		expect(out.tags).toEqual(
 			expect.arrayContaining([
 				"articles",
@@ -436,5 +442,259 @@ describe("resolveEntityChanges", () => {
 			},
 		]);
 		expect(out.paths).not.toContain("/pedia/undefined");
+	});
+
+	// --- dedication resolution (#2731) -------------------------------------
+	it("bounds a maximum-size batch of overlapping canonical ranges to the affected corpus", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{
+				kind: "dedication",
+				id: 7,
+				perekRanges: Array.from({ length: 512 }, () => ({ low: 1, high: 929 })),
+			},
+		]);
+		expect(out.tags.filter((tag) => tag.startsWith("perek:"))).toHaveLength(
+			929,
+		);
+		expect(out.tags.filter((tag) => tag.startsWith("sefer:"))).toHaveLength(
+			Object.keys(SEFER_NAME_BY_ID).length,
+		);
+		expect(out.tags).toHaveLength(929 + Object.keys(SEFER_NAME_BY_ID).length);
+		expect(out.paths).toHaveLength(929);
+		expect(out.paths).toEqual(expect.arrayContaining(["/929/1", "/929/929"]));
+		expect(out.patterns).toEqual([]);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
+	it("revalidates both books for a dedication range crossing a sefer boundary", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 50, high: 51 }] },
+		]);
+		expect(out.tags).toEqual([
+			"perek:50:dedications",
+			"perek:51:dedications",
+			"sefer:1:perek-dedications",
+			"sefer:2:perek-dedications",
+		]);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/929/1", "/929/50", "/929/51", "/929/90"]),
+		);
+		expect(out.paths).not.toContain("/929/91");
+		expect(out.paths).toHaveLength(90);
+		expect(out.urls).toEqual(out.paths);
+	});
+
+	it("expires both aggregate books when a perek dedication moves beyond the largest book", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 717, high: 717 }] },
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 718, high: 718 }] },
+		]);
+		expect(out.tags).toEqual([
+			"perek:717:dedications",
+			"sefer:25:perek-dedications",
+			"perek:718:dedications",
+			"sefer:26:perek-dedications",
+		]);
+		expect(out.paths).toHaveLength(150 + 31);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/929/568", "/929/717", "/929/718", "/929/748"]),
+		);
+		expect(out.paths).not.toContain("/929/567");
+		expect(out.paths).not.toContain("/929/749");
+		expect(out.urls).toEqual(out.paths);
+		expect(out.patterns).toEqual([]);
+	});
+
+	it("preserves article and entry invalidation tags after their target rows were deleted", async () => {
+		mockQuery.mockResolvedValue([]);
+		const out = await resolveEntityChanges([
+			{
+				kind: "dedication",
+				id: 7,
+				articleIds: [9],
+				entryIds: ["deleted-entry"],
+			},
+		]);
+		expect(out.tags).toEqual([
+			"article:9:dedications",
+			"pedia-entry:deleted-entry:dedications",
+		]);
+		expect(out.paths).toEqual([]);
+		expect(mockQuery.mock.calls.map(([, params]) => params)).toEqual([
+			[9],
+			["deleted-entry"],
+		]);
+	});
+
+	it("propagates article and entry lookup failures so callers can retry invalidation", async () => {
+		for (const scope of [{ articleIds: [9] }, { entryIds: ["entry"] }]) {
+			mockQuery.mockRejectedValueOnce(new Error("database unavailable"));
+			await expect(
+				resolveEntityChanges([{ kind: "dedication", id: 7, ...scope }]),
+			).rejects.toThrow("database unavailable");
+		}
+	});
+
+	it("does not invent descendant routes for unknown ancestors", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{
+				kind: "dedication",
+				id: 7,
+				seferIds: [999],
+				helekIds: [999],
+				perekRanges: [{ low: 930, high: 930 }],
+			},
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"sefer:999:dedications",
+				"helek:999:dedications",
+				"perek:930:dedications",
+			]),
+		);
+		expect(out.paths).toEqual(["/929/930", "/", "/bookshelf"]);
+	});
+
+	it("treats empty assignment lists and masora false as an unscoped change", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{
+				kind: "dedication",
+				id: 7,
+				perekRanges: [],
+				seferIds: [],
+				helekIds: [],
+				parashaIds: [],
+				articleIds: [],
+				entryIds: [],
+				masora: false,
+			},
+		]);
+		expect(out.tags).toEqual([
+			"dedications",
+			"dedications:bookshelf",
+			"masora:dedications",
+		]);
+		expect(out.paths).toEqual(["/", "/bookshelf"]);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
+	it("coalesces old and new scope assignments across repeated dedication events", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, parashaIds: [2, 3], masora: true },
+			{ kind: "dedication", id: 7, parashaIds: [3, 4], masora: true },
+		]);
+		expect(out.tags).toEqual([
+			"parasha:2:dedications",
+			"parasha:3:dedications",
+			"masora:dedications",
+			"parasha:4:dedications",
+		]);
+		expect(out.paths).toEqual(["/parasha/2", "/parasha/3", "/parasha/4"]);
+	});
+
+	it("resolves a perek-range dedication change to its perakim", async () => {
+		stubDb({});
+		// Perakim 3-4 sit inside בראשית (1-50): their flat pages changed,
+		// and so did the book spread of every other perek in the sefer —
+		// the range also fans out to the whole sefer's /929 paths (#2731).
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, perekRanges: [{ low: 3, high: 4 }] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining(["perek:3:dedications", "perek:4:dedications"]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/929/1", "/929/3", "/929/4", "/929/50"]),
+		);
+		expect(out.paths).not.toContain("/929/51");
+		expect(out.paths.filter((p) => p.startsWith("/929/"))).toHaveLength(50);
+	});
+
+	it("expires a sefer dedication across its whole perek range", async () => {
+		stubDb({});
+		// Sefer 1 (בראשית) spans canonical perakim 1..50 — the flat perek
+		// pages render ancestor dedications in their headings, so every
+		// one of them changed (#2731).
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, seferIds: [1] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining(["sefer:1:dedications", "dedications:bookshelf"]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/", "/bookshelf", "/929/1", "/929/50"]),
+		);
+		expect(out.paths).not.toContain("/929/51");
+		expect(out.paths.filter((p) => p.startsWith("/929/"))).toHaveLength(50);
+	});
+
+	it("expires a helek dedication across every sefer it owns", async () => {
+		stubDb({});
+		// Helek 3 (כתובים) spans canonical perakim 568..929.
+		const out = await resolveEntityChanges([
+			{ kind: "dedication", id: 7, helekIds: [3] },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining(["helek:3:dedications", "dedications:bookshelf"]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining(["/929/568", "/929/686", "/929/929"]),
+		);
+		expect(out.paths).not.toContain("/929/567");
+		expect(out.paths.filter((p) => p.startsWith("/929/"))).toHaveLength(
+			929 - 568 + 1,
+		);
+	});
+
+	it("resolves parasha, article, entry and masora dedication scopes", async () => {
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_article/.test(sql)) return [{ perek_id: 5 }];
+			if (/FROM tanahpedia_entry/.test(sql))
+				return [{ unique_name: "persons#abraham" }];
+			throw new Error(`unstubbed SQL: ${sql}`);
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "dedication",
+				id: 7,
+				parashaIds: [2],
+				articleIds: [9],
+				entryIds: ["123"],
+				masora: true,
+			},
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"parasha:2:dedications",
+				"article:9:dedications",
+				"pedia-entry:123:dedications",
+				"masora:dedications",
+			]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining([
+				"/parasha/2",
+				"/929/5/9",
+				"/pedia/persons#abraham",
+			]),
+		);
+	});
+
+	it("expires every dedication surface on an unscoped delete", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([{ kind: "dedication", id: 7 }]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining([
+				"dedications",
+				"dedications:bookshelf",
+				"masora:dedications",
+			]),
+		);
 	});
 });

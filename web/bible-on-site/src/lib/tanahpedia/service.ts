@@ -69,10 +69,8 @@ export async function getEntryByUniqueName(
 	const entry = entries[0];
 	// Stored reading metric (#2607): degrades to null when the schema is not
 	// deployed yet, and a failed metric read must not take down the entry.
-	const metric = await metricOrFallback(
-		`entry ${entry.id}`,
-		null,
-		() => getEntryMetric(entry.id),
+	const metric = await metricOrFallback(`entry ${entry.id}`, null, () =>
+		getEntryMetric(entry.id),
 	);
 	const entities = await query<{
 		id: string;
@@ -914,6 +912,11 @@ export interface PerekEntityReference {
 	segmentEnd: number | null;
 }
 
+/** Reference row carrying its chapter for a multi-chapter query. */
+export interface PerekScopedEntityReference extends PerekEntityReference {
+	perekId: number;
+}
+
 export interface EntryTanahOccurrence {
 	perekId: number;
 	pasukNumber: number;
@@ -948,12 +951,40 @@ export async function getEntryOccurrences(
  * plain text: `buildEntityRefLookup` drops null `entryUniqueName`, so
  * entry create/delete flips presentation without any re-inference.
  */
-export async function getMentionReferencesForPerek(
+export function getMentionReferencesForPerek(
 	perekId: number,
 ): Promise<PerekEntityReference[]> {
+	return queryPerekMentionReferences([perekId], false);
+}
+
+/** Resolve mentions for exactly these chapters in one parameterized query. */
+export function getMentionReferencesForPereks(
+	perekIds: number[],
+): Promise<PerekScopedEntityReference[]> {
+	return queryPerekMentionReferences(perekIds, true);
+}
+
+function queryPerekMentionReferences(
+	perekIds: number[],
+	scoped: false,
+): Promise<PerekEntityReference[]>;
+function queryPerekMentionReferences(
+	perekIds: number[],
+	scoped: true,
+): Promise<PerekScopedEntityReference[]>;
+async function queryPerekMentionReferences(
+	perekIds: number[],
+	scoped: boolean,
+): Promise<PerekEntityReference[]> {
+	if (perekIds.length === 0) return [];
+	// Only placeholder count and fixed SQL fragments vary; IDs stay bound values.
+	const predicate = scoped
+		? `IN (${perekIds.map(() => "?").join(", ")})`
+		: "= ?";
 	try {
 		return await query<PerekEntityReference>(
 			`SELECT
+			   ${scoped ? "d.perek_id AS perekId," : ""}
 			   ANY_VALUE(ent.id) AS entityId,
 			   ANY_VALUE(ent.title) AS entityName,
 			   d.entity_type AS entityType,
@@ -968,16 +999,19 @@ export async function getMentionReferencesForPerek(
 			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
 			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
 			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId
-			 WHERE d.source_kind = 'pasuk' AND d.perek_id = ?
+			 WHERE d.source_kind = 'pasuk' AND d.perek_id ${predicate}
 			   AND d.acceptance IN ('auto', 'manual')
 			 GROUP BY d.id
 			 HAVING COUNT(DISTINCT names.entryId) <= 1
-			 ORDER BY pasukNumber, segmentStart`,
-			[String(perekId)],
+			 ORDER BY ${scoped ? "d.perek_id," : ""} pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
+			perekIds.map(String),
 		);
 	} catch (error) {
+		const scope = scoped
+			? `pereks ${perekIds.join(", ")}`
+			: `perek ${perekIds[0]}`;
 		console.error(
-			`Failed to fetch mention references for perek ${perekId}:`,
+			`Failed to fetch mention references for ${scope}:`,
 			error instanceof Error ? error.message : error,
 		);
 		throw error;
@@ -1022,7 +1056,7 @@ export async function getMentionReferencesForArticle(
 			   AND d.acceptance IN ('auto', 'manual')
 			 GROUP BY d.id
 			 HAVING COUNT(DISTINCT names.entryId) <= 1
-			 ORDER BY spanStart`,
+			 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
 			[String(articleId), contentHash],
 		);
 	} catch (error) {
@@ -1034,12 +1068,40 @@ export async function getMentionReferencesForArticle(
 	}
 }
 
-export async function getEntityReferencesForPerek(
+export function getEntityReferencesForPerek(
 	perekId: number,
 ): Promise<PerekEntityReference[]> {
+	return queryPerekEntityReferences([perekId], false);
+}
+
+/** Load curated references for exactly these chapters, preserving row order. */
+export function getEntityReferencesForPereks(
+	perekIds: number[],
+): Promise<PerekScopedEntityReference[]> {
+	return queryPerekEntityReferences(perekIds, true);
+}
+
+function queryPerekEntityReferences(
+	perekIds: number[],
+	scoped: false,
+): Promise<PerekEntityReference[]>;
+function queryPerekEntityReferences(
+	perekIds: number[],
+	scoped: true,
+): Promise<PerekScopedEntityReference[]>;
+async function queryPerekEntityReferences(
+	perekIds: number[],
+	scoped: boolean,
+): Promise<PerekEntityReference[]> {
+	if (perekIds.length === 0) return [];
+	// Only placeholder count and fixed SQL fragments vary; IDs stay bound values.
+	const predicate = scoped
+		? `IN (${perekIds.map(() => "?").join(", ")})`
+		: "= ?";
 	try {
 		return await query<PerekEntityReference>(
 			`SELECT
+			   ${scoped ? "ets.perek_id AS perekId," : ""}
 			   ets.entity_id AS entityId,
 			   e.name AS entityName,
 			   e.entity_type AS entityType,
@@ -1051,13 +1113,16 @@ export async function getEntityReferencesForPerek(
 			 JOIN tanahpedia_entity e ON e.id = ets.entity_id
 			 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
 			 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
-			 WHERE ets.perek_id = ?
-			 ORDER BY ets.pasuk_number, ets.segment_start`,
-			[String(perekId)],
+			 WHERE ets.perek_id ${predicate}
+			 ORDER BY ${scoped ? "ets.perek_id," : ""} ets.pasuk_number, ets.segment_start`,
+			perekIds.map(String),
 		);
 	} catch (error) {
+		const scope = scoped
+			? `pereks ${perekIds.join(", ")}`
+			: `perek ${perekIds[0]}`;
 		console.error(
-			`Failed to fetch entity references for perek ${perekId}:`,
+			`Failed to fetch entity references for ${scope}:`,
 			error instanceof Error ? error.message : error,
 		);
 		// Reject so a transient failure cannot become a permanently cached

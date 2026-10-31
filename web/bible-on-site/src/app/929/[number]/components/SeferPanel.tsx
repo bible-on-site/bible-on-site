@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Skeleton, SkeletonLabel } from "@/app/components/Skeleton";
 import type { Article, ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import { demoteHeadings } from "@/lib/html-headings";
@@ -38,6 +39,11 @@ import {
 import { writeSeferContentHistory } from "./useSeferContentNavigation";
 
 type PanelTab = "perushim" | "articles";
+
+/** Stable empty list — the effect reset must reuse one reference or a
+ * new `[]` identity re-triggers the render loop (#2731). */
+const NO_LINES: string[] = [];
+const COMMENTARY_SKELETON_KEYS = ["a", "b", "c"];
 
 interface SeferPanelProps {
 	articles?: ArticleSummary[];
@@ -180,12 +186,15 @@ export function SeferPanel({
 
 	/* ─── Article full view (unchanged contract) ─── */
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+	const [articleDedicationLines, setArticleDedicationLines] =
+		useState(NO_LINES);
 	const [articleLoading, setArticleLoading] = useState(false);
 	const [articleFullscreen, setArticleFullscreen] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSelectedArticle(null);
+		setArticleDedicationLines(NO_LINES);
 		setArticleLoading(false);
 		setArticleFullscreen(false);
 		if (deepArticleSummary) {
@@ -193,7 +202,8 @@ export function SeferPanel({
 			getArticleForBook(deepArticleSummary.id)
 				.then((full) => {
 					if (!cancelled) {
-						setSelectedArticle(full);
+						setSelectedArticle(full?.article ?? null);
+						setArticleDedicationLines(full?.dedicationLines ?? NO_LINES);
 						if (!full) setSlug(undefined);
 					}
 				})
@@ -543,9 +553,23 @@ export function SeferPanel({
 								לא נבחרו פרשנים. בחרו פרשן מהרשימה כדי לראות פירוש.
 							</p>
 						) : loadingNotes ? (
-							<p className={styles.emptyState} aria-busy="true">
-								מתחבר לפירוש...
-							</p>
+							<div aria-busy="true">
+								<SkeletonLabel>מתחבר לפירוש...</SkeletonLabel>
+								{COMMENTARY_SKELETON_KEYS.map((key) => (
+									<div key={key} className={styles.commentaryGroup}>
+										<Skeleton
+											width="4.5em"
+											height="0.85rem"
+											className={styles.skeletonPasuk}
+										/>
+										<div className={styles.noteContent}>
+											<Skeleton className={styles.skeletonLine} />
+											<Skeleton className={styles.skeletonLine} />
+											<Skeleton width="60%" className={styles.skeletonLine} />
+										</div>
+									</div>
+								))}
+							</div>
 						) : groups.length === 0 && !hasFailures ? (
 							<p className={styles.emptyState}>
 								{activePesukim
@@ -703,6 +727,7 @@ export function SeferPanel({
 						<div className={styles.panelArticleOverlay}>
 							<ArticleFullView
 								article={selectedArticle}
+								dedicationLines={articleDedicationLines}
 								onBack={() => navigate()}
 								fullPage
 								fullscreen={articleFullscreen}
@@ -725,6 +750,7 @@ export function SeferPanel({
 						<div className={styles.articleFullscreenBody}>
 							<ArticleFullView
 								article={selectedArticle}
+								dedicationLines={articleDedicationLines}
 								onBack={() => setArticleFullscreen(false)}
 								fullPage
 								fullscreen

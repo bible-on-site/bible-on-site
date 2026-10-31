@@ -30,43 +30,55 @@ const E2E_LCOV = `${COVERAGE_DIR}/e2e/lcov.info`;
 const NORMALIZED_UNIT_LCOV = `${COVERAGE_DIR}/unit/lcov.normalized.info`;
 const NORMALIZED_E2E_LCOV = `${COVERAGE_DIR}/e2e/lcov.normalized.info`;
 
-mkdirSync(`${COVERAGE_DIR}/merged`, { recursive: true });
-dumpTargetCoverage();
-normalizeCoverageFiles();
-mergeCoverage();
-fixLcovPathsForCodecov();
-printCoverageSummary();
+// Guarded so unit tests can import the helpers below without running the
+// pipeline — importing must never spawn the merge or touch .coverage/.
+const invokedAsScript =
+	typeof process.argv[1] === "string" &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedAsScript) {
+	dumpTargetCoverage();
+	normalizeCoverageFiles();
+	mergeCoverage();
+	printCoverageSummary();
+}
 
 function mergeCoverage(): void {
-	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings.
-	// Inconsistent branch data (e.g. single-branch blocks from SWC ternary instrumentation) is fixed
-	// during normalization — see fixInconsistentBranches() in normalize-coverage.mts.
-	// Docker must create the report as the caller on Linux so the Node path
-	// normalization below can write it. Docker Desktop maps Windows bind mounts.
-	// execFile keeps the computed COVERAGE_DIR out of shell interpolation.
-	const dockerUser =
-		process.getuid && process.getgid
-			? ["--user", `${process.getuid()}:${process.getgid()}`]
-			: [];
 	const out = runCommand([
-		"docker",
-		"run",
-		"--rm",
-		"-t",
-		...dockerUser,
-		"-v",
-		`${COVERAGE_DIR}:/.coverage`,
-		"lcov-cli:0.0.2",
-		"--rc",
-		"branch_coverage=1",
-		"-a",
-		"/.coverage/unit/lcov.normalized.info",
-		"-a",
-		"/.coverage/e2e/lcov.normalized.info",
-		"-o",
-		"/.coverage/merged/lcov.info",
+		process.execPath,
+		...buildMergeArgs(getMonorepoPrefix()),
 	]);
 	if (out) console.log(formatOutput(out));
+}
+
+/**
+ * The merge invocation for `coverage:merge`, exported so tests can pin the
+ * #2670 contract.
+ *
+ * Both reports enumerate the same canonical universe: sanitizeCoverage
+ * (tests/util/coverage/coverage-universe.mjs) rewrites every collected record
+ * onto the coordinates jest's transform emits for the file and drops records
+ * that name no real instrumentable src file — the dev server's generated
+ * modules (data<hash> chunks, `[json].cjs` wrappers, font chunks) and stale
+ * .next-cache variants can never reach the report. With the untrusted
+ * coordinate space removed at collection time, the e2e layer merges as a
+ * full `--require` peer: identical tuples name identical arms on both sides,
+ * so a plain union is exact — no canonical layer needed. execFile keeps the
+ * paths out of shell interpolation.
+ */
+export function buildMergeArgs(prefix: string | null): string[] {
+	const args = [
+		resolve(PACKAGE_DIR, "../../devops/merge-lcov.mts"),
+		"--out",
+		`${COVERAGE_DIR}/merged/lcov.info`,
+		"--require",
+		`${COVERAGE_DIR}/unit/lcov.normalized.info`,
+		"--require",
+		`${COVERAGE_DIR}/e2e/lcov.normalized.info`,
+	];
+	// --prefix rewrites bare `SF:src/...` records to `web/bible-on-site/src/...`
+	// so Codecov flag paths match the monorepo layout.
+	if (prefix) args.push("--prefix", prefix);
+	return args;
 }
 
 function normalizeCoverageFiles(): void {
@@ -189,42 +201,6 @@ function printExecError(cmd: string, error: unknown): void {
 		if (err.stack) console.error("Stack    :", String(err.stack));
 	} else {
 		console.error("Error    :", String(error));
-	}
-}
-
-/**
- * Prefix LCOV source paths so Codecov can match them to the repository layout.
- *
- * The merged LCOV file contains paths relative to the package root (e.g.
- * `SF:src/app/page.tsx`), but Codecov flags reference paths from the repo root
- * (e.g. `web/bible-on-site/src/`).  This step adds the missing prefix.
- */
-function fixLcovPathsForCodecov(): void {
-	const mergedLcov = `${COVERAGE_DIR}/merged/lcov.info`;
-	if (!existsSync(mergedLcov)) {
-		console.log("Merged LCOV not found, skipping path prefix fix");
-		return;
-	}
-
-	const prefix = getMonorepoPrefix();
-	if (!prefix) {
-		console.log(
-			"Could not determine monorepo prefix, skipping LCOV path fix",
-		);
-		return;
-	}
-
-	const original = readFileSync(mergedLcov, "utf8");
-	// Handle both forward-slash (Linux/CI) and back-slash (Windows) SF entries
-	const fixed = original
-		.replace(/^SF:src\//gm, `SF:${prefix}src/`)
-		.replace(/^SF:src\\/gm, `SF:${prefix}src/`);
-
-	if (fixed !== original) {
-		writeFileSync(mergedLcov, fixed, "utf8");
-		console.log(`Fixed LCOV paths: added prefix '${prefix}'`);
-	} else {
-		console.log("LCOV paths already prefixed or nothing to fix");
 	}
 }
 

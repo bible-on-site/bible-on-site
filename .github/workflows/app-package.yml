@@ -276,6 +276,7 @@ jobs:
         with:
           distribution: "microsoft"
           java-version: "17"
+          verify-signature: true
 
       - name: Hash NuGet dependency inputs
         id: nuget-key
@@ -419,7 +420,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
+          path: |
+            ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
+            ${{ env.APP_DIRECTORY }}/.artifacts/*-native-symbols.zip
           retention-days: 30
           if-no-files-found: error
           include-hidden-files: true
@@ -757,6 +760,7 @@ jobs:
           path: |
             ${{ env.IOS_VERIFIED_IPA }}
             ${{ env.APP_DIRECTORY }}/.artifacts/assetpacks/*.aar
+            ${{ env.APP_DIRECTORY }}/.artifacts/assetpacks/asset-packs.json
             ${{ env.APP_DIRECTORY }}/.artifacts/payloads/*
           retention-days: 30
           if-no-files-found: error

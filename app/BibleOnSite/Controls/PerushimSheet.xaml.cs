@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -13,7 +14,7 @@ namespace BibleOnSite.Controls;
 /// ambient BindingContext (Perushim, CheckedPerushim, PerushimSelectionStatus…).
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
-public partial class PerushimSheet : Border
+public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
 #pragma warning restore S2333
 {
     private bool _isExpanded;
@@ -29,7 +30,7 @@ public partial class PerushimSheet : Border
     public bool IsOpen { get; private set; }
 
     /// <summary>Raised whenever <see cref="IsOpen"/> changes (toggle, pan-dismiss).</summary>
-#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
+#pragma warning disable S3264 // Subscribed by the shared ReaderChrome/ReaderPlatformChrome coordinators; Codacy's per-file analysis misses them.
     public event EventHandler<bool>? IsOpenChanged;
 #pragma warning restore S3264
 

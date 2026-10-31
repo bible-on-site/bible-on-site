@@ -56,6 +56,9 @@ tests/unit/components/err.txt
 # Derived navigation metadata; regenerate from the canonical corpus.
 /src/data/db/client-catalog.generated.json
 
+# Brotli copy of the canonical corpus read by production servers.
+/src/data/db/*.tanah_view.json.br
+
 # Build-time store snapshot; regenerate via scripts/collect-store-metadata.mts.
 /src/data/db/store-metadata-snapshot.generated.json
 

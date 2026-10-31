@@ -32,7 +32,8 @@ Treat small e2e coverage variance as noise; only block or revert on sustained dr
                     ▼                           ▼
         ┌─────────────────────┐     ┌─────────────────────────────┐
         │  Istanbul Coverage  │     │    Istanbul Coverage        │
-        │  global.__coverage__│     │    (via CDP protocol)       │
+        │  global.__coverage__│     │  global.__coverage__        │
+        │                     │     │  (browser + server drain)   │
         └─────────────────────┘     └─────────────────────────────┘
                     │                           │
                     ▼                           ▼
@@ -119,29 +120,29 @@ Jest reporters run in a separate process from the tests themselves. The `global.
 1. **Instrumentation**: Next.js dev server uses SWC with the coverage plugin
 2. **Warmup**: Global setup warms up the server to ensure coverage is collected for key pages
 3. **Execution**: Playwright tests run against the instrumented dev server
-4. **Collection**: Global teardown connects via Chrome DevTools Protocol (CDP) to extract coverage
-5. **Reporting**: Monocart reporter generates LCOV from Istanbul coverage data
+4. **Collection**: Per-test, `window.__coverage__` (browser) and `GET /api/dev/coverage` (server's `global.__coverage__`) drain through `sanitizeCoverage`; global teardown drains the server counters one last time
+5. **Projection**: `sanitizeCoverage` rewrites every record onto the canonical instrumented map ([coverage-universe.mjs](../../../../web/bible-on-site/tests/util/coverage/coverage-universe.mjs)) and drops records that name no real instrumentable src file (#2670)
+6. **Reporting**: Monocart reporter generates LCOV from Istanbul coverage data
 
 ### Key Files
 
 - [next.config.mjs](../../../../web/bible-on-site/next.config.mjs) - Next.js SWC plugin configuration
 - [playwright-global-setup.js](../../../../web/bible-on-site/playwright-global-setup.js) - Warms up server for coverage
-- [playwright-global-teardown-coverage.js](../../../../web/bible-on-site/playwright-global-teardown-coverage.js) - Extracts coverage via CDP
+- [playwright-global-teardown-coverage.js](../../../../web/bible-on-site/playwright-global-teardown-coverage.js) - Final server `__coverage__` drain via `/api/dev/coverage`
+- [tests/util/coverage/coverage-universe.mjs](../../../../web/bible-on-site/tests/util/coverage/coverage-universe.mjs) - Canonical instrumented map per src file + variant-hit projection (#2670)
 - [playwright.base.config.ts](../../../../web/bible-on-site/playwright.base.config.ts) - Monocart reporter configuration
 
 ### E2E coverage variance
 
 E2E coverage is **slightly unstable** between runs: same tests and code can yield a small spread in covered lines (LH). In three consecutive runs, LF stayed 842 while LH was 641, 643, 648 (about 76.1%–77.0%). So CI/Codecov may see small fluctuations; treat minor e2e coverage dips as noise unless they persist or are large.
 
-### CDP Coverage Extraction
+### Server coverage drain and the canonical universe (#2670)
 
-The teardown connects to the Next.js server's debug port via CDP:
+Server-side counters accumulate in the dev server process's `global.__coverage__`. The dev-only route [src/app/api/dev/coverage/route.ts](../../../../web/bible-on-site/src/app/api/dev/coverage/route.ts) returns that object and resets it; the browser fixture drains it per test, and the global teardown drains it once more after the suite.
 
-```javascript
-const client = await CDPClient({ port: getRouterDebugPort() });
-const coverageData = await client.getIstanbulCoverage();
-await client.close();
-```
+`global.__coverage__` is the only correct source: an earlier implementation pulled V8 coverage over CDP (`CDPClient.getIstanbulCoverage()`), and V8→Istanbul conversion enumerates a completely different coordinate set — including generated modules — than the SWC plugin.
+
+Even with real plugin counters, dev-server (turbopack) compiles emit a *variant* instrumented map: comments are lost before the plugin runs so `istanbul ignore` regions get instrumented, generated modules (`data<hash>` chunks, `[json].cjs`/`[text].mjs` wrappers, font chunks) appear under fake src-relative paths, and the `.next` filesystem cache can keep stale variants alive. Left alone that made the e2e denominator jitter between identical runs (#2670). `sanitizeCoverage` therefore builds the canonical universe — the map jest's transform produces for every src file — projects each record's hit counts onto it (matching locations by equality, then containment), and drops records naming no real instrumentable src file.
 
 ## Coverage Merge
 
@@ -163,8 +164,12 @@ bun run coverage:merge
 This runs [merge-coverage.mts](../../../../web/bible-on-site/tests/util/coverage/merge-coverage.mts) which:
 
 1. Normalizes function names in both LCOV files
-2. Uses Docker `lcov-cli` to merge the normalized files
+2. Merges them with [devops/merge-lcov.mts](../../../../devops/merge-lcov.mts) — both inputs are `--require`d and merged as a plain union of DA/FNDA/BRDA records
 3. Outputs combined coverage to `.coverage/merged/lcov.info`
+
+### Why a plain union is safe (#2670)
+
+Both reports enumerate the same canonical coordinate space: `sanitizeCoverage` (see "Server coverage drain and the canonical universe" above) projects every collected record onto the map jest's transform emits for the file, so identical `DA:line`/`BRDA:line,block,branch` tuples mean the same thing on both layers. Files only the e2e layer ever instruments (e.g. dev-only API routes) still contribute their full canonical universe — no coverage is lost to a unit-side pin — while dev-server generated modules and variant coordinates can never reach the merge, so the denominator stays a deterministic function of the source tree and the test suite's instrumented set.
 
 ## Ignore Patterns
 
@@ -237,8 +242,8 @@ When Codecov reports a lower project coverage (e.g. 89.84% vs target 92%) but th
    - The number is computed from the merged LCOV we upload. If the merged report truly has lower coverage, Codecov will show it.
 
 2. **Possible causes**
-   - **Non-determinism**: E2E or unit runs may hit different code paths (timing, order), so coverage can vary between runs.
-   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `bun run coverage:merge` and **fails the job** on error (the earlier `continue-on-error` masking was removed — the LCOV container now runs with the caller's UID/GID so root-owned output stays writable); the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
+   - **Non-determinism in hit counts**: E2E or unit runs may hit different code paths (timing, order), so covered lines can vary between runs. The instrumented *universe* is canonical on both layers (#2670), so the denominator itself cannot jitter from e2e compilation order or generated modules.
+   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `bun run coverage:merge` and **fails the job** on error — both inputs are `--require`d, so a missing layer fails the merge instead of publishing a partial report; the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
    - **Path/flag mismatch**: Codecov applies the `website` flag path `web/bible-on-site/src/`. If LCOV `SF:` paths differ (e.g. absolute vs repo-relative), more or fewer files can be counted and the percentage can shift.
    - **New files in denominator**: Only files under `src/` are in the project. New test files under `tests/` are not in the flag path and do not affect project coverage.
 

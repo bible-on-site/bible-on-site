@@ -115,9 +115,9 @@ test("touch navigation stops at the first and last chapters", async ({
 
 test("phone text stays swipeable when a chapter link requests book view", async ({
 	page,
-	isWideEnough,
 }) => {
-	test.skip(isWideEnough, "Phone text view is the fallback for book links");
+	// CI selects the Desktop project; exercise the phone fallback in that run.
+	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto("/929/2?book");
 	await expect(page.getByRole("article")).toBeVisible();
 	await expect(page.locator("html")).not.toHaveAttribute("data-book-view");

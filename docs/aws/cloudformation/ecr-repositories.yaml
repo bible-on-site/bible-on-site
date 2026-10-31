@@ -79,29 +79,16 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site-api
-      ImageTagMutability: MUTABLE
+      # Prerequisite for the API multi-architecture publisher; verify live before merge.
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:
         EncryptionType: AES256
-      LifecyclePolicy:
-        LifecyclePolicyText: |
-          {
-            "rules": [
-              {
-                "rulePriority": 1,
-                "description": "Keep last 15 images",
-                "selection": {
-                  "tagStatus": "any",
-                  "countType": "imageCountMoreThan",
-                  "countNumber": 15
-                },
-                "action": {
-                  "type": "expire"
-                }
-              }
-            ]
-          }
+      # No API lifecycle policy: authenticated inspection found none.
       Tags:
         - Key: Project
           Value: bible-on-site

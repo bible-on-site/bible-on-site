@@ -9,11 +9,13 @@ use crate::common::auth::ApiAuth;
 use crate::providers::Database;
 use crate::resolvers::articles_resolver;
 use crate::resolvers::authors_resolver;
+use crate::resolvers::dedications_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
-use crate::resolvers::tanahpedia_entries_resolver;
+use crate::resolvers::tanahpedia_aliases_resolver;
 use crate::resolvers::tanahpedia_entity_resolver;
+use crate::resolvers::tanahpedia_entries_resolver;
 use crate::resolvers::tanahpedia_family_resolver;
 use crate::resolvers::tanahpedia_revisions_resolver;
 use crate::services::article_search::ArticleSearchIndex;
@@ -22,9 +24,11 @@ use crate::services::article_search::ArticleSearchIndex;
 pub struct QueryRoot(
     articles_resolver::ArticlesQuery,
     authors_resolver::AuthorsQuery,
+    dedications_resolver::DedicationsQuery,
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
     starter_resolver::StarterQuery,
+    tanahpedia_aliases_resolver::TanahpediaAliasesQuery,
     tanahpedia_entries_resolver::TanahpediaEntriesQuery,
     tanahpedia_entity_resolver::TanahpediaEntityQuery,
     tanahpedia_family_resolver::TanahpediaFamilyQuery,
@@ -33,6 +37,8 @@ pub struct QueryRoot(
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
+    dedications_resolver::DedicationsMutation,
+    tanahpedia_aliases_resolver::TanahpediaAliasesMutation,
     tanahpedia_family_resolver::TanahpediaFamilyMutation,
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
 );
@@ -212,13 +218,13 @@ mod tests {
                         article_id: 7,
                         perek_id: 42,
                         pasuk: 3,
-                        created_at,
+                        created_at: created_at.and_utc(),
                     },
                     entities::article_covering_source::Model {
                         article_id: 7,
                         perek_id: 43,
                         pasuk: 1,
-                        created_at,
+                        created_at: created_at.and_utc(),
                     },
                 ]])
                 .into_connection(),
@@ -328,7 +334,7 @@ mod tests {
         assert!(one.errors.is_empty(), "{:?}", one.errors);
         let one_json = one.data.into_json().unwrap();
         assert_eq!(one_json["perekByPerekId"]["perekId"], 1);
-        assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א'");
+        assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א");
 
         let by_sefer = schema
             .execute(Request::new(
@@ -778,5 +784,385 @@ mod tests {
             let response = schema.execute(Request::new(operation).data(auth())).await;
             assert!(response.errors.is_empty(), "{:?}", response.errors);
         }
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_dedication_operations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let operations = [
+            r#"{ dedicationsAdmin { id } }"#,
+            r#"mutation { createDedication(input: { subject: "x" }) { id } }"#,
+            r#"mutation { updateDedication(id: 1, input: { subject: "x" }) { id } }"#,
+            r#"mutation { deleteDedication(id: 1) }"#,
+        ];
+
+        for operation in operations {
+            let response = schema
+                .execute(Request::new(operation).data(crate::common::auth::ApiAuth::new(None)))
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert_eq!(
+                response.errors[0].message,
+                "Dedication API is not configured"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_dedication_create() {
+        use entities::{
+            dedication, dedication_dedication_type, dedication_type, sefer, sefer_dedication,
+        };
+
+        let now = chrono::Utc::now().naive_utc();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // purpose validation
+                .append_query_results::<
+                    dedication_type::Model,
+                    Vec<dedication_type::Model>,
+                    _,
+                >([vec![dedication_type::Model {
+                    id: 1,
+                    description: "לע\"נ".to_string(),
+                }]])
+                // sefer target validation (מלאכי, perakim 565-567)
+                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
+                    sefer::Model {
+                        id: 24,
+                        name: "מלאכי".to_string(),
+                        tanach_us_name: None,
+                        perek_id_from: 565,
+                        perek_id_to: 567,
+                    },
+                ]])
+                // insert dedication + purpose link + sefer link
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 42,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                // find_aggregate → list_all: 6 empty link tables + the sefer row
+                .append_query_results::<
+                    entities::perek_dedication::Model,
+                    Vec<entities::perek_dedication::Model>,
+                    _,
+                >([vec![]])
+                .append_query_results::<
+                    sefer_dedication::Model,
+                    Vec<sefer_dedication::Model>,
+                    _,
+                >([vec![sefer_dedication::Model {
+                    sefer_id: 24,
+                    dedication_id: 42,
+                    expires_at: None,
+                    created_at: now.and_utc(),
+                }]])
+                .append_query_results::<
+                    entities::helek_dedication::Model,
+                    Vec<entities::helek_dedication::Model>,
+                    _,
+                >([vec![]])
+                .append_query_results::<
+                    entities::parasha_dedication::Model,
+                    Vec<entities::parasha_dedication::Model>,
+                    _,
+                >([vec![]])
+                .append_query_results::<
+                    entities::article_dedication::Model,
+                    Vec<entities::article_dedication::Model>,
+                    _,
+                >([vec![]])
+                .append_query_results::<
+                    entities::tanahpedia_entry_dedication::Model,
+                    Vec<entities::tanahpedia_entry_dedication::Model>,
+                    _,
+                >([vec![]])
+                .append_query_results::<
+                    entities::masora_dedication::Model,
+                    Vec<entities::masora_dedication::Model>,
+                    _,
+                >([vec![]])
+                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                    dedication::Model {
+                        id: 42,
+                        subject: "מוקדש".to_string(),
+                        expires_at: None,
+                    },
+                ]])
+                .append_query_results::<
+                    dedication_dedication_type::Model,
+                    Vec<dedication_dedication_type::Model>,
+                    _,
+                >([vec![dedication_dedication_type::Model {
+                    dedication_id: 42,
+                    dedication_type_id: 1,
+                }]])
+                .append_query_results::<
+                    dedication_type::Model,
+                    Vec<dedication_type::Model>,
+                    _,
+                >([vec![dedication_type::Model {
+                    id: 1,
+                    description: "לע\"נ".to_string(),
+                }]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"mutation { createDedication(input: { subject: "מוקדש", purposeTypeIds: [1], targets: [{ kind: SEFER, seferId: 24 }] }) { id subject purposes expiresAt scopes { kind seferId } } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_dedication_api_key(
+                    Some("dedication-test-key".to_string()),
+                    Some("dedication-test-key".to_string()),
+                )),
+            )
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let created = &json["createDedication"];
+        assert_eq!(created["id"], 42);
+        assert_eq!(created["subject"], "מוקדש");
+        assert_eq!(created["purposes"][0], "לע\"נ");
+        assert!(created["expiresAt"].is_null());
+        assert_eq!(created["scopes"][0]["kind"], "SEFER");
+        assert_eq!(created["scopes"][0]["seferId"], 24);
+    }
+
+    #[tokio::test]
+    async fn schema_resolves_public_dedications_for_sefer_context() {
+        use entities::{
+            dedication, dedication_dedication_type, dedication_type, helek, sefer, sefer_dedication,
+        };
+
+        let now = chrono::Utc::now().naive_utc();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // ancestor expansion: canonical sefer + helek tables
+                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
+                    sefer::Model {
+                        id: 24,
+                        name: "מלאכי".to_string(),
+                        tanach_us_name: None,
+                        perek_id_from: 565,
+                        perek_id_to: 567,
+                    },
+                ]])
+                .append_query_results::<helek::Model, Vec<helek::Model>, _>([vec![
+                    helek::Model {
+                        id: 1,
+                        name: "תורה".to_string(),
+                        sefer_id_from: 1,
+                        sefer_id_to: 5,
+                    },
+                ]])
+                // sefer-scope link rows — one matches sefer 24
+                .append_query_results::<
+                    sefer_dedication::Model,
+                    Vec<sefer_dedication::Model>,
+                    _,
+                >([vec![
+                    sefer_dedication::Model {
+                        sefer_id: 24,
+                        dedication_id: 42,
+                        expires_at: None,
+                        created_at: now.and_utc(),
+                    },
+                    sefer_dedication::Model {
+                        sefer_id: 7,
+                        dedication_id: 43,
+                        expires_at: None,
+                        created_at: now.and_utc(),
+                    },
+                ]])
+                // hydrate: dedication 42 (+43 filtered out upstream)
+                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                    dedication::Model {
+                        id: 42,
+                        subject: "מרדכי בן זאב".to_string(),
+                        expires_at: None,
+                    },
+                ]])
+                .append_query_results::<
+                    dedication_dedication_type::Model,
+                    Vec<dedication_dedication_type::Model>,
+                    _,
+                >([vec![dedication_dedication_type::Model {
+                    dedication_id: 42,
+                    dedication_type_id: 1,
+                }]])
+                .append_query_results::<
+                    dedication_type::Model,
+                    Vec<dedication_type::Model>,
+                    _,
+                >([vec![dedication_type::Model {
+                    id: 1,
+                    description: "לע\"נ".to_string(),
+                }]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                r#"{ dedications(context: { seferIds: [24] }) { id subject purposes scopes { kind seferId } } }"#,
+            ))
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let dedications = json["dedications"].as_array().unwrap();
+        assert_eq!(dedications.len(), 1);
+        assert_eq!(dedications[0]["id"], 42);
+        assert_eq!(dedications[0]["subject"], "מרדכי בן זאב");
+        assert_eq!(dedications[0]["scopes"][0]["kind"], "SEFER");
+    }
+    #[tokio::test]
+    async fn schema_rejects_alias_operations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let operations = [
+            r#"{ tanahpediaNameStatus(name: "משה") { kind } }"#,
+            r#"{ tanahpediaEntryAliases(entryId: "e1") { name } }"#,
+            r#"mutation { saveTanahpediaAlias(input: { name: "משה", targets: [{ entryId: "e1" }], expectedTargets: [] }) { name } }"#,
+            r#"mutation { removeTanahpediaEntryFromAlias(name: "משה", entryId: "e1") { name } }"#,
+            r#"mutation { deleteTanahpediaAlias(name: "משה") { name } }"#,
+        ];
+
+        for operation in operations {
+            let response = schema
+                .execute(Request::new(operation).data(crate::common::auth::ApiAuth::new(None)))
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert_eq!(response.errors[0].message, "Revision API is not configured");
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_alias_queries_and_mutation() {
+        use entities::tanahpedia::entry;
+
+        let target_row = |entry_id: &str| {
+            [
+                ("entry_id", Value::from(entry_id.to_string())),
+                ("unique_name", Value::from("משה-רבנו".to_string())),
+                ("title", Value::from("משה רבנו".to_string())),
+                ("label", Value::String(None)),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect::<BTreeMap<String, Value>>()
+        };
+        let now = chrono::Utc::now().naive_utc();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // tanahpediaNameStatus → alias: holder none, then target rows.
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![target_row("e1")],
+                ])
+                // tanahpediaEntryAliases → names, then per-name targets + holder.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![[("name", Value::from("משה".to_string()))]
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect::<BTreeMap<String, Value>>()],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![target_row("e1")],
+                ])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                // saveTanahpediaAlias → lock, holder none, current empty,
+                // existing unique_name, then delete + insert execs.
+                .append_query_results::<entities::tanahpedia::entry_synonym::Model, Vec<entities::tanahpedia::entry_synonym::Model>, _>([
+                    vec![],
+                ])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![[("unique_name", Value::from("משה-רבנו".to_string()))]
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect::<BTreeMap<String, Value>>()],
+                ])
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let auth = || {
+            crate::common::auth::ApiAuth::with_revision_api_key(
+                Some("alias-test-key".to_string()),
+                Some("alias-test-key".to_string()),
+            )
+        };
+
+        let status = schema
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaNameStatus(name: "משה") { kind name aliasTargets { entryId title label } } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(status.errors.is_empty(), "{:?}", status.errors);
+        let status_json = status.data.into_json().unwrap()["tanahpediaNameStatus"].clone();
+        assert_eq!(status_json["kind"], "alias");
+        assert_eq!(status_json["aliasTargets"][0]["entryId"], "e1");
+
+        let aliases = schema
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaEntryAliases(entryId: "e1") { name kind targets { entryId } isSelfMain reservedCategory shadowedByCanonical { id } } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(aliases.errors.is_empty(), "{:?}", aliases.errors);
+        let alias_json = aliases.data.into_json().unwrap()["tanahpediaEntryAliases"].clone();
+        assert_eq!(alias_json[0]["name"], "משה");
+        assert_eq!(alias_json[0]["kind"], "alias");
+        assert_eq!(alias_json[0]["isSelfMain"], false);
+
+        let saved = schema
+            .execute(
+                Request::new(
+                    r#"mutation { saveTanahpediaAlias(input: { name: "משה", targets: [{ entryId: "e1" }], expectedTargets: [] }) { name kind targetCount revalidation } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(saved.errors.is_empty(), "{:?}", saved.errors);
+        let saved_json = saved.data.into_json().unwrap()["saveTanahpediaAlias"].clone();
+        assert_eq!(saved_json["kind"], "alias");
+        assert_eq!(saved_json["targetCount"], 1);
+        // No WEBSITE_URL/REVALIDATE_SECRET on the test box → documented no-op.
+        assert_eq!(saved_json["revalidation"], "SKIPPED");
     }
 }

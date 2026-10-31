@@ -43,7 +43,7 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 
 /* Override border-radius: flat bottom to sit flush against book edge */
 .flipbook-toolbar {
-	border-radius: 8px 8px 0 0;
+	border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 /* Page indicator - bible-on-site customizations */
@@ -69,6 +69,47 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 .flipbook-toolbar input.flipbook-toolbar-indicator:focus {
 	outline-color: #fff;
 	border-color: transparent;
+}
+
+/* ===================================================================
+ * TOC page — intentional site overrides on top of the library's TocPage
+ * stylesheet (html-flip-book-react/styles.css, complete since
+ * alpha.75 and carrying the bounded-scroll pane since alpha.92). These
+ * live in this reader-shared stylesheet — not a route-level CSS file —
+ * so they apply on every book host (the /929 overlay, /dev/sefer,
+ * Parasha and Masora) regardless of which route loaded first.
+ * =================================================================== */
+
+/* Single-line title policy: a long perek title stays on one row and
+   truncates with an ellipsis instead of wrapping (upstream's default). */
+.toc-title {
+	max-width: 85%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+	/* Dark TOC palette — upstream ships no dark scheme for TocPage. */
+	.toc-page {
+		background-color: #1c1915;
+	}
+
+	.toc-heading {
+		color: #f0ebe3;
+	}
+
+	.toc-link:hover {
+		background-color: rgba(255, 255, 255, 0.06);
+	}
+
+	.toc-dots {
+		border-bottom-color: #555;
+	}
+
+	.toc-page-num {
+		color: #8ab4f8;
+	}
 }
 
 /* ===================================================================

@@ -27,8 +27,12 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     // Circular menu state
 
-    // Articles view state
-    private bool _isShowingArticles;
+    // Articles view state is owned by the shared reader chrome (#2573).
+    private ReaderChrome _chrome = null!;
+
+    // Native safe-area + Back plumbing is owned by the shared platform
+    // chrome coordinator (#2573).
+    private ReaderPlatformChrome _platformChrome = null!;
 
     // Guard: ignore CurrentItemChanged events fired by the CarouselView during
     // initial collection assignment — the ViewModel already holds the unit.
@@ -48,9 +52,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     public ParashaPage()
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = new ParashaViewModel();
         BindingContext = _viewModel;
         FinishSetup();
@@ -59,9 +60,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     public ParashaPage(ParashaViewModel viewModel)
     {
         InitializeComponent();
-#if IOS
-        ConfigureReaderSafeArea();
-#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         FinishSetup();
@@ -69,6 +67,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     private void FinishSetup()
     {
+        SetupReaderChrome();
         SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
@@ -83,7 +82,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         SubscribeNotesMaterialization();
         SubscribeThemeChange();
         InitializeSearchHeader();
-        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
+        SetupPlatformChrome();
 #if ANDROID || IOS
         if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
         {
@@ -122,13 +121,97 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     private void RebuildLoadedRows() => _ = _viewModel.RebuildLoadedRowsAsync();
 
     /// <summary>
+    /// Wires the platform chrome every reader shares (#2573) — iOS safe-area
+    /// and edge-back history, Android predictive-Back registration, and the
+    /// capsule's enabled-state provider — through the one coordinator. Only
+    /// the division plugs differ: which transient surfaces consume Back and
+    /// what Back does to them.
+    /// </summary>
+    private void SetupPlatformChrome()
+    {
+        _platformChrome = new ReaderPlatformChrome(
+            new ReaderPlatformChromeSurfaces
+            {
+                Page = this,
+                Root = MainGrid,
+                NavigationBar = NormalNavigationBar,
+                BottomBar = BottomBar,
+                FanMenu = FanMenu,
+                Carousel = ParashaCarousel,
+                BackSensitiveOverlays = [ReaderMenuOverlay, ExitFullScreenButton],
+                SearchSurface = ChapterSearch,
+                SelectionSurface = SelectionBar,
+                PerushimSheet = PerushimPanel,
+            },
+            new ReaderPlatformChromeActions
+            {
+                OwnsReturnSurface = OwnsReaderReturnSurface,
+                TryHandleBack = TryHandleReaderBack,
+            });
+    }
+
+    /// <summary>
+    /// Wires the shared reader chrome — bottom bar, perushim sheet, articles
+    /// view, fullscreen and fan prev/next refresh plus picker cleanup —
+    /// through the one coordinator every reader page uses (#2573). Only the
+    /// division adapters differ: unit ids, unit articles, unit navigation.
+    /// </summary>
+    private void SetupReaderChrome()
+    {
+        _chrome = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = BottomBar,
+                PerushimSheet = PerushimPanel,
+                FanMenu = FanMenu,
+                PreviousSatellite = PrevUnitButton,
+                NextSatellite = NextUnitButton,
+                ExitFullscreenButton = ExitFullScreenButton,
+                ArticlesView = ArticlesCollection,
+                ReaderContent = ParashaCarousel,
+                Toolbar = ReaderToolbar,
+                Host = MainGrid,
+                ContentArea = ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = ShowUnitArticlesAsync,
+                CurrentUnit = () => _viewModel.Unit,
+                SelectArticle = id => _viewModel.SelectedArticleId = id,
+                CanGoPrevious = () => _viewModel.CanGoToPreviousUnit,
+                CanGoNext = () => _viewModel.CanGoToNextUnit,
+                IsSelectableUnit = unitId => unitId > 0,
+                CurrentUnitId = () => _viewModel.UnitId,
+                NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
+                FullscreenStateChanged = OnReaderFullscreenStateChanged,
+            });
+    }
+
+    /// <summary>
+    /// Parasha extras after a fullscreen transition: the search surface closes
+    /// on entry, the reader keeps no native Back affordance, and Android's
+    /// predictive-Back callback re-evaluates its overlays.
+    /// </summary>
+    private void OnReaderFullscreenStateChanged(bool isFullScreen)
+    {
+        if (isFullScreen)
+        {
+            ChapterSearch.Close();
+        }
+        Shell.SetNavBarIsVisible(this, false);
+        _platformChrome.RefreshNativeBack();
+    }
+
+    /// <summary>
     /// Wires the unit picker's confirm event in code (rather than XAML event
     /// wiring) so the subscription is explicit beside the other setup calls.
+    /// The shared chrome completes the selection: it closes the fan that opened
+    /// the picker and navigates a valid, different unit id (#2476).
     /// </summary>
     private void SetupUnitPickerEvents()
     {
         ParashaUnitPickerPopup.UnitSelected += async (_, unitId) =>
-            await OnUnitPickerSelectedAsync(unitId);
+            await _chrome.CompletePickerSelectionAsync(unitId);
     }
 
     /// <summary>
@@ -189,14 +272,11 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
         ClearAllSelections();
         SetAnalyticsScreenForUnit();
-        if (FanMenu.IsOpen)
-        {
-            RefreshNavButtonVisuals();
-        }
+        _chrome.RefreshPrevNext();
 
         _ = UpdateArticlesCountAsync();
         _ = _viewModel.PreloadAdjacentRowsAsync(_viewModel.UnitId);
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             _ = ShowUnitArticlesAsync();
         }
@@ -319,61 +399,24 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     {
         ClearAllSelections();
         _ = UpdateArticlesCountAsync();
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             _ = ShowUnitArticlesAsync();
         }
-        // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
-        RefreshNavButtonVisuals();
-    }
-
-    /// <summary>
-    /// Forces the prev/next buttons to update their visual state.
-    /// Workaround for MAUI bug where button disabled visual doesn't refresh in AbsoluteLayout.
-    /// </summary>
-    private void RefreshNavButtonVisuals()
-    {
-        // Only update if menu is open (buttons visible)
-        if (!FanMenu.IsOpen)
-        {
-            return;
-        }
-
-        var canPrev = _viewModel.CanGoToPreviousUnit;
-        var canNext = _viewModel.CanGoToNextUnit;
-
-        PrevUnitButton.IsEnabled = canPrev;
-        PrevUnitButton.Opacity = canPrev ? 1.0 : 0.4;
-
-        NextUnitButton.IsEnabled = canNext;
-        NextUnitButton.Opacity = canNext ? 1.0 : 0.4;
+        _chrome.RefreshPrevNext();
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-#if ANDROID
-        RegisterReaderBack();
-#endif
-#if WINDOWS
-        RegisterReaderKeyboardBack();
-#endif
+        _platformChrome.Appearing();
         SubscribeRecitation();
-#if IOS
-        // Native history must be ready before asynchronous reader positioning.
-        ConfigureIosReaderHistory();
-#endif
         await InitializeRecitationAsync();
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-#endif
-#if IOS
-        ApplyBottomBarSafeArea();
-        SizeChanged -= OnPageSizeChanged;
-        SizeChanged += OnPageSizeChanged;
 #endif
         if (_viewModel.Unit == null && !_isLoading)
         {
@@ -435,9 +478,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
-#if IOS
-        Dispatcher.Dispatch(ConfigureIosReaderHistory);
-#endif
+        _platformChrome.ScheduleHistoryRefresh();
     }
 
     /// <summary>
@@ -538,23 +579,13 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
     }
 
-    private void OnReaderListLoaded(object? sender, EventArgs e)
-    {
-#if IOS
-        // Newly realized verse lists must yield the edge gesture to history.
-        ConfigureIosReaderHistory();
-#endif
-    }
+    private void OnReaderListLoaded(object? sender, EventArgs e) =>
+        _platformChrome.ReaderSurfaceRealized();
 
     protected override void OnDisappearing()
     {
         FinishSearchIntroduction();
-#if ANDROID
-        UnregisterReaderBack();
-#endif
-#if WINDOWS
-        UnregisterReaderKeyboardBack();
-#endif
+        _platformChrome.Disappearing();
         if (!_preserveSearchOnDisappear)
         {
             ChapterSearch.Close();
@@ -570,10 +601,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         MainActivity.TouchReleased -= OnTouchReleased;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
-#endif
-#if IOS
-        // A page pushed above gets its native edge-back back (#2432).
-        RestoreIosInteractiveBack();
 #endif
         base.OnDisappearing();
     }
@@ -715,34 +742,19 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
         ClearAllSelections();
         SetAnalyticsScreenForUnit();
-
-        // Refresh nav button visuals if menu is open (synchronous)
-        if (FanMenu.IsOpen)
-        {
-            RefreshNavButtonVisuals();
-        }
+        _chrome.RefreshPrevNext();
 
         // Fire async tasks in the background — never block the next swipe
         _ = UpdateArticlesCountAsync();
         _ = _viewModel.LoadPerushimAsync(unit);
         _ = _viewModel.PreloadAdjacentRowsAsync(unit.UnitId);
-        if (_isShowingArticles)
+        if (_chrome.IsShowingArticles)
         {
             _ = ShowUnitArticlesAsync();
         }
     }
 
     #region Circular Menu
-
-    /// <summary>
-    /// Fan open — refresh prev/next enabled state before the satellites fade
-    /// in, so a disabled edge button animates to its dimmed opacity.
-    /// </summary>
-    private void OnFanMenuOpening(object? sender, EventArgs e)
-    {
-        PrevUnitButton.IsEnabled = _viewModel.CanGoToPreviousUnit;
-        NextUnitButton.IsEnabled = _viewModel.CanGoToNextUnit;
-    }
 
     /// <summary>Handles tap on a satellite menu item — the menu closes.</summary>
     private async void OnMenuItemClicked(object? sender, EventArgs e)
@@ -751,65 +763,28 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         await FanMenu.CloseAsync();
     }
 
-    /// <summary>Syncs the chevron glyph with the perushim sheet's open state.</summary>
-#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
-    private void OnPerushimSheetOpenChanged(object? sender, bool isOpen)
-#pragma warning restore S1172
-    {
-        BottomBar.IsPerushimOpen = isOpen;
-    }
-
-    /// <summary>Bottom-bar chevron — toggles the perushim sheet.</summary>
-    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
-    {
-        // Cap the drag-up expansion so the sheet's top edge stays under the
-        // status bar/pill: content + toolbar rows already begin below it.
-        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
-        await PerushimPanel.ToggleAsync(MainGrid.Height, ContentArea.Height + toolbarHeight - 8);
-    }
-
     #endregion
 
     #region Navigation & Picker
 
     /// <summary>
-    /// On iOS/Mac the focused-pasuk overlay has no system Back affordance, so
-    /// the shared top bar's navigation slot doubles as its close control — the
-    /// interceptor consumes the tap as "close" instead of opening the flyout
-    /// (#2467, same contract as the perek reader).
+    /// Whether a transient reader surface would consume Back — mirrors
+    /// <see cref="TryHandleReaderBack"/>'s ordering without acting on it, so
+    /// the capsule's enabled state reflects the same surfaces the shared
+    /// back pipeline serves (#2467).
     /// </summary>
-    private bool OnFocusedPasukNavigationIntercepted()
-    {
-        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
-        {
-            return false;
-        }
-        ClearAllSelections();
-        return true;
-    }
+    private bool OwnsReaderReturnSurface() =>
+        ExitFullScreenButton.IsVisible
+        || ReaderMenuOverlay.IsOpen
+        || PerushimPanel.IsOpen
+        || ChapterSearch.IsSearchOpen
+        || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, _focusedPasuk != null,
+            _recitationCursor.PlayingKey != null);
 
     private void OnUnitPickerClicked(object? sender, EventArgs e)
     {
         ParashaUnitPickerPopup.Show(_viewModel.UnitId);
-    }
-
-    /// <summary>
-    /// Handles unit selection from the picker popup. A confirmed selection
-    /// completes the navigation: the picker closes itself and the radial menu
-    /// that opened it closes too, leaving the reader undimmed and interactive
-    /// (#2476).
-    /// </summary>
-    private async Task OnUnitPickerSelectedAsync(int unitId)
-    {
-        if (FanMenu.IsOpen)
-        {
-            await FanMenu.CloseAsync();
-        }
-
-        if (unitId > 0 && unitId != _viewModel.UnitId)
-        {
-            await _viewModel.NavigateToUnitAsync(unitId);
-        }
     }
 
     /// <summary>⋮ reader options menu — toggles the dropdown overlay.</summary>
@@ -881,46 +856,11 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
     }
 
-    /// <summary>Handles articles button click - shows the unit's articles.</summary>
-    private async void OnArticlesButtonClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            if (_isShowingArticles)
-            {
-                return;
-            }
-
-            PerushimPanel.CloseImmediate();
-            _isShowingArticles = true;
-            await ShowUnitArticlesAsync();
-
-            ParashaCarousel.IsVisible = false;
-            ArticlesCollection.IsVisible = true;
-
-            BottomBar.IsArticlesActive = true;
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: articles-button styling failure is log-only
-        catch (Exception ex) //NOSONAR — articles-button styling failure is log-only.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
-        }
-    }
-
-    /// <summary>Returns to the unit text view.</summary>
-    private void ShowUnitView()
-    {
-        _isShowingArticles = false;
-        _viewModel.SelectedArticleId = null;
-
-        ArticlesCollection.IsVisible = false;
-        ParashaCarousel.IsVisible = true;
-
-        BottomBar.IsArticlesActive = false;
-    }
-
-    /// <summary>Pushes the unit's loaded articles into the articles grid.</summary>
+    /// <summary>
+    /// Pushes the unit's loaded articles into the articles grid — the shared
+    /// chrome calls this through its ReloadArticlesAsync adapter when the
+    /// articles view opens or the unit changes underneath it.
+    /// </summary>
     private async Task ShowUnitArticlesAsync()
     {
         var unit = _viewModel.Unit;
@@ -932,68 +872,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         ArticlesCollection.ItemsSource = _viewModel.Articles;
     }
 
-    /// <summary>Handles article selection - navigates to article detail.</summary>
-#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
-    private async void OnArticleSelected(object? sender, Article article)
-#pragma warning restore S1172
-    {
-        _viewModel.SelectedArticleId = article.Id;
-        try
-        {
-            await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
-        catch (Exception ex) //NOSONAR — article navigation failure is log-only.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
-        }
-    }
-
-    #endregion
-
-    #region Full Screen
-
-    /// <summary>Text button — returns to the unit view from articles, else
-    /// animates the visible unit's vertical content back to its start (#2624).</summary>
-    private void OnTextButtonClicked(object? sender, EventArgs e)
-    {
-        if (_isShowingArticles)
-        {
-            ShowUnitView();
-        }
-        else
-        {
-            ReaderScrollTop.ScrollCurrentUnitToStart(ParashaCarousel, _viewModel.Unit);
-        }
-    }
-
-    /// <summary>Enters full screen mode - hides top and bottom bars, shows exit button.</summary>
-    private void OnFullScreenClicked(object? sender, EventArgs e)
-    {
-        // Close circular menu if open — snaps to the closed state with no
-        // animation so the scrim cannot linger over the fullscreen reader.
-        FanMenu.ResetToClosed();
-
-        ReaderToolbar.IsVisible = false;
-        BottomBar.IsVisible = false;
-        FanMenu.IsVisible = false;
-        ExitFullScreenButton.ResetPosition();
-        ExitFullScreenButton.IsVisible = true;
-    }
-
-    /// <summary>Exits full screen mode - restores navigation and bottom bar.</summary>
-    private void ExitFullScreen()
-    {
-        ExitFullScreenButton.IsVisible = false;
-        ReaderToolbar.IsVisible = true;
-        BottomBar.IsVisible = true;
-        FanMenu.IsVisible = true;
-    }
-
-    /// <summary>Exits full screen mode - restores navigation and bottom bar.</summary>
-    private void OnExitFullScreenClicked(object? sender, EventArgs e) => ExitFullScreen();
-
     #endregion
 
     #region Android Touch / Swipe
@@ -1004,7 +882,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -1015,7 +893,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
             ContainsTouch(SelectionBar, position))
@@ -1075,55 +953,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             // the final snap. ScrollTo also resets MAUI's current snap target.
             ParashaCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
         }
-    }
-#endif
-
-    #endregion
-
-    #region iOS Safe Area
-
-#if IOS
-    /// <summary>
-    /// The page disables automatic safe-area padding so the reader spans the
-    /// full width in landscape — see ReaderSafeArea for the shared logic
-    /// which is what produced the empty landscape side bands (#1308).
-    /// Keep the root's top inset so the reader toolbar stays below the status
-    /// bar and notch. Its bottom edge also respects the home indicator, with
-    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
-    /// and descendant layouts unpadded so landscape content spans the width.
-    /// Views inside scroll views (the carousel cells and pasukim lists) never
-    /// apply safe-area padding, so only the direct layout chain needs this.
-    /// </summary>
-    private void ConfigureReaderSafeArea()
-    {
-        ReaderSafeArea.Configure(MainGrid);
-    }
-
-    private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-
-    private void ApplyBottomBarSafeArea()
-    {
-        double bottom = 0;
-        var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
-            .OfType<UIKit.UIWindowScene>()
-            .FirstOrDefault()?.Windows
-            .FirstOrDefault(w => w.IsKeyWindow);
-        if (window != null)
-        {
-            bottom = window.SafeAreaInsets.Bottom;
-        }
-
-        // Shift the bars down over the home-indicator inset and pull the page
-        // up underneath so no gap shows (tester-confirmed combination).
-        // With no inset (iPad, landscape) the same assignments restore the
-        // layout defaults, so an inset disappearing never leaves stale values.
-        var totalHeight = ReaderBottomBar.TotalHeight + bottom;
-        BottomBar.TranslationY = bottom;
-        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-        BottomBar.HeightRequest = totalHeight;
-        FanMenu.SetBottomInset(bottom);
-        this.Padding = new Thickness(0, 0, 0, -bottom);
-        Resources["BottomBarTotalHeight"] = totalHeight;
     }
 #endif
 

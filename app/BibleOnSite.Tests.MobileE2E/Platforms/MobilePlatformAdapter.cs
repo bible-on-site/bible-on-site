@@ -201,10 +201,22 @@ public abstract class MobilePlatformAdapter
         {
             options.PlatformVersion = configuration.PlatformVersion;
         }
-        options.AddAdditionalAppiumOption("noReset", configuration.KeepAppForReview);
+        // The harness installs the Android package itself (see run.mjs)
+        // with --no-incremental before the session starts, so UiAutomator2
+        // must reuse it under noReset — a driver-initiated reinstall has
+        // no incremental opt-out and would reintroduce the libmonodroid
+        // open_from_bundles SIGSEGV (#2773).
+        var reuseInstalledApp = configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
+        options.AddAdditionalAppiumOption("noReset", reuseInstalledApp);
         // Android fully uninstalls the app. iOS resets and reinstalls it through
         // noReset=false and enforceAppInstall=true while the device stays booted.
-        options.AddAdditionalAppiumOption("fullReset", android && !configuration.KeepAppForReview);
+        options.AddAdditionalAppiumOption("fullReset", android && !reuseInstalledApp);
+        // noReset keeps a leftover app process alive across sessions, and
+        // UiAutomator2's session-start short-circuits the launch when the
+        // package already runs — a prior class's mid-navigation screen would
+        // then leak into the next session. forceAppLaunch keeps every session
+        // start on the deterministic fresh launch the suite relies on.
+        options.AddAdditionalAppiumOption("forceAppLaunch", android && reuseInstalledApp);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {
@@ -440,8 +452,10 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         var before = driver.PageSource;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            // Preferences uses a custom top bar, outside UIKit's navigation bar.
-            var button = driver.FindElements(AutomationId("PreferencesBackButton"))
+            // The shared capsule back is the app's visible back control on the
+            // custom top-bar pages (preferences, readers) — all outside UIKit's
+            // navigation bar (#2467).
+            var button = driver.FindElements(AutomationId("TopBarBackButton"))
                 .FirstOrDefault(element => element.Displayed && CanTap(element))
                 ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
                     .FirstOrDefault(element => element.Displayed && CanTap(element));

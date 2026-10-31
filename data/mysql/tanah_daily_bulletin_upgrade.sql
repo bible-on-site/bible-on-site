@@ -44,3 +44,71 @@ SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_d
 PREPARE bulletinUpgrade FROM @bulletinSql;
 EXECUTE bulletinUpgrade;
 DEALLOCATE PREPARE bulletinUpgrade;
+
+-- Keep audience selection explicit and default to the test audience.
+SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_email_settings (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    audience ENUM(''test'', ''real'') NOT NULL DEFAULT ''test'',
+    revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    next_send_at DATETIME(3) NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+PREPARE bulletinUpgrade FROM @bulletinSql;
+EXECUTE bulletinUpgrade;
+DEALLOCATE PREPARE bulletinUpgrade;
+INSERT IGNORE INTO tanah_daily_bulletin_email_settings (id) VALUES (1);
+
+-- Preserve consent and suppression separately for each subscription topic.
+SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_subscriber (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(254) NOT NULL,
+    audience ENUM(''test'', ''real'') NOT NULL,
+    consent_status ENUM(''pending'', ''confirmed'', ''unsubscribed'', ''bounced'', ''complained'') NOT NULL DEFAULT ''pending'',
+    consent_source VARCHAR(120) NULL,
+    consented_at DATETIME(3) NULL,
+    last_event_at DATETIME(3) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_bulletin_subscriber (email, audience)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+PREPARE bulletinUpgrade FROM @bulletinSql;
+EXECUTE bulletinUpgrade;
+DEALLOCATE PREPARE bulletinUpgrade;
+
+SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_email_job (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    bulletin_date DATE NOT NULL,
+    audience ENUM(''test'', ''real'') NOT NULL,
+    idempotency_key VARCHAR(80) NOT NULL,
+    settings_revision BIGINT UNSIGNED NOT NULL,
+    status ENUM(''queued'', ''sending'', ''accepted'', ''delivered'', ''failed'', ''uncertain'', ''suppressed'') NOT NULL DEFAULT ''queued'',
+    last_error VARCHAR(255) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_bulletin_email_job (bulletin_date, audience, idempotency_key),
+    CONSTRAINT fk_bulletin_email_job FOREIGN KEY (bulletin_date) REFERENCES tanah_daily_bulletin(bulletin_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+PREPARE bulletinUpgrade FROM @bulletinSql;
+EXECUTE bulletinUpgrade;
+DEALLOCATE PREPARE bulletinUpgrade;
+
+SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_email_recipient (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    job_id CHAR(36) NOT NULL,
+    subscriber_id BIGINT UNSIGNED NOT NULL,
+    email VARCHAR(254) NOT NULL,
+    status ENUM(''queued'', ''sending'', ''accepted'', ''delivered'', ''failed'', ''uncertain'', ''suppressed'', ''bounced'', ''complained'') NOT NULL DEFAULT ''queued'',
+    attempt_token CHAR(36) NULL,
+    message_id VARCHAR(255) NULL,
+    started_at DATETIME(3) NULL,
+    event_at DATETIME(3) NULL,
+    last_error VARCHAR(255) NULL,
+    UNIQUE KEY uq_bulletin_job_recipient (job_id, email),
+    UNIQUE KEY uq_bulletin_message (message_id),
+    KEY ix_bulletin_email_outbox (status, id),
+    CONSTRAINT fk_bulletin_recipient_job FOREIGN KEY (job_id) REFERENCES tanah_daily_bulletin_email_job(id),
+    CONSTRAINT fk_bulletin_recipient_subscription FOREIGN KEY (subscriber_id) REFERENCES tanah_daily_bulletin_subscriber(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+PREPARE bulletinUpgrade FROM @bulletinSql;
+EXECUTE bulletinUpgrade;
+DEALLOCATE PREPARE bulletinUpgrade;

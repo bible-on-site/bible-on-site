@@ -16,11 +16,13 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 
 // Setup logging
 const logDir = path.resolve(__dirname, ".playwright-report/setup");
@@ -44,7 +46,7 @@ writeFileSync(
 	`[${new Date().toISOString()}] [INIT] E2E Server Launcher started\n`,
 );
 
-// --coverage is passed by Playwright when MEASURE_COV=1; NODE_OPTIONS/env are set by config
+// --coverage is passed by Playwright when MEASURE_COV=1; env vars come from the playwright config
 const _useCoverage = process.argv.includes("--coverage");
 
 try {
@@ -69,7 +71,7 @@ async function populateDatabase(): Promise<void> {
 
 	log("[DB Setup] ========================================");
 	log("[DB Setup] Ensuring test database is populated...");
-	log(`[DB Setup] Using database URL: ${dbUrl.replace(/:[^:@]+@/, ":***@")}`);
+	log("[DB Setup] DB_URL is configured");
 
 	// Path to data directory (relative to web/bible-on-site)
 	const dataDirectory = path.resolve(__dirname, "../../data");
@@ -77,7 +79,6 @@ async function populateDatabase(): Promise<void> {
 
 	// Check if cargo-make is available
 	const cargoMakeCheck = spawnSync("cargo", ["make", "--version"], {
-		shell: true,
 		stdio: "pipe",
 	});
 
@@ -227,17 +228,17 @@ async function main() {
 	// flip-book to local and runs docker compose — both break in CI)
 	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
-	log(`[Server] Starting Next.js server: bun x next dev -p 3001`);
+	const nextCli = require.resolve("next/dist/bin/next");
+	log("[Server] Starting Next.js server: node next dev -p 3001");
 
 	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
 	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).
 	const serverLogPath = path.resolve(logDir, "server.log");
 	const serverLog = createWriteStream(serverLogPath, { flags: "w" });
 
-	const server = spawn("bun", ["x", "next", "dev", "-p", "3001"], {
+	const server = spawn(process.execPath, [nextCli, "dev", "-p", "3001"], {
 		cwd: __dirname,
 		stdio: ["inherit", "pipe", "pipe"],
-		shell: true,
 		env: process.env,
 	});
 
