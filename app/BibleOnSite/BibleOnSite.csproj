@@ -251,7 +251,7 @@
 		<!-- Fragment 1.9 merges Kotlin extensions into the main artifact. Keep Ktx
 		     aligned so Firebase's older transitive Ktx does not duplicate those classes.
 		     https://developer.android.com/jetpack/androidx/releases/fragment#1.9.0-alpha01 -->
-		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.1" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
