@@ -26,8 +26,9 @@ export interface DailySendResult {
 // The server POSTs to stored endpoints, so only known browser push services are
 // accepted (Chrome/Edge-Chromium/Opera/Samsung via FCM, Firefox, Edge on
 // Windows, Safari) — never an arbitrary URL.
+// Chrome on desktop currently issues jmt17.google.com/fcm/send/... endpoints.
 const PUSH_SERVICE_HOST =
-	/^(?:fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.notify\.windows\.com|web\.push\.apple\.com)$/;
+	/^(?:fcm\.googleapis\.com|android\.googleapis\.com|jmt\d+\.google\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.notify\.windows\.com|web\.push\.apple\.com)$/;
 const BASE64URL = /^[A-Za-z0-9_-]+={0,2}$/;
 const MAX_ENDPOINT_LENGTH = 1024;
 const SEND_BATCH_SIZE = 50;
