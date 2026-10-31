@@ -51,7 +51,7 @@
 	gap: 2px;
 	padding: 10px 14px;
 	border: 1px solid rgba(21, 82, 172, 0.18);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	text-decoration: none;
 	transition: background-color 0.2s ease;
 }
@@ -84,7 +84,7 @@
 .occasionItem {
 	padding: 10px 14px;
 	border: 1px solid rgba(21, 82, 172, 0.18);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 }
 
 .occasionName {
