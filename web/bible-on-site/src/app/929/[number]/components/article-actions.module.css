@@ -1,0 +1,130 @@
+/* Unified article command row (#2786): return at the logical leading edge,
+   share + fullscreen clustered at the trailing edge — one base control
+   system for all three commands. Sizing follows the *article container*
+   (@container), not the viewport, so the same row works inside a narrow
+   book page and on a wide article route. */
+
+.actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin: 0 0 12px;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+	position: relative;
+	/* The book layout is a flex column — the row must never shrink into
+	   the scrolling body. */
+	flex-shrink: 0;
+}
+
+.actionCluster {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+/* Every command — return button/link, share, fullscreen — shares this base:
+   same height, padding, gap, icon box, border, radius and type. */
+.action {
+	appearance: none;
+	font: inherit;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 34px;
+	padding: 4px 12px;
+	border: 1px solid #d4c9a8;
+	border-radius: 6px;
+	background: #f0ead8;
+	color: #5a4a2e;
+	font-size: 0.85rem;
+	font-weight: 500;
+	line-height: 1.2;
+	cursor: pointer;
+	text-decoration: none;
+	white-space: nowrap;
+	transition:
+		background 0.15s,
+		border-color 0.15s;
+}
+
+.action:hover {
+	background: #e8e0cc;
+	border-color: var(--hc-muted, #8b7355);
+}
+
+.action:active {
+	background: #ddd2b8;
+}
+
+.action:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
+	outline-offset: 2px;
+}
+
+.actionIcon {
+	width: 15px;
+	height: 15px;
+	flex-shrink: 0;
+}
+
+/* The return arrow is drawn pointing back (LTR: left); mirror it for RTL —
+   the share/fullscreen glyphs are non-directional and stay unflipped. */
+.iconBack:dir(rtl) {
+	transform: scaleX(-1);
+}
+
+/* Compact variant driven by the article panel's own width — a book page is
+   much narrower than the standalone route even at the same viewport. */
+@container (max-width: 360px) {
+	.action {
+		min-height: 30px;
+		padding: 3px 8px;
+		font-size: 0.78rem;
+		gap: 4px;
+	}
+
+	.actionIcon {
+		width: 13px;
+		height: 13px;
+	}
+}
+
+/* Accessible share feedback: announced, never painted. */
+.srOnly {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.action {
+		border-color: #4a4030;
+		background: #2a241a;
+		color: var(--hc-muted, #cbb98c);
+	}
+
+	.action:hover {
+		background: #342c1e;
+		border-color: var(--hc-muted, #8b7355);
+	}
+
+	.action:active {
+		background: #3d342a;
+	}
+}
+
+@media (forced-colors: active) {
+	.action {
+		border-color: ButtonBorder;
+	}
+}

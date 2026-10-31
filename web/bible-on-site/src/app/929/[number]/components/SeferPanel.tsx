@@ -222,16 +222,118 @@ export function SeferPanel({
 		};
 	}, [deepArticleSummary, perekId]);
 
+	/* ─── Article fullscreen modal + return-to-grid focus (#2786) ─── */
+	const rootRef = useRef<HTMLElement>(null);
+	// Set by an explicit חזרה למאמרים click — the article card that should
+	// receive focus once the overlay unmounts.
+	const pendingArticleFocus = useRef<number | null>(null);
+	const wasArticleFullscreen = useRef(false);
+	// The dialog body's reading position, snapshotted before React detaches
+	// the portal — by the time the modal effect's exit path runs the dialog
+	// is already unmounted and its scrollTop reads 0.
+	const closingScrollTop = useRef<number | null>(null);
+
+	// Every fullscreen-exit path (exit command, Escape) goes through here so
+	// the reading position is captured while the dialog still lives.
+	const closeArticleFullscreen = useCallback(() => {
+		const body = document
+			.querySelector<HTMLElement>("[data-article-dialog]")
+			?.querySelector<HTMLElement>("[data-article-body]");
+		closingScrollTop.current = body ? body.scrollTop : null;
+		setArticleFullscreen(false);
+	}, []);
+
 	// Escape exits the article fullscreen (browser fullscreen stays the
 	// book's own concern — this overlay is the article's, #2544 item 7).
 	useEffect(() => {
 		if (!articleFullscreen) return;
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape") setArticleFullscreen(false);
+			if (event.key === "Escape") closeArticleFullscreen();
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
+	}, [articleFullscreen, closeArticleFullscreen]);
+
+	// Escape raised inside the dialog stops at this topmost surface; the
+	// document listener above stays the fallback for focus outside it.
+	const onArticleDialogKeyDown = (
+		event: React.KeyboardEvent<HTMLDivElement>,
+	) => {
+		if (event.key === "Escape") {
+			event.stopPropagation();
+			closeArticleFullscreen();
+		}
+	};
+
+	// The article fullscreen is a modal dialog: aria-modal alone does not
+	// keep Tab inside, so every body sibling of the portal goes inert (the
+	// panel's own inert covers the embedded twin). Focus enters on the exit
+	// control and returns to the embedded twin on exit. The reading position
+	// follows the reader: mirrored into the fullscreen body on open and
+	// written back to the embedded body on exit.
+	useEffect(() => {
+		const wasFullscreen = wasArticleFullscreen.current;
+		wasArticleFullscreen.current = articleFullscreen;
+		if (articleFullscreen === wasFullscreen) return;
+		if (articleFullscreen) {
+			const dialog = document.querySelector<HTMLElement>(
+				"[data-article-dialog]",
+			);
+			/* istanbul ignore if -- the portal mounts in the same commit */
+			if (!dialog) return;
+			const inerted: Element[] = [];
+			for (const sibling of document.body.children) {
+				if (sibling === dialog || sibling.hasAttribute("inert")) continue;
+				sibling.setAttribute("inert", "");
+				inerted.push(sibling);
+			}
+			(
+				dialog.querySelector<HTMLElement>(
+					"[data-article-action='fullscreen']",
+				) ?? dialog
+			).focus();
+			const embeddedBody = rootRef.current?.querySelector<HTMLElement>(
+				"[data-article-body]",
+			);
+			const fullscreenBody = dialog.querySelector<HTMLElement>(
+				"[data-article-body]",
+			);
+			if (embeddedBody && fullscreenBody) {
+				fullscreenBody.scrollTop = embeddedBody.scrollTop;
+			}
+			const previousOverflow = document.body.style.overflow;
+			document.body.style.overflow = "hidden";
+			return () => {
+				for (const el of inerted) el.removeAttribute("inert");
+				document.body.style.overflow = previousOverflow;
+			};
+		}
+		if (pendingArticleFocus.current == null) {
+			rootRef.current
+				?.querySelector<HTMLElement>("[data-article-action='fullscreen']")
+				?.focus({ preventScroll: true });
+		}
+		const embeddedBody = rootRef.current?.querySelector<HTMLElement>(
+			"[data-article-body]",
+		);
+		if (embeddedBody && closingScrollTop.current != null) {
+			embeddedBody.scrollTop = closingScrollTop.current;
+		}
+		closingScrollTop.current = null;
 	}, [articleFullscreen]);
+
+	// After an explicit return to the grid, hand focus to the article's card —
+	// the masonry never unmounted, so its DOM order and scroll are intact.
+	// preventScroll keeps that restored scroll position: the card may sit
+	// just outside the viewport and a scroll-into-view would move the grid.
+	useEffect(() => {
+		if (selectedArticle || pendingArticleFocus.current == null) return;
+		const card = document.getElementById(
+			`article-${pendingArticleFocus.current}`,
+		);
+		pendingArticleFocus.current = null;
+		card?.focus({ preventScroll: true });
+	}, [selectedArticle]);
 
 	/* ─── Perush selection (global default / sefer override) ─── */
 	// Read directly (the panel lives in the client-only flipbook) and re-read
@@ -398,13 +500,24 @@ export function SeferPanel({
 		[onNavigate, perekId],
 	);
 
+	// חזרה למאמרים always lands on the articles grid — from the embedded view
+	// and from article fullscreen alike (#2786). The card it came from gets
+	// focus once the overlay clears.
+	const returnToArticles = useCallback(() => {
+		pendingArticleFocus.current = selectedArticle?.id ?? null;
+		setArticleFullscreen(false);
+		navigate();
+	}, [selectedArticle?.id, navigate]);
+
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
 
 	return (
 		<section
+			ref={rootRef}
 			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
+			inert={articleFullscreen}
 		>
 			{/* tablist header: פרשנים - date - מאמרים (RTL order) */}
 			<div
@@ -712,7 +825,7 @@ export function SeferPanel({
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => navigate()}
+								onBack={returnToArticles}
 								fullPage
 								fullscreen={articleFullscreen}
 								onToggleFullscreen={() => setArticleFullscreen((prev) => !prev)}
@@ -730,15 +843,18 @@ export function SeferPanel({
 						role="dialog"
 						aria-modal="true"
 						aria-label={selectedArticle.name}
+						data-article-dialog
+						tabIndex={-1}
+						onKeyDown={onArticleDialogKeyDown}
 					>
 						<div className={styles.articleFullscreenBody}>
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => setArticleFullscreen(false)}
+								onBack={returnToArticles}
 								fullPage
 								fullscreen
-								onToggleFullscreen={() => setArticleFullscreen(false)}
+								onToggleFullscreen={closeArticleFullscreen}
 							/>
 						</div>
 					</div>,

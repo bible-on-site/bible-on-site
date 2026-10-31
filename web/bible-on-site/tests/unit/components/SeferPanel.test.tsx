@@ -374,7 +374,7 @@ describe("deep links", () => {
 			dedicationLines: [],
 		});
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
-		await screen.findByText("חזרה למאמרים →");
+		await screen.findByRole("button", { name: "חזרה למאמרים" });
 		expect(
 			screen.getByRole("tab", { name: "מאמרים" }).getAttribute("aria-selected"),
 		).toBe("true");
@@ -410,13 +410,28 @@ describe("article fullscreen", () => {
 			article: mockArticles[0],
 			dedicationLines: [],
 		});
-		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		const toggle = await screen.findByRole("button", { name: "מסך מלא" });
 		fireEvent.click(toggle);
 		const dialog = await screen.findByRole("dialog");
 		expect(dialog).toBeTruthy();
+		// The panel turns inert while the modal dialog owns interaction (#2786).
+		expect(view.container.firstElementChild).toHaveAttribute("inert");
+		// Every body sibling is inert too — nothing outside the dialog stays
+		// keyboard-reachable (aria-modal alone does not contain Tab).
+		for (const sibling of document.body.children) {
+			if (sibling !== dialog) expect(sibling).toHaveAttribute("inert");
+		}
+		expect(dialog).not.toHaveAttribute("inert");
+		// The page behind the modal stops scrolling.
+		expect(document.body.style.overflow).toBe("hidden");
 		fireEvent.keyDown(document, { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(view.container.firstElementChild).not.toHaveAttribute("inert");
+		for (const sibling of document.body.children) {
+			expect(sibling).not.toHaveAttribute("inert");
+		}
+		expect(document.body.style.overflow).toBe("");
 	});
 
 	it("ignores non-Escape keys and closes on the overlay's own control", async () => {
@@ -429,9 +444,177 @@ describe("article fullscreen", () => {
 		await screen.findByRole("dialog");
 		fireEvent.keyDown(document, { key: "x" });
 		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "x" });
 		expect(dialog).toBeTruthy();
-		fireEvent.click(within(dialog).getByRole("button", { name: "צמצם" }));
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		);
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("moves focus to the exit control on enter and back to the twin on exit (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		const toggle = await screen.findByRole("button", { name: "מסך מלא" });
+		fireEvent.click(toggle);
+		const dialog = await screen.findByRole("dialog");
+		const exit = within(dialog).getByRole("button", {
+			name: "יציאה ממסך מלא",
+		});
+		expect(document.activeElement).toBe(exit);
+		fireEvent.click(exit);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		// Exit returns to the same article — the embedded view is still open
+		// and focus lands back on its fullscreen command.
+		expect(document.activeElement).toBe(
+			screen.getByRole("button", { name: "מסך מלא" }),
+		);
+		expect(
+			screen.getByRole("heading", { name: "מאמר ראשון" }),
+		).toBeTruthy();
+	});
+
+	it("keeps no duplicate reachable controls while the dialog is open", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		// Exactly one fullscreen command is keyboard-reachable — the embedded
+		// twin sits inside the inert panel.
+		expect(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		).toBeTruthy();
+		expect(
+			screen
+				.getAllByRole("button", { name: "יציאה ממסך מלא" })
+				.filter((el) => !el.closest("[inert]")),
+		).toHaveLength(1);
+	});
+
+	it("does not clobber a body sibling that was already inert (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const sibling = document.createElement("div");
+		sibling.setAttribute("inert", "");
+		document.body.appendChild(sibling);
+		try {
+			await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+			fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+			const dialog = await screen.findByRole("dialog");
+			expect(sibling).toHaveAttribute("inert");
+			fireEvent.click(
+				within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+			);
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			// The pre-existing inert belongs to someone else — kept, not removed.
+			expect(sibling).toHaveAttribute("inert");
+		} finally {
+			sibling.remove();
+		}
+	});
+
+	it("opens fullscreen for an article without body content (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: { ...mockArticles[0], content: "" },
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		expect(
+			within(dialog).getByRole("heading", { name: "מאמר ראשון" }),
+		).toBeTruthy();
+		// Closing works even with no body scroller to snapshot.
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("mirrors the embedded reading position into fullscreen (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		await screen.findByRole("button", { name: "מסך מלא" });
+		const embeddedBody = view.container.querySelector<HTMLElement>(
+			"[data-article-body]",
+		);
+		expect(embeddedBody).not.toBeNull();
+		// biome-ignore lint/style/noNonNullAssertion: asserted above
+		embeddedBody!.scrollTop = 120;
+		fireEvent.click(screen.getByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		expect(
+			dialog.querySelector<HTMLElement>("[data-article-body]")?.scrollTop,
+		).toBe(120);
+	});
+
+	it("restores the fullscreen reading position back to the embedded body (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		const dialogBody = dialog.querySelector<HTMLElement>("[data-article-body]");
+		expect(dialogBody).not.toBeNull();
+		// biome-ignore lint/style/noNonNullAssertion: asserted above
+		dialogBody!.scrollTop = 88;
+		// Escape raised inside the dialog closes it (the document listener is
+		// the fallback for focus outside the dialog).
+		fireEvent.keyDown(dialog, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(
+			view.container.querySelector<HTMLElement>("[data-article-body]")
+				?.scrollTop,
+		).toBe(88);
+	});
+
+	it("returns to the articles grid from fullscreen, not just out of it (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "חזרה למאמרים" }),
+		);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		// The grid is back and the article's own card owns focus.
+		const card = await screen.findByRole("link", { name: /מאמר ראשון/ });
+		await waitFor(() => expect(document.activeElement).toBe(card));
+		expect(
+			screen.getByRole("tab", { name: "מאמרים" }).getAttribute("aria-selected"),
+		).toBe("true");
+	});
+
+	it("returns to the articles grid from the embedded view and focuses the card", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(
+			await screen.findByRole("button", { name: "חזרה למאמרים" }),
+		);
+		const card = await screen.findByRole("link", { name: /מאמר ראשון/ });
+		await waitFor(() => expect(document.activeElement).toBe(card));
+		expect(
+			screen.queryByRole("button", { name: "חזרה למאמרים" }),
+		).toBeNull();
 	});
 });
 
@@ -497,7 +680,7 @@ describe("deep article load failures", () => {
 		mockGetArticleForBook.mockResolvedValue(null);
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		await screen.findByRole("link", { name: /מאמר ראשון/ });
-		expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+		expect(screen.queryByRole("button", { name: "חזרה למאמרים" })).toBeNull();
 	});
 });
 
@@ -541,7 +724,9 @@ describe("modifier clicks", () => {
 			] as const) {
 				fireEvent.click(card as HTMLElement, { [modifier]: true });
 			}
-			expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+			expect(
+				screen.queryByRole("button", { name: "חזרה למאמרים" }),
+			).toBeNull();
 			expect(push).not.toHaveBeenCalled();
 		} finally {
 			push.mockRestore();
