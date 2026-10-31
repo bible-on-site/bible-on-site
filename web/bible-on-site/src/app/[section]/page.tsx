@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
-import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
@@ -99,60 +99,62 @@ export default async function Home({ params }: Props) {
 	// this render through `dedications:bookshelf`.
 	const dedications = await getBookshelfDedicationLines();
 	return (
-		<div className={styles.page}>
-			{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
-			<section className={styles.alHaperekSection}>
-				<header className={styles.sectionHeader}>
-					<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
-					<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
-				</header>
-				<section
-					className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
-				>
-					<article className={styles.headlineArticle}>
-						<h2 className={styles.headlineTitle}>
-							<Link href="/929/">
+		<>
+			<main className={styles.page}>
+				{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
+				<section className={styles.alHaperekSection}>
+					<header className={styles.sectionHeader}>
+						<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
+						<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
+					</header>
+					<section
+						className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
+					>
+						<article className={styles.headlineArticle}>
+							<h2 className={styles.headlineTitle}>
+								<Link href="/929/">
+									<Image
+										className="icon-white"
+										src="/icons/calendar-today.svg"
+										alt="עלון יומי"
+										width={48}
+										height={48}
+									/>
+									<span>לימוד יומי על הפרק</span>
+								</Link>
+							</h2>
+							<p>
+								בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום.
+								הלימוד נעים, מעמיק ומחכים.
+							</p>
+						</article>
+						<article className={styles.headlineArticle}>
+							<h2 className={styles.headlineTitle}>
 								<Image
 									className="icon-white"
-									src="/icons/calendar-today.svg"
+									src="/icons/smartphone.svg"
 									alt="עלון יומי"
-									width={48}
-									height={48}
+									width={320}
+									height={512}
+									style={{ width: 34, height: "auto" }}
 								/>
-								<span>לימוד יומי על הפרק</span>
-							</Link>
-						</h2>
-						<p>
-							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד
-							נעים, מעמיק ומחכים.
-						</p>
-					</article>
-					<article className={styles.headlineArticle}>
-						<h2 className={styles.headlineTitle}>
-							<Image
-								className="icon-white"
-								src="/icons/smartphone.svg"
-								alt="עלון יומי"
-								width={320}
-								height={512}
-								style={{ width: 34, height: "auto" }}
-							/>
-							<span>ישומון תנ&quot;ך על הפרק</span>
-						</h2>
-						<p>
-							לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
-							באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.
-						</p>
-					</article>
+								<span>ישומון תנ&quot;ך על הפרק</span>
+							</h2>
+							<p>
+								לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
+								באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.
+							</p>
+						</article>
+					</section>
+					<div className={styles.alHaperekDivider} />
 				</section>
-				<div className={styles.alHaperekDivider} />
-			</section>
-			<TanahSefarimSection dedications={dedications} />
-			<NumbersSection />
-			<AppSection />
-			<TosSection />
-			<ContactSection />
+				<TanahSefarimSection dedications={dedications} />
+				<NumbersSection />
+				<AppSection />
+				<TosSection />
+				<ContactSection />
+			</main>
 			<Footer />
-		</div>
+		</>
 	);
 }

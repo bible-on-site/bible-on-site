@@ -22,6 +22,7 @@ namespace BibleOnSite.Tests.Helpers;
 /// context, like <see cref="BibleOnSite.Tests.Controls.ReaderFanMenuTests"/>).
 /// The page-level wiring contract lives in ReaderChromeContractTests.
 /// </summary>
+[Collection("Application state")]
 public class ReaderChromeTests
 {
     /// <summary>
