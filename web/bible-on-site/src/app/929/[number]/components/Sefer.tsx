@@ -434,22 +434,16 @@ const Sefer = (props: {
 			});
 	}, [perekIds, perekObj.perekId, perekObj.sefer]);
 
-	// The page tree must stay referentially stable across renders: every
-	// committed flip updates the document-title state, and without this memo
-	// the flatMap rebuilt ~30k elements — a full re-render of every mounted
-	// reader page mid-animation (#2805).
-	const contentPages = useMemo(
+	// Keep scripture independent of async summaries and commentary selection.
+	// Those updates must not rebuild or reconcile every word in the book.
+	const scripturePages = useMemo(
 		() =>
-			perakim.flatMap((perek, perekIdx) => {
+			perakim.map((perek, perekIdx) => {
 				const pagePerekId = perekIds?.[perekIdx];
-				// Prefer a stable perek id for keys; fall back to index only when the id
-				// isn't available, so React state stays attached to the right page even
-				// if the perakim order ever changes.
 				const perekKeyBase = pagePerekId ?? `idx-${perekIdx + 1}`;
 				const perekKey = `perek-${perekKeyBase}`;
-				const blankKey = `blank-${perekKeyBase}`;
-				const illustrations = imagesByPerek?.[perekIds?.[perekIdx] ?? -1] ?? [];
-				return [
+				const illustrations = imagesByPerek?.[pagePerekId ?? -1] ?? [];
+				return (
 					<React.Fragment key={perekKey}>
 						<RecitationPlayer
 							perekId={pagePerekId ?? 0}
@@ -569,7 +563,26 @@ const Sefer = (props: {
 								<SeferPasukSelectionBar perekId={pagePerekId ?? 0} />
 							</section>
 						</RecitationPlayer>
-					</React.Fragment>,
+					</React.Fragment>
+				);
+			}),
+		[
+			perakim,
+			perekIds,
+			imagesByPerek,
+			entityRefLookupsByPerekIdx,
+			perekObj.sefer,
+			props.perekDedications,
+		],
+	);
+
+	const panelPages = useMemo(
+		() =>
+			perakim.map((_perek, perekIdx) => {
+				const pagePerekId = perekIds?.[perekIdx];
+				const perekKeyBase = pagePerekId ?? `idx-${perekIdx + 1}`;
+				const blankKey = `blank-${perekKeyBase}`;
+				return (
 					<React.Fragment key={blankKey}>
 						<SeferPanel
 							articles={
@@ -599,16 +612,13 @@ const Sefer = (props: {
 							perekTitleParts={seferPerekTitles[perekIdx]}
 							onContentTitle={setInBookContentTitle}
 						/>
-					</React.Fragment>,
-				];
+					</React.Fragment>
+				);
 			}),
 		[
 			perakim,
 			perekIds,
-			imagesByPerek,
-			entityRefLookupsByPerekIdx,
 			perekObj.sefer,
-			props.perekDedications,
 			currentPerekIdx,
 			articles,
 			perushim,
@@ -618,6 +628,11 @@ const Sefer = (props: {
 			contentNavigation.content,
 			contentNavigation.navigate,
 		],
+	);
+
+	const contentPages = useMemo(
+		() => scripturePages.flatMap((page, index) => [page, panelPages[index]]),
+		[scripturePages, panelPages],
 	);
 
 	// Total pages: cover + cover-interior + TOC + (perakim * 2) + backCover

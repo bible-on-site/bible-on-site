@@ -3,8 +3,18 @@
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { BookmarkProvider } from "html-flip-book-react";
+import { renderPasukWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
 import { sampleImage } from "./perek-image-fixture";
 
+jest.mock("@/app/929/[number]/components/pasuk-renderer", () => {
+	const actual = jest.requireActual(
+		"@/app/929/[number]/components/pasuk-renderer",
+	);
+	return {
+		...actual,
+		renderPasukWithEntityRefs: jest.fn(actual.renderPasukWithEntityRefs),
+	};
+});
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
 var mockPathname = "/929/1";
@@ -246,6 +256,83 @@ const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
 );
 
 describe("Sefer component", () => {
+	it("does not rebuild scripture when background summaries arrive", async () => {
+		let finish!: (value: unknown) => void;
+		mockGetPerekSummariesBatch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2]}
+			/>,
+		);
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		await act(async () => finish({ "2": { articles: [], perushim: [] } }));
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("updates commentary selection without rebuilding scripture", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		const panel = () =>
+			(
+				capturedFlipBookProps.pages as React.ReactElement<{
+					children: React.ReactElement<{
+						initialSlug?: string;
+						onNavigate: (slug?: string) => void;
+					}>;
+				}>[]
+			)[4].props.children.props;
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		act(() => panel().onNavigate('רש"י'));
+		expect(panel().initialSlug).toBe('רש"י');
+		act(() => panel().onNavigate());
+		expect(panel().initialSlug).toBeUndefined();
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("refreshes scripture when the book corpus changes", () => {
+		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
+		const sefer = getSeferByName(minimalPerek.sefer);
+		const { rerender } = render(<SeferContents {...props} sefer={sefer} />);
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		const chapter =
+			"perakim" in sefer ? sefer.perakim[0] : sefer.additionals[0].perakim[0];
+		const changed = {
+			...sefer,
+			perakim: [
+				{
+					...chapter,
+					pesukim: [
+						{
+							segments: [
+								{
+									type: "qri" as const,
+									value: "חדש",
+									recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+								},
+							],
+						},
+					],
+				},
+			],
+		};
+		rerender(<SeferContents {...props} sefer={changed} />);
+		expect(
+			jest.mocked(renderPasukWithEntityRefs).mock.calls.length,
+		).toBeGreaterThan(renders);
+		expect(screen.getByText("חדש")).toBeInTheDocument();
+	});
+
 	beforeEach(() => {
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
