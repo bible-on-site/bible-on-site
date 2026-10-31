@@ -33,5 +33,8 @@ jobs:
           node-version-file: devops/package.json
       - name: Test data deployment recovery without AWS or database writes
         run: bun run --cwd devops test:deploy-data
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14" # Lambda runtime of bible-on-site-db-populator
       - name: Test additive migration preservation without AWS
         run: python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"

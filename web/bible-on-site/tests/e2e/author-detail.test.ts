@@ -47,12 +47,10 @@ test.describe("Author detail page", () => {
 		await expect(page.locator("h1")).toBeVisible();
 	});
 
-	test("numeric ID still resolves via backward-compat", async ({ page }) => {
-		await page.goto("/929/authors/1");
+	test("numeric author id URLs are no longer supported", async ({ page }) => {
+		const response = await page.goto("/929/authors/1");
 
-		await expect(page).toHaveTitle(/הרב לדוגמא|תנ"ך באתר/);
-		const authorName = page.locator("h1").filter({ hasText: "הרב" });
-		await expect(authorName).toBeVisible();
+		expect(response?.status()).toBe(404);
 	});
 
 	test("/929/rabbis alias works for author detail", async ({ page }) => {
