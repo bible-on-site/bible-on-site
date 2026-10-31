@@ -20,3 +20,11 @@ after the cap, annotated per rendered line with its Hebrew-letter count
   letters per line; **after** caps every line at ≤34, with many at exactly 34.
 - `lines-narrow-*` (660px phone column): identical line count — the cap only
   reshapes lines whose width would otherwise admit more than 34 letters.
+
+## Android emulator captures
+
+`tikkun-android-bereshit-10.png` / `tikkun-android-bereshit-10-scrolled.png` —
+the app deployed to a Linux KVM Android emulator (API 36, 1080x2400), בראשית י
+in תיקון קוראים + שניים מקרא. The same 34-letter cap drives the Android canvas
+draw path — every rendered line ends within the letter budget instead of
+stretching to device width.
