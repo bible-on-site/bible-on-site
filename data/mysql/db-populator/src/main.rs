@@ -298,13 +298,7 @@ async fn main() -> Result<()> {
         // structure so the entry link FK resolves.
         apply_dedication_upgrade(&mut conn, base_path).await?;
 
-        let external_reference_path = base_path.join("../external_reference_structure.sql");
-        execute_script(
-            &mut conn,
-            &external_reference_path,
-            "external-reference-structure",
-        )
-        .await?;
+        apply_external_reference_structure(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -594,6 +588,20 @@ async fn apply_dedication_upgrade(conn: &mut MySqlConnection, base_path: &Path) 
         conn,
         &base_path.join("../tanah_dedication_upgrade.sql"),
         "dedication-upgrade",
+    )
+    .await
+}
+
+/// Creates the JSON-LD `sameAs` authority-link table (#1840). Additive
+/// `CREATE TABLE IF NOT EXISTS`, so it is safe to re-run.
+async fn apply_external_reference_structure(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../external_reference_structure.sql"),
+        "external-reference-structure",
     )
     .await
 }
@@ -1444,6 +1452,10 @@ SELECT 1";
             ] {
                 assert_eq!(table_count(&mut conn, table).await?, 0, "{table}");
             }
+
+            apply_external_reference_structure(&mut conn, base_path).await?;
+            apply_external_reference_structure(&mut conn, base_path).await?;
+            assert_eq!(table_count(&mut conn, "external_reference").await?, 0);
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())
