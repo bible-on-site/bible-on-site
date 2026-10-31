@@ -171,7 +171,7 @@
   left: -10px;
   top: 50%;
   transform: translateY(-50%) rotate(-18deg);
-  background-color: #1552ac;
+  background-color: var(--accent-600);
   color: white;
   font-size: 0.6rem;
   padding: 2px 6px;

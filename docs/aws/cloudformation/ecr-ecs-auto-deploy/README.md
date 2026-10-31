@@ -13,6 +13,9 @@ code archive has SHA-256 (base64) `+LA84RQhCaaH3SXfFure7h7wVcGBh8dXO+gcRb8qi5k=`
 The [parent template](../ecr-ecs-auto-deploy.yaml) contains the same force-only
 logic; its inline-code handler is `index.handler` because CloudFormation names
 inline Python modules `index`.
+The templates target `python3.14`; the live function stays on Python 3.12
+until its approved runtime upgrade (see
+[Lambda Python Runtimes](../cloudformation.md#lambda-python-runtimes)).
 
 Website 0.2.469 passed final CD and public health, warmed readiness, and
 recitation verification. During its handover, the existing router log also

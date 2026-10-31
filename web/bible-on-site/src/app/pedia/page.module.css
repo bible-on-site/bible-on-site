@@ -12,7 +12,7 @@
 .pageTitle {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
   text-align: center;
 }
@@ -37,7 +37,7 @@
   max-width: 40rem;
   margin: 0 auto 24px auto;
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #fef3c7;
   border: 1px solid #f59e0b;
   text-align: right;
@@ -60,7 +60,7 @@
   font-size: 0.85em;
   padding: 2px 6px;
   background: rgba(255, 255, 255, 0.7);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .dbLoadWarningPre {
@@ -69,7 +69,7 @@
   font-size: 0.8rem;
   overflow: auto;
   background: rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -93,7 +93,7 @@
 .sectionTitle {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 16px 0;
 }
 
@@ -117,7 +117,7 @@
   display: block;
   padding: 24px 16px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   text-align: center;
   text-decoration: none;
   color: inherit;
@@ -146,7 +146,7 @@
 .comingSoonBadge {
   display: inline-block;
   padding: 1px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #e5e7eb;
   color: #4b5563;
   font-size: 0.75rem;
@@ -167,7 +167,7 @@
   align-items: center;
   padding: 6px 12px;
   background: #f0f4ff;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   text-decoration: none;
   color: inherit;
   border-right: 3px solid var(--link-accent, #1a73e8);
@@ -190,7 +190,7 @@
 .subcategoryName {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #1c2c5d;
+  color: var(--accent-900);
 }
 
 .subcategoryCount {
@@ -201,7 +201,7 @@
 .categoryName {
   font-size: 1.15rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 6px 0;
 }
 
@@ -232,7 +232,7 @@
   text-decoration: none;
   color: var(--link-accent, #1a73e8);
   font-size: 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: background 0.15s ease;
 }
 
@@ -248,10 +248,10 @@
 .backLink {
   display: inline-block;
   padding: 12px 32px;
-  background: #1c2c5d;
+  background: var(--accent-900);
   color: #fff;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: all 0.2s ease;
 }
@@ -279,7 +279,7 @@
 
 .entityName {
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
 }
 
 .entityEntryLink {
@@ -309,7 +309,7 @@
   background: #f0f0f0;
   padding: 48px;
   text-align: center;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   margin-bottom: 32px;
   color: var(--muted-text, #6b7280);
   font-size: 1rem;
@@ -329,7 +329,7 @@
   padding: 0;
   background: #f8fafc;
   border: 1px dashed #c7d2fe;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   color: var(--muted-text, #64748b);
   font-size: 0.95rem;
   font-family: inherit;
@@ -489,7 +489,7 @@
 .entryContent sup:target,
 .homepageContent sup:target {
   background-color: #fff3bf;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .entityBadges {
@@ -503,7 +503,7 @@
   display: inline-block;
   padding: 4px 12px;
   background: #e8f0fe;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   font-size: 0.85rem;
   text-decoration: none;
   color: var(--link-accent, #1a73e8);
@@ -518,7 +518,7 @@
   max-width: 40rem;
   margin: 8px auto 0;
   padding: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #f8f9ff;
   border: 1px solid #c7d2fe;
   text-align: center;
@@ -527,7 +527,7 @@
 .emptyStateTitle {
   font-size: 1.15rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
 }
 
@@ -580,7 +580,7 @@
 .todaySection {
   background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
   border: 1px solid #c7d2fe;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 24px 28px;
   margin-bottom: 40px;
   position: relative;
@@ -595,7 +595,7 @@
   width: 4px;
   height: 100%;
   background: linear-gradient(180deg, #4f46e5, #818cf8);
-  border-radius: 0 14px 14px 0;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 
 .todayHeader {
@@ -620,7 +620,7 @@
   font-weight: 500;
   background: rgba(99, 102, 241, 0.1);
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .todayList {
@@ -678,7 +678,7 @@
   .categoryName,
   .entityName,
   .emptyStateTitle {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .pageSubtitle,
@@ -714,7 +714,7 @@
   .breadcrumbLink,
   .entityEntryLink,
   .recentLink {
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .categoryCard {
@@ -733,7 +733,7 @@
 
   .subcategoryCard {
     background: #1a2030;
-    border-right-color: #7eb0ff;
+    border-right-color: var(--accent-300);
   }
 
   .subcategoryCard:hover {
@@ -754,7 +754,7 @@
   }
 
   .backLink {
-    background: #a8b9ff;
+    background: var(--accent-200);
     color: #16213d;
   }
 
