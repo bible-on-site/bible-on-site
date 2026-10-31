@@ -140,6 +140,7 @@ public sealed class NavigationFailureRecoveryTests : IDisposable
 
     [Theory]
     [InlineData(false, false)]
+    [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
     public async Task ArticleChangedDuringPendingOperation_HandlesFailureAndCanRunAgain(
