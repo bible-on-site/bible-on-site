@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PHASE_PRODUCTION_BUILD } from "next/constants.js";
+import { getBuildWorkerCount } from "./scripts/build-worker-budget.mjs";
 
 const KB = 1024;
 const MB = KB * KB;
@@ -31,11 +34,12 @@ const parashaDivision = JSON.parse(
 		"utf8",
 	),
 );
-/** First parasha unitId per Torah sefer — the book-chrome URLs land
- * there. Unit ids are positional (index + 1) like the data module's. */
-const parashaSeferFirstUnits = Object.entries(
-	parashaDivision.units.reduce((first, unit, index) => {
-		if (!(unit.sefer in first)) first[unit.sefer] = index + 1;
+/** First parasha canonical slug per Torah sefer — the book-chrome URLs
+ * land there. Internal rewrite destinations carry the canonical slug so
+ * only canonical params reach the /parasha/[unit] route (issue #2738). */
+const parashaSeferFirstSlugs = Object.entries(
+	parashaDivision.units.reduce((first, unit) => {
+		if (!(unit.sefer in first)) first[unit.sefer] = unit.slug;
 		return first;
 	}, {}),
 );
@@ -43,10 +47,19 @@ const parashaSeferFirstUnits = Object.entries(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	// Route-cache keys are built from decoded pathnames, so quoted Hebrew slugs
+	// like רש"י produce filenames NTFS rejects. The handler subclasses the
+	// default filesystem cache and encodes unsafe filesystem path segments,
+	// preserving logical cache keys and existing build seeds (issue #1999).
+	cacheHandler: fileURLToPath(new URL("./cache-handler.mjs", import.meta.url)),
 	// Keep the canonical source bytes outside JavaScript chunks and present in
 	// standalone images for both route handlers and server component runtimes.
+	// The cache handler is required at runtime by the standalone server too.
 	outputFileTracingIncludes: {
-		"/*": ["./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"],
+		"/*": [
+			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br",
+			"./cache-handler.mjs",
+		],
 	},
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
@@ -125,7 +138,9 @@ const nextConfig = {
 		// Dependency-graph CSS chunking: routes download close to only the CSS
 		// they import instead of one large shared chunk (~94% unused CSS on
 		// perek pages before; #2735). Turbopack-only; webpack ignores it.
-		cssChunking: "graph",
+		// Next.js supports graph chunking only under Turbopack; keep the
+		// documented dev-webpack command usable too.
+		cssChunking: process.env.TURBOPACK ? "graph" : true,
 		esmExternals: true,
 		externalDir: true,
 		turbopackFileSystemCacheForDev: true,
@@ -208,7 +223,7 @@ const nextConfig = {
 				// the /parasha route dir like מסורה does through /masora.
 				{ source: "/פרשה", destination: "/parasha" },
 				{ source: `/${encodeURIComponent("פרשה")}`, destination: "/parasha" },
-				...parashaSeferFirstUnits.flatMap(([sefer, unitId]) =>
+				...parashaSeferFirstSlugs.flatMap(([sefer, firstSlug]) =>
 					Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
 						["פרשה", encodeURIComponent("פרשה")].flatMap((root) =>
 							[
@@ -216,7 +231,7 @@ const nextConfig = {
 								`/${root}/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
 							].map((source) => ({
 								source,
-								destination: `/parasha/${unitId}?book&bookPage=${page}`,
+								destination: `/parasha/${encodeURIComponent(firstSlug)}?book&bookPage=${page}`,
 							})),
 						),
 					),
@@ -261,4 +276,24 @@ const nextConfig = {
 	},
 };
 
-export default nextConfig;
+export default (phase, { defaultConfig }) => {
+	if (phase !== PHASE_PRODUCTION_BUILD) return nextConfig;
+	return {
+		...nextConfig,
+		experimental: {
+			...nextConfig.experimental,
+			// Concurrent prerenders queued over 180 output writes on Windows;
+			// even small HTML files waited beyond the 60-second page deadline.
+			// Bound the producer queue without changing that deadline or retries.
+			...(process.platform === "win32"
+				? { staticGenerationMaxConcurrency: 1 }
+				: {}),
+			cpus: getBuildWorkerCount({
+				defaultCpuLimit: defaultConfig.experimental.cpus,
+				parallelism: availableParallelism(),
+				availableBytes: process.availableMemory(),
+				constrainedBytes: process.constrainedMemory(),
+			}),
+		},
+	};
+};

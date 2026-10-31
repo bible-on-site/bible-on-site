@@ -8,6 +8,8 @@ import type {
 	SeferDownloadContext,
 	SemanticPageInfo,
 } from "@/lib/download/types";
+import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
+import { formatDedication } from "@/lib/dedications/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
 	getPerushimByPerekId,
@@ -19,14 +21,21 @@ import { decorateArticleContent } from "@/lib/tanahpedia/article-mention-refs";
 /**
  * Fetch a single article by ID for in-book display (e.g. flipbook blank page).
  * Returns null if not found. Content arrives mention-decorated (#2516) so
- * in-book rendering matches the standalone article route.
+ * in-book rendering matches the standalone article route; the article's own
+ * dedication lines ride along for the same reason (#2731).
  */
 export async function getArticleForBook(
 	articleId: number,
-): Promise<Article | null> {
+): Promise<{ article: Article; dedicationLines: string[] } | null> {
 	const article = await getArticleById(articleId);
 	if (!article) return null;
-	return decorateArticleContent(article);
+	const { getArticleDedications } = await import("@/lib/dedications/loaders");
+	return {
+		article: await decorateArticleContent(article),
+		dedicationLines: (await getArticleDedications(articleId)).map(
+			formatDedication,
+		),
+	};
 }
 
 /**
@@ -92,6 +101,18 @@ export async function getPerekSummariesBatch(
 		}),
 	);
 	return Object.fromEntries(entries);
+}
+
+/**
+ * The bookshelf's helek/sefer dedication lines (#2731), loaded on demand by
+ * the in-reader sefarim picker — the modal opens client-side after mount,
+ * so its dedication view arrives through the tag-cached loader.
+ */
+export async function getBookshelfDedicationLines(): Promise<BookshelfDedicationLines> {
+	const { getBookshelfDedicationLines: load } = await import(
+		"@/lib/dedications/loaders"
+	);
+	return load();
 }
 
 /** Result of a download action when a handler is implemented */

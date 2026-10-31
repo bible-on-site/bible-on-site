@@ -9,50 +9,33 @@
              x:Name="Page"
              x:DataType="viewmodels:TanahpediaEntityTypeViewModel"
              Title="{Binding Title}"
-             FlowDirection="RightToLeft">
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
-    <!-- Normal stack page: no custom on-screen Back arrow — device/system
-         Back and the navigation stack carry the user back (#2467 policy). -->
-    <Shell.BackButtonBehavior>
-        <BackButtonBehavior IsVisible="False"/>
-    </Shell.BackButtonBehavior>
+    <!-- The shared navigation capsule: hamburger at the far-right edge, Back
+         immediately beside it, then the title pill opening the scoped
+         Tanahpedia search — the same bar as every other page (#2467). -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="TanahpediaCategoryMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <Button Text="{Binding Title}"
+                        FontSize="20"
+                        Padding="12,0"
+                        HeightRequest="40"
+                        CornerRadius="14"
+                        BorderWidth="0"
+                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                        VerticalOptions="Center"
+                        HorizontalOptions="Fill"
+                        Margin="4,0"
+                        SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                        AutomationId="TanahpediaCategorySearchTitle"
+                        Clicked="OnSearchTitleClicked"/>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
 
-    <!-- Shared top bar: hamburger that opens the flyout, plus the title pill
-         opening the scoped Tanahpedia search — the same bar as the landing
-         page and the על הפרק reader pattern. -->
-    <Shell.TitleView>
-        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
-            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="20"
-                    WidthRequest="40"
-                    HeightRequest="40"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                    SemanticProperties.Description="תפריט"
-                    AutomationId="TanahpediaCategoryMenuButton"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Start"
-                    Clicked="OnMenuButtonClicked"/>
-            <Button Grid.Column="1"
-                    Text="{Binding Title}"
-                    FontSize="20"
-                    Padding="12,0"
-                    HeightRequest="40"
-                    CornerRadius="14"
-                    BorderWidth="0"
-                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                    VerticalOptions="Center"
-                    HorizontalOptions="Start"
-                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
-                    AutomationId="TanahpediaCategorySearchTitle"
-                    Clicked="OnSearchTitleClicked"/>
-        </Grid>
-    </Shell.TitleView>
-
-    <Grid>
+    <Grid Grid.Row="1">
         <Grid RowDefinitions="Auto,*">
             <!-- Entity count — פריטים (entities), not ערכים: some entities
                  have no entry and some have several. -->
@@ -214,5 +197,6 @@
         <!-- Scoped Tanahpedia search overlay — same provider and sheet as the
              landing page, preset to this category on fresh navigation. -->
         <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch" />
+    </Grid>
     </Grid>
 </ContentPage>

@@ -43,6 +43,52 @@ async function main() {
 			demandOption: false,
 			type: "string",
 		})
+		.option("docker-image-arm64", {
+			describe: "Path to the native ARM64 API Docker archive",
+			type: "string",
+		})
+		.option("source-ref", {
+			describe: "Full source Git SHA carried by both API images",
+			type: "string",
+		})
+		.option("publish-index", {
+			describe: "Publish the verified amd64/arm64 API OCI index",
+			type: "boolean",
+			default: false,
+		})
+		.check((args) => {
+			const indexSpecified = process.argv
+				.slice(2)
+				.some(
+					(argument) =>
+						argument === "--publish-index" ||
+						argument.startsWith("--publish-index=") ||
+						argument === "--no-publish-index",
+				);
+			const dual =
+				args.dockerImageArm64 !== undefined ||
+				args.sourceRef !== undefined ||
+				args.publishIndex;
+			if (args.moduleName !== "api" && (dual || indexSpecified))
+				throw new Error("Dual archives and publish-index are API-only");
+			if (
+				dual &&
+				(!args.dockerImage || !args.dockerImageArm64 || !args.sourceRef)
+			)
+				throw new Error(
+					"API dual publication requires docker-image, docker-image-arm64 and source-ref",
+				);
+			if (
+				args.sourceRef !== undefined &&
+				(typeof args.sourceRef !== "string" ||
+					args.sourceRef.length !== 40 ||
+					!/^[a-f0-9]{40}$/.test(args.sourceRef))
+			)
+				throw new Error(
+					"source-ref must be a full lowercase 40-character Git SHA",
+				);
+			return true;
+		})
 		.help()
 		.alias("help", "h")
 		.parse();
@@ -71,7 +117,6 @@ async function main() {
 		// Get AWS configuration (async - validates SSO credentials)
 		const config = await getECRConfig();
 		console.info(`Using AWS region: ${config.region}`);
-		console.info(`Using AWS account: ${config.accountId}`);
 
 		// Create ECR client
 		const client = createECRClient(config);
@@ -81,6 +126,13 @@ async function main() {
 		const deployer: ECRDeployerBase = new DeployerClass(client, config);
 		deployer.setLocalVersion(moduleVersion);
 		deployer.setDockerImagePath(dockerImagePath);
+		if (argv.dockerImageArm64 || argv.sourceRef || argv.publishIndex) {
+			deployer.setAPIImageOptions({
+				arm64ArchivePath: argv.dockerImageArm64,
+				sourceRef: argv.sourceRef,
+				publishIndex: argv.publishIndex,
+			});
+		}
 
 		// Deploy
 		await deployer.deploy();

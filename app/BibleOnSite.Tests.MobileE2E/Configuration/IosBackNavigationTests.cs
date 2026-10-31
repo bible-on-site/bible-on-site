@@ -9,13 +9,13 @@ namespace BibleOnSite.Tests.MobileE2E.Configuration;
 public sealed class IosBackNavigationTests
 {
     [Theory]
-    [InlineData(true, "PreferencesBackButton")]
+    [InlineData(true, "TopBarBackButton")]
     [InlineData(false, "//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]")]
-    public void BackTapsTheVisiblePreferencesControlBeforeTryingNativeNavigation(bool preferencesVisible, string expectedLocator)
+    public void BackTapsTheVisiblePreferencesControlBeforeTryingNativeNavigation(bool customBackVisible, string expectedLocator)
     {
         // The failing simulator had a visible custom Back button and no native
         // navigation bar. Edge swipes left it on the preferences root page.
-        var executor = new BackExecutor(preferencesVisible);
+        var executor = new BackExecutor(customBackVisible);
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         new IosPlatformAdapter().GoBack(driver);
         Assert.Equal(expectedLocator, executor.LastLocator);
@@ -29,7 +29,7 @@ public sealed class IosBackNavigationTests
         Assert.Equal(1, executor.Touches);
     }
 
-    private sealed class BackExecutor(bool preferencesVisible) : ICommandExecutor
+    private sealed class BackExecutor(bool customBackVisible) : ICommandExecutor
     {
         public string? LastLocator { get; private set; }
         public IEnumerable<Dictionary<string, object>>? Actions { get; private set; }
@@ -49,14 +49,17 @@ public sealed class IosBackNavigationTests
                 var name when name == DriverCommand.GetElementAttribute => "true",
                 var name when name == DriverCommand.GetElementRect => new Dictionary<string, object>
                 {
-                    ["x"] = 0, ["y"] = 62, ["width"] = 48, ["height"] = 56
+                    ["x"] = 0,
+                    ["y"] = 62,
+                    ["width"] = 48,
+                    ["height"] = 56
                 },
                 _ => null
             };
             if (command.Name == DriverCommand.FindElements)
             {
                 LastLocator = (string)command.Parameters["value"]!;
-                var visible = LastLocator != "PreferencesBackButton" || preferencesVisible;
+                var visible = LastLocator != "TopBarBackButton" || customBackVisible;
                 value = visible ? new object[] { new Dictionary<string, object>
                 {
                     ["element-6066-11e4-a52e-4f735466cecf"] = "back"

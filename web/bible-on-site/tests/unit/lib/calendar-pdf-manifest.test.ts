@@ -68,20 +68,26 @@ describe("getCalendarPdfManifest", () => {
 		expect(await getCalendarPdfManifest()).toBeNull();
 	});
 
-	it("caches the result for the TTL — one fetch serves many requests", async () => {
+	it("caches from response completion until the exact TTL boundary", async () => {
+		const t0 = 1_000;
+		const completedAt = t0 + 250;
+		const clock = jest.spyOn(Date, "now").mockReturnValue(t0);
 		const fetchSpy = mockFetch(
 			async () => new Response(JSON.stringify(VALID_MANIFEST)),
 		);
-		const t0 = Date.now();
-		expect(await getCalendarPdfManifest(t0)).not.toBeNull();
-		expect(
-			await getCalendarPdfManifest(t0 + MANIFEST_TTL_MS - 1),
-		).not.toBeNull();
+		const initial = getCalendarPdfManifest();
+		// Response completion starts the TTL; request latency does not shorten it.
+		clock.mockReturnValue(completedAt);
+		expect(await initial).not.toBeNull();
+		clock.mockReturnValue(t0 + MANIFEST_TTL_MS + 1);
+		expect(await getCalendarPdfManifest()).not.toBeNull();
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
-		// After the TTL the manifest is refetched.
-		expect(
-			await getCalendarPdfManifest(t0 + MANIFEST_TTL_MS + 1),
-		).not.toBeNull();
+
+		clock.mockReturnValue(completedAt + MANIFEST_TTL_MS - 1);
+		expect(await getCalendarPdfManifest()).not.toBeNull();
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+		clock.mockReturnValue(completedAt + MANIFEST_TTL_MS);
+		expect(await getCalendarPdfManifest()).not.toBeNull();
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
 	});
 

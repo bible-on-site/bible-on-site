@@ -24,7 +24,7 @@ jest.mock("next/navigation", () => ({
 		toString: () => "",
 	}),
 	useRouter: () => ({ replace: mockReplace }),
-	usePathname: () => "/פרשה/5",
+	usePathname: () => "/פרשה/חיי-שרה",
 }));
 
 jest.mock("next/dynamic", () => () => () => <div data-testid="sefer" />);
@@ -53,7 +53,7 @@ describe("ParashaSeferComposite", () => {
 		mockGet.mockReturnValue(null);
 		delete document.documentElement.dataset.bookView;
 		localStorage.clear();
-		window.history.replaceState(null, "", "/פרשה/5");
+		window.history.replaceState(null, "", "/פרשה/חיי-שרה");
 	});
 
 	it("returns null when viewport is not wide enough", () => {

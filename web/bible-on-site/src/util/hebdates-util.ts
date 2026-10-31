@@ -234,12 +234,15 @@ export class HebrewDate {
 	}
 
 	/**
-	 * Hebrew month name for this date (he-IL locale, e.g. "חשוון", "אדר א׳").
+	 * Hebrew month name with ASCII punctuation (e.g. "חשוון", "אדר א'").
 	 */
 	toMonthName(): string {
-		return this.date.toLocaleString("he-IL-u-ca-hebrew", {
-			month: "long",
-		});
+		return this.date
+			.toLocaleString("he-IL-u-ca-hebrew", {
+				month: "long",
+			})
+			.replace(/׳/g, "'")
+			.replace(/״/g, '"');
 	}
 
 	/**
@@ -248,9 +251,7 @@ export class HebrewDate {
 	 */
 	toTraditionalHebrewString(): string {
 		const dayStr = toLetters(this.day, { addQuotes: true });
-		const monthStr = this.date.toLocaleString("he-IL-u-ca-hebrew", {
-			month: "long",
-		});
+		const monthStr = this.toMonthName();
 		const yearStr =
 			this.year >= 5000
 				? `ה'${toLetters(this.year - 5000, { addQuotes: true })}`

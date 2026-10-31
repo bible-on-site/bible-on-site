@@ -27,7 +27,6 @@
 		"web/bible-on-site/playwright*.ts",
 		"web/bible-on-site/playwright*.js",
 		"web/bible-on-site/launch-e2e-server.mts",
-		"web/bible-on-site/get-debug-port.js",
 		"web/bible-on-site/.test.env",
 		"web/bible-on-site/e2e-impact.json",
 		"web/bible-on-site/tests/util/**",

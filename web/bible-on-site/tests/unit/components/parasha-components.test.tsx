@@ -27,7 +27,7 @@ jest.mock("next/link", () => ({
 
 jest.mock("next/navigation", () => ({
 	useSearchParams: () => new URLSearchParams(),
-	usePathname: () => "/פרשה/1",
+	usePathname: () => "/פרשה/בראשית",
 	useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
 	notFound: () => {
 		throw new Error("NEXT_NOT_FOUND");
@@ -163,19 +163,19 @@ describe("UnitNav", () => {
 		);
 		expect(screen.getByRole("link", { name: /פרשה קודמת/ })).toHaveAttribute(
 			"href",
-			"/פרשה/1",
+			"/פרשה/בראשית",
 		);
 		expect(screen.getByRole("link", { name: /פרשת בראשית/ })).toHaveAttribute(
 			"href",
-			"/פרשה/1",
+			"/פרשה/בראשית",
 		);
 		expect(screen.getByRole("link", { name: /פרשה הבאה/ })).toHaveAttribute(
 			"href",
-			"/פרשה/3",
+			"/פרשה/לך-לך",
 		);
 		expect(screen.getByRole("link", { name: /פרשת לך לך/ })).toHaveAttribute(
 			"href",
-			"/פרשה/3",
+			"/פרשה/לך-לך",
 		);
 	});
 
@@ -208,11 +208,11 @@ describe("UnitBreadcrumb", () => {
 		// The picker links every שמות parasha (13-23).
 		expect(screen.getByRole("link", { name: "פרשת שמות" })).toHaveAttribute(
 			"href",
-			"/פרשה/13",
+			"/פרשה/שמות",
 		);
 		expect(screen.getByRole("link", { name: "פרשת פקודי" })).toHaveAttribute(
 			"href",
-			"/פרשה/23",
+			"/פרשה/פקודי",
 		);
 	});
 });
@@ -229,11 +229,11 @@ describe("ParashaLanding", () => {
 		expect(screen.getAllByRole("link")).toHaveLength(54);
 		expect(screen.getByRole("link", { name: /פרשת בראשית/ })).toHaveAttribute(
 			"href",
-			"/פרשה/1",
+			"/פרשה/בראשית",
 		);
 		expect(
 			screen.getByRole("link", { name: /פרשת וזאת הברכה/ }),
-		).toHaveAttribute("href", "/פרשה/54");
+		).toHaveAttribute("href", "/פרשה/וזאת-הברכה");
 	});
 
 	it("documents joined parashot and special-occasion Haftarot", () => {
@@ -342,7 +342,7 @@ describe("ParashaUnitLayout", () => {
 describe("ParashaUnitPage", () => {
 	it("renders the Torah reading, Haftarah, and scoped sections", async () => {
 		const jsx = await ParashaUnitPage({
-			params: Promise.resolve({ unit: "1" }),
+			params: Promise.resolve({ unit: "בראשית" }),
 		});
 		render(jsx);
 		expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -364,7 +364,7 @@ describe("ParashaUnitPage", () => {
 
 	it("keeps the Suspense fallbacks' perush hrefs inside the division", async () => {
 		const jsx = await ParashaUnitPage({
-			params: Promise.resolve({ unit: "1" }),
+			params: Promise.resolve({ unit: "בראשית" }),
 		});
 		// jsdom mounts the live children, never the fallback elements —
 		// reach into the tree and invoke their href builders directly.
@@ -382,17 +382,17 @@ describe("ParashaUnitPage", () => {
 		expect(torah).toHaveLength(1);
 		expect(haftara).toHaveLength(1);
 		expect(decodeURIComponent(hrefOf(torah[0]))).toBe(
-			'/פרשה/1?perush=רש"י',
+			'/פרשה/בראשית?perush=רש"י',
 		);
 		expect(decodeURIComponent(hrefOf(haftara[0]))).toBe(
-			'/פרשה/1?haftaraPerush=רש"י',
+			'/פרשה/בראשית?haftaraPerush=רש"י',
 		);
 	});
 
 	it("keeps Torah and Haftarah perushim inside the division page (issue #2190)", async () => {
 		perushimSectionProps.length = 0;
 		const jsx = await ParashaUnitPage({
-			params: Promise.resolve({ unit: "1" }),
+			params: Promise.resolve({ unit: "בראשית" }),
 		});
 		render(jsx);
 		const hrefOf = (props: Record<string, unknown>) =>
@@ -408,11 +408,11 @@ describe("ParashaUnitPage", () => {
 		expect(torahProps.length).toBeGreaterThan(0);
 		expect(haftaraProps.length).toBeGreaterThan(0);
 		for (const props of torahProps) {
-			expect(decodeURIComponent(hrefOf(props))).toBe('/פרשה/1?perush=רש"י');
+			expect(decodeURIComponent(hrefOf(props))).toBe('/פרשה/בראשית?perush=רש"י');
 		}
 		for (const props of haftaraProps) {
 			expect(decodeURIComponent(hrefOf(props))).toBe(
-				'/פרשה/1?haftaraPerush=רש"י',
+				'/פרשה/בראשית?haftaraPerush=רש"י',
 			);
 		}
 		// Each scope also opens in place via its live section.
@@ -423,7 +423,7 @@ describe("ParashaUnitPage", () => {
 
 	it("renders prev/next parasha links", async () => {
 		const jsx = await ParashaUnitPage({
-			params: Promise.resolve({ unit: "2" }),
+			params: Promise.resolve({ unit: "נח" }),
 		});
 		render(jsx);
 		const nav = within(
@@ -431,17 +431,17 @@ describe("ParashaUnitPage", () => {
 		);
 		expect(nav.getByRole("link", { name: /פרשת בראשית/ })).toHaveAttribute(
 			"href",
-			"/פרשה/1",
+			"/פרשה/בראשית",
 		);
 		expect(nav.getByRole("link", { name: /פרשת לך לך/ })).toHaveAttribute(
 			"href",
-			"/פרשה/3",
+			"/פרשה/לך-לך",
 		);
 	});
 
 	it("calls notFound for an unknown unit", async () => {
 		await expect(
-			ParashaUnitPage({ params: Promise.resolve({ unit: "55" }) }),
+			ParashaUnitPage({ params: Promise.resolve({ unit: "דמיון" }) }),
 		).rejects.toThrow("NEXT_NOT_FOUND");
 	});
 });
