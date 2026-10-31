@@ -9,6 +9,16 @@ namespace BibleOnSite.Helpers;
 /// fill the text column like a printed tikkun. Positions are computed
 /// right-to-left: the first word of a line sits at the right edge.
 ///
+/// Besides the width budget, a rendered line is capped at
+/// <see cref="MaxLineLetters"/> Hebrew base letters (א-ת including final
+/// forms; niqqud, taamim, maqaf, spaces, punctuation and numerals add zero —
+/// #2839). The count spans the whole line, so pasuk markers, qri-note text and
+/// repeated שניים מקרא copies all weigh in, and it resets whenever a line is
+/// emitted (including section breaks). Words never split: when the next word
+/// would exceed either budget it moves to the next line. A single word whose
+/// own letter count exceeds the cap cannot be broken, so it keeps its own line
+/// intact — the unavoidable exception — rather than being split or dropped.
+///
 /// Section markers are first-class layout instructions, never drawn text:
 /// <list type="bullet">
 /// <item>{פ} (פתוחה) ends the current line — it stays naturally aligned (right
@@ -32,6 +42,12 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class TikkunFlowLayout
 {
+    /// <summary>
+    /// Maximum Hebrew base letters on one rendered line (#2839). Niqqud,
+    /// taamim, maqaf, spaces and punctuation count zero toward it.
+    /// </summary>
+    public static int MaxLineLetters { get; } = 34;
+
     /// <summary>
     /// סתומה gap yardstick — the width of nine Hebrew letters. Measured with the
     /// active font/size, so the gap scales with the reader's text size instead of
@@ -75,6 +91,7 @@ public static class TikkunFlowLayout
         var placed = new List<PlacedWord>(words.Count);
         var line = new List<LineItem>();
         var lineWidth = 0f;
+        var lineLetters = 0;
         var y = 0f;
         var lineCount = 0;
         var pendingStuma = false;
@@ -110,6 +127,7 @@ public static class TikkunFlowLayout
             y += lineHeight;
             line.Clear();
             lineWidth = 0f;
+            lineLetters = 0;
         }
 
         foreach (var word in words)
@@ -169,7 +187,15 @@ public static class TikkunFlowLayout
                         }
 
                         var needed = lineWidth + slot + width;
-                        if (line.Count > 0 && needed > maxWidth + Epsilon)
+                        // Letter cap (#2839): the next whole word wraps when it
+                        // would push the line's Hebrew-letter count past
+                        // MaxLineLetters, even when width remains. The cap never
+                        // splits a word — an unbreakable word longer than the cap
+                        // stays intact on its own line (documented exception).
+                        var letters = HebrewLetters(word.Text);
+                        var overWidth = needed > maxWidth + Epsilon;
+                        var overLetters = lineLetters + letters > MaxLineLetters;
+                        if (line.Count > 0 && (overWidth || overLetters))
                         {
                             // Wrap: an ordinary overflow justifies the completed
                             // line; a {ס} that has no room for gap + word ends it
@@ -184,11 +210,13 @@ public static class TikkunFlowLayout
                             }
                             line.Add(new LineItem(word, width, slot, stretchable));
                             lineWidth = slot + width;
+                            lineLetters = letters;
                         }
                         else
                         {
                             line.Add(new LineItem(word, width, slot, stretchable));
                             lineWidth += slot + width;
+                            lineLetters += letters;
                         }
                         pendingStuma = false;
                         break;
@@ -204,4 +232,11 @@ public static class TikkunFlowLayout
 
         return new Result(placed, y, lineCount);
     }
+
+    /// <summary>
+    /// Counts the Hebrew base letters (א-ת, final forms included) in a rendered
+    /// word for the <see cref="MaxLineLetters"/> budget. Niqqud, taamim, maqaf,
+    /// spaces, punctuation and numerals contribute zero (#2839).
+    /// </summary>
+    internal static int HebrewLetters(string text) => text.Count(GimatryHelper.IsHebrewLetter);
 }
