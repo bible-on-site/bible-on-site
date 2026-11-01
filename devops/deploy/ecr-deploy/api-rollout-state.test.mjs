@@ -69,6 +69,18 @@ test("registration preserves every existing field, role, environment, log, volum
 	);
 });
 
+test("untagged registration omits the tags member without mutating the source", () => {
+	const base = { ...definition(), tags: [] },
+		copy = structuredClone(base);
+	for (const architecture of ["X86_64", "ARM64"]) {
+		const request = registration(base, [], architecture, IMAGE_URI + ":latest");
+		assert.equal(Object.hasOwn(request, "tags"), false);
+		assert.equal(request.runtimePlatform.cpuArchitecture, architecture);
+		assert.deepEqual(request.containerDefinitions, base.containerDefinitions);
+	}
+	assert.deepEqual(base, copy);
+});
+
 test("only the exact API resources, current size, readiness check and Linux architectures qualify", () => {
 	assertDefinition(definition());
 	assertService(service(), true);
