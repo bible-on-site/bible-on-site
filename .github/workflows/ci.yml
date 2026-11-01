@@ -2584,7 +2584,7 @@ jobs:
       - name: Verify repeatable deployment recovery
         working-directory: devops
         run: |
-          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts github/ci/website-image-gates.test.mjs
+          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts github/ci/website-image-gates.test.mjs github/release/website-handover-lock.test.mjs
           bun run test:api-handover
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs

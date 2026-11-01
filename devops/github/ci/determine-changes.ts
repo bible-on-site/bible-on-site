@@ -82,6 +82,9 @@ export const MODULES = {
 			// cd-aws.yml owns the post-deploy verifier invocation contract
 			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
 			".github/workflows/cd-aws.yml",
+			".github/workflows/website-handover-lock.yml",
+			"devops/github/release/website-handover-lock.mjs",
+			"devops/github/release/website-handover-lock.test.mjs",
 			".github/workflows/shared-dockerize.yml",
 			"devops/deploy/ecr-deploy/website-images.mts",
 			"devops/deploy/ecr-deploy/api-images.mts",
