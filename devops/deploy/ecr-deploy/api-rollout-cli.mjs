@@ -16,8 +16,14 @@ export async function deployAPIWithHandover({
 	const file =
 		journal ?? join(tmpdir(), "api-handover-" + randomUUID() + ".ndjson");
 	writeFileSync(file, "", { flag: "wx", mode: 0o600 });
-	const record = (event, value) =>
-		appendFileSync(file, JSON.stringify({ event, value }) + "\n");
+	const record = (event, value) => {
+		const line = JSON.stringify({ event, value }) + "\n";
+		try {
+			(dependencies.append ?? appendFileSync)(file, line);
+		} catch {
+			console.error("API handover journal fallback:", line);
+		}
+	};
 	let caller, transport;
 	console.info("API handover journal:", file);
 	try {

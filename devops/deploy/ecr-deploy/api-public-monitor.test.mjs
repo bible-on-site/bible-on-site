@@ -9,6 +9,16 @@ import {
 
 export const OLD_INSTANCE = "11111111-1111-4111-8111-111111111111";
 export const NEW_INSTANCE = "22222222-2222-4222-8222-222222222222";
+function reverseKeys(value) {
+	if (Array.isArray(value)) return value.map(reverseKeys);
+	if (value && typeof value === "object")
+		return Object.fromEntries(
+			Object.entries(value)
+				.reverse()
+				.map(([key, item]) => [key, reverseKeys(item)]),
+		);
+	return value;
+}
 function fixture() {
 	let at = 0;
 	const calls = [],
@@ -55,15 +65,20 @@ function fixture() {
 				data = {
 					data: {
 						searchArticles: {
-							total: 1,
-							hits: [{ articleId: 495, score: 1.5 }],
+							total: 2,
+							hits: [
+								{ articleId: 495, score: f.score ?? 1.5 },
+								{ articleId: 496, score: 1.0 },
+							],
 						},
 					},
 				};
+				if (f.reverseHits) data.data.searchArticles.hits.reverse();
 			}
 		}
 		if (f.extraKey) data.extra = true;
 		if (f.graphqlError) data.errors = [{ message: "private canary" }];
+		if (f.reverseObjectKeys) data = reverseKeys(data);
 		const headers = new Headers();
 		if (f.instance !== null) headers.set("x-tanahpedia-instance", f.instance);
 		return new Response(JSON.stringify(data), {
@@ -235,4 +250,39 @@ test("contracts reject changed readiness versions, markers and chapter identitie
 	);
 	f.chapters = 928;
 	await assert.rejects(f.monitor.contracts(f.version));
+});
+
+test("contract hashes canonicalize object keys while preserving ranking and scores", async () => {
+	const f = fixture(),
+		baseline = await f.monitor.contracts(f.version);
+	f.reverseObjectKeys = true;
+	assert.deepEqual(await f.monitor.contracts(f.version, baseline), baseline);
+	f.score = 1.6;
+	await assert.rejects(
+		f.monitor.contracts(f.version, baseline),
+		/contracts changed/,
+	);
+	f.score = 1.5;
+	f.reverseHits = true;
+	await assert.rejects(
+		f.monitor.contracts(f.version, baseline),
+		/contracts changed/,
+	);
+});
+
+test("a background observer failure is retained and prevents a healthy result", async () => {
+	const f = fixture();
+	f.monitor.versions.add(f.version);
+	f.monitor.wait = async () => {
+		throw new Error("private observer canary");
+	};
+	f.monitor.start();
+	await f.monitor.loop;
+	assert.equal(f.monitor.running, false);
+	assert.equal(f.monitor.rows.at(-1).passed, false);
+	assert.throws(() => f.monitor.assertHealthy(), /sample failed/);
+	assert.equal(
+		JSON.stringify(f.events).includes("private observer canary"),
+		false,
+	);
 });

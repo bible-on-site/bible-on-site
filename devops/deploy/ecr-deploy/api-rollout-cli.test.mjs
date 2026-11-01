@@ -39,6 +39,56 @@ for (const fail of [false, true])
 							throw Object.assign(new Error("private-canary"), {
 								name: "TestFailure",
 							});
+
+						test("journal append failure falls back to workflow logs without blocking publication or recovery", async (t) => {
+							const dir = await mkdtemp(join(tmpdir(), "api-cli-fallback-")),
+								lines = [];
+							t.mock.method(console, "error", (...args) =>
+								lines.push(args.join(" ")),
+							);
+							try {
+								let published = false;
+								const result = await deployAPIWithHandover({
+									config: {},
+									journal: join(dir, "handover.ndjson"),
+									deployer: {
+										async getLocalVersion() {
+											return "0.1.101";
+										},
+										async deploy() {
+											published = true;
+										},
+									},
+									dependencies: {
+										append() {
+											throw new Error("private disk error canary");
+										},
+										createCaller: () => ({ call() {}, close() {} }),
+										createTransport: () => ({
+											request() {},
+											observations: [],
+											dnsObservations: [],
+											close() {},
+										}),
+										run: async ({ publish, record }) => {
+											await publish();
+											record("rollback-intent", { task: "owned-task" });
+											return { passed: true };
+										},
+									},
+								});
+								assert.equal(published, true);
+								assert.deepEqual(result, { passed: true });
+								assert.match(lines.join("\n"), /rollback-intent/);
+								assert.match(lines.join("\n"), /public-transport/);
+								assert.doesNotMatch(
+									lines.join("\n"),
+									/private disk error canary/,
+								);
+							} finally {
+								await rm(dir, { recursive: true, force: true });
+							}
+						});
 						return { changed: true };
 					},
 				};

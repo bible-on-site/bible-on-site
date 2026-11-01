@@ -158,6 +158,7 @@ test("a lost update acknowledgement still starts rollback and leaves evidence", 
 
 test("a completed rollout with changed public contracts restores the immutable old native pin", async () => {
 	const f = fixture();
+	f.monitor.legacy = true;
 	f.monitor.failFinalContracts = true;
 	await assert.rejects(runAPIRollout(f), /changed contract/);
 	assert.equal(f.backend.updates, 2);
@@ -248,5 +249,87 @@ test("post-completion recovery protects the replacement before restoring the old
 		[...f.backend.otherLeases.values()].every(
 			(lease) => !lease.protected && Object.keys(lease.tags).length === 0,
 		),
+	);
+});
+
+test("pre-mutation checks leave another ongoing deployment alone and remove only our lease", async () => {
+	const f = fixture();
+	const publish = async () => {
+		f.backend.published = true;
+		f.backend.mutateService = (service) => {
+			service.deployments.push({
+				taskDefinition: service.taskDefinition,
+				rolloutState: "IN_PROGRESS",
+			});
+		};
+	};
+	await assert.rejects(
+		runAPIRollout({ ...f, publish }),
+		/one completed healthy deployment/,
+	);
+	assert.equal(f.backend.updates, 0);
+	assert.equal(f.backend.protected, false);
+	assert.deepEqual(ownedTags(f.backend), []);
+	assert.equal(
+		f.backend.calls.filter((row) => row.name === "StopServiceDeployment")
+			.length,
+		0,
+	);
+	assert.equal(
+		f.backend.records.find((row) => row.name === "rollout-failed").value
+			.attempted,
+		false,
+	);
+});
+
+test("an in-flight sample failing at monitor shutdown still rolls back the completed release", async () => {
+	const f = fixture(),
+		originalStop = f.monitor.stop.bind(f.monitor);
+	let injected = false;
+	f.monitor.stop = async () => {
+		if (
+			!injected &&
+			f.backend.updates === 1 &&
+			f.backend.old.lastStatus === "STOPPED"
+		) {
+			injected = true;
+			f.monitor.rows.push({ passed: false, route: "late-public-sample" });
+		}
+		await originalStop();
+	};
+	await assert.rejects(runAPIRollout(f), /sample failed/);
+	assert.equal(f.backend.updates, 2);
+	assert.ok(f.backend.records.some((row) => row.name === "recovery-completed"));
+	assert.equal(
+		f.backend.records.some((row) => row.name === "rollout-completed"),
+		false,
+	);
+	assert.equal(
+		f.monitor.rows.find((row) => row.route === "late-public-sample").passed,
+		false,
+	);
+});
+
+test("the source grant must cover both existing rollout and recovery windows without renewal", async () => {
+	const f = fixture();
+	await assert.rejects(
+		runAPIRollout({
+			...f,
+			publish: async () => {
+				f.backend.published = true;
+				f.backend.at += 400000;
+			},
+		}),
+		/too close to expiration/,
+	);
+	assert.equal(f.backend.updates, 0);
+	assert.equal(f.backend.protected, false);
+	assert.deepEqual(ownedTags(f.backend), []);
+	assert.equal(
+		f.backend.calls.filter(
+			(row) =>
+				row.name === "UpdateTaskProtection" && row.input.protectionEnabled,
+		).length,
+		1,
 	);
 });

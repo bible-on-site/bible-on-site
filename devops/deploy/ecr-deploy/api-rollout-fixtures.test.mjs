@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import stableStringify from "fast-json-stable-stringify";
 import { APIRolloutAWS } from "./api-rollout-aws.mjs";
 import { PublicAPIMonitor, healthRoutes } from "./api-public-monitor.mjs";
 import {
+	API_ACCOUNT,
 	API_CLUSTER,
 	API_SERVICE,
 	LEASE_PREFIX,
@@ -32,7 +34,7 @@ export function makeImages(label) {
 	const manifests = new Map(),
 		children = {};
 	for (const architecture of ["amd64", "arm64"]) {
-		const bytes = JSON.stringify({
+		const bytes = stableStringify({
 			schemaVersion: 2,
 			mediaType: IMAGE_TYPE,
 			config: { digest: sha(label + architecture), size: 1 },
@@ -41,7 +43,7 @@ export function makeImages(label) {
 		children[architecture] = sha(bytes);
 		manifests.set(sha(bytes), bytes);
 	}
-	const bytes = JSON.stringify({
+	const bytes = stableStringify({
 		schemaVersion: 2,
 		mediaType: INDEX_TYPE,
 		manifests: Object.entries(children).map(([architecture, digest]) => ({
@@ -295,7 +297,7 @@ export class Backend {
 		};
 		switch (name) {
 			case "GetCallerIdentity":
-				return { Account: "250598594267" };
+				return { Account: API_ACCOUNT };
 			case "DescribeRule":
 				return {
 					Arn: "arn:aws:events:il-central-1:250598594267:rule/ecr-push-bible-on-site-api",

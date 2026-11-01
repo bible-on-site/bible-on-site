@@ -248,6 +248,15 @@ test("invalid DNS answers are recorded and never cached", async () => {
 	assert.ok(f.transport.dnsObservations.every((row) => row.error));
 });
 
+test("an otherwise valid oversized DNS document is rejected before it can enter the cache", async () => {
+	const f = fixture();
+	f.httpsClient.dnsAnswer = { ...answer(), padding: "a".repeat(65536) };
+	await assert.rejects(f.request(), /DNS response exceeds 64 KiB/);
+	assert.equal(f.calls.filter((row) => row.dns).length, 1);
+	assert.equal(f.transport.dnsObservations[0].cacheHit, false);
+	assert.ok(f.transport.dnsObservations[0].error);
+});
+
 test("an aborted request fails before a call and in-flight aborts preserve their reason", async () => {
 	const f = fixture(),
 		controller = new AbortController(),

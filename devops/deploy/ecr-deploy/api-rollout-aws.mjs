@@ -305,7 +305,12 @@ export class APIRolloutAWS {
 		const actual = await this.definition(arn);
 		assert.ok(
 			isDeepStrictEqual(
-				registration(actual.definition, actual.tags, architecture, image),
+				registration(
+					actual.definition,
+					actual.tags,
+					actual.definition.runtimePlatform?.cpuArchitecture ?? "X86_64",
+					actual.definition.containerDefinitions[0].image,
+				),
 				request,
 			),
 			"Registered task definition differs from preserved request",
@@ -318,8 +323,29 @@ export class APIRolloutAWS {
 		});
 		return actual.definition;
 	}
-	async update(definition, expectedService) {
-		const current = await this.service();
+	async update(
+		definition,
+		expectedService,
+		{ source = null, beforeMutation = () => {} } = {},
+	) {
+		const state = source ? await this.snapshot(source.task.taskArn) : null;
+		const current = state?.service ?? (await this.service());
+		if (source) {
+			assertService(current, true);
+			assert.deepEqual(
+				state.active,
+				[source.task.taskArn],
+				"API source task changed before mutation",
+			);
+			const task = state.tasks.find(
+				(row) => row.taskArn === source.task.taskArn,
+			);
+			assertTask(task, source.definition, source.image);
+			assert.ok(
+				healthy(task) && discoveryMatches(state.instances, [task]),
+				"API source stopped being healthy before mutation",
+			);
+		}
 		assert.ok(
 			isDeepStrictEqual(fingerprint(current), fingerprint(expectedService)),
 			"API service settings changed",
@@ -336,6 +362,7 @@ export class APIRolloutAWS {
 			forceNewDeployment: true,
 		};
 		this.record("service-update-intent", { ...input });
+		beforeMutation();
 		const result = await this.call("UpdateService", input);
 		assert.equal(result.service?.serviceArn, SERVICE_ARN);
 		assert.equal(result.service.taskDefinition, input.taskDefinition);

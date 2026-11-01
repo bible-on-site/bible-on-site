@@ -59,6 +59,7 @@ async function recover({
 	wait,
 	record,
 }) {
+	if (!monitor.running) monitor.start();
 	let lease = sourceLease,
 		retiring = baseline.task,
 		retiringVersion = baseline.public.version;
@@ -220,6 +221,16 @@ async function recover({
 							baseline.contracts,
 							candidateInstance,
 						);
+						await monitor.stop();
+						assert.ok(
+							freshRecoveryWindow(
+								monitor,
+								publicIndex,
+								baseline.public.version,
+								candidateInstance,
+							),
+							"A final recovery public sample failed",
+						);
 						assert.ok(
 							now() - started < LIMITS.overall,
 							"Recovery exceeded 300s during final verification",
@@ -353,16 +364,21 @@ export async function runAPIRollout({
 			baseline.public.version === version
 		) {
 			await lease.release();
+			await monitor.stop();
 			monitor.assertHealthy();
 			record("rollout-already-current", { version, image, task: task.taskArn });
 			return { version, image, task: task.taskArn, changed: false };
 		}
-		await lease.assertActive(LIMITS.overall / 1000);
+		await lease.assertActive((2 * LIMITS.overall) / 1000);
 		monitor.assertHealthy();
 		// Set before the RPC: a lost UpdateService acknowledgement still needs recovery.
-		attempted = true;
 		const started = now();
-		await aws.update(target, baseline.service);
+		await aws.update(target, baseline.service, {
+			source: baseline,
+			beforeMutation: () => {
+				attempted = true;
+			},
+		});
 		let candidate = null,
 			candidateInstance = null,
 			observedAt = null,
@@ -488,6 +504,7 @@ export async function runAPIRollout({
 							baseline.contracts,
 							candidateInstance,
 						);
+						await monitor.stop();
 						monitor.assertHealthy();
 						assert.ok(
 							now() - started < LIMITS.overall,
@@ -548,7 +565,8 @@ export async function runAPIRollout({
 				record("recovery-failed", {
 					name: recoveryError.name,
 					code: recoveryError.code ?? null,
-					protectedTask: task.taskArn,
+					protectedTask:
+						lease.confirmed && !lease.released ? task.taskArn : null,
 					leaseKey: lease.key,
 					expiration: lease.expiration,
 				});
@@ -557,7 +575,8 @@ export async function runAPIRollout({
 				);
 			}
 		} else if (lease.confirmed && !lease.released) await lease.release();
-		else if (lease.tagAttempted) await lease.removeUngrantedMarker();
+		else if (!lease.confirmed && lease.tagAttempted)
+			await lease.removeUngrantedMarker();
 		throw error;
 	} finally {
 		await monitor.stop();

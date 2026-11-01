@@ -55,6 +55,13 @@ test("registration preserves every existing field, role, environment, log, volum
 	assert.deepEqual(base, copy);
 	assert.ok(!("registeredAt" in request));
 	assert.match(registrationHash(request), /^[a-f0-9]{64}$/);
+	const reordered = Object.fromEntries(Object.entries(request).reverse());
+	reordered.containerDefinitions = request.containerDefinitions.map(
+		(container) => Object.fromEntries(Object.entries(container).reverse()),
+	);
+	assert.equal(registrationHash(reordered), registrationHash(request));
+	reordered.memory = "1024";
+	assert.notEqual(registrationHash(reordered), registrationHash(request));
 	const unknown = { ...base, futureCriticalSetting: { preserve: true } };
 	assert.throws(
 		() => registration(unknown, tags, "ARM64", IMAGE_URI + ":latest"),

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
+import stableStringify from "fast-json-stable-stringify";
 import { API_ORIGINS, HTTP_BUDGET_MS } from "./api-public-transport.mjs";
 
 const uuid =
@@ -25,7 +26,7 @@ export const healthRoutes = routes
 	.filter((route) => !route.query)
 	.map(({ origin, path }) => origin + path);
 const sha = (value) =>
-	createHash("sha256").update(JSON.stringify(value)).digest("hex");
+	createHash("sha256").update(stableStringify(value)).digest("hex");
 
 export class PublicAPIMonitor {
 	constructor({
@@ -198,7 +199,17 @@ export class PublicAPIMonitor {
 				if (this.running)
 					await this.wait(Math.max(0, 1000 - (this.now() - started)));
 			}
-		})();
+		})().catch((error) => {
+			this.running = false;
+			const row = {
+				passed: false,
+				at: this.now(),
+				route: "public-monitor",
+				error: { name: error.name, code: error.code ?? null },
+			};
+			this.rows.push(row);
+			this.record("public-sample", row);
+		});
 	}
 	async stop() {
 		this.running = false;

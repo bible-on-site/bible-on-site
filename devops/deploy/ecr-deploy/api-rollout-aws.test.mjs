@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { createAWSCaller } from "./api-rollout-aws.mjs";
+import { API_ACCOUNT, API_REGION } from "./api-task-protection.mjs";
 import { IMAGE_URI } from "./api-rollout-state.mjs";
 import { fixture, sha } from "./api-rollout-fixtures.test.mjs";
 
@@ -9,7 +10,7 @@ test("actual SDK transport captures the AWS HTTP clock and makes one signed requ
 	const requests = [],
 		date = "Sun, 01 Nov 2026 00:00:00 GMT";
 	const caller = createAWSCaller(
-		{ accountId: "250598594267", region: "il-central-1" },
+		{ accountId: API_ACCOUNT, region: API_REGION },
 		{
 			credentials: {
 				accessKeyId: "TESTACCESSKEY",
@@ -51,8 +52,8 @@ test("SDK failures expose no task payload, response body or chained credential d
 	let calls = 0;
 	const caller = createAWSCaller(
 		{
-			accountId: "250598594267",
-			region: "il-central-1",
+			accountId: API_ACCOUNT,
+			region: API_REGION,
 			useEnvCredentials: true,
 		},
 		{
@@ -94,10 +95,10 @@ test("SDK failures expose no task payload, response body or chained credential d
 	assert.equal(calls, 1);
 	caller.close();
 	assert.throws(() =>
-		createAWSCaller({ accountId: "other", region: "il-central-1" }),
+		createAWSCaller({ accountId: "other", region: API_REGION }),
 	);
 	assert.throws(() =>
-		createAWSCaller({ accountId: "250598594267", region: "us-east-1" }),
+		createAWSCaller({ accountId: API_ACCOUNT, region: "us-east-1" }),
 	);
 });
 
@@ -208,4 +209,74 @@ test("service drift prevents update and registering preserves secrets without lo
 		/settings changed/,
 	);
 	assert.equal(f.backend.updates, 0);
+});
+
+for (const field of ["architecture", "image"])
+	test(`registration rejects an actual ${field} that differs from its request`, async () => {
+		const f = fixture(),
+			baseline = await f.aws.preflight();
+		f.backend.hook = async (operation, input) => {
+			if (
+				operation === "DescribeTaskDefinition" &&
+				input.taskDefinition !== baseline.definition.taskDefinitionArn
+			) {
+				const value = structuredClone(
+					f.backend.definitions.get(input.taskDefinition),
+				);
+				if (field === "architecture")
+					value.runtimePlatform.cpuArchitecture = "X86_64";
+				else
+					value.containerDefinitions[0].image =
+						IMAGE_URI + "@" + f.backend.oldImages.children.arm64;
+				return { taskDefinition: value, tags: baseline.tags };
+			}
+		};
+		await assert.rejects(
+			f.aws.register(
+				baseline.definition,
+				baseline.tags,
+				"ARM64",
+				IMAGE_URI + ":latest",
+			),
+			/differs from preserved request/,
+		);
+		assert.equal(f.backend.updates, 0);
+	});
+
+test("registration readback accepts reordered AWS tags while preserving every value", async () => {
+	const f = fixture(),
+		baseline = await f.aws.preflight();
+	const tags = [
+		{ key: "z", value: "last" },
+		{ key: "a", value: "first" },
+	];
+	f.backend.hook = async (operation, input) => {
+		if (
+			operation === "DescribeTaskDefinition" &&
+			input.taskDefinition !== baseline.definition.taskDefinitionArn
+		)
+			return {
+				taskDefinition: structuredClone(
+					f.backend.definitions.get(input.taskDefinition),
+				),
+				tags: [...tags],
+			};
+	};
+	await f.aws.register(
+		baseline.definition,
+		tags,
+		"ARM64",
+		IMAGE_URI + ":latest",
+	);
+	assert.deepEqual(
+		tags.map((tag) => tag.key),
+		["z", "a"],
+	);
+	const request = f.backend.calls.find(
+		(row) => row.name === "RegisterTaskDefinition",
+	).input;
+	assert.deepEqual(request.tags, [
+		{ key: "a", value: "first" },
+		{ key: "z", value: "last" },
+	]);
 });

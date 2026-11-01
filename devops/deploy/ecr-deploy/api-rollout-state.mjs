@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
+import stableStringify from "fast-json-stable-stringify";
 import {
 	API_ACCOUNT,
 	API_CLUSTER,
@@ -147,7 +148,9 @@ export function registration(definition, tags, architecture, image) {
 		if (registrationFields.has(key)) request[key] = structuredClone(value);
 	}
 	assert.ok(Array.isArray(tags));
-	request.tags = structuredClone(tags);
+	request.tags = structuredClone(tags).sort((left, right) =>
+		left.key < right.key ? -1 : left.key > right.key ? 1 : 0,
+	);
 	request.runtimePlatform = {
 		...request.runtimePlatform,
 		cpuArchitecture: architecture,
@@ -161,7 +164,7 @@ export function registration(definition, tags, architecture, image) {
 	return request;
 }
 export function registrationHash(request) {
-	return createHash("sha256").update(JSON.stringify(request)).digest("hex");
+	return createHash("sha256").update(stableStringify(request)).digest("hex");
 }
 export function assertService(service, stable = false) {
 	assert.equal(service.serviceArn, SERVICE_ARN);
