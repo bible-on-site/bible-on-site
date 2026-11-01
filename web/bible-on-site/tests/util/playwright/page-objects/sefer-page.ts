@@ -130,8 +130,10 @@ export class SeferPage {
 	 * Qri elements are rendered with parentheses when they differ from ktiv
 	 */
 	async verifyQriElementsAreVisible(): Promise<void> {
-		// Qri elements have a specific CSS class
-		const qriElements = this.page.locator('[class*="qri"]');
+		// Retained off-screen chapters are dormant; check the facing chapter.
+		const qriElements = this.page.locator(
+			'.he-book .page.current-page [class*="qri"]',
+		);
 		await expect(qriElements.first()).toBeVisible({ timeout: 10_000 });
 		const count = await qriElements.count();
 		expect(count).toBeGreaterThan(0);
