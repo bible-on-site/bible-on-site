@@ -2,35 +2,36 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
-import * as ecs from "@aws-sdk/client-ecs";
 import * as ecr from "@aws-sdk/client-ecr";
-import * as discovery from "@aws-sdk/client-servicediscovery";
+import * as ecs from "@aws-sdk/client-ecs";
 import * as events from "@aws-sdk/client-eventbridge";
+import * as discovery from "@aws-sdk/client-servicediscovery";
 import * as sts from "@aws-sdk/client-sts";
 import { fromEnv, fromSSO } from "@aws-sdk/credential-providers";
+import {
+	API_RULE,
+	ARN,
+	assertDefinition,
+	assertService,
+	assertTask,
+	completed,
+	DISCOVERY_ID,
+	definitionArn,
+	digest,
+	discoveryMatches,
+	fingerprint,
+	healthy,
+	NAMESPACE_ID,
+	registration,
+	registrationHash,
+	SERVICE_ARN,
+} from "./api-rollout-state.mjs";
 import {
 	API_ACCOUNT,
 	API_CLUSTER,
 	API_REGION,
 	API_SERVICE,
 } from "./api-task-protection.mjs";
-import {
-	API_RULE,
-	DISCOVERY_ID,
-	NAMESPACE_ID,
-	SERVICE_ARN,
-	assertDefinition,
-	assertService,
-	definitionArn,
-	digest,
-	fingerprint,
-	registration,
-	registrationHash,
-	assertTask,
-	completed,
-	discoveryMatches,
-	healthy,
-} from "./api-rollout-state.mjs";
 
 const modules = [ecs, ecr, discovery, events, sts];
 const configurations = [
@@ -108,6 +109,167 @@ export class APIRolloutAWS {
 	constructor({ call, record = () => {} }) {
 		this.call = call;
 		this.record = record;
+		this.recordedCompletions = new Set();
+	}
+	async completion(state, task, image) {
+		const service = state.service;
+		assert.equal(service.serviceArn, SERVICE_ARN);
+		if (
+			service.runningCount !== 1 ||
+			service.pendingCount !== 0 ||
+			state.active.length !== 1 ||
+			state.active[0] !== task.taskArn ||
+			!healthy(task) ||
+			!discoveryMatches(state.instances, [task])
+		)
+			return false;
+		if (service.taskDefinition !== task.taskDefinitionArn) return false;
+		assert.equal(task.clusterArn, ARN + "cluster/" + API_CLUSTER);
+		assert.ok(
+			[image.root, image.child].includes(task.containers[0].imageDigest),
+		);
+		if (completed(service)) return true;
+		// Deployment history can finish before DescribeServices retires its legacy
+		// rollout summary. Keep the summary intact and verify the exact revision.
+		const primaries = service.deployments.filter(
+			(row) => row.status === "PRIMARY",
+		);
+		assert.equal(primaries.length, 1, "Ambiguous primary API deployment");
+		const primary = primaries[0];
+		assert.match(task.startedBy, /^ecs-svc\/[0-9]+$/);
+		if (
+			primary.id !== task.startedBy ||
+			primary.taskDefinition !== task.taskDefinitionArn
+		)
+			return false;
+		assert.ok(
+			primary.createdAt instanceof Date &&
+				Number.isFinite(primary.createdAt.getTime()),
+		);
+		const revisionPrefix =
+			ARN + "service-revision/" + API_CLUSTER + "/" + API_SERVICE + "/";
+		const expectedRevision =
+			revisionPrefix + task.startedBy.slice("ecs-svc/".length);
+		const deploymentPrefix =
+			ARN + "service-deployment/" + API_CLUSTER + "/" + API_SERVICE + "/";
+		const listed = await this.call("ListServiceDeployments", {
+			cluster: API_CLUSTER,
+			service: API_SERVICE,
+			// Creation timestamps in the two AWS views can have different precision.
+			createdAt: { after: new Date(primary.createdAt.getTime() - 1000) },
+			maxResults: 100,
+		});
+		assert.ok(Array.isArray(listed.serviceDeployments));
+		assert.ok(
+			!listed.nextToken && listed.serviceDeployments.length <= 1,
+			"Ambiguous API deployment history",
+		);
+		if (!listed.serviceDeployments.length) return false;
+		const arn = listed.serviceDeployments[0].serviceDeploymentArn;
+		assert.ok(
+			typeof arn === "string" &&
+				arn.startsWith(deploymentPrefix) &&
+				/^[a-zA-Z0-9_-]+$/.test(arn.slice(deploymentPrefix.length)),
+		);
+		const result = await this.call("DescribeServiceDeployments", {
+			serviceDeploymentArns: [arn],
+		});
+		assert.equal(result.failures?.length ?? 0, 0);
+		assert.equal(result.serviceDeployments?.length, 1);
+		const deployment = result.serviceDeployments[0];
+		assert.equal(deployment.serviceDeploymentArn, arn);
+		assert.equal(deployment.serviceArn, SERVICE_ARN);
+		assert.equal(deployment.clusterArn, ARN + "cluster/" + API_CLUSTER);
+		assert.equal(
+			deployment.targetServiceRevision?.arn,
+			expectedRevision,
+			"API completion belongs to another revision",
+		);
+		if (["PENDING", "IN_PROGRESS"].includes(deployment.status)) return false;
+		assert.equal(
+			deployment.status,
+			"SUCCESSFUL",
+			"API deployment did not succeed",
+		);
+		assert.ok(
+			isDeepStrictEqual(
+				deployment.deploymentConfiguration,
+				service.deploymentConfiguration,
+			),
+			"API deployment settings changed",
+		);
+		assert.ok(
+			!deployment.deploymentConfiguration.earlySuccessCriteria?.enabled &&
+				!deployment.earlySuccessCriteria?.enabled,
+			"Early success cannot prove full API completion",
+		);
+		assert.equal(
+			deployment.deploymentCircuitBreaker?.status,
+			"MONITORING_COMPLETE",
+		);
+		assert.equal(deployment.deploymentCircuitBreaker.failureCount, 0);
+		assert.ok(
+			deployment.finishedAt instanceof Date &&
+				deployment.startedAt instanceof Date &&
+				Number.isFinite(deployment.startedAt.getTime()) &&
+				deployment.finishedAt >= deployment.startedAt &&
+				deployment.finishedAt.getTime() <=
+					Date.parse(result.$clock?.serverDate) + 1000,
+			"Missing bounded API completion time",
+		);
+		const counts = (row) => [
+			row.requestedTaskCount,
+			row.runningTaskCount,
+			row.pendingTaskCount,
+		];
+		assert.deepEqual(counts(deployment.targetServiceRevision), [1, 1, 0]);
+		assert.ok(
+			Array.isArray(deployment.sourceServiceRevisions) &&
+				deployment.sourceServiceRevisions.length > 0,
+		);
+		for (const source of deployment.sourceServiceRevisions) {
+			assert.ok(
+				source.arn.startsWith(revisionPrefix) &&
+					/^[0-9]+$/.test(source.arn.slice(revisionPrefix.length)) &&
+					source.arn !== expectedRevision,
+			);
+			assert.deepEqual(
+				counts(source),
+				[0, 0, 0],
+				"API source revision has not retired",
+			);
+		}
+		const revisions = await this.call("DescribeServiceRevisions", {
+			serviceRevisionArns: [expectedRevision],
+		});
+		assert.equal(revisions.failures?.length ?? 0, 0);
+		assert.equal(revisions.serviceRevisions?.length, 1);
+		const revision = revisions.serviceRevisions[0];
+		assert.equal(revision.serviceRevisionArn, expectedRevision);
+		assert.equal(revision.serviceArn, SERVICE_ARN);
+		assert.equal(revision.clusterArn, ARN + "cluster/" + API_CLUSTER);
+		assert.equal(revision.taskDefinition, task.taskDefinitionArn);
+		assert.equal(revision.containerImages?.length, 1);
+		assert.equal(revision.containerImages[0].containerName, "api");
+		assert.ok(
+			[image.root, image.child].includes(
+				revision.containerImages[0].imageDigest,
+			),
+			"API completion image differs from the replacement",
+		);
+		if (!this.recordedCompletions.has(arn)) {
+			this.record("deployment-completed-proof", {
+				serviceDeploymentArn: arn,
+				serviceRevisionArn: expectedRevision,
+				task: task.taskArn,
+				taskDefinition: task.taskDefinitionArn,
+				imageDigest: revision.containerImages[0].imageDigest,
+				finishedAt: deployment.finishedAt.toISOString(),
+				legacyRolloutState: primary.rolloutState,
+			});
+			this.recordedCompletions.add(arn);
+		}
+		return true;
 	}
 	async service() {
 		const result = await this.call("DescribeServices", {
