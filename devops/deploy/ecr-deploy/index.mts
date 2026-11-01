@@ -2,6 +2,7 @@ import * as dotenv from "dotenv";
 import yargs from "yargs";
 import { AdminECRDeployer } from "./admin-deployer.mts";
 import { APIECRDeployer } from "./api-deployer.mts";
+import { deployAPIWithHandover } from "./api-rollout-cli.mjs";
 import { createECRClient, getECRConfig } from "./ecr-client.mts";
 import type { ECRDeployerBase } from "./ecr-deployer-base.mts";
 import { WebsiteECRDeployer } from "./website-deployer.mts";
@@ -135,7 +136,8 @@ async function main() {
 		}
 
 		// Deploy
-		await deployer.deploy();
+		if (moduleName === "api") await deployAPIWithHandover({ config, deployer });
+		else await deployer.deploy();
 
 		console.info("ECR deployment process finished successfully.");
 	} catch (error) {

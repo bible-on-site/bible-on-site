@@ -1103,7 +1103,6 @@ mod tests {
         assert_eq!(result.kind, "disambiguation");
         assert_eq!(result.target_count, 2);
         let log = db.get_connection().clone().into_transaction_log();
-        let statements: Vec<String> = log.iter().map(|t| format!("{t:?}")).collect();
         assert_eq!(
             sql_occurrences(
                 &log,
