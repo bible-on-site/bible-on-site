@@ -332,3 +332,23 @@ test("npm mode restores same-version legacy junctions and rolls back without alt
 		"fresh source",
 	);
 });
+
+test("an active copied override refreshes changed source without another opt-in", (t) => {
+	const f = fixture(t);
+	copyLocalFlipBook(f.project, {
+		local: resolveLocalFlipBook(f.project, {}, true),
+		run: f.run,
+	});
+	const manifest = f.read(path.join(f.project, "package.json"), "utf8");
+	f.write(path.join(f.react, "src", "index.ts"), "next local source");
+	assert.equal(copyLocalFlipBook(f.project, { env: {}, run: f.run }), true);
+	assert.equal(
+		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
+		"next local source",
+	);
+	assert.equal(f.read(path.join(f.project, "package.json"), "utf8"), manifest);
+	assert.equal(
+		resolveLocalFlipBook(f.project, { USE_LOCAL_FLIP_BOOK: "0" }),
+		null,
+	);
+});

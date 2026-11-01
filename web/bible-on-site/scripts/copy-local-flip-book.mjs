@@ -35,6 +35,21 @@ function atLeastVersion(localVersion, publishedVersion) {
 	return true;
 }
 
+function activeLocalRepository(projectRoot, env) {
+	if (env.USE_LOCAL_FLIP_BOOK === "0") return null;
+	const marker = path.join(
+		projectRoot,
+		"node_modules",
+		"html-flip-book-react",
+		".local-flip-book",
+	);
+	if (!fs.existsSync(marker)) return null;
+	const { repoRoot } = JSON.parse(fs.readFileSync(marker, "utf8"));
+	if (typeof repoRoot !== "string" || !repoRoot.trim())
+		throw new Error(`Invalid active local flip-book marker: ${marker}`);
+	return path.resolve(repoRoot);
+}
+
 export function resolveLocalFlipBook(
 	projectRoot,
 	env = process.env,
@@ -42,9 +57,14 @@ export function resolveLocalFlipBook(
 ) {
 	const dep = readPackage(projectRoot).dependencies?.["html-flip-book-react"];
 	const fileDependency = dep?.startsWith("file:");
-	const explicit = fileDependency || env.USE_LOCAL_FLIP_BOOK === "1";
+	const activeRepo = fileDependency
+		? null
+		: activeLocalRepository(projectRoot, env);
+	const explicit =
+		fileDependency || env.USE_LOCAL_FLIP_BOOK === "1" || activeRepo !== null;
 	if (!explicit && (!automatic || env.USE_LOCAL_FLIP_BOOK === "0")) return null;
-	const repoDir = path.resolve(projectRoot, "..", "..", "..", "html-flip-book");
+	const repoDir =
+		activeRepo ?? path.resolve(projectRoot, "..", "..", "..", "html-flip-book");
 	const reactSrc = fileDependency
 		? path.resolve(projectRoot, dep.slice("file:".length))
 		: ["react", "html-flip-book-react"]
