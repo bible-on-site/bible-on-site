@@ -13,12 +13,21 @@ region il-central-1, cluster `bible-on-site-cluster`, service
 x86 task with 256 CPU units and 2048 MiB. The image follows
 `bible-on-site:latest`; the website EventBridge rule owns ordinary deployments.
 
-Migrate only the website processor architecture to ARM64. Preserve capacity,
+Migrate the website processor architecture to ARM64. Preserve capacity,
 roles and secret mappings, networking and discovery, public/crawled URLs,
 database content, application behavior, cache policy, the existing readiness
 limits and the 120-second container stop timeout. API, admin and RDS are outside
 this migration. Reference CloudFormation files document the target only; do not
 deploy these untested templates.
+
+The live revision 16 overrides the Dockerfile health check with only
+`/api/health/ready` (curl maximum 5 seconds). The reviewed migration also aligns
+that command with the already-tested Dockerfile/reference check: readiness,
+recitation catalog, and chapter 2, each with curl maximum 3 seconds. The three
+requests fit within the existing 10-second health timeout. Interval 30 seconds,
+start period 120 seconds and five retries remain unchanged. This warms the
+actual critical route bundles before the new task is eligible for public
+traffic. Verify the aligned command first on the pinned x86 fallback, then ARM.
 
 ## Native build and release contract
 
@@ -59,6 +68,18 @@ live policy before any child upload or canonical/latest write. No new IAM
 permission is proposed. Record the previous policy for rollback; apply a live
 policy change only within the specific approved scope.
 
+The current lifecycle rule selects any images beyond the newest 15, so a digest
+pin alone does not retain a fallback. Add a higher-priority rule selecting
+`rollback-website-arm64-x86-` tags and retaining its newest one image. Apply an
+immutable tag in that namespace to the verified native x86 fallback before the
+ARM cutover. The lower-priority existing 15-image rule cannot expire that newest
+protected image. This can retain one additional image and its layers; it adds
+no running task. Preview both rules and verify the exact fallback stays present.
+The [November 1 preview evidence](website-arm64-retention-preview.json) records
+AWS accepting the actual proposed policy and a shadow experiment preserving an
+older image despite an aggressive lower-priority cleanup rule. Neither preview
+changed the live policy or deleted an image.
+
 Do not convert an already-published canonical version between single-image and
 index modes. Its immutable collision guard requires a fresh ordinary release
 version. If the first migration release is to use an index, enable the reviewed
@@ -75,7 +96,7 @@ flag before that release is published; do not toggle modes halfway through it.
    throughout the migration. Save immutable image and complete service/task
    configuration evidence without serializing credentials or environment values.
 3. Within the approved scope, apply only the reviewed website tag-mutability
-   policy and publication flag, then merge. Follow both native master builds,
+   policy, fallback-retention rule and publication flag, then merge. Follow both native master builds,
    the exact published release and ordinary x86 index deployment through public
    verification. Do not cut over to ARM after a failed build or deployment.
 4. Qualify the exact published native ARM image on isolated Fargate capacity
@@ -89,7 +110,8 @@ flag before that release is published; do not toggle modes halfway through it.
    with ordinary website releases; temporarily disable only the website ECR
    event rule if the reviewed manual handover needs sole ownership. Preserve
    an old healthy task until replacement readiness and discovery are verified.
-6. Clone the actual full task definition, changing only architecture and image.
+6. Clone the actual full task definition, changing only architecture, image and
+   the reviewed critical-route health command above.
    Verify a qualified ARM native pin, then ordinary ARM `latest` resolving to
    that same child. Verify healthy counts, exact runtime architecture/digest,
    completed ECS deployment history, Cloud Map and public traffic. Restore the
@@ -100,7 +122,7 @@ flag before that release is published; do not toggle modes halfway through it.
 
 ## Rollback
 
-Before ARM cutover, restore the recorded previous registry mutability and revert
+Before ARM cutover, restore the recorded previous registry mutability/lifecycle and revert
 the workflow change if necessary. A recorded immutable release tag is never
 overwritten to change modes. After index activation, retain the publication flag
 and both native archives for ordinary releases; turning the flag off cannot
