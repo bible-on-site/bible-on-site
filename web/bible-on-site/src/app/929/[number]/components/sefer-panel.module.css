@@ -4,6 +4,7 @@
 
 /* The component replaces BlankPageContent's .pageBlank section: a flex
    column filling the book page. */
+
 .panelRoot {
 	display: flex;
 	flex-direction: column;
@@ -733,4 +734,20 @@
 	.commentaryGroup[data-pasuk-highlight="fading"] {
 		transition: none;
 	}
+}
+
+/* Only the scroll panes change scrollbar paint during a fold. Keep their
+   descendants on a stable color so scripture/commentary words do not restyle. */
+:global(.page--flipping) .tagList,
+:global(.page--flipping) .commentaryScroll,
+:global(.page--flipping) .articlesScroll,
+:global(.page--flipping) .articleFullscreenBody {
+	scrollbar-color: transparent transparent;
+}
+
+.tagList > *,
+.commentaryScroll > *,
+.articlesScroll > *,
+.articleFullscreenBody > * {
+	scrollbar-color: auto;
 }

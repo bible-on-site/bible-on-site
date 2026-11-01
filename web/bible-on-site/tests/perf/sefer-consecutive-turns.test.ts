@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
 import {
@@ -14,8 +16,13 @@ import {
 // Every mode/book/gesture has its own unchanged 20s local / 60s CI deadline.
 // Full Chromium also uses the desktop rendering path locally; archive hardware
 // metadata with results so software-rendered CI is not labelled desktop GPU fps.
-test.use({ channel: "chromium", viewport: { width: 1440, height: 900 } });
+test.use({
+	channel: "chromium",
+	viewport: { width: 1440, height: 900 },
+	launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] },
+});
 test.describe.configure({ retries: 0 });
+test.skip(({ isMobile }) => isMobile, "Desktop Chrome/Edge regression profile");
 
 for (const [chapter, bookmarks] of [
 	[125, 36],
@@ -91,16 +98,45 @@ for (const [chapter, bookmarks] of [
 									width: box.width,
 								};
 							});
-							await page.mouse.move(edge.x, edge.y);
-							await page.mouse.down();
+							await client.send("Input.dispatchMouseEvent", {
+								type: "mouseMoved",
+								x: edge.x,
+								y: edge.y,
+							});
+							await client.send("Input.dispatchMouseEvent", {
+								type: "mousePressed",
+								x: edge.x,
+								y: edge.y,
+								button: "left",
+								buttons: 1,
+								clickCount: 1,
+							});
+							const inputs: Promise<unknown>[] = [];
 							for (let step = 1; step <= 14; step++) {
-								await page.mouse.move(
-									edge.x + (edge.width * 1.4 * step) / 14,
-									edge.y - (edge.width * 0.1 * step) / 14,
-								);
-								await page.waitForTimeout(11);
+								const motion = client.send("Input.dispatchMouseEvent", {
+									type: "mouseMoved",
+									x: edge.x + (edge.width * 1.4 * step) / 14,
+									y: edge.y - (edge.width * 0.1 * step) / 14,
+									buttons: 1,
+								});
+								// Confirm panstart, then preserve the 14-point/11ms input
+								// schedule without making physical movement wait for each
+								// render acknowledgement (the existing native swipe flow).
+								if (step === 1) await motion;
+								else inputs.push(motion);
+								await delay(11);
 							}
-							await page.mouse.up();
+							inputs.push(
+								client.send("Input.dispatchMouseEvent", {
+									type: "mouseReleased",
+									x: edge.x + edge.width * 1.4,
+									y: edge.y - edge.width * 0.1,
+									button: "left",
+									buttons: 0,
+									clickCount: 1,
+								}),
+							);
+							await Promise.all(inputs);
 						}
 						await page.waitForFunction(
 							(target) =>
@@ -114,8 +150,10 @@ for (const [chapter, bookmarks] of [
 					await page.waitForTimeout(200);
 				} finally {
 					samples = await stopTurnProbe(page);
-					await testInfo.attach("turn-samples", {
-						body: JSON.stringify(
+					const samplePath = testInfo.outputPath("turn-samples.json");
+					await writeFile(
+						samplePath,
+						JSON.stringify(
 							{
 								chapter,
 								mode,
@@ -129,6 +167,9 @@ for (const [chapter, bookmarks] of [
 							null,
 							2,
 						),
+					);
+					await testInfo.attach("turn-samples", {
+						path: samplePath,
 						contentType: "application/json",
 					});
 					await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
@@ -147,6 +188,18 @@ for (const [chapter, bookmarks] of [
 						value: metrics[key as keyof typeof TURN_LIMITS],
 						upperValue: limit,
 					});
+				for (const [phase, values] of [
+					["first-turn", metrics.firstTurn],
+					["consecutive-turns", metrics.consecutiveTurns],
+				] as const) {
+					for (const [key, limit] of Object.entries(TURN_LIMITS))
+						reportBenchmark({
+							name: `sefer-handoff/${chapter}/${mode}/${gesture}/${phase}/${key}`,
+							measure: "time_ms",
+							value: values[key as keyof typeof TURN_LIMITS],
+							upperValue: limit,
+						});
+				}
 				expect(turnBudgetFailures(metrics), JSON.stringify(metrics)).toEqual(
 					[],
 				);

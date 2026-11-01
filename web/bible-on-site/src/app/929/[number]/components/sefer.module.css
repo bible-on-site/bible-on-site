@@ -397,8 +397,7 @@
 .pasukNum[data-pasuk-selected] {
 	background: var(--pasuk-num-color, #1c2c5d);
 	border-radius: var(--radius-sm);
-	box-shadow:
-		0 0 0 2px
+	box-shadow: 0 0 0 2px
 		color-mix(in srgb, var(--pasuk-num-color, #1c2c5d) 30%, transparent);
 	color: var(--surface-elevated, #fff);
 	padding: 0 2px;
@@ -514,8 +513,7 @@
 
 	.pasukNum[data-pasuk-selected] {
 		background: var(--pasuk-num-color, #a8b9ff);
-		box-shadow:
-			0 0 0 2px
+		box-shadow: 0 0 0 2px
 			color-mix(in srgb, var(--pasuk-num-color, #a8b9ff) 35%, transparent);
 		color: var(--surface-elevated, #1a1f2e);
 	}
@@ -596,4 +594,18 @@
 	.perekText [id^="pasuk-"][data-pasuk-highlight="fading"] {
 		transition: none;
 	}
+}
+
+/* These panes already use native scrollbar colors. Keep their gutters fixed
+   during a turn and stop the animated color at their text boundary. */
+:global(.page--flipping) .perekTextScrollWrapper,
+:global(.page--flipping) .articleBodyWrapper,
+:global(.page--flipping) .perushNotesInBook {
+	scrollbar-color: transparent transparent;
+}
+
+.perekTextScrollWrapper > *,
+.articleBodyWrapper > *,
+.perushNotesInBook > * {
+	scrollbar-color: auto;
 }

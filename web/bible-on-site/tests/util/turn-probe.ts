@@ -41,6 +41,8 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 					firstMotion: null,
 					responseFrame: null,
 					settled: null,
+					frameStart: probe.frames.length,
+					frameEnd: null,
 				});
 			},
 		};
@@ -84,5 +86,6 @@ export async function markTurnSettled(page: Page) {
 		const input = window.__seferTurns?.inputs.at(-1);
 		if (!input) throw new Error("Completed turn has no trusted input");
 		input.settled = performance.now();
+		input.frameEnd = window.__seferTurns?.frames.length ?? null;
 	});
 }
