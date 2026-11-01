@@ -80,10 +80,13 @@ and public contracts. Circuit-breaker rollback also requires a previously
 completed deployment; inspect its real target and outcome. Do not claim that
 floating `latest` guarantees a particular recovery image.
 
-If multiarch publication itself needs reversal, keep the existing immutable
-children/index, return publication to x86 mode for a fresh future version and
-verify that version before moving `latest`. Do not delete immutable release
-artifacts or rewrite an immutable canonical version as rollback.
+Before the first index is published, restoring the previous publication flag
+can abandon the planned mode change. Once `latest` is an index, keep
+`API_MULTIARCH_RELEASES=true`: the publisher deliberately rejects subsequent
+single-platform releases, including fresh versions. Returning the service to
+x86 still works through the index's x86 child. Repair or revert publisher code
+while preserving dual-platform publication. Retain immutable release artifacts
+and never rewrite an existing canonical version as rollback.
 
 AWS documents the [container health-check behavior](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html),
 [completed-deployment circuit-breaker target](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-circuit-breaker.html)
