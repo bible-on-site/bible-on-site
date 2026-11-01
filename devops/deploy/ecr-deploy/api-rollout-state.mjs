@@ -265,6 +265,20 @@ export function assertTask(task, definition, image) {
 	);
 	assert.equal(image.architecture, architecture);
 	privateIP(task);
+	return {
+		reportedDigest: task.containers[0].imageDigest,
+		reportedDigestKind:
+			image.root !== image.child &&
+			task.containers[0].imageDigest === image.root
+				? "index"
+				: "native-child",
+		derivedNativeChild: image.child,
+		actualCPUArchitectures: task.attributes
+			.filter((row) => row.name === "ecs.cpu-architecture")
+			.map((row) => row.value),
+		cpu: task.cpu,
+		memory: task.memory,
+	};
 }
 export function ageUpperMs(task, clock) {
 	assert.ok(

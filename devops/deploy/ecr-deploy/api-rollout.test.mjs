@@ -17,6 +17,12 @@ test("protected latest handover waits for both public aliases and the unchanged 
 	assert.equal(result.instance, NEW_INSTANCE);
 	assert.equal(result.task, taskArn("b"));
 	assert.equal(result.protectionReleased, true);
+	assert.equal(result.runtime.reportedDigest, f.backend.newImages.root);
+	assert.equal(result.runtime.reportedDigestKind, "index");
+	assert.equal(
+		result.runtime.derivedNativeChild,
+		f.backend.newImages.children.amd64,
+	);
 	assert.ok(result.elapsedMs < LIMITS.overall);
 	const visible = f.backend.records.find(
 		(row) => row.name === "replacement-visible",
@@ -56,6 +62,9 @@ test("ARM pinned and normal latest use actual native descriptors without changin
 		imageMode: "pinned",
 	});
 	assert.equal(result.image.child, f.backend.newImages.children.arm64);
+	assert.equal(result.runtime.reportedDigest, result.image.child);
+	assert.equal(result.runtime.reportedDigestKind, "native-child");
+	assert.deepEqual(result.runtime.actualCPUArchitectures, ["arm64"]);
 	assert.equal(f.backend.current.runtimePlatform.cpuArchitecture, "ARM64");
 	assert.equal(
 		f.backend.current.containerDefinitions[0].image,

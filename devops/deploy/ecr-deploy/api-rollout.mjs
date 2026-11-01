@@ -126,7 +126,7 @@ async function recover({
 			assert.ok(candidates.length <= 1, "Ambiguous recovery task");
 			if (candidates.length) {
 				const task = candidates[0];
-				assertTask(task, restore.definition, restore.image);
+				const runtime = assertTask(task, restore.definition, restore.image);
 				if (seen === null) {
 					seen = task.taskArn;
 					completionAt = now();
@@ -240,6 +240,7 @@ async function recover({
 							task: seen,
 							definition: restore.definition.taskDefinitionArn,
 							image: restore.image,
+							runtime,
 							elapsedMs: now() - started,
 							failedSamplesRetained: monitor.rows.filter((row) => !row.passed)
 								.length,
@@ -300,7 +301,7 @@ export async function runAPIRollout({
 		currentArchitecture,
 		true,
 	);
-	assertTask(task, initial.definition, oldImage);
+	const sourceRuntime = assertTask(task, initial.definition, oldImage);
 	assert.ok(healthy(task), "The existing API task must be healthy");
 	assert.ok(
 		discoveryMatches(initial.instances, [task]),
@@ -327,6 +328,7 @@ export async function runAPIRollout({
 		definition: fallback.taskDefinitionArn,
 		image: oldImage,
 		sourceTask: task.taskArn,
+		sourceRuntime,
 	});
 	const lease = new APITaskProtection({
 		call: aws.call.bind(aws),
@@ -366,8 +368,19 @@ export async function runAPIRollout({
 			await lease.release();
 			await monitor.stop();
 			monitor.assertHealthy();
-			record("rollout-already-current", { version, image, task: task.taskArn });
-			return { version, image, task: task.taskArn, changed: false };
+			record("rollout-already-current", {
+				version,
+				image,
+				task: task.taskArn,
+				runtime: sourceRuntime,
+			});
+			return {
+				version,
+				image,
+				task: task.taskArn,
+				runtime: sourceRuntime,
+				changed: false,
+			};
 		}
 		await lease.assertActive((2 * LIMITS.overall) / 1000);
 		monitor.assertHealthy();
@@ -407,7 +420,7 @@ export async function runAPIRollout({
 			assert.ok(replacements.length <= 1);
 			if (replacements.length) {
 				const next = replacements[0];
-				assertTask(next, target, image);
+				const runtime = assertTask(next, target, image);
 				if (candidate === null) {
 					candidate = next.taskArn;
 					observedAt = now();
@@ -428,6 +441,7 @@ export async function runAPIRollout({
 							task: candidate,
 							upperMs: age,
 							image,
+							runtime,
 						});
 					}
 				}
@@ -514,6 +528,7 @@ export async function runAPIRollout({
 							changed: true,
 							version,
 							image,
+							runtime,
 							task: candidate,
 							instance: candidateInstance,
 							definition: target.taskDefinitionArn,
