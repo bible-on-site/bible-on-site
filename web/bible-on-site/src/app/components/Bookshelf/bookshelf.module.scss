@@ -179,7 +179,9 @@ button.block {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) rotate(90deg);
-  display: flex;
+  // Equal side tracks keep the name centered; the dedication sits in the end track.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   direction: rtl;
   white-space: nowrap;
@@ -189,10 +191,7 @@ button.block {
   font-family: inherit; // Use website font, avoid mixing font families
   font-weight: bold;
   -webkit-font-smoothing: antialiased;
-  flex: none;
-  // Auto margins split the free space around the name, so it stays
-  // centered while the dedication keeps the line's end.
-  margin-inline: auto;
+  grid-column: 2;
   background: transparent;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -244,13 +243,20 @@ button.block {
 // wording stays in the button's accessible name and the hover title.
 .spineDedication {
   font-family: inherit;
-  flex: 0 1 auto;
+  grid-column: 3;
+  justify-self: end;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   color: rgba(255, 255, 255, 0.9);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
   line-height: 1.3;
+
+  // Too little room on small screens; the caption stays in the title tooltip only.
+  @media (max-width: 540px) {
+    display: none;
+  }
 }
 
 // Helek dedication caption beside a shelf's helek heading (#2731),

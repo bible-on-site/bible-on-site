@@ -335,9 +335,8 @@ function BookBlock({
 							width: `${sqSize * BOOK_HEIGHT}px`,
 							height: `${sqSize * BOOK_WIDTH}px`,
 							gap: `${sqSize * 0.4}px`,
-							paddingInlineStart: `${sqSize * 0.4}px`,
-							// Keep the end-pinned caption clear of today's ribbon.
-							paddingInlineEnd: `${sqSize * (isToday && hasDedications ? 3.2 : 0.4)}px`,
+							// Symmetric so the name stays centered; wide enough to clear today's ribbon.
+							paddingInline: `${sqSize * (isToday && hasDedications ? 3.2 : 0.4)}px`,
 						}}
 					>
 						<span className={styles.spineText}>{sefer.displayName}</span>
