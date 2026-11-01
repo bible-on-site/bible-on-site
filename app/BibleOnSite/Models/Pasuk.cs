@@ -26,7 +26,7 @@ public partial class Pasuk : ObservableObject
     partial void OnIsSelectedChanged(bool value)
     {
         _ = value;
-        _formattedText = null;
+        InvalidateFormatted();
         OnPropertyChanged(nameof(FormattedText));
     }
 
@@ -43,7 +43,7 @@ public partial class Pasuk : ObservableObject
             }
             OnPropertyChanging(nameof(RecitingSegment));
             _recitingSegment = value;
-            _formattedText = null;
+            InvalidateFormatted();
             OnPropertyChanged(nameof(FormattedText));
             OnPropertyChanged(nameof(RecitingSegment));
         }
@@ -63,7 +63,18 @@ public partial class Pasuk : ObservableObject
     /// The segments that make up this pasuk (for rich rendering).
     /// </summary>
     private List<PasukSegment> _segments = new();
-    private WeakReference<FormattedString>? _formattedText;
+
+    /// <summary>Most-recently-used entries of <see cref="FormattedText"/> per
+    /// pasuk. A strong <see cref="FormattedString"/> retains its subscribers
+    /// (MAUI 10.0.90 Labels subscribe to it), so an unbounded cache would pin
+    /// recycled Labels in buffered perakim; a bare WeakReference instead loses
+    /// ~40% of rebinds to GC churn while scrolling (#2309). Bounding the MRU
+    /// keeps retention capped at the freshest pesukim and absorbs that churn.
+    /// </summary>
+    private const int FormattedCacheCapacity = 128;
+    private static readonly object _formattedCacheLock = new();
+    private static readonly LinkedList<Pasuk> _formattedMru = new();
+    private static readonly Dictionary<Pasuk, (LinkedListNode<Pasuk> Node, FormattedString Formatted)> _formattedCache = new();
     // The masking revision the cached FormattedString was built under — a
     // הסתר שם השם settings change bumps DivineNameMasking.Revision, which
     // invalidates the cache without touching the canonical segments.
@@ -75,7 +86,7 @@ public partial class Pasuk : ObservableObject
         set
         {
             _segments = value;
-            _formattedText = null;
+            InvalidateFormatted();
             OnPropertyChanged(nameof(FormattedText));
         }
     }
@@ -111,21 +122,48 @@ public partial class Pasuk : ObservableObject
     {
         get
         {
-            if (_formattedText?.TryGetTarget(out var formatted) == true &&
-                _formattedRevision == DivineNameMasking.Revision &&
-                _formattedDark == IsDarkTheme)
+            lock (_formattedCacheLock)
             {
-                return formatted;
+                if (_formattedCache.TryGetValue(this, out var entry) &&
+                    _formattedRevision == DivineNameMasking.Revision &&
+                    _formattedDark == IsDarkTheme)
+                {
+                    _formattedMru.Remove(entry.Node);
+                    _formattedMru.AddFirst(entry.Node);
+                    return entry.Formatted;
+                }
             }
 
-            formatted = BuildFormattedText();
+            var formatted = BuildFormattedText();
             _formattedRevision = DivineNameMasking.Revision;
             _formattedDark = IsDarkTheme;
-            // MAUI 10.0.90 Labels subscribe to a FormattedString. Retaining it
-            // strongly in a buffered perek can also retain recycled Labels.
-            _formattedText = new WeakReference<FormattedString>(formatted);
+            lock (_formattedCacheLock)
+            {
+                if (_formattedCache.Remove(this, out var stale))
+                {
+                    _formattedMru.Remove(stale.Node);
+                }
+                _formattedCache[this] = (_formattedMru.AddFirst(this), formatted);
+                while (_formattedMru.Count > FormattedCacheCapacity)
+                {
+                    _formattedCache.Remove(_formattedMru.Last!.Value);
+                    _formattedMru.RemoveLast();
+                }
+            }
             return formatted;
         }
+    }
+
+    private void InvalidateFormatted()
+    {
+        lock (_formattedCacheLock)
+        {
+            if (_formattedCache.Remove(this, out var entry))
+            {
+                _formattedMru.Remove(entry.Node);
+            }
+        }
+        _formattedRevision = -1;
     }
 
     private static readonly Color QriColor = Color.FromArgb("#637598");
@@ -164,11 +202,14 @@ public partial class Pasuk : ObservableObject
     /// </summary>
     internal void RefreshForThemeChange()
     {
-        if (_formattedText?.TryGetTarget(out _) != true || _formattedDark == IsDarkTheme)
+        lock (_formattedCacheLock)
         {
-            return;
+            if (!_formattedCache.ContainsKey(this) || _formattedDark == IsDarkTheme)
+            {
+                return;
+            }
         }
-        _formattedText = null;
+        InvalidateFormatted();
         OnPropertyChanged(nameof(FormattedText));
     }
 
