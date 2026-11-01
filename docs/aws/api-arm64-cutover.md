@@ -19,6 +19,13 @@ native architectures on a disposable MySQL server with the frozen public
 corpus and synthetic write fixtures. Keep the existing 30-second readiness,
 2-second request, zero-retry and resource limits.
 
+Record the index digest separately from each platform-manifest digest. If ECS
+reports the index digest, verify its exact bytes and unique native platform
+descriptor against the actual task's runtime platform and qualified child.
+Retain the reported value and that derivation; never label an index digest as
+a directly reported child digest. Any unrelated digest or ambiguous platform
+mapping fails qualification.
+
 Include complete persisted model/document/vector/term comparisons, query
 ranking and scores, cold initialization, held-lock snapshot reuse, queued
 synthetic updates and database-outage readiness. Alias management requires a
