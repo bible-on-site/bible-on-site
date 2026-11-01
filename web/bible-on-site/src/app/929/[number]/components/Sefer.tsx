@@ -42,7 +42,7 @@ import {
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { FlipBook } from "@/app/components/reading/FlipBook";
 import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
-import type { SefarimItem } from "@/data/db/tanah-view-types";
+import type { Perek, SefarimItem } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
@@ -108,10 +108,66 @@ import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
-/**
- * Pasuk number in a book content page — see ./SeferPasukNumber (recitation,
- * perush navigation, or a pasuk-selection toggle during selection mode).
- */
+// A page element is cheap to create. Its verse tree is built only when the
+// FlipBook mounts that page inside its buffer, including pages revealed later.
+function SeferScriptureText({
+	perek,
+	pagePerekId,
+	perekLookup,
+}: {
+	perek: Perek;
+	pagePerekId: number;
+	perekLookup: ReturnType<typeof buildEntityRefLookup>;
+}) {
+	return (
+		<article className={styles.perekText}>
+			{perek.pesukim.map((pasuk, pasukIdx) => {
+				const pasukKey = pasukIdx + 1;
+				const pasukNumElement = (
+					<SeferPasukNumber perekId={pagePerekId} pasuk={pasukKey} />
+				);
+
+				const pasukElement = renderPasukWithEntityRefs(
+					pasuk.segments,
+					pasukIdx,
+					perekLookup,
+					Ptuah,
+					Stuma,
+					styles.qri,
+					(entryUniqueName, children, key) => (
+						<RecitationLink
+							key={key}
+							link={
+								<TanahpediaLink
+									key={key}
+									entryUniqueName={entryUniqueName}
+									className={styles.tanahpediaLink}
+								>
+									{children}
+								</TanahpediaLink>
+							}
+						>
+							{children}
+						</RecitationLink>
+					),
+					(pasuk, segment, text) => (
+						<RecitationWordControl pasuk={pasuk} segment={segment}>
+							{text}
+						</RecitationWordControl>
+					),
+				);
+				return (
+					<RecitationVerse key={pasukKey} pasuk={pasukKey}>
+						{pasukNumElement}
+						<span> </span>
+						{pasukElement}
+						<span> </span>
+					</RecitationVerse>
+				);
+			})}
+		</article>
+	);
+}
 
 const Sefer = (props: {
 	perekObj: PerekObj;
@@ -505,60 +561,14 @@ const Sefer = (props: {
 											</figcaption>
 										</figure>
 									))}
-									<article className={styles.perekText}>
-										{perek.pesukim.map((pasuk, pasukIdx) => {
-											const pasukKey = pasukIdx + 1;
-											const pasukNumElement = (
-												<SeferPasukNumber
-													perekId={pagePerekId ?? 0}
-													pasuk={pasukKey}
-												/>
-											);
-											const perekLookup =
-												entityRefLookupsByPerekIdx[perekIdx] ??
-												buildEntityRefLookup([]);
-											const pasukElement = renderPasukWithEntityRefs(
-												pasuk.segments,
-												pasukIdx,
-												perekLookup,
-												Ptuah,
-												Stuma,
-												styles.qri,
-												(entryUniqueName, children, key) => (
-													<RecitationLink
-														key={key}
-														link={
-															<TanahpediaLink
-																key={key}
-																entryUniqueName={entryUniqueName}
-																className={styles.tanahpediaLink}
-															>
-																{children}
-															</TanahpediaLink>
-														}
-													>
-														{children}
-													</RecitationLink>
-												),
-												(pasuk, segment, text) => (
-													<RecitationWordControl
-														pasuk={pasuk}
-														segment={segment}
-													>
-														{text}
-													</RecitationWordControl>
-												),
-											);
-											return (
-												<RecitationVerse key={pasukKey} pasuk={pasukKey}>
-													{pasukNumElement}
-													<span> </span>
-													{pasukElement}
-													<span> </span>
-												</RecitationVerse>
-											);
-										})}
-									</article>
+									<SeferScriptureText
+										perek={perek}
+										pagePerekId={pagePerekId ?? 0}
+										perekLookup={
+											entityRefLookupsByPerekIdx[perekIdx] ??
+											buildEntityRefLookup([])
+										}
+									/>
 								</div>
 								<SeferPasukSelectionBar perekId={pagePerekId ?? 0} />
 							</section>

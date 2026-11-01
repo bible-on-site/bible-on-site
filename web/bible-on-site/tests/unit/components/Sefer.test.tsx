@@ -17,6 +17,7 @@ jest.mock("@/app/929/[number]/components/pasuk-renderer", () => {
 });
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
+var mockVisiblePageIndices: number[] | undefined;
 var mockPathname = "/929/1";
 jest.mock("next/navigation", () => ({
 	usePathname: () => mockPathname,
@@ -38,7 +39,9 @@ jest.mock("next/dynamic", () => {
 			}));
 			return (
 				<div data-testid="mock-flipbook">
-					{props.pages as React.ReactNode[]}
+					{(props.pages as React.ReactNode[]).filter(
+						(_page, index) => mockVisiblePageIndices?.includes(index) ?? true,
+					)}
 				</div>
 			);
 		});
@@ -256,6 +259,52 @@ const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
 );
 
 describe("Sefer component", () => {
+	it("builds scripture only when its page enters the mounted book window", () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const sefer = {
+			...original,
+			perakim: [
+				chapter,
+				{
+					...chapter,
+					pesukim: [
+						{
+							segments: [
+								{
+									type: "qri" as const,
+									value: "בהמשך הספר",
+									recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+								},
+							],
+						},
+					],
+				},
+			],
+		};
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer,
+		};
+		mockVisiblePageIndices = [];
+		jest.mocked(renderPasukWithEntityRefs).mockClear();
+		const { rerender } = render(<SeferContents {...props} />);
+		expect(renderPasukWithEntityRefs).not.toHaveBeenCalled();
+		mockVisiblePageIndices = [3];
+		rerender(<SeferContents {...props} />);
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("בהמשך הספר")).not.toBeInTheDocument();
+		mockVisiblePageIndices = [5];
+		rerender(<SeferContents {...props} />);
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(2);
+		expect(screen.getByText("בהמשך הספר")).toBeInTheDocument();
+	});
 	it("does not rebuild scripture when background summaries arrive", async () => {
 		let finish!: (value: unknown) => void;
 		mockGetPerekSummariesBatch.mockReturnValueOnce(
@@ -334,6 +383,7 @@ describe("Sefer component", () => {
 	});
 
 	beforeEach(() => {
+		mockVisiblePageIndices = undefined;
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
