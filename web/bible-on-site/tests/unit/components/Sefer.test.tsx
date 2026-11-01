@@ -259,7 +259,9 @@ const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
 );
 
 describe("Sefer component", () => {
-	it("builds scripture only when its page enters the mounted book window", () => {
+	it("builds scripture only when its page enters the mounted book window", async () => {
+		const summaries = Promise.resolve({});
+		mockGetPerekSummariesBatch.mockReturnValueOnce(summaries);
 		const original = getSeferByName(minimalPerek.sefer);
 		const chapter =
 			"perakim" in original
@@ -295,6 +297,9 @@ describe("Sefer component", () => {
 		mockVisiblePageIndices = [];
 		jest.mocked(renderPasukWithEntityRefs).mockClear();
 		const { rerender } = render(<SeferContents {...props} />);
+		await act(async () => {
+			await summaries;
+		});
 		expect(renderPasukWithEntityRefs).not.toHaveBeenCalled();
 		mockVisiblePageIndices = [3];
 		rerender(<SeferContents {...props} />);
