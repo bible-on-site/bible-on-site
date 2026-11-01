@@ -445,6 +445,11 @@ Resources:
         - FARGATE
       Cpu: "256" # 0.25 vCPU
       Memory: "512" # 512 MB
+      # Apply only after the dual-platform latest index and completed pinned
+      # x86 recovery deployment are verified; see ../api-arm64-cutover.md.
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: api
@@ -454,15 +459,14 @@ Resources:
             - ContainerPort: 3003
               HostPort: 3003
               Protocol: tcp
-          # TODO: Add container health check once /api/health endpoint is implemented
-          # HealthCheck:
-          #   Command:
-          #     - CMD-SHELL
-          #     - curl -f http://localhost:3003/api/health || exit 1
-          #   Interval: 30
-          #   Timeout: 10
-          #   Retries: 3
-          #   StartPeriod: 60
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - wget -T 2 -qO- http://127.0.0.1:3003/health/ready >/dev/null
+            Interval: 5
+            Timeout: 3
+            Retries: 3
+            StartPeriod: 30
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -584,8 +588,8 @@ Resources:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
         DeploymentCircuitBreaker:
-          Enable: false
-          Rollback: false
+          Enable: true
+          Rollback: true
       EnableExecuteCommand: false
       Tags:
         - Key: Project
