@@ -325,11 +325,9 @@ async function readTagDigest(
 		throw error;
 	}
 	const images = result?.imageDetails;
-	if (
-		images?.length !== 1 ||
-		!images[0].imageTags?.includes(tag) ||
-		!isDigest(images[0].imageDigest)
-	)
+	// The tag selector resolves the digest even when imageTags still lists only
+	// older aliases. That cached list is not a second tag lookup.
+	if (images?.length !== 1 || !isDigest(images[0].imageDigest))
 		throw new Error(`Invalid registry tag metadata for ${tag}`);
 	return images[0].imageDigest;
 }
@@ -463,7 +461,8 @@ async function putImage(
 		);
 	// BatchGetImage's manifest-by-tag path can return the previous image after
 	// a successful retag. Verify the exact write acknowledgement above and the
-	// tag's metadata here, without sleeping, retrying or accepting another digest.
+	// tag-selected digest here, without sleeping, retrying or accepting another
+	// digest. imageTags can still omit the newly added alias for an existing index.
 	const result = await client.send(
 		new DescribeImagesCommand({
 			repositoryName,
@@ -471,11 +470,7 @@ async function putImage(
 		}),
 	);
 	const stored = result.imageDetails;
-	if (
-		stored?.length !== 1 ||
-		!stored[0].imageTags?.includes(tag) ||
-		stored[0].imageDigest !== image.digest
-	)
+	if (stored?.length !== 1 || stored[0].imageDigest !== image.digest)
 		throw new Error(
 			`Registry tag metadata does not preserve the exact digest for ${tag}`,
 		);
