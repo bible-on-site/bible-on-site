@@ -201,8 +201,14 @@ AWS_PROFILE=AdministratorAccess-250598594267 node devops/setup-dev-env.mts sync-
 4. Runs `mysqldump` from production and restores into local `tanah-dev`
 5. **Migrates article content**: replaces S3 references from `bible-on-site-assets` → `bible-on-site-assets-dev`
 6. **Applies the Tanahpedia safe structure + baseline seed** (`cargo make mysql-seed-tanahpedia-baseline`) — creates missing tables, idempotent column upgrades, and lookup rows without touching synced content
-7. Optionally syncs S3 assets from prod to dev bucket
+7. Optionally syncs S3 assets from prod to dev bucket; local RustFS targets use a persistent incremental mirror shared across worktrees at `~/.cache/bible-on-site/s3-mirrors/<region>/<bucket>`, rather than downloading and deleting the entire bucket on every run
 8. Revokes the security group ingress rule
+
+Keep the shared mirror to avoid repeat internet-download charges. Source reads
+use your AWS identity; destination writes use local RustFS credentials and a
+validated local HTTP endpoint. Concurrent mirror use fails with a lock message;
+after a killed process, verify it exited before removing the empty `.lock`
+directory. A failed asset refresh does not mark the complete local sync fresh.
 
 **S3 bucket naming convention:**
 

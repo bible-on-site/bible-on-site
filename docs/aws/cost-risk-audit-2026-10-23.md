@@ -1,5 +1,10 @@
 # AWS cost risk audit - 2026-10-23
 
+For the later S3 download spike, see the
+[November 1 reassessment](s3-delivery-cost-2026-11-01.md). It adds a shared local
+mirror and an approval-gated, asset-only CDN proposal while retaining the
+legacy-URL requirements below. This dated audit remains a historical snapshot.
+
 Production uptime and existing public/crawled URLs take priority over savings.
 This audit supersedes the manual rollout instructions in #2563 and the original
 #2576 checklist. Reference CloudFormation files describe configuration; none
