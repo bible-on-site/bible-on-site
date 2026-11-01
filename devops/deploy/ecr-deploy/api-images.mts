@@ -510,6 +510,7 @@ async function immutableImage(
 export async function assertAPIRepositoryPolicy(
 	client: ECRClient,
 	repositoryName: string,
+	mutableTags: readonly string[] = ["latest"],
 ): Promise<void> {
 	const result = await client.send(
 		new DescribeRepositoriesCommand({ repositoryNames: [repositoryName] }),
@@ -520,12 +521,17 @@ export async function assertAPIRepositoryPolicy(
 	const exclusions = repository?.imageTagMutabilityExclusionFilters;
 	if (
 		repository?.imageTagMutability !== "IMMUTABLE_WITH_EXCLUSION" ||
-		exclusions?.length !== 1 ||
-		exclusions[0].filterType !== "WILDCARD" ||
-		exclusions[0].filter !== "latest"
+		exclusions?.length !== mutableTags.length ||
+		new Set(mutableTags).size !== mutableTags.length ||
+		!mutableTags.includes("latest") ||
+		!mutableTags.every((tag) =>
+			exclusions.some(
+				(entry) => entry.filterType === "WILDCARD" && entry.filter === tag,
+			),
+		)
 	)
 		throw new Error(
-			"API repository must use IMMUTABLE_WITH_EXCLUSION with only latest mutable",
+			`Image repository must use IMMUTABLE_WITH_EXCLUSION with only ${mutableTags.join(", ")} mutable`,
 		);
 }
 
@@ -587,6 +593,7 @@ export type APIPublishOptions = {
 	repositoryUri: string;
 	version: string;
 	publishIndex?: boolean;
+	mutableTags?: readonly string[];
 	pushArchive?: (archive: string, reference: string) => Promise<void>;
 };
 /** No canonical/latest write occurs until both immutable children have been verified. */
@@ -610,7 +617,7 @@ export async function publishAPIImages(
 		throw new Error(
 			"Publication must use the exact validated API version and architecture pair",
 		);
-	await assertAPIRepositoryPolicy(client, repositoryName);
+	await assertAPIRepositoryPolicy(client, repositoryName, options.mutableTags);
 	await assertAPILatestMode(client, repositoryName, publishIndex);
 	await assertNewest(client, repositoryName, version);
 	const versionTag = `v${version}`;

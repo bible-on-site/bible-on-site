@@ -61,6 +61,7 @@ if (result.status === 0) {
 		"devops/assets-cdn.mjs",
 		"devops/assets-cdn-check.mjs",
 		"devops/deploy/ecr-deploy/api-images.mts",
+		"devops/deploy/ecr-deploy/website-images.mts",
 		"devops/deploy/ecr-deploy/api-public-transport.mjs",
 		"devops/deploy/ecr-deploy/api-public-monitor.mjs",
 		"devops/deploy/ecr-deploy/api-task-protection.mjs",
