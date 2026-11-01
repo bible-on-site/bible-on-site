@@ -320,6 +320,13 @@ test("the handover policy limits service writes, role passing, size and lease ta
 		true,
 	);
 	assert.equal(statements.APIRuleStateRead.Action, "events:DescribeRule");
+	for (const statement of policy.Statement)
+		assert.equal(
+			statement.Condition.StringEquals[
+				"token.actions.githubusercontent.com:sub"
+			],
+			"repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master",
+		);
 	for (const statement of policy.Statement.filter(
 		(row) => row.Action !== "iam:PassRole",
 	))

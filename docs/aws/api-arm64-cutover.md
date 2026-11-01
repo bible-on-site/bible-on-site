@@ -82,7 +82,11 @@ task protection is limited to cluster tasks because IAM cannot scope those
 task APIs by service. The coordinator independently verifies the exact API
 service group, task ARN, architecture, image and lease ownership. Definition
 registration is limited to the API family, Fargate and the existing 256/512
-size. Role passing is limited to the existing execution role.
+size. Role passing is limited to the existing execution role. Every new grant
+requires the `master` branch OIDC subject. Pull-request builds retain their
+existing permissions; they do not gain API service/task control. The OIDC
+`sub` claim is available in the AWS session, so this restriction applies to
+resource access as well as role assumption.
 
 With no other API release running, disable only EventBridge rule
 `ecr-push-bible-on-site-api`. The API CLI refuses to publish while that rule is
