@@ -2,7 +2,7 @@ use std::{
     env, io,
     net::TcpListener,
     sync::{
-        Arc,
+        Arc, LazyLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -145,13 +145,20 @@ struct HealthResponse {
     version: &'static str,
 }
 
+// An opaque process marker lets deployment checks distinguish old and new
+// instances of the same release without exposing AWS metadata or changing JSON.
+const HEALTH_INSTANCE_HEADER: &str = "x-tanahpedia-instance";
+static HEALTH_INSTANCE: LazyLock<String> = LazyLock::new(|| uuid::Uuid::new_v4().to_string());
+
 /// GET/HEAD /health — returns API status and version (embedded at compile time).
 /// Used by ECS health checks and for version introspection.
 async fn health_check() -> HttpResponse {
-    HttpResponse::Ok().json(HealthResponse {
-        status: "ok",
-        version: env!("CARGO_PKG_VERSION"),
-    })
+    HttpResponse::Ok()
+        .insert_header((HEALTH_INSTANCE_HEADER, HEALTH_INSTANCE.as_str()))
+        .json(HealthResponse {
+            status: "ok",
+            version: env!("CARGO_PKG_VERSION"),
+        })
 }
 
 /// Dependency readiness is separate from the stable liveness/version contract.
@@ -162,10 +169,12 @@ async fn readiness_check(index: web::Data<ArticleSearchIndex>) -> HttpResponse {
     } else {
         HttpResponse::ServiceUnavailable()
     };
-    response.json(HealthResponse {
-        status: if ready { "ready" } else { "not_ready" },
-        version: env!("CARGO_PKG_VERSION"),
-    })
+    response
+        .insert_header((HEALTH_INSTANCE_HEADER, HEALTH_INSTANCE.as_str()))
+        .json(HealthResponse {
+            status: if ready { "ready" } else { "not_ready" },
+            version: env!("CARGO_PKG_VERSION"),
+        })
 }
 
 #[cfg(test)]
@@ -260,6 +269,10 @@ mod tests {
             )
             .await;
             assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers().get(HEALTH_INSTANCE_HEADER).unwrap(),
+                HEALTH_INSTANCE.as_str()
+            );
         }
         for method in [
             Method::POST,
@@ -291,6 +304,69 @@ mod tests {
         let response =
             test::call_service(&app, test::TestRequest::get().uri("/health").to_request()).await;
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn health_routes_identify_the_same_process_without_changing_json() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+        )))
+        .await;
+        let mut instance = None;
+        for (method, path, expected) in [
+            (Method::GET, "/health", StatusCode::OK),
+            (Method::HEAD, "/health", StatusCode::OK),
+            (
+                Method::GET,
+                "/health/ready",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (
+                Method::HEAD,
+                "/health/ready",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method.clone())
+                    .uri(path)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), expected);
+            let value = response
+                .headers()
+                .get("x-tanahpedia-instance")
+                .expect("health routing must identify the serving process")
+                .to_str()
+                .expect("instance identifier is ASCII")
+                .to_owned();
+            assert_eq!(uuid::Uuid::parse_str(&value).unwrap().get_version_num(), 4);
+            assert_eq!(value.len(), 36);
+            if let Some(ref previous) = instance {
+                assert_eq!(&value, previous);
+            } else {
+                instance = Some(value);
+            }
+            if method == Method::GET {
+                let body = to_bytes(response.into_body()).await.unwrap();
+                let status = if path == "/health" { "ok" } else { "not_ready" };
+                assert_eq!(
+                    std::str::from_utf8(&body).unwrap(),
+                    format!(
+                        r#"{{"status":"{}","version":"{}"}}"#,
+                        status,
+                        env!("CARGO_PKG_VERSION")
+                    )
+                );
+            }
+        }
     }
 
     #[actix_web::test]

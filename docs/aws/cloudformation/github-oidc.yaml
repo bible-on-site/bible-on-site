@@ -235,7 +235,304 @@ Resources:
         - Key: Purpose
           Value: github-actions-ecr-deploy
 
+  # API releases use a separate role: enforce the exact master subject in its
+  # trust policy, without widening the shared role used by PR/SSG builds.
+  # Preserve shared managed policy v9 and the SSG ownership-read inline policy.
+  GitHubActionsAPIDeployRole:
+    Type: AWS::IAM::Role
+    DependsOn: GitHubOIDCProvider
+    Properties:
+      RoleName: GitHubActionsAPIDeployRole
+      Description: Master-only API image publication and protected task handover
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Fn::Sub: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Federated": "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+                },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": {
+                  "StringEquals": {
+                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                  }
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: github-actions-api-deploy
+
+  GitHubActionsAPIPublishPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GitHubActionsAPIPublish
+      Roles: [!Ref GitHubActionsAPIDeployRole]
+      PolicyDocument:
+        Fn::Sub: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "APIRegistryAuthentication",
+                "Effect": "Allow",
+                "Action": "ecr:GetAuthorizationToken",
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "APIRepositoryPublication",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:DescribeRepositories",
+                  "ecr:DescribeImages",
+                  "ecr:BatchCheckLayerAvailability",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchGetImage",
+                  "ecr:InitiateLayerUpload",
+                  "ecr:UploadLayerPart",
+                  "ecr:CompleteLayerUpload",
+                  "ecr:PutImage"
+                ],
+                "Resource": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/bible-on-site-api",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              }
+            ]
+          }
+
+  # Task protection has cluster-task scope; the coordinator also verifies API group.
+  GitHubActionsAPIHandoverPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GitHubActionsAPIHandover
+      Roles: [!Ref GitHubActionsAPIDeployRole]
+      PolicyDocument:
+        Fn::Sub: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "APIServiceRead",
+                "Effect": "Allow",
+                "Action": [
+                  "ecs:DescribeServices",
+                  "ecs:ListServiceDeployments"
+                ],
+                "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-api",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "APIServiceUpdate",
+                "Effect": "Allow",
+                "Action": "ecs:UpdateService",
+                "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-api",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  },
+                  "ArnLike": {
+                    "ecs:task-definition": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/bible-on-site-api:*"
+                  }
+                }
+              },
+              {
+                "Sid": "APIServiceRecovery",
+                "Effect": "Allow",
+                "Action": [
+                  "ecs:DescribeServiceDeployments",
+                  "ecs:DescribeServiceRevisions",
+                  "ecs:StopServiceDeployment"
+                ],
+                "Resource": [
+                  "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-api",
+                  "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service-deployment/bible-on-site-cluster/bible-on-site-api/*",
+                  "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service-revision/bible-on-site-cluster/bible-on-site-api/*"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "ClusterTaskReadAndProtection",
+                "Effect": "Allow",
+                "Action": [
+                  "ecs:DescribeTasks",
+                  "ecs:GetTaskProtection",
+                  "ecs:UpdateTaskProtection"
+                ],
+                "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/bible-on-site-cluster/*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  },
+                  "ArnEquals": {
+                    "ecs:cluster": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/bible-on-site-cluster"
+                  }
+                }
+              },
+              {
+                "Sid": "APITagsRead",
+                "Effect": "Allow",
+                "Action": "ecs:ListTagsForResource",
+                "Resource": [
+                  "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/bible-on-site-cluster/*",
+                  "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/bible-on-site-api:*"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "OwnedLeaseMarkersOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecs:TagResource",
+                  "ecs:UntagResource"
+                ],
+                "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/bible-on-site-cluster/*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  },
+                  "ForAllValues:StringLike": {
+                    "aws:TagKeys": [
+                      "tanahpedia:api-handover:*"
+                    ]
+                  },
+                  "Null": {
+                    "aws:TagKeys": "false"
+                  }
+                }
+              },
+              {
+                "Sid": "APIRegisterExistingSize",
+                "Effect": "Allow",
+                "Action": "ecs:RegisterTaskDefinition",
+                "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/bible-on-site-api:*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  },
+                  "NumericEquals": {
+                    "ecs:task-cpu": "256",
+                    "ecs:task-memory": "512"
+                  },
+                  "ForAllValues:StringEquals": {
+                    "ecs:compute-compatibility": [
+                      "FARGATE"
+                    ]
+                  },
+                  "Null": {
+                    "ecs:compute-compatibility": "false"
+                  }
+                }
+              },
+              {
+                "Sid": "PreserveAPIDefinitionTagsOnCreate",
+                "Effect": "Allow",
+                "Action": "ecs:TagResource",
+                "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/bible-on-site-api:*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1",
+                    "ecs:CreateAction": "RegisterTaskDefinition"
+                  }
+                }
+              },
+              {
+                "Sid": "ReadDefinitions",
+                "Effect": "Allow",
+                "Action": "ecs:DescribeTaskDefinition",
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "ListOnlyThisCluster",
+                "Effect": "Allow",
+                "Action": "ecs:ListTasks",
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  },
+                  "ArnEquals": {
+                    "ecs:cluster": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/bible-on-site-cluster"
+                  }
+                }
+              },
+              {
+                "Sid": "APICloudMapRead",
+                "Effect": "Allow",
+                "Action": [
+                  "servicediscovery:GetService",
+                  "servicediscovery:ListInstances",
+                  "servicediscovery:GetInstancesHealthStatus"
+                ],
+                "Resource": "arn:${AWS::Partition}:servicediscovery:${AWS::Region}:${AWS::AccountId}:service/srv-mgck3ttvkcu6xa72",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "APIRuleStateRead",
+                "Effect": "Allow",
+                "Action": "events:DescribeRule",
+                "Resource": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/ecr-push-bible-on-site-api",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "PassExistingExecutionRoleOnly",
+                "Effect": "Allow",
+                "Action": "iam:PassRole",
+                "Resource": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ecsTaskExecutionRole",
+                "Condition": {
+                  "StringEquals": {
+                    "iam:PassedToService": "ecs-tasks.amazonaws.com"
+                  }
+                }
+              }
+            ]
+          }
+
 Outputs:
+  APIDeployRoleArn:
+    Description: Master-only role for API releases
+    Value: !GetAtt GitHubActionsAPIDeployRole.Arn
+
   OIDCProviderArn:
     Description: ARN of the GitHub OIDC Provider
     Value: !GetAtt GitHubOIDCProvider.Arn

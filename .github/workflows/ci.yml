@@ -970,6 +970,8 @@ jobs:
           # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
           # options positionally across groups, so cls_ratio must pass
           # --threshold-max-sample-size _ to leave it unset (#2718).
+          # Frame blocking can also be zero. Its normalized measure uses
+          # the browser test's existing CPU-scaled budget: 1 means the limit.
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
@@ -985,6 +987,7 @@ jobs:
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
             --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
+            --threshold-measure frame_budget_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 1.0 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
@@ -2562,7 +2565,9 @@ jobs:
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts
+        run: |
+          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts
+          bun run test:api-handover
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2634,6 +2639,20 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      # The restored Mongo image, its writable copy and Rust coverage artifacts
+      # exceed the default free disk space on the hosted runner. Reclaim unused
+      # SDKs/images before either cache restoration or the parallel image pull.
+      - name: Free space for Sefaria and Rust
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -2848,6 +2867,20 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      # The restored Mongo image, its writable copy and Rust coverage artifacts
+      # exceed the default free disk space on the hosted runner. Reclaim unused
+      # SDKs/images before either cache restoration or the parallel image pull.
+      - name: Free space for Sefaria and Rust
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
 
       # Same overlap as data_ci: the image pull (or artifact download + load)
       # only depends on the needs/ outputs, so it runs in the background while

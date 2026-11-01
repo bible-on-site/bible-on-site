@@ -61,7 +61,56 @@ check shown in the template. Enable circuit-breaker rollback on the existing
 API service, retaining minimum healthy 100% and maximum 200%. Deploy and
 verify a **completed** healthy pinned x86 deployment before proceeding. A
 saved request or registered definition is not a completed recovery target.
-Capture the service deployment/revision and resolved image digest.
+Capture the service deployment/revision and resolved image digest. The completed
+source revision is an immutable recovery target even when its image URI says
+`latest`; bind its recorded resolved digest to the verified old image. Keep a
+separate native-child pin for recovery after a new deployment has completed.
+
+## One API deployment owner
+
+The current release workflow keeps deployment automation at the dispatch SHA
+and checks out the immutable artifact source under `release-source`. Replaying
+an older release must not replace current publication or handover safeguards.
+Website post-deployment verification still runs from its exact release source,
+with dependencies supplied by the current deployment tools.
+
+Before activating this owner, validate and create only the dedicated
+`GitHubActionsAPIDeployRole` and its two inline policies documented in
+`github-oidc.yaml`. Its trust policy requires the exact repository `master`
+OIDC subject and the AWS audience. The API workflow selects that role;
+website/admin and PR/SSG builds keep their existing shared role. Preserve the
+shared managed policy and SSG ownership-read inline policy unchanged.
+
+The API role can publish only to the existing API ECR repository in
+`il-central-1`; it cannot create/delete repositories, alter policies or access
+database parameters. Its handover policy addresses only this API service and
+current-size API-family registrations. Task protection has cluster-task scope
+because IAM cannot filter those task APIs by service; the coordinator also
+verifies the exact API service group, task ARN, architecture, image and lease
+ownership. Role passing is limited to the existing execution role.
+
+Keep the branch restriction in the role trust policy. AWS Access Analyzer
+rejected the OIDC-provider namespace when placed in an identity permissions
+policy; the separate role enforces it at sign-in and leaves permission-policy
+validation free of that unsupported form.
+
+With no other API release running, disable only EventBridge rule
+`ecr-push-bible-on-site-api`. The API CLI refuses to publish while that rule is
+enabled. Website and admin retain their existing triggers and Lambda settings.
+Do not deploy either reconstructed infrastructure stack for this change.
+
+The API publisher prepares the immutable fallback, checks both public aliases,
+and protects the exact healthy source task before moving ECR `latest`. It then
+explicitly updates the API service. An already-published release can therefore
+finish its runtime rollout without rewriting an immutable canonical tag.
+
+The temporary protection lasts 15 minutes as an expiration safeguard; it is
+never renewed and does not extend deployment deadlines. A unique task tag and
+the grant's exact whole-second expiration bind cleanup to this run. Existing
+protections and foreign tags remain untouched. AWS can acknowledge a legacy
+task ARN and return fractional expiration seconds while subsequent reads use
+the long ARN and whole seconds; normalize only those verified observations.
+An uncertain grant is preserved for investigation rather than cleared blindly.
 
 ## Switch architecture and retain release continuity
 
@@ -72,6 +121,24 @@ Cloud Map registration and the handover through both existing public aliases.
 Retain the existing response deadlines and compare the full public contracts.
 Never treat `RUNNING` alone as application readiness.
 
+Keep the source protected until the replacement is healthy in ECS and Cloud
+Map, and all four public health/readiness routes across both aliases have
+reached its opaque `x-tanahpedia-instance` process marker. The marker contains
+no AWS identifiers and leaves the health JSON unchanged. Observe this stable
+visibility for the existing 10-second DNS TTL plus 10-second router cache
+before releasing the old task. Cloud Map registration alone does not prove
+that the router can already discover the replacement.
+
+Require the old task to stop, one completed deployment and only the new healthy
+Cloud Map address, then observe another cache window and repeat all 14 public
+contract checks. Keep 30 seconds from AWS task start for readiness, 180 seconds
+from replacement observation for ECS completion and 300 seconds overall.
+Public health, readiness and 929 chapter identities are sampled at one request
+per second, with a 2-second whole-request deadline and no retries. Reuse verified
+TLS connections and authoritative DNS TTLs; never increase deadlines to hide
+client-side DNS/TLS setup or a real 502. Save the complete pass/failure journal
+as the workflow's API handover artifact, without task-definition secrets.
+
 After the pinned ARM deployment passes, restore the ordinary ARM task
 definition's image reference to the verified multiarch `latest` index and
 verify its completed rollout and exact ARM child again. Leave multiarch
@@ -81,11 +148,24 @@ until that normal release path is preserved and verified.
 
 ## Rollback
 
-On a rollout or public-contract failure, restore the saved pinned healthy x86
-task definition on the same service and verify its actual digest, readiness
-and public contracts. Circuit-breaker rollback also requires a previously
-completed deployment; inspect its real target and outcome. Do not claim that
-floating `latest` guarantees a particular recovery image.
+On a rollout or public-contract failure, initiate control-plane recovery before
+requiring a fresh healthy public baseline. For an ongoing deployment, verify
+the recorded source revision's definition and immutable image, then request
+ECS rollback to that revision. For a completed deployment, protect the exact
+replacement while restoring the saved old native-child pin, and apply the
+same discovery/public visibility window before retiring it. Verify actual
+digest, readiness, completed singleton, discovery and public contracts. Keep
+every failed sample in the original journal even when recovery succeeds.
+Circuit-breaker rollback also needs a completed target; inspect its real
+target and outcome. Floating `latest` alone does not guarantee a recovery image.
+
+The November 1 API 0.1.100 ARM attempt exposed the reason for this protocol:
+the router still used the retired x86 address before ARM discovery was visible,
+causing a real public 502. The ARM task itself stayed healthy and exited cleanly
+on recovery. X86 was restored, and a subsequent protected x86 `latest` handover
+passed all 247 public samples and all 14 contracts. These observations validate
+the handover mechanism, not completion of the ARM migration or qualification of
+a later binary.
 
 Before the first index is published, restoring the previous publication flag
 can abandon the planned mode change. Once `latest` is an index, keep
@@ -98,6 +178,9 @@ and never rewrite an existing canonical version as rollback.
 AWS documents the [container health-check behavior](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html),
 [completed-deployment circuit-breaker target](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-circuit-breaker.html)
 and [immutable service revisions](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-revision.html).
+See also [task protection](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-scale-in-protection.html),
+[stopping a service deployment with rollback](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_StopServiceDeployment.html)
+and [service deployment permissions](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-deployment-permissions.html).
 
 ## Compute estimate
 

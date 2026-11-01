@@ -1,6 +1,9 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { reportBenchmark } from "../util/benchmark";
+import {
+	reportBenchmark,
+	reportFrameBlockingBenchmark,
+} from "../util/benchmark";
 import { type FrameMetrics, reduceFrameSamples } from "../util/frame-metrics";
 
 /**
@@ -24,8 +27,8 @@ import { type FrameMetrics, reduceFrameSamples } from "../util/frame-metrics";
  * longtask observer injected into the page: a flip that drops frames
  * shows up as gaps beyond one animation frame, and synchronous main-thread
  * work shows up as longtasks.  The bound is generous — CI runners vary —
- * so it trips on catastrophic regressions while the reported metrics let
- * Bencher catch gradual drift.
+ * so it trips on catastrophic regressions. Bencher records the fraction of
+ * that same calibrated frame budget; raw milliseconds remain in the log.
  *
  * Click and drag workloads run as separate tests so each stays inside
  * the suite deadline, which itself remains a regression check.
@@ -53,8 +56,8 @@ const FRAME_GAP_BUDGET_MS = 33.4;
  * spent ~2s per batch in >50ms tasks where the healthy path spends
  * ~0.4s (~5.7x), a gap wider than shared-CPU hardware variance.  The
  * frame-blocked bound stays generous — software-rasterized CI inflates
- * rAF gaps regardless of main-thread health — while Bencher tracks the
- * reported values for drift.
+ * rAF gaps regardless of main-thread health. Bencher uses that same bound;
+ * a percentage of near-zero historical blocking would flag ordinary frames.
  */
 const MAX_BLOCKED_MS_PER_BATCH = 8_000;
 const MAX_LONGTASK_MS_PER_BATCH = 1_500;
@@ -422,20 +425,17 @@ test.describe("Sefer flip performance", () => {
 			value: ratio,
 			upperValue: MAX_RATIO,
 		});
-		// Frame-blocked metrics — the common-mode detector. Reported as
-		// time_ms so Bencher tracks drift against baseline over time.
-		reportBenchmark({
-			name: "sefer-flip/dev-click-blocked",
-			measure: "time_ms",
-			value: devClick.blockedMs,
-			upperValue: bounds.blockedMs,
-		});
-		reportBenchmark({
-			name: "sefer-flip/929-click-blocked",
-			measure: "time_ms",
-			value: seoClick.blockedMs,
-			upperValue: bounds.blockedMs,
-		});
+		// Keep Bencher's common-mode limit identical to the browser assertion.
+		reportFrameBlockingBenchmark(
+			"sefer-flip/dev-click-blocked",
+			devClick.blockedMs,
+			bounds.blockedMs,
+		);
+		reportFrameBlockingBenchmark(
+			"sefer-flip/929-click-blocked",
+			seoClick.blockedMs,
+			bounds.blockedMs,
+		);
 
 		console.log(
 			`\n📊 Flip perf — dev: ${devAvg.toFixed(0)}ms | 929: ${seoAvg.toFixed(0)}ms | ratio: ${ratio.toFixed(2)}x | cpu×${cpuFactor.toFixed(2)} (min-of-runs below)\n` +
@@ -462,18 +462,16 @@ test.describe("Sefer flip performance", () => {
 		const devDrag = minMetrics(dev.batches);
 		const seoDrag = minMetrics(seo.batches);
 
-		reportBenchmark({
-			name: "sefer-flip/dev-drag-blocked",
-			measure: "time_ms",
-			value: devDrag.blockedMs,
-			upperValue: bounds.blockedMs,
-		});
-		reportBenchmark({
-			name: "sefer-flip/929-drag-blocked",
-			measure: "time_ms",
-			value: seoDrag.blockedMs,
-			upperValue: bounds.blockedMs,
-		});
+		reportFrameBlockingBenchmark(
+			"sefer-flip/dev-drag-blocked",
+			devDrag.blockedMs,
+			bounds.blockedMs,
+		);
+		reportFrameBlockingBenchmark(
+			"sefer-flip/929-drag-blocked",
+			seoDrag.blockedMs,
+			bounds.blockedMs,
+		);
 
 		console.log(
 			`\n📊 Drag perf | cpu×${cpuFactor.toFixed(2)} (min-of-runs below)\n` +
