@@ -7,17 +7,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // can classify; page navigations keep the Cognito redirect.
 
 const {
+	handleDocumentMock,
 	handlerFetchMock,
 	verifyIdTokenMock,
 	verifyServiceTokenMock,
 	parseCookieMock,
 	getLoginUrlMock,
 } = vi.hoisted(() => ({
+	handleDocumentMock: vi.fn(),
 	handlerFetchMock: vi.fn(),
 	verifyIdTokenMock: vi.fn(),
 	verifyServiceTokenMock: vi.fn(),
 	parseCookieMock: vi.fn(),
 	getLoginUrlMock: vi.fn(),
+}));
+
+vi.mock("~/server/bulletin-document.server", () => ({
+	handleBulletinDocument: handleDocumentMock,
 }));
 
 vi.mock("@tanstack/react-start/server-entry", () => ({
@@ -67,6 +73,34 @@ function serverFnRequest(): Request {
 }
 
 describe("server entry auth boundary", () => {
+	it("dispatches only the document prefix to the restricted public PDF handler", async () => {
+		handleDocumentMock.mockResolvedValue(
+			new Response("pdf fixture", {
+				headers: { "Content-Type": "application/pdf" },
+			}),
+		);
+		const entry = await loadEntry();
+		const request = new Request(
+			"https://admin.test/api/bulletin-documents/2026-11-01/test.pdf",
+		);
+		const response = await entry.fetch(request);
+		expect(await response.text()).toBe("pdf fixture");
+		expect(handleDocumentMock).toHaveBeenCalledWith(request);
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+		expect(verifyIdTokenMock).not.toHaveBeenCalled();
+	});
+	it("does not fall through to privileged handlers when a public document is missing", async () => {
+		handleDocumentMock.mockResolvedValue(null);
+		const entry = await loadEntry();
+		expect(
+			(
+				await entry.fetch(
+					new Request("https://admin.test/api/bulletin-documents/invalid"),
+				)
+			).status,
+		).toBe(404);
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+	});
 	beforeEach(() => {
 		handlerFetchMock
 			.mockReset()
