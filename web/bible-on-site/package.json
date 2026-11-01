@@ -53,7 +53,7 @@
 		"node": ">=26.10.0 <27"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1160.0",
+		"@aws-sdk/client-lambda": "3.1161.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"bidi-js": "1.1.0",
 		"gematry": "1.0.2",
@@ -78,7 +78,7 @@
 		"web-push": "3.6.7"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-s3": "3.1160.0",
+		"@aws-sdk/client-s3": "3.1161.0",
 		"@biomejs/biome": "2.6.4",
 		"@playwright/test": "1.64.1",
 		"@swc/core": "1.16.20",
@@ -102,7 +102,7 @@
 		"monocart-reporter": "2.15.1",
 		"parse5": "8.0.1",
 		"picomatch": "4.0.7",
-		"sass": "1.107.0",
+		"sass": "1.107.1",
 		"schema-dts": "2.1.0",
 		"swc-plugin-coverage-instrument": "0.0.33",
 		"ts-jest": "29.4.15",
