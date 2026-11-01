@@ -271,8 +271,8 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: ecr-push-bible-on-site-api
-      Description: Trigger ECS deployment when bible-on-site-api image is pushed to ECR
-      State: ENABLED
+      Description: Disabled - the API publisher owns the protected ECS handover
+      State: DISABLED
       EventPattern:
         source:
           - aws.ecr
