@@ -41,7 +41,14 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site
-      ImageTagMutability: MUTABLE
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: deps-cache
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: deps-cache-arm64
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:

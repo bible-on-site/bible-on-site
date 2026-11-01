@@ -82,6 +82,16 @@ export const MODULES = {
 			// cd-aws.yml owns the post-deploy verifier invocation contract
 			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
 			".github/workflows/cd-aws.yml",
+			".github/workflows/shared-dockerize.yml",
+			"devops/deploy/ecr-deploy/website-images.mts",
+			"devops/deploy/ecr-deploy/api-images.mts",
+			"devops/deploy/ecr-deploy/api-images.test.mts",
+			"devops/github/ci/website-image-gates.test.mjs",
+			"devops/deploy/ecr-deploy/ecr-deployer-base.mts",
+			"devops/deploy/ecr-deploy/index.mts",
+			"devops/github/release/api-image-assets.mjs",
+			"devops/github/release/release-provenance.mjs",
+			"devops/github/release/check-deployment.mjs",
 			// The calendar-PDF artifact publisher defines the generation/publish
 			// contract verified by the calendar_pdf_artifacts job (#2608).
 			".github/workflows/calendar-pdf-publish.yml",
