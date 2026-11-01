@@ -16,6 +16,9 @@ const WEB_SERVER_URL = "http://127.0.0.1:3001";
 // and surface in the browser as "Unexpected end of JSON input" (#2005).
 const WARMUP_ROUTES = [
 	"",
+	// The home page fetches push capabilities while navigating to the reader.
+	// Finish cold API compilation before it can block that browser navigation.
+	"api/push/subscription",
 	"929",
 	"929/1",
 	"929/188",
