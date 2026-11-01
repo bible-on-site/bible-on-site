@@ -218,4 +218,27 @@ describe("Bookshelf", () => {
 			container.remove();
 		},
 	);
+
+	describe("with sefer dedications", () => {
+		const dedications = {
+			bySefer: { בראשית: ["לרפואת א", 'לע"נ ב'], שמות: ['לע"נ ג'] },
+			byHelek: {},
+		};
+
+		it("joins a sefer's dedications on its spine line with the full text in the title", () => {
+			render(<Bookshelf dedications={dedications} />);
+			const caption = screen.getByText('לרפואת א · לע"נ ב');
+			expect(caption).toHaveAttribute("title", 'לרפואת א\nלע"נ ב');
+			expect(caption.parentElement).toHaveTextContent("בראשית");
+		});
+
+		it("pads today's dedicated spine line more than others to clear the ribbon", () => {
+			render(<Bookshelf dedications={dedications} />);
+			const todayLine = screen.getByText('לרפואת א · לע"נ ב').parentElement;
+			const otherLine = screen.getByText('לע"נ ג').parentElement;
+			expect(todayLine?.getAttribute("style")).not.toEqual(
+				otherLine?.getAttribute("style"),
+			);
+		});
+	});
 });

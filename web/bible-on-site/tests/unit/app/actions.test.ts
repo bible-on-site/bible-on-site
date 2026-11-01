@@ -120,7 +120,7 @@ describe("getArticleForBook", () => {
 
 		const result = await getArticleForBook(2);
 
-		expect(result?.dedicationLines).toEqual(['מוקדש לראובן (לע"נ)']);
+		expect(result?.dedicationLines).toEqual(['לע"נ ראובן']);
 	});
 
 	it("returns null when article not found", async () => {

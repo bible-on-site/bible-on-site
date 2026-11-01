@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace BibleOnSite.Models;
 
 /// <summary>
@@ -59,16 +61,35 @@ public class DedicationContext
 
 public static class DedicationFormatter
 {
+    private static readonly HashSet<string> HealingPurposes =
+    [
+        "רפואה", "לרפואה", "לרפואת", "רפואה שלמה", "רפואה שלימה", "לרפואה שלמה", "לרפואה שלימה",
+    ];
+
     /// <summary>
-    /// The rendered line — mirrors the website's `formatDedication` and the
-    /// API's presentation contract: `מוקדש ל{subject} ({purposes})`.
+    /// One stored purpose in display form: whitespace collapsed, legacy
+    /// gershayim/geresh/typographic quotes mapped to ASCII, healing variants
+    /// folded to the construct form לרפואת.
+    /// </summary>
+    public static string DisplayPurpose(string purpose)
+    {
+        var clean = Regex.Replace(purpose.Trim(), @"\s+", " ");
+        clean = Regex.Replace(clean, "[״“”„]", "\"");
+        clean = Regex.Replace(clean, "[׳‘’]", "'");
+        return HealingPurposes.Contains(clean) ? "לרפואת" : clean;
+    }
+
+    /// <summary>
+    /// The rendered line — mirrors the website's `formatDedication` (#2849):
+    /// purposes first (joined with ו) then the exact subject, e.g.
+    /// `לרפואת מזל בת רחל`; the subject alone when no purpose is given.
     /// </summary>
     public static string Format(Dedication dedication)
     {
-        var purposes = dedication.Purposes.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        var purposes = dedication.Purposes.Select(DisplayPurpose).Where(p => p.Length > 0).Distinct().ToList();
         return purposes.Count == 0
-            ? $"מוקדש ל{dedication.Subject}"
-            : $"מוקדש ל{dedication.Subject} ({string.Join(", ", purposes)})";
+            ? dedication.Subject
+            : $"{string.Join(" ו", purposes)} {dedication.Subject}";
     }
 
     public static List<string> FormatAll(IEnumerable<Dedication> dedications) =>
