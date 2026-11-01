@@ -970,6 +970,8 @@ jobs:
           # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
           # options positionally across groups, so cls_ratio must pass
           # --threshold-max-sample-size _ to leave it unset (#2718).
+          # Frame blocking can also be zero. Its normalized measure uses
+          # the browser test's existing CPU-scaled budget: 1 means the limit.
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
@@ -985,6 +987,7 @@ jobs:
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
             --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
+            --threshold-measure frame_budget_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 1.0 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
