@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { Readable } from "node:stream";
 import test from "node:test";
+import { createAWSCaller } from "./api-rollout-aws.mjs";
 import {
 	APITaskProtection,
+	API_ACCOUNT,
 	API_CLUSTER,
+	API_REGION,
+	API_SERVICE,
 	LEASE_PREFIX,
 	expirySecond,
 	sameTask,
@@ -13,8 +18,10 @@ const TASK =
 	"a".repeat(32);
 const NONCE = "1".repeat(32);
 const NOW = Date.parse("2026-11-01T00:00:00Z");
+const VALID_TAG_TEXT = /^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$/u;
 class FakeAWS {
-	constructor() {
+	constructor(nonce = NONCE) {
+		this.nonce = nonce;
 		this.tags = { existing: "preserve" };
 		this.protected = false;
 		this.expiry = null;
@@ -56,13 +63,17 @@ class FakeAWS {
 		}
 		if (name === "TagResource") {
 			assert.equal(input.resourceArn, TASK);
-			for (const { key, value } of input.tags) this.tags[key] = value;
+			for (const { key, value } of input.tags) {
+				assert.match(key, VALID_TAG_TEXT);
+				assert.match(value, VALID_TAG_TEXT);
+				this.tags[key] = value;
+			}
 			if (this.concurrentTag) this.tags.concurrent = "leave unchanged";
 			return {};
 		}
 		if (name === "UntagResource") {
 			assert.equal(input.resourceArn, TASK);
-			assert.deepEqual(input.tagKeys, [LEASE_PREFIX + NONCE]);
+			assert.deepEqual(input.tagKeys, [LEASE_PREFIX + this.nonce]);
 			for (const key of input.tagKeys) delete this.tags[key];
 			return {};
 		}
@@ -107,6 +118,86 @@ const writes = (aws) =>
 	aws.calls.filter(({ name }) =>
 		["TagResource", "UntagResource", "UpdateTaskProtection"].includes(name),
 	);
+
+for (const nonce of [NONCE, "11111111-1111-4111-8111-111111111111"]) {
+	test(`actual SDK protection lifecycle uses ECS-valid tags for ${nonce.includes("-") ? "UUID" : "hex"} ownership`, async () => {
+		const aws = new FakeAWS(nonce);
+		const caller = createAWSCaller(
+			{ accountId: API_ACCOUNT, region: API_REGION },
+			{
+				credentials: {
+					accessKeyId: "TESTACCESSKEY",
+					secretAccessKey: "test-secret",
+				},
+				requestHandler: {
+					async handle(request) {
+						const operation = request.headers["x-amz-target"].split(".").at(-1);
+						const input = JSON.parse(request.body);
+						// ECS rejected the old JSON marker in the live TagResource call.
+						const invalid =
+							operation === "TagResource" &&
+							input.tags.some(
+								({ key, value }) =>
+									!VALID_TAG_TEXT.test(key) ||
+									!VALID_TAG_TEXT.test(value) ||
+									key.length > 128 ||
+									value.length > 256,
+							);
+						const result = invalid
+							? {
+									__type: "InvalidParameterException",
+									message: "Some tags contain invalid characters.",
+								}
+							: await aws.call(operation, input);
+						return {
+							response: {
+								statusCode: invalid ? 400 : 200,
+								headers: {
+									date: new Date(aws.now).toUTCString(),
+									"content-type": "application/x-amz-json-1.1",
+								},
+								body: Readable.from([
+									JSON.stringify(result, (key, value) =>
+										key === "$clock"
+											? undefined
+											: key === "expirationDate"
+												? Date.parse(value) / 1000
+												: value,
+									),
+								]),
+							},
+						};
+					},
+				},
+			},
+		);
+		try {
+			const lease = new APITaskProtection({
+				call: caller.call,
+				task: TASK,
+				nonce,
+			});
+			await lease.grant();
+			await lease.assertActive(600);
+			assert.equal(lease.value, `${API_SERVICE}:${nonce}`);
+			await lease.release();
+			assert.equal(lease.released, true);
+			assert.equal(aws.protected, false);
+			assert.deepEqual(aws.tags, { existing: "preserve" });
+			const grants = aws.calls.filter(
+				(c) => c.name === "UpdateTaskProtection" && c.input.protectionEnabled,
+			);
+			assert.equal(grants.length, 1);
+			assert.equal(grants[0].input.expiresInMinutes, 15);
+			assert.equal(
+				aws.calls.filter((c) => c.name === "UntagResource").length,
+				1,
+			);
+		} finally {
+			caller.close();
+		}
+	});
+}
 
 test("owned grant/release accepts actual legacy ARN and fractional write/whole-second read", async () => {
 	const { aws, lease } = fixture();
