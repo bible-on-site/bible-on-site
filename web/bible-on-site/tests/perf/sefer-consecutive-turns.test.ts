@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
@@ -23,6 +23,7 @@ test.use({
 });
 test.describe.configure({ retries: 0 });
 test.skip(({ isMobile }) => isMobile, "Desktop Chrome/Edge regression profile");
+const TURN_DIAGNOSTICS = ".playwright-report/perf/diagnostics/sefer-turns";
 
 for (const [chapter, bookmarks] of [
 	[125, 36],
@@ -139,9 +140,19 @@ for (const [chapter, bookmarks] of [
 							await Promise.all(inputs);
 						}
 						await page.waitForFunction(
-							(target) =>
-								Number(location.pathname.split("/").at(-1)) === target &&
-								!document.querySelector(".he-book .page--flipping"),
+							(target) => {
+								const visible = Array.from(
+									document.querySelectorAll(".he-book .page.current-page"),
+								);
+								return (
+									Number(location.pathname.split("/").at(-1)) === target &&
+									!document.querySelector(".he-book .page--flipping") &&
+									visible.length === 2 &&
+									visible.every((page) =>
+										page.querySelector(".flipbook-page-content")?.textContent?.trim(),
+									)
+								);
+							},
 							chapter + index + 1,
 							{ timeout: 5_000, polling: "raf" },
 						);
@@ -172,6 +183,13 @@ for (const [chapter, bookmarks] of [
 						path: samplePath,
 						contentType: "application/json",
 					});
+					// Keep complete samples in the artifact published even when a
+					// timing guard fails before Lighthouse diagnostics can run.
+					await mkdir(TURN_DIAGNOSTICS, { recursive: true });
+					await copyFile(
+						samplePath,
+						`${TURN_DIAGNOSTICS}/${chapter}-${mode}-${gesture}.json`,
+					);
 					await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 					await client.detach();
 					await page.screenshot({ path: testInfo.outputPath("after.png") });
