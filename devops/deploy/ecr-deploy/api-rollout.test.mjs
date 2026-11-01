@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runAPIRollout } from "./api-rollout.mjs";
-import { IMAGE_URI, LIMITS } from "./api-rollout-state.mjs";
 import {
-	NEW_INSTANCE,
 	definitionArn,
 	fixture,
+	NEW_INSTANCE,
 	ownedTags,
 	taskArn,
 } from "./api-rollout-fixtures.test.mjs";
+import { IMAGE_URI, LIMITS } from "./api-rollout-state.mjs";
 
 test("protected latest handover waits for both public aliases and the unchanged cache window", async () => {
 	const f = fixture(),
@@ -52,6 +52,114 @@ test("protected latest handover waits for both public aliases and the unchanged 
 		JSON.stringify(f.backend.records).includes("must-not-appear-in-journal"),
 		false,
 	);
+});
+
+function laggingHistoryFixture(successAt = 115000) {
+	const f = fixture();
+	const prefix = "arn:aws:ecs:il-central-1:250598594267:";
+	const serviceArn = prefix + "service/bible-on-site-cluster/bible-on-site-api";
+	const clusterArn = prefix + "cluster/bible-on-site-cluster";
+	const revisionArn =
+		prefix + "service-revision/bible-on-site-cluster/bible-on-site-api/22";
+	const deploymentArn =
+		prefix + "service-deployment/bible-on-site-cluster/bible-on-site-api/owned";
+	const epoch = Date.parse("2026-11-01T00:00:00Z");
+	f.backend.mutateService = (value) => {
+		if (f.backend.updates !== 1) return;
+		f.backend.next.startedBy = "ecs-svc/22";
+		value.deployments = [
+			{
+				id: "ecs-svc/22",
+				status: "PRIMARY",
+				createdAt: new Date(epoch + f.backend.started),
+				taskDefinition: f.backend.current.taskDefinitionArn,
+				rolloutState: "IN_PROGRESS",
+				failedTasks: 0,
+			},
+		];
+	};
+	f.backend.hook = async (name, input) => {
+		if (name === "ListServiceDeployments" && !input.status)
+			return { serviceDeployments: [{ serviceDeploymentArn: deploymentArn }] };
+		if (name === "DescribeServiceDeployments")
+			return {
+				serviceDeployments: [
+					{
+						serviceDeploymentArn: deploymentArn,
+						serviceArn,
+						clusterArn,
+						status:
+							f.backend.at - f.backend.started >= successAt
+								? "SUCCESSFUL"
+								: "IN_PROGRESS",
+						startedAt: new Date(epoch + f.backend.started),
+						finishedAt: new Date(epoch + f.backend.started + successAt),
+						deploymentConfiguration: f.backend.state().deploymentConfiguration,
+						deploymentCircuitBreaker: {
+							status: "MONITORING_COMPLETE",
+							failureCount: 0,
+						},
+						targetServiceRevision: {
+							arn: revisionArn,
+							requestedTaskCount: 1,
+							runningTaskCount: 1,
+							pendingTaskCount: 0,
+						},
+						sourceServiceRevisions: [
+							{
+								arn: revisionArn.replace(/22$/, "11"),
+								requestedTaskCount: 0,
+								runningTaskCount: 0,
+								pendingTaskCount: 0,
+							},
+						],
+					},
+				],
+				failures: [],
+				$clock: { serverDate: new Date(epoch + f.backend.at).toUTCString() },
+			};
+		if (
+			name === "DescribeServiceRevisions" &&
+			input.serviceRevisionArns[0] === revisionArn
+		)
+			return {
+				serviceRevisions: [
+					{
+						serviceRevisionArn: revisionArn,
+						serviceArn,
+						clusterArn,
+						taskDefinition: f.backend.current.taskDefinitionArn,
+						containerImages: [
+							{ containerName: "api", imageDigest: f.backend.newImages.root },
+						],
+					},
+				],
+				failures: [],
+			};
+	};
+	return f;
+}
+
+test("successful deployment history completes within 180s despite a lagging legacy rollout summary", async () => {
+	const f = laggingHistoryFixture();
+	const result = await runAPIRollout(f);
+	assert.equal(result.changed, true);
+	assert.ok(result.elapsedMs < 180000);
+	assert.equal(f.backend.updates, 1);
+	assert.equal(f.backend.state().deployments[0].rolloutState, "IN_PROGRESS");
+	assert.equal(f.backend.old.lastStatus, "STOPPED");
+	assert.equal(f.backend.protected, false);
+	assert.deepEqual(ownedTags(f.backend), []);
+	assert.ok(
+		f.backend.records.some((row) => row.name === "deployment-completed-proof"),
+	);
+});
+
+test("late deployment history still triggers the unchanged 180s completion gate", async () => {
+	const f = laggingHistoryFixture(190000);
+	await assert.rejects(runAPIRollout(f), /completion exceeded 180s/);
+	assert.equal(f.backend.protected, false);
+	assert.deepEqual(ownedTags(f.backend), []);
 });
 
 test("ARM pinned and normal latest use actual native descriptors without changing service resources", async () => {
