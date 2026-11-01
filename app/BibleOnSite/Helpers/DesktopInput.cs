@@ -33,6 +33,17 @@ public interface IWindowsSearchSurface
     void OpenDesktopSearch();
 }
 
+/// <summary>
+/// Optional extension for reader pages with the in-app fullscreen reading
+/// presentation, toggled by F11 (#2766). Esc/Back still exit it through
+/// <see cref="IWindowsDesktopSurface.DismissTopmostSurface"/>.
+/// </summary>
+public interface IWindowsFullscreenSurface
+{
+    /// <summary>Enters or leaves the reader's fullscreen presentation.</summary>
+    void ToggleDesktopFullscreen();
+}
+
 /// <summary>What the Back key/accelerator/mouse-back should do.</summary>
 public enum DesktopBackRoute
 {

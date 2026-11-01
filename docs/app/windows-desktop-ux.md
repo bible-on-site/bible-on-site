@@ -1,4 +1,4 @@
-# Windows desktop UX (#2766 — increment 1)
+# Windows desktop UX (#2766)
 
 The Windows build shares the touch-first MAUI layouts with mobile. This
 document records the desktop input model, the adaptive column rules, the
@@ -13,6 +13,7 @@ increments.
 | Mouse X1 (Back) button | Same Back pipeline. X2 is ignored (no forward navigation). |
 | `Esc` | Peels the topmost transient surface only — never navigates, never exits. |
 | `Ctrl+F` | Opens/re-focuses the in-page search on Perek and Parasha readers. |
+| `F11` | Toggles the reader fullscreen presentation on Perek, Parasha and Masora (`IWindowsFullscreenSurface`); `Esc`/Back still exit it first. Ignored while the flyout is open or on non-reader pages. |
 | `Tab` / `Enter` / `Space` | Flyout rows are native WinUI buttons on Windows — focusable, activatable, with hover/pressed/focus visuals and automation names. |
 
 Back ordering (title-bar button, `Alt+Left`, mouse Back — one pipeline in
@@ -92,16 +93,46 @@ rect measurements:
   results, articles and preferences edge-to-edge; the bottom bar's
   proportional offsets pushed its actions to the window corners.
 
-## Deferred (not in this increment)
+## Audited defects addressed in increment 2
+
+Observed on master `e6787d9` (Windows Server 2022, 100% scale, 1140×840
+window) with UIA tree dumps of the running Debug build:
+
+- The native `NavigationView` pane toggle stayed in the title bar as a
+  second menu button with the English UIA name `Open Navigation`, next
+  to the shared top-bar hamburger, and swapped sides with the title-bar
+  Back between root and pushed pages. It is now kept hidden
+  (`DesktopWindowChrome.OnShellHandlerChanged`); the shared hamburger is
+  the single menu entry point.
+- Every `CollectionView`/`CarouselView` row (each pasuk, article, list
+  and calendar row) was announced by UIA/Narrator as
+  `Microsoft.Maui.Controls.Platform.ItemTemplateContext`. Rows now get a
+  name composed from their own visible text
+  (`Platforms/Windows/ListItemAutomationNames.cs` +
+  `Helpers/AccessibleItemText.cs`), rebuilt on container recycling;
+  nested buttons keep their own names.
+- The inactive title-bar Back at a navigation root rendered as a filled
+  grey tile (shared Disabled style) — the heaviest glyph in the title
+  bar. It is now a transparent, dimmed glyph.
+- The fullscreen action had no keyboard shortcut; `F11` now toggles it
+  and the tooltips advertise `F11` / `Esc`.
+
+Known gap: the floating exit-fullscreen control is a draggable `Border`,
+not a tab stop; keyboard users exit with `Esc`, `F11` or `Alt+Left`.
+
+## Deferred
+
+- Exit-fullscreen control as a focusable button (needs to keep its drag
+  behavior).
 
 - Adaptive *navigation* model: locking the flyout into a nav pane at wide
   widths (collapse/reveal state preserved), selected-destination
   highlight in the flyout.
 - Per-page layout beyond column caps (learning calendar, corpus search
   grids, list pages), and the bottom-bar's absolute layout redesign.
-- `Ctrl+F` on non-reader pages, `F11` fullscreen, XButton2, arrow-key
-  pasuk navigation.
-- Narrator/Accessibility Insights pass and keyboard focus *containment*
+- `Ctrl+F` on non-reader pages, XButton2, arrow-key pasuk navigation.
+- Full Narrator/Accessibility Insights pass (increment 2 only fixed
+  the UIA names found in tree dumps) and keyboard focus *containment*
   inside popups.
 - Windows display-scaling matrix (100/125/150/200%) and text-scaling
   verification; wheel-scroll audit of the reader carousel.

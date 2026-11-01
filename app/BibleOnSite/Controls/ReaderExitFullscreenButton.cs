@@ -22,7 +22,7 @@ public class ReaderExitFullscreenButton : Border
         // Name + pointer label for the icon-only control (#2766); Esc also
         // exits fullscreen via the reader Back chain.
         SemanticProperties.SetDescription(this, "יציאה ממסך מלא");
-        ToolTipProperties.SetText(this, "יציאה ממסך מלא");
+        ToolTipProperties.SetText(this, OperatingSystem.IsWindows() ? "יציאה ממסך מלא (Esc / F11)" : "יציאה ממסך מלא");
         WidthRequest = 48;
         HeightRequest = 48;
         StrokeShape = new RoundRectangle { CornerRadius = 24 };

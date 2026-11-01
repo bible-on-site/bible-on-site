@@ -9,7 +9,7 @@ namespace BibleOnSite.Pages;
 /// Ctrl+F opens the parasha search.
 /// </summary>
 #pragma warning disable S2333 // partial required: ParashaPage is split across 6 declaration parts.
-public partial class ParashaPage : IWindowsDesktopSurface, IWindowsSearchSurface
+public partial class ParashaPage : IWindowsDesktopSurface, IWindowsSearchSurface, IWindowsFullscreenSurface
 #pragma warning restore S2333
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
@@ -23,4 +23,12 @@ public partial class ParashaPage : IWindowsDesktopSurface, IWindowsSearchSurface
 	}
 
 	void IWindowsSearchSurface.OpenDesktopSearch() => OnParashaSourceClicked(this, EventArgs.Empty);
+
+	void IWindowsFullscreenSurface.ToggleDesktopFullscreen()
+	{
+		if (!ChapterSearch.IsSearchOpen)
+		{
+			_chrome.ToggleFullScreen();
+		}
+	}
 }
