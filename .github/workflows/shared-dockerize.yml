@@ -11,7 +11,7 @@ on:
         type: string
         default: ''
       image_arch:
-        description: Native architecture; ARM64 is enabled only for API
+        description: Native API or website image architecture
         required: false
         type: string
         default: amd64
@@ -70,7 +70,7 @@ jobs:
         run: |
           case "$IMAGE_ARCH" in
             amd64) test "$(uname -m)" = x86_64 ;;
-            arm64) test "$IS_CARGO" = true; test "$(uname -m)" = aarch64 ;;
+            arm64) test "$IS_CARGO" = true || test "$IS_NPM" = true; test "$(uname -m)" = aarch64 ;;
             *) echo 'Unsupported image architecture'; exit 1 ;;
           esac
 
@@ -102,8 +102,8 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ env.MODULE_NAME }}-${{ hashFiles(format('{0}/bun.lock', env.MODULE_DIRECTORY)) }}
-          restore-keys: ${{ runner.os }}-bun-${{ env.MODULE_NAME }}-
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ env.MODULE_NAME }}-${{ hashFiles(format('{0}/bun.lock', env.MODULE_DIRECTORY)) }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-bun-${{ env.MODULE_NAME }}-
 
       - name: Install dev dependencies
         if: ${{ env.IS_NPM == 'true' }}
@@ -311,13 +311,15 @@ jobs:
         run: |
           REPOSITORY=$(aws ecr describe-repositories --repository-names bible-on-site --query 'repositories[0].repositoryUri' --output text)
           aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY%%/*}"
-          CACHE_REF="$REPOSITORY:deps-cache"
+          CACHE_TAG_NAME=deps-cache
+          if [ "$IMAGE_ARCH" = arm64 ]; then CACHE_TAG_NAME=deps-cache-arm64; fi
+          CACHE_REF="$REPOSITORY:$CACHE_TAG_NAME"
           echo "ref=$CACHE_REF" >> "$GITHUB_OUTPUT"
           CACHE_ARGS=()
-          CACHE_TAG=$(aws ecr describe-images --repository-name bible-on-site --filter tagStatus=TAGGED --query 'imageDetails[?contains(imageTags, `deps-cache`)].imageDigest | [0]' --output text)
+          CACHE_TAG=$(aws ecr describe-images --repository-name bible-on-site --filter tagStatus=TAGGED --query "imageDetails[?contains(imageTags, '$CACHE_TAG_NAME')].imageDigest | [0]" --output text)
           if [ "$CACHE_TAG" != None ]; then CACHE_ARGS+=(--cache-from "type=registry,ref=$CACHE_REF"); fi
           docker buildx build --builder default --network=host --progress=plain \
-            --target deps --build-arg BUILDKIT_INLINE_CACHE=1 --load \
+            --target deps --platform "linux/$IMAGE_ARCH" --build-arg BUILDKIT_INLINE_CACHE=1 --load \
             "${CACHE_ARGS[@]}" -f web/bible-on-site/Dockerfile -t "$CACHE_REF" web
 
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
@@ -327,11 +329,8 @@ jobs:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           CACHE_ARGS=()
-          LABEL_ARGS=()
-          if [ "$IS_CARGO" = true ]; then
-            LABEL_ARGS+=(--label "org.opencontainers.image.revision=$GITHUB_SHA"
-              --label "org.opencontainers.image.version=${{ steps.get_module_version.outputs.MODULE_VERSION }}")
-          fi
+          LABEL_ARGS=(--label "org.opencontainers.image.revision=$GITHUB_SHA"
+            --label "org.opencontainers.image.version=${{ steps.get_module_version.outputs.MODULE_VERSION }}")
           if [ "$IS_NPM" = true ]; then
             # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
@@ -417,9 +416,10 @@ jobs:
         run: |
           gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
 
-      # Pre-merge (non-push) runs validate the build only; release consumes master artifacts.
+      # Website PR candidates are retained for native qualification, not release.
+      # Release consumes only the artifacts bound to the master push CI run.
       - name: Store Docker Image
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || env.IS_NPM == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}

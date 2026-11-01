@@ -20,16 +20,32 @@ export function releasePayload(release) {
 /** Bind both API platform artifacts to the CI run recorded in the published release. */
 export function apiImageArtifacts(payload) {
 	if (payload?.released_arm64_artifact_name === undefined) return undefined;
-	const amd64 = `bible-on-site-api-docker-${payload.ci_run_id}`;
+	if (payload.module_name !== "api")
+		throw new Error(
+			"API platform artifacts do not match published CI provenance",
+		);
+	return nativeImageArtifacts(payload);
+}
+
+/** Select native archives only from the original module and source CI run. */
+export function nativeImageArtifacts(payload) {
+	if (payload?.released_arm64_artifact_name === undefined) return undefined;
+	const image =
+		payload.module_name === "api"
+			? "bible-on-site-api"
+			: payload.module_name === "website"
+				? "bible-on-site"
+				: undefined;
+	const amd64 = `${image}-docker-${payload.ci_run_id}`;
 	const arm64 = `${amd64}-arm64`;
 	if (
-		payload.module_name !== "api" ||
+		!image ||
 		!/^\d+$/.test(String(payload.ci_run_id)) ||
 		payload.released_artifact_name !== amd64 ||
 		payload.released_arm64_artifact_name !== arm64
 	) {
 		throw new Error(
-			"API platform artifacts do not match published CI provenance",
+			"Native platform artifacts do not match published CI provenance",
 		);
 	}
 	return { amd64, arm64 };

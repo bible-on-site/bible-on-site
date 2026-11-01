@@ -77,8 +77,9 @@ partial class Build
             }
 
             var bundle = uploadRequest.ResponseBody;
-            Assert.True(bundle.VersionCode.HasValue, "Bundle upload returned no version code");
-            Serilog.Log.Information($"Uploaded bundle with version code: {bundle.VersionCode}");
+            var versionCode = bundle?.VersionCode
+                ?? throw new InvalidOperationException("Bundle upload returned no version code");
+            Serilog.Log.Information($"Uploaded bundle with version code: {versionCode}");
 
             // Upload native debug symbols for the version code just uploaded
             if (!string.IsNullOrEmpty(AndroidSymbolsPath))
@@ -89,7 +90,7 @@ partial class Build
                 var symbolsUpload = service.Edits.Deobfuscationfiles.Upload(
                     GooglePlayPackageName,
                     edit.Id,
-                    (int)bundle.VersionCode.Value,
+                    (int)versionCode,
                     EditsResource.DeobfuscationfilesResource.UploadMediaUpload.DeobfuscationFileTypeEnum.NativeCode,
                     symbolsStream,
                     "application/octet-stream");
@@ -98,7 +99,7 @@ partial class Build
                 {
                     Assert.Fail($"Native symbols upload failed: {symbolsProgress.Exception?.Message}");
                 }
-                Serilog.Log.Information($"Uploaded native debug symbols for version code {bundle.VersionCode}");
+                Serilog.Log.Information($"Uploaded native debug symbols for version code {versionCode}");
             }
             else
             {
@@ -113,7 +114,7 @@ partial class Build
                     new()
                     {
                         Status = "completed",
-                        VersionCodes = new List<long?> { bundle.VersionCode }
+                        VersionCodes = new List<long?> { versionCode }
                     }
                 }
             };

@@ -25,6 +25,10 @@ import {
 	validateAPIImageOptions,
 } from "./api-images.mts";
 import { ECRDeployerBase } from "./ecr-deployer-base.mts";
+import {
+	publishWebsiteImages,
+	WEBSITE_MUTABLE_TAGS,
+} from "./website-images.mts";
 
 const sourceRef = "a".repeat(40);
 const version = "0.1.96";
@@ -161,6 +165,10 @@ function child(archive: APIArchive): Image {
 }
 
 class Registry {
+	name: string;
+	constructor(name = repositoryName) {
+		this.name = name;
+	}
 	images = new Map<string, Image>();
 	pushed: string[] = [];
 	puts: string[] = [];
@@ -187,7 +195,7 @@ class Registry {
 				return {
 					repositories: [
 						{
-							repositoryName,
+							repositoryName: this.name,
 							repositoryUri,
 							imageTagMutability: this.policy,
 							imageTagMutabilityExclusionFilters: this.exclusions,
@@ -282,7 +290,7 @@ class Registry {
 					this.extraTags.push("v0.1.97");
 				return {
 					image: {
-						repositoryName,
+						repositoryName: this.name,
 						imageId: { imageTag: tag, imageDigest: expected },
 						imageManifest: manifest,
 						imageManifestMediaType: mediaType,
@@ -295,7 +303,7 @@ class Registry {
 	options(prepared: PreparedAPIArchives, publishIndex = false) {
 		return {
 			client: this.client,
-			repositoryName,
+			repositoryName: this.name,
 			repositoryUri,
 			version,
 			publishIndex,
@@ -333,6 +341,143 @@ test("validates both native configs and privately decompresses without modifying
 		assert.notEqual(
 			(await readFile(prepared.images[0].path)).toString(),
 			"changed after validation",
+		);
+	}));
+
+for (const publishIndex of [false, true]) {
+	test(`website publishes both verified children with index mode ${publishIndex}`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry("bible-on-site");
+			registry.exclusions = WEBSITE_MUTABLE_TAGS.map((filter) => ({
+				filterType: "WILDCARD",
+				filter,
+			}));
+			registry.extraTags = ["deps-cache", "deps-cache-arm64", "v99.0.0-arm64"];
+			const result = await publishWebsiteImages(
+				prepared,
+				registry.options(prepared, publishIndex),
+			);
+			assert.deepEqual(
+				result.children.map((entry) => entry.platform.architecture),
+				["amd64", "arm64"],
+			);
+			assert.equal(
+				registry.images.get("latest")?.digest,
+				result.canonicalDigest,
+			);
+			assert.equal(
+				registry.images.get(`v${version}`)?.mediaType,
+				publishIndex ? OCI_INDEX : childType,
+			);
+			assert.deepEqual(registry.pushed, [
+				`v${version}-amd64`,
+				`v${version}-arm64`,
+			]);
+		}));
+}
+
+for (const filters of [
+	[{ filterType: "WILDCARD", filter: "latest" }],
+	[...WEBSITE_MUTABLE_TAGS, "v*"].map((filter) => ({
+		filterType: "WILDCARD",
+		filter,
+	})),
+	WEBSITE_MUTABLE_TAGS.map((filter) => ({ filterType: "INVALID", filter })),
+]) {
+	test(`website refuses a repository policy with filters ${JSON.stringify(filters)}`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry("bible-on-site");
+			registry.exclusions = filters;
+			await assert.rejects(
+				publishWebsiteImages(prepared, registry.options(prepared)),
+				/IMMUTABLE_WITH_EXCLUSION/,
+			);
+			assert.deepEqual(registry.puts, []);
+			assert.deepEqual(registry.pushed, []);
+		}));
+}
+
+test("website cannot publish to another repository or downgrade latest after index activation", async () =>
+	fixture(async (prepared) => {
+		const wrong = new Registry();
+		await assert.rejects(
+			publishWebsiteImages(prepared, wrong.options(prepared)),
+			/existing bible-on-site repository/,
+		);
+		assert.deepEqual(wrong.puts, []);
+		const registry = new Registry("bible-on-site");
+		registry.exclusions = WEBSITE_MUTABLE_TAGS.map((filter) => ({
+			filterType: "WILDCARD",
+			filter,
+		}));
+		await publishWebsiteImages(prepared, registry.options(prepared, true));
+		const writes = [...registry.puts];
+		await assert.rejects(
+			publishWebsiteImages(prepared, registry.options(prepared)),
+			/already an index/,
+		);
+		assert.deepEqual(registry.puts, writes);
+	}));
+
+test("website deployer validates both archives and retains the API option boundary", async () =>
+	fixture(async (prepared, paths) => {
+		const registry = new Registry("bible-on-site");
+		registry.exclusions = WEBSITE_MUTABLE_TAGS.map((filter) => ({
+			filterType: "WILDCARD",
+			filter,
+		}));
+		for (const archive of prepared.images)
+			registry.images.set(
+				`v${version}-${archive.architecture}`,
+				child(archive),
+			);
+		const deployer = new ExistingRelease(
+			"website",
+			"bible-on-site",
+			"bible-on-site",
+			registry.client,
+			{ region: "test", accountId: "test" },
+		);
+		assert.throws(
+			() => deployer.setWebsiteImageOptions({ sourceRef }),
+			/requires/,
+		);
+		deployer.setDockerImagePath(paths.amd64);
+		assert.throws(
+			() =>
+				deployer.setAPIImageOptions({
+					arm64ArchivePath: paths.arm64,
+					sourceRef,
+				}),
+			/only for API/,
+		);
+		deployer.setWebsiteImageOptions({
+			arm64ArchivePath: paths.arm64,
+			sourceRef,
+			publishIndex: true,
+		});
+		await deployer.run();
+		assert.equal(registry.images.get("latest")?.mediaType, OCI_INDEX);
+		const legacy = new ExistingRelease(
+			"website",
+			"bible-on-site",
+			"bible-on-site",
+			registry.client,
+			{ region: "test", accountId: "test" },
+		);
+		const writes = [...registry.puts];
+		await assert.rejects(legacy.run(), /already an index/);
+		assert.deepEqual(registry.puts, writes);
+		const api = new ExistingRelease(
+			"api",
+			repositoryName,
+			repositoryName,
+			registry.client,
+			{ region: "test", accountId: "test" },
+		);
+		assert.throws(
+			() => api.setWebsiteImageOptions({ sourceRef }),
+			/website deployer/,
 		);
 	}));
 
