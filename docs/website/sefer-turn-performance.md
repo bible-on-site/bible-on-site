@@ -6,8 +6,10 @@ Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
 The fixed desktop profile uses full Chromium, visible scrollbars, a 1440x900
-viewport, 4x CPU slowdown, one worker and zero retries. Each scenario performs
-six turns with gaps of `0, 0, 100, 0, 100, 0` milliseconds. The 100ms gaps cover
+viewport, 4x CPU slowdown, one worker and zero retries. The performance
+configuration serializes all projects so another browser test cannot contend
+with the measured reader. Each scenario performs six turns with gaps of
+`0, 0, 100, 0, 100, 0` milliseconds. The 100ms gaps cover
 the existing 80ms buffer recenter; sampling also continues for 200ms after the
 last turn. Both current pages must contain visible text before measurement and
 after every turn. Mounted content hidden by page buffering does not qualify.
