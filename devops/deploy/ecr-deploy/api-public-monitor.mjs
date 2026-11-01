@@ -57,7 +57,7 @@ export class PublicAPIMonitor {
 				? {
 						method: "POST",
 						headers: { "content-type": "application/json" },
-						body: JSON.stringify({ query: route.query }),
+						body: stableStringify({ query: route.query }),
 					}
 				: {}),
 		});
