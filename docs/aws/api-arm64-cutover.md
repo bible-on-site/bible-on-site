@@ -74,19 +74,25 @@ an older release must not replace current publication or handover safeguards.
 Website post-deployment verification still runs from its exact release source,
 with dependencies supplied by the current deployment tools.
 
-Before activating this owner, validate and install only the separate
-`GitHubActionsAPIHandover` inline policy documented in `github-oidc.yaml`, on
-`GitHubActionsECRDeployRole`. Preserve the existing managed policy and SSG
-ownership-read inline policy. Its new service writes address only this API;
-task protection is limited to cluster tasks because IAM cannot scope those
-task APIs by service. The coordinator independently verifies the exact API
-service group, task ARN, architecture, image and lease ownership. Definition
-registration is limited to the API family, Fargate and the existing 256/512
-size. Role passing is limited to the existing execution role. Every new grant
-requires the `master` branch OIDC subject. Pull-request builds retain their
-existing permissions; they do not gain API service/task control. The OIDC
-`sub` claim is available in the AWS session, so this restriction applies to
-resource access as well as role assumption.
+Before activating this owner, validate and create only the dedicated
+`GitHubActionsAPIDeployRole` and its two inline policies documented in
+`github-oidc.yaml`. Its trust policy requires the exact repository `master`
+OIDC subject and the AWS audience. The API workflow selects that role;
+website/admin and PR/SSG builds keep their existing shared role. Preserve the
+shared managed policy and SSG ownership-read inline policy unchanged.
+
+The API role can publish only to the existing API ECR repository in
+`il-central-1`; it cannot create/delete repositories, alter policies or access
+database parameters. Its handover policy addresses only this API service and
+current-size API-family registrations. Task protection has cluster-task scope
+because IAM cannot filter those task APIs by service; the coordinator also
+verifies the exact API service group, task ARN, architecture, image and lease
+ownership. Role passing is limited to the existing execution role.
+
+Keep the branch restriction in the role trust policy. AWS Access Analyzer
+rejected the OIDC-provider namespace when placed in an identity permissions
+policy; the separate role enforces it at sign-in and leaves permission-policy
+validation free of that unsupported form.
 
 With no other API release running, disable only EventBridge rule
 `ecr-push-bible-on-site-api`. The API CLI refuses to publish while that rule is

@@ -235,16 +235,92 @@ Resources:
         - Key: Purpose
           Value: github-actions-ecr-deploy
 
-  # New API grants require a master-branch OIDC session. PR build sessions
-  # keep their existing grants. API task handover belongs to the publisher.
-  # Keep managed policy v9
-  # and the separate SSG ownership-read policy unchanged. Task protection can
-  # only be scoped to cluster tasks in IAM; the coordinator also checks API group.
+  # API releases use a separate role: enforce the exact master subject in its
+  # trust policy, without widening the shared role used by PR/SSG builds.
+  # Preserve shared managed policy v9 and the SSG ownership-read inline policy.
+  GitHubActionsAPIDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GitHubActionsAPIDeployRole
+      Description: Master-only API image publication and protected task handover
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Fn::Sub: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Federated": "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+                },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": {
+                  "StringEquals": {
+                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                  }
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: github-actions-api-deploy
+
+  GitHubActionsAPIPublishPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GitHubActionsAPIPublish
+      Roles: [!Ref GitHubActionsAPIDeployRole]
+      PolicyDocument:
+        Fn::Sub: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "APIRegistryAuthentication",
+                "Effect": "Allow",
+                "Action": "ecr:GetAuthorizationToken",
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              },
+              {
+                "Sid": "APIRepositoryPublication",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:DescribeRepositories",
+                  "ecr:DescribeImages",
+                  "ecr:BatchCheckLayerAvailability",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchGetImage",
+                  "ecr:InitiateLayerUpload",
+                  "ecr:UploadLayerPart",
+                  "ecr:CompleteLayerUpload",
+                  "ecr:PutImage"
+                ],
+                "Resource": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/bible-on-site-api",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "il-central-1"
+                  }
+                }
+              }
+            ]
+          }
+
+  # Task protection has cluster-task scope; the coordinator also verifies API group.
   GitHubActionsAPIHandoverPolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: GitHubActionsAPIHandover
-      Roles: [!Ref GitHubActionsECRDeployRole]
+      Roles: [!Ref GitHubActionsAPIDeployRole]
       PolicyDocument:
         Fn::Sub: |
           {
@@ -260,8 +336,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-api",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   }
                 }
               },
@@ -272,8 +347,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/bible-on-site-cluster/bible-on-site-api",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   },
                   "ArnLike": {
                     "ecs:task-definition": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/bible-on-site-api:*"
@@ -295,8 +369,7 @@ Resources:
                 ],
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   }
                 }
               },
@@ -311,8 +384,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/bible-on-site-cluster/*",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   },
                   "ArnEquals": {
                     "ecs:cluster": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/bible-on-site-cluster"
@@ -329,8 +401,7 @@ Resources:
                 ],
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   }
                 }
               },
@@ -344,8 +415,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/bible-on-site-cluster/*",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   },
                   "ForAllValues:StringLike": {
                     "aws:TagKeys": [
@@ -364,8 +434,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/bible-on-site-api:*",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   },
                   "NumericEquals": {
                     "ecs:task-cpu": "256",
@@ -389,8 +458,7 @@ Resources:
                 "Condition": {
                   "StringEquals": {
                     "aws:RequestedRegion": "il-central-1",
-                    "ecs:CreateAction": "RegisterTaskDefinition",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "ecs:CreateAction": "RegisterTaskDefinition"
                   }
                 }
               },
@@ -401,8 +469,7 @@ Resources:
                 "Resource": "*",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   }
                 }
               },
@@ -413,8 +480,7 @@ Resources:
                 "Resource": "*",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   },
                   "ArnEquals": {
                     "ecs:cluster": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/bible-on-site-cluster"
@@ -432,8 +498,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:servicediscovery:${AWS::Region}:${AWS::AccountId}:service/srv-mgck3ttvkcu6xa72",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   }
                 }
               },
@@ -444,8 +509,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/ecr-push-bible-on-site-api",
                 "Condition": {
                   "StringEquals": {
-                    "aws:RequestedRegion": "il-central-1",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "aws:RequestedRegion": "il-central-1"
                   }
                 }
               },
@@ -456,8 +520,7 @@ Resources:
                 "Resource": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ecsTaskExecutionRole",
                 "Condition": {
                   "StringEquals": {
-                    "iam:PassedToService": "ecs-tasks.amazonaws.com",
-                    "token.actions.githubusercontent.com:sub": "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master"
+                    "iam:PassedToService": "ecs-tasks.amazonaws.com"
                   }
                 }
               }
@@ -465,6 +528,10 @@ Resources:
           }
 
 Outputs:
+  APIDeployRoleArn:
+    Description: Master-only role for API releases
+    Value: !GetAtt GitHubActionsAPIDeployRole.Arn
+
   OIDCProviderArn:
     Description: ARN of the GitHub OIDC Provider
     Value: !GetAtt GitHubOIDCProvider.Arn

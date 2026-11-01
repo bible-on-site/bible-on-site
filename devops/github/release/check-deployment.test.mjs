@@ -275,6 +275,73 @@ test("only the API EventBridge trigger is disabled for coordinated publication",
 	}
 });
 
+test("only master API releases assume the dedicated role with API-only image access", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/github-oidc.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	).replace(/\r/g, "");
+	const resource = (name) =>
+		template.split(`  ${name}:\n`)[1].split(/^  (?:[A-Za-z]|#)/m)[0];
+	const trust = JSON.parse(
+		resource("GitHubActionsAPIDeployRole")
+			.split("        Fn::Sub: |\n")[1]
+			.split("      Tags:")[0]
+			.trim(),
+	);
+	assert.deepEqual(trust.Statement, [
+		{
+			Effect: "Allow",
+			Principal: {
+				Federated:
+					"arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com",
+			},
+			Action: "sts:AssumeRoleWithWebIdentity",
+			Condition: {
+				StringEquals: {
+					"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+					"token.actions.githubusercontent.com:sub":
+						"repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master",
+				},
+			},
+		},
+	]);
+	assert.doesNotMatch(
+		resource("GitHubActionsAPIDeployRole"),
+		/ManagedPolicyArns/,
+	);
+	const publishBlock = resource("GitHubActionsAPIPublishPolicy"),
+		publish = JSON.parse(publishBlock.split("        Fn::Sub: |\n")[1].trim());
+	assert.match(publishBlock, /Roles: \[!Ref GitHubActionsAPIDeployRole\]/);
+	assert.equal(publish.Statement[0].Action, "ecr:GetAuthorizationToken");
+	assert.equal(publish.Statement[0].Resource, "*");
+	assert.equal(
+		publish.Statement[1].Resource,
+		"arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/bible-on-site-api",
+	);
+	assert.ok(publish.Statement[1].Action.includes("ecr:PutImage"));
+	assert.ok(
+		publish.Statement.every(
+			(row) =>
+				row.Condition.StringEquals["aws:RequestedRegion"] === "il-central-1",
+		),
+	);
+	assert.doesNotMatch(
+		JSON.stringify(publish),
+		/CreateRepository|Delete|ssm:|iam:|s3:|lambda:/,
+	);
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/cd-aws.yml", import.meta.url),
+		"utf8",
+	);
+	assert.match(
+		workflow,
+		/role-to-assume: \$\{\{ env\.MODULE_NAME == 'api' && format\('arn:aws:iam::\{0\}:role\/GitHubActionsAPIDeployRole', env\.AWS_ACCOUNT_ID\) \|\| secrets\.AWS_DEPLOY_ROLE_ARN \}\}/,
+	);
+});
+
 test("the handover policy limits service writes, role passing, size and lease tags", () => {
 	const template = readFileSync(
 		new URL(
@@ -320,13 +387,8 @@ test("the handover policy limits service writes, role passing, size and lease ta
 		true,
 	);
 	assert.equal(statements.APIRuleStateRead.Action, "events:DescribeRule");
-	for (const statement of policy.Statement)
-		assert.equal(
-			statement.Condition.StringEquals[
-				"token.actions.githubusercontent.com:sub"
-			],
-			"repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master",
-		);
+	assert.match(block, /Roles: \[!Ref GitHubActionsAPIDeployRole\]/);
+	assert.doesNotMatch(json, /token\.actions\.githubusercontent\.com/);
 	for (const statement of policy.Statement.filter(
 		(row) => row.Action !== "iam:PassRole",
 	))
