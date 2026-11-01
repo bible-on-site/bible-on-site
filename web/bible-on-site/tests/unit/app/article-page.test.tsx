@@ -656,19 +656,17 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 			const { container } = render(jsx);
-			const html = container.innerHTML;
+			const chapterText = container.querySelector(".perekText") as HTMLElement;
 
-			// ktiv text rendered directly
-			expect(screen.getByText("כתיב")).toBeTruthy();
-			// qri with different ktiv renders parenthesised with label
-			expect(html).toContain("קרי");
-			// regular qri (no ktivOffset) rendered as-is
-			expect(screen.getByText("רגיל")).toBeTruthy();
-			// ptuha and stuma mocks rendered
-			expect(screen.getByTestId("ptuha")).toBeTruthy();
-			expect(screen.getByTestId("stuma")).toBeTruthy();
-			// maqaf trailing character: "מלה־" — should not add space after it
-			expect(screen.getByText("מלה־")).toBeTruthy();
+			// Preserve the complete verse and spacing without requiring word wrappers.
+			expect(chapterText.querySelector("#pasuk-1")?.textContent).toBe(
+				"א כתיב (קרי)   רגיל מלה־ ",
+			);
+			// Different qri keeps its parenthesised text and label.
+			expect(chapterText.querySelector(".qri")?.textContent).toBe("(קרי)");
+			expect(chapterText.querySelector(".qri label")).not.toBeNull();
+			expect(within(chapterText).getByTestId("ptuha")).toBeTruthy();
+			expect(within(chapterText).getByTestId("stuma")).toBeTruthy();
 		});
 
 		it("calls notFound when perekId is NaN", async () => {

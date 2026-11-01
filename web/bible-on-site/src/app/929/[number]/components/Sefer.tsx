@@ -158,10 +158,7 @@ function SeferScriptureText({
 				);
 				return (
 					<RecitationVerse key={pasukKey} pasuk={pasukKey}>
-						{pasukNumElement}
-						<span> </span>
-						{pasukElement}
-						<span> </span>
+						{pasukNumElement} {pasukElement}{" "}
 					</RecitationVerse>
 				);
 			})}
@@ -703,7 +700,7 @@ const Sefer = (props: {
 						pages={pages}
 						pageSemantics={hePageSemantics}
 						direction="rtl"
-						leavesBuffer={7}
+						leavesBuffer={1}
 						of={toHebrewChapterNumber(perakim.length)}
 						tocPageIndex={2}
 						coverConfig={{

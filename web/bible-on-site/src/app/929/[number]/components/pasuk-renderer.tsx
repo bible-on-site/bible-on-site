@@ -46,11 +46,8 @@ export function renderSegmentRange(
 				segment.value
 			);
 		}
-		content.push(
-			<span
-				key={segmentKey}
-				className={isQriWithDifferentKtiv ? qriClassName : ""}
-			>
+		const segmentContent = (
+			<>
 				{segment.type === "ktiv" ? (
 					value
 				) : segment.type === "qri" ? (
@@ -68,7 +65,18 @@ export function renderSegmentRange(
 				) : (
 					stuma()
 				)}
-			</span>,
+			</>
+		);
+		// The recitation control already owns each word's element. Ordinary
+		// words and spaces need no extra layout objects when a chapter mounts.
+		content.push(
+			isQriWithDifferentKtiv ? (
+				<span key={segmentKey} className={qriClassName}>
+					{segmentContent}
+				</span>
+			) : (
+				<React.Fragment key={segmentKey}>{segmentContent}</React.Fragment>
+			),
 		);
 		const needsSpace =
 			i < segments.length - 1 &&
@@ -77,7 +85,7 @@ export function renderSegmentRange(
 				segment.value.at(segment.value.length - 1) === "־"
 			);
 		if (needsSpace && i < endIdx) {
-			content.push(<span key={`sp-${segmentKey}`}> </span>);
+			content.push(" ");
 		}
 	}
 	const lastSeg = segments[endIdx];
@@ -180,22 +188,20 @@ export function renderPasukSegmentsWithEntityRefs(
 			qriClassName,
 			wordWrapper,
 		);
-		const trailSpan = trailingSpace ? (
-			<span key={`sp-trail-${pasukIdx + 1}-${run.endIdx + 1}`}> </span>
-		) : null;
+		const trailSpace = trailingSpace ? " " : null;
 		const runKey = `run-${pasukIdx + 1}-${run.startIdx}`;
 		if (run.ref?.entryUniqueName) {
 			return (
 				<React.Fragment key={runKey}>
 					{linkWrapper(run.ref.entryUniqueName, content, runKey)}
-					{trailSpan}
+					{trailSpace}
 				</React.Fragment>
 			);
 		}
 		return (
 			<React.Fragment key={runKey}>
 				{content}
-				{trailSpan}
+				{trailSpace}
 			</React.Fragment>
 		);
 	});

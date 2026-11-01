@@ -652,11 +652,15 @@ test.describe("Sefer view", () => {
 		await expect(page).toHaveURL(/\/929\/2\?book/);
 		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
 
-		// Leaving Sefer view hands the title back to the flat perek page.
+		// Leaving Sefer view opens the current chapter's flat page.
 		const toggler = page.getByTestId("read-mode-toggler");
 		await toggler.click();
 		await expect(page.locator('[class*="seferOverlay"]')).not.toBeVisible();
-		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
+		await expect(page).toHaveURL(/\/929\/2$/);
+		await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+			/^בראשית ב -/,
+		);
+		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
 	});
 
 	test.describe("Touch swipe", () => {

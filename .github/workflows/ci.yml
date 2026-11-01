@@ -792,6 +792,7 @@ jobs:
           module: website
           directory: ${{ env.WEBSITE_DIRECTORY }}
           playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
+          playwright-distribution: full
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
@@ -803,10 +804,9 @@ jobs:
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # The browser install only needs node_modules; it runs in the background
-      # across MySQL/Rust/populate/build and is gated before the perf test. On
-      # a binary-cache hit only the system dependencies are installed.
-      # Every suite runs headless, so --only-shell skips the headed Chromium
-      # build and downloads only the headless shell.
+      # across MySQL/Rust/populate/build and is gated before the perf test.
+      # The consecutive-turn profile uses the full Chromium headless mode;
+      # existing shell-only cache entries do not contain that executable.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -814,7 +814,7 @@ jobs:
           if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
-            bun x playwright install --with-deps --only-shell chromium
+            bun x playwright install --with-deps chromium
           fi
 
       - name: Restore Next.js build cache
@@ -1138,6 +1138,11 @@ jobs:
       - name: Unit Test
         id: bun-unit-test
         run: bun run coverage:unit
+
+      - name: Local flip-book workflow guards
+        run: >-
+          node --test scripts/copy-local-flip-book.test.mjs
+          scripts/copy-local-flip-book-windows.test.mjs
 
       - name: Store Website Unit JUnit Report
         uses: actions/upload-artifact@v7

@@ -67,6 +67,24 @@ it("renders ordinary and pointed non-name words without masking subscriptions", 
 	expect(subscribe).not.toHaveBeenCalled();
 });
 
+it("bounds a long recitation verse to one element per ordinary word", () => {
+	const segments = Array.from({ length: 100 }, () => qri("בְּרֵאשִׁית"));
+	const { content } = renderSegmentRange(
+		segments,
+		0,
+		segments.length - 1,
+		0,
+		() => null,
+		() => null,
+		"qri",
+		(pasuk, segment, text) => <b data-word={`${pasuk}:${segment}`}>{text}</b>,
+	);
+	const { container } = render(<p>{content}</p>);
+	expect(container.textContent).toBe(segments.map(() => "בְּרֵאשִׁית").join(" "));
+	expect(container.querySelectorAll("[data-word]")).toHaveLength(100);
+	expect(container.querySelectorAll("*").length).toBeLessThanOrEqual(101);
+});
+
 it.each([false, true])(
 	"keeps names reactive from unmasked choices (enabled: %s)",
 	(enabled) => {

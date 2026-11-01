@@ -4,6 +4,7 @@
 
 /* The component replaces BlankPageContent's .pageBlank section: a flex
    column filling the book page. */
+
 .panelRoot {
 	display: flex;
 	flex-direction: column;
@@ -734,3 +735,4 @@
 		transition: none;
 	}
 }
+

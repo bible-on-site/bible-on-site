@@ -9,6 +9,10 @@ const KB = 1024;
 const MB = KB * KB;
 
 const isProduction = process.env.NODE_ENV === "production";
+const localAssetEndpoint = [
+	"http://localhost:4566",
+	"http://127.0.0.1:4566",
+].includes(process.env.S3_ENDPOINT ?? "");
 const productionBulletinClient = path.resolve(
 	import.meta.dirname,
 	"src/lib/download/bulletin-client-local.production.ts",
@@ -102,6 +106,9 @@ const nextConfig = {
 	images: {
 		unoptimized: !isProduction,
 		dangerouslyAllowSVG: true,
+		// Production-mode tests use the same explicitly configured local store
+		// as development. Public S3 endpoints keep Next's default IP restriction.
+		dangerouslyAllowLocalIP: localAssetEndpoint,
 		remotePatterns: [
 			// MinIO for development (all buckets)
 			{
