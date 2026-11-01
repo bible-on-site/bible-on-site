@@ -11,6 +11,9 @@ const result = spawnSync(
 	[
 		"--experimental-test-coverage",
 		"--test-coverage-include=devops/deploy/ecr-deploy/**",
+		"--test-coverage-include=devops/asset-mirror.mjs",
+		"--test-coverage-include=devops/assets-cdn.mjs",
+		"--test-coverage-include=devops/assets-cdn-check.mjs",
 		"--test-coverage-include=devops/github/release/**",
 		"--test-coverage-include=devops/github/ci/verify-native-image.mjs",
 		"--test-coverage-include=devops/github/ci/verify-api-native.mjs",
@@ -22,6 +25,9 @@ const result = spawnSync(
 		"--test-reporter=lcov",
 		"--test-reporter-destination=.coverage/devops/lcov.info",
 		"--test",
+		"devops/asset-mirror.test.mjs",
+		"devops/assets-cdn.test.mjs",
+		"devops/assets-cdn-check.test.mjs",
 		"devops/deploy/ecr-deploy/resume-image.test.mts",
 		"devops/deploy/ecr-deploy/ecr-client.test.mts",
 		"devops/deploy/ecr-deploy/api-images.test.mts",
@@ -44,6 +50,9 @@ if (result.status === 0) {
 		.replace(/\\/g, "/")
 		.split(/\r?\n/);
 	for (const file of [
+		"devops/asset-mirror.mjs",
+		"devops/assets-cdn.mjs",
+		"devops/assets-cdn-check.mjs",
 		"devops/deploy/ecr-deploy/api-images.mts",
 		"devops/github/release/api-image-assets.mjs",
 		"devops/github/ci/verify-native-image.mjs",
