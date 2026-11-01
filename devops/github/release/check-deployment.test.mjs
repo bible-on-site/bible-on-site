@@ -285,6 +285,10 @@ test("only master API releases assume the dedicated role with API-only image acc
 	).replace(/\r/g, "");
 	const resource = (name) =>
 		template.split(`  ${name}:\n`)[1].split(/^  (?:[A-Za-z]|#)/m)[0];
+	assert.match(
+		resource("GitHubActionsAPIDeployRole"),
+		/DependsOn: GitHubOIDCProvider/,
+	);
 	const trust = JSON.parse(
 		resource("GitHubActionsAPIDeployRole")
 			.split("        Fn::Sub: |\n")[1]

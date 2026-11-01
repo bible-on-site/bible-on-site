@@ -240,6 +240,7 @@ Resources:
   # Preserve shared managed policy v9 and the SSG ownership-read inline policy.
   GitHubActionsAPIDeployRole:
     Type: AWS::IAM::Role
+    DependsOn: GitHubOIDCProvider
     Properties:
       RoleName: GitHubActionsAPIDeployRole
       Description: Master-only API image publication and protected task handover
