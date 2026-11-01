@@ -107,7 +107,8 @@ flag before that release is published; do not toggle modes halfway through it.
    cache and revalidation behavior, sustained/burst traffic, and outage/recovery.
    Keep existing deadlines; fix a regression rather than increasing its limit.
 5. Retain and verify a completed immutable x86 fallback. Serialize the cutover
-   with ordinary website releases; temporarily disable only the website ECR
+   with ordinary website releases using the deployment lock described below;
+   temporarily disable only the website ECR
    event rule if the reviewed manual handover needs sole ownership. Preserve
    an old healthy task until replacement readiness and discovery are verified.
 6. Clone the actual full task definition, changing only architecture, image and
@@ -119,6 +120,41 @@ flag before that release is published; do not toggle modes halfway through it.
 7. Independently verify owned protection/markers cleared and all isolated tasks,
    services, security groups and logs cleaned up. Preserve rollback artifacts,
    shared fixtures and production logs. Record the final live revision and proof.
+
+## Deployment queue lock
+
+The manual `website-handover-lock.yml` workflow shares exactly the ordinary
+website CD concurrency group, with cancellation disabled and every dispatch
+queued. It has no AWS credentials or OIDC permission and cannot perform the
+architecture switch. Its sole purpose is to keep another ordinary release from
+moving `latest` while the separately approved operator performs the handover.
+
+After isolated qualification, create a dedicated GitHub deployment with task
+`deploy:website-arm64-migration`, environment `website-arm64-migration`, the
+approved merged control-source SHA, and payload exactly containing `purpose`,
+`nonce`, `sourceRef`, `account`, `region`, and `service`. The purpose is
+`website-arm64-migration`, the nonce is 32 lowercase hexadecimal characters,
+and the AWS target matches the baseline above. Dispatch the lock with that ID,
+nonce and source SHA. The workflow refuses a source not merged into master.
+Its run name includes the nonce so an interrupted dispatch acknowledgement can
+be reconciled without dispatching it again. A completed dedicated record is an
+idempotent no-op; any existing owner or failed attempt requires reconciliation
+and a fresh record/nonce. A workflow retry never silently renews the hold.
+
+Before any migration write, verify that the lock run is in progress in the
+correct queue, its workflow/control source matches the approved implementation,
+and its dedicated deployment's latest status is `in_progress` with description
+`website-arm64-lock:<nonce>` and a log URL pointing to that exact run. Then
+recheck the actual registry/service state. Hold ownership must remain valid
+through every phase; do not start a phase without enough remaining hold budget
+for its completion and rollback.
+
+Only after final public verification, event-owner restoration and lease cleanup
+post a `success` status with description `website-arm64-complete:<nonce>` to that
+dedicated deployment. The lock exits successfully and queued ordinary releases
+resume. A wrong owner, missing marker, failed status or the fixed 30-minute hold
+deadline fails closed; the operator must reconcile and restore the verified x86
+fallback if necessary. Do not extend the hold to conceal a slow/failing handover.
 
 ## Rollback
 
