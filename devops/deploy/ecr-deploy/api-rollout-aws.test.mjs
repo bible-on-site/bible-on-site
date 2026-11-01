@@ -1,10 +1,93 @@
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import test from "node:test";
-import { createAWSCaller } from "./api-rollout-aws.mjs";
+import { APIRolloutAWS, createAWSCaller } from "./api-rollout-aws.mjs";
 import { API_ACCOUNT, API_REGION } from "./api-task-protection.mjs";
 import { IMAGE_URI } from "./api-rollout-state.mjs";
-import { fixture, sha } from "./api-rollout-fixtures.test.mjs";
+import { definition, fixture, sha } from "./api-rollout-fixtures.test.mjs";
+
+test("actual SDK registration omits empty tags and accepts untagged AWS readbacks", async () => {
+	for (const architecture of ["X86_64", "ARM64"]) {
+		for (const returnedTags of [undefined, []]) {
+			const base = definition(),
+				requests = [];
+			let registered;
+			const caller = createAWSCaller(
+				{ accountId: API_ACCOUNT, region: API_REGION },
+				{
+					credentials: {
+						accessKeyId: "TESTACCESSKEY",
+						secretAccessKey: "test-secret",
+					},
+					requestHandler: {
+						async handle(request) {
+							const input = JSON.parse(request.body);
+							const registering = request.headers["x-amz-target"].endsWith(
+								".RegisterTaskDefinition",
+							);
+							requests.push({ registering, input });
+							// The live ECS API rejected this exact wire payload before
+							// publication: ClientException, "Tags can not be empty."
+							const invalid =
+								registering &&
+								Array.isArray(input.tags) &&
+								input.tags.length === 0;
+							if (registering && !invalid)
+								registered = {
+									...input,
+									taskDefinitionArn: base.taskDefinitionArn.replace(
+										/:\d+$/,
+										":99",
+									),
+								};
+							return {
+								response: {
+									statusCode: invalid ? 400 : 200,
+									headers: { "content-type": "application/x-amz-json-1.1" },
+									body: Readable.from([
+										JSON.stringify(
+											invalid
+												? {
+														__type: "ClientException",
+														message: "Tags can not be empty.",
+													}
+												: {
+														taskDefinition: registered,
+														...(returnedTags === undefined
+															? {}
+															: { tags: returnedTags }),
+													},
+										),
+									]),
+								},
+							};
+						},
+					},
+				},
+			);
+			try {
+				const aws = new APIRolloutAWS({ call: caller.call });
+				const result = await aws.register(
+					base,
+					[],
+					architecture,
+					IMAGE_URI + ":latest",
+				);
+				assert.equal(requests.length, 2);
+				assert.equal(Object.hasOwn(requests[0].input, "tags"), false);
+				assert.deepEqual(
+					result.containerDefinitions[0].environment,
+					base.containerDefinitions[0].environment,
+				);
+				assert.equal(result.runtimePlatform.cpuArchitecture, architecture);
+				assert.equal(result.cpu, "256");
+				assert.equal(result.memory, "512");
+			} finally {
+				caller.close();
+			}
+		}
+	}
+});
 
 test("actual SDK transport captures the AWS HTTP clock and makes one signed request", async () => {
 	const requests = [],
