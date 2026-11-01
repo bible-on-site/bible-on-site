@@ -3,18 +3,17 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
-import { APITaskProtection } from "./api-task-protection.mjs";
 import {
-	IMAGE_URI,
-	LIMITS,
 	ageUpperMs,
 	assertService,
 	assertTask,
-	completed,
 	discoveryMatches,
 	fingerprint,
 	healthy,
+	IMAGE_URI,
+	LIMITS,
 } from "./api-rollout-state.mjs";
+import { APITaskProtection } from "./api-task-protection.mjs";
 
 function unchanged(state, baseline, definitions) {
 	assertService(state.service);
@@ -176,8 +175,13 @@ async function recover({
 					else if (visibility === null) visibility = now();
 					else if (now() - visibility >= LIMITS.cache) await lease.release();
 				}
+				const currentCompletion = await aws.completion(
+					state,
+					task,
+					restore.image,
+				);
 				const singleton =
-					completed(state.service) &&
+					currentCompletion &&
 					state.service.taskDefinition ===
 						restore.definition.taskDefinitionArn &&
 					healthy(task) &&
@@ -253,7 +257,7 @@ async function recover({
 						now() - completionAt < LIMITS.completion,
 						"Recovery ECS completion exceeded 180s",
 					);
-					ecsCompleted = completed(state.service);
+					ecsCompleted = currentCompletion;
 				}
 			}
 			await wait(LIMITS.poll);
@@ -475,16 +479,17 @@ export async function runAPIRollout({
 						await lease.release();
 					}
 				}
+				const currentCompletion = await aws.completion(state, next, image);
 				if (!ecsCompleted) {
 					assert.ok(
 						now() - observedAt < LIMITS.completion,
 						"API ECS completion exceeded 180s",
 					);
-					ecsCompleted = completed(state.service);
+					ecsCompleted = currentCompletion;
 				}
 				const exclusive =
 					lease.released &&
-					completed(state.service) &&
+					currentCompletion &&
 					healthy(next) &&
 					old?.lastStatus === "STOPPED" &&
 					discoveryMatches(state.instances, [next]);

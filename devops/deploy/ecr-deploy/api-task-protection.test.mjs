@@ -132,7 +132,11 @@ for (const nonce of [NONCE, "11111111-1111-4111-8111-111111111111"]) {
 				requestHandler: {
 					async handle(request) {
 						const operation = request.headers["x-amz-target"].split(".").at(-1);
-						const input = JSON.parse(request.body);
+						const input = JSON.parse(
+							typeof request.body === "string"
+								? request.body
+								: new TextDecoder().decode(request.body),
+						);
 						// ECS rejected the old JSON marker in the live TagResource call.
 						const invalid =
 							operation === "TagResource" &&
