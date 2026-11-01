@@ -982,6 +982,120 @@ test("verifies a retag using its write receipt and tag metadata despite a stale 
 		assert.deepEqual(registry.puts, [`v${version}`, "latest"]);
 	}));
 
+const cachedAliasLists: [string, string[] | undefined][] = [
+	["missing", undefined],
+	["empty", []],
+	["canonical-only", [`v${version}`]],
+];
+for (const [name, aliases] of cachedAliasLists) {
+	test(`publishes an index with ${name} cached aliases in post-write metadata`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			const original = registry.client.send.bind(registry.client);
+			let reads = 0;
+			registry.client.send = (async (command: unknown) => {
+				const result = await original(command as never);
+				if (
+					command instanceof DescribeImagesCommand &&
+					command.input.imageIds?.[0]?.imageTag === "latest" &&
+					registry.puts.includes("latest")
+				) {
+					reads++;
+					return {
+						imageDetails: [
+							{
+								imageDigest: registry.images.get("latest")?.digest,
+								imageTags: aliases,
+							},
+						],
+					};
+				}
+				return result;
+			}) as typeof registry.client.send;
+			const result = await publishAPIImages(
+				prepared,
+				registry.options(prepared, true),
+			);
+			assert.equal(
+				result.canonicalDigest,
+				registry.images.get("latest")?.digest,
+			);
+			assert.equal(reads, 1);
+			assert.equal(registry.puts.filter((tag) => tag === "latest").length, 1);
+		}));
+
+	test(`an index with ${name} cached aliases still blocks a single-platform downgrade`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			await publishAPIImages(prepared, registry.options(prepared, true));
+			const original = registry.client.send.bind(registry.client);
+			registry.client.send = (async (command: unknown) => {
+				if (
+					command instanceof DescribeImagesCommand &&
+					command.input.imageIds?.[0]?.imageTag === "latest"
+				)
+					return {
+						imageDetails: [
+							{
+								imageDigest: registry.images.get("latest")?.digest,
+								imageTags: aliases,
+							},
+						],
+					};
+				return original(command as never);
+			}) as typeof registry.client.send;
+			await assert.rejects(
+				assertAPILatestMode(registry.client, repositoryName, false),
+				/every subsequent release requires/,
+			);
+		}));
+
+	test(`a native image with ${name} cached aliases is resolved by its selected tag digest`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			const current = child(prepared.images[0]);
+			registry.images.set("latest", current);
+			const original = registry.client.send.bind(registry.client);
+			registry.client.send = (async (command: unknown) => {
+				if (
+					command instanceof DescribeImagesCommand &&
+					command.input.imageIds?.[0]?.imageTag === "latest"
+				)
+					return {
+						imageDetails: [{ imageDigest: current.digest, imageTags: aliases }],
+					};
+				return original(command as never);
+			}) as typeof registry.client.send;
+			await assertAPILatestMode(registry.client, repositoryName, false);
+			assert.deepEqual(registry.puts, []);
+		}));
+
+	test(`an already-current index with ${name} cached aliases is not rewritten`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			await publishAPIImages(prepared, registry.options(prepared, true));
+			registry.puts = [];
+			const original = registry.client.send.bind(registry.client);
+			registry.client.send = (async (command: unknown) => {
+				if (
+					command instanceof DescribeImagesCommand &&
+					command.input.imageIds?.[0]?.imageTag === "latest"
+				)
+					return {
+						imageDetails: [
+							{
+								imageDigest: registry.images.get("latest")?.digest,
+								imageTags: aliases,
+							},
+						],
+					};
+				return original(command as never);
+			}) as typeof registry.client.send;
+			await publishAPIImages(prepared, registry.options(prepared, true));
+			assert.deepEqual(registry.puts, []);
+		}));
+}
+
 const badWriteReceipts: [
 	string,
 	(image: Record<string, unknown>) => unknown,
@@ -1056,10 +1170,10 @@ const badTagMetadata: [string, (expected: string) => unknown][] = [
 			{ imageTags: ["latest"], imageDigest: expected },
 		],
 	],
-	["missing tag", (expected) => [{ imageDigest: expected }]],
+	["missing digest", () => [{ imageTags: ["latest"] }]],
 	[
-		"wrong tag",
-		(expected) => [{ imageTags: ["other"], imageDigest: expected }],
+		"invalid digest",
+		() => [{ imageTags: ["latest"], imageDigest: "sha256:invalid" }],
 	],
 	[
 		"wrong digest",
