@@ -67,7 +67,10 @@ test.describe("Accessibility statement page", () => {
 		page,
 	}) => {
 		await page.goto("/accessibility");
-		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+		const trigger = page.getByRole("button", {
+			name: "התאמות נגישות",
+			disabled: false,
+		});
 		await trigger.press("Enter");
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
 		await expect(menu).toBeVisible();
