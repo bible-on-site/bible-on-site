@@ -215,6 +215,200 @@ test("unverified source CI cannot write to production", () => {
 	);
 });
 
+test("AWS release replays retain current automation and isolate immutable artifact source", () => {
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/cd-aws.yml", import.meta.url),
+		"utf8",
+	).replace(/\r/g, "");
+	const steps = workflow.split("      - name: ").slice(1);
+	const automation = steps.find((block) =>
+		block.startsWith("Checkout deployment automation\n"),
+	);
+	const artifact = steps.find((block) =>
+		block.startsWith("Checkout artifact source\n"),
+	);
+	assert.match(automation, /ref: \$\{\{ github.sha \}\}/);
+	assert.doesNotMatch(automation, /path:/);
+	assert.match(
+		artifact,
+		/ref: \$\{\{ steps.guard.outputs.ref \}\}\n +path: release-source/,
+	);
+	const verify = steps.find((block) =>
+		block.startsWith("Verify website recitation after ECS rollout\n"),
+	);
+	assert.match(verify, /working-directory: release-source/);
+	assert.match(verify, /NODE_PATH="\$GITHUB_WORKSPACE\/devops\/node_modules"/);
+	assert.match(
+		workflow,
+		/import\('\$GITHUB_WORKSPACE\/release-source\/web\/bible-on-site\/scripts\/verify-public-content.mjs'\)/,
+	);
+	const deploy = steps.find((block) => block.startsWith("Deploy to ECR\n"));
+	assert.match(deploy, /working-directory: \$\{\{ env.DEVOPS_DIRECTORY \}\}/);
+	assert.match(deploy, /--source-ref "\$API_RELEASE_SOURCE"/);
+	assert.match(
+		workflow,
+		/run-name: Deploy \$\{\{ github.event.client_payload.module_name \}\}/,
+	);
+	assert.match(
+		workflow,
+		/name: api-handover-\$\{\{ github.run_id \}\}-\$\{\{ github.run_attempt \}\}/,
+	);
+});
+
+test("only the API EventBridge trigger is disabled for coordinated publication", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/ecr-ecs-auto-deploy.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	for (const [resource, state] of [
+		["Api", "DISABLED"],
+		["Website", "ENABLED"],
+		["Admin", "ENABLED"],
+	]) {
+		const block = template
+			.split(`  ECRPushRule${resource}:`)[1]
+			.split(/^  [A-Za-z]/m)[0];
+		assert.ok(block.includes(`State: ${state}`));
+	}
+});
+
+test("only master API releases assume the dedicated role with API-only image access", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/github-oidc.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	).replace(/\r/g, "");
+	const resource = (name) =>
+		template.split(`  ${name}:\n`)[1].split(/^  (?:[A-Za-z]|#)/m)[0];
+	assert.match(
+		resource("GitHubActionsAPIDeployRole"),
+		/DependsOn: GitHubOIDCProvider/,
+	);
+	const trust = JSON.parse(
+		resource("GitHubActionsAPIDeployRole")
+			.split("        Fn::Sub: |\n")[1]
+			.split("      Tags:")[0]
+			.trim(),
+	);
+	assert.deepEqual(trust.Statement, [
+		{
+			Effect: "Allow",
+			Principal: {
+				Federated:
+					"arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com",
+			},
+			Action: "sts:AssumeRoleWithWebIdentity",
+			Condition: {
+				StringEquals: {
+					"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+					"token.actions.githubusercontent.com:sub":
+						"repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master",
+				},
+			},
+		},
+	]);
+	assert.doesNotMatch(
+		resource("GitHubActionsAPIDeployRole"),
+		/ManagedPolicyArns/,
+	);
+	const publishBlock = resource("GitHubActionsAPIPublishPolicy"),
+		publish = JSON.parse(publishBlock.split("        Fn::Sub: |\n")[1].trim());
+	assert.match(publishBlock, /Roles: \[!Ref GitHubActionsAPIDeployRole\]/);
+	assert.equal(publish.Statement[0].Action, "ecr:GetAuthorizationToken");
+	assert.equal(publish.Statement[0].Resource, "*");
+	assert.equal(
+		publish.Statement[1].Resource,
+		"arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/bible-on-site-api",
+	);
+	assert.ok(publish.Statement[1].Action.includes("ecr:PutImage"));
+	assert.ok(
+		publish.Statement.every(
+			(row) =>
+				row.Condition.StringEquals["aws:RequestedRegion"] === "il-central-1",
+		),
+	);
+	assert.doesNotMatch(
+		JSON.stringify(publish),
+		/CreateRepository|Delete|ssm:|iam:|s3:|lambda:/,
+	);
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/cd-aws.yml", import.meta.url),
+		"utf8",
+	);
+	assert.match(
+		workflow,
+		/role-to-assume: \$\{\{ env\.MODULE_NAME == 'api' && format\('arn:aws:iam::\{0\}:role\/GitHubActionsAPIDeployRole', env\.AWS_ACCOUNT_ID\) \|\| secrets\.AWS_DEPLOY_ROLE_ARN \}\}/,
+	);
+});
+
+test("the handover policy limits service writes, role passing, size and lease tags", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/github-oidc.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	).replace(/\r/g, "");
+	const block = template
+		.split("  GitHubActionsAPIHandoverPolicy:\n")[1]
+		.split("Outputs:\n")[0];
+	const json = block.split("        Fn::Sub: |\n")[1].trim();
+	const policy = JSON.parse(json),
+		statements = Object.fromEntries(
+			policy.Statement.map((row) => [row.Sid, row]),
+		);
+	assert.equal(
+		statements.APIServiceUpdate.Resource.endsWith(
+			"service/bible-on-site-cluster/bible-on-site-api",
+		),
+		true,
+	);
+	assert.equal(
+		statements.APIRegisterExistingSize.Condition.NumericEquals["ecs:task-cpu"],
+		"256",
+	);
+	assert.equal(
+		statements.APIRegisterExistingSize.Condition.NumericEquals[
+			"ecs:task-memory"
+		],
+		"512",
+	);
+	assert.deepEqual(
+		statements.OwnedLeaseMarkersOnly.Condition["ForAllValues:StringLike"][
+			"aws:TagKeys"
+		],
+		["tanahpedia:api-handover:*"],
+	);
+	assert.equal(
+		statements.PassExistingExecutionRoleOnly.Resource.endsWith(
+			"role/ecsTaskExecutionRole",
+		),
+		true,
+	);
+	assert.equal(statements.APIRuleStateRead.Action, "events:DescribeRule");
+	assert.match(block, /Roles: \[!Ref GitHubActionsAPIDeployRole\]/);
+	assert.doesNotMatch(json, /token\.actions\.githubusercontent\.com/);
+	for (const statement of policy.Statement.filter(
+		(row) => row.Action !== "iam:PassRole",
+	))
+		assert.equal(
+			statement.Condition.StringEquals["aws:RequestedRegion"],
+			"il-central-1",
+		);
+	assert.ok(
+		policy.Statement.every(
+			(row) =>
+				!JSON.stringify(row.Action).includes("iam:Put") &&
+				!JSON.stringify(row.Action).includes("servicediscovery:Update"),
+		),
+	);
+});
+
 for (const file of [
 	"cd-aws.yml",
 	"cd-bulletin.yml",
