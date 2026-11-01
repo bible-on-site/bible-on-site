@@ -158,10 +158,7 @@ function SeferScriptureText({
 				);
 				return (
 					<RecitationVerse key={pasukKey} pasuk={pasukKey}>
-						{pasukNumElement}
-						<span> </span>
-						{pasukElement}
-						<span> </span>
+						{pasukNumElement} {pasukElement}{" "}
 					</RecitationVerse>
 				);
 			})}

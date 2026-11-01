@@ -84,8 +84,7 @@ describe("UnitTextBody", () => {
 		expect(container.querySelectorAll("#pasuk-1-3")).toHaveLength(1);
 		expect(container.querySelectorAll('[id^="pasuk-"]')).toHaveLength(3);
 		// The pasuk's segments render a second time, anchorless.
-		expect(screen.getAllByText("א3ראשון")).toHaveLength(2);
-		expect(screen.getAllByText("א3שני")).toHaveLength(2);
+		expect(container.textContent?.match(/א3ראשון א3שני/g)).toHaveLength(2);
 	});
 
 	it("skips slices whose perek the resolver cannot supply", () => {

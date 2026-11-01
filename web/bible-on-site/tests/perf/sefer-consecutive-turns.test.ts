@@ -52,13 +52,24 @@ for (const [chapter, bookmarks] of [
 				}, mode);
 				await page.goto(`/929/${chapter}?book`, { waitUntil: "load" });
 				await page.waitForFunction(
-					() =>
-						document.querySelectorAll(".he-book .page.current-page").length ===
-							2 &&
-						!document.querySelector(".he-book .page--flipping") &&
-						document.querySelector<HTMLButtonElement>(
-							"button.flipbook-toolbar-next",
-						)?.disabled === false,
+					() => {
+						const current = Array.from(
+							document.querySelectorAll(".he-book .page.current-page"),
+						);
+						return (
+							current.length === 2 &&
+							current.every((page) => {
+								const content = page.querySelector(".flipbook-page-content");
+								return (
+									content?.checkVisibility() && content.textContent?.trim()
+								);
+							}) &&
+							!document.querySelector(".he-book .page--flipping") &&
+							document.querySelector<HTMLButtonElement>(
+								"button.flipbook-toolbar-next",
+							)?.disabled === false
+						);
+					},
 					null,
 					{ timeout: 5_000 },
 				);
@@ -153,11 +164,14 @@ for (const [chapter, bookmarks] of [
 								);
 								return (
 									visible.length === 2 &&
-									visible.every((page) =>
-										page
-											.querySelector(".flipbook-page-content")
-											?.textContent?.trim(),
-									)
+									visible.every((page) => {
+										const content = page.querySelector(
+											".flipbook-page-content",
+										);
+										return (
+											content?.checkVisibility() && content.textContent?.trim()
+										);
+									})
 								);
 							},
 							chapter + index + 1,
