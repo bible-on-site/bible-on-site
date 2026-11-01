@@ -509,10 +509,12 @@ jobs:
   # Compile and inspect the actual signed distribution on relevant PRs too.
   # Simulator builds cannot detect missing App Groups provisioning or a broken
   # embedded downloader; publication remains in the master-only job above.
+  # Pull requests only: the ~17-minute macOS job already gated the PR, and
+  # repeating it per merge_group entry doubles scarce macOS runner time.
   package_ios_pr:
     name: Validate iOS Distribution
     needs: [setup_env, determine_changes, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    if: ${{ always() && !cancelled() && !failure() && github.event_name == 'pull_request' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
       actions: read
@@ -3168,7 +3170,7 @@ jobs:
           if [ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ]; then APP_MODULE_CHANGED=true; else APP_MODULE_CHANGED=false; fi
           if [ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ]; then APP_CI_CHANGED=true; else APP_CI_CHANGED=false; fi
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
               exit 1
             fi

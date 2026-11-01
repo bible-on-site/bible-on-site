@@ -1417,7 +1417,6 @@ fi
 			"app_mobile_e2e",
 			"app_ios_ci",
 			"perushim_data",
-			"package_ios_pr",
 			"package_windows_pr",
 			"package_api",
 			"package_bulletin",
@@ -1431,6 +1430,9 @@ fi
 		]) {
 			evaluate("merge_group", name);
 		}
+		// The signed iOS distribution gates the pull request, not the queue.
+		evaluate("merge_group", "package_ios_pr", true, true, true);
+		evaluate("pull_request", "package_ios_pr");
 		// Baseline recovery alone never selects the PR native-audio producer.
 		evaluate("pull_request", "app_ios_ci", false, false, true);
 		for (const event of ["push", "workflow_dispatch"]) {
