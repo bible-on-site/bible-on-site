@@ -3,13 +3,13 @@
 import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
 import React, { useEffect, useMemo, useState } from "react";
-import type { Perek } from "@/data/db/tanah-view-types";
-import type { ArticleSummary } from "@/lib/articles";
-import type { RangePerushSummary } from "@/lib/perushim";
-import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import { constructTsetAwareHDate } from "@/util/hebdates-util";
-import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
+import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import {
+	releaseSeferDocumentTitle,
+	setSeferDocumentTitle,
+} from "@/app/929/[number]/components/sefer-document-title";
 import { UnitBlankPageContent } from "@/app/components/reading/UnitBlankPageContent";
+import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
 import { UnitTextBody } from "@/app/components/reading/UnitTextBody";
 import {
 	getUnitScopeSummariesBatch,
@@ -24,11 +24,11 @@ import {
 	unitBookKey,
 } from "@/app/components/reading/unit-book-navigation";
 import { useUnitBookContentNavigation } from "@/app/components/reading/useUnitBookContentNavigation";
-import {
-	releaseSeferDocumentTitle,
-	setSeferDocumentTitle,
-} from "@/app/929/[number]/components/sefer-document-title";
-import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import type { Perek } from "@/data/db/tanah-view-types";
+import type { ArticleSummary } from "@/lib/articles";
+import type { RangePerushSummary } from "@/lib/perushim";
+import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import unitPageStyles from "../page.module.css";
 import {
 	type BookPage,
@@ -39,8 +39,8 @@ import {
 	MASORA_CONTENT_OFFSET,
 	MASORA_ROOT,
 	MASORA_ROOT_ALIASES,
-	masoraBookPageRoute,
 	type MasoraBookUnit,
+	masoraBookPageRoute,
 	masoraPerushDocumentTitle,
 	masoraUnitDocumentTitle,
 } from "./masora-book-utils";
@@ -181,13 +181,11 @@ const MasoraSefer = (props: {
 			: `${MASORA_ROOT}/${currentUnitId}?book`,
 	);
 
-	// The page tree must stay referentially stable across renders: every
-	// committed flip updates the document-title state, and rebuilding this
-	// flatMap then re-rendered every mounted reader page mid-animation
-	// (#2805).
-	const contentPages = useMemo(
+	// Keep scripture independent of async summaries and commentary selection.
+	// Those updates must not rebuild or reconcile every word in the book.
+	const scripturePages = useMemo(
 		() =>
-			units.flatMap((unit) => {
+			units.map((unit) => {
 				const pasukCount = (perekId: number) =>
 					perekById.get(perekId)?.pesukim.length ?? 1;
 				const resolvePerek = (perekId: number) => {
@@ -199,12 +197,7 @@ const MasoraSefer = (props: {
 					};
 				};
 				const bookKey = unitBookKey(unit.unitId, "torah");
-				const summaries =
-					unit.unitId === currentUnitId
-						? { articles, perushim }
-						: batchSummaries[String(unit.unitId)];
-				const unitPath = `${MASORA_ROOT}/${unit.unitId}`;
-				return [
+				return (
 					<React.Fragment key={`masora-${unit.unitId}`}>
 						<section
 							className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
@@ -256,7 +249,21 @@ const MasoraSefer = (props: {
 								</article>
 							</div>
 						</section>
-					</React.Fragment>,
+					</React.Fragment>
+				);
+			}),
+		[units, seferName, perekSources, entityRefsByPerek, perekById],
+	);
+
+	const panelPages = useMemo(
+		() =>
+			units.map((unit) => {
+				const summaries =
+					unit.unitId === currentUnitId
+						? { articles, perushim }
+						: batchSummaries[String(unit.unitId)];
+				const unitPath = `${MASORA_ROOT}/${unit.unitId}`;
+				return (
 					<React.Fragment key={`blank-${unit.unitId}`}>
 						<UnitBlankPageContent
 							division="masora"
@@ -288,23 +295,25 @@ const MasoraSefer = (props: {
 							}
 							onContentTitle={setInBookContentTitle}
 						/>
-					</React.Fragment>,
-				];
+					</React.Fragment>
+				);
 			}),
 		[
 			units,
-			seferName,
-			perekSources,
-			hebrewDateStr,
-			entityRefsByPerek,
 			currentUnitId,
 			articles,
 			perushim,
 			batchSummaries,
+			perekSources,
+			hebrewDateStr,
 			contentNavigation.content,
 			contentNavigation.navigate,
-			perekById,
 		],
+	);
+
+	const contentPages = useMemo(
+		() => scripturePages.flatMap((page, index) => [page, panelPages[index]]),
+		[scripturePages, panelPages],
 	);
 
 	return (
