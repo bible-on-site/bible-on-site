@@ -232,6 +232,16 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
         // retains its biblical maqaf and cantillation marks.
         let content = normalize_html_text(
             &ammonia::Builder::default()
+                .add_tag_attributes("span", &["style"])
+                .attribute_filter(|element, attribute, value| {
+                    if element == "span" && attribute == "style" {
+                        crate::article_style::InlineStyle::parse(value)
+                            .css()
+                            .map(std::borrow::Cow::Owned)
+                    } else {
+                        Some(std::borrow::Cow::Borrowed(value))
+                    }
+                })
                 .url_relative(ammonia::UrlRelative::RewriteWithBase(ammonia::Url::parse(
                     "https://תנך.com/",
                 )?))
@@ -277,6 +287,39 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn article_editor_emphasis_survives_safe_sanitization_in_both_formats() {
+        let mut input = layout_input();
+        input.article = Some(DailyArticle {
+            id: 7,
+            title: "מאמר".into(),
+            author: "מחבר".into(),
+            html: "<p><span style='font-weight: bold; background:url(javascript:bad)'>כאשר</span> <span style='font-style: italic'>עוד</span><span style='font-size:999px'>טקסט</span></p>".into(),
+        });
+        let fonts = Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts");
+        let rendered = render(&input, &fonts).unwrap();
+        assert!(
+            rendered
+                .email_html
+                .contains("style=\"font-weight: 700\">כאשר</span>")
+        );
+        assert!(
+            rendered
+                .email_html
+                .contains("style=\"font-style: italic\">עוד</span>")
+        );
+        assert!(
+            !rendered.email_html.contains("javascript:bad")
+                && !rendered.email_html.contains("999px")
+        );
+        assert!(
+            STANDARD
+                .decode(rendered.pdf_base64)
+                .unwrap()
+                .starts_with(b"%PDF")
+        );
+    }
 
     fn layout_input() -> DailyInput {
         DailyInput {
