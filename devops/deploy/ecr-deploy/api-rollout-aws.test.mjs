@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import test from "node:test";
+import stableStringify from "fast-json-stable-stringify";
 import { APIRolloutAWS, createAWSCaller } from "./api-rollout-aws.mjs";
 import {
 	definition,
@@ -160,6 +161,12 @@ test("actual SDK completion serializes the bounded history lookup and deserializ
 							maxResults: 100,
 							createdAt: { after: (f.epoch - 1000) / 1000 },
 						});
+					const payload = structuredClone(f.responses[name]);
+					delete payload.$clock;
+					for (const row of payload.serviceDeployments ?? [])
+						for (const key of ["startedAt", "finishedAt"])
+							if (row[key] instanceof Date)
+								row[key] = row[key].getTime() / 1000;
 					return {
 						response: {
 							statusCode: 200,
@@ -167,15 +174,7 @@ test("actual SDK completion serializes the bounded history lookup and deserializ
 								"content-type": "application/x-amz-json-1.1",
 								date: f.responses.DescribeServiceDeployments.$clock.serverDate,
 							},
-							body: Readable.from([
-								JSON.stringify(f.responses[name], (key, value) =>
-									key === "$clock"
-										? undefined
-										: key.endsWith("At")
-											? Date.parse(value) / 1000
-											: value,
-								),
-							]),
+							body: Readable.from([stableStringify(payload)]),
 						},
 					};
 				},
