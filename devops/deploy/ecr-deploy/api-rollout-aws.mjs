@@ -128,8 +128,9 @@ export class APIRolloutAWS {
 		});
 		assert.equal(result.taskDefinition?.taskDefinitionArn, arn);
 		assertDefinition(result.taskDefinition);
-		assert.ok(Array.isArray(result.tags));
-		return { definition: result.taskDefinition, tags: result.tags };
+		const tags = result.tags ?? [];
+		assert.ok(Array.isArray(tags));
+		return { definition: result.taskDefinition, tags };
 	}
 	async instances() {
 		const rows = await this.call("ListInstances", {

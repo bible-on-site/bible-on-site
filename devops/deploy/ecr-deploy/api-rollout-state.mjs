@@ -145,12 +145,15 @@ export function registration(definition, tags, architecture, image) {
 			registrationFields.has(key) || definitionMetadata.has(key),
 			"Unknown task-definition field; preserve it explicitly before deployment",
 		);
-		if (registrationFields.has(key)) request[key] = structuredClone(value);
+		if (registrationFields.has(key) && key !== "tags")
+			request[key] = structuredClone(value);
 	}
 	assert.ok(Array.isArray(tags));
-	request.tags = structuredClone(tags).sort((left, right) =>
-		left.key < right.key ? -1 : left.key > right.key ? 1 : 0,
-	);
+	// ECS rejects an explicit empty list even when the source is untagged.
+	if (tags.length > 0)
+		request.tags = structuredClone(tags).sort((left, right) =>
+			left.key < right.key ? -1 : left.key > right.key ? 1 : 0,
+		);
 	request.runtimePlatform = {
 		...request.runtimePlatform,
 		cpuArchitecture: architecture,
