@@ -17,6 +17,7 @@ import {
 } from "@aws-sdk/client-ecr";
 import {
 	type APIArchive,
+	assertAPILatestMode,
 	OCI_INDEX,
 	type PreparedAPIArchives,
 	prepareAPIArchives,
@@ -197,10 +198,12 @@ class Registry {
 				const tag = command.input.imageIds?.[0]?.imageTag;
 				if (tag) {
 					const image = this.images.get(tag);
+					if (!image)
+						throw Object.assign(new Error("Tag not found"), {
+							name: "ImageNotFoundException",
+						});
 					return {
-						imageDetails: image
-							? [{ imageTags: [tag], imageDigest: image.digest }]
-							: [],
+						imageDetails: [{ imageTags: [tag], imageDigest: image.digest }],
 					};
 				}
 				return {
@@ -210,6 +213,28 @@ class Registry {
 				};
 			}
 			if (command instanceof BatchGetImageCommand) {
+				const requestedDigest = command.input.imageIds?.[0]?.imageDigest;
+				if (requestedDigest) {
+					const matches = [...this.images].filter(
+						([, image]) => image.digest === requestedDigest,
+					);
+					return matches.length
+						? {
+								images: matches.map(([tag, image]) => ({
+									imageId: { imageTag: tag, imageDigest: image.digest },
+									imageManifest: image.manifest,
+									imageManifestMediaType: image.mediaType,
+								})),
+							}
+						: {
+								failures: [
+									{
+										imageId: { imageDigest: requestedDigest },
+										failureCode: "ImageNotFound",
+									},
+								],
+							};
+				}
 				const tag = command.input.imageIds?.[0]?.imageTag;
 				assert.ok(tag);
 				const image = this.images.get(tag);
@@ -814,6 +839,96 @@ test("a late index promotion is rechecked immediately before latest changes", as
 		assert.equal(registry.images.get("latest")?.digest, established.digest);
 	}));
 
+test("a stale tag manifest cannot hide an index from the publication mode guard", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		await publishAPIImages(prepared, registry.options(prepared, true));
+		const current = registry.images.get("latest");
+		assert.ok(current);
+		const previous = child(prepared.images[0]);
+		const original = registry.client.send.bind(registry.client);
+		let staleTagReads = 0;
+		let digestReads = 0;
+		registry.client.send = (async (command: unknown) => {
+			if (command instanceof BatchGetImageCommand) {
+				if (command.input.imageIds?.[0]?.imageTag === "latest") {
+					staleTagReads++;
+					return {
+						images: [
+							{
+								imageId: { imageTag: "latest", imageDigest: previous.digest },
+								imageManifest: previous.manifest,
+								imageManifestMediaType: previous.mediaType,
+							},
+						],
+					};
+				}
+				if (command.input.imageIds?.[0]?.imageDigest === current.digest) {
+					digestReads++;
+					return {
+						images: ["latest", `v${version}`].map((tag) => ({
+							imageId: { imageTag: tag, imageDigest: current.digest },
+							imageManifest: current.manifest,
+							imageManifestMediaType: current.mediaType,
+						})),
+					};
+				}
+			}
+			return original(command as never);
+		}) as typeof registry.client.send;
+		await assert.rejects(
+			assertAPILatestMode(registry.client, repositoryName, false),
+			/every subsequent release requires/,
+		);
+		assert.equal(staleTagReads, 0);
+		assert.equal(digestReads, 1);
+	}));
+
+test("an already correct latest mapping is not rewritten because its tag manifest is stale", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		await publishAPIImages(prepared, registry.options(prepared, true));
+		const current = registry.images.get("latest");
+		assert.ok(current);
+		const previous = child(prepared.images[0]);
+		registry.puts = [];
+		const original = registry.client.send.bind(registry.client);
+		let staleTagReads = 0;
+		let duplicateWrites = 0;
+		registry.client.send = (async (command: unknown) => {
+			if (
+				command instanceof BatchGetImageCommand &&
+				command.input.imageIds?.[0]?.imageTag === "latest"
+			) {
+				staleTagReads++;
+				return {
+					images: [
+						{
+							imageId: { imageTag: "latest", imageDigest: previous.digest },
+							imageManifest: previous.manifest,
+							imageManifestMediaType: previous.mediaType,
+						},
+					],
+				};
+			}
+			if (
+				command instanceof PutImageCommand &&
+				command.input.imageTag === "latest" &&
+				command.input.imageDigest === current.digest
+			) {
+				duplicateWrites++;
+				throw Object.assign(new Error("Same image already tagged"), {
+					name: "ImageAlreadyExistsException",
+				});
+			}
+			return original(command as never);
+		}) as typeof registry.client.send;
+		await publishAPIImages(prepared, registry.options(prepared, true));
+		assert.equal(staleTagReads, 0);
+		assert.equal(duplicateWrites, 0);
+		assert.deepEqual(registry.puts, []);
+	}));
+
 test("verifies a retag using its write receipt and tag metadata despite a stale manifest read", async () =>
 	fixture(async (prepared) => {
 		const registry = new Registry();
@@ -856,7 +971,13 @@ test("verifies a retag using its write receipt and tag metadata despite a stale 
 		});
 		assert.equal(result.canonicalDigest, child(prepared.images[0]).digest);
 		assert.equal(registry.images.get("latest")?.digest, result.canonicalDigest);
-		assert.deepEqual(metadataTags, [`v${version}`, "latest"]);
+		assert.deepEqual(metadataTags, [
+			"latest",
+			`v${version}`,
+			"latest",
+			"latest",
+			"latest",
+		]);
 		assert.equal(staleReads, 0);
 		assert.deepEqual(registry.puts, [`v${version}`, "latest"]);
 	}));
@@ -888,7 +1009,7 @@ const badWriteReceipts: [
 	],
 ];
 for (const [name, corrupt] of badWriteReceipts) {
-	test(`rejects a latest write receipt with ${name} before metadata verification`, async () =>
+	test(`rejects a latest write receipt with ${name} before post-write metadata verification`, async () =>
 		fixture(async (prepared) => {
 			const registry = new Registry();
 			const transport = registry.client;
@@ -897,7 +1018,8 @@ for (const [name, corrupt] of badWriteReceipts) {
 				send: async (command: unknown) => {
 					if (
 						command instanceof DescribeImagesCommand &&
-						command.input.imageIds?.[0]?.imageTag === "latest"
+						command.input.imageIds?.[0]?.imageTag === "latest" &&
+						registry.puts.includes("latest")
 					)
 						latestMetadataReads++;
 					const result = await Reflect.apply(transport.send, transport, [
@@ -945,7 +1067,7 @@ const badTagMetadata: [string, (expected: string) => unknown][] = [
 	],
 ];
 for (const [name, corrupt] of badTagMetadata) {
-	test(`rejects ${name} in latest metadata without retrying the write or read`, async () =>
+	test(`rejects ${name} in post-write latest metadata without retrying the write or read`, async () =>
 		fixture(async (prepared) => {
 			const registry = new Registry();
 			const transport = registry.client;
@@ -954,7 +1076,8 @@ for (const [name, corrupt] of badTagMetadata) {
 				send: async (command: unknown) => {
 					if (
 						command instanceof DescribeImagesCommand &&
-						command.input.imageIds?.[0]?.imageTag === "latest"
+						command.input.imageIds?.[0]?.imageTag === "latest" &&
+						registry.puts.includes("latest")
 					) {
 						metadataReads++;
 						return { imageDetails: corrupt(child(prepared.images[0]).digest) };
@@ -970,6 +1093,279 @@ for (const [name, corrupt] of badTagMetadata) {
 			assert.equal(registry.puts.filter((tag) => tag === "latest").length, 1);
 		}));
 }
+
+for (const [name, corrupt] of badTagMetadata) {
+	test(`publication mode guard rejects ${name} in current tag metadata`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			const current = child(prepared.images[0]);
+			registry.images.set("latest", current);
+			const original = registry.client.send.bind(registry.client);
+			let metadataReads = 0;
+			registry.client.send = (async (command: unknown) => {
+				if (
+					command instanceof DescribeImagesCommand &&
+					command.input.imageIds?.[0]?.imageTag === "latest"
+				) {
+					metadataReads++;
+					return { imageDetails: corrupt(current.digest) };
+				}
+				return original(command as never);
+			}) as typeof registry.client.send;
+			await assert.rejects(
+				assertAPILatestMode(registry.client, repositoryName, false),
+				/Invalid registry tag metadata|Unable to inspect registry digest/,
+			);
+			assert.equal(metadataReads, 1);
+			assert.deepEqual(registry.puts, []);
+		}));
+}
+
+test("publication mode guard distinguishes absent tags/repositories from metadata errors", async () => {
+	for (const name of [
+		"ImageNotFoundException",
+		"RepositoryNotFoundException",
+		"AccessDeniedException",
+	]) {
+		let reads = 0;
+		const client = {
+			send: async (command: unknown) => {
+				assert.ok(command instanceof DescribeImagesCommand);
+				reads++;
+				throw Object.assign(new Error("Metadata lookup failed"), { name });
+			},
+		} as unknown as ECRClient;
+		if (name === "AccessDeniedException")
+			await assert.rejects(
+				assertAPILatestMode(client, repositoryName, false),
+				/Metadata lookup failed/,
+			);
+		else await assertAPILatestMode(client, repositoryName, false);
+		assert.equal(reads, 1);
+	}
+});
+
+const corruptDigestReplies: [
+	string,
+	(images: Record<string, unknown>[]) => Record<string, unknown>,
+][] = [
+	["missing images", () => ({})],
+	[
+		"failure after metadata",
+		() => ({ failures: [{ failureCode: "ImageNotFound" }] }),
+	],
+	[
+		"partial response failure",
+		(images) => ({ images, failures: [{ failureCode: "Unknown" }] }),
+	],
+	[
+		"missing first manifest",
+		(images) => ({ images: [{ ...images[0], imageManifest: undefined }] }),
+	],
+	[
+		"missing first media type",
+		(images) => ({
+			images: [{ ...images[0], imageManifestMediaType: undefined }],
+		}),
+	],
+	[
+		"wrong requested digest",
+		(images) => ({
+			images: [{ ...images[0], imageId: { imageDigest: digest("different") } }],
+		}),
+	],
+	[
+		"tampered first manifest",
+		(images) => ({ images: [{ ...images[0], imageManifest: "{}" }] }),
+	],
+	[
+		"missing duplicate manifest",
+		(images) => ({
+			images: [images[0], { ...images[1], imageManifest: undefined }],
+		}),
+	],
+	[
+		"missing duplicate media type",
+		(images) => ({
+			images: [images[0], { ...images[1], imageManifestMediaType: undefined }],
+		}),
+	],
+	[
+		"conflicting duplicate media type",
+		(images) => ({
+			images: [images[0], { ...images[1], imageManifestMediaType: childType }],
+		}),
+	],
+];
+for (const [name, corrupt] of corruptDigestReplies) {
+	test(`publication mode guard fails closed on ${name}`, async () =>
+		fixture(async (prepared) => {
+			const current = completeIndex(prepared);
+			let metadataReads = 0,
+				digestReads = 0;
+			const client = {
+				send: async (command: unknown) => {
+					if (command instanceof DescribeImagesCommand) {
+						metadataReads++;
+						return {
+							imageDetails: [
+								{ imageTags: ["latest"], imageDigest: current.digest },
+							],
+						};
+					}
+					assert.ok(command instanceof BatchGetImageCommand);
+					assert.deepEqual(command.input.imageIds, [
+						{ imageDigest: current.digest },
+					]);
+					digestReads++;
+					return corrupt(
+						["latest", `v${version}`].map((tag) => ({
+							imageId: { imageTag: tag, imageDigest: current.digest },
+							imageManifest: current.manifest,
+							imageManifestMediaType: current.mediaType,
+						})),
+					);
+				},
+			} as unknown as ECRClient;
+			await assert.rejects(
+				assertAPILatestMode(client, repositoryName, false),
+				/Unable to inspect registry digest|Invalid registry manifest for digest/,
+			);
+			assert.equal(metadataReads, 1);
+			assert.equal(digestReads, 1);
+		}));
+}
+
+test("publication mode guard accepts identical legacy digest aliases", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		const current = child(prepared.images[0]);
+		registry.images.set("latest", current);
+		registry.images.set(`v${version}`, current);
+		await assertAPILatestMode(registry.client, repositoryName, false);
+		assert.deepEqual(registry.puts, []);
+	}));
+
+test("publication mode guard accepts a valid image whose body omits optional mediaType", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		const current = child(prepared.images[0]);
+		const body = JSON.parse(current.manifest);
+		delete body.mediaType;
+		const manifest = JSON.stringify(body);
+		registry.images.set("latest", {
+			...current,
+			manifest,
+			digest: digest(manifest),
+		});
+		await assertAPILatestMode(registry.client, repositoryName, false);
+		assert.deepEqual(registry.puts, []);
+	}));
+
+test("publication mode guard rejects invalid JSON even when its digest is genuine", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		const current = child(prepared.images[0]);
+		const manifest = "not JSON";
+		registry.images.set("latest", {
+			...current,
+			manifest,
+			digest: digest(manifest),
+		});
+		await assert.rejects(
+			assertAPILatestMode(registry.client, repositoryName, false),
+			SyntaxError,
+		);
+		assert.deepEqual(registry.puts, []);
+	}));
+
+for (const [name, corrupt] of [
+	[
+		"unknown media type",
+		(image: Image) => ({ ...image, mediaType: "application/x-unknown" }),
+	],
+	[
+		"wrong schema",
+		(image: Image) => {
+			const value = JSON.parse(image.manifest);
+			value.schemaVersion = 1;
+			const manifest = JSON.stringify(value);
+			return { ...image, manifest, digest: digest(manifest) };
+		},
+	],
+	[
+		"index body with image header",
+		() => {
+			const manifest = JSON.stringify({ schemaVersion: 2, manifests: [] });
+			return { manifest, mediaType: childType, digest: digest(manifest) };
+		},
+	],
+	[
+		"bad config digest",
+		(image: Image) => {
+			const value = JSON.parse(image.manifest);
+			value.config.digest = "invalid";
+			const manifest = JSON.stringify(value);
+			return { ...image, manifest, digest: digest(manifest) };
+		},
+	],
+	[
+		"missing layers",
+		(image: Image) => {
+			const value = JSON.parse(image.manifest);
+			delete value.layers;
+			const manifest = JSON.stringify(value);
+			return { ...image, manifest, digest: digest(manifest) };
+		},
+	],
+	[
+		"mismatched body media type",
+		(image: Image) => {
+			const value = JSON.parse(image.manifest);
+			value.mediaType = OCI_INDEX;
+			const manifest = JSON.stringify(value);
+			return { ...image, manifest, digest: digest(manifest) };
+		},
+	],
+] as const) {
+	test(`publication mode guard rejects ${name}`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry();
+			registry.images.set("latest", corrupt(child(prepared.images[0])));
+			await assert.rejects(
+				assertAPILatestMode(registry.client, repositoryName, false),
+				/unsupported image manifest/,
+			);
+			assert.deepEqual(registry.puts, []);
+		}));
+}
+
+test("publication mode guard does not fall back when immutable bytes disappear", async () =>
+	fixture(async (prepared) => {
+		const current = child(prepared.images[0]);
+		let reads = 0;
+		const client = {
+			send: async (command: unknown) => {
+				reads++;
+				if (command instanceof DescribeImagesCommand)
+					return {
+						imageDetails: [
+							{ imageTags: ["latest"], imageDigest: current.digest },
+						],
+					};
+				assert.ok(command instanceof BatchGetImageCommand);
+				throw Object.assign(
+					new Error("Repository disappeared after metadata"),
+					{ name: "RepositoryNotFoundException" },
+				);
+			},
+		} as unknown as ECRClient;
+		await assert.rejects(
+			assertAPILatestMode(client, repositoryName, false),
+			/Repository disappeared/,
+		);
+		assert.equal(reads, 2);
+	}));
 
 class RacingLegacyRelease extends ExistingRelease {
 	private calls = 0;
