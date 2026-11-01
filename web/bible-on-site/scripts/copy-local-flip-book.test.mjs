@@ -27,6 +27,11 @@ test("fixture filesystem helpers reject paths outside their temporary root", (t)
 		/must stay inside/,
 	);
 	assert.throws(() => f.read(outside), /must stay inside/);
+	assert.throws(() => f.realpath(outside), /must stay inside/);
+	assert.throws(
+		() => f.rename(f.target, outside, () => {}),
+		/must stay inside/,
+	);
 	assert.throws(() => f.junction(f.react, outside), /must stay inside/);
 });
 

@@ -71,6 +71,16 @@ export function fixture(
 		// nosemgrep -- inspects the fixture junction itself at a contained path.
 		return fs.lstatSync(resolved).isSymbolicLink();
 	}
+	function realpath(file) {
+		const resolved = within(file);
+		// nosemgrep -- both the lookup and its resolved junction target stay in this fixture root.
+		return within(fs.realpathSync(resolved));
+	}
+	function rename(source, destination, operation) {
+		const from = within(source);
+		const to = within(destination);
+		return operation(from, to);
+	}
 	function json(file, content) {
 		write(file, JSON.stringify(content));
 	}
@@ -133,6 +143,8 @@ export function fixture(
 		mkdir,
 		junction,
 		isLink,
+		realpath,
+		rename,
 		json,
 		run,
 		commands,

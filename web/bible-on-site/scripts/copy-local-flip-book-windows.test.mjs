@@ -16,23 +16,20 @@ test("Windows publication renames only a link when copied trees cannot be moved"
 	const local = resolveLocalFlipBook(f.project, {}, true);
 	const rename = fs.renameSync;
 	t.mock.method(fs, "renameSync", (source, destination) => {
-		if (
-			path.basename(source) === "next" &&
-			!fs.lstatSync(source).isSymbolicLink()
-		) {
+		if (path.basename(source) === "next" && !f.isLink(source)) {
 			throw Object.assign(
 				new Error("Copied tree is held by a Windows scanner"),
 				{ code: "EPERM" },
 			);
 		}
-		return rename(source, destination);
+		return f.rename(source, destination, rename);
 	});
 	copyLocalFlipBook(f.project, { local, run: f.run, platform: "win32" });
 	assert.equal(f.isLink(f.target), true);
-	const firstSnapshot = fs.realpathSync(f.target);
+	const firstSnapshot = f.realpath(f.target);
 	f.write(path.join(f.react, "src", "page.tsx"), "second source");
 	copyLocalFlipBook(f.project, { local, run: f.run, platform: "win32" });
-	assert.notEqual(fs.realpathSync(f.target), firstSnapshot);
+	assert.notEqual(f.realpath(f.target), firstSnapshot);
 	assert.equal(f.exists(firstSnapshot), false);
 	assert.equal(
 		f.read(path.join(f.target, "dist", "flip-book.js"), "utf8"),
@@ -47,7 +44,7 @@ test("failed Windows link promotion restores the previous package", (t) => {
 	t.mock.method(fs, "renameSync", (source, destination) => {
 		if (path.basename(source) === "link")
 			throw new Error("link promotion failed");
-		return rename(source, destination);
+		return f.rename(source, destination, rename);
 	});
 	assert.throws(
 		() =>
@@ -76,7 +73,7 @@ test("a rollback failure keeps its recovery copy instead of deleting it", (t) =>
 	t.mock.method(fs, "renameSync", (source, destination) => {
 		if (["link", "previous"].includes(path.basename(source)))
 			throw new Error("promotion/rollback locked");
-		return rename(source, destination);
+		return f.rename(source, destination, rename);
 	});
 	assert.throws(
 		() =>
@@ -114,7 +111,7 @@ test("registry restoration retires its owned Windows snapshot", (t) => {
 		run: f.run,
 		platform: "win32",
 	});
-	const snapshot = path.dirname(fs.realpathSync(f.target));
+	const snapshot = path.dirname(f.realpath(f.target));
 	prepareDevDependencies(f.project, {
 		env: { USE_LOCAL_FLIP_BOOK: "0" },
 		run: f.run,
@@ -133,7 +130,7 @@ test("failed registry rollback keeps the last working package for recovery", (t)
 	t.mock.method(fs, "renameSync", (source, destination) => {
 		if (path.basename(source) === "previous")
 			throw new Error("registry rollback locked");
-		return rename(source, destination);
+		return f.rename(source, destination, rename);
 	});
 	syncBuiltinESMExports();
 	t.after(() => {

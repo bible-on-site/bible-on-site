@@ -211,15 +211,25 @@ for (const [chapter, bookmarks] of [
 test("turn probe detects an injected second-turn stall", async ({
 	page,
 	isMobile,
-}) => {
+}, testInfo) => {
 	test.skip(isMobile, "Desktop regression probe control");
+	await page.route("**/929/125?book", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "text/html",
+			body: '<button class="flipbook-toolbar-next">Next</button><div class="he-book"><div class="page"></div></div>',
+		}),
+	);
 	await page.goto("/929/125?book", { waitUntil: "load" });
 	// A minimal control isolates the probe from app code. Native clicks still
 	// carry real browser timestamps; the second handler deliberately blocks.
-	await page.setContent(
-		'<button class="flipbook-toolbar-next">Next</button><div class="he-book"><div class="page"></div></div>',
-	);
 	await page.evaluate(() => {
+		// Native frames can be timestamped before their input. Exaggerate that
+		// ordering here: observations must use callback execution time while
+		// cadence retains the unchanged spacing between frame timestamps.
+		const raf = window.requestAnimationFrame.bind(window);
+		window.requestAnimationFrame = (callback) =>
+			raf((timestamp) => callback(timestamp - 1_000));
 		history.replaceState(null, "", "/929/300?book");
 		let count = 0;
 		document.querySelector("button")?.addEventListener("click", () => {
@@ -246,7 +256,14 @@ test("turn probe detects an injected second-turn stall", async ({
 		);
 		await markTurnSettled(page);
 	}
-	const metrics = reduceTurnSamples(await stopTurnProbe(page), 300, 2);
+	const samples = await stopTurnProbe(page);
+	const samplePath = testInfo.outputPath("control-samples.json");
+	await writeFile(samplePath, JSON.stringify(samples, null, 2));
+	await testInfo.attach("control-samples", {
+		path: samplePath,
+		contentType: "application/json",
+	});
+	const metrics = reduceTurnSamples(samples, 300, 2);
 	expect(metrics.responseMs[0]).toBeLessThan(200);
 	expect(metrics.responseMs[1]).toBeGreaterThanOrEqual(250);
 	expect(turnBudgetFailures(metrics).length).toBeGreaterThan(0);

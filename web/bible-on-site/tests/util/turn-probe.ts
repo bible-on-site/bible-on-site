@@ -59,9 +59,12 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 				input.firstMotion === null &&
 				document.querySelector(".he-book .page--flipping")
 			) {
-				input.firstMotion = now;
-				requestAnimationFrame((next) => {
-					input.responseFrame = next;
+				// rAF's supplied timestamp is the scheduled frame start, which can
+				// precede an input handled in that frame. Record observation times
+				// on the same performance clock as native event timestamps instead.
+				input.firstMotion = performance.now();
+				requestAnimationFrame(() => {
+					input.responseFrame = performance.now();
 				});
 			}
 			probe.raf = requestAnimationFrame(tick);
