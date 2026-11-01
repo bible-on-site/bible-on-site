@@ -46,7 +46,7 @@ export class APITaskProtection {
 		this.call = call;
 		this.task = task;
 		this.key = LEASE_PREFIX + nonce;
-		this.value = JSON.stringify({ service: API_SERVICE, nonce });
+		this.value = `${API_SERVICE}:${nonce}`;
 		this.record = record;
 		this.expiration = null;
 		this.confirmed = false;
