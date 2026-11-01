@@ -11,14 +11,28 @@ configuration serializes all projects so another browser test cannot contend
 with the measured reader. Each scenario performs six turns with gaps of
 `0, 0, 100, 0, 100, 0` milliseconds. The 100ms gaps cover
 the existing 80ms buffer recenter; sampling also continues for 200ms after the
-last turn. Both current pages must contain visible text before measurement and
-after every turn. Mounted content hidden by page buffering does not qualify.
+last turn. Both current pages must contain visible text before and after the
+timing window. Separate functional tests check visibility after every turn in
+all three bookmark modes. Mounted content hidden by page buffering does not qualify.
+
+Read input coordinates before starting the probe and use native input at those
+fixed positions. During measured handoffs, wait only for the committed chapter,
+completed motion and nonempty page text. Visibility and geometry queries can
+force synchronous style/layout work and create the pause being measured. Keep
+those rendering assertions outside the timing window; do not add actionability
+checks or layout reads between turns.
 
 | Metric | Limit |
 | --- | --- |
 | Input response p95 | 200ms |
 | Maximum frame gap | 100ms |
 | Frame gap p95 | 50ms |
+
+The [public baseline](sefer-turn-performance.public-baseline.json) retains all
+available samples against website 0.2.600 and explicitly records failed cases
+that produced no samples. All 12 reader cases fail with the corrected native-input
+observer; the deliberate-stall control passes. The website version and active
+desktop were unchanged throughout.
 
 Response runs from the trusted native input timestamp to the render opportunity
 after the first observed moving-page marker. It is not physical presentation
@@ -31,7 +45,9 @@ All three limits apply to the first turn, consecutive turns, and the complete
 sample. Keep every frame, including buffer cleanup between turns. Missing,
 untrusted, out-of-order, unfinished or nonpositive samples fail validation.
 There is no rounding tolerance or selection of the fastest run. A browser control
-inserts a 250ms stall on the second turn and must detect it; reducer tests cover
+inserts a 250ms stall on the second turn and must detect it. Its layout-read
+sentinels also reject an observer that forces visibility or geometry queries
+while timing the control. Reducer tests cover
 the sample-validity rules. The scripture-renderer test separately bounds a
 100-word active recitation verse to 100 word elements plus its paragraph.
 This prevents redundant word/space wrappers from multiplying layout work while

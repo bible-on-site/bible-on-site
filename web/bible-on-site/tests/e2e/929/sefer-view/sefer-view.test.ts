@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
+import { waitForVisibleTurnContent } from "../../../util/turn-probe";
 
 /**
  * Test suite for sefer view functionality
@@ -96,6 +97,41 @@ test.describe("Sefer view", () => {
 	test.beforeEach(({ skipOnNotWideEnough }) => {
 		void skipOnNotWideEnough;
 	});
+	for (const mode of ["leaf", "pinned", "hidden"] as const) {
+		test(`both current pages retain visible text after every turn with ${mode} bookmarks`, async ({
+			page,
+		}) => {
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await page.addInitScript((attachment) => {
+				localStorage.setItem(
+					"seferBookmarks",
+					JSON.stringify({
+						enabled: attachment !== "hidden",
+						placement: "sides",
+						orientation: "perpendicular",
+						attachment: attachment === "pinned" ? "pinned" : "leaf",
+						order: "page",
+						upcomingOnly: false,
+					}),
+				);
+			}, mode);
+			await page.goto("/929/300?book", { waitUntil: "load" });
+			await waitForVisibleTurnContent(page);
+			for (let chapter = 301; chapter <= 306; chapter++) {
+				await page.locator(".flipbook-toolbar-next").click();
+				await expect(page).toHaveURL(
+					(url) =>
+						url.pathname === `/929/${chapter}` && url.searchParams.has("book"),
+				);
+				await page.waitForFunction(
+					() => !document.querySelector(".he-book .page--flipping"),
+					null,
+					{ timeout: 5_000 },
+				);
+				await waitForVisibleTurnContent(page);
+			}
+		});
+	}
 
 	test("TOC links open chapter routes with modifiers and turn pages on regular click", async ({
 		page,

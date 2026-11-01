@@ -1,7 +1,7 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
-import { setTimeout as delay } from "node:timers/promises";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
+import { dispatchTurnInput, prepareTurnInput } from "../util/turn-input";
 import {
 	reduceTurnSamples,
 	TURN_LIMITS,
@@ -11,6 +11,9 @@ import {
 	markTurnSettled,
 	startTurnProbe,
 	stopTurnProbe,
+	turnContentIsVisible,
+	waitForTurnCommit,
+	waitForVisibleTurnContent,
 } from "../util/turn-probe";
 
 // Every mode/book/gesture has its own unchanged 20s local / 60s CI deadline.
@@ -61,7 +64,10 @@ for (const [chapter, bookmarks] of [
 							current.every((page) => {
 								const content = page.querySelector(".flipbook-page-content");
 								return (
-									content?.checkVisibility() && content.textContent?.trim()
+									content?.checkVisibility({
+										checkOpacity: true,
+										checkVisibilityCSS: true,
+									}) && content.textContent?.trim()
 								);
 							}) &&
 							!document.querySelector(".he-book .page--flipping") &&
@@ -85,6 +91,7 @@ for (const [chapter, bookmarks] of [
 				const hardware = await system.send("SystemInfo.getInfo");
 				await system.detach();
 				const client = await page.context().newCDPSession(page);
+				const inputPoint = await prepareTurnInput(page, gesture);
 				await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
 				await startTurnProbe(page, gesture);
 				let samples: Awaited<ReturnType<typeof stopTurnProbe>>;
@@ -92,91 +99,8 @@ for (const [chapter, bookmarks] of [
 					// Immediate handoffs plus the existing 80ms buffer recenter window.
 					for (const [index, gap] of [0, 0, 100, 0, 100, 0].entries()) {
 						if (gap) await page.waitForTimeout(gap);
-						if (gesture === "toolbar") {
-							await page.locator("button.flipbook-toolbar-next").click();
-						} else {
-							const edge = await page.evaluate(() => {
-								const surfaces = [
-									...document.querySelectorAll(".he-book .page.current-page"),
-								]
-									.map((element) => element.getBoundingClientRect())
-									.filter((box) => box.width > 40 && box.height > 40)
-									.sort((a, b) => a.x - b.x);
-								const box = surfaces[0];
-								if (!box) throw new Error("No visible forward page");
-								return {
-									x: box.x + 10,
-									y: box.y + box.height * 0.85,
-									width: box.width,
-								};
-							});
-							await client.send("Input.dispatchMouseEvent", {
-								type: "mouseMoved",
-								x: edge.x,
-								y: edge.y,
-							});
-							await client.send("Input.dispatchMouseEvent", {
-								type: "mousePressed",
-								x: edge.x,
-								y: edge.y,
-								button: "left",
-								buttons: 1,
-								clickCount: 1,
-							});
-							const inputs: Promise<unknown>[] = [];
-							for (let step = 1; step <= 14; step++) {
-								const motion = client.send("Input.dispatchMouseEvent", {
-									type: "mouseMoved",
-									x: edge.x + (edge.width * 1.4 * step) / 14,
-									y: edge.y - (edge.width * 0.1 * step) / 14,
-									buttons: 1,
-								});
-								// Confirm panstart, then preserve the 14-point/11ms input
-								// schedule without making physical movement wait for each
-								// render acknowledgement (the existing native swipe flow).
-								if (step === 1) await motion;
-								else inputs.push(motion);
-								await delay(11);
-							}
-							inputs.push(
-								client.send("Input.dispatchMouseEvent", {
-									type: "mouseReleased",
-									x: edge.x + edge.width * 1.4,
-									y: edge.y - edge.width * 0.1,
-									button: "left",
-									buttons: 0,
-									clickCount: 1,
-								}),
-							);
-							await Promise.all(inputs);
-						}
-						await page.waitForFunction(
-							(target) => {
-								// Avoid scanning the page tree on every animation frame:
-								// content readiness matters after the turn has committed.
-								if (
-									Number(location.pathname.split("/").at(-1)) !== target ||
-									document.querySelector(".he-book .page--flipping")
-								)
-									return false;
-								const visible = Array.from(
-									document.querySelectorAll(".he-book .page.current-page"),
-								);
-								return (
-									visible.length === 2 &&
-									visible.every((page) => {
-										const content = page.querySelector(
-											".flipbook-page-content",
-										);
-										return (
-											content?.checkVisibility() && content.textContent?.trim()
-										);
-									})
-								);
-							},
-							chapter + index + 1,
-							{ timeout: 5_000, polling: "raf" },
-						);
+						await dispatchTurnInput(client, gesture, inputPoint);
+						await waitForTurnCommit(page, chapter + index + 1);
 						await markTurnSettled(page);
 					}
 					await page.waitForTimeout(200);
@@ -219,6 +143,7 @@ for (const [chapter, bookmarks] of [
 						contentType: "image/png",
 					});
 				}
+				await waitForVisibleTurnContent(page);
 				const metrics = reduceTurnSamples(samples, chapter, 6);
 				for (const [key, limit] of Object.entries(TURN_LIMITS))
 					reportBenchmark({
@@ -256,7 +181,7 @@ test("turn probe detects an injected second-turn stall", async ({
 		route.fulfill({
 			status: 200,
 			contentType: "text/html",
-			body: '<button class="flipbook-toolbar-next">Next</button><div class="he-book"><div class="page"></div></div>',
+			body: '<button class="flipbook-toolbar-next">Next</button><div class="he-book"><div class="page current-page"><div class="flipbook-page-content">Front</div></div><div class="page current-page"><div class="flipbook-page-content">Back</div></div></div>',
 		}),
 	);
 	await page.goto("/929/125?book", { waitUntil: "load" });
@@ -303,7 +228,58 @@ test("turn probe detects an injected second-turn stall", async ({
 			document.querySelector(".page")?.classList.add("page--flipping");
 			count++;
 			history.replaceState(null, "", `/929/${300 + count}?book`);
+			requestAnimationFrame(() =>
+				requestAnimationFrame(() =>
+					document.querySelector(".page")?.classList.remove("page--flipping"),
+				),
+			);
 		});
+	});
+	const client = await page.context().newCDPSession(page);
+	for (const [property, value] of [
+		["opacity", "0"],
+		["visibility", "hidden"],
+	]) {
+		await page.evaluate(
+			({ property, value }) => {
+				document
+					.querySelector<HTMLElement>(".page")
+					?.style.setProperty(property, value);
+			},
+			{ property, value },
+		);
+		expect(await page.evaluate(turnContentIsVisible)).toBe(false);
+		await page.evaluate(
+			(name) =>
+				document
+					.querySelector<HTMLElement>(".page")
+					?.style.removeProperty(name),
+			property,
+		);
+	}
+	expect(await page.evaluate(turnContentIsVisible)).toBe(true);
+	const inputPoint = await prepareTurnInput(page, "toolbar");
+	await page.evaluate(() => {
+		// The observer must not create a pause by forcing styles/layout itself.
+		for (const name of ["checkVisibility", "getBoundingClientRect"]) {
+			const descriptor = Object.getOwnPropertyDescriptor(
+				Element.prototype,
+				name,
+			);
+			if (!descriptor || typeof descriptor.value !== "function") {
+				throw new Error(`Missing layout-read control: ${name}`);
+			}
+			const original = descriptor.value;
+			Object.defineProperty(Element.prototype, name, {
+				...descriptor,
+				value: function (this: Element, ...args: unknown[]) {
+					if (window.__seferTurns) {
+						throw new Error(`Observer forced ${name} while timing turns`);
+					}
+					return Reflect.apply(original, this, args);
+				},
+			});
+		}
 	});
 	await startTurnProbe(page, "toolbar");
 	await page.evaluate(
@@ -313,17 +289,13 @@ test("turn probe detects an injected second-turn stall", async ({
 			),
 	);
 	for (let index = 0; index < 2; index++) {
-		await page.locator("button").click();
-		await page.waitForFunction(
-			() =>
-				typeof window.__seferTurns?.inputs.at(-1)?.responseFrame === "number",
-		);
-		await page.evaluate(() =>
-			document.querySelector(".page")?.classList.remove("page--flipping"),
-		);
+		await dispatchTurnInput(client, "toolbar", inputPoint);
+		await waitForTurnCommit(page, 301 + index);
 		await markTurnSettled(page);
 	}
 	const samples = await stopTurnProbe(page);
+	await client.detach();
+	await waitForVisibleTurnContent(page);
 	const samplePath = testInfo.outputPath("control-samples.json");
 	await writeFile(samplePath, JSON.stringify(samples, null, 2));
 	await testInfo.attach("control-samples", {

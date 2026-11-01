@@ -104,3 +104,58 @@ export async function markTurnSettled(page: Page) {
 		input.frameEnd = window.__seferTurns?.frames.length ?? null;
 	});
 }
+
+export async function waitForTurnCommit(page: Page, target: number) {
+	await page.waitForFunction(
+		(chapter) => {
+			if (
+				Number(location.pathname.split("/").at(-1)) !== chapter ||
+				document.querySelector(".he-book .page--flipping") ||
+				typeof window.__seferTurns?.inputs.at(-1)?.responseFrame !== "number"
+			)
+				return false;
+			const current = Array.from(
+				document.querySelectorAll(".he-book .page.current-page"),
+			);
+			return (
+				current.length === 2 &&
+				current.every((page) => {
+					const content = page.querySelector(".flipbook-page-content");
+					return content?.textContent?.trim();
+				})
+			);
+		},
+		target,
+		{ timeout: 5_000, polling: "raf" },
+	);
+}
+
+/** Runs in the page; opacity/visibility hiding must not qualify as readable text. */
+export function turnContentIsVisible() {
+	if (window.__seferTurns) {
+		throw new Error("Check visible content outside the turn timing window");
+	}
+	const current = Array.from(
+		document.querySelectorAll(".he-book .page.current-page"),
+	);
+	return (
+		current.length === 2 &&
+		current.every((page) => {
+			const content = page.querySelector(".flipbook-page-content");
+			return (
+				content?.checkVisibility({
+					checkOpacity: true,
+					checkVisibilityCSS: true,
+				}) && !!content.textContent?.trim()
+			);
+		})
+	);
+}
+
+/** Rendering assertions stay outside the cadence probe's critical path. */
+export async function waitForVisibleTurnContent(page: Page) {
+	await page.waitForFunction(turnContentIsVisible, null, {
+		timeout: 5_000,
+		polling: "raf",
+	});
+}
