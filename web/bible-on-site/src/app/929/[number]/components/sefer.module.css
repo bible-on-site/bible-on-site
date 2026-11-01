@@ -596,16 +596,3 @@
 	}
 }
 
-/* These panes already use native scrollbar colors. Keep their gutters fixed
-   during a turn and stop the animated color at their text boundary. */
-:global(.page--flipping) .perekTextScrollWrapper,
-:global(.page--flipping) .articleBodyWrapper,
-:global(.page--flipping) .perushNotesInBook {
-	scrollbar-color: transparent transparent;
-}
-
-.perekTextScrollWrapper > *,
-.articleBodyWrapper > *,
-.perushNotesInBook > * {
-	scrollbar-color: auto;
-}
