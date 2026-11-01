@@ -22,6 +22,7 @@ export interface TurnInput {
 export interface TurnSamples {
 	inputs: TurnInput[];
 	frames: number[];
+	repeatedFrameTimestamps?: number[];
 }
 
 function percentile(values: number[], fraction: number): number {

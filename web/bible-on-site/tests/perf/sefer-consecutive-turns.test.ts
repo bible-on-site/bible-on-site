@@ -141,15 +141,22 @@ for (const [chapter, bookmarks] of [
 						}
 						await page.waitForFunction(
 							(target) => {
+								// Avoid scanning the page tree on every animation frame:
+								// content readiness matters after the turn has committed.
+								if (
+									Number(location.pathname.split("/").at(-1)) !== target ||
+									document.querySelector(".he-book .page--flipping")
+								)
+									return false;
 								const visible = Array.from(
 									document.querySelectorAll(".he-book .page.current-page"),
 								);
 								return (
-									Number(location.pathname.split("/").at(-1)) === target &&
-									!document.querySelector(".he-book .page--flipping") &&
 									visible.length === 2 &&
 									visible.every((page) =>
-										page.querySelector(".flipbook-page-content")?.textContent?.trim(),
+										page
+											.querySelector(".flipbook-page-content")
+											?.textContent?.trim(),
 									)
 								);
 							},
@@ -244,10 +251,32 @@ test("turn probe detects an injected second-turn stall", async ({
 	await page.evaluate(() => {
 		// Native frames can be timestamped before their input. Exaggerate that
 		// ordering here: observations must use callback execution time while
-		// cadence retains the unchanged spacing between frame timestamps.
+		// cadence must still report the blocked interval.
 		const raf = window.requestAnimationFrame.bind(window);
+		let currentFrame: number | undefined;
+		let previousFrame: number | undefined;
+		let repeatedFrame: number | undefined;
+		let repeatedValue = 0;
 		window.requestAnimationFrame = (callback) =>
-			raf((timestamp) => callback(timestamp - 1_000));
+			raf((timestamp) => {
+				if (timestamp !== currentFrame) {
+					previousFrame = currentFrame;
+					currentFrame = timestamp;
+				}
+				// A repeated scheduled timestamp is the same render opportunity.
+				// It must not become a zero-duration frame or erase a later stall.
+				if (
+					repeatedFrame === undefined &&
+					previousFrame !== undefined &&
+					window.__seferTurns?.inputs.length
+				) {
+					repeatedFrame = timestamp;
+					repeatedValue = previousFrame;
+				}
+				callback(
+					(timestamp === repeatedFrame ? repeatedValue : timestamp) - 1_000,
+				);
+			});
 		history.replaceState(null, "", "/929/300?book");
 		let count = 0;
 		document.querySelector("button")?.addEventListener("click", () => {
@@ -263,6 +292,12 @@ test("turn probe detects an injected second-turn stall", async ({
 		});
 	});
 	await startTurnProbe(page, "toolbar");
+	await page.evaluate(
+		() =>
+			new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			),
+	);
 	for (let index = 0; index < 2; index++) {
 		await page.locator("button").click();
 		await page.waitForFunction(
@@ -282,6 +317,8 @@ test("turn probe detects an injected second-turn stall", async ({
 		contentType: "application/json",
 	});
 	const metrics = reduceTurnSamples(samples, 300, 2);
+	expect(samples.inputs[0].frameStart).toBe(0);
+	expect(samples.repeatedFrameTimestamps?.length).toBeGreaterThan(0);
 	expect(metrics.responseMs[0]).toBeLessThan(200);
 	expect(metrics.responseMs[1]).toBeGreaterThanOrEqual(250);
 	expect(turnBudgetFailures(metrics).length).toBeGreaterThan(0);

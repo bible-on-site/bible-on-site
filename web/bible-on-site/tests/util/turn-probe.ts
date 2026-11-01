@@ -6,6 +6,7 @@ declare global {
 		__seferTurns?: {
 			inputs: TurnInput[];
 			frames: number[];
+			repeatedFrameTimestamps: number[];
 			raf: number;
 			listener: (event: Event) => void;
 			eventType: string;
@@ -22,6 +23,7 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 		const probe = {
 			inputs: [] as TurnInput[],
 			frames: [] as number[],
+			repeatedFrameTimestamps: [] as number[],
 			raf: 0,
 			eventType: inputGesture === "drag" ? "pointerdown" : "click",
 			listener: (event: Event) => {
@@ -51,7 +53,13 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 		let previous: number | null = null;
 		const tick = (now: number) => {
 			if (window.__seferTurns !== probe) return;
-			if (previous !== null) probe.frames.push(now - previous);
+			if (previous !== null) {
+				// Multiple callbacks can describe the same render opportunity.
+				// Keep that evidence separately; the next distinct timestamp still
+				// measures the full gap, including any blocked time.
+				if (now === previous) probe.repeatedFrameTimestamps.push(now);
+				else if (probe.inputs.length > 0) probe.frames.push(now - previous);
+			}
 			previous = now;
 			const input = probe.inputs.at(-1);
 			if (
@@ -80,7 +88,11 @@ export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
 		window.__seferTurns = undefined;
 		cancelAnimationFrame(probe.raf);
 		document.removeEventListener(probe.eventType, probe.listener, true);
-		return { inputs: probe.inputs, frames: probe.frames };
+		return {
+			inputs: probe.inputs,
+			frames: probe.frames,
+			repeatedFrameTimestamps: probe.repeatedFrameTimestamps,
+		};
 	});
 }
 
