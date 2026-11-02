@@ -577,30 +577,6 @@
 	scrollbar-color: #c4b896 transparent;
 }
 
-.fullscreenToggle {
-	appearance: none;
-	font: inherit;
-	font-size: 0.8rem;
-	border: 1px solid #d4c9a8;
-	border-radius: var(--radius-sm);
-	background: #f0ead8;
-	color: #5a4a2e;
-	padding: 3px 10px;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-@media (hover: hover) {
-	.fullscreenToggle:hover {
-		background: #e8e0cc;
-	}
-}
-
-.fullscreenToggle:focus-visible {
-	outline: 2px solid var(--link-accent, #1a73e8);
-	outline-offset: 2px;
-}
-
 @media (prefers-color-scheme: dark) {
 	.panelTab {
 		--tab-fill: #2a241a;
@@ -681,8 +657,7 @@
 
 	.scopeToggle,
 	.deepBack,
-	.noteRetry,
-	.fullscreenToggle {
+	.noteRetry {
 		border-color: #4a4030;
 		background: #2a241a;
 		color: var(--hc-muted, #cbb98c);
@@ -691,8 +666,7 @@
 	@media (hover: hover) {
 		.scopeToggle:hover,
 		.deepBack:hover,
-		.noteRetry:hover,
-		.fullscreenToggle:hover {
+		.noteRetry:hover {
 			background: #342c1e;
 		}
 	}
@@ -764,7 +738,6 @@
 .scopeToggle:active,
 .deepBack:active,
 .noteRetry:active,
-.fullscreenToggle:active,
 .articleCard:active {
 	scale: var(--press-scale);
 }

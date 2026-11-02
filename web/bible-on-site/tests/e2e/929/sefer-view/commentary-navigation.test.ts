@@ -136,7 +136,7 @@ test.describe("Sefer commentary navigation", () => {
 						? blank.locator("a#article-1")
 						: blank.getByRole("button", { name: /בחירת רש"י/ });
 				const back = blank.getByRole("button", {
-					name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+					name: kind === "article" ? "חזרה למאמרים" : "→ חזרה לפרשנים",
 				});
 				await item.click();
 				if (kind === "perush") {
@@ -182,7 +182,7 @@ test.describe("Sefer commentary navigation", () => {
 		const blank = page.locator('.he-book .page[data-page-index="4"]');
 		await blank.getByRole("tab", { name: "מאמרים" }).click();
 		const scroller = blank.locator('[class*="articlesScroll"]');
-		const back = blank.getByRole("button", { name: "חזרה למאמרים →" });
+		const back = blank.getByRole("button", { name: "חזרה למאמרים" });
 
 		// Scroll the masonry off its top edge.
 		const position = await scroller.evaluate((el) => {
@@ -490,7 +490,7 @@ test.describe("Sefer commentary navigation", () => {
 			await page.goto(route);
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
 			const back = blank.getByRole("button", {
-				name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+				name: kind === "article" ? "חזרה למאמרים" : "→ חזרה לפרשנים",
 			});
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await expect(page).toHaveURL(

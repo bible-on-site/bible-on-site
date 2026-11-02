@@ -42,6 +42,7 @@ exclude_paths:
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_reading_metrics_upgrade.sql"
+  - "data/mysql/tanah_web_push_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"

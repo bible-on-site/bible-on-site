@@ -1069,7 +1069,6 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v))
             .collect::<BTreeMap<String, Value>>()
         };
-        let now = chrono::Utc::now().naive_utc();
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 // tanahpediaNameStatus → alias: holder none, then target rows.

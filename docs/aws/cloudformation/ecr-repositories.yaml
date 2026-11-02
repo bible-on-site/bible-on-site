@@ -41,7 +41,14 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site
-      ImageTagMutability: MUTABLE
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: deps-cache
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: deps-cache-arm64
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:
@@ -52,6 +59,19 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
+                "description": "Retain the newest website ARM migration x86 fallback",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["rollback-website-arm64-x86-"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
                 "description": "Keep last 15 images",
                 "selection": {
                   "tagStatus": "any",
