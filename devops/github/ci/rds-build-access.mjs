@@ -486,17 +486,17 @@ if (
 			case "check-run": {
 				const build = await completedBuildRun(process.env);
 				console.log(
-					JSON.stringify({
-						run: build.run,
-						attempt: build.attempt,
-						completedJobs: build.jobs.length,
-					}),
+					`CI run ${build.run}, attempt ${build.attempt}: ${build.jobs.length} completed jobs`,
 				);
 				break;
 			}
-			case "cleanup-run":
-				console.log(JSON.stringify(await cleanupCompletedBuild(process.env)));
+			case "cleanup-run": {
+				const result = await cleanupCompletedBuild(process.env);
+				console.log(
+					`CI run ${result.run}, attempt ${result.attempt}: removed ${result.removed.length} owned rules${result.removed.length ? ` (${result.removed.join(", ")})` : ""}`,
+				);
 				break;
+			}
 			default:
 				throw new Error(
 					"Usage: rds-build-access.mjs grant|cleanup|host|check-run|cleanup-run",
