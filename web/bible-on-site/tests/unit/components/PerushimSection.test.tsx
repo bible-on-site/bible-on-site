@@ -136,5 +136,6 @@ describe("PerushimSection", () => {
 		);
 		expect(screen.getByText("מתחבר לפירוש...")).toBeTruthy();
 		expect(screen.queryByRole("link")).toBeNull();
+		expect(document.querySelectorAll('[data-skeleton="rect"]')).toHaveLength(4);
 	});
 });

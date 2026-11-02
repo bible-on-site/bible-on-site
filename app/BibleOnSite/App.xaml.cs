@@ -74,6 +74,29 @@ public partial class App : Application
         // attached properties; they cannot be assigned inside an object
         // initializer. The tooltip advertises the keyboard equivalent that
         // DesktopWindowChrome wires on the window (#2766).
+        // The shared Button style paints Disabled as a filled grey tile, which
+        // made the inactive root Back the heaviest glyph in the title bar.
+        back.SetAppThemeColor(Button.TextColorProperty, Colors.Black, Colors.White);
+        VisualStateManager.SetVisualStateGroups(back,
+        [
+            new VisualStateGroup
+            {
+                Name = "CommonStates",
+                States =
+                {
+                    new VisualState { Name = "Normal" },
+                    new VisualState
+                    {
+                        Name = "Disabled",
+                        Setters =
+                        {
+                            new Setter { Property = VisualElement.BackgroundColorProperty, Value = Colors.Transparent },
+                            new Setter { Property = VisualElement.OpacityProperty, Value = 0.4 },
+                        },
+                    },
+                },
+            },
+        ]);
         SemanticProperties.SetDescription(back, "חזור");
         ToolTipProperties.SetText(back, "חזור (Alt+Left)");
         shell.Navigated += (_, _) =>

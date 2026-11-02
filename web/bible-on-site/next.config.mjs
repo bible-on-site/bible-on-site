@@ -57,7 +57,7 @@ const nextConfig = {
 	// The cache handler is required at runtime by the standalone server too.
 	outputFileTracingIncludes: {
 		"/*": [
-			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br",
 			"./cache-handler.mjs",
 		],
 	},

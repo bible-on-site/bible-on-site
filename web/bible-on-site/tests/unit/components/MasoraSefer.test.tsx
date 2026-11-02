@@ -146,7 +146,7 @@ jest.mock("@/app/929/[number]/components/sefer-document-title", () => ({
 	setSeferDocumentTitle: (...args: unknown[]) =>
 		mockSetSeferDocumentTitle(...args),
 	releaseSeferDocumentTitle: (...args: unknown[]) =>
-			mockReleaseSeferDocumentTitle(...args),
+		mockReleaseSeferDocumentTitle(...args),
 }));
 
 import { setUnitOpenPerush } from "@/app/components/reading/unit-book-navigation";
@@ -228,6 +228,51 @@ const baseProps = () => ({
 });
 
 describe("MasoraSefer", () => {
+	it("does not rerender scripture when background summaries arrive", async () => {
+		let finish!: (value: unknown) => void;
+		mockSummariesBatch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		render(<MasoraSefer {...baseProps()} />);
+		const renders = mockUnitTextBodies.length;
+		await act(async () =>
+			finish({
+				"2": { articles: [], perushim: currentUnitSummaries.perushim },
+			}),
+		);
+		expect(mockBlankPages.get("2:torah")?.perushim).toBe(
+			currentUnitSummaries.perushim,
+		);
+		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("updates commentary selection without rerendering scripture", () => {
+		render(<MasoraSefer {...baseProps()} />);
+		const renders = mockUnitTextBodies.length;
+		const navigate = mockBlankPages.get("1:torah")?.onNavigate as (
+			kind?: string,
+			slug?: string,
+		) => void;
+		act(() => navigate("perush", 'רש"י'));
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		act(() => navigate());
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("refreshes scripture when the chapter corpus changes", () => {
+		const props = baseProps();
+		const { rerender } = render(<MasoraSefer {...props} />);
+		const renders = mockUnitTextBodies.length;
+		const updated = new Map(props.perekById);
+		updated.set(1, perek(7));
+		rerender(<MasoraSefer {...props} perekById={updated} />);
+		expect(mockUnitTextBodies.length).toBeGreaterThan(renders);
+		expect(
+			(mockUnitTextBodies[renders].pasukCount as (id: number) => number)(1),
+		).toBe(7);
+	});
+
 	beforeEach(() => {
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
@@ -238,9 +283,7 @@ describe("MasoraSefer", () => {
 		mockGetCurrentPageIndex.mockReset().mockReturnValue(0);
 		// Never resolve by default — tests that don't await the batch
 		// would otherwise hit act() warnings on the summary setState.
-		mockSummariesBatch.mockReset().mockReturnValue(
-			new Promise(() => {}),
-		);
+		mockSummariesBatch.mockReset().mockReturnValue(new Promise(() => {}));
 		mockSetSeferDocumentTitle.mockClear();
 		mockReleaseSeferDocumentTitle.mockClear();
 		history.replaceState(null, "", "/מסורה/1?book");
@@ -320,13 +363,10 @@ describe("MasoraSefer", () => {
 		["front", []],
 		["toc", [0]],
 		["back", [0, 1, 2, 3]],
-	] as const)(
-		"opens the book chrome %s page at its leaf",
-		(page, expected) => {
-			render(<MasoraSefer {...baseProps()} initialBookPage={page} />);
-			expect(capturedFlipBookProps.initialTurnedLeaves).toEqual(expected);
-		},
-	);
+	] as const)("opens the book chrome %s page at its leaf", (page, expected) => {
+		render(<MasoraSefer {...baseProps()} initialBookPage={page} />);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual(expected);
+	});
 
 	it("restores the requested page when it differs from the current page", () => {
 		render(<MasoraSefer {...baseProps()} currentUnitId={2} />);
@@ -359,9 +399,7 @@ describe("MasoraSefer", () => {
 		act(() => {
 			onNavigate("perush", 'רש"י');
 		});
-		expect(decodeURIComponent(window.location.search)).toContain(
-			'perush=רש"י',
-		);
+		expect(decodeURIComponent(window.location.search)).toContain('perush=רש"י');
 		expect(window.location.search).toContain("book=");
 		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
 		act(() => {
@@ -440,9 +478,11 @@ describe("MasoraSefer", () => {
 	it("lazy-loads the real FlipBook through the dynamic loader", async () => {
 		render(<MasoraSefer {...baseProps()} />);
 		const loader = (globalThis as Record<string, unknown>)
-			.__masoraDynamicLoader as (() => Promise<{
-			FlipBook?: unknown;
-		}>) | null;
+			.__masoraDynamicLoader as
+			| (() => Promise<{
+					FlipBook?: unknown;
+			  }>)
+			| null;
 		expect(loader).not.toBeNull();
 		if (!loader) {
 			throw new Error("dynamic loader was not captured");
@@ -461,9 +501,7 @@ describe("MasoraSefer", () => {
 
 	it("logs and survives a failed summary batch", async () => {
 		mockSummariesBatch.mockRejectedValue(new Error("offline"));
-		const errorSpy = jest
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 		try {
 			render(<MasoraSefer {...baseProps()} />);
 			await act(async () => {});
@@ -494,12 +532,11 @@ describe("MasoraSefer", () => {
 		);
 
 		// An open perush/article on a blank page wins over the page title.
-		const onContentTitle = mockBlankPages.get("1:torah")
-			?.onContentTitle as (t: string | null) => void;
+		const onContentTitle = mockBlankPages.get("1:torah")?.onContentTitle as (
+			t: string | null,
+		) => void;
 		act(() => onContentTitle('רש"י על הפרשה'));
-		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
-			'רש"י על הפרשה',
-		);
+		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith('רש"י על הפרשה');
 		act(() => onContentTitle(null));
 	});
 
@@ -533,9 +570,7 @@ describe("MasoraSefer", () => {
 		) as HTMLElement;
 		// The delegated onClick lives on the scroll wrapper inside the
 		// pane; the numeral must sit inside it to reach the handler.
-		(
-			textPane.querySelector("article") as HTMLElement
-		).insertAdjacentHTML(
+		(textPane.querySelector("article") as HTMLElement).insertAdjacentHTML(
 			"beforeend",
 			`<span id="pasuk-1-2-book-1"><b data-pasuk-num>ב</b></span>`,
 		);
@@ -557,9 +592,7 @@ describe("MasoraSefer", () => {
 			).toHaveAttribute("data-pasuk-highlight");
 		} finally {
 			setUnitOpenPerush("1:torah", null);
-			document
-				.querySelector('[data-sefer-unit-perush="1:torah"]')
-				?.remove();
+			document.querySelector('[data-sefer-unit-perush="1:torah"]')?.remove();
 		}
 	});
 });
