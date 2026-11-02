@@ -656,7 +656,11 @@ test.describe("Sefer view", () => {
 		const toggler = page.getByTestId("read-mode-toggler");
 		await toggler.click();
 		await expect(page.locator('[class*="seferOverlay"]')).not.toBeVisible();
-		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
+		await expect(page).toHaveURL(/\/929\/2(?:\?|$)/);
+		await expect(page.getByRole("heading", { level: 1 })).toContainText(
+			"בראשית ב",
+		);
+		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
 	});
 
 	test.describe("Touch swipe", () => {
