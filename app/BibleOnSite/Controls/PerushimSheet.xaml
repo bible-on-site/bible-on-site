@@ -4,6 +4,7 @@
         xmlns:controls="clr-namespace:BibleOnSite.Controls"
         xmlns:models="clr-namespace:BibleOnSite.Models"
         xmlns:converters="clr-namespace:BibleOnSite.Converters"
+        xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
         x:Class="BibleOnSite.Controls.PerushimSheet"
         x:Name="SheetRoot"
         BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
@@ -12,6 +13,19 @@
         StrokeThickness="1"
         VerticalOptions="End"
         IsVisible="False">
+        <!-- Windows: a bottom sheet the width of a monitor looks like a
+             full page; cap + center keeps it a sheet (#2766). -->
+        <Border.MaximumWidthRequest>
+            <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+            <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderSheetMaxWidth}"/>
+            </OnPlatform>
+        </Border.MaximumWidthRequest>
+        <Border.HorizontalOptions>
+            <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                <On Platform="Windows" Value="Center"/>
+            </OnPlatform>
+        </Border.HorizontalOptions>
     <Border.Resources>
         <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
         <converters:PerushEnabledConverter x:Key="PerushEnabledConverter"/>

@@ -182,6 +182,12 @@ export interface RevalidationFailure {
 	failedAt: string;
 	/** The requests still unapplied (retried on the next flush). */
 	requests: RevalidateRequest[];
+	/**
+	 * Some requests were skipped because the website endpoint is not
+	 * configured (`VITE_WEBSITE_URL`/`REVALIDATE_SECRET` unset) — a config
+	 * gap, not a transient delivery failure.
+	 */
+	unconfigured?: boolean;
 }
 
 /**
@@ -285,11 +291,19 @@ async function drain(): Promise<void> {
 			const failed = outcomes
 				.filter((o) => o.outcome === "failed")
 				.map((o) => o.post);
-			if (failed.length > 0) {
-				pendingRetry.push(...failed);
+			const skipped = outcomes
+				.filter((o) => o.outcome === "skipped")
+				.map((o) => o.post);
+			// Skipped requests are unapplied work too — an unconfigured endpoint
+			// must surface as stale content, and the requests ride the next
+			// flush so they deliver once the config exists (#2763).
+			const unapplied = [...failed, ...skipped];
+			if (unapplied.length > 0) {
+				pendingRetry.push(...unapplied);
 				lastFailure = {
 					failedAt: new Date().toISOString(),
 					requests: [...pendingRetry],
+					...(skipped.length > 0 ? { unconfigured: true } : {}),
 				};
 			} else {
 				lastFailure = null;
@@ -298,7 +312,7 @@ async function drain(): Promise<void> {
 				(outcome) => outcome.outcome === "applied",
 			);
 			for (const resolve of waiting?.resolvers ?? []) {
-				resolve(failed.length === 0 && applied);
+				resolve(unapplied.length === 0 && applied);
 			}
 		}
 		// Nothing flushed (e.g. an empty enqueue) — the generation's callers

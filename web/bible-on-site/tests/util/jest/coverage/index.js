@@ -33,7 +33,7 @@ class MonocartCoverageReporter {
 		if (!sanitizeCoverageModule) {
 			const modulePath = path.resolve(
 				__dirname,
-				"../../coverage/sanitize-coverage.js",
+				"../../coverage/sanitize-coverage.mjs",
 			);
 			sanitizeCoverageModule = await import(pathToFileURL(modulePath).href);
 		}

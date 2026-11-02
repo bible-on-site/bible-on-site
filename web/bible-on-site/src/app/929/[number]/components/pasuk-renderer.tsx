@@ -1,6 +1,7 @@
 import React from "react";
 import type { Segment } from "@/data/db/tanah-view-types";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
+import { containsDivineName } from "@/lib/divine-name-masking";
 import type { EntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import { getSegmentRuns } from "@/lib/tanahpedia/entity-ref-lookup";
 import { DivineNameText } from "./DivineNameText";
@@ -35,10 +36,16 @@ export function renderSegmentRange(
 		// הסתר שם השם is display-only: the wrapped element reads the stored
 		// preference and renders the masked form, while segment identity —
 		// keys, word indices, recitation alignment — stays canonical.
-		const value =
-			segment.type === "ktiv" || segment.type === "qri" ? (
+		// Ordinary words never change with the preference, so they need no
+		// client component or external-store subscription.
+		let value: React.ReactNode = null;
+		if (segment.type === "ktiv" || segment.type === "qri") {
+			value = containsDivineName(segment.value) ? (
 				<DivineNameText value={segment.value} />
-			) : null;
+			) : (
+				segment.value
+			);
+		}
 		content.push(
 			<span
 				key={segmentKey}

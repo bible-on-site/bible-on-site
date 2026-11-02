@@ -23,6 +23,10 @@ export const metadata: Metadata = {
 	title: SITE_NAME,
 	applicationName: SITE_NAME,
 	description: SITE_DESCRIPTION,
+	// Probed by crawlers and Lighthouse; real files under public/ so the
+	// requests resolve instead of 404ing through the app router (#1022).
+	manifest: "/manifest.json",
+	icons: { apple: "/apple-touch-icon.png" },
 	openGraph: siteOpenGraph({
 		title: SITE_NAME,
 		description: SITE_DESCRIPTION,

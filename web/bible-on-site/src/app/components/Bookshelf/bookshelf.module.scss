@@ -169,23 +169,34 @@ button.block {
   transform-origin: top center;
 }
 
-// Spine text - vertical, rotated 90 degrees
+// Spine title line - the sefer name and its dedication share one line,
+// rotated 90 degrees as a unit. Its box is the spine turned on its side
+// (width/height set inline from sqSize), so in the line's own RTL frame the
+// name sits centered in the free space and the dedication is pinned to the
+// line's end (its left before rotation, the spine top after it).
+.spineLine {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  // Equal side tracks keep the name centered; the dedication sits in the end track.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  direction: rtl;
+  white-space: nowrap;
+}
+
 .spineText {
   font-family: inherit; // Use website font, avoid mixing font families
   font-weight: bold;
   -webkit-font-smoothing: antialiased;
-  position: absolute;
+  grid-column: 2;
   background: transparent;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   font-size: $fFontSize;
   line-height: $fFontSize;
-  top: 50%;
-  left: 50%;
-  transform-origin: 0 50%;
-  transform: rotate(90deg) translateX(-50%);
-  white-space: nowrap;
-  width: max-content;
 }
 
 // Cover content container - positioned at 25% from top
@@ -227,27 +238,24 @@ button.block {
 // Sefer dedication — vertical text pinned to the spine's physical left
 // edge (#2731). `vertical-lr` stacks extra dedications as columns growing
 // rightward toward the title without spilling onto the neighbouring sefer.
+// Dedication caption at the end of the spine title line (#2849). Long or
+// multiple dedications stay on the line and end in an ellipsis; the full
+// wording stays in the button's accessible name and the hover title.
 .spineDedication {
   font-family: inherit;
-  position: absolute;
-  top: 5%;
-  left: 1px;
-  height: 90%;
-  // Up to ~half the spine width so a wrapped column still clears the title.
-  width: 50%;
-  writing-mode: vertical-lr;
-  direction: rtl;
+  grid-column: 3;
+  justify-self: end;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: rgba(255, 255, 255, 0.9);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
   line-height: 1.3;
-  overflow: hidden;
-  pointer-events: none;
 
-  p {
-    margin: 0;
-    padding-left: 0.12em;
-    white-space: normal;
-    text-align: start;
+  // Too little room on small screens; the caption stays in the title tooltip only.
+  @media (max-width: 540px) {
+    display: none;
   }
 }
 

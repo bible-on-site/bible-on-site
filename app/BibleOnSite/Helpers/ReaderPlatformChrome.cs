@@ -3,13 +3,6 @@ using System.ComponentModel;
 #if ANDROID
 using AndroidX.Activity;
 #endif
-#if WINDOWS
-using BibleOnSite.Services;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Input;
-using Windows.System;
-using KeyboardAccelerator = Microsoft.UI.Xaml.Input.KeyboardAccelerator;
-#endif
 
 namespace BibleOnSite.Helpers;
 
@@ -70,12 +63,20 @@ public sealed class ReaderPlatformChromeSurfaces
     /// trigger role as <see cref="SearchSurface"/>.
     /// </summary>
     public VisualElement? SelectionSurface { get; init; }
+
+    /// <summary>
+    /// The perushim sheet. Its open state travels on <c>IsOpenChanged</c>
+    /// rather than an <see cref="VisualElement.IsVisible"/> flip, so it cannot
+    /// ride <see cref="BackSensitiveOverlays"/> — open/close refreshes the
+    /// capsule Back and the Android callback the same way (#2766).
+    /// </summary>
+    public required IReaderPerushimSheetSurface PerushimSheet { get; init; }
 }
 
 /// <summary>
 /// The division-specific plugs <see cref="ReaderPlatformChrome"/> needs: which
-/// surfaces keep Back alive, what Back does, and what suppresses the Windows
-/// focus hand-off. The plumbing they feed is shared; the policy is not.
+/// surfaces keep Back alive and what Back does. The plumbing they feed is
+/// shared; the policy is not.
 /// </summary>
 public sealed class ReaderPlatformChromeActions
 {
@@ -88,12 +89,6 @@ public sealed class ReaderPlatformChromeActions
 
     /// <summary>The page-owned Back pipeline (each division's surface ordering).</summary>
     public required Func<bool> TryHandleBack { get; init; }
-
-    /// <summary>
-    /// Windows focus gate: suppresses the navigation-button focus hand-off
-    /// (an open search surface owns the keyboard). Null = never suppress.
-    /// </summary>
-    public Func<bool>? SuppressFocus { get; init; }
 }
 
 /// <summary>
@@ -107,10 +102,13 @@ public sealed class ReaderPlatformChromeActions
 ///   keep the edge-back gesture honest (#2432).
 /// - Android: the predictive-Back <c>OnBackPressedCallback</c> registered on
 ///   appearing, re-evaluated by the same triggers every reader shares.
-/// - Windows: the Alt+Left keyboard accelerator and the navigation-button
-///   focus hand-off.
 /// - All platforms: the capsule <see cref="SharedTopBar.BackStateProvider"/>
-///   and the overlay-visibility refresh that keeps it honest.
+///   and the overlay/sheet-open refresh that keeps it honest.
+///
+/// Windows keyboard shortcuts and the focus hand-off are deliberately not
+/// here: the window-level <c>DesktopWindowChrome</c> (#2766) serves every
+/// page, not just the readers, so a per-page accelerator would double-handle
+/// Alt+Left.
 ///
 /// Platform bodies live behind the <c>#if</c> hooks in each lifecycle slot,
 /// so this file compiles — and its cross-platform wiring runs — everywhere
@@ -120,22 +118,15 @@ public sealed class ReaderPlatformChromeActions
 public sealed class ReaderPlatformChrome
 {
     private readonly ReaderPlatformChromeSurfaces _ui;
-#if ANDROID || WINDOWS
-    private readonly ReaderPlatformChromeActions _actions;
-#endif
-
 #if ANDROID
+    private readonly ReaderPlatformChromeActions _actions;
     private ReaderBackCallback? _readerBack;
-#endif
-#if WINDOWS
-    private UIElement? _keyboardBackOwner;
-    private KeyboardAccelerator? _keyboardBack;
 #endif
 
     public ReaderPlatformChrome(ReaderPlatformChromeSurfaces surfaces, ReaderPlatformChromeActions actions)
     {
         _ui = surfaces;
-#if ANDROID || WINDOWS
+#if ANDROID
         _actions = actions;
 #endif
 
@@ -171,19 +162,26 @@ public sealed class ReaderPlatformChrome
         {
             selection.PropertyChanged += OnSelectionSurfaceChanged;
         }
+
+        // The perushim sheet reports open/close on its own event rather than
+        // an IsVisible flip — feed it the same capsule + native refresh an
+        // overlay gets so a swipe-opened sheet still owns Back (#2766).
+        _ui.PerushimSheet.IsOpenChanged += (_, _) =>
+        {
+            _ui.NavigationBar.RefreshBackState();
+            RefreshNativeBack();
+        };
     }
 
     /// <summary>
     /// The reader's appearing slot — registers the native Back plumbing
-    /// (Android callback, Windows accelerator) and applies the iOS reader
-    /// history + home-indicator inset. Call once from the page's OnAppearing.
+    /// (Android callback) and applies the iOS reader history + home-indicator
+    /// inset. Call once from the page's OnAppearing.
     /// </summary>
     public void Appearing()
     {
 #if ANDROID
         RegisterReaderBack();
-#elif WINDOWS
-        RegisterReaderKeyboardBack();
 #elif IOS
         // Native history must be ready before asynchronous reader positioning.
         ConfigureReaderHistory();
@@ -204,8 +202,6 @@ public sealed class ReaderPlatformChrome
     {
 #if ANDROID
         UnregisterReaderBack();
-#elif WINDOWS
-        UnregisterReaderKeyboardBack();
 #elif IOS
         // A page pushed above gets its native edge-back back (#2432): re-enable
         // the recognizer ConfigureReaderHistory switches off at the navigation
@@ -399,100 +395,6 @@ public sealed class ReaderPlatformChrome
 
             Enabled = false;
             activity.OnBackPressedDispatcher.OnBackPressed();
-        }
-    }
-#endif
-
-#if WINDOWS
-    private void RegisterReaderKeyboardBack()
-    {
-        UnregisterReaderKeyboardBack();
-        _ui.Root.HandlerChanged += OnReaderKeyboardHandlerChanged;
-        _ui.Root.Loaded += OnReaderKeyboardHandlerChanged;
-        Shell.Current.Navigated += OnReaderNavigated;
-        AttachKeyboardBack();
-    }
-
-    private void UnregisterReaderKeyboardBack()
-    {
-        _ui.Root.HandlerChanged -= OnReaderKeyboardHandlerChanged;
-        _ui.Root.Loaded -= OnReaderKeyboardHandlerChanged;
-        Shell.Current.Navigated -= OnReaderNavigated;
-        DetachKeyboardBack();
-    }
-
-    private void OnReaderKeyboardHandlerChanged(object? sender, EventArgs e)
-    {
-        AttachKeyboardBack();
-        FocusReaderKeyboard();
-    }
-
-    private void OnReaderNavigated(object? sender, ShellNavigatedEventArgs args) => FocusReaderKeyboard();
-
-    private void FocusReaderKeyboard()
-    {
-        _ui.Page.Dispatcher.Dispatch(() =>
-        {
-            if (Shell.Current.CurrentPage == _ui.Page &&
-                _actions.SuppressFocus?.Invoke() != true)
-            {
-                _ui.NavigationBar.NavigationButton.Focus();
-            }
-        });
-    }
-
-    private void AttachKeyboardBack()
-    {
-        if (_ui.Page.Window?.Handler?.PlatformView is not Microsoft.UI.Xaml.Window window ||
-            window.Content is not UIElement owner ||
-            ReferenceEquals(owner, _keyboardBackOwner))
-        {
-            return;
-        }
-
-        DetachKeyboardBack();
-        _keyboardBackOwner = owner;
-        _keyboardBack = new KeyboardAccelerator { Key = VirtualKey.Left, Modifiers = VirtualKeyModifiers.Menu };
-        _keyboardBack.Invoked += OnReaderKeyboardBackInvoked;
-        owner.KeyboardAccelerators.Add(_keyboardBack);
-    }
-
-    private void DetachKeyboardBack()
-    {
-        if (_keyboardBack != null)
-        {
-            _keyboardBack.Invoked -= OnReaderKeyboardBackInvoked;
-            _keyboardBackOwner?.KeyboardAccelerators.Remove(_keyboardBack);
-        }
-        _keyboardBack = null;
-        _keyboardBackOwner = null;
-    }
-
-    private async void OnReaderKeyboardBackInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        if (Shell.Current.CurrentPage != _ui.Page)
-        {
-            return;
-        }
-
-        args.Handled = _actions.TryHandleBack();
-        if (args.Handled || _ui.Page.Navigation.NavigationStack.Count <= 1)
-        {
-            return;
-        }
-
-        args.Handled = true;
-        try
-        {
-            // Through the shared navigator so Alt+Left cannot overlap a
-            // transition the gate still owns (deduped like any second tap).
-            await ShellAppNavigator.Instance.GoToAsync("..", false, null);
-        }
-#pragma warning disable S2221 // Deliberate failure boundary: reader Back navigation failure is log-only
-        catch (Exception exception) //NOSONAR — reader Back navigation failure is log-only.
-        {
-#pragma warning restore S2221
-            Console.Error.WriteLine($"Reader Back navigation failed: {exception}");
         }
     }
 #endif

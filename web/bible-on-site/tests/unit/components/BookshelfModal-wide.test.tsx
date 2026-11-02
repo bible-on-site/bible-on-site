@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 /**
  * Test that BookshelfModal appends ?book on wide screens.
@@ -11,7 +11,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 	Bookshelf: ({
 		onSeferClick,
-	}: { onSeferClick?: (name: string, from: number) => void }) => (
+	}: {
+		onSeferClick?: (name: string, from: number) => void;
+	}) => (
 		<button
 			data-testid="mock-bookshelf"
 			type="button"
@@ -59,8 +61,10 @@ describe("BookshelfModal (wide screen)", () => {
 		mockPush.mockClear();
 	});
 
-	it("navigates to today's perek with ?book on wide screen", () => {
-		render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+	it("navigates to today's perek with ?book on wide screen", async () => {
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+		});
 		fireEvent.click(screen.getByTestId("mock-bookshelf"));
 		// Today is perek 5 (בראשית), wide screen → /929/5?book
 		expect(mockPush).toHaveBeenCalledWith("/929/5?book");

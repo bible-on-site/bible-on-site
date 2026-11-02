@@ -1,6 +1,7 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
@@ -13,6 +14,7 @@ namespace BibleOnSite.Tests.Controls;
 /// tests pin the shared geometry, the hamburger/Back capsule order and the
 /// disabled-at-root Back state instead of per-page margins.
 /// </summary>
+[Collection(PreferencesServiceCollection.Name)]
 public class SharedTopBarTests : IDisposable
 {
     public SharedTopBarTests()

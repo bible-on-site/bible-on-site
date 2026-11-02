@@ -171,3 +171,45 @@ pinned. Full evidence, snapshots and the pinned-image recovery request stay
 private per this runbook; the public record is the
 [#2576 live verification comment](https://github.com/bible-on-site/bible-on-site/issues/2576#issuecomment-6388941527)
 and [PR #2603](https://github.com/bible-on-site/bible-on-site/pull/2603).
+
+## Admin revalidation follow-up - 2026-11-01
+
+Dorad explicitly approved the configuration completion for
+[#2763](https://github.com/bible-on-site/bible-on-site/issues/2763), after
+the application fix in [#2857](https://github.com/bible-on-site/bible-on-site/pull/2857)
+was deployed. The live admin task definition moved from revision 8 to 9,
+adding the two mappings already present in `ecs-services.yaml`:
+
+- `VITE_WEBSITE_URL=http://website.bible-on-site.local:3000`.
+- `REVALIDATE_SECRET` from the existing
+  `bible-on-site-revalidate-secret` SSM parameter, shared with the website.
+
+The existing execution role already permitted the parameter read. The full
+task definition was cloned; environment ordering was normalized when comparing
+the AWS registration response. All other configuration, including the image,
+roles, resources, network and Spot strategy, was preserved. The running image
+remains admin v0.1.159, digest
+`sha256:b1d17b3e4e1707d762ef2bea822d6f5b1fd8dd719fb9a00aec9814617eed0134`.
+
+Postflight verified one COMPLETED primary deployment, desired/running 1,
+pending 0, the previous task STOPPED, the expected image and FARGATE_SPOT
+provider, and the new process listening. Website/API service configuration
+and public health remained unchanged. An authenticated invalidation of the
+existing `/pedia/משה` alias returned HTTP 200 with `revalidated: true`; the
+public alias then resolved to `/pedia/משה-רבנו` and HTTP 200. The credential
+was held only in memory and was not logged or stored with this record.
+
+The full editor-save acceptance remains blocked by a separate schema gap:
+the editor reports `Unknown column 'c.base_revision_id' in 'where clause'`.
+The existing `tanahpedia_alter_entry_revision_history.sql` migration was
+missing from the production deploy manifest. Its manifest registration is
+prepared separately; no production database migration was performed during
+this approved configuration rollout. The error is captured in
+[the production editor screenshot](../evidence/issue-2763/editor-schema-blocker.png).
+Keep #2763 open until the approved migration and a real editor publishing
+check are complete.
+
+Rollback restores task definition revision 8; a private recovery request also
+pins the original image digest if the mutable release tag has advanced. This
+restores the previous unconfigured revalidation behavior. Rollback was not
+needed. Full task snapshots and the recovery request remain outside Git.

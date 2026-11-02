@@ -36,7 +36,7 @@
 .option {
 	padding: 2px 10px;
 	border: 1px solid rgba(21, 82, 172, 0.35);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: transparent;
 	color: inherit;
 	font-family: inherit;
@@ -49,4 +49,12 @@
 	border-color: rgba(21, 82, 172, 0.55);
 	color: var(--pasuk-num-color, #1c2c5d);
 	font-weight: 700;
+}
+
+.controls:disabled {
+	opacity: 0.65;
+}
+
+.controls:disabled .option {
+	cursor: default;
 }
