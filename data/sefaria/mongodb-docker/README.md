@@ -14,6 +14,16 @@ docker build -t sefaria-mongo:latest .
 docker run -d -p 27017:27017 --name sefaria-mongo sefaria-mongo:latest
 ```
 
+The default command initializes `/data/db` and keeps the existing persistent-volume behavior. Ephemeral CI instead starts the restored database in place:
+
+```bash
+docker run -d -p 27017:27017 --name sefaria-mongo \
+  --entrypoint docker-entrypoint.sh sefaria-mongo:latest \
+  mongod --dbpath /mongodb-data
+```
+
+The build restores as the `mongodb` user and waits for a clean shutdown. A failed restore or an empty fixture fails the build. Direct startup avoids copying the entire database before MongoDB can start; CI still requires readiness within 120 seconds, with the existing 60 attempts and two-second interval.
+
 ## Usage in Tests
 
 Once the container is running, you can run the integration tests:
@@ -33,7 +43,7 @@ The dump is imported at build time, so the container starts with data pre-loaded
 
 ## CI Integration
 
-CI publishes this image to `ghcr.io/bible-on-site/sefaria-mongo`, tagged with the git tree hash of this directory, and Data CI and Perushim Data pull it. Fork pull requests cannot publish, so when they rebuild the image it reaches those jobs as a workflow artifact. See `.github/workflows/ci.yml` for the workflow configuration.
+CI publishes this image to `ghcr.io/bible-on-site/sefaria-mongo`, tagged with the git tree hash of this directory, and Data CI and Perushim Data pull it. Fork pull requests cannot publish, so when they rebuild the image it reaches those jobs as a workflow artifact. Changes to this test image select Data CI without releasing production data. See `.github/workflows/ci.yml` for the workflow configuration.
 
 ## Updating the Dump
 
