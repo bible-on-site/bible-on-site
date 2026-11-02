@@ -44,7 +44,7 @@
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test --config=playwright.e2e.config.ts --project=Desktop",
 		"coverage:merge": "node ./tests/util/coverage/merge-coverage.mts",
 		"package": "cross-env-shell \"docker build -t bible-on-site:${npm_package_version} .\"",
-		"version": "cross-env-shell echo ${npm_package_version}"
+		"version": "node --print process.env.npm_package_version"
 	},
 	"bin": {
 		"biome": "./node_modules/@biomejs/biome/bin/biome"
