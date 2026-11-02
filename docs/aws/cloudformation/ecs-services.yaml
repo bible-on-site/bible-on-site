@@ -285,6 +285,10 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: bible-on-site-website
+      # Website ARM migration target; apply only after the release and canary gates.
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
