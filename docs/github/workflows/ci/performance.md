@@ -196,3 +196,22 @@ Since this measurement, #2263 replaced the fixed three-way split with a
 `plan_ios` job that selects the affected cases and packs them into a
 runtime-planned number of shards each leg executes verbatim — leg count and
 setup duplication now scale with the plan instead of staying at three.
+
+## macOS runner-minutes round: 2026-11-01
+
+During peak PR creation the iOS legs queue for `xcode-27` runners, so the
+target is total macOS runner time, not one run's wall clock. Three days of
+jobs that actually held a macOS runner (≈13,900 min) split into iOS shards
+62%, `Validate iOS Distribution` 27% and the shared iOS build 11%. Impact
+selection rarely narrows the suite (CI, runner workflow and `bun.lock` changes
+are global triggers), so nearly every run planned the full 18-case, ≈25-minute
+suite across three shards of ≈16 minutes each, ≈6 minutes of which is per-leg
+setup.
+
+- The planner's per-shard target became a capacity (26 minutes): the full
+  suite now packs onto one shard, saving ≈14 macOS minutes per run at the cost
+  of a ≈15-minute longer iOS leg when runners are idle. The pilot deadline
+  scales with the planned estimate (1.5 × estimate + 5m, clamped to 15–45m)
+  so a single runner can carry the whole suite.
+- `Validate iOS Distribution` runs on pull requests only; the merge group no
+  longer repeats the ≈17-minute signed package for the same change.
