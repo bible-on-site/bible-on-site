@@ -10,7 +10,7 @@ namespace BibleOnSite.Pages;
 /// implement <see cref="IWindowsSearchSurface"/>.
 /// </summary>
 #pragma warning disable S2333 // partial required: MasoraPage is split across 3 declaration parts.
-public partial class MasoraPage : IWindowsDesktopSurface
+public partial class MasoraPage : IWindowsDesktopSurface, IWindowsFullscreenSurface
 #pragma warning restore S2333
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
@@ -20,6 +20,14 @@ public partial class MasoraPage : IWindowsDesktopSurface
 		if (Shell.Current?.CurrentPage == this)
 		{
 			NormalNavigationBar.NavigationButton.Focus();
+		}
+	}
+
+	void IWindowsFullscreenSurface.ToggleDesktopFullscreen()
+	{
+		if (Shell.Current?.CurrentPage == this)
+		{
+			_chrome.ToggleFullScreen();
 		}
 	}
 }

@@ -9,7 +9,7 @@ namespace BibleOnSite.Pages;
 /// Ctrl+F opens the perek search.
 /// </summary>
 #pragma warning disable S2333 // partial required: PerekPage is split across 5 declaration parts.
-public partial class PerekPage : IWindowsDesktopSurface, IWindowsSearchSurface
+public partial class PerekPage : IWindowsDesktopSurface, IWindowsSearchSurface, IWindowsFullscreenSurface
 #pragma warning restore S2333
 {
 	bool IWindowsDesktopSurface.DismissTopmostSurface() => TryHandleReaderBack();
@@ -23,4 +23,12 @@ public partial class PerekPage : IWindowsDesktopSurface, IWindowsSearchSurface
 	}
 
 	void IWindowsSearchSurface.OpenDesktopSearch() => OnPerekSourceClicked(this, EventArgs.Empty);
+
+	void IWindowsFullscreenSurface.ToggleDesktopFullscreen()
+	{
+		if (!ChapterSearch.IsSearchOpen)
+		{
+			_chrome.ToggleFullScreen();
+		}
+	}
 }
