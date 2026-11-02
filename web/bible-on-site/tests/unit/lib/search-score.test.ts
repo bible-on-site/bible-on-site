@@ -4,6 +4,8 @@
 import {
 	editDistance,
 	maxEdits,
+	prepareQuery,
+	scorePrepared,
 	searchScore,
 	tokenScore,
 } from "@/lib/search/score";
@@ -71,5 +73,43 @@ describe("searchScore", () => {
 
 	it("returns zero for an empty query", () => {
 		expect(searchScore("בראשית", "")).toBe(0);
+	});
+
+	it("keeps the strongest match even when fuzzy words appear before it", () => {
+		expect(searchScore("בראשת בראשיתו אלהים", "בראשית")).toBe(80);
+		expect(searchScore("בראשת בראשיתו אלהים ברא", "בראשית ברא")).toBe(80);
+		expect(searchScore("בראשת בראשית אלהים ברא", "בראשית ברא")).toBe(90);
+		expect(searchScore("בראשת אלהים", "בראשית")).toBe(60);
+	});
+
+	it("matches per-word scoring across exact, prefix, fuzzy and missing terms", () => {
+		const words = [
+			"בראשית",
+			"בראשיתו",
+			"בראשת",
+			"ברא",
+			"אלהים",
+			"אבגדהוזח",
+			"אבגדהוזט",
+			"שלום",
+		];
+		for (const left of words) {
+			for (const right of words) {
+				const text = `${left} ${right}`;
+				for (const phrase of [...words, "בראשית ברא", "שלום אלהים"]) {
+					const prepared = prepareQuery(phrase);
+					const scores = prepared.terms.map((term) =>
+						Math.max(...[left, right].map((word) => tokenScore(word, term))),
+					);
+					const expected =
+						text === phrase
+							? 110
+							: ` ${text} `.includes(` ${phrase} `)
+								? 100
+								: Math.min(...scores);
+					expect(scorePrepared(text, prepared)).toBe(expected);
+				}
+			}
+		}
 	});
 });
