@@ -52,6 +52,7 @@ describe("TopNavAccessibility", () => {
 		render(<TopNavAccessibility />);
 
 		const button = trigger();
+		expect(button).toBeEnabled();
 		expect(button).toHaveAttribute("aria-haspopup", "dialog");
 		expect(button).toHaveAttribute("aria-expanded", "false");
 		expect(button).toHaveClass("top-nav-accessibility");

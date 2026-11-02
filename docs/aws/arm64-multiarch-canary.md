@@ -231,9 +231,12 @@ Three properties constrain the design:
 4. **Gate it.** Any added arm64 job must enter `cross_module_ci` under the
    same trigger condition as its amd64 twin (the merge-gating rule in
    `.github/instructions/aws-workflows.instructions.md`), so a broken arm64
-   build blocks merges exactly like an amd64 one. The website remains
-   master-push-only for its DB-backed SSG build - its arm64 variant runs
-   there before the release it feeds, never as a pre-merge no-op.
+   build blocks merges exactly like an amd64 one. Website DB-backed SSG
+   now runs both native release builds for trusted repository PRs and merge
+   groups as well as selected master pushes. Fork PRs retain the existing
+   credential-free native dependency validation because SSG needs production
+   data/secrets. Only the master push artifacts may feed a published release.
+   See [the website migration gates](website-arm64-migration.md).
 5. **Manifest/digest inspection in CI.** Record `crane manifest
    <repo>:v<ver>` / `docker buildx imagetools inspect` output (amd64 +
    arm64 children with digests) in the deploy job log so the pinned
