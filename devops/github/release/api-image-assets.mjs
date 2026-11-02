@@ -1,14 +1,15 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findRelease, verifyReleaseAssets } from "./release-assets.mjs";
-import { apiImageArtifacts, releasePayload } from "./release-provenance.mjs";
+import { nativeImageArtifacts, releasePayload } from "./release-provenance.mjs";
 
 /** Verify both downloaded archives against immutable-source published release metadata. */
 export function verifyAPIImageAssets(
 	release,
-	{ version, sourceRef, directory },
+	{ version, sourceRef, directory, moduleName = "api" },
 ) {
 	if (
+		!["api", "website"].includes(moduleName) ||
 		!/^\d+\.\d+\.\d+$/.test(version ?? "") ||
 		!/^[a-f0-9]{40}$/.test(sourceRef ?? "") ||
 		typeof directory !== "string" ||
@@ -21,16 +22,22 @@ export function verifyAPIImageAssets(
 		!release ||
 		release.draft ||
 		release.prerelease ||
-		release.tag_name !== `api-v${version}`
+		release.tag_name !== `${moduleName}-v${version}`
 	) {
 		throw new Error("API archives require the published canonical release");
 	}
 	const payload = releasePayload(release);
-	if (!apiImageArtifacts(payload) || payload.ref !== sourceRef)
+	if (
+		!nativeImageArtifacts(payload) ||
+		payload.module_name !== moduleName ||
+		payload.ref !== sourceRef
+	)
 		throw new Error("API archive source differs from the approved release");
+	const image =
+		moduleName === "website" ? "bible-on-site" : "bible-on-site-api";
 	const names = [
-		`bible-on-site-api-v${version}.tar.gz`,
-		`bible-on-site-api-v${version}-arm64.tar.gz`,
+		`${image}-v${version}.tar.gz`,
+		`${image}-v${version}-arm64.tar.gz`,
 	];
 	for (const name of names) {
 		const matching =
@@ -54,14 +61,18 @@ export function verifyAPIImageAssets(
 
 export function main(env = process.env, lookup = findRelease) {
 	const version = env.MODULE_VERSION;
+	const moduleName = env.MODULE_NAME ?? "api";
+	if (!["api", "website"].includes(moduleName))
+		throw new Error("Invalid native image module");
 	if (!/^\d+\.\d+\.\d+$/.test(version ?? ""))
 		throw new Error("Invalid API release version");
 	return verifyAPIImageAssets(
-		lookup(env.GITHUB_REPOSITORY, `api-v${version}`),
+		lookup(env.GITHUB_REPOSITORY, `${moduleName}-v${version}`),
 		{
 			version,
-			sourceRef: env.API_RELEASE_SOURCE,
+			sourceRef: env.IMAGE_RELEASE_SOURCE ?? env.API_RELEASE_SOURCE,
 			directory: env.DOCKER_IMAGE_OUTPUT_DIR,
+			moduleName,
 		},
 	);
 }

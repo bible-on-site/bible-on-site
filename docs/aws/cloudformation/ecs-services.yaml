@@ -285,10 +285,14 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: bible-on-site-website
+      # Website ARM migration target; apply only after the release and canary gates.
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: "256" # 0.25 vCPU
+      Cpu: "512" # 0.5 vCPU; measured CPU decision in docs/performance/website-cpu-2026-11-02
       Memory: "2048" # 2 GB (reduced OOM; was 1024)
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt WebsiteTaskRole.Arn

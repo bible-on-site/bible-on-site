@@ -270,7 +270,7 @@ test("only the API EventBridge trigger is disabled for coordinated publication",
 	]) {
 		const block = template
 			.split(`  ECRPushRule${resource}:`)[1]
-			.split(/^  [A-Za-z]/m)[0];
+			.split(/^ {2}[A-Za-z]/m)[0];
 		assert.ok(block.includes(`State: ${state}`));
 	}
 });
@@ -284,7 +284,7 @@ test("only master API releases assume the dedicated role with API-only image acc
 		"utf8",
 	).replace(/\r/g, "");
 	const resource = (name) =>
-		template.split(`  ${name}:\n`)[1].split(/^  (?:[A-Za-z]|#)/m)[0];
+		template.split(`  ${name}:\n`)[1].split(/^ {2}(?:[A-Za-z]|#)/m)[0];
 	assert.match(
 		resource("GitHubActionsAPIDeployRole"),
 		/DependsOn: GitHubOIDCProvider/,
@@ -814,4 +814,44 @@ test("API platform selection comes from published provenance rather than dispatc
 		() => checkDeployment(api, request({ releases: [wrong] })),
 		/published CI provenance/,
 	);
+});
+
+test("website platform selection requires its own immutable published artifact pair", () => {
+	const payload = {
+		ref: sha,
+		ci_run_id: 10,
+		module_name: "website",
+		module_version: "1.0.10",
+		released_artifact_name: "bible-on-site-docker-10",
+		released_arm64_artifact_name: "bible-on-site-docker-10-arm64",
+	};
+	const release = {
+		...published,
+		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+	};
+	assert.equal(
+		checkDeployment(input, request({ releases: [release] })).websiteArm64,
+		true,
+	);
+	assert.equal(
+		checkDeployment(input, request({ releases: [release] })).apiArm64,
+		undefined,
+	);
+	assert.equal(
+		checkDeployment({ ...input, websiteArm64: true }, request()).websiteArm64,
+		undefined,
+	);
+	for (const changed of [
+		{ released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64" },
+		{ released_artifact_name: "bible-on-site-docker-9" },
+	]) {
+		const wrong = {
+			...release,
+			body: `<!-- release-delivery:${JSON.stringify({ ...payload, ...changed })} -->`,
+		};
+		assert.throws(
+			() => checkDeployment(input, request({ releases: [wrong] })),
+			/published CI provenance/,
+		);
+	}
 });

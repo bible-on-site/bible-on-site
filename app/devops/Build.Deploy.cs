@@ -76,7 +76,8 @@ partial class Build
                 Assert.Fail($"Upload failed: {uploadProgress.Exception?.Message}");
             }
 
-            var versionCode = uploadRequest.ResponseBody?.VersionCode
+            var bundle = uploadRequest.ResponseBody;
+            var versionCode = bundle?.VersionCode
                 ?? throw new InvalidOperationException("Bundle upload returned no version code");
             Serilog.Log.Information($"Uploaded bundle with version code: {versionCode}");
 

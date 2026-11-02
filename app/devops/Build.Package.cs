@@ -221,7 +221,8 @@ partial class Build
             var sharedLibsDir = objDir
                 .GlobDirectories("**/app_shared_libraries")
                 .FirstOrDefault()
-                ?? throw new InvalidOperationException($"app_shared_libraries not found under {objDir}");
+                ?? throw new InvalidOperationException(
+                    $"app_shared_libraries not found under {objDir}");
             var symbolsZip = ArtifactsDirectory /
                 $"{aabFiles.First().Name.Replace("-Signed.aab", "")}-native-symbols.zip";
             ZipFile.CreateFromDirectory(sharedLibsDir.ToString(), symbolsZip.ToString());

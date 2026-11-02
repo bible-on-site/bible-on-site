@@ -187,10 +187,7 @@ html[data-a11y-contrast="high"] ::selection {
    rules, including portaled/dynamic content. Excluded: icon-only anchors
    whose sole element child is an img/svg — a bare icon gains nothing
    from underlining and keeps its existing hit-area styling. */
-:is(
-		html[data-a11y-links="underlined"],
-		html[data-a11y-contrast="high"]
-	)
+:is(html[data-a11y-links="underlined"], html[data-a11y-contrast="high"])
 	a[href]:not(:has(> :is(img, svg):only-child)) {
 	text-decoration: underline;
 	text-underline-offset: 0.15em;
@@ -307,7 +304,12 @@ html[data-a11y-contrast="high"] ::selection {
 	filter: invert(1);
 }
 
-.top-nav-accessibility:hover {
+.top-nav-accessibility:disabled {
+	cursor: wait;
+	opacity: 0.55;
+}
+
+.top-nav-accessibility:enabled:hover {
 	background-color: rgba(255, 255, 255, 0.16);
 	border-color: #fff;
 }

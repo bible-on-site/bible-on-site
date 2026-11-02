@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import stableStringify from "fast-json-stable-stringify";
 import { APIRolloutAWS } from "./api-rollout-aws.mjs";
@@ -370,8 +371,11 @@ export class Backend {
 				};
 			}
 			case "TagResource":
-				for (const row of input.tags)
+				for (const row of input.tags) {
+					assert.match(row.key, /^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$/u);
+					assert.match(row.value, /^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$/u);
 					this.lease(input.resourceArn).tags[row.key] = row.value;
+				}
 				return {};
 			case "UntagResource":
 				for (const key of input.tagKeys)

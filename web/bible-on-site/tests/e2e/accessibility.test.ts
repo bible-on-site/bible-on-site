@@ -67,7 +67,10 @@ test.describe("Accessibility statement page", () => {
 		page,
 	}) => {
 		await page.goto("/accessibility");
-		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+		const trigger = page.getByRole("button", {
+			name: "התאמות נגישות",
+			disabled: false,
+		});
 		await trigger.press("Enter");
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
 		await expect(menu).toBeVisible();
@@ -229,12 +232,53 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 	};
 
 	const openMenu = async (page: Page) => {
-		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+		const trigger = page.getByRole("button", {
+			name: "התאמות נגישות",
+			disabled: false,
+		});
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
 		await trigger.press("Enter");
 		await expect(menu).toBeVisible({ timeout: 750 });
 		return menu;
 	};
+
+	test("menu is unavailable until its client controls are ready", async ({
+		page,
+	}, testInfo) => {
+		const { promise: scriptsReady, resolve: releaseScripts } =
+			Promise.withResolvers<void>();
+		await page.route(/\/_next\/.*\.js(?:\?|$)/, async (route) => {
+			await scriptsReady;
+			await route.continue();
+		});
+		try {
+			await page.goto("/accessibility", { waitUntil: "commit" });
+			const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+			await expect(trigger).toBeVisible();
+			const initialCapture = testInfo.outputPath("initial-control.png");
+			const viewport = page.viewportSize();
+			await page.screenshot({
+				path: initialCapture,
+				clip: { x: 0, y: 0, width: viewport?.width ?? 1280, height: 160 },
+			});
+			await testInfo.attach("Initial accessibility control", {
+				path: initialCapture,
+				contentType: "image/png",
+			});
+			await expect(trigger).toBeDisabled();
+
+			releaseScripts();
+			await page
+				.getByRole("button", { name: "התאמות נגישות", disabled: false })
+				.press("Enter");
+			await expect(
+				page.getByRole("dialog", { name: "התאמות נגישות" }),
+			).toBeVisible({ timeout: 750 });
+		} finally {
+			releaseScripts();
+			await page.unrouteAll({ behavior: "wait" });
+		}
+	});
 
 	test("toggles persist, re-apply before paint and survive client navigation", async ({
 		page,
