@@ -66,6 +66,9 @@ RUN bun run build
 FROM base AS runner
 WORKDIR /app
 
+# Bind delivery metadata to the published archive before immutable tags exist.
+LABEL io.bible-on-site.image-delivery="soci-v2"
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
