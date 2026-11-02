@@ -533,7 +533,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// Tracks scroll events to prevent long-press during scroll.
+    /// Tracks scroll events to prevent long-press during scroll, and feeds the
+    /// stored-metric reading position (issue #2607).
     /// </summary>
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
@@ -547,6 +548,24 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // walking every verse behavior on every scroll frame causes jank.
         LongPressBehavior.CancelAllPending();
 #endif
+        UpdateReadingProgress(sender as CollectionView, e);
+    }
+
+    /// <summary>
+    /// Maps the virtualized list's item indices onto the stored pasuk metrics:
+    /// the first visible pasuk anchors the reading position, and the content
+    /// end inside the viewport reads as complete — the app granularity of the
+    /// web engine's anchor rule (issue #2607).
+    /// </summary>
+    private void UpdateReadingProgress(CollectionView? list, ItemsViewScrolledEventArgs e)
+    {
+        if (list?.ItemsSource is not IReadOnlyList<PasukDisplayItem> items || items.Count == 0)
+        {
+            return;
+        }
+        var anchorIndex = Math.Clamp(e.FirstVisibleItemIndex, 0, items.Count - 1);
+        var contentEndVisible = e.LastVisibleItemIndex >= items.Count - 1;
+        _viewModel.UpdateReadingProgress(items[anchorIndex].PasukNum, contentEndVisible);
     }
 
     protected override async void OnAppearing()

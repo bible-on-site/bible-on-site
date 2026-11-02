@@ -40,16 +40,21 @@ import {
 	type PerekSummaries,
 } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { FlipBook } from "@/app/components/reading/FlipBook";
 import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
 import type { Perek, SefarimItem } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
-
 import type { ArticleSummary } from "@/lib/articles";
 import { getDivineNameMaskingSettings } from "@/lib/divine-name-settings";
 import type { PerushSummary } from "@/lib/perushim";
+import type {
+	ReadingMetric,
+	ReadingProgressUnit,
+} from "@/lib/reading-metrics/types";
 import {
 	getSeferBookmarkServerSnapshot,
 	getSeferBookmarkSnapshot,
@@ -183,6 +188,10 @@ const Sefer = (props: {
 	perekDedications?: Record<number, string[]>;
 	initialSlug?: string;
 	initialBookPage?: BookPage | null;
+	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
+	perekPasukUnits?: ReadingProgressUnit[];
+	/** Stored perek metric for the current perek's page badge (#2607). */
+	perekMetric?: ReadingMetric | null;
 	/** Whether the reader is shown. A host may keep it mounted but hidden (the
 	 * perek overlay during close animation); while hidden the flat page title
 	 * is restored. Defaults to true for hosts that always show the reader. */
@@ -197,6 +206,8 @@ const Sefer = (props: {
 		imagesByPerek,
 		initialSlug,
 		initialBookPage,
+		perekPasukUnits,
+		perekMetric,
 		isVisible = true,
 	} = props;
 	const sefer = props.sefer;
@@ -496,6 +507,7 @@ const Sefer = (props: {
 
 	// Keep scripture independent of async summaries and commentary selection.
 	// Those updates must not rebuild or reconcile every word in the book.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the stale-read exclusion is intentional - scripture must not rebuild when background summaries or the current perek's metrics resolve
 	const scripturePages = useMemo(
 		() =>
 			perakim.map((perek, perekIdx) => {
@@ -522,6 +534,16 @@ const Sefer = (props: {
 										<span className={styles.pageHeaderPerek}>
 											{toHebrewChapterNumber(perekIdx + 1)}
 										</span>
+										<ReadingTime
+											estimatedSeconds={
+												(perekIdx === currentPerekIdx
+													? perekMetric
+													: batchSummaries[String(pagePerekId ?? 0)]
+															?.perekMetric
+												)?.estimatedSeconds
+											}
+											className={styles.pageHeaderMetric}
+										/>
 									</div>
 									{(props.perekDedications?.[pagePerekId ?? 0] ?? []).map(
 										(line, index) => (
@@ -536,6 +558,17 @@ const Sefer = (props: {
 									<RecitationHeader title={perek.header} />
 								</div>
 								<div className={styles.perekTextScrollWrapper}>
+									<ReadingProgress
+										units={
+											perekIdx === currentPerekIdx
+												? (perekPasukUnits ?? [])
+												: (batchSummaries[String(pagePerekId ?? 0)]
+														?.pasukUnits ?? [])
+										}
+										scroller={`.${styles.perekTextScrollWrapper}`}
+										content={`.${styles.perekText}`}
+										unitSelector='[data-sefer-pasuk="{key}"]'
+									/>
 									{illustrations.map((illustration) => (
 										<figure
 											key={illustration.id}

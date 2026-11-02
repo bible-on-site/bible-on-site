@@ -71,6 +71,13 @@ public class StarterService : BaseGraphQLService
                     abstract
                     name
                     priority
+                    readingMetric {
+                        wordCount
+                        estimatedSeconds
+                        wordsPerMinute
+                        calcVersion
+                        sourceHash
+                    }
                 }
                 perekArticlesCounters
             }
@@ -162,6 +169,7 @@ public class StarterService : BaseGraphQLService
                     Abstract = a.Abstract ?? string.Empty,
                     Name = a.Name,
                     Priority = a.Priority,
+                    ReadingMetric = a.ReadingMetric?.ToModel(),
                     Author = author
                 };
             })
@@ -342,7 +350,26 @@ public class StarterService : BaseGraphQLService
         int AuthorId,
         string? Abstract,
         string Name,
-        int Priority);
+        int Priority,
+        ReadingMetricData? ReadingMetric = null);
+
+    /// <summary>Persisted reading metric as the API returns it (issue #2607); serialized into the local cache so offline starts keep the badge.</summary>
+    internal record ReadingMetricData(
+        int? WordCount,
+        int? EstimatedSeconds,
+        int WordsPerMinute,
+        int CalcVersion,
+        string? SourceHash)
+    {
+        public ReadingMetric ToModel() => new()
+        {
+            WordCount = WordCount,
+            EstimatedSeconds = EstimatedSeconds,
+            WordsPerMinute = WordsPerMinute,
+            CalcVersion = CalcVersion,
+            SourceHash = SourceHash ?? string.Empty
+        };
+    }
 
     #endregion
 }
