@@ -32,6 +32,19 @@ inactive setups cannot pass. The original 0.05px character-position guard stays
 independent. An opaque scroller cache was rejected because a straight fold
 changed text rasterization despite preserving diagonal-fold captures.
 
+Paper shading must finish with the turn. A settled paper leaf has a transparent
+shadow gradient; the previous opacity transition still started two invisible
+120ms fades per turn. The hosted failure traces recorded 12 such animations in
+each six-turn diagnostic sequence. The paper renderer now keeps its material
+classification through settlement and disables those fades. Rigid covers keep
+their existing 120ms shading transition. The library's
+[browser regression](https://github.com/doradsoft/html-flip-book/blob/dd02ed799f405840d155594d7a471023fcdee720/e2e/cover-shadow.spec.ts)
+checks both reading directions, zero-duration paper shading and unchanged cover
+shading. Its material tests also cover invalid/restored dimensions and cover
+reclassification without redundant class writes. The
+[actual old/new reader captures](https://github.com/doradsoft/html-flip-book/blob/dd02ed799f405840d155594d7a471023fcdee720/docs/images/sefer-shadow-comparison.json)
+preserve every pixel across 18 page poses and every recorded character rectangle.
+
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
 completed motion and nonempty page text. Visibility and geometry queries can
@@ -45,18 +58,26 @@ checks or layout reads between turns.
 | Maximum frame gap | 100ms |
 | Frame gap p95 | 50ms |
 
-Reader source tree `caeba53083d653790ed8d9b9ee6c3c200f05ee93`, rebuilt with
-published flip-book alpha.102, passed all 12 reader cases and the deliberate-stall
-control in each environment below, without
-retries. Both use full Chromium 156.0.8078.4, the viewport and slowdown above,
-and the full-content fixture. These are separate environment results, not a
-headed/headless before-and-after comparison. Values are the worst across all
-12 cases; first-turn and consecutive-turn windows also pass independently.
+Reader source tree `33bd53b16542de070b019bf8d13080027cba221b` with
+flip-book executable source `8def6671570e66c223a25609f1a78e0a4dfee818` passed
+all 12 reader cases and the deliberate-stall control in each environment below,
+without retries. This local-library qualification uses full Chromium
+156.0.8078.4, the viewport and slowdown above, and the full-content fixture.
+These are separate environment results, not a headed/headless before-and-after
+comparison. Values are the worst across all 12 cases; first-turn and
+consecutive-turn windows also pass independently. Record the normal registry
+rebuild and CI separately when adopting the published package.
 
 | Environment | Response p95 | Maximum gap | Gap p95 | First-turn gap p95 | Consecutive gap p95 |
 | --- | --- | --- | --- | --- | --- |
-| Active Windows desktop, headed | 112.6ms | 66.8ms | 33.4ms | 33.4ms | 33.4ms |
-| Linux, headless, four shared CPUs | 112.8ms | 66.7ms | 33.4ms | 49.9ms | 33.4ms |
+| Active Windows desktop, headed | 111.8ms | 83.4ms | 49.9ms | 50ms | 50ms |
+| Linux, headless, four shared CPUs | 109.2ms | 66.7ms | 49.9ms | 50ms | 33.4ms |
+
+Before this shadow fix, the website head using alpha.102 failed 8/12 cadence
+cases in [hosted CI](https://github.com/bible-on-site/bible-on-site/actions/runs/41514403497),
+including independent first-turn failures with moving bookmarks. Its original
+samples remain failed; profiled diagnostic runs and passing local runs do not
+replace them or relax the limits.
 
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
