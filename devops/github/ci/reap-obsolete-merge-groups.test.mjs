@@ -27,6 +27,7 @@ function fixture(runs=[run()]) {
 }
 const call=(f,options={})=>reap({eventName:"workflow_run",payload:f.payload,api:f.api,journal:f.journal,...options});
 function node(head,base=sha("c"),number=20){return {position:1,state:"AWAITING_CHECKS",headCommit:{oid:head},baseCommit:{oid:base},pullRequest:{number,headRefOid:sha("d")}};}
+function ungrouped(number=21,position=1){return {position,state:"QUEUED",headCommit:null,baseCommit:null,pullRequest:{number,headRefOid:sha("e")}};}
 
 test("dry run records two independent proofs and cannot mutate",async()=>{
  const f=fixture();const result=await call(f);assert.equal(result.mode,"dry-run");assert.equal(result.actions[0].outcome,"would-cancel");assert.equal(result.actions[0].proofs.length,2);assert.deepEqual(f.state.cancels,[]);assert.deepEqual(f.state.journal,[]);
@@ -63,6 +64,15 @@ test("a queue/ref race in the second fence blocks cancellation",async()=>{
 test("incomplete run pages and queue topology fail closed",async()=>{
  const f=fixture();f.state.pagesComplete=false;await assert.rejects(call(f,{dryRun:false}),/INCOMPLETE_RUN_PAGE/);assert.deepEqual(f.state.cancels,[]);
  const g=fixture();g.api.getQueue=async()=>({repository:{databaseId:POLICY.repositoryId,nameWithOwner:POLICY.repository,mergeQueue:{entries:{nodes:[],totalCount:101,pageInfo:{hasNextPage:true}}}}});await assert.rejects(call(g,{dryRun:false}),/INCOMPLETE_QUEUE_PAGE/);assert.deepEqual(g.state.cancels,[]);
+});
+test("ungrouped queue entries carry no commits without failing the reap",async()=>{
+ const f=fixture();f.state.queueNodes=[node(sha("c"),sha("b"),20),{...ungrouped(),position:2},{...ungrouped(22),position:3}];
+ const r=await call(f,{dryRun:false});assert.equal(r.actions[0].outcome,"cancelled");assert.deepEqual(f.state.cancels,[1]);
+ for(const broken of [
+  {...ungrouped(),position:2,baseCommit:{oid:sha("c")}},
+  {...ungrouped(),position:2,headCommit:{oid:sha("c")}},
+  {...ungrouped(),position:2,state:"AWAITING_CHECKS"},
+ ]){const g=fixture();g.state.queueNodes=[node(sha("c"),sha("b"),20),broken];await assert.rejects(call(g,{dryRun:false}),/QUEUE_TOPOLOGY|UNKNOWN_QUEUE_HEAD/);assert.deepEqual(g.state.cancels,[]);}
 });
 test("unrelated events and refs are ignored",async()=>{
  const f=fixture();f.payload.workflow_run.event="pull_request";assert.equal((await call(f)).ignored,"unrelated-event");
