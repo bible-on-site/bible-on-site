@@ -12,7 +12,7 @@
 import "server-only";
 
 import { query } from "../api-client";
-import type { ReadingMetric } from "./types";
+import type { ReadingMetric, ReadingProgressUnit } from "./types";
 
 interface MetricRow {
 	word_count: number | null;
@@ -25,6 +25,19 @@ function toMetric(row: MetricRow): ReadingMetric {
 	return {
 		wordCount: row.word_count,
 		estimatedSeconds: row.estimated_seconds,
+	};
+}
+
+interface UnitRow {
+	word_count: number;
+	cumulative_words: number;
+}
+
+function toUnit(key: string | null, row: UnitRow): ReadingProgressUnit {
+	return {
+		key,
+		wordCount: row.word_count,
+		cumulativeWords: row.cumulative_words,
 	};
 }
 
@@ -95,6 +108,24 @@ export async function getPerekMetric(
 	return row ? toMetric(row) : null;
 }
 
+/** Stored metrics keyed by perek id — one read for a whole sefer (#2607). */
+export async function getPerekMetrics(
+	perekIds: number[],
+): Promise<Map<number, ReadingMetric>> {
+	if (perekIds.length === 0) return new Map();
+	const placeholders = perekIds.map(() => "?").join(", ");
+	const rows = await orMetricMissing(
+		() =>
+			query<MetricRow & { perek_id: number }>(
+				`SELECT perek_id, ${METRIC_SELECT}
+				 FROM tanah_perek_metric WHERE perek_id IN (${placeholders})`,
+				perekIds,
+			),
+		[],
+	);
+	return new Map(rows.map((r) => [r.perek_id, toMetric(r)]));
+}
+
 /** Stored metrics keyed by article id for arbitrary id sets. */
 export async function getArticleMetrics(
 	articleIds: number[],
@@ -161,4 +192,147 @@ export async function getEntryMetric(
 	);
 	const [row] = rows;
 	return row ? toMetric(row) : null;
+}
+
+/* ── Ordered progress units (word-weighted reading-position, #2607) ── */
+
+const UNIT_SELECT = "word_count, cumulative_words";
+
+/**
+ * Stored per-pasuk units for one perek, in canonical order. Keys are pasuk
+ * numbers so a GUI maps `#pasuk-N` / `[data-sefer-pasuk]` elements to rows.
+ */
+export async function getPerekProgressUnits(
+	perekId: number,
+): Promise<ReadingProgressUnit[]> {
+	const rows = await orMetricMissing(
+		() =>
+			query<UnitRow & { pasuk: number }>(
+				`SELECT pasuk, ${UNIT_SELECT} FROM tanah_perek_pasuk_metric
+				 WHERE perek_id = ? ORDER BY pasuk`,
+				[perekId],
+			),
+		[],
+	);
+	return rows.map((r) => toUnit(String(r.pasuk), r));
+}
+
+/**
+ * Stored per-pasuk units for many perakim in one query — the Sefer view
+ * renders every perek of the book at once, so one batched read replaces a
+ * request per page.
+ */
+export async function getPerekProgressUnitsBatch(
+	perekIds: number[],
+): Promise<Map<number, ReadingProgressUnit[]>> {
+	if (perekIds.length === 0) return new Map();
+	const placeholders = perekIds.map(() => "?").join(", ");
+	const rows = await orMetricMissing(
+		() =>
+			query<UnitRow & { perek_id: number; pasuk: number }>(
+				`SELECT perek_id, pasuk, ${UNIT_SELECT} FROM tanah_perek_pasuk_metric
+				 WHERE perek_id IN (${placeholders})
+				 ORDER BY perek_id, pasuk`,
+				perekIds,
+			),
+		[],
+	);
+	const byPerek = new Map<number, ReadingProgressUnit[]>();
+	for (const row of rows) {
+		const list = byPerek.get(row.perek_id) ?? [];
+		list.push(toUnit(String(row.pasuk), row));
+		byPerek.set(row.perek_id, list);
+	}
+	return byPerek;
+}
+
+/**
+ * Stored readable-block units for one article, in document order. Blocks
+ * carry no element key — the GUI locates the i-th non-empty readable
+ * segment inside the rendered body and aligns it with `block_idx` i.
+ */
+export async function getArticleProgressUnits(
+	articleId: number,
+): Promise<ReadingProgressUnit[]> {
+	const rows = await orMetricMissing(
+		() =>
+			query<UnitRow & { block_idx: number }>(
+				`SELECT block_idx, ${UNIT_SELECT} FROM tanah_article_metric_block
+				 WHERE article_id = ? ORDER BY block_idx`,
+				[articleId],
+			),
+		[],
+	);
+	return rows.map((r) => toUnit(null, r));
+}
+
+/**
+ * Stored readable-block units for one Tanahpedia entry, same positional
+ * contract as {@link getArticleProgressUnits}.
+ */
+export async function getEntryProgressUnits(
+	entryId: string,
+): Promise<ReadingProgressUnit[]> {
+	const rows = await orMetricMissing(
+		() =>
+			query<UnitRow & { block_idx: number }>(
+				`SELECT block_idx, ${UNIT_SELECT} FROM tanahpedia_entry_metric_block
+				 WHERE entry_id = ? ORDER BY block_idx`,
+				[entryId],
+			),
+		[],
+	);
+	return rows.map((r) => toUnit(null, r));
+}
+
+/**
+ * Stored note units for one perush on one perek, ordered by
+ * (pasuk, note_idx). Keys are `pasuk:noteIdx` so a GUI maps
+ * `[data-perush-pasuk][data-perush-note]` elements to rows.
+ */
+export async function getPerushProgressUnits(
+	perushId: number,
+	perekId: number,
+): Promise<ReadingProgressUnit[]> {
+	const rows = await orMetricMissing(
+		() =>
+			query<UnitRow & { pasuk: number; note_idx: number }>(
+				`SELECT pasuk, note_idx, ${UNIT_SELECT} FROM tanah_note_metric
+				 WHERE perush_id = ? AND perek_id = ?
+				 ORDER BY pasuk, note_idx`,
+				[perushId, perekId],
+			),
+		[],
+	);
+	return rows.map((r) => toUnit(`${r.pasuk}:${r.note_idx}`, r));
+}
+
+/**
+ * Stored note units for several perushim on one perek in a single query —
+ * the Sefer commentary pane shows every selected perush at once and each
+ * rendered note element maps to its own stored unit.
+ */
+export async function getPerushProgressUnitsBatch(
+	perekId: number,
+	perushIds: number[],
+): Promise<Map<number, ReadingProgressUnit[]>> {
+	if (perushIds.length === 0) return new Map();
+	const placeholders = perushIds.map(() => "?").join(", ");
+	const rows = await orMetricMissing(
+		() =>
+			query<UnitRow & { perush_id: number; pasuk: number; note_idx: number }>(
+				`SELECT perush_id, pasuk, note_idx, ${UNIT_SELECT} FROM tanah_note_metric
+				 WHERE perek_id = ? AND perush_id IN (${placeholders})
+				 ORDER BY perush_id, pasuk, note_idx`,
+				[perekId, ...perushIds],
+			),
+		[],
+	);
+	const byPerush = new Map<number, ReadingProgressUnit[]>();
+	for (const row of rows) {
+		const list = byPerush.get(row.perush_id) ?? [];
+		list.push(toUnit(`${row.pasuk}:${row.note_idx}`, row));
+		byPerush.set(row.perush_id, list);
+	}
+	return byPerush;
 }

@@ -15,10 +15,11 @@
         <Border.Shadow>
             <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
         </Border.Shadow>
-        <!-- Rows: title (top) → optional perek source → author (flexible, bottom-aligned so it
-             sits directly above the footer) → footer. The * row absorbs title height differences
-             so the author/footer block is anchored identically on every card in a grid row. -->
-        <Grid RowDefinitions="Auto,Auto,*,Auto"
+        <!-- Rows: title (top) → reading-time badge → optional perek source → author (flexible,
+             bottom-aligned so it sits directly above the footer) → footer. The * row absorbs
+             title height differences so the author/footer block is anchored identically on
+             every card in a grid row. -->
+        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto"
               Padding="12">
             <!-- Short Abstract (RTL: right-aligned) -->
             <Label Grid.Row="0"
@@ -29,10 +30,20 @@
                    TextColor="{AppThemeBinding Light=Black, Dark=White}"
                    LineBreakMode="TailTruncation"
                    MaxLines="3"
-                   Margin="0,0,0,8"/>
+                   Margin="0,0,0,4"/>
+
+            <!-- Reading-time badge over the full article body (issue #2607);
+                 hidden when the metric is unknown or verified-empty. -->
+            <Label Grid.Row="1"
+                   Text="{Binding Article.ReadingTimeBadge, Source={x:Reference ThisCard}}"
+                   IsVisible="{Binding Article.ReadingTimeBadge, Source={x:Reference ThisCard}, Converter={StaticResource StringNotEmptyConverter}}"
+                   FontSize="10"
+                   AutomationId="ArticleReadingTimeBadge"
+                   TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
+                   Margin="0,0,0,4"/>
 
             <!-- Perek Source (only shown when ShowPerekSource is true, e.g., rabbi articles) -->
-            <Label Grid.Row="1"
+            <Label Grid.Row="2"
                    Text="{Binding Article.PerekDisplayName, Source={x:Reference ThisCard}}"
                    FontSize="11"
                    TextColor="{AppThemeBinding Light=Black, Dark=White}"
@@ -41,7 +52,7 @@
 
             <!-- Author Info (RTL: rabbi name on a full-width row, avatar centered on its own
                  row below so short names never sit next to a truncated "..."). -->
-            <VerticalStackLayout Grid.Row="2"
+            <VerticalStackLayout Grid.Row="3"
                                  VerticalOptions="End"
                                  Spacing="4">
                 <Label Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
@@ -75,7 +86,7 @@
             </VerticalStackLayout>
 
             <!-- Read indicator pinned to the card bottom (RTL: left side) -->
-            <HorizontalStackLayout Grid.Row="3"
+            <HorizontalStackLayout Grid.Row="4"
                                    FlowDirection="RightToLeft"
                                    HorizontalOptions="End"
                                    Spacing="4"

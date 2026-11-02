@@ -14,6 +14,7 @@ import {
 	normalizeAbstractHtml,
 	sortAuthorArticles,
 } from "../../../../lib/authors/articles-grid";
+import { ReadingTime } from "../../../components/ReadingTime";
 import styles from "./author-articles-table.module.css";
 
 const SORTABLE_COLUMNS: { key: ArticleSortKey; label: string }[] = [
@@ -145,6 +146,10 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 											}}
 										/>
 									)}
+									<ReadingTime
+										estimatedSeconds={row.metric?.estimatedSeconds}
+										className={styles.abstractReadingTime}
+									/>
 								</td>
 							</tr>
 						))}

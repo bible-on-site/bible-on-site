@@ -92,6 +92,14 @@
 	flex-shrink: 0;
 }
 
+/* Perek reading-time estimate inside the book page header (#2607). */
+.pageHeaderMetric {
+	flex-shrink: 0;
+	font-size: 0.7rem;
+	font-weight: 400;
+	color: #8b7355;
+}
+
 .perekHeader {
 	font-size: 0.9rem;
 	font-weight: 600;

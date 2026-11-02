@@ -155,6 +155,20 @@ args = [
     "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite",
 ]
 
+[tasks.apply-note-metrics]
+description = "Add/refresh the shared reading-metrics tables inside the shipped v2 notes SQLite (no MongoDB)"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "note-metrics",
+    "--input",
+    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+]
+
 [tasks.generate-perushim-view-mysql]
 description = "Generate perushim notes as MySQL SQL file"
 cwd = "./sefaria/pipelines/perushim-view"
