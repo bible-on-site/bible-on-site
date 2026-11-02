@@ -432,6 +432,7 @@ describe("[slug] page", () => {
 			});
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [
@@ -637,7 +638,9 @@ describe("[slug] page", () => {
 
 			expect(screen.getByText("מאמר לדוגמא")).toBeTruthy();
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
-			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+			// The unified command row (#2786): a real link back to the perek route.
+			const back = screen.getByRole("link", { name: "חזרה לפרק" });
+			expect(back.getAttribute("href")).toBe("/929/5");
 			expect(container.querySelector("#article-view h1")?.textContent).toBe(
 				"מאמר לדוגמא",
 			);
@@ -669,6 +672,42 @@ describe("[slug] page", () => {
 			expect(screen.getByTestId("stuma")).toBeTruthy();
 			// maqaf trailing character: "מלה־" — should not add space after it
 			expect(screen.getByText("מלה־")).toBeTruthy();
+		});
+
+		it("renders the unified command row with return and share (#2786)", async () => {
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			const { container } = render(jsx);
+
+			const articleView = container.querySelector("#article-view");
+			expect(articleView).not.toBeNull();
+			// The command row trails the article: the main content stays on
+			// top on the standalone route (review ask).
+			const group = within(articleView as HTMLElement).getByRole("group", {
+				name: "פעולות מאמר",
+			});
+			expect(articleView?.lastElementChild).toBe(group.parentElement);
+			const header = articleView?.querySelector("header");
+			expect(
+				header != null &&
+					!!(header.compareDocumentPosition(group) &
+						Node.DOCUMENT_POSITION_FOLLOWING),
+			).toBe(true);
+			expect(
+				within(group)
+					.getByRole("link", { name: "חזרה לפרק" })
+					.getAttribute("href"),
+			).toBe("/929/5");
+			expect(within(group).getByRole("button", { name: "שתף" })).toBeTruthy();
+			// No fullscreen command on a route that is already a full page.
+			expect(
+				within(group).queryByRole("button", { name: "מסך מלא" }),
+			).toBeNull();
+			// The obsolete bottom-only back row is gone.
+			expect(
+				within(articleView as HTMLElement).queryByText("חזרה לפרק →"),
+			).toBeNull();
 		});
 
 		it("calls notFound when perekId is NaN", async () => {
@@ -722,6 +761,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -754,6 +794,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -789,6 +830,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [
@@ -820,6 +862,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -847,6 +890,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: rawNote }],
@@ -870,6 +914,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: "דעת זקנים",
 				parshanName: "בעלי התוספות",
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -926,6 +971,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "note" }],
@@ -958,6 +1004,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -990,6 +1037,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],

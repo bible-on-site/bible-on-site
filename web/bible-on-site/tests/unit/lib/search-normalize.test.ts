@@ -4,6 +4,7 @@
 import {
 	htmlToPlainText,
 	normalizeSearchText,
+	normalizeWithMap,
 	searchTokens,
 } from "@/lib/search/normalize";
 
@@ -27,6 +28,23 @@ describe("normalizeSearchText", () => {
 
 	it("keeps digits", () => {
 		expect(normalizeSearchText("פרק 32")).toBe("פרק 32");
+	});
+
+	it("preserves per-code-point Greek, titlecase and Roman-numeral casing", () => {
+		expect(normalizeSearchText("ΟΣ ΣΣ ǅ Ⅰ Ⅱ")).toBe("οσ σσ ǆ ⅰ ⅱ");
+		expect(normalizeSearchText("א\u20ddב \ud800x\udc00")).toBe("א ב x");
+	});
+
+	it("agrees with mapped normalization across every Unicode scalar", () => {
+		for (let first = 0; first <= 0x10ffff; first += 256) {
+			const points: string[] = [];
+			for (let code = first; code < Math.min(first + 256, 0x110000); code++) {
+				if (code < 0xd800 || code > 0xdfff)
+					points.push(String.fromCodePoint(code));
+			}
+			const text = `ΟΣ Ⅰ ǅ ${points.join("")} בְּרֵאשִׁית`;
+			expect(normalizeSearchText(text)).toBe(normalizeWithMap(text).normalized);
+		}
 	});
 
 	it("trims and returns empty for punctuation-only input", () => {
@@ -66,9 +84,7 @@ describe("htmlToPlainText", () => {
 		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).not.toContain(
 			"<script",
 		);
-		expect(
-			htmlToPlainText("א<<b>b>ב"),
-		).not.toContain("<");
+		expect(htmlToPlainText("א<<b>b>ב")).not.toContain("<");
 	});
 
 	it("decodes named and numeric entities", () => {
