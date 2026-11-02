@@ -436,6 +436,18 @@ jobs:
             echo "version=${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Linux images include root-owned SDK directories; tar must be able to
+      # restore their metadata as the runner, just like the Android SDK below.
+      - name: Make cached MAUI workload packs writable by the runner
+        if: inputs.mode != 'prebuilt-run' && runner.os == 'Linux'
+        run: |
+          : "${DOTNET_ROOT:?DOTNET_ROOT is required}"
+          sdk_owner="$(id -u):$(id -g)"
+          for component in packs metadata sdk-manifests template-packs; do
+            sudo mkdir -p "$DOTNET_ROOT/$component"
+            sudo chown -R "$sdk_owner" "$DOTNET_ROOT/$component"
+          done
+
       # The workload set is a multi-GB silent NuGet download (~6 min cold in
       # run 38438842693); restored packs turn the install into a verify no-op.
       # Exact key only — a partial restore is worse than downloading.

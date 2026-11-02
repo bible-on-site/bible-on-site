@@ -11,7 +11,7 @@ on:
         type: string
         default: ''
       image_arch:
-        description: Native architecture; ARM64 is enabled only for API
+        description: Native API or website image architecture
         required: false
         type: string
         default: amd64
@@ -70,7 +70,7 @@ jobs:
         run: |
           case "$IMAGE_ARCH" in
             amd64) test "$(uname -m)" = x86_64 ;;
-            arm64) test "$IS_CARGO" = true; test "$(uname -m)" = aarch64 ;;
+            arm64) test "$IS_CARGO" = true || test "$IS_NPM" = true; test "$(uname -m)" = aarch64 ;;
             *) echo 'Unsupported image architecture'; exit 1 ;;
           esac
 
@@ -102,8 +102,8 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ env.MODULE_NAME }}-${{ hashFiles(format('{0}/bun.lock', env.MODULE_DIRECTORY)) }}
-          restore-keys: ${{ runner.os }}-bun-${{ env.MODULE_NAME }}-
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ env.MODULE_NAME }}-${{ hashFiles(format('{0}/bun.lock', env.MODULE_DIRECTORY)) }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-bun-${{ env.MODULE_NAME }}-
 
       - name: Install dev dependencies
         if: ${{ env.IS_NPM == 'true' }}
@@ -204,31 +204,26 @@ jobs:
 
           echo "✓ Fetched DB_URL from SSM and security group $RDS_SG from RDS"
 
-      - name: Get runner public IP
+      - name: Grant owned runner access to RDS
         if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
-        id: runner_ip
-        run: echo "ip=$(curl -s ifconfig.me)" >> $GITHUB_OUTPUT
-
-      - name: Whitelist runner IP in RDS security group
-        if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
-        run: |
-          echo "Adding runner IP ${{ steps.runner_ip.outputs.ip }} to RDS security group ${{ steps.rds_creds.outputs.rds_sg }}..."
-          aws ec2 authorize-security-group-ingress \
-            --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
-            --protocol tcp --port 3306 \
-            --cidr ${{ steps.runner_ip.outputs.ip }}/32 \
-            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Source,Value=github-actions-build},{Key=RunId,Value=${{ github.run_id }}}]'
+        env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          RDS_BUILD_ACCESS_LEASE: ${{ runner.temp }}/rds-build-access.json
+          RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
+        run: node devops/github/ci/rds-build-access.mjs grant
 
       - name: Test RDS connectivity
         if: ${{ env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        env:
+          PROD_DB_URL: ${{ steps.rds_creds.outputs.db_url }}
         run: |
           # Wait for security group rule to propagate
           sleep 10
           # Extract host from DB_URL
-          DB_HOST=$(echo "${{ steps.rds_creds.outputs.db_url }}" | sed -E 's|mysql://[^@]+@([^:]+):.*|\1|')
+          DB_HOST=$(node devops/github/ci/rds-build-access.mjs host)
           echo "Testing connectivity to $DB_HOST:3306..."
           # Test TCP connection
-          timeout 30 bash -c "until nc -z $DB_HOST 3306; do echo 'Waiting for RDS...'; sleep 2; done"
+          timeout 30 bash -c 'until nc -z "$1" 3306; do echo "Waiting for RDS..."; sleep 2; done' _ "$DB_HOST"
           echo "✓ RDS connectivity verified"
       # --- End RDS Access Setup ---
 
@@ -274,9 +269,16 @@ jobs:
           set -euo pipefail
           read -r DB_HOST DB_PORT DB_USER DB_NAME <<<"$(python3 -c 'from urllib.parse import urlparse; import os; u=urlparse(os.environ["PROD_DB_URL"]); print(u.hostname, u.port or 3306, u.username, u.path.lstrip("/").split("?")[0])')"
           export MYSQL_PWD="$(python3 -c 'from urllib.parse import urlparse, unquote; import os; print(unquote(urlparse(os.environ["PROD_DB_URL"]).password or ""))')"
+          # setup-mysql's client defaults trust its local CA. RDS needs its own
+          # CA bundle and hostname verification, without changing local imports.
+          RDS_CA_BUNDLE="$RUNNER_TEMP/rds-ca-bundle.pem"
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem \
+            --output "$RDS_CA_BUNDLE"
           # parshan/perush/note are redeployed from the manifest below, so the
           # dump carries every static, tanahpedia and metrics table as it runs on prod.
           mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
+            --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
             --single-transaction --quick --no-tablespaces --column-statistics=0 \
             --set-gtid-purged=OFF --default-character-set=utf8mb4 \
             --databases "$DB_NAME" \
@@ -288,11 +290,13 @@ jobs:
 
       - name: Replay the deploy manifest on the local dump
         if: ${{ env.IS_NPM == 'true' && steps.dump_prod.outputs.local_db_url != '' }}
+        env:
+          LOCAL_DB_URL: ${{ steps.dump_prod.outputs.local_db_url }}
         run: |
           set -euo pipefail
           python3 -m pip install --quiet pymysql
           python3 devops/deploy/data-deploy/validate_lambda_parser.py \
-            --db "${{ steps.dump_prod.outputs.local_db_url }}"
+            --db "$LOCAL_DB_URL"
       # --- End Local SSG database ---
 
       - name: Merge and audit approved recitation timings
@@ -307,13 +311,15 @@ jobs:
         run: |
           REPOSITORY=$(aws ecr describe-repositories --repository-names bible-on-site --query 'repositories[0].repositoryUri' --output text)
           aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY%%/*}"
-          CACHE_REF="$REPOSITORY:deps-cache"
+          CACHE_TAG_NAME=deps-cache
+          if [ "$IMAGE_ARCH" = arm64 ]; then CACHE_TAG_NAME=deps-cache-arm64; fi
+          CACHE_REF="$REPOSITORY:$CACHE_TAG_NAME"
           echo "ref=$CACHE_REF" >> "$GITHUB_OUTPUT"
           CACHE_ARGS=()
-          CACHE_TAG=$(aws ecr describe-images --repository-name bible-on-site --filter tagStatus=TAGGED --query 'imageDetails[?contains(imageTags, `deps-cache`)].imageDigest | [0]' --output text)
+          CACHE_TAG=$(aws ecr describe-images --repository-name bible-on-site --filter tagStatus=TAGGED --query "imageDetails[?contains(imageTags, '$CACHE_TAG_NAME')].imageDigest | [0]" --output text)
           if [ "$CACHE_TAG" != None ]; then CACHE_ARGS+=(--cache-from "type=registry,ref=$CACHE_REF"); fi
           docker buildx build --builder default --network=host --progress=plain \
-            --target deps --build-arg BUILDKIT_INLINE_CACHE=1 --load \
+            --target deps --platform "linux/$IMAGE_ARCH" --build-arg BUILDKIT_INLINE_CACHE=1 --load \
             "${CACHE_ARGS[@]}" -f web/bible-on-site/Dockerfile -t "$CACHE_REF" web
 
       - name: Dockerize ${{ env.MODULE_NAME_CAPITALIZED }}
@@ -323,11 +329,8 @@ jobs:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           CACHE_ARGS=()
-          LABEL_ARGS=()
-          if [ "$IS_CARGO" = true ]; then
-            LABEL_ARGS+=(--label "org.opencontainers.image.revision=$GITHUB_SHA"
-              --label "org.opencontainers.image.version=${{ steps.get_module_version.outputs.MODULE_VERSION }}")
-          fi
+          LABEL_ARGS=(--label "org.opencontainers.image.revision=$GITHUB_SHA"
+            --label "org.opencontainers.image.version=${{ steps.get_module_version.outputs.MODULE_VERSION }}")
           if [ "$IS_NPM" = true ]; then
             # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
@@ -400,23 +403,23 @@ jobs:
             -o ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_PATH }}
 
       # --- RDS Cleanup (runs even if build fails) ---
-      - name: Remove runner IP from RDS security group
-        if: ${{ always() && env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' && steps.runner_ip.outputs.ip != '' }}
-        run: |
-          echo "Removing runner IP ${{ steps.runner_ip.outputs.ip }} from RDS security group..."
-          aws ec2 revoke-security-group-ingress \
-            --group-id ${{ steps.rds_creds.outputs.rds_sg }} \
-            --protocol tcp --port 3306 \
-            --cidr ${{ steps.runner_ip.outputs.ip }}/32
+      - name: Remove only this build's RDS access rule
+        if: ${{ always() && env.IS_NPM == 'true' && steps.rds_creds.outputs.rds_sg != '' }}
+        env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          RDS_BUILD_ACCESS_LEASE: ${{ runner.temp }}/rds-build-access.json
+          RDS_SECURITY_GROUP: ${{ steps.rds_creds.outputs.rds_sg }}
+        run: node devops/github/ci/rds-build-access.mjs cleanup
       # --- End RDS Cleanup ---
       - name: GZip Docker Image
         working-directory: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
         run: |
           gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
 
-      # Pre-merge (non-push) runs validate the build only; release consumes master artifacts.
+      # Website PR candidates are retained for native qualification, not release.
+      # Release consumes only the artifacts bound to the master push CI run.
       - name: Store Docker Image
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || env.IS_NPM == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}

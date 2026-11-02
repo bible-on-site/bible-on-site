@@ -325,6 +325,199 @@ public class TikkunFlowLayoutTests
         }
     }
 
+    public class LetterCap
+    {
+        // A column wide enough that width never drives the wrap: every break
+        // in these tests comes from the 34-letter budget alone.
+        private const float WideWidth = 100_000f;
+
+        private static string HebrewRun(int letters) => new('א', letters);
+
+        private static int LettersOnLine(TikkunFlowLayout.Result result, int line) =>
+            LineWords(result, line).Sum(w => TikkunFlowLayout.HebrewLetters(w.Text));
+
+        [Fact]
+        public void fits_exactly_thirty_four_letters_on_one_line()
+        {
+            var result = TikkunFlowLayout.Layout(
+                Words(HebrewRun(30), HebrewRun(4)), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(1);
+            LettersOnLine(result, 0).Should().Be(TikkunFlowLayout.MaxLineLetters);
+        }
+
+        [Fact]
+        public void wraps_the_word_that_would_reach_thirty_five_letters()
+        {
+            // 34 + the next word's single letter would make 35 → it moves whole
+            // to the next line even though width is unlimited.
+            var result = TikkunFlowLayout.Layout(
+                Words(HebrewRun(30), HebrewRun(4), "ב"), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 0).Select(w => w.Text)
+                .Should().Equal(HebrewRun(30), HebrewRun(4));
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("ב");
+        }
+
+        [Fact]
+        public void ignores_niqqud_and_taamim_while_counting()
+        {
+            // The pointed word carries six base letters under niqqud and a taam.
+            // Twenty-eight unpointed letters plus six reaches the cap exactly,
+            // so the next word wraps (had marks counted, it would not fit).
+            var pointed = "בְּרֵאשִׁ֖ית";
+            pointed.Length.Should().BeGreaterThan(6);
+            TikkunFlowLayout.HebrewLetters(pointed).Should().Be(6);
+
+            var result = TikkunFlowLayout.Layout(
+                Words(HebrewRun(28), pointed, "ב"), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 0).Select(w => w.Text).Should().Equal(HebrewRun(28), pointed);
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("ב");
+        }
+
+        [Fact]
+        public void counts_final_forms_as_letters()
+        {
+            // ךםןףץ — five sofit letters; 30 + 5 = 35 → the sofit word wraps.
+            var result = TikkunFlowLayout.Layout(
+                Words(HebrewRun(30), "ךםןףץ"), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LettersOnLine(result, 0).Should().Be(30);
+            LettersOnLine(result, 1).Should().Be(5);
+        }
+
+        [Fact]
+        public void maqaf_groups_count_their_letters_but_stay_unsplit()
+        {
+            // The maqaf-joined pair carries four letters and counts as one
+            // layout unit — with the 33-letter word it exceeds the budget, so
+            // the whole group wraps unsplit.
+            const string maqafGroup = "אָב־אָב";
+            TikkunFlowLayout.HebrewLetters(maqafGroup).Should().Be(4);
+
+            var result = TikkunFlowLayout.Layout(
+                Words(HebrewRun(33), maqafGroup), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 1).Should().ContainSingle()
+                .Which.Text.Should().Be(maqafGroup);
+        }
+
+        [Fact]
+        public void spaces_punctuation_and_numerals_add_zero()
+        {
+            TikkunFlowLayout.HebrewLetters("(קְרִי: 12").Should().Be(3);
+        }
+
+        [Fact]
+        public void keeps_an_unbreakable_overlong_word_intact_on_its_own_line()
+        {
+            // A 40-letter word exceeds the cap by itself — it must not split or
+            // drop, and the following word starts the next line.
+            var overlong = HebrewRun(40);
+            var result = TikkunFlowLayout.Layout(
+                Words(overlong, "בב"), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 0).Should().ContainSingle()
+                .Which.Text.Should().Be(overlong);
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("בב");
+        }
+
+        [Fact]
+        public void counts_pasuk_markers_and_qri_notes_toward_the_line()
+        {
+            // The pasuk-number marker and the qri-note label are rendered
+            // letters: 30-word + marker "יא" (2) + "(קרי:" (3) = 35 → the note
+            // wraps whole even though width is free.
+            var words = new List<TikkunWord>
+            {
+                new(HebrewRun(30), null, 1f, false),
+                new("יא", null, 14f / 18f, true),
+                new("(קְרִי:", null, 14f / 18f, false),
+            };
+
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 0).Select(w => w.Text).Should().Equal(HebrewRun(30), "יא");
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("(קְרִי:");
+        }
+
+        [Fact]
+        public void carries_the_count_across_repeated_pasuk_copies()
+        {
+            // שניים מקרא emits each pasuk's words twice inline: the second copy
+            // keeps counting on the same line instead of restarting.
+            var result = TikkunFlowLayout.Layout(
+                Words(HebrewRun(20), HebrewRun(20)), Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LettersOnLine(result, 0).Should().Be(20);
+            LettersOnLine(result, 1).Should().Be(20);
+        }
+
+        [Fact]
+        public void resets_the_budget_after_a_ptuha_break()
+        {
+            // {פ} ends the line after 30 letters; the next section starts a
+            // fresh line with a fresh budget, so 8 + 26 = 34 fits together
+            // (without the reset the accumulated 30 would split them).
+            var words = Words(HebrewRun(30), HebrewRun(8), HebrewRun(26));
+            words.Insert(1, TikkunWord.PtuhaBreak);
+
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LineWords(result, 1).Select(w => w.Text)
+                .Should().Equal(HebrewRun(8), HebrewRun(26));
+        }
+
+        [Fact]
+        public void stuma_gap_itself_adds_no_letters()
+        {
+            // {ס} between two words on one line: the gap is invisible layout,
+            // so 30 + gap + 4 still fits the budget.
+            var words = Words(HebrewRun(30), HebrewRun(4));
+            words.Insert(1, TikkunWord.StumaGap);
+
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(1);
+            LettersOnLine(result, 0).Should().Be(34);
+        }
+
+        [Fact]
+        public void the_cap_still_wraps_a_line_that_width_alone_would_extend()
+        {
+            // Width would happily take every word — the letter budget is what
+            // ends the line: six 5-letter words fill 30, the seventh (→ 35)
+            // and the rest move whole to the next line.
+            var result = TikkunFlowLayout.Layout(
+                Words("אאאאא", "בבבבב", "גגגגג", "דדדדד", "ההההה",
+                    "ווווו", "זזזזז", "חח"),
+                Measure, BaseFontSize, WideWidth, LineHeightFactor);
+
+            result.LineCount.Should().Be(2);
+            LettersOnLine(result, 0).Should().Be(30);
+            LineWords(result, 1).Select(w => w.Text).Should().Equal("זזזזז", "חח");
+        }
+    }
+
     public class MixedSections
     {
         [Fact]
@@ -362,6 +555,178 @@ public class TikkunFlowLayoutTests
             var next = LineWords(result, 1);
             next.Select(w => w.Text).Should().Equal("ג", "cc");
             RightEdge(next[0]).Should().BeApproximately(200, 0.01f);
+        }
+    }
+
+    /// <summary>
+    /// #2839 contract against the shipped canon: the tracked tanah_view asset is
+    /// the exact input the flow renders, so these checks prove real pesukim —
+    /// qri notes, maqaf chains, שניים מקרא copies and section tokens included —
+    /// stay within the letter budget without losing or duplicating a word.
+    /// Regenerate the asset with
+    /// `cd data && cargo make generate-tanah-view-sqlite-from-json`.
+    /// </summary>
+    public class PackagedScripture
+    {
+        private const string DbName = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
+
+        private sealed class SegmentRow
+        {
+            [SQLite.Column("perek_id")] public int PerekId { get; set; }
+            [SQLite.Column("pasuk_id")] public int PasukId { get; set; }
+            [SQLite.Column("segment_type")] public string SegmentType { get; set; } = string.Empty;
+            [SQLite.Column("value")] public string? Value { get; set; }
+            [SQLite.Column("qri_ktiv_offset")] public int? QriKtivOffset { get; set; }
+        }
+
+        private static string? FindPackagedDbPath()
+        {
+            // Same project-root walk as MasoraDataServiceTests.
+            var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+            while (dir != null && !Directory.Exists(Path.Join(dir.FullName, "BibleOnSite")))
+            {
+                dir = dir.Parent;
+            }
+
+            return dir == null
+                ? null
+                : Path.Join(dir.FullName, "BibleOnSite", "Resources", "Raw", DbName);
+        }
+
+        private static async Task<List<SegmentRow>> LoadAllSegmentsAsync()
+        {
+            var dbPath = FindPackagedDbPath();
+            Assert.SkipUnless(dbPath != null && File.Exists(dbPath), "Packaged tanah_view database not present");
+
+            var db = new SQLite.SQLiteAsyncConnection(dbPath, SQLite.SQLiteOpenFlags.ReadOnly);
+            try
+            {
+                return await db.QueryAsync<SegmentRow>(
+                    "SELECT s.perek_id AS perek_id, s.pasuk_id AS pasuk_id, " +
+                    "s.segment_type AS segment_type, v.value AS value, " +
+                    "o.qri_ktiv_offset AS qri_ktiv_offset " +
+                    "FROM tanah_pasuk_segment s " +
+                    "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
+                    "LEFT JOIN tanah_pasuk_segment_qri_ktiv_offset o ON o.id = s.id " +
+                    "ORDER BY s.perek_id, s.pasuk_id, s.id");
+            }
+            finally
+            {
+                await db.CloseAsync();
+            }
+        }
+
+        private static List<Pasuk> ToPesukim(IEnumerable<SegmentRow> rows)
+        {
+            var pesukim = new List<Pasuk>();
+            List<PasukSegment>? segments = null;
+            var current = -1;
+            foreach (var row in rows)
+            {
+                if (row.PasukId != current)
+                {
+                    current = row.PasukId;
+                    segments = [];
+                    pesukim.Add(new Pasuk { PasukNum = current, Text = string.Empty, Segments = segments });
+                }
+
+                segments!.Add(new PasukSegment
+                {
+                    Type = row.SegmentType switch
+                    {
+                        "ktiv" => SegmentType.Ktiv,
+                        "ptuha" => SegmentType.Ptuha,
+                        "stuma" => SegmentType.Stuma,
+                        _ => SegmentType.Qri,
+                    },
+                    Value = row.Value ?? string.Empty,
+                    PairedOffset = row.QriKtivOffset,
+                });
+            }
+
+            return pesukim;
+        }
+
+        private static List<List<TikkunFlowLayout.PlacedWord>> Lines(
+            TikkunFlowLayout.Result result, float lineHeight) =>
+            result.Words
+                .GroupBy(w => (int)Math.Round(w.Y / lineHeight))
+                .OrderBy(g => g.Key)
+                .Select(g => g.ToList())
+                .ToList();
+
+        [Fact]
+        public async Task bereshit_yud_shnayim_mikra_caps_every_line_at_34_letters()
+        {
+            // The reported flow: בראשית י (perek_id 10) in שניים מקרא. A column
+            // far wider than the cap isolates the letter budget as the only
+            // wrap driver — width would otherwise pack ~5× more.
+            var rows = await LoadAllSegmentsAsync();
+            var pesukim = ToPesukim(rows.Where(r => r.PerekId == 10));
+            pesukim.Should().NotBeEmpty();
+
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true, hideMarks: false);
+            var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                maxWidth: 1_000_000, LineHeightFactor);
+
+            var lines = Lines(result, LineHeight);
+            lines.Should().NotBeEmpty();
+            lines.Select(l => l.Sum(w => TikkunFlowLayout.HebrewLetters(w.Text)))
+                .Should().OnlyContain(count => count <= TikkunFlowLayout.MaxLineLetters,
+                    "no rendered line may exceed the 34-Hebrew-letter cap");
+            // Every input word landed once, in order — cap wrapping must never
+            // drop, split or duplicate text.
+            result.Words.Select(w => w.Text)
+                .Should().Equal(words.Where(w => w.Kind == TikkunWordKind.Text).Select(w => w.Text));
+        }
+
+        [Fact]
+        public async Task every_shipped_word_fits_the_cap_so_the_unbreakable_exception_never_fires()
+        {
+            // The >34-letter unbreakable-word exception is documented defensive
+            // behavior; shipped scripture (incl. maqaf-joined layout units)
+            // must never produce one. Guards both marked and unmarked builds.
+            var rows = await LoadAllSegmentsAsync();
+            var pesukim = ToPesukim(rows);
+            pesukim.Should().NotBeEmpty();
+
+            foreach (var hideMarks in new[] { false, true })
+            {
+                var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true, hideMarks);
+                var longest = words.Where(w => w.Kind == TikkunWordKind.Text)
+                    .Select(w => TikkunFlowLayout.HebrewLetters(w.Text))
+                    .Max();
+                longest.Should().BeLessThanOrEqualTo(TikkunFlowLayout.MaxLineLetters,
+                    $"hideMarks={hideMarks}: no real word may force the unbreakable exception");
+            }
+        }
+
+        [Fact]
+        public async Task every_line_of_every_perek_stays_within_the_cap()
+        {
+            // Whole-canon sweep: every emitted line of every perek, marked and
+            // unmarked, honors the budget — the flow's only input is this data.
+            var rows = await LoadAllSegmentsAsync();
+            var byPerek = rows.GroupBy(r => r.PerekId);
+
+            foreach (var perek in byPerek)
+            {
+                var pesukim = ToPesukim(perek);
+                foreach (var hideMarks in new[] { false, true })
+                {
+                    var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true, hideMarks);
+                    var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                        maxWidth: 1_000_000, LineHeightFactor);
+
+                    Lines(result, LineHeight)
+                        .Select(l => l.Sum(w => TikkunFlowLayout.HebrewLetters(w.Text)))
+                        .Should().OnlyContain(count => count <= TikkunFlowLayout.MaxLineLetters,
+                            $"perek {perek.Key} hideMarks={hideMarks} emitted an over-cap line");
+                    result.Words.Select(w => w.Text)
+                        .Should().Equal(words.Where(w => w.Kind == TikkunWordKind.Text).Select(w => w.Text),
+                            $"perek {perek.Key} hideMarks={hideMarks} lost or duplicated words");
+                }
+            }
         }
     }
 }

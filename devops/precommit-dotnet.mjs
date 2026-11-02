@@ -44,12 +44,17 @@ const PROJECTS = {
  */
 const TEST_PROJECTS = {
 	"app/BibleOnSite.Tests": {
-		project: "app/BibleOnSite.Tests/BibleOnSite.Tests.csproj",
+		project: "BibleOnSite.Tests/BibleOnSite.Tests.csproj",
 		sources: ["app/BibleOnSite.Tests/", "app/BibleOnSite/"],
 	},
 	"app/devops.Tests": {
-		project: "app/devops.Tests/devops.Tests.csproj",
-		sources: ["app/devops.Tests/", "app/devops/"],
+		project: "devops.Tests/devops.Tests.csproj",
+		sources: [
+			"app/devops.Tests/",
+			"app/devops.Tests.Probes/",
+			"app/devops/",
+			"app/BibleOnSite.E2eCoverage/",
+		],
 	},
 };
 
@@ -57,6 +62,7 @@ const TEST_PROJECTS = {
 const GLOBAL_TRIGGERS = [
 	".editorconfig",
 	"global.json",
+	"app/global.json",
 	"app/Directory.Build.props",
 ];
 
@@ -84,14 +90,15 @@ if (runTests) {
 				console.info(`Skipping ${dir} — project not restored/built yet.`);
 			continue;
 		}
-		// Mirrors the TestUnit nuke task: Microsoft.Testing.Platform args go
-		// after `--`; non-integration categories only, same as CI.
+		// Run beside app/global.json so .NET selects Microsoft.Testing.Platform,
+		// using the same project option and unit-only filter as TestUnit.
 		const args = [
 			"dotnet",
 			"test",
+			"--project",
 			project,
 			"--no-restore",
-			"--nologo",
+			"--no-logo",
 			"-v",
 			"q",
 			"--",
@@ -99,7 +106,7 @@ if (runTests) {
 			"Category=Integration",
 		];
 		console.info(`Detected changes in ${dir} — running: ${args.join(" ")}`);
-		if (runIn(".", args) !== 0) failed = true;
+		if (runIn("app", args) !== 0) failed = true;
 	}
 } else {
 	for (const [dir, args] of Object.entries(PROJECTS)) {
