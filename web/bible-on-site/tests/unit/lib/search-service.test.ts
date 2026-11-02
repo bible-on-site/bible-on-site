@@ -84,6 +84,22 @@ describe("searchSite", () => {
 		jest.spyOn(console, "warn").mockImplementation(() => {});
 	});
 
+	it("lets scheduled database work start before synchronous scripture scoring", async () => {
+		const events: string[] = [];
+		mockNotes.mockImplementation(async () => {
+			events.push("database-start");
+			await Promise.resolve();
+			events.push("database-ready");
+			return [];
+		});
+		mockPerakim.mockImplementation(() => {
+			events.push("scripture");
+			return [];
+		});
+		await searchSite("בראשית", ["perek", "perush"]);
+		expect(events).toEqual(["database-start", "database-ready", "scripture"]);
+	});
+
 	afterEach(() => {
 		jest.restoreAllMocks();
 	});

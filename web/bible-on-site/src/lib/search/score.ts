@@ -31,6 +31,27 @@ export function editDistance(
 	if (Math.abs(left.length - right.length) > limit) {
 		return limit + 1;
 	}
+	if (limit === 1) {
+		// Medium-length terms only need one edit. Scan the matching suffix
+		// after the first mismatch without allocating a dynamic-programming
+		// matrix for every word in the corpus. Keep UTF-16 comparisons, as
+		// used by the general path and the native scorer.
+		let i = 0;
+		let j = 0;
+		let edits = 0;
+		while (i < left.length && j < right.length) {
+			if (left[i] === right[j]) {
+				i++;
+				j++;
+				continue;
+			}
+			if (edits === 1) return 2;
+			edits++;
+			if (left.length >= right.length) i++;
+			if (right.length >= left.length) j++;
+		}
+		return edits + (i < left.length || j < right.length ? 1 : 0);
+	}
 	let previous = Array.from({ length: right.length + 1 }, (_, i) => i);
 	let current = new Array<number>(right.length + 1);
 	for (let i = 1; i <= left.length; i++) {
