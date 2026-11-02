@@ -22,6 +22,7 @@ export function recitationResponse() {
 	const body = JSON.stringify(recitationPackage());
 	const etag = `"${createHash("sha256").update(body).digest("hex")}"`;
 	const response = { configuration, body, etag };
+	// nosemgrep: javascript.lang.correctness.no-stringify-keys -- the key is a fixed Symbol; serialized JSON is only the cached value.
 	server[responseKey] = response;
 	return response;
 }
