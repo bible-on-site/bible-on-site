@@ -12,6 +12,7 @@
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_alter_child_birth_order.sql",
+	"tanahpedia_alter_entry_revision_history.sql",
 	"tanahpedia_alter_saying_date.sql",
 	"tanahpedia_alter_mention_decoration.sql",
 	"tanahpedia_remove_simchat_torah_placeholder.sql",
@@ -21,5 +22,6 @@
 	"tanahpedia_jerusalem_occurrences_data.sql",
 	"tanah_reading_metrics_upgrade.sql",
 	"tanah_dedication_upgrade.sql",
-	"tanah_dedication_data.sql"
+	"tanah_dedication_data.sql",
+	"tanah_web_push_upgrade.sql"
 ]

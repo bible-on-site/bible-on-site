@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen, act } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 // Bypass unstable_cache — just run the wrapped function directly (#2731:
 // dedication loaders are tag-cached).
@@ -14,7 +14,9 @@ jest.mock("next/cache", () => ({
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 	Bookshelf: ({
 		onSeferClick,
-	}: { onSeferClick?: (name: string, from: number) => void }) => (
+	}: {
+		onSeferClick?: (name: string, from: number) => void;
+	}) => (
 		<button
 			data-testid="mock-bookshelf"
 			type="button"
@@ -66,46 +68,50 @@ describe("BookshelfModal", () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it("renders dialog when isOpen is true", () => {
-		render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
-		expect(
-			screen.getByRole("dialog", { hidden: true }),
-		).toBeInTheDocument();
+	it("renders dialog when isOpen is true", async () => {
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+		});
+		expect(screen.getByRole("dialog", { hidden: true })).toBeInTheDocument();
 		expect(screen.getByTestId("mock-bookshelf")).toBeInTheDocument();
 		expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled();
 	});
 
-	it("calls onClose when close button is clicked", () => {
+	it("calls onClose when close button is clicked", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
-		fireEvent.click(
-			screen.getByRole("button", { name: "סגור", hidden: true }),
-		);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
+		fireEvent.click(screen.getByRole("button", { name: "סגור", hidden: true }));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
-	it("calls onClose on Escape key", () => {
+	it("calls onClose on Escape key", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
 		act(() => {
-			document.dispatchEvent(
-				new KeyboardEvent("keydown", { key: "Escape" }),
-			);
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 		});
 		expect(onClose).toHaveBeenCalled();
 	});
 
-	it("calls onClose on backdrop click (click on dialog itself)", () => {
+	it("calls onClose on backdrop click (click on dialog itself)", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
 		const dialog = screen.getByRole("dialog", { hidden: true });
 		fireEvent.click(dialog);
 		expect(onClose).toHaveBeenCalled();
 	});
 
-	it("does NOT trigger backdrop close when clicking inside content", () => {
+	it("does NOT trigger backdrop close when clicking inside content", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
 		const content = screen
 			.getByRole("dialog", { hidden: true })
 			.querySelector(".content") as Element;
@@ -114,43 +120,52 @@ describe("BookshelfModal", () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
-	it("navigates to today's perek when clicking today's sefer (narrow)", () => {
-		render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+	it("navigates to today's perek when clicking today's sefer (narrow)", async () => {
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+		});
 		fireEvent.click(screen.getByTestId("mock-bookshelf"));
 		// Today is perek 5 (בראשית), clicked sefer is also בראשית → navigate to /929/5
 		expect(mockPush).toHaveBeenCalledWith("/929/5");
 	});
 
-	it("calls dialog.close when isOpen transitions to false", () => {
+	it("unmounts dialog when isOpen transitions to false", () => {
 		const { rerender } = render(
 			<BookshelfModal isOpen={true} onClose={jest.fn()} />,
 		);
 		expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled();
 		rerender(<BookshelfModal isOpen={false} onClose={jest.fn()} />);
+		expect(
+			screen.queryByRole("dialog", { hidden: true }),
+		).not.toBeInTheDocument();
 	});
 
-	it("calls onClose on Escape keydown on dialog element", () => {
+	it("calls onClose on Escape keydown on dialog element", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
 		const dialog = screen.getByRole("dialog", { hidden: true });
 		fireEvent.keyDown(dialog, { key: "Escape" });
 		expect(onClose).toHaveBeenCalled();
 	});
 
-	it("ignores non-Escape document keydown", () => {
+	it("ignores non-Escape document keydown", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
 		act(() => {
-			document.dispatchEvent(
-				new KeyboardEvent("keydown", { key: "Enter" }),
-			);
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
 		});
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
-	it("ignores non-Escape keydown on dialog element", () => {
+	it("ignores non-Escape keydown on dialog element", async () => {
 		const onClose = jest.fn();
-		render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={onClose} />);
+		});
 		const dialog = screen.getByRole("dialog", { hidden: true });
 		fireEvent.keyDown(dialog, { key: "Tab" });
 		expect(onClose).not.toHaveBeenCalled();
