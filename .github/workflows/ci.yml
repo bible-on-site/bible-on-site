@@ -447,7 +447,7 @@ jobs:
   package_website:
     name: Package Website
     needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
     permissions:
       contents: write
       actions: read
@@ -456,6 +456,24 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
+
+  package_website_arm64:
+    name: Package Website ARM64
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write # Required for AWS OIDC authentication to access RDS during SSG build
+    secrets: inherit
+    uses: ./.github/workflows/shared-dockerize.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      image_arch: arm64
       # Prefer the perushim SQL generated in this run; fall back to the master
       # baseline. Empty means no artifact is available and the SSG build keeps
       # querying prod RDS directly.
@@ -2566,7 +2584,7 @@ jobs:
       - name: Verify repeatable deployment recovery
         working-directory: devops
         run: |
-          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts
+          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts github/ci/website-image-gates.test.mjs github/release/website-handover-lock.test.mjs
           bun run test:api-handover
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
@@ -3066,6 +3084,8 @@ jobs:
         package_windows_pr,
         package_api,
         package_api_arm64,
+        package_website,
+        package_website_arm64,
         package_bulletin,
         package_admin,
         app_mobile_e2e,
@@ -3163,6 +3183,20 @@ jobs:
             if [ "${{ needs.website_performance.result }}" = "success" ]; then PERFORMANCE_STATUS=success; else PERFORMANCE_STATUS=failure; fi
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          # Match both native website package jobs. Fork PRs retain credential-free
+          # native dependency checks; full SSG requires the trusted repository secrets.
+          if { [ "${{ github.event_name }}" = push ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = true ] && [ "$WEBSITE_MODULE_CHANGED" = true ]; } ||
+             { [ "${{ github.event_name }}" != push ] && { [ "${{ github.event_name }}" != pull_request ] || [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; } && { [ "$WEBSITE_MODULE_CHANGED" = true ] || [ "$WEBSITE_CI_CHANGED" = true ]; }; }; then
+            if [ "${{ needs.package_website.result }}" != success ] || [ "${{ needs.package_website_arm64.result }}" != success ]; then
+              echo "Both native website release images must pass or the build did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_website.outputs.module_version }}" ] || [ "${{ needs.package_website.outputs.module_version }}" != "${{ needs.package_website_arm64.outputs.module_version }}" ]; then
+              echo "Both website images must have the same nonempty release version"
               exit 1
             fi
           fi
@@ -3693,10 +3727,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_api, package_api_arm64, package_app, package_bulletin, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website_arm64.result == 'success' && needs.package_website.outputs.module_version == needs.package_website_arm64.outputs.module_version && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3708,15 +3742,15 @@ jobs:
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
       extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_app, package_bulletin, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_website_arm64, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3731,10 +3765,10 @@ jobs:
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_api, package_api_arm64, package_bulletin, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_website_arm64, package_api, package_api_arm64, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3760,10 +3794,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_api, package_api_arm64, package_app, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3778,8 +3812,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_api, package_api_arm64, package_app, package_bulletin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
