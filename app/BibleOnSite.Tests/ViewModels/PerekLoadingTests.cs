@@ -796,4 +796,79 @@ public class PerekLoadingTests
 
         fixture.Model.Perushim.Select(p => p.Name).Should().Contain("Rashi");
     }
+
+    [Fact]
+    public async Task LoadPerushimAsync_DecoratesPerushimWithStoredReadingMetrics()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        // The #2607 pack generation adds the perush metric table — a stored
+        // row becomes the sheet badge; a perush without a row stays badgeless.
+        await fixture.Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+            "CREATE TABLE tanah_perush_metric (perush_id INTEGER NOT NULL, perek_id INTEGER NOT NULL, " +
+            "word_count INTEGER, estimated_seconds INTEGER, words_per_minute INTEGER NOT NULL, " +
+            "calc_version INTEGER NOT NULL, source_hash TEXT NOT NULL, computed_at TEXT NOT NULL DEFAULT '', " +
+            "PRIMARY KEY (perush_id, perek_id))",
+            "INSERT INTO tanah_perush_metric VALUES (1, 1, 120, 33, 220, 1, 'h1', '')");
+        var vm = fixture.Model;
+
+        await vm.LoadByPerekIdAsync(1);
+
+        vm.Perushim.Select(p => p.Id).Should().Equal(2, 1);
+        var rashi = vm.Perushim.Single(p => p.Id == 1);
+        rashi.ReadingMetric.Should().NotBeNull();
+        rashi.ReadingMetric!.WordCount.Should().Be(120);
+        rashi.ReadingMetric.EstimatedSeconds.Should().Be(33);
+        rashi.ReadingTimeBadge.Should().NotBeNullOrEmpty();
+        vm.Perushim.Single(p => p.Id == 2).ReadingMetric.Should().BeNull("no stored row — the badge hides");
+    }
+
+    /// <summary>
+    /// A notes service whose batched perush-metric read pauses mid-flight, so
+    /// a test can move the perek on while the decoration await is suspended.
+    /// </summary>
+    private sealed class GatedMetricsNotesService(
+        IPadDeliveryService pad, Microsoft.Maui.Storage.IFileSystem fileSystem)
+        : PerushimNotesService(pad, fileSystem)
+    {
+        public TaskCompletionSource<int> MetricsEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<IReadOnlyDictionary<int, ReadingMetric>> MetricsResult { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
+        {
+            MetricsEntered.TrySetResult(perekId);
+            return MetricsResult.Task;
+        }
+    }
+
+    private static Perek BarePerek(int perekId) => new()
+    {
+        PerekId = perekId, Date = "", HebDate = "", SeferName = "", SeferTanahUsName = "", Tseit = ""
+    };
+
+    [Fact]
+    public async Task LoadPerushimAsync_WhenPerekMovesOnDuringMetricRead_DiscardsTheLoad()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var gated = new GatedMetricsNotesService(NotesDeliveryTests.Pad().Object, fixture.Storage.FileSystem.Object);
+        var vm = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            fixture.Data, new PerushimCatalogService(fixture.Storage.FileSystem.Object),
+            gated, fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        vm.Perek = BarePerek(1);
+
+        var load = vm.LoadPerushimAsync(1);
+        await gated.MetricsEntered.Task;
+
+        // The swipe lands while the metric read is suspended — publishing
+        // perek 1's perushim now would clobber perek 2's reader.
+        vm.Perek = BarePerek(2);
+        gated.MetricsResult.SetResult(new Dictionary<int, ReadingMetric>
+        {
+            [1] = new() { WordCount = 120, EstimatedSeconds = 33, WordsPerMinute = 220, CalcVersion = 1, SourceHash = "h1" }
+        });
+        await load;
+
+        vm.Perushim.Should().BeEmpty("a stale load discards its results before publication");
+    }
 }
