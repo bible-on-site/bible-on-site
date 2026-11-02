@@ -436,6 +436,50 @@ describe("Sefer component", () => {
 		expect(blankProps().initialSlug).toBeUndefined();
 	});
 
+	it("keeps the active content title when a background chapter publishes or cleans up", async () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const previousUrl = location.pathname + location.search + location.hash;
+		const previousState = history.state;
+		const rendered = render(
+			<SeferContents
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2]}
+				sefer={{ ...original, perakim: [chapter, chapter] }}
+			/>,
+		);
+		const panel = (index: number) => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{
+				children: React.ReactElement<{
+					onNavigate: (slug?: string) => void;
+					onContentTitle?: (title: string | null) => void;
+				}>;
+			}>[];
+			return pages[4 + index * 2].props.children.props;
+		};
+		try {
+			await act(async () =>
+				(
+					capturedFlipBookProps.handlers as { onPageFlipped: () => void }
+				).onPageFlipped(),
+			);
+			act(() => panel(1).onNavigate("222"));
+			const activeTitle = 'תוכן פעיל | תנ"ך על הפרק';
+			act(() => panel(1).onContentTitle?.(activeTitle));
+			expect(document.title).toBe(activeTitle);
+			act(() => panel(0).onContentTitle?.(null));
+			expect(document.title).toBe(activeTitle);
+		} finally {
+			rendered.unmount();
+			history.replaceState(previousState, "", previousUrl);
+		}
+	});
+
 	it("keeps entity links on the correct chapter when other chapters have no references", async () => {
 		const reference: PerekEntityReference = {
 			entityId: "creation",

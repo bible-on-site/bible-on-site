@@ -255,35 +255,35 @@
       },
       "metrics": {
         "responseMs": [
-          129.59999999776483,
+          129.6,
           131.5,
-          118.39999999850988,
-          124.89999999850988,
-          133.60000000149012,
-          84.80000000074506
+          118.4,
+          124.9,
+          133.6,
+          84.8
         ],
-        "responseP95Ms": 133.60000000149012,
-        "responseMaxMs": 133.60000000149012,
-        "frameGapMaxMs": 216.70000000000073,
-        "frameGapP95Ms": 116.60000000000036,
+        "responseP95Ms": 133.6,
+        "responseMaxMs": 133.6,
+        "frameGapMaxMs": 216.7,
+        "frameGapP95Ms": 116.6,
         "firstTurn": {
-          "responseP95Ms": 129.59999999776483,
-          "frameGapMaxMs": 116.60000000000036,
-          "frameGapP95Ms": 66.69999999999982
+          "responseP95Ms": 129.6,
+          "frameGapMaxMs": 116.6,
+          "frameGapP95Ms": 66.7
         },
         "consecutiveTurns": {
-          "responseP95Ms": 133.60000000149012,
-          "frameGapMaxMs": 216.70000000000073,
-          "frameGapP95Ms": 116.70000000000073
+          "responseP95Ms": 133.6,
+          "frameGapMaxMs": 216.7,
+          "frameGapP95Ms": 116.7
         }
       },
       "failures": [
-        "all turns/frameGapMaxMs=216.70000000000073ms > 100ms",
-        "all turns/frameGapP95Ms=116.60000000000036ms > 50ms",
-        "first turn/frameGapMaxMs=116.60000000000036ms > 100ms",
-        "first turn/frameGapP95Ms=66.69999999999982ms > 50ms",
-        "consecutive turns/frameGapMaxMs=216.70000000000073ms > 100ms",
-        "consecutive turns/frameGapP95Ms=116.70000000000073ms > 50ms"
+        "all turns/frameGapMaxMs=216.7ms > 100ms",
+        "all turns/frameGapP95Ms=116.6ms > 50ms",
+        "first turn/frameGapMaxMs=116.6ms > 100ms",
+        "first turn/frameGapP95Ms=66.7ms > 50ms",
+        "consecutive turns/frameGapMaxMs=216.7ms > 100ms",
+        "consecutive turns/frameGapP95Ms=116.7ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -484,38 +484,38 @@
       },
       "metrics": {
         "responseMs": [
-          351.5999999977648,
-          224.90000000223517,
-          204.89999999850988,
-          189.40000000223517,
-          206.59999999776483,
-          392.80000000074506
+          351.6,
+          224.9,
+          204.9,
+          189.4,
+          206.6,
+          392.8
         ],
-        "responseP95Ms": 392.80000000074506,
-        "responseMaxMs": 392.80000000074506,
-        "frameGapMaxMs": 183.20000000000073,
-        "frameGapP95Ms": 133.39999999999964,
+        "responseP95Ms": 392.8,
+        "responseMaxMs": 392.8,
+        "frameGapMaxMs": 183.2,
+        "frameGapP95Ms": 133.4,
         "firstTurn": {
-          "responseP95Ms": 351.5999999977648,
-          "frameGapMaxMs": 166.63400000000001,
-          "frameGapP95Ms": 166.63400000000001
+          "responseP95Ms": 351.6,
+          "frameGapMaxMs": 166.634,
+          "frameGapP95Ms": 166.634
         },
         "consecutiveTurns": {
-          "responseP95Ms": 392.80000000074506,
-          "frameGapMaxMs": 183.20000000000073,
-          "frameGapP95Ms": 133.39999999999964
+          "responseP95Ms": 392.8,
+          "frameGapMaxMs": 183.2,
+          "frameGapP95Ms": 133.4
         }
       },
       "failures": [
-        "all turns/responseP95Ms=392.80000000074506ms > 200ms",
-        "all turns/frameGapMaxMs=183.20000000000073ms > 100ms",
-        "all turns/frameGapP95Ms=133.39999999999964ms > 50ms",
-        "first turn/responseP95Ms=351.5999999977648ms > 200ms",
-        "first turn/frameGapMaxMs=166.63400000000001ms > 100ms",
-        "first turn/frameGapP95Ms=166.63400000000001ms > 50ms",
-        "consecutive turns/responseP95Ms=392.80000000074506ms > 200ms",
-        "consecutive turns/frameGapMaxMs=183.20000000000073ms > 100ms",
-        "consecutive turns/frameGapP95Ms=133.39999999999964ms > 50ms"
+        "all turns/responseP95Ms=392.8ms > 200ms",
+        "all turns/frameGapMaxMs=183.2ms > 100ms",
+        "all turns/frameGapP95Ms=133.4ms > 50ms",
+        "first turn/responseP95Ms=351.6ms > 200ms",
+        "first turn/frameGapMaxMs=166.634ms > 100ms",
+        "first turn/frameGapP95Ms=166.634ms > 50ms",
+        "consecutive turns/responseP95Ms=392.8ms > 200ms",
+        "consecutive turns/frameGapMaxMs=183.2ms > 100ms",
+        "consecutive turns/frameGapP95Ms=133.4ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -736,35 +736,35 @@
       },
       "metrics": {
         "responseMs": [
-          88.80000000074506,
-          80.69999999925494,
-          150.30000000074506,
-          143.69999999925494,
+          88.8,
+          80.7,
+          150.3,
+          143.7,
           136.5,
-          131.69999999925494
+          131.7
         ],
-        "responseP95Ms": 150.30000000074506,
-        "responseMaxMs": 150.30000000074506,
+        "responseP95Ms": 150.3,
+        "responseMaxMs": 150.3,
         "frameGapMaxMs": 200,
-        "frameGapP95Ms": 116.70000000000027,
+        "frameGapP95Ms": 116.7,
         "firstTurn": {
-          "responseP95Ms": 88.80000000074506,
-          "frameGapMaxMs": 116.70000000000027,
-          "frameGapP95Ms": 116.70000000000027
+          "responseP95Ms": 88.8,
+          "frameGapMaxMs": 116.7,
+          "frameGapP95Ms": 116.7
         },
         "consecutiveTurns": {
-          "responseP95Ms": 150.30000000074506,
+          "responseP95Ms": 150.3,
           "frameGapMaxMs": 200,
-          "frameGapP95Ms": 133.30000000000018
+          "frameGapP95Ms": 133.3
         }
       },
       "failures": [
         "all turns/frameGapMaxMs=200ms > 100ms",
-        "all turns/frameGapP95Ms=116.70000000000027ms > 50ms",
-        "first turn/frameGapMaxMs=116.70000000000027ms > 100ms",
-        "first turn/frameGapP95Ms=116.70000000000027ms > 50ms",
+        "all turns/frameGapP95Ms=116.7ms > 50ms",
+        "first turn/frameGapMaxMs=116.7ms > 100ms",
+        "first turn/frameGapP95Ms=116.7ms > 50ms",
         "consecutive turns/frameGapMaxMs=200ms > 100ms",
-        "consecutive turns/frameGapP95Ms=133.30000000000018ms > 50ms"
+        "consecutive turns/frameGapP95Ms=133.3ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -953,37 +953,37 @@
       },
       "metrics": {
         "responseMs": [
-          237.60000000149012,
-          233.19999999925494,
-          249.30000000074506,
-          233.60000000149012,
-          222.59999999776483,
-          380.69999999925494
+          237.6,
+          233.2,
+          249.3,
+          233.6,
+          222.6,
+          380.7
         ],
-        "responseP95Ms": 380.69999999925494,
-        "responseMaxMs": 380.69999999925494,
-        "frameGapMaxMs": 200.10000000000036,
-        "frameGapP95Ms": 133.39999999999964,
+        "responseP95Ms": 380.7,
+        "responseMaxMs": 380.7,
+        "frameGapMaxMs": 200.1,
+        "frameGapP95Ms": 133.4,
         "firstTurn": {
-          "responseP95Ms": 237.60000000149012,
+          "responseP95Ms": 237.6,
           "frameGapMaxMs": 100,
           "frameGapP95Ms": 100
         },
         "consecutiveTurns": {
-          "responseP95Ms": 380.69999999925494,
-          "frameGapMaxMs": 200.10000000000036,
-          "frameGapP95Ms": 149.89999999999964
+          "responseP95Ms": 380.7,
+          "frameGapMaxMs": 200.1,
+          "frameGapP95Ms": 149.9
         }
       },
       "failures": [
-        "all turns/responseP95Ms=380.69999999925494ms > 200ms",
-        "all turns/frameGapMaxMs=200.10000000000036ms > 100ms",
-        "all turns/frameGapP95Ms=133.39999999999964ms > 50ms",
-        "first turn/responseP95Ms=237.60000000149012ms > 200ms",
+        "all turns/responseP95Ms=380.7ms > 200ms",
+        "all turns/frameGapMaxMs=200.1ms > 100ms",
+        "all turns/frameGapP95Ms=133.4ms > 50ms",
+        "first turn/responseP95Ms=237.6ms > 200ms",
         "first turn/frameGapP95Ms=100ms > 50ms",
-        "consecutive turns/responseP95Ms=380.69999999925494ms > 200ms",
-        "consecutive turns/frameGapMaxMs=200.10000000000036ms > 100ms",
-        "consecutive turns/frameGapP95Ms=149.89999999999964ms > 50ms"
+        "consecutive turns/responseP95Ms=380.7ms > 200ms",
+        "consecutive turns/frameGapMaxMs=200.1ms > 100ms",
+        "consecutive turns/frameGapP95Ms=149.9ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -1215,21 +1215,21 @@
       },
       "metrics": {
         "responseMs": [
-          60.900000002235174,
-          80.39999999850988,
-          53.80000000074506,
-          71.90000000223517,
+          60.9,
+          80.4,
+          53.8,
+          71.9,
           94.5,
-          77.10000000149012
+          77.1
         ],
         "responseP95Ms": 94.5,
         "responseMaxMs": 94.5,
         "frameGapMaxMs": 200,
-        "frameGapP95Ms": 99.69999999999982,
+        "frameGapP95Ms": 99.7,
         "firstTurn": {
-          "responseP95Ms": 60.900000002235174,
-          "frameGapMaxMs": 66.69999999999982,
-          "frameGapP95Ms": 66.60000000000036
+          "responseP95Ms": 60.9,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6
         },
         "consecutiveTurns": {
           "responseP95Ms": 94.5,
@@ -1239,8 +1239,8 @@
       },
       "failures": [
         "all turns/frameGapMaxMs=200ms > 100ms",
-        "all turns/frameGapP95Ms=99.69999999999982ms > 50ms",
-        "first turn/frameGapP95Ms=66.60000000000036ms > 50ms",
+        "all turns/frameGapP95Ms=99.7ms > 50ms",
+        "first turn/frameGapP95Ms=66.6ms > 50ms",
         "consecutive turns/frameGapMaxMs=200ms > 100ms",
         "consecutive turns/frameGapP95Ms=100ms > 50ms"
       ],
@@ -1435,38 +1435,38 @@
       },
       "metrics": {
         "responseMs": [
-          264.30000000074506,
+          264.3,
           349,
           212,
           203.5,
-          268.69999999925494,
-          227.19999999925494
+          268.7,
+          227.2
         ],
         "responseP95Ms": 349,
         "responseMaxMs": 349,
-        "frameGapMaxMs": 200.09999999999945,
-        "frameGapP95Ms": 133.29999999999927,
+        "frameGapMaxMs": 200.1,
+        "frameGapP95Ms": 133.3,
         "firstTurn": {
-          "responseP95Ms": 264.30000000074506,
-          "frameGapMaxMs": 116.69999999999982,
-          "frameGapP95Ms": 116.69999999999982
+          "responseP95Ms": 264.3,
+          "frameGapMaxMs": 116.7,
+          "frameGapP95Ms": 116.7
         },
         "consecutiveTurns": {
           "responseP95Ms": 349,
-          "frameGapMaxMs": 200.09999999999945,
-          "frameGapP95Ms": 133.29999999999927
+          "frameGapMaxMs": 200.1,
+          "frameGapP95Ms": 133.3
         }
       },
       "failures": [
         "all turns/responseP95Ms=349ms > 200ms",
-        "all turns/frameGapMaxMs=200.09999999999945ms > 100ms",
-        "all turns/frameGapP95Ms=133.29999999999927ms > 50ms",
-        "first turn/responseP95Ms=264.30000000074506ms > 200ms",
-        "first turn/frameGapMaxMs=116.69999999999982ms > 100ms",
-        "first turn/frameGapP95Ms=116.69999999999982ms > 50ms",
+        "all turns/frameGapMaxMs=200.1ms > 100ms",
+        "all turns/frameGapP95Ms=133.3ms > 50ms",
+        "first turn/responseP95Ms=264.3ms > 200ms",
+        "first turn/frameGapMaxMs=116.7ms > 100ms",
+        "first turn/frameGapP95Ms=116.7ms > 50ms",
         "consecutive turns/responseP95Ms=349ms > 200ms",
-        "consecutive turns/frameGapMaxMs=200.09999999999945ms > 100ms",
-        "consecutive turns/frameGapP95Ms=133.29999999999927ms > 50ms"
+        "consecutive turns/frameGapMaxMs=200.1ms > 100ms",
+        "consecutive turns/frameGapP95Ms=133.3ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -1706,33 +1706,33 @@
       },
       "metrics": {
         "responseMs": [
-          64.30000000074506,
-          74.40000000223517,
+          64.3,
+          74.4,
           57,
-          73.80000000074506,
-          116.60000000149012,
-          79.69999999925494
+          73.8,
+          116.6,
+          79.7
         ],
-        "responseP95Ms": 116.60000000149012,
-        "responseMaxMs": 116.60000000149012,
-        "frameGapMaxMs": 166.60000000000036,
-        "frameGapP95Ms": 83.39999999999964,
+        "responseP95Ms": 116.6,
+        "responseMaxMs": 116.6,
+        "frameGapMaxMs": 166.6,
+        "frameGapP95Ms": 83.4,
         "firstTurn": {
-          "responseP95Ms": 64.30000000074506,
-          "frameGapMaxMs": 66.69999999999982,
-          "frameGapP95Ms": 66.69999999999982
+          "responseP95Ms": 64.3,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.7
         },
         "consecutiveTurns": {
-          "responseP95Ms": 116.60000000149012,
-          "frameGapMaxMs": 166.60000000000036,
+          "responseP95Ms": 116.6,
+          "frameGapMaxMs": 166.6,
           "frameGapP95Ms": 83.5
         }
       },
       "failures": [
-        "all turns/frameGapMaxMs=166.60000000000036ms > 100ms",
-        "all turns/frameGapP95Ms=83.39999999999964ms > 50ms",
-        "first turn/frameGapP95Ms=66.69999999999982ms > 50ms",
-        "consecutive turns/frameGapMaxMs=166.60000000000036ms > 100ms",
+        "all turns/frameGapMaxMs=166.6ms > 100ms",
+        "all turns/frameGapP95Ms=83.4ms > 50ms",
+        "first turn/frameGapP95Ms=66.7ms > 50ms",
+        "consecutive turns/frameGapMaxMs=166.6ms > 100ms",
         "consecutive turns/frameGapP95Ms=83.5ms > 50ms"
       ],
       "status": "timing_budget_failed"
@@ -1932,38 +1932,38 @@
       },
       "metrics": {
         "responseMs": [
-          309.19999999925494,
-          352.30000000074506,
-          265.70000000298023,
-          336.80000000074506,
-          235.69999999925494,
-          394.30000000074506
+          309.2,
+          352.3,
+          265.7,
+          336.8,
+          235.7,
+          394.3
         ],
-        "responseP95Ms": 394.30000000074506,
-        "responseMaxMs": 394.30000000074506,
-        "frameGapMaxMs": 199.89999999999964,
+        "responseP95Ms": 394.3,
+        "responseMaxMs": 394.3,
+        "frameGapMaxMs": 199.9,
         "frameGapP95Ms": 166.5,
         "firstTurn": {
-          "responseP95Ms": 309.19999999925494,
-          "frameGapMaxMs": 133.29999999999973,
-          "frameGapP95Ms": 133.29999999999973
+          "responseP95Ms": 309.2,
+          "frameGapMaxMs": 133.3,
+          "frameGapP95Ms": 133.3
         },
         "consecutiveTurns": {
-          "responseP95Ms": 394.30000000074506,
-          "frameGapMaxMs": 199.89999999999964,
-          "frameGapP95Ms": 166.69999999999982
+          "responseP95Ms": 394.3,
+          "frameGapMaxMs": 199.9,
+          "frameGapP95Ms": 166.7
         }
       },
       "failures": [
-        "all turns/responseP95Ms=394.30000000074506ms > 200ms",
-        "all turns/frameGapMaxMs=199.89999999999964ms > 100ms",
+        "all turns/responseP95Ms=394.3ms > 200ms",
+        "all turns/frameGapMaxMs=199.9ms > 100ms",
         "all turns/frameGapP95Ms=166.5ms > 50ms",
-        "first turn/responseP95Ms=309.19999999925494ms > 200ms",
-        "first turn/frameGapMaxMs=133.29999999999973ms > 100ms",
-        "first turn/frameGapP95Ms=133.29999999999973ms > 50ms",
-        "consecutive turns/responseP95Ms=394.30000000074506ms > 200ms",
-        "consecutive turns/frameGapMaxMs=199.89999999999964ms > 100ms",
-        "consecutive turns/frameGapP95Ms=166.69999999999982ms > 50ms"
+        "first turn/responseP95Ms=309.2ms > 200ms",
+        "first turn/frameGapMaxMs=133.3ms > 100ms",
+        "first turn/frameGapP95Ms=133.3ms > 50ms",
+        "consecutive turns/responseP95Ms=394.3ms > 200ms",
+        "consecutive turns/frameGapMaxMs=199.9ms > 100ms",
+        "consecutive turns/frameGapP95Ms=166.7ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -2147,38 +2147,38 @@
       },
       "metrics": {
         "responseMs": [
-          560.1999999992549,
-          415.79999999701977,
-          362.5999999977648,
-          286.69999999925494,
-          309.29999999701977,
-          398.6000000014901
+          560.2,
+          415.8,
+          362.6,
+          286.7,
+          309.3,
+          398.6
         ],
-        "responseP95Ms": 560.1999999992549,
-        "responseMaxMs": 560.1999999992549,
-        "frameGapMaxMs": 249.89999999999964,
+        "responseP95Ms": 560.2,
+        "responseMaxMs": 560.2,
+        "frameGapMaxMs": 249.9,
         "frameGapP95Ms": 200,
         "firstTurn": {
-          "responseP95Ms": 560.1999999992549,
-          "frameGapMaxMs": 249.83399999999983,
-          "frameGapP95Ms": 249.83399999999983
+          "responseP95Ms": 560.2,
+          "frameGapMaxMs": 249.834,
+          "frameGapP95Ms": 249.834
         },
         "consecutiveTurns": {
-          "responseP95Ms": 415.79999999701977,
-          "frameGapMaxMs": 249.89999999999964,
-          "frameGapP95Ms": 199.90000000000055
+          "responseP95Ms": 415.8,
+          "frameGapMaxMs": 249.9,
+          "frameGapP95Ms": 199.9
         }
       },
       "failures": [
-        "all turns/responseP95Ms=560.1999999992549ms > 200ms",
-        "all turns/frameGapMaxMs=249.89999999999964ms > 100ms",
+        "all turns/responseP95Ms=560.2ms > 200ms",
+        "all turns/frameGapMaxMs=249.9ms > 100ms",
         "all turns/frameGapP95Ms=200ms > 50ms",
-        "first turn/responseP95Ms=560.1999999992549ms > 200ms",
-        "first turn/frameGapMaxMs=249.83399999999983ms > 100ms",
-        "first turn/frameGapP95Ms=249.83399999999983ms > 50ms",
-        "consecutive turns/responseP95Ms=415.79999999701977ms > 200ms",
-        "consecutive turns/frameGapMaxMs=249.89999999999964ms > 100ms",
-        "consecutive turns/frameGapP95Ms=199.90000000000055ms > 50ms"
+        "first turn/responseP95Ms=560.2ms > 200ms",
+        "first turn/frameGapMaxMs=249.834ms > 100ms",
+        "first turn/frameGapP95Ms=249.834ms > 50ms",
+        "consecutive turns/responseP95Ms=415.8ms > 200ms",
+        "consecutive turns/frameGapMaxMs=249.9ms > 100ms",
+        "consecutive turns/frameGapP95Ms=199.9ms > 50ms"
       ],
       "status": "timing_budget_failed"
     },
@@ -2206,5 +2206,11 @@
       "status": "unmeasured_failure",
       "error": "TimeoutError: page.waitForFunction: Timeout 5000ms exceeded."
     }
-  ]
+  ],
+  "reduction": {
+    "source": "web/bible-on-site/tests/util/turn-metrics.ts",
+    "sha256": "e0119a889fef22dd72d6009d8a4646b8a86154591ff684b6135139a6ee9d1ed5",
+    "clockUnit": "integer microseconds",
+    "rawSamplesUnchanged": true
+  }
 }

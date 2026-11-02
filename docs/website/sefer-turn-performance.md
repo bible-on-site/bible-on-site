@@ -36,6 +36,9 @@ available samples against website 0.2.600 and explicitly records failed cases
 that produced no samples. All 12 reader cases fail with the corrected native-input
 observer; the deliberate-stall control passes. The website version and active
 desktop were unchanged throughout.
+The historical capture hashes and raw samples remain intact. Its `reduction`
+field separately identifies the current reducer used to audit those samples.
+All 12 original reader cases still fail after correcting clock arithmetic.
 
 Response runs from the trusted native input timestamp to the render opportunity
 after the first observed moving-page marker. It is not physical presentation
@@ -47,7 +50,12 @@ can precede an input handled in that frame.
 All three limits apply to the first turn, consecutive turns, and the complete
 sample. Keep every frame, including buffer cleanup between turns. Missing,
 untrusted, out-of-order, unfinished or nonpositive samples fail validation.
-There is no rounding tolerance or selection of the fastest run. A browser control
+Elapsed arithmetic uses integer microseconds while retaining the original raw
+samples. This prevents binary subtraction noise such as
+`50.000000000000455ms` from inventing an overrun. The exact limits are
+200,000 / 100,000 / 50,000 microseconds; a single microsecond over still fails.
+Tests explicitly reject 50.001ms, 50.1ms, 100.001ms and 100.1ms. There is no
+budget tolerance or selection of the fastest run. A browser control
 inserts a 250ms stall on the second turn and must detect it. Its layout-read
 sentinels also reject an observer that forces visibility or geometry queries
 while timing the control. Reducer tests cover
@@ -70,6 +78,20 @@ captures attached to each test. Compare matching source, package, viewport and
 CPU profiles. An inactive Windows desktop or screensaver cannot qualify a
 desktop measurement. Hardware-rendered desktop results and software-rendered CI
 results both retain the limits above; label their environments separately.
+
+For the user's desktop Chrome/Edge profile, run the same matrix in a visible
+browser window on an active desktop:
+
+```sh
+bun run test:perf tests/perf/sefer-consecutive-turns.test.ts --headed --project=Desktop --workers=1 --retries=0
+```
+
+Keep headed desktop and headless CI results separate. Raw samples record the
+browser mode; changing that mode does not qualify as a before/after comparison
+of a code change. Keep failed measurements when another environment passes.
+Serialize builds, coverage collection and timing runs: a build competing with a
+timed check is a different load profile. Investigate failures under their
+original deadlines rather than increasing them.
 
 Local library validation uses the recorded checkout override described in the
 [integration workflow](../../.github/instructions/flipbook-integration.instructions.md).

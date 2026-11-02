@@ -25,6 +25,13 @@ export interface TurnSamples {
 	repeatedFrameTimestamps?: number[];
 }
 
+// Keep elapsed clock arithmetic in integer microseconds. Native timestamps
+// can subtract to 50.000000000000455ms for a 50ms interval. This is finer than
+// the browser clock's resolution; real 50.001ms/50.1ms overruns still fail.
+const MICROS_PER_MS = 1_000;
+const clockMicros = (milliseconds: number) =>
+	Math.round(milliseconds * MICROS_PER_MS);
+
 function percentile(values: number[], fraction: number): number {
 	return [...values].sort((a, b) => a - b)[
 		Math.ceil(values.length * fraction) - 1
@@ -47,6 +54,9 @@ export function reduceTurnSamples(
 	) {
 		throw new Error("Incomplete turn/frame samples");
 	}
+	const frameMicros = samples.frames.map(clockMicros);
+	if (!frameMicros.every((gap) => Number.isSafeInteger(gap) && gap > 0))
+		throw new Error("Incomplete turn/frame samples");
 	const turns = samples.inputs.map((input, index) => {
 		const { at, firstMotion, responseFrame, settled } = input;
 		const { frameStart, frameEnd } = input;
@@ -72,28 +82,31 @@ export function reduceTurnSamples(
 		) {
 			throw new Error(`Invalid or unfinished turn ${index + 1}`);
 		}
-		return { responseMs: responseFrame - at, frameStart, frameEnd };
+		const responseMicros = clockMicros(responseFrame - at);
+		if (!Number.isSafeInteger(responseMicros) || responseMicros <= 0)
+			throw new Error(`Invalid or unfinished turn ${index + 1}`);
+		return { responseMicros, frameStart, frameEnd };
 	});
-	const responseMs = turns.map((turn) => turn.responseMs);
+	const responseMicros = turns.map((turn) => turn.responseMicros);
 	const summarize = (responses: number[], frames: number[]) => ({
-		responseP95Ms: percentile(responses, 0.95),
-		frameGapMaxMs: Math.max(...frames),
-		frameGapP95Ms: percentile(frames, 0.95),
+		responseP95Ms: percentile(responses, 0.95) / MICROS_PER_MS,
+		frameGapMaxMs: Math.max(...frames) / MICROS_PER_MS,
+		frameGapP95Ms: percentile(frames, 0.95) / MICROS_PER_MS,
 	});
 	const first = turns[0];
 	return {
-		responseMs,
-		responseP95Ms: percentile(responseMs, 0.95),
-		responseMaxMs: Math.max(...responseMs),
-		frameGapMaxMs: Math.max(...samples.frames),
-		frameGapP95Ms: percentile(samples.frames, 0.95),
+		responseMs: responseMicros.map((value) => value / MICROS_PER_MS),
+		responseP95Ms: percentile(responseMicros, 0.95) / MICROS_PER_MS,
+		responseMaxMs: Math.max(...responseMicros) / MICROS_PER_MS,
+		frameGapMaxMs: Math.max(...frameMicros) / MICROS_PER_MS,
+		frameGapP95Ms: percentile(frameMicros, 0.95) / MICROS_PER_MS,
 		firstTurn: summarize(
-			[first.responseMs],
-			samples.frames.slice(first.frameStart, first.frameEnd),
+			[first.responseMicros],
+			frameMicros.slice(first.frameStart, first.frameEnd),
 		),
 		consecutiveTurns: summarize(
-			responseMs.slice(1),
-			samples.frames.slice(first.frameEnd),
+			responseMicros.slice(1),
+			frameMicros.slice(first.frameEnd),
 		),
 	};
 }

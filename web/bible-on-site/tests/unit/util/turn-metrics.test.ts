@@ -30,6 +30,47 @@ it("keeps every turn and accepts a responsive sequence", () => {
 	expect(samples).toEqual(before);
 });
 
+it("uses integer clock units without turning binary subtraction noise into an overrun", () => {
+	const samples = healthy();
+	samples.inputs[0].responseFrame = 200.00000000000003;
+	samples.frames.fill(50.000000000000455);
+	samples.frames[0] = 100.00000000000045;
+	const before = structuredClone(samples);
+	const metrics = reduceTurnSamples(samples, 300, 6);
+	expect(metrics.responseP95Ms).toBe(200);
+	expect(metrics.frameGapMaxMs).toBe(100);
+	expect(metrics.frameGapP95Ms).toBe(50);
+	expect(turnBudgetFailures(metrics)).toEqual([]);
+	expect(samples).toEqual(before);
+});
+
+it.each([50.001, 50.1])("rejects a real frame-gap p95 of %sms", (gap) => {
+	const samples = healthy();
+	samples.frames.fill(gap);
+	const failures = turnBudgetFailures(reduceTurnSamples(samples, 300, 6));
+	for (const phase of ["all turns", "first turn", "consecutive turns"])
+		expect(failures).toContain(`${phase}/frameGapP95Ms=${gap}ms > 50ms`);
+});
+
+it.each([100.001, 100.1])("rejects a real maximum frame gap of %sms", (gap) => {
+	const samples = healthy();
+	samples.frames[0] = gap;
+	expect(turnBudgetFailures(reduceTurnSamples(samples, 300, 6))).toContain(
+		`all turns/frameGapMaxMs=${gap}ms > 100ms`,
+	);
+});
+
+it.each([200.001, 200.1])(
+	"rejects a real input response of %sms",
+	(response) => {
+		const samples = healthy();
+		samples.inputs[0].responseFrame = response;
+		expect(turnBudgetFailures(reduceTurnSamples(samples, 300, 6))).toContain(
+			`first turn/responseP95Ms=${response}ms > 200ms`,
+		);
+	},
+);
+
 it("rejects a 250ms second-turn pause even when the other five turns are fast", () => {
 	const samples = healthy();
 	samples.inputs[1].responseFrame = 1_250;
@@ -92,6 +133,20 @@ it.each([
 	},
 	(s: TurnSamples) => {
 		s.frames[0] = -1;
+	},
+	(s: TurnSamples) => {
+		s.frames[0] = 0.0001;
+	},
+	(s: TurnSamples) => {
+		s.inputs[0].firstMotion = 0.0001;
+		s.inputs[0].responseFrame = 0.0002;
+	},
+	(s: TurnSamples) => {
+		s.frames[0] = Number.MAX_SAFE_INTEGER;
+	},
+	(s: TurnSamples) => {
+		s.inputs[5].responseFrame = 10_000_000_000_000;
+		s.inputs[5].settled = 10_000_000_000_100;
 	},
 	(s: TurnSamples) => {
 		s.inputs[0].frameEnd = null;

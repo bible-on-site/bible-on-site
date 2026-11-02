@@ -617,7 +617,12 @@ const Sefer = (props: {
 									: (slug) => contentNavigation.navigate(pagePerekId, slug)
 							}
 							perekTitleParts={seferPerekTitles[perekIdx]}
-							onContentTitle={setInBookContentTitle}
+							onContentTitle={
+								contentNavigation.content != null &&
+								contentNavigation.content.perekId === pagePerekId
+									? setInBookContentTitle
+									: undefined
+							}
 						/>
 					</React.Fragment>
 				);
@@ -701,6 +706,7 @@ const Sefer = (props: {
 						pageSemantics={hePageSemantics}
 						direction="rtl"
 						leavesBuffer={0}
+						keepPageContentLayout
 						of={toHebrewChapterNumber(perakim.length)}
 						tocPageIndex={2}
 						coverConfig={{

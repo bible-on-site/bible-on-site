@@ -60,6 +60,13 @@
 	--scrollbarBG: #cfd8dc;
 }
 
+/* Lay out covered chapters at their scrollable width in one pass. The reader
+   restores auto overflow before revealing a page, so short chapters keep their
+   original full width and long chapters keep the same visible scrollbar. */
+:global(.flipbook-layout-dormant) .perekTextScrollWrapper {
+	overflow-y: scroll;
+}
+
 .perekTextScrollWrapper::-webkit-scrollbar {
 	width: 11px;
 }
@@ -595,4 +602,3 @@
 		transition: none;
 	}
 }
-

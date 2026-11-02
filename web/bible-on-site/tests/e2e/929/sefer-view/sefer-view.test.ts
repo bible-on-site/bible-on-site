@@ -21,8 +21,10 @@ import { waitForVisibleTurnContent } from "../../../util/turn-probe";
 function activePageFoldWidth(page: Page) {
 	return page.evaluate(() => {
 		const surfaces = Array.from(
-			document.querySelectorAll<HTMLElement>(".he-book .page.page--folded"),
-		).filter((surface) => surface.style.willChange === "transform");
+			document.querySelectorAll<HTMLElement>(
+				".he-book .page.page--folded.page--flipping",
+			),
+		);
 		if (surfaces.length === 0) return 0;
 		const visibleWidths = surfaces.map((surface) => {
 			const points = Array.from(

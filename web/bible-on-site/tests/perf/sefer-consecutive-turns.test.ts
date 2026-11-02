@@ -116,6 +116,7 @@ for (const [chapter, bookmarks] of [
 								gesture,
 								cpuRate: 4,
 								browser: browser.version(),
+								headless: testInfo.project.use.headless ?? true,
 								gpu: hardware.gpu,
 								limits: TURN_LIMITS,
 								samples,

@@ -90,9 +90,11 @@ export class SeferPage {
 	 * Checks that there are multiple article elements with text content
 	 */
 	async verifyPesukimAreVisible(): Promise<void> {
-		const visibleArticles = this.page.locator("article:visible");
+		const visibleArticles = this.page.locator(
+			".he-book .page.current-page article",
+		);
 
-		// Wait for any article to become visible; flipbook renders hidden pages too
+		// Covered chapters retain layout. Assert the current spread itself.
 		await expect(visibleArticles.first()).toBeVisible({ timeout: 10_000 });
 
 		const count = await visibleArticles.count();
@@ -100,6 +102,14 @@ export class SeferPage {
 
 		// Verify a visible page has meaningful text (avoid hidden cover pages)
 		const firstVisibleArticle = visibleArticles.first();
+		expect(
+			await firstVisibleArticle.evaluate((article) =>
+				article.checkVisibility({
+					checkOpacity: true,
+					checkVisibilityCSS: true,
+				}),
+			),
+		).toBe(true);
 		const textContent = await firstVisibleArticle.textContent();
 		expect(textContent).toBeTruthy();
 		// biome-ignore lint/style/noNonNullAssertion: assured by previous check
