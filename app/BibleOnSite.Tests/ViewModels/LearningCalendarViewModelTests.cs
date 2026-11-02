@@ -102,6 +102,7 @@ public class LearningCalendarViewModelTests
         vm.Cells.Should().BeEmpty();
         vm.IsLoading.Should().BeFalse();
         vm.ErrorMessage.Should().BeEmpty();
+        vm.CanExportPdf.Should().BeFalse("the PDF export policy is only built during InitializeAsync");
     }
 
     [Fact]

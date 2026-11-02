@@ -112,12 +112,15 @@ export async function processScheduledBulletin(
 			expectedAudience: "real",
 			expectedRevision: telegram.revision,
 		}),
-		enqueueBulletinWhatsApp({
-			date: targetDate,
-			requestKey: scheduledBulletinRequestKey(targetDate, "whatsapp"),
-			expectedAudience: "real",
-			expectedRevision: whatsapp.revision,
-		}),
+		enqueueBulletinWhatsApp(
+			{
+				date: targetDate,
+				requestKey: scheduledBulletinRequestKey(targetDate, "whatsapp"),
+				expectedAudience: "real",
+				expectedRevision: whatsapp.revision,
+			},
+			{ refreshRealTarget: true },
+		),
 	]);
 	if (results.some((result) => result.status === "rejected"))
 		throw new Error("Scheduled bulletin channel enqueue incomplete");

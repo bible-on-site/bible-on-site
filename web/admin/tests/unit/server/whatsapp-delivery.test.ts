@@ -729,6 +729,121 @@ describe("immutable durable enqueue and legacy preservation", () => {
 			expectedAudience: audience,
 			expectedRevision: 0,
 		});
+	describe("scheduled target refresh", () => {
+		const scheduled = (audience: WhatsAppAudience = "real") =>
+			enqueueBulletinWhatsApp(
+				{
+					date,
+					requestKey: key,
+					expectedAudience: audience,
+					expectedRevision: 0,
+				},
+				{ refreshRealTarget: true },
+			);
+		function expireTargets() {
+			state.settings.audience = "real";
+			for (const row of state.targets)
+				row.expires_at = new Date(Date.now() - 1).toISOString();
+		}
+		it("refreshes the expired real group before reserving Sunday's publication", async () => {
+			expireTargets();
+			const testTarget = structuredClone(state.targets[0]);
+			const result = await scheduled();
+			expect(result.status).toBe("queued");
+			expect(
+				WhatsAppClient.prototype.verifyTarget,
+			).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({
+					audience: "real",
+					groupId: config().realGroupId,
+				}),
+			);
+			expect(state.targets.find((row) => row.audience === "test")).toEqual(
+				testTarget,
+			);
+			expect(state.jobs).toHaveLength(1);
+			expect(state.jobs[0].target_group_id).toBe(config().realGroupId);
+			expect(state.legacy?.provider_message_id).toBe(
+				`whatsapp-job:${result.id}`,
+			);
+			expect(mocks.sqs).toHaveBeenCalledOnce();
+			expect(WhatsAppClient.prototype.sendDocument).not.toHaveBeenCalled();
+		});
+		it("reuses fresh verification and an existing request without further lookups", async () => {
+			state.settings.audience = "real";
+			const result = await scheduled();
+			for (const row of state.targets) row.expires_at = "2000-01-01T00:00:00Z";
+			expect((await scheduled()).id).toBe(result.id);
+			expect(state.jobs).toHaveLength(1);
+			expect(WhatsAppClient.prototype.verifyTarget).not.toHaveBeenCalled();
+		});
+		it("verifies the real destination when no metadata has been cached", async () => {
+			state.settings.audience = "real";
+			state.targets = [];
+			await scheduled();
+			expect(state.targets.map((row) => row.audience)).toEqual(["real"]);
+			expect(state.jobs).toHaveLength(1);
+		});
+		it.each([new WhatsAppSuppressedError(), new WhatsAppDeferredError()])(
+			"keeps the public ledger untouched when verification cannot succeed: %s",
+			async (error) => {
+				expireTargets();
+				const legacy = structuredClone(state.legacy);
+				vi.mocked(WhatsAppClient.prototype.verifyTarget).mockRejectedValueOnce(
+					error,
+				);
+				await expect(scheduled()).rejects.toBe(error);
+				expect(state.jobs).toHaveLength(0);
+				expect(state.legacy).toEqual(legacy);
+				expect(mocks.sqs).not.toHaveBeenCalled();
+			},
+		);
+		it("retains manual verification and never refreshes a test-audience request", async () => {
+			expireTargets();
+			await expect(enqueue(key, "real")).rejects.toBeInstanceOf(
+				WhatsAppSuppressedError,
+			);
+			state.settings.audience = "test";
+			await expect(scheduled("test")).rejects.toBeInstanceOf(
+				WhatsAppSuppressedError,
+			);
+			expect(WhatsAppClient.prototype.verifyTarget).not.toHaveBeenCalled();
+			expect(state.jobs).toHaveLength(0);
+		});
+		it("rechecks an admin audience change made during provider verification", async () => {
+			expireTargets();
+			const lookup =
+				deferred<Awaited<ReturnType<WhatsAppClient["verifyTarget"]>>>();
+			vi.mocked(WhatsAppClient.prototype.verifyTarget).mockReturnValueOnce(
+				lookup.promise,
+			);
+			const running = scheduled().catch((error: unknown) => error);
+			await vi.waitFor(() =>
+				expect(WhatsAppClient.prototype.verifyTarget).toHaveBeenCalled(),
+			);
+			state.settings.audience = "test";
+			state.settings.revision = 1;
+			lookup.resolve({
+				groupId: targetGroupId(config(), "real"),
+				title: "Verified",
+				size: 2,
+				senderId: "15555550101@c.us",
+				senderPhone: config().expectedSenderPhone,
+				participantDigest: digest,
+				outgoingStatusesEnabled: true,
+			});
+			expect(await running).toBeInstanceOf(WhatsAppSuppressedError);
+			expect(state.settings).toMatchObject({ audience: "test", revision: 1 });
+			expect(state.jobs).toHaveLength(0);
+			expect(mocks.sqs).not.toHaveBeenCalled();
+		});
+		it("does not contact the provider for invalid prepared content", async () => {
+			expireTargets();
+			mocks.prepared.mockResolvedValueOnce(null);
+			await expect(scheduled()).rejects.toThrow();
+			expect(WhatsAppClient.prototype.verifyTarget).not.toHaveBeenCalled();
+		});
+	});
 	it("freezes the exact PDF, target, sender, caption and hash before publishing", async () => {
 		const result = await enqueue();
 		const row = state.jobs[0];
