@@ -198,10 +198,11 @@ pub async fn indexed_hashes<C: ConnectionTrait>(conn: &C) -> Result<Vec<(i32, [u
 }
 
 /// Stored model row: serialized model blob, schema version, and epoch.
-/// (`dims`/`doc_count` columns stay for operational observability but aren't
-/// read back — the blob carries its own dimensions.)
+/// The training-time count distinguishes a valid empty corpus from missing docs.
+/// The blob carries its own dimensions.
 #[derive(Debug, Clone)]
 pub struct StoredState {
+    pub doc_count: i32,
     pub schema_version: i32,
     pub model_epoch: i32,
     pub blob: Vec<u8>,
@@ -211,11 +212,12 @@ pub async fn load_state<C: ConnectionTrait>(conn: &C) -> Result<Option<StoredSta
     let row = conn
         .query_one_raw(Statement::from_string(
             DbBackend::MySql,
-            "SELECT schema_version, model_epoch, model FROM article_search_state WHERE id = 1",
+            "SELECT schema_version, model_epoch, doc_count, model FROM article_search_state WHERE id = 1",
         ))
         .await?;
     row.map(|row| {
         Ok(StoredState {
+            doc_count: row.try_get("", "doc_count")?,
             schema_version: row.try_get("", "schema_version")?,
             model_epoch: row.try_get("", "model_epoch")?,
             blob: row.try_get("", "model")?,
@@ -270,6 +272,7 @@ pub async fn state_probe<C: ConnectionTrait>(conn: &C) -> Result<Option<(i32, i3
 /// Indexed document row: unit embedding plus compressed term statistics.
 #[derive(Debug, Clone)]
 pub struct StoredDoc {
+    pub model_epoch: i32,
     pub article_id: i32,
     pub plain_len: i32,
     pub vector: Vec<u8>,
@@ -280,12 +283,13 @@ pub async fn load_docs<C: ConnectionTrait>(conn: &C) -> Result<Vec<StoredDoc>, D
     let rows = conn
         .query_all_raw(Statement::from_string(
             DbBackend::MySql,
-            "SELECT article_id, plain_len, vector, terms FROM article_search_doc",
+            "SELECT article_id, model_epoch, plain_len, vector, terms FROM article_search_doc",
         ))
         .await?;
     rows.into_iter()
         .map(|row| {
             Ok(StoredDoc {
+                model_epoch: row.try_get("", "model_epoch")?,
                 article_id: row.try_get("", "article_id")?,
                 plain_len: row.try_get("", "plain_len")?,
                 vector: row.try_get("", "vector")?,
@@ -322,6 +326,94 @@ pub async fn upsert_doc<C: ConnectionTrait>(
         ],
     ))
     .await?;
+    Ok(())
+}
+
+// A fixed row ceiling bounds parameters; the byte ceiling counts the actual
+// vector/term payload plus a conservative SQL/protocol allowance. A single
+// larger row retains the existing scalar path rather than adding a content cap.
+const DOCUMENT_BATCH_ROWS: usize = 64;
+const DOCUMENT_BATCH_BYTES: usize = 256 * 1024;
+const DOCUMENT_BATCH_FIXED_BYTES: usize = 4096;
+const DOCUMENT_BATCH_ROW_OVERHEAD: usize = 512;
+
+fn document_batches(docs: Vec<super::PreparedDoc>) -> Vec<Vec<super::PreparedDoc>> {
+    let mut batches = Vec::new();
+    let mut batch = Vec::new();
+    let mut bytes = DOCUMENT_BATCH_FIXED_BYTES;
+    for doc in docs {
+        let cost = doc
+            .vector
+            .len()
+            .saturating_add(doc.terms.len())
+            .saturating_add(DOCUMENT_BATCH_ROW_OVERHEAD);
+        if !batch.is_empty()
+            && (batch.len() == DOCUMENT_BATCH_ROWS
+                || bytes.saturating_add(cost) > DOCUMENT_BATCH_BYTES)
+        {
+            batches.push(std::mem::take(&mut batch));
+            bytes = DOCUMENT_BATCH_FIXED_BYTES;
+        }
+        bytes = bytes.saturating_add(cost);
+        batch.push(doc);
+    }
+    if !batch.is_empty() {
+        batches.push(batch);
+    }
+    batches
+}
+
+fn document_batch_statement(model_epoch: i32, batch: Vec<super::PreparedDoc>) -> Statement {
+    let mut branches = Vec::with_capacity(batch.len());
+    let mut values = Vec::with_capacity(batch.len() * 5);
+    for (ordinal, doc) in batch.into_iter().enumerate() {
+        branches.push(if ordinal == 0 {
+            "SELECT 0 AS ordinal, ? AS model_epoch, ? AS plain_len, ? AS vector, ? AS terms, ? AS article_id".to_owned()
+        } else {
+            format!("SELECT {ordinal}, ?, ?, ?, ?, ?")
+        });
+        values.extend([
+            model_epoch.into(),
+            doc.plain_len.into(),
+            doc.vector.into(),
+            doc.terms.into(),
+            doc.article_id.into(),
+        ]);
+    }
+    mysql(&format!(
+        "REPLACE INTO article_search_doc (article_id, model_epoch, content_hash, plain_len, vector, terms)
+         SELECT a.id, prepared.model_epoch, {CONTENT_HASH_EXPR}, prepared.plain_len, prepared.vector, prepared.terms
+         FROM ({}) AS prepared JOIN tanah_article a ON a.id = prepared.article_id
+         WHERE a.perek_id BETWEEN 1 AND 929 ORDER BY prepared.ordinal",
+        branches.join(" UNION ALL ")
+    ), values)
+}
+
+/// Writes full-retrain documents in bounded statements. The enclosing publisher
+/// owns the transaction and advisory-lock session; incremental updates continue
+/// to use `upsert_doc` unchanged. Ordering is explicit, including repeated ids.
+pub(super) async fn upsert_docs<C: ConnectionTrait>(
+    conn: &C,
+    model_epoch: i32,
+    docs: Vec<super::PreparedDoc>,
+) -> Result<(), DbErr> {
+    for mut batch in document_batches(docs) {
+        if batch.len() == 1 {
+            let doc = batch.pop().expect("one document in scalar batch");
+            upsert_doc(
+                conn,
+                doc.article_id,
+                model_epoch,
+                doc.plain_len,
+                doc.vector,
+                doc.terms,
+            )
+            .await?;
+        } else {
+            conn.execute_raw(document_batch_statement(model_epoch, batch))
+                .await?;
+        }
+    }
     Ok(())
 }
 
@@ -532,11 +624,13 @@ mod tests {
     async fn load_state_and_state_probe_map_the_singleton_row() {
         let conn = conn_with_queries(vec![vec![mock_row([
             ("schema_version", SCHEMA_VERSION.into()),
+            ("doc_count", 42_i32.into()),
             ("model_epoch", 7_i32.into()),
             ("model", vec![9_u8, 8].into()),
         ])]]);
         let state = load_state(&conn).await.expect("state").expect("row");
         assert_eq!(state.model_epoch, 7);
+        assert_eq!(state.doc_count, 42);
         assert_eq!(state.blob, vec![9_u8, 8]);
 
         let conn = conn_with_queries(vec![vec![]]);
@@ -556,6 +650,7 @@ mod tests {
     async fn load_docs_maps_stored_rows() {
         let conn = conn_with_queries(vec![vec![mock_row([
             ("article_id", 6_i32.into()),
+            ("model_epoch", 7_i32.into()),
             ("plain_len", 120_i32.into()),
             ("vector", vec![0_u8, 0, 0, 0].into()),
             ("terms", vec![1_u8].into()),
@@ -563,6 +658,7 @@ mod tests {
         let docs = load_docs(&conn).await.expect("docs");
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].article_id, 6);
+        assert_eq!(docs[0].model_epoch, 7);
         assert_eq!(docs[0].plain_len, 120);
         assert_eq!(docs[0].vector, vec![0_u8, 0, 0, 0]);
     }
@@ -618,5 +714,104 @@ mod tests {
         assert_eq!(rows[0].perek_id, 3);
         assert_eq!(rows[0].author_name.as_deref(), Some("רש\"י"));
         assert_eq!(rows[0].sefer_name.as_deref(), Some("בראשית"));
+    }
+
+    fn batch_doc(id: i32, vector: Vec<u8>, terms: Vec<u8>) -> super::super::PreparedDoc {
+        super::super::PreparedDoc {
+            article_id: id,
+            plain_len: id.max(1),
+            vector,
+            terms,
+        }
+    }
+
+    #[test]
+    fn full_document_batches_bound_rows_bytes_and_preserve_input_order() {
+        assert!(document_batches(Vec::new()).is_empty());
+        let batches = document_batches(
+            (1..=130)
+                .map(|id| batch_doc(id, vec![0, 255], vec![]))
+                .collect(),
+        );
+        assert_eq!(
+            batches.iter().map(Vec::len).collect::<Vec<_>>(),
+            [64, 64, 2]
+        );
+        assert_eq!(
+            batches
+                .into_iter()
+                .flatten()
+                .map(|d| d.article_id)
+                .collect::<Vec<_>>(),
+            (1..=130).collect::<Vec<_>>()
+        );
+        let batches = document_batches(
+            (1..=5)
+                .map(|id| batch_doc(id, vec![0; 60_000], vec![255; 60_000]))
+                .collect(),
+        );
+        assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [2, 2, 1]);
+        for batch in batches {
+            let payload: usize = batch
+                .iter()
+                .map(|d| d.vector.len() + d.terms.len() + 12 + 5 * 16)
+                .sum();
+            let statement = document_batch_statement(9, batch);
+            assert!(statement.sql.len() + payload + 128 <= DOCUMENT_BATCH_BYTES);
+        }
+        let batches = document_batches(vec![
+            batch_doc(1, vec![], vec![]),
+            batch_doc(2, vec![0; DOCUMENT_BATCH_BYTES], vec![255]),
+            batch_doc(3, vec![128], vec![]),
+        ]);
+        assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [1, 1, 1]);
+        assert_eq!(batches[1][0].vector.len(), DOCUMENT_BATCH_BYTES);
+    }
+
+    #[test]
+    fn full_document_batch_binds_binary_data_and_orders_the_outer_select() {
+        let statement = document_batch_statement(
+            7,
+            vec![
+                batch_doc(9, vec![0, 255, 128], vec![]),
+                batch_doc(2, vec![], vec![255, 0]),
+            ],
+        );
+        assert!(statement.sql.ends_with("ORDER BY prepared.ordinal"));
+        assert!(statement.sql.contains(CONTENT_HASH_EXPR));
+        assert!(statement.sql.contains("a.perek_id BETWEEN 1 AND 929"));
+        assert_eq!(
+            statement.values.unwrap().0,
+            vec![
+                7.into(),
+                9.into(),
+                vec![0_u8, 255, 128].into(),
+                Vec::<u8>::new().into(),
+                9.into(),
+                7.into(),
+                2.into(),
+                Vec::<u8>::new().into(),
+                vec![255_u8, 0].into(),
+                2.into()
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn full_document_empty_and_oversized_scalar_paths_keep_the_contract() {
+        let conn = conn_with_execs(0);
+        upsert_docs(&conn, 0, vec![]).await.unwrap();
+        assert!(conn.into_transaction_log().is_empty());
+        let conn = conn_with_execs(1);
+        upsert_docs(
+            &conn,
+            0,
+            vec![batch_doc(8, vec![0; DOCUMENT_BATCH_BYTES], vec![255])],
+        )
+        .await
+        .unwrap();
+        let log = conn.into_transaction_log();
+        assert_eq!(log.len(), 1);
+        assert!(format!("{log:?}").contains("WHERE a.id = ?"));
     }
 }

@@ -124,6 +124,107 @@ public class NavigationBoundaryTests
         }
     }
 
+    /// <summary>The queued overload is for dependent navigation (app links):
+    /// it must wait for the in-flight transition and still reach its route —
+    /// a vanished retarget was part of the iOS crash path (#2810).</summary>
+    [Fact]
+    public async Task QueuedNavigation_WaitsForInFlight_ThenReachesItsRoute()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = "home", Content = new ContentPage() });
+            shell.Items.Add(new ShellContent { Route = "target", Content = new ContentPage() });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+
+            // The shared gate is still held by the first navigation's settle
+            // wait when the queued call enters, so the second must queue.
+            var inFlight = ShellAppNavigator.Instance.GoToAsync("//home");
+            var queued = ShellAppNavigator.Instance.GoToQueuedAsync("//target");
+            await Task.WhenAll(inFlight, queued);
+
+            shell.CurrentState.Location.OriginalString.Should().Contain("target",
+                "the queued navigation must complete once the in-flight one releases the gate");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
+    [Fact]
+    public async Task QueuedNavigation_PreservesInvalidRouteError()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = "home", Content = new ContentPage() });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+            await FluentActions.Awaiting(() => ShellAppNavigator.Instance.GoToQueuedAsync("missingRoute"))
+                .Should().ThrowAsync<ArgumentException>().WithMessage("*missingRoute*");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
+    public sealed class QueryCapturingPage : ContentPage, IQueryAttributable
+    {
+        public IDictionary<string, object>? Query { get; private set; }
+        public void ApplyQueryAttributes(IDictionary<string, object> query) => Query = query;
+    }
+
+    [Fact]
+    public async Task ParameterizedNavigation_ForwardsDictionaryAsQuery()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var form = new QueryCapturingPage();
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = "form", Content = form });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+            await ShellAppNavigator.Instance.GoToAsync("//form", false,
+                new Dictionary<string, object> { ["mode"] = "quick" });
+            form.Query.Should().ContainKey("mode").WhoseValue.Should().Be("quick");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
+    [Fact]
+    public async Task ParameterizedNavigation_ForwardsShellNavigationQueryParameters()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var form = new QueryCapturingPage();
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = "form", Content = form });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+            await ShellAppNavigator.Instance.GoToAsync("//form", false,
+                new ShellNavigationQueryParameters(new Dictionary<string, object> { ["mode"] = "typed" }));
+            form.Query.Should().ContainKey("mode").WhoseValue.Should().Be("typed");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
     [Fact]
     public async Task Alert_ForwardsArgumentsToTheWindowDialogService()
     {
@@ -220,8 +321,10 @@ public class NavigationBoundaryTests
     }
 
     [Fact]
-    public async Task PreferencesChromeBackCommand_PopsItsSingleHistoryEntry()
+    public async Task PreferencesChromeBack_PopsItsSingleHistoryEntry()
     {
+        // The capsule Back in the preferences template rides the shared
+        // pipeline (IWindow.BackButtonClicked) — one pop per press (#2467).
         var previous = Application.Current;
         var dispatcher = new Mock<IDispatcher>();
         dispatcher.SetupGet(d => d.IsDispatchRequired).Returns(false);
@@ -237,11 +340,11 @@ public class NavigationBoundaryTests
             shell.Items.Add(new ShellContent { Route = "reader", Content = reader });
             var application = new TestApplication(shell);
             Application.Current = application;
-            ((IApplication)application).CreateWindow(null!);
+            var window = ((IApplication)application).CreateWindow(null!);
             await shell.GoToAsync("//reader");
             await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
 
-            PreferencesNavigation.BackCommand.Execute(null);
+            ((IWindow)window).BackButtonClicked().Should().BeTrue();
             await Task.Yield();
 
             shell.CurrentPage.Should().BeSameAs(reader);

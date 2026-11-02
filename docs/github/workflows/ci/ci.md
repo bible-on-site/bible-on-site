@@ -47,10 +47,10 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
   `perushim-sqlite-v2-indexed.master`) and per-platform app E2E coverage
   (`app-e2e-coverage.master.{android,ios}`).
 - **Determine Docker Image Availability**
-  (`determine_docker_image_availability`): checks the cached LCOV Docker
-  artifact and the GHCR Sefaria MongoDB image (tagged by the git tree hash of
-  `data/sefaria/mongodb-docker`); computes `can_publish_sefaria_mongo` (fork
-  PRs get a read-only token and cannot push to GHCR).
+  (`determine_docker_image_availability`): checks the GHCR Sefaria MongoDB
+  image (tagged by the git tree hash of `data/sefaria/mongodb-docker`) and
+  computes `can_publish_sefaria_mongo` (fork PRs get a read-only token and
+  cannot push to GHCR).
 - **Determine Changes** (`determine_changes`): one job running
   [`determine-changes.ts`](../../../../devops/github/ci/determine-changes.ts),
   which diffs the event's base revision (merge parent for PRs,
@@ -62,8 +62,6 @@ triggers on its own path filter (`devops/deploy/data-deploy/**`,
     tests or CI runs the module's checks but must not ship a release
     (#2210/#2132 — e.g. `web/bible-on-site/tests/**`,
     `app/BibleOnSite.Tests*/**`, `app/mobile-e2e/**`).
-- **Build LCOV Docker Image** (`build_lcov_docker`): rebuilds the coverage
-  image only when the cached artifact is missing.
 - **Build Sefaria MongoDB Docker Image** (`build_sefaria_mongo_docker`):
   publishes the Data integration-test MongoDB image to GHCR, tagged by the git
   tree hash of `data/sefaria/mongodb-docker`, only when that tag is missing.
@@ -134,7 +132,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
   `e2e-impact`, `e2e-coverage-trees`, `codecov-report-state`,
   `bencher-comparison` tests).
 - Publishes per-flag coverage to Codecov (`website`, `api`, `app`, `bulletin`,
-  `admin`, `admin_e2e`, `data`) and the cross-module merge to Codacy, then
+  `admin`, `data`) and the cross-module merge to Codacy, then
   polls Codecov's report state (`codecov-report-state.mjs`) — distinguishing
   pass, explicit fail, and unresolved/outage paths.
 - `website_publish_test_results_to_codecov` uploads the website's JUnit
@@ -175,6 +173,35 @@ Performance builds the same Next.js app pre-merge.
 - `bump_versions` — after any release, publishes the next version bump on
   master (`[skip ci]`), with collision-retry publication when a tag exists
   elsewhere. See [version-verification.md](../../version-verification.md).
+
+#### Pending API recovery
+
+A failed master run can leave real API changes unpublished. A later CI-only
+repair has no API files in its push diff, so event-diff selection alone would
+never rebuild that pending release. On master pushes where API content was not
+already selected, [`pending-api-release.mjs`](../../../../devops/github/ci/pending-api-release.mjs)
+compares the checked-out API tree with the immutable tag commit of the latest
+published canonical API release. Drafts, prereleases and bare tags are not a
+published baseline. Delivery metadata must agree with the tag when present.
+
+Only the API package's own manifest and source-less lockfile version are
+normalized. Dependencies, source, build inputs, file modes, additions and
+deletions remain meaningful; an automatic version-only bump cannot trigger a
+new release. Real unpublished changes with a newer API version select fresh API
+checks and packaging. Other module flags stay unchanged, and all existing
+Cross Module CI, release and CD provenance guards still apply. Nothing promotes
+an artifact from a failed source run.
+
+Available pinned commits are reused. A missing commit is fetched without
+changing repository history depth; depth-limited fetches are restricted to
+checkouts that were already shallow.
+
+The lookup is read-only and fails the selection job on metadata, provenance,
+fetch or version ambiguity. It runs only as a fallback on master pushes;
+ordinary API-change pushes retain their existing version-collision path.
+Removing the reconciliation step and its API output ORs disables this recovery
+without changing the ordinary release path. Its regression suite runs in the
+selection job on every CI event.
 
 ## Native E2E (`app-mobile-e2e.yml` + `app-mobile-e2e-runner.yml`)
 
@@ -259,7 +286,7 @@ save can only rewrite the state that same key already describes.
 | Android AVD state | config recipe + emulator/SDK package stamps | One snapshot: booted state, system certs, resolved marker |
 | Android SDK | license fingerprint + `SDK-PACKAGE` recipe | Save trusted pushes only |
 | Playwright browsers | `playwright-<version>` (+ webkit variant for `app_ios_ci`) | Version pinned by `setup_env` |
-| Docker LCOV image | action-cache artifact `github-workflow-lcov` | Rebuilt only on miss |
+| Docker LCOV image | BuildKit layer cache `lcov-cli` (type=gha) | Built per leg by `.github/actions/lcov-image`; ~seconds on cache hit |
 
 Toolchain identity is stamped into every key via
 `compute-ios-toolchain-id.mjs` / `hash-native-deps.mjs`, so Xcode/macOS/Node
@@ -372,3 +399,33 @@ skips recovery. This implements
 [issue #1183](https://github.com/bible-on-site/bible-on-site/issues/1183).
 See [Apple's build query](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds)
 and [Fastlane's upload/distribution options](https://docs.fastlane.tools/actions/pilot/).
+
+
+## Obsolete merge-group inspection
+
+A deleted queue branch can leave its old CI run queued or running after the
+queue has rebuilt a replacement. CI currently assigns each merge-group run a
+unique concurrency key, so normal PR supersession does not remove these runs.
+
+`reap-obsolete-merge-groups.yml` initially runs in **read-only dry-run mode**.
+It consumes only trusted default-branch code and GitHub metadata, never a
+candidate checkout or artifact. It inspects CI workflow-run and queue-branch
+delete events; delivery of internal queue delete events is not assumed, so
+workflow-run scans and manual cleanup remain available.
+
+A candidate must belong to this exact repository and CI workflow, retain its
+original run/ref/head identity, have an absent queue ref, and appear in no
+current queue head or base. Complete bounded pages and two fresh proofs are
+required. Current master and every merged PR's remaining validation are
+preserved, including HEADGREEN cases where a PR merges before its earlier
+checks finish. Unknown identity, incomplete topology, API errors and races
+fail closed. The controller caps requests and permits at most two normal
+cancellations per invocation; it never force-cancels or retries a mutation.
+
+The shipped inspection job has `actions: read`, calls `--dry-run`, and cannot
+cancel builds. Enabling cancellation requires a separately validated rollout
+after real inspection artifacts confirm event/ref behavior. Apply mode also
+requires a successful fsynced intent journal before every POST and retains
+one outcome-reconciliation read, so unknown outcomes are not retried. Rollback
+is returning to dry-run/read-only mode; exact stale builds can still be
+cleaned up manually after the same current-state checks.

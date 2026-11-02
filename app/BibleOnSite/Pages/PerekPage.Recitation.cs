@@ -164,7 +164,7 @@ public partial class PerekPage
             _focusedWordSpans.TryGetValue(_recitingWord.Segment, out var previous))
         {
             previous.BackgroundColor = null;
-            previous.TextColor = Color.FromArgb("#637598");
+            previous.TextColor = Pasuk.QriTextColor;
         }
 
         _recitingWord = word;
@@ -175,8 +175,8 @@ public partial class PerekPage
         }
         if (word != null && _focusedPasuk?.PasukNum == word.Pasuk && _focusedWordSpans.TryGetValue(word.Segment, out var current))
         {
-            current.BackgroundColor = Color.FromArgb("#e9eff8");
-            current.TextColor = Color.FromArgb("#1c427b");
+            current.BackgroundColor = Pasuk.RecitingBackgroundDefault;
+            current.TextColor = Pasuk.RecitingText;
         }
     }
 
@@ -461,7 +461,7 @@ public partial class PerekPage
             var segment = pasuk.Segments[i];
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Pasuk.QriTextColor });
             }
 
             var span = new Span
@@ -480,8 +480,9 @@ public partial class PerekPage
             if (word != null)
             {
                 _focusedWordSpans[word.Segment] = span;
-                span.TextColor = Color.FromArgb(_recitingWord == word ? "#1c427b" : "#637598");
-                span.BackgroundColor = _recitingWord == word ? Color.FromArgb("#e9eff8") : null;
+                var reciting = _recitingWord == word;
+                span.TextColor = reciting ? Pasuk.RecitingText : Pasuk.QriTextColor;
+                span.BackgroundColor = reciting ? Pasuk.RecitingBackgroundDefault : null;
                 var tap = new TapGestureRecognizer();
                 tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perek.PerekId}:{word.Pasuk}:{word.Segment}",
                     word.StartMs, word.EndMs, resumeFromMs: word.StartMs);
@@ -490,7 +491,7 @@ public partial class PerekPage
             formatted.Spans.Add(span);
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = ")", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = ")", TextColor = Pasuk.QriTextColor });
             }
 
             if (i < pasuk.Segments.Count - 1 && segment.Type is not (SegmentType.Ptuha or SegmentType.Stuma) && !segment.EndsWithMaqaf)
@@ -729,10 +730,19 @@ public partial class PerekPage
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the perek picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
+        { _chrome.ExitFullScreen(); return true; }
+        if (PerekPickerPopup.IsVisible)
+        { PerekPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
         if (ReaderMenuOverlay.IsOpen)
         { ReaderMenuOverlay.Close(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

@@ -440,6 +440,13 @@ public partial class SearchViewModel : ObservableObject
     /// </summary>
     public async Task SearchAsync(CancellationToken cancellationToken)
     {
+        // A debounce delay may finish before its UI continuation runs. If a
+        // newer query canceled it meanwhile, it must not cancel that query
+        // or clear its results when the old continuation is finally resumed.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
         CancelSearch();
         var version = _searchVersion;
         _searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -508,7 +515,7 @@ public partial class SearchViewModel : ObservableObject
 
             if (filters.Contains(SearchFilter.Perek))
             {
-                results.AddRange(await Task.Run(() => GetPerekResults(phrase, books).ToList(), token));
+                results.AddRange(await Task.Run(() => GetPerekResults(phrase, books, token).ToList(), token));
             }
 
             token.ThrowIfCancellationRequested();
@@ -755,14 +762,19 @@ public partial class SearchViewModel : ObservableObject
         }
     }
 
-    private IEnumerable<PerekSearchResult> GetPerekResults(string phrase, IReadOnlySet<int> books)
+    internal IEnumerable<PerekSearchResult> GetPerekResults(string phrase, IReadOnlySet<int> books, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var referenceQuery = string.Join(" ", phrase.Split(' ').Select(word => int.TryParse(word, out var number) && number is > 0 and <= 929
             ? number.ToHebrewLetters() : word));
         var normalizedReference = SearchText.Normalize(referenceQuery);
         var normalizedPhrase = SearchText.Normalize(phrase);
         return _perekDataService.Perakim!.Values
-            .Where(perek => books.Contains(perek.SeferId))
+            .Where(perek =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return books.Contains(perek.SeferId);
+            })
             .Select(perek => (Perek: perek, Source: _perekDataService.GetPerekSource(perek.PerekId) ?? string.Empty))
             .Select(row => (row.Perek, row.Source,
                 Score: Math.Max(SearchText.ScoreNormalized(row.Source, normalizedReference),

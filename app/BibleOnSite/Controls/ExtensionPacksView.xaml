@@ -13,7 +13,7 @@
                 <Label Text="פירושים"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -35,7 +35,6 @@
                         <Button Text="הורדת חבילת הפירושים"
                                 Command="{Binding DownloadPerushimCommand}"
                                 AutomationId="DownloadPerushimButton"
-                                BackgroundColor="{StaticResource Primary}"
                                 TextColor="White"
                                 CornerRadius="8"
                                 IsVisible="{Binding ShowPerushimDownloadButton}">
@@ -55,13 +54,11 @@
                                        VerticalOptions="Center"/>
                                 <ActivityIndicator Grid.Column="1"
                                                    IsRunning="{Binding IsPerushimDownloading}"
-                                                   Color="{StaticResource Primary}"
                                                    VerticalOptions="Center"
                                                    WidthRequest="18"
                                                    HeightRequest="18"/>
                             </Grid>
-                            <ProgressBar Progress="{Binding PerushimDownloadProgress}"
-                                         ProgressColor="{StaticResource Primary}"/>
+                            <ProgressBar Progress="{Binding PerushimDownloadProgress}"/>
                             <Button Text="ביטול ההורדה"
                                     Command="{Binding CancelPerushimDownloadCommand}"
                                     AutomationId="CancelPerushimDownloadButton"
@@ -99,7 +96,7 @@
                 <Label Text="קריינות"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -145,7 +142,7 @@
                                             <Label Text="מוריד…"
                                                    FontSize="13"
                                                    FontAttributes="Bold"
-                                                   TextColor="{StaticResource Primary}"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                    VerticalOptions="Center"
                                                    Margin="8,0"
                                                    IsVisible="{Binding ShowProgress}"/>
@@ -155,7 +152,6 @@
                                                     AutomationId="DownloadBookButton"
                                                     SemanticProperties.Description="{Binding Name, StringFormat='הורדת הקלטות {0}'}"
                                                     IsVisible="{Binding ShowDownload}"
-                                                    BackgroundColor="{StaticResource Primary}"
                                                     TextColor="White"
                                                     CornerRadius="8"
                                                     FontSize="12"
@@ -186,7 +182,6 @@
                                 Command="{Binding Packs.DownloadAllCommand}"
                                 IsEnabled="{Binding Packs.IsIdle}"
                                 AutomationId="RecitationDownloadAllButton"
-                                BackgroundColor="{StaticResource Primary}"
                                 TextColor="White"
                                 CornerRadius="8">
                             <Button.ImageSource>
@@ -197,8 +192,7 @@
                             </Button.ImageSource>
                         </Button>
                         <VerticalStackLayout Spacing="6" IsVisible="{Binding Packs.IsDownloading}">
-                            <ProgressBar Progress="{Binding Packs.Progress}"
-                                         ProgressColor="{StaticResource Primary}"/>
+                            <ProgressBar Progress="{Binding Packs.Progress}"/>
                             <Button Text="ביטול ההורדה"
                                     Command="{Binding Packs.CancelDownloadCommand}"
                                     AutomationId="RecitationCancelDownloadButton"

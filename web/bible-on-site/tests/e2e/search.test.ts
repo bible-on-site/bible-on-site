@@ -55,7 +55,7 @@ test.describe("Site search", () => {
 		for (const readerPath of [
 			"/929/1",
 			`/${encodeURIComponent("מסורה")}/1`,
-			`/${encodeURIComponent("פרשה")}/1`,
+			`/${encodeURIComponent("פרשה")}/${encodeURIComponent("בראשית")}`,
 		]) {
 			await page.goto(readerPath);
 			await expect(searchEntry).toHaveCount(0);

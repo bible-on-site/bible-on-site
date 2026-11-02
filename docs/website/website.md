@@ -174,6 +174,46 @@ never delays or fails the admin request.
 - **Verification**: submitting is not proof Bing received the URLs —
   confirm receipt in Bing Webmaster Tools as an operational follow-up.
 
+## Web Push Notifications (Daily Perek Reminder)
+
+Readers can opt in to a browser notification with the daily perek (#1096).
+
+- **Opt-in UI**: `PushNotificationsToggle` in the app section of the home
+  page. It registers `public/sw.js` only when the reader opts in, asks for
+  notification permission, subscribes with the VAPID public key and stores
+  the subscription. Unchecking deletes it on the server and unsubscribes the
+  browser. Unsupported browsers get an explanation; iPhone/iPad readers are
+  told to add the site to the home screen first (iOS/iPadOS 16.4+ only
+  expose Web Push to installed web apps). Blocked permission is explained
+  instead of re-prompting.
+- **Storage**: `tanah_web_push_subscription`
+  (`data/mysql/tanah_web_push_upgrade.sql`, data-deploy manifest), keyed by
+  the sha256 of the endpoint. A row is the opt-in, and there is no other
+  personal data. The website DB user needs `INSERT`/`DELETE`/`SELECT` on it.
+- **API**: `GET /api/push/subscription` returns the public key (`null` while
+  push is unconfigured, which hides the UI; 200 so pages log no console
+  error), `POST` stores a
+  `PushSubscription.toJSON()` body, `DELETE {endpoint}` removes it. Only
+  endpoints on known browser push services (FCM, Mozilla, WNS, Apple) are
+  accepted, so the sender never POSTs to arbitrary URLs.
+- **Trigger**: `.github/workflows/web-push-daily.yml` calls
+  `POST /api/push/daily` at 05:00 UTC Sunday-Friday with
+  `Authorization: Bearer $PUSH_SEND_SECRET`. The route resolves the day with
+  the shared learning schedule and sends only on study days (never on
+  Shabbat or review days). Payloads link to `/929/<perekId>`, use topic
+  `daily-perek` (an undelivered reminder is replaced, not stacked) and a
+  12-hour TTL. Subscriptions the push service reports as gone (404/410) are
+  deleted.
+- **Service worker**: `public/sw.js` only renders pushes (RTL Hebrew) and
+  focuses or opens the linked page on click, same-origin only. It has no
+  fetch handler, so it never affects loading or caching.
+- **Configuration** (server-only env on the website task):
+  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+  (`mailto:` or site URL) and `PUSH_SEND_SECRET`. Generate the key pair with
+  `bunx web-push generate-vapid-keys`. Any unset value turns the feature off.
+  The workflow runs only when the repository variable `WEB_PUSH_ENABLED` is
+  `true` and the repository secret `PUSH_SEND_SECRET` matches the website's.
+
 ## Database Configuration
 
 Environment variables for database connection (supports both formats):

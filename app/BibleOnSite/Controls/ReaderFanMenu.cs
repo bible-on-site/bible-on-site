@@ -92,6 +92,9 @@ public class ReaderFanMenu : Grid
                 Opacity = 0.3f
             }
         };
+        // Name + pointer label for the icon-only FAB (#2766).
+        SemanticProperties.SetDescription(ToggleButton, "תפריט הניווט");
+        ToolTipProperties.SetText(ToggleButton, "תפריט הניווט");
         if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("Primary", out var primary) == true
             && primary is Color primaryColor)
         {
@@ -217,9 +220,11 @@ public class ReaderFanMenu : Grid
 
         _scrim.IsVisible = true;
 
-        // Change FAB icon to X
+        // Change FAB icon to X — the close state keeps red semantics in dark
+        // mode too, but shifts to a deeper red that stays legible on OffBlack.
         ToggleButton.Text = Fonts.FluentUI.dismiss_24_regular;
-        ToggleButton.BackgroundColor = Colors.Red;
+        ToggleButton.SetAppThemeColor(VisualElement.BackgroundColorProperty,
+            Colors.Red, Color.FromArgb("#B71C1C"));
 
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>
@@ -242,7 +247,14 @@ public class ReaderFanMenu : Grid
     private async Task AnimateCloseAsync()
     {
         ToggleButton.Text = Fonts.FluentUI.navigation_24_regular;
-        ToggleButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
+        // Same guard as the constructor: an awaited close can outlive the
+        // Application (teardown mid-animation), so the resource read must not
+        // assume Current is still alive.
+        if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("Primary", out var primary) == true
+            && primary is Color primaryColor)
+        {
+            ToggleButton.BackgroundColor = primaryColor;
+        }
 
         var animations = new List<Task>
         {
@@ -296,7 +308,11 @@ public class ReaderFanMenu : Grid
             satellite.InputTransparent = true;
         }
         ToggleButton.Text = Fonts.FluentUI.navigation_24_regular;
-        ToggleButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
+        if (Microsoft.Maui.Controls.Application.Current?.Resources.TryGetValue("Primary", out var primary) == true
+            && primary is Color primaryColor)
+        {
+            ToggleButton.BackgroundColor = primaryColor;
+        }
         ToggleButton.Rotation = 0;
         _scrim.Opacity = 0;
         _scrim.IsVisible = false;

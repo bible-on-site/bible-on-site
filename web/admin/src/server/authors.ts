@@ -1,11 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "./db";
 import { getAuthorImageUrl } from "./s3";
-import {
-	authorInvalidation,
-	authorPath,
-	revalidateWebsite,
-} from "./website-revalidate";
+import { authorChange, revalidateWebsite } from "./website-revalidate";
 
 // imageUrl is computed at runtime from the author ID (S3 key: authors/high-res/{id}.jpg).
 // There is NO image_url column in tanah_author — do not add one.
@@ -87,7 +83,9 @@ export const createAuthor = createServerFn({ method: "POST" })
 		const author = toAuthor(row);
 		// Post-commit: expire the website's author/article caches so the new
 		// author becomes public without a redeploy (see server/website-revalidate.ts).
-		await revalidateWebsite(authorInvalidation(authorPath(author.name)));
+		await revalidateWebsite([
+			authorChange({ id: author.id, name: author.name }),
+		]);
 		return author;
 	});
 
@@ -120,9 +118,15 @@ export const updateAuthor = createServerFn({ method: "POST" })
 		}
 
 		const author = toAuthor(row);
-		const urls = new Set([authorPath(author.name)]);
-		if (previous) urls.add(authorPath(previous.name));
-		await revalidateWebsite(authorInvalidation(...urls));
+		await revalidateWebsite([
+			authorChange({
+				id: author.id,
+				name: author.name,
+				...(previous && previous.name !== author.name
+					? { oldName: previous.name }
+					: {}),
+			}),
+		]);
 		return author;
 	});
 
@@ -136,11 +140,12 @@ export const deleteAuthor = createServerFn({ method: "POST" })
 			[id],
 		);
 		await execute("DELETE FROM tanah_author WHERE id = ?", [id]);
-		// Orphaned articles lose their author link; both surfaces expire.
-		await revalidateWebsite(
-			authorInvalidation(
-				...(previous ? [authorPath(previous.name)] : []),
-			),
-		);
+		// The author's pages and their articles' surfaces expire; the website
+		// resolves the orphaned articles by id.
+		if (previous) {
+			await revalidateWebsite([
+				authorChange({ id, name: previous.name }),
+			]);
+		}
 		return { success: true };
 	});

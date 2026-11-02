@@ -40,6 +40,33 @@ describe("attachmentFilename", () => {
 			"fallback.pdf",
 		);
 	});
+
+	it("warns and uses the plain filename when filename* is malformed", () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			expect(
+				attachmentFilename(
+					"attachment; filename*=UTF-8''%E0%A4%A; filename=\"cal.pdf\"",
+					"fallback.pdf",
+				),
+			).toBe("cal.pdf");
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining("filename* is malformed"),
+				expect.any(Error),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("falls through to the plain filename when filename* decodes empty", () => {
+		expect(
+			attachmentFilename(
+				"attachment; filename*=UTF-8''; filename=\"cal.pdf\"",
+				"fallback.pdf",
+			),
+		).toBe("cal.pdf");
+	});
 });
 
 describe("triggerBrowserDownload", () => {

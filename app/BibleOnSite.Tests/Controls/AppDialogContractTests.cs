@@ -50,8 +50,9 @@ public class AppDialogContractTests
 		styles.Keys.Should().Contain(["AppDialogAction", "AppDialogDestructiveAction"]);
 
 		var safeText = StyleSetterValue(styles["AppDialogAction"], "TextColor");
-		safeText.Should().ContainAll(["Primary", "PrimaryLight"],
-			"safe actions render in theme blue in both themes (#2460)");
+		safeText.Should().ContainAll(["Primary", "AccentOnDark"],
+			"safe actions render in theme blue in both themes — Primary alone is " +
+			"illegible on dark surfaces, so the lighter brand accent applies (#2601)");
 		var destructiveText = StyleSetterValue(styles["AppDialogDestructiveAction"], "TextColor");
 		destructiveText.Should().ContainAll(["Error", "ErrorDark"],
 			"destructive actions render in red in both themes");

@@ -7,12 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // can classify; page navigations keep the Cognito redirect.
 
 const {
+	handleDocumentMock,
 	handlerFetchMock,
 	verifyIdTokenMock,
 	verifyServiceTokenMock,
 	parseCookieMock,
 	getLoginUrlMock,
 } = vi.hoisted(() => ({
+	handleDocumentMock: vi.fn(),
 	handlerFetchMock: vi.fn(),
 	verifyIdTokenMock: vi.fn(),
 	verifyServiceTokenMock: vi.fn(),
@@ -20,11 +22,24 @@ const {
 	getLoginUrlMock: vi.fn(),
 }));
 
+vi.mock("~/server/bulletin-document.server", () => ({
+	handleBulletinDocument: handleDocumentMock,
+}));
+
 vi.mock("@tanstack/react-start/server-entry", () => ({
 	default: { fetch: handlerFetchMock },
 	createServerEntry: (opts: {
 		fetch: (request: Request) => Promise<Response>;
 	}) => opts,
+}));
+
+// Worker startup and dedication scheduling have their own integration suites.
+// Authentication/coverage assertions must not load their DB/provider graph.
+vi.mock("~/server/email-worker-runtime.server", () => ({
+	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("~/server/auth", () => ({
@@ -58,6 +73,34 @@ function serverFnRequest(): Request {
 }
 
 describe("server entry auth boundary", () => {
+	it("dispatches only the document prefix to the restricted public PDF handler", async () => {
+		handleDocumentMock.mockResolvedValue(
+			new Response("pdf fixture", {
+				headers: { "Content-Type": "application/pdf" },
+			}),
+		);
+		const entry = await loadEntry();
+		const request = new Request(
+			"https://admin.test/api/bulletin-documents/2026-11-01/test.pdf",
+		);
+		const response = await entry.fetch(request);
+		expect(await response.text()).toBe("pdf fixture");
+		expect(handleDocumentMock).toHaveBeenCalledWith(request);
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+		expect(verifyIdTokenMock).not.toHaveBeenCalled();
+	});
+	it("does not fall through to privileged handlers when a public document is missing", async () => {
+		handleDocumentMock.mockResolvedValue(null);
+		const entry = await loadEntry();
+		expect(
+			(
+				await entry.fetch(
+					new Request("https://admin.test/api/bulletin-documents/invalid"),
+				)
+			).status,
+		).toBe(404);
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+	});
 	beforeEach(() => {
 		handlerFetchMock
 			.mockReset()

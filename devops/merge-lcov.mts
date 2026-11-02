@@ -20,7 +20,10 @@
  *             on unknown coordinates are dropped — a foreign hit without
  *             its unhit siblings would fake a fully covered file — and
  *             foreign BRDA arms never merge, since the same tuple can name
- *             a different branch in another build.
+ *             a different branch in another build. File blocks the input
+ *             enumerates that no canonical layer knows are dropped whole
+ *             and listed in the summary so instrumentation drift stays
+ *             visible instead of silently shrinking coverage.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
@@ -33,7 +36,13 @@
  *
  * Paths are resolved against the caller's working directory.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,12 +67,17 @@ interface FileRecord {
  * can raise DA/FNDA hit counts, never extend the universe. Canonical
  * inputs merge first regardless of CLI order, so the universe is always
  * complete before untrusted hits apply.
+ *
+ * When `droppedForeignFiles` is given it is filled with the normalized SF
+ * paths of whole file blocks an untrusted input enumerated that no
+ * canonical layer declares — dropped hits included.
  */
 export function mergeLcovTexts(
 	contents: string[],
 	prefix?: string,
 	relocates: string[] = [],
 	hitsOnly: ReadonlySet<number> = new Set(),
+	droppedForeignFiles?: Set<string>,
 ): string {
 	const files = new Map<string, FileRecord>();
 	const newRecord = (): FileRecord => ({
@@ -100,12 +114,13 @@ export function mergeLcovTexts(
 				// BRDA block/branch indices are the instrumenter's own
 				// coordinates — the same tuple can name a different arm in
 				// another build, so untrusted branch hits never merge.
+				const canonicalDefinitions = rec.fn;
 				for (const [name, h] of foreign.fnda) {
 					// A function is provably the same only when the untrusted
 					// block declared it at the exact FN "line,name" the
 					// canonical build declared.
 					const proven = [...foreign.fn].some(
-						(def) => def.endsWith(`,${name}`) && rec.fn.has(def),
+						(def) => def.endsWith(`,${name}`) && canonicalDefinitions.has(def),
 					);
 					if (proven) rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, h));
 				}
@@ -133,7 +148,9 @@ export function mergeLcovTexts(
 				// An untrusted file is foreign code: the whole block drops,
 				// hits included — reporting them without their unhit siblings
 				// would fake a fully covered file.
-				rec = coveredOnly ? (files.get(p) ?? null) : recordFor(p);
+				const canonicalRec = coveredOnly ? (files.get(p) ?? null) : null;
+				if (coveredOnly && !canonicalRec) droppedForeignFiles?.add(p);
+				rec = coveredOnly ? canonicalRec : recordFor(p);
 				foreign = coveredOnly && rec ? newRecord() : null;
 				continue;
 			}
@@ -146,11 +163,17 @@ export function mergeLcovTexts(
 			if (!target) continue;
 			if (line.startsWith("DA:")) {
 				const [ln, hits] = line.slice(3).split(",");
-				target.da.set(Number(ln), Math.max(target.da.get(Number(ln)) ?? 0, Number(hits)));
+				target.da.set(
+					Number(ln),
+					Math.max(target.da.get(Number(ln)) ?? 0, Number(hits)),
+				);
 			} else if (line.startsWith("BRDA:")) {
 				const [ln, block, branch, hits] = line.slice(5).split(",");
 				const key = `${ln},${block},${branch}`;
-				target.brda.set(key, Math.max(target.brda.get(key) ?? 0, Number(hits) || 0));
+				target.brda.set(
+					key,
+					Math.max(target.brda.get(key) ?? 0, Number(hits) || 0),
+				);
 			} else if (line.startsWith("FNDA:")) {
 				const comma = line.indexOf(",", 5);
 				const hits = Number(line.slice(5, comma));
@@ -166,17 +189,25 @@ export function mergeLcovTexts(
 	const chunks: string[] = [];
 	for (const [path, rec] of [...files.entries()].sort()) {
 		// A file block with no records at all has nothing to report.
-		if (!rec.da.size && !rec.brda.size && !rec.fnda.size && !rec.fn.size) continue;
+		if (!rec.da.size && !rec.brda.size && !rec.fnda.size && !rec.fn.size)
+			continue;
 		const lines: string[] = [`TN:`, `SF:${path}`];
 		for (const fn of [...rec.fn].sort()) lines.push(`FN:${fn}`);
-		for (const [name, hits] of [...rec.fnda.entries()].sort()) lines.push(`FNDA:${hits},${name}`);
-		for (const [ln, hits] of [...rec.da.entries()].sort((a, b) => a[0] - b[0])) {
+		for (const [name, hits] of [...rec.fnda.entries()].sort())
+			lines.push(`FNDA:${hits},${name}`);
+		for (const [ln, hits] of [...rec.da.entries()].sort(
+			(a, b) => a[0] - b[0],
+		)) {
 			lines.push(`DA:${ln},${hits}`);
 		}
-		for (const [key, hits] of [...rec.brda.entries()].sort()) lines.push(`BRDA:${key},${hits}`);
+		for (const [key, hits] of [...rec.brda.entries()].sort())
+			lines.push(`BRDA:${key},${hits}`);
 		const lh = [...rec.da.values()].filter((h) => h > 0).length;
 		const brh = [...rec.brda.values()].filter((h) => h > 0).length;
-		lines.push(`FNF:${rec.fn.size}`, `FNH:${[...rec.fnda.values()].filter((h) => h > 0).length}`);
+		lines.push(
+			`FNF:${rec.fn.size}`,
+			`FNH:${[...rec.fnda.values()].filter((h) => h > 0).length}`,
+		);
 		lines.push(`BRF:${rec.brda.size}`, `BRH:${brh}`);
 		lines.push(`LF:${rec.da.size}`, `LH:${lh}`, "end_of_record");
 		chunks.push(lines.join("\n"));
@@ -212,10 +243,15 @@ function main(): void {
 		process.exit(1);
 	}
 
-	const required = [...(flags.get("require") ?? []), ...(flags.get("hits-only") ?? [])];
+	const required = [
+		...(flags.get("require") ?? []),
+		...(flags.get("hits-only") ?? []),
+	];
 	const missing = required.filter((p) => !existsSync(resolve(p)));
 	if (missing.length > 0) {
-		console.error(`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`);
+		console.error(
+			`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`,
+		);
 		process.exit(1);
 	}
 
@@ -240,10 +276,28 @@ function main(): void {
 		console.log(`✓ Added coverage from ${inputPath}`);
 	}
 
-	const merged = mergeLcovTexts(contents, prefix, relocates, hitsOnly);
+	const droppedForeignFiles = new Set<string>();
+	const merged = mergeLcovTexts(
+		contents,
+		prefix,
+		relocates,
+		hitsOnly,
+		droppedForeignFiles,
+	);
 	const outPath = resolve(out);
 	mkdirSync(dirname(outPath), { recursive: true });
 	writeFileSync(outPath, merged);
+
+	if (droppedForeignFiles.size > 0) {
+		const shown = [...droppedForeignFiles].slice(0, 15);
+		const rest = droppedForeignFiles.size - shown.length;
+		console.log(
+			`⚠ Untrusted input file(s) outside the canonical universe — ` +
+				`dropped hits included (${droppedForeignFiles.size}):\n  ` +
+				shown.join("\n  ") +
+				(rest > 0 ? `\n  …and ${rest} more` : ""),
+		);
+	}
 
 	if (rmInputDirs) {
 		for (const dir of consumedDirs) {

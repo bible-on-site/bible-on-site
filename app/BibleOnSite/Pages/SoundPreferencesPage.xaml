@@ -46,7 +46,6 @@
                             Value="{Binding RecitationVolume}"
                             AutomationId="RecitationVolumeSlider"
                             SemanticProperties.Description="עוצמת קריינות"
-                            MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                 </VerticalStackLayout>
             </Border>
@@ -82,7 +81,6 @@
                             Value="{Binding LessonsVolume}"
                             AutomationId="LessonsVolumeSlider"
                             SemanticProperties.Description="עוצמת שיעורים מוקלטים"
-                            MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                 </VerticalStackLayout>
             </Border>
@@ -118,7 +116,6 @@
                             Value="{Binding EffectsVolume}"
                             AutomationId="EffectsVolumeSlider"
                             SemanticProperties.Description="עוצמת אפקטים"
-                            MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     <Label Text="אין כרגע צלילי אפקטים באפליקציה; ההעדפה נשמרת ותיושם כשיתווספו"
                            FontSize="12"

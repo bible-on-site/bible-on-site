@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 /**
  * Separate test file for BookshelfModal when clicking a non-today sefer.
@@ -12,7 +12,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 jest.mock("@/app/components/Bookshelf/Bookshelf", () => ({
 	Bookshelf: ({
 		onSeferClick,
-	}: { onSeferClick?: (name: string, from: number) => void }) => (
+	}: {
+		onSeferClick?: (name: string, from: number) => void;
+	}) => (
 		<button
 			data-testid="mock-bookshelf"
 			type="button"
@@ -30,6 +32,12 @@ jest.mock("@/app/components/Bookshelf/bookshelf-modal.module.css", () => ({
 }));
 
 const mockPush = jest.fn();
+// Bypass unstable_cache — just run the wrapped function directly (#2731:
+// dedication loaders are tag-cached).
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
+}));
+
 jest.mock("next/navigation", () => ({
 	useRouter: () => ({ push: mockPush }),
 }));
@@ -53,8 +61,10 @@ describe("BookshelfModal (non-today sefer)", () => {
 		mockPush.mockClear();
 	});
 
-	it("navigates to perekFrom when clicking a non-today sefer", () => {
-		render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+	it("navigates to perekFrom when clicking a non-today sefer", async () => {
+		await act(async () => {
+			render(<BookshelfModal isOpen={true} onClose={jest.fn()} />);
+		});
 		// Mock bookshelf fires onSeferClick("בראשית", 1) — Bookshelf passed perekFrom
 		fireEvent.click(screen.getByTestId("mock-bookshelf"));
 		expect(mockPush).toHaveBeenCalledWith("/929/1");

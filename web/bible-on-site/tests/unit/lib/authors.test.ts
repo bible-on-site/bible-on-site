@@ -9,10 +9,8 @@ jest.mock("../../../src/lib/api-client", () => ({
 
 import { query } from "../../../src/lib/api-client";
 import {
-	getAllAuthorIds,
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
-	getAuthorById,
 	getAuthorByName,
 	getAuthorImageUrl,
 } from "../../../src/lib/authors/service";
@@ -97,83 +95,6 @@ describe("authors service", () => {
 		});
 	});
 
-	describe("getAuthorById", () => {
-		it("returns mapped author when found", async () => {
-			const mockRow = {
-				id: 1,
-				name: "Test Author",
-				details: "Some details",
-			};
-
-			mockQuery.mockResolvedValue([mockRow]);
-			process.env.S3_ENDPOINT = "http://localhost:4566";
-
-			const result = await getAuthorById(1);
-
-			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("SELECT id, name, details"),
-				[1],
-			);
-
-			expect(result).toEqual({
-				id: 1,
-				name: "Test Author",
-				details: "Some details",
-				imageUrl:
-					"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
-			});
-		});
-
-		it("returns null when author not found", async () => {
-			mockQuery.mockResolvedValue([]);
-
-			const result = await getAuthorById(999);
-
-			expect(result).toBeNull();
-		});
-
-		it("returns null and logs warning on error", async () => {
-			const consoleWarn = jest
-				.spyOn(console, "warn")
-				.mockImplementation(() => {});
-			mockQuery.mockRejectedValue(new Error("DB error"));
-
-			await expect(getAuthorById(1)).rejects.toThrow("DB error");
-			expect(consoleWarn).toHaveBeenCalledWith(
-				"Failed to fetch author 1:",
-				"DB error",
-			);
-		});
-
-		it("propagates non-Error rejections without caching them", async () => {
-			mockQuery.mockRejectedValue("string error");
-
-			await expect(getAuthorById(1)).rejects.toBe("string error");
-			expect(console.warn).toHaveBeenCalledWith(
-				"Failed to fetch author 1:",
-				"string error",
-			);
-		});
-
-		it("handles empty details as empty string", async () => {
-			const mockRow = {
-				id: 1,
-				name: "Test Author",
-				details: "",
-			};
-
-			mockQuery.mockResolvedValue([mockRow]);
-			process.env.S3_ENDPOINT = "http://localhost:4566";
-
-			const result = await getAuthorById(1);
-
-			expect(result?.details).toBe("");
-			expect(result?.imageUrl).toBe(
-				"http://localhost:4566/bible-on-site-assets/authors/high-res/1.jpg",
-			);
-		});
-	});
-
 	describe("getArticlesByAuthorId", () => {
 		it("returns mapped articles when found", async () => {
 			const mockRows = [
@@ -234,61 +155,6 @@ describe("authors service", () => {
 			await expect(getArticlesByAuthorId(5)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for author 5:",
-				"string error",
-			);
-		});
-	});
-
-	describe("getAllAuthorIds", () => {
-		it("returns array of author IDs", async () => {
-			mockQuery.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
-
-			const result = await getAllAuthorIds();
-
-			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("SELECT a.id FROM tanah_author"),
-			);
-
-			expect(result).toEqual([1, 2, 3]);
-		});
-
-		it("only counts authors with valid chapter articles", async () => {
-			mockQuery.mockResolvedValue([]);
-
-			await getAllAuthorIds();
-
-			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("art.perek_id BETWEEN 1 AND 929"),
-			);
-		});
-
-		it("returns empty array when no authors", async () => {
-			mockQuery.mockResolvedValue([]);
-
-			const result = await getAllAuthorIds();
-
-			expect(result).toEqual([]);
-		});
-
-		it("returns empty array and logs warning on error", async () => {
-			const consoleWarn = jest
-				.spyOn(console, "warn")
-				.mockImplementation(() => {});
-			mockQuery.mockRejectedValue(new Error("DB error"));
-
-			await expect(getAllAuthorIds()).rejects.toThrow("DB error");
-			expect(consoleWarn).toHaveBeenCalledWith(
-				"Failed to fetch author IDs:",
-				"DB error",
-			);
-		});
-
-		it("propagates non-Error rejections without caching them", async () => {
-			mockQuery.mockRejectedValue("string error");
-
-			await expect(getAllAuthorIds()).rejects.toBe("string error");
-			expect(console.warn).toHaveBeenCalledWith(
-				"Failed to fetch author IDs:",
 				"string error",
 			);
 		});

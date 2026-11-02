@@ -196,6 +196,58 @@ public sealed class AppConfig
     }
 
     /// <summary>
+    /// Default base URL of the shared public assets bucket — the same fallback
+    /// the website's assetsUrl() uses when no CDN origin is configured
+    /// (S3_BUCKET=bible-on-site-assets in il-central-1).
+    /// </summary>
+    private const string DefaultAssetsBaseUrl =
+        "https://bible-on-site-assets.s3.il-central-1.amazonaws.com";
+
+#if DEBUG
+    /// <summary>
+    /// Local S3-compatible endpoint of the dev stack (RustFS), matching the
+    /// website's .dev.env. Android emulator maps host loopback to 10.0.2.2.
+    /// Only the DEBUG branch of GetAssetsBaseUrl consults it.
+    /// </summary>
+    private static string DevAssetsEndpoint
+    {
+        get
+        {
+#if ANDROID
+            return "http://10.0.2.2:4566";
+#else
+            return "http://localhost:4566";
+#endif
+        }
+    }
+#endif
+
+    /// <summary>
+    /// Gets the base URL of the shared public assets bucket that hosts the
+    /// published calendar-PDF manifest/objects (#2622), mirroring the
+    /// website's assetsUrl() resolution: ASSETS_BASE_URL first, then — in
+    /// DEBUG — the local S3_ENDPOINT/S3_BUCKET path-style URL so a local app
+    /// reads the same locally generated artifacts the local website serves,
+    /// and finally the production bucket's virtual-hosted S3 URL.
+    /// </summary>
+    public string GetAssetsBaseUrl()
+    {
+        var env = Environment.GetEnvironmentVariable("ASSETS_BASE_URL");
+        if (!string.IsNullOrEmpty(env))
+        {
+            return env.TrimEnd('/');
+        }
+#if DEBUG
+        var endpoint = Environment.GetEnvironmentVariable("S3_ENDPOINT");
+        var bucket = Environment.GetEnvironmentVariable("S3_BUCKET");
+        return $"{(string.IsNullOrEmpty(endpoint) ? DevAssetsEndpoint : endpoint.TrimEnd('/'))}" +
+            $"/{(string.IsNullOrEmpty(bucket) ? "bible-on-site-assets-dev" : bucket)}";
+#else
+        return DefaultAssetsBaseUrl;
+#endif
+    }
+
+    /// <summary>
     /// Gets the Terms of Service URL.
     /// </summary>
     public string TosUrl => $"{GetWebsiteUrl()}/tos";

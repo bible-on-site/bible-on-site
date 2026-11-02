@@ -31,8 +31,10 @@ Canonical website source: `web/bible-on-site/src/lib/reading/contract.ts`
   filling skipped text, no collapsing repeats.
 - **`ReadingUnit`** — `{ division, unitId, slug, seferName, order,
   heading, ranges, auxiliaryReadings?, closingBreak? }`. `unitId` is a
-  stable contiguous id within the division; `slug` is the decimal
-  `unitId`; `order` is 1-based within the parent sefer; `heading` is the
+  stable contiguous id within the division; `slug` is the canonical URL
+  segment — the decimal `unitId` for מסורה, the Hebrew parasha name
+  (hyphen-joined, e.g. `לך-לך`) for פרשה (issue #2738); `order` is
+  1-based within the parent sefer; `heading` is the
   unit's display identity inside the division's own hierarchy — for
   מסורה units the sefer name plus the parasha ordinal
   ("בראשית פרשה ח"), with no conventional perek/pasuk references.
@@ -108,7 +110,13 @@ verbatim by the website (`src/data/parasha/parasha-units.ts`) and by the
 SQLite exporter (`reading_units.rs::derive_parasha_units`), so all
 consumers resolve identical units:
 - Exactly the five Torah sefarim carry primary units: **54 parashiot**
-  with positional decimal `unitId`s/`slug`s and per-sefer `order`.
+  with positional decimal `unitId`s and per-sefer `order`. Each unit's
+  `slug` is the canonical Hebrew name (plain unpointed words joined by
+  ASCII hyphens — `לך-לך`, `אחרי-מות`, `וזאת-הברכה`); the table's
+  `aliases` hold researched lexical variants (Sefaria Terms API, per
+  `nameAudit`) and every unit accepts the shared `פרשת {name}` prefix,
+  while numeric ids and aliases permanent-redirect to the canonical
+  slug (issue #2738).
   Joined pairs (ויקהל–פקודי, תזריע–מצורע, אחרי מות–קדושים, בהר–בחוקותי,
   מטות–מסעי, נצבים–וילך) stay **separate unit identities** — the
   `joinedReadings` table records the combination for display, never
@@ -147,9 +155,14 @@ live in `docs/data/aliyah-sources.md`. Consumers:
 - **Website** — `src/data/parasha/parasha-aliyot.ts` resolves every
   boundary to canonical `perekId`/`pasuk` at module load (impossible
   endpoints fail the build) and validates ordered non-overlapping
-  coverage, allowing the intentional maftir tail-repeat. The flat
-  parasha page embeds all context/scheme marker layers and swaps them
-  client-side (`?reading=`/`?scheme=`); the sefer book renders each
+  coverage, allowing the intentional maftir tail-repeat. Named
+  **variant layers** are derived from the per-aliyah `alternatives`:
+  each (custom | alt-source) group substitutes its recorded ranges for
+  the covered ordinals inside a full boundary list, re-validated for
+  contiguous coverage; variants that move no boundary *start* are
+  dropped as renderer-identical. The flat parasha page embeds all
+  context/scheme/variant marker layers and swaps them client-side
+  (`?reading=`/`?scheme=`/`?variant=`); the sefer book renders each
   unit's standalone Shabbat layer. Aliyah markers take the prominent
   separator treatment; perek labels demote to pasuk-number styling.
 - **SQLite export** — `reading_units.rs::insert_parasha_aliyot` resolves
@@ -163,9 +176,15 @@ live in `docs/data/aliyah-sources.md`. Consumers:
     (division_id, unit_id)`: joined contexts keep their two constituent
     unit identities in reading order — never merged.
   - `tanah_parasha_aliyah` — `(reading_id, scheme_id, ordinal) →
-    { role, label, start/end perek/pasuk, note }`: inclusive canonical
-    bounds; `role='maftir'` marks the intentional repeated-tail reading;
-    `note` carries the source's documented alternative splits verbatim.
+    { role, label, start/end perek/pasuk }`: inclusive canonical
+    bounds; `role='maftir'` marks the intentional repeated-tail reading.
+  - `tanah_parasha_aliyah_alternative` — `(reading_id, scheme_id,
+    ordinal, alternative) → { start/end perek/pasuk, custom, source }`:
+    the documented variant range for each aliyah that carries one —
+    `custom` names the minhag (NULL = unattributed recorded split),
+    `source` the upstream that records it. Consumers derive named
+    variant layers by substituting each (custom | source) group's
+    ranges for its ordinals, the same derivation the website runs.
   - `tanah_parasha_aliyah_source` — the single provenance row (name,
     repository, license, upstream commit, retrieval date).
 - **Native app** — the tables are the versioned contract for app-side

@@ -2,7 +2,7 @@ use std::{
     env, io,
     net::TcpListener,
     sync::{
-        Arc,
+        Arc, LazyLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -101,6 +101,7 @@ impl ActixApp {
         let article_index = article_index.clone();
         move |cfg: &mut web::ServiceConfig| {
             cfg.app_data(web::Data::new(build_schema(&db, &article_index)))
+                .app_data(web::Data::new(article_index.clone()))
                 .service(web::resource("/").guard(guard::Post()).to(graphql_request))
                 .service(
                     web::resource("/")
@@ -111,6 +112,11 @@ impl ActixApp {
                     web::resource("/health")
                         .guard(guard::Any(guard::Get()).or(guard::Head()))
                         .to(health_check),
+                )
+                .service(
+                    web::resource("/health/ready")
+                        .guard(guard::Any(guard::Get()).or(guard::Head()))
+                        .to(readiness_check),
                 );
 
             if env::var("PROFILE").unwrap_or_default() != "prod" {
@@ -139,13 +145,36 @@ struct HealthResponse {
     version: &'static str,
 }
 
+// An opaque process marker lets deployment checks distinguish old and new
+// instances of the same release without exposing AWS metadata or changing JSON.
+const HEALTH_INSTANCE_HEADER: &str = "x-tanahpedia-instance";
+static HEALTH_INSTANCE: LazyLock<String> = LazyLock::new(|| uuid::Uuid::new_v4().to_string());
+
 /// GET/HEAD /health — returns API status and version (embedded at compile time).
 /// Used by ECS health checks and for version introspection.
 async fn health_check() -> HttpResponse {
-    HttpResponse::Ok().json(HealthResponse {
-        status: "ok",
-        version: env!("CARGO_PKG_VERSION"),
-    })
+    HttpResponse::Ok()
+        .insert_header((HEALTH_INSTANCE_HEADER, HEALTH_INSTANCE.as_str()))
+        .json(HealthResponse {
+            status: "ok",
+            version: env!("CARGO_PKG_VERSION"),
+        })
+}
+
+/// Dependency readiness is separate from the stable liveness/version contract.
+async fn readiness_check(index: web::Data<ArticleSearchIndex>) -> HttpResponse {
+    let ready = index.is_ready().await;
+    let mut response = if ready {
+        HttpResponse::Ok()
+    } else {
+        HttpResponse::ServiceUnavailable()
+    };
+    response
+        .insert_header((HEALTH_INSTANCE_HEADER, HEALTH_INSTANCE.as_str()))
+        .json(HealthResponse {
+            status: if ready { "ready" } else { "not_ready" },
+            version: env!("CARGO_PKG_VERSION"),
+        })
 }
 
 #[cfg(test)]
@@ -167,6 +196,177 @@ mod tests {
                 )
                 .into_connection(),
         )
+    }
+
+    #[actix_web::test]
+    async fn readiness_route_requires_initialized_live_worker_and_preserves_liveness() {
+        use crate::services::article_search::{lsa, store};
+        use sea_orm::{MockExecResult, Value};
+        use std::collections::BTreeMap;
+        let model = lsa::LsaModel::train(Vec::new(), Vec::new(), &[]);
+        let row = |pairs: Vec<(&str, Value)>| -> BTreeMap<String, Value> {
+            pairs
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect()
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_exec_results(vec![
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1
+                    };
+                    3
+                ])
+                .append_query_results([
+                    vec![row(vec![
+                        ("schema_version", store::SCHEMA_VERSION.into()),
+                        ("model_epoch", 1_i32.into()),
+                        ("doc_count", 0_i32.into()),
+                        ("model", lsa::serialize_model(&model).into()),
+                    ])],
+                    vec![],
+                    vec![row(vec![("ready", 1_i32.into())])],
+                    vec![row(vec![("ready", 1_i32.into())])],
+                ])
+                .into_connection(),
+        );
+        let index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &index,
+            Arc::new(AtomicBool::new(false)),
+        )))
+        .await;
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/health/ready").to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = to_bytes(response.into_body())
+            .await
+            .expect("readiness body");
+        assert_eq!(
+            std::str::from_utf8(&body).expect("UTF8"),
+            format!(
+                r#"{{"status":"not_ready","version":"{}"}}"#,
+                env!("CARGO_PKG_VERSION")
+            )
+        );
+        let worker = tokio::spawn(article_search::run_worker(index));
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        for method in [Method::GET, Method::HEAD] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method)
+                    .uri("/health/ready")
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers().get(HEALTH_INSTANCE_HEADER).unwrap(),
+                HEALTH_INSTANCE.as_str()
+            );
+        }
+        for method in [
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::TRACE,
+            Method::CONNECT,
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method)
+                    .uri("/health/ready")
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+        worker.abort();
+        let _ = worker.await;
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/health/ready").to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let response =
+            test::call_service(&app, test::TestRequest::get().uri("/health").to_request()).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn health_routes_identify_the_same_process_without_changing_json() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+        )))
+        .await;
+        let mut instance = None;
+        for (method, path, expected) in [
+            (Method::GET, "/health", StatusCode::OK),
+            (Method::HEAD, "/health", StatusCode::OK),
+            (
+                Method::GET,
+                "/health/ready",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (
+                Method::HEAD,
+                "/health/ready",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method.clone())
+                    .uri(path)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), expected);
+            let value = response
+                .headers()
+                .get("x-tanahpedia-instance")
+                .expect("health routing must identify the serving process")
+                .to_str()
+                .expect("instance identifier is ASCII")
+                .to_owned();
+            assert_eq!(uuid::Uuid::parse_str(&value).unwrap().get_version_num(), 4);
+            assert_eq!(value.len(), 36);
+            if let Some(ref previous) = instance {
+                assert_eq!(&value, previous);
+            } else {
+                instance = Some(value);
+            }
+            if method == Method::GET {
+                let body = to_bytes(response.into_body()).await.unwrap();
+                let status = if path == "/health" { "ok" } else { "not_ready" };
+                assert_eq!(
+                    std::str::from_utf8(&body).unwrap(),
+                    format!(
+                        r#"{{"status":"{}","version":"{}"}}"#,
+                        status,
+                        env!("CARGO_PKG_VERSION")
+                    )
+                );
+            }
+        }
     }
 
     #[actix_web::test]

@@ -6,9 +6,9 @@ import { hebrewSerif, taameyD } from "@/app/929/[number]/hebrew-font";
 import "@/app/929/[number]/layout.css";
 import {
 	getAdjacentParashaUnits,
-	getParashaUnitCount,
 	PARASHA_DIVISION,
 } from "@/data/parasha/parasha-units";
+import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 
 /**
  * פרשה unit pages share the /929 reader chrome: the same swipe
@@ -24,17 +24,23 @@ export default async function ParashaUnitLayout({
 	params: Promise<{ unit: string }>;
 }) {
 	const { unit } = await params;
-	const unitId = Number.parseInt(unit, 10);
-	const count = getParashaUnitCount();
-	const inRange = unitId >= 1 && unitId <= count;
-	const { prev, next } = inRange
-		? getAdjacentParashaUnits(unitId)
-		: { prev: null, next: null };
+	// Params arrive percent-encoded (same convention as /929/[slug]).
+	let segment = unit;
+	try {
+		segment = decodeURIComponent(unit);
+	} catch {
+		segment = unit;
+	}
+	const resolved = resolveParashaSegment(segment);
+	const { prev, next } =
+		resolved?.kind === "canonical"
+			? getAdjacentParashaUnits(resolved.unitId)
+			: { prev: null, next: null };
 
 	return (
 		<UnitSwipeNavigation
-			prevHref={prev ? `${PARASHA_DIVISION.rootPath}/${prev.unitId}` : null}
-			nextHref={next ? `${PARASHA_DIVISION.rootPath}/${next.unitId}` : null}
+			prevHref={prev ? `${PARASHA_DIVISION.rootPath}/${prev.slug}` : null}
+			nextHref={next ? `${PARASHA_DIVISION.rootPath}/${next.slug}` : null}
 			className={`perek-layout ${hebrewSerif.variable} ${taameyD.variable}`}
 		>
 			<ReaderSettings />

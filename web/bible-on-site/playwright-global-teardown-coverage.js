@@ -1,33 +1,51 @@
-import { CDPClient } from "monocart-coverage-reports";
 import { addCoverageReport } from "monocart-reporter";
-import { getRouterDebugPort } from "./get-debug-port";
 import { sanitizeCoverage } from "./tests/util/coverage/sanitize-coverage";
 
+const WEB_SERVER_URL = "http://127.0.0.1:3001";
+
+/**
+ * Drains the dev server's remaining `global.__coverage__` one last time.
+ *
+ * Per-test coverage already flows through `window.__coverage__` (browser) and
+ * `GET /api/dev/coverage` (server) in tests/util/playwright/test-fixture.ts —
+ * all of it produced by the same swc-plugin-coverage-instrument instrumentation.
+ * This final drain captures server counters that accumulated after the last
+ * test context closed (e.g. trailing fetches or late module registrations).
+ *
+ * The previous implementation pulled V8 coverage over CDP
+ * (`CDPClient.getIstanbulCoverage()`). V8->Istanbul conversion uses a
+ * different coordinate system than the SWC plugin and only enumerates scripts
+ * the dev server happened to compile during the run, so it polluted the report
+ * with generated modules and a run-dependent denominator (#2670).
+ */
 const globalTeardown = async (config) => {
-	let client;
+	let coverageData;
 	try {
-		client = await CDPClient({
-			port: getRouterDebugPort(),
-		});
+		// Loopback drain of the dev server's coverage counters — the hardcoded
+		// 127.0.0.1 playwright webServer never leaves this machine.
+		// nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request
+		const res = await fetch(`${WEB_SERVER_URL}/api/dev/coverage`);
+		if (!res.ok) {
+			console.warn(
+				`[coverage] Server coverage drain returned ${res.status}. ` +
+					"Residual server coverage will not be collected.",
+			);
+			return;
+		}
+		coverageData = await res.json();
 	} catch {
-		// If we can't connect to the debug port, the server wasn't started with --inspect
-		// This happens when reuseExistingServer picks up a pre-running dev server
+		// The server is already down or was never started by Playwright
+		// (reuseExistingServer may attach to a production server without the
+		// dev-only /api/dev/coverage route).
 		console.warn(
-			`[coverage] Could not connect to debug port ${getRouterDebugPort()}. ` +
-				"Coverage data will not be collected. " +
-				"Stop any existing dev server and let Playwright start a fresh one with coverage instrumentation.",
+			`[coverage] Could not reach ${WEB_SERVER_URL}/api/dev/coverage. ` +
+				"Residual server coverage will not be collected.",
 		);
 		return;
 	}
-	if (!client?.getIstanbulCoverage) {
-		console.warn(
-			`[coverage] Debug port ${getRouterDebugPort()} connected but Istanbul coverage not available. ` +
-				"The dev server may not have been started with --inspect flag.",
-		);
+	if (!coverageData || typeof coverageData !== "object") {
 		return;
 	}
-	const coverageData = await client.getIstanbulCoverage();
-	await client.close();
 	sanitizeCoverage(coverageData);
 
 	// there is no test info on teardown, just mock one with required config

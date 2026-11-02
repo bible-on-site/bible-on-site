@@ -1,6 +1,5 @@
 import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
-import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,6 +15,12 @@ import {
 	getArticleSummariesByPerekId,
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
+import {
+	getArticleDedications,
+	getSeferDedications,
+	getSeferPerekDedicationLines,
+} from "../../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../../lib/dedications/service";
 import { demoteHeadings } from "../../../../lib/html-headings";
 import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import {
@@ -23,6 +28,14 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
+import {
+	articleTag,
+	cachedPerKey,
+	COLLECTION_TAGS,
+	perekArticlesTag,
+	perekPerushimTag,
+	perushDetailTag,
+} from "../../../../lib/revalidate/tags";
 import {
 	articlePath,
 	authorPath,
@@ -35,6 +48,10 @@ import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { ArticlesSection } from "../components/ArticlesSection";
@@ -97,43 +114,42 @@ export async function generateStaticParams({
 }
 
 /**
- * Cache article data with on-demand revalidation support.
+ * Entity-scoped caches with on-demand revalidation support: each entry
+ * carries both its collection tag and its entity tag so an admin change
+ * invalidates exactly the data and routes that consume it.
  */
-const getCachedArticle = unstable_cache(
-	async (id: number) => getArticleById(id),
-	["article"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticle = cachedPerKey(
+	"article",
+	(id: number) => String(id),
+	(key) => [COLLECTION_TAGS.articles, articleTag(Number(key))],
+	(id: number) => getArticleById(id),
 );
 
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticles = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
-const getCachedPerushDetail = unstable_cache(
-	async (perushId: number, perekId: number) =>
-		getPerushDetail(perushId, perekId),
-	["perush-detail"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
+const getCachedPerushDetail = cachedPerKey(
+	"perush-detail",
+	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
+	(key) => {
+		const [perushId, perekId] = key.split(":").map(Number);
+		return [
+			COLLECTION_TAGS.perushim,
+			perushDetailTag(perushId, perekId),
+		];
 	},
+	(perushId: number, perekId: number) => getPerushDetail(perushId, perekId),
 );
 
 export async function generateMetadata({
@@ -265,6 +281,17 @@ export default async function ArticlePage({
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 
+	// Dedications (#2731): the book keeps the sefer+helek cover set and the
+	// perek-scoped spread lines regardless of the route it opens from — the
+	// article/perush routes share the same `SeferComposite` mount contract
+	// as the flat perek page.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
+
 	if (isArticle) {
 		// Handle article view; mention decorations (#2516) resolve against
 		// live entries per render — the returned copy carries them.
@@ -277,6 +304,11 @@ export default async function ArticlePage({
 		// Mention decorations (#2516) resolve against live entries per
 		// render; unresolved targets stay plain text.
 		article = await decorateArticleContent(article);
+
+		// The article's own dedication scope renders under its title (#2731).
+		const articleDedicationLines = dedicationLines(
+			await getArticleDedications(article.id),
+		);
 
 		return (
 			<>
@@ -309,6 +341,7 @@ export default async function ArticlePage({
 							<span className={styles.authorName}>{article.authorName}</span>
 						</Link>
 						<h1 className={styles.articleTitle}>{article.name}</h1>
+						<DedicationLines lines={articleDedicationLines} />
 						<ReadingTime
 							estimatedSeconds={article.metric?.estimatedSeconds}
 							className={styles.readingTime}
@@ -339,6 +372,8 @@ export default async function ArticlePage({
 						perekIds={perekIds}
 						entityRefsByPerek={entityRefsByPerek}
 						imagesByPerek={seferImages}
+						seferDedications={seferDedicationLines}
+						perekDedications={perekDedications}
 						initialSlug={slug}
 					/>
 				</Suspense>
@@ -451,6 +486,8 @@ export default async function ArticlePage({
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 					imagesByPerek={seferImages}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 					initialSlug={slug}
 				/>
 			</Suspense>

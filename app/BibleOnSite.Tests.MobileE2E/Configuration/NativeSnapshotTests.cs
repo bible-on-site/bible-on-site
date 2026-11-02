@@ -18,7 +18,10 @@ public sealed class NativeSnapshotTests
         ["enabled"] = displayed,
         ["rect"] = new Dictionary<string, object>
         {
-            ["x"] = x, ["y"] = y, ["width"] = 20, ["height"] = 20d
+            ["x"] = x,
+            ["y"] = y,
+            ["width"] = 20,
+            ["height"] = 20d
         }
     };
 
@@ -89,6 +92,20 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void ReadOnlySearchGeometryNeedsNoNativeHitTestOrPropertyRequests()
+    {
+        var executor = new SnapshotExecutor([Entry("search input", x: 10, y: 20)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var match = Assert.Single(new PerekPage(driver, new IosPlatformAdapter()).RenderedElements("PerekSearchInput"));
+        Assert.Equal("search input", match.Text);
+        Assert.Equal(new Point(10, 20), match.Frame.Location);
+        Assert.Equal(1, executor.Lookups);
+        Assert.DoesNotContain(DriverCommand.GetElementAttribute, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+    }
+
+    [Fact]
     public void RejectedTextDoesNotRequestAViewportButTheAcceptedPollDoes()
     {
         var executor = new SnapshotExecutor([Entry("loading"), Entry("ready")]);
@@ -109,6 +126,37 @@ public sealed class NativeSnapshotTests
         Assert.Equal(2, executor.Lookups);
     }
 
+    [Theory]
+    [InlineData("visible")]
+    [InlineData("hidden")]
+    [InlineData("frame")]
+    [InlineData("scroll")]
+    [InlineData("spoken")]
+    public void DeadSessionTimeoutEscapesEveryPagePollWithoutAnotherLookup(string operation)
+    {
+        const string message = "The driver did not receive any response from the 'findElements' command within 120000 ms";
+        var executor = new SnapshotExecutor(operation == "hidden" ? [] : [Entry("heading")])
+        {
+            TimeoutOnLookup = 1, TimeoutMessage = message
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        var failure = Assert.Throws<WebDriverTimeoutException>(() =>
+        {
+            switch (operation)
+            {
+                case "hidden": page.WaitForHidden("FlyoutPreferences"); break;
+                case "frame": page.WaitForStableFrame("PasukimCollection"); break;
+                case "scroll": page.ScrollBackTo("PasukText", "heading"); break;
+                case "spoken": page.WaitForSpoken("PerekSource"); break;
+                default: page.WaitForStartup(); break;
+            }
+        });
+        Assert.Contains(message, failure.Message);
+        Assert.True(DeviceSessionDeath.Matches(failure));
+        Assert.Equal(1, executor.Lookups);
+    }
+
     [Fact]
     public void HiddenWaitRetriesAfterACommandTimeout()
     {
@@ -124,7 +172,8 @@ public sealed class NativeSnapshotTests
     {
         var executor = new SnapshotExecutor([Entry("collection"), Entry("collection"), Entry("heading", y: 40)])
         {
-            TimeoutOnLookup = 2, FrameWidth = 100
+            TimeoutOnLookup = 2,
+            FrameWidth = 100
         };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         var page = new PerekPage(driver, new IosPlatformAdapter());
@@ -259,6 +308,7 @@ public sealed class NativeSnapshotTests
         public Dictionary<string, object?>? LastParameters { get; private set; }
         public bool Stale { get; init; }
         public int TimeoutOnLookup { get; init; }
+        public string TimeoutMessage { get; init; } = "The element observation timed out.";
         public string Orientation { get; set; } = "PORTRAIT";
         public int FrameX { get; set; } = 10;
         public int FrameWidth { get; set; } = 30;
@@ -283,7 +333,7 @@ public sealed class NativeSnapshotTests
                     status = WebDriverResult.Timeout;
                     value = new Dictionary<string, object>
                     {
-                        ["message"] = "The driver did not receive any response from the 'findElements' command within 45000 ms"
+                        ["message"] = TimeoutMessage
                     };
                 }
                 else if (Stale)

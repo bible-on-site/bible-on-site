@@ -61,6 +61,16 @@ describe("getMentionReferencesForPerek", () => {
 		expect(sql).not.toMatch(/SELECT\s+ent\.id/);
 	});
 
+	it("orders human-accepted rows ahead of pipeline rows sharing a span", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForPerek(9);
+		const [sql] = mockQuery.mock.calls[0];
+		// A `manual` row surviving a model supersede shares its span with
+		// the new revision's `auto` row; the renderer takes the first
+		// covering ref, so human decisions must sort first.
+		expect(sql).toContain("(d.acceptance = 'manual') DESC");
+	});
+
 	it("returns decorations in the shared PerekEntityReference shape", async () => {
 		const row: PerekEntityReference = {
 			entityId: "entry-1",
@@ -75,21 +85,23 @@ describe("getMentionReferencesForPerek", () => {
 		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([row]);
 	});
 
-	it("returns [] instead of throwing when the decoration table is absent", async () => {
+	it("rethrows when the decoration query fails — the cached wrapper decides degradation", async () => {
 		const consoleError = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 		mockQuery.mockRejectedValueOnce(new Error("table doesn't exist"));
-		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		await expect(getMentionReferencesForPerek(12)).rejects.toThrow(
+			"table doesn't exist",
+		);
 		consoleError.mockRestore();
 	});
 
-	it("logs non-Error rejections verbatim", async () => {
+	it("logs non-Error rejections verbatim then rethrows", async () => {
 		const consoleError = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 		mockQuery.mockRejectedValueOnce("db gone");
-		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		await expect(getMentionReferencesForPerek(12)).rejects.toBe("db gone");
 		expect(consoleError).toHaveBeenCalledWith(
 			expect.stringContaining("perek 12"),
 			"db gone",
@@ -139,6 +151,13 @@ describe("getMentionReferencesForArticle", () => {
 		const [sql] = mockQuery.mock.calls[0];
 		expect(sql).toContain("ANY_VALUE(ent.unique_name) AS entryUniqueName");
 		expect(sql).not.toMatch(/SELECT\s+ent\./);
+	});
+
+	it("orders human-accepted rows ahead of pipeline rows sharing a span", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForArticle(1, "h");
+		const [sql] = mockQuery.mock.calls[0];
+		expect(sql).toContain("(d.acceptance = 'manual') DESC");
 	});
 
 	it("returns resolved refs in span order for the decorator", async () => {
