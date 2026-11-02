@@ -6,7 +6,7 @@ import hashlib
 import io
 import json
 import os
-import subprocess
+import subprocess  # nosec B404 # Only constants and mocked subprocesses are used here.
 import sys
 import tempfile
 import unittest
@@ -27,6 +27,7 @@ from integration_test import MemoryS3
 
 class Process:
     def __init__(self, data=b"dump contents", code=0, broken=False):
+        """Provide fixture pipes and the requested exit or write failure."""
         self.stdout = io.BytesIO(data)
         self.stdin = MagicMock()
         if broken:
@@ -34,9 +35,11 @@ class Process:
         self.code = code
 
     def __enter__(self):
+        """Enter the simulated subprocess context."""
         return self
 
     def __exit__(self, *args):
+        """Preserve exceptions from the operation under test."""
         return False
 
     def wait(self):
@@ -45,6 +48,13 @@ class Process:
 
 class BackupTests(unittest.TestCase):
     def setUp(self):
+        self.enterContext(
+            patch.object(
+                backup.shutil,
+                "which",
+                side_effect=lambda tool: str(Path(self.temp.name, tool).resolve()),
+            )
+        )
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
@@ -126,6 +136,14 @@ class BackupTests(unittest.TestCase):
         with self.assertRaises(backup.BackupError):
             self.source.command("mysql", path)
 
+    def test_executable_requires_an_installed_allowlisted_mysql_tool(self):
+        self.assertTrue(Path(self.source.executable("mysql")).is_absolute())
+        with self.assertRaisesRegex(backup.BackupError, "Unsupported"):
+            self.source.executable("sh")
+        with patch.object(backup.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(backup.BackupError, "unavailable"):
+                self.source.executable("mysql")
+
     def test_query_credentials_are_removed_on_success_and_failure(self):
         with patch.object(
             backup.subprocess,
@@ -136,6 +154,7 @@ class BackupTests(unittest.TestCase):
                 self.source.query("SELECT 1;", self.directory), ["one", "two"]
             )
             self.assertEqual(command.call_args.kwargs["stderr"], subprocess.DEVNULL)
+            self.assertFalse(command.call_args.kwargs["shell"])
         with (
             patch.object(
                 backup.subprocess,
@@ -215,7 +234,8 @@ class BackupTests(unittest.TestCase):
         for identity, rows in [
             ({"uuid": "production", "events": "OFF"}, []),
             ({"uuid": "scratch", "events": "ON"}, []),
-            ({"uuid": "scratch", "events": "OFF"}, ["tanah"]),
+            ({"uuid": "scratch", "events": "OFF", "version": "8.4.9"}, ["tanah"]),
+            ({"uuid": "scratch", "events": "OFF", "version": "8.0.40"}, []),
         ]:
             with patch.object(backup, "server_identity", return_value=identity):
                 self.scratch.query = MagicMock(return_value=rows)
@@ -234,7 +254,11 @@ class BackupTests(unittest.TestCase):
                 patch.object(
                     backup,
                     "server_identity",
-                    return_value={"uuid": "scratch", "events": "OFF"},
+                    return_value={
+                        "uuid": "scratch",
+                        "events": "OFF",
+                        "version": "8.4.9",
+                    },
                 ),
                 patch.object(backup.subprocess, "Popen", return_value=process),
             ):
@@ -274,7 +298,7 @@ class BackupTests(unittest.TestCase):
         s3.abort_multipart_upload.assert_called_once()
 
     def test_sdk_accepts_real_multipart_request_shapes(self):
-        s3 = boto3.client(
+        s3 = boto3.client(  # nosec B106 # Stubber's public dummy credentials, never AWS.
             "s3",
             region_name=backup.REGION,
             aws_access_key_id="testing",

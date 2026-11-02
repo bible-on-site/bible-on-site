@@ -6,7 +6,7 @@ import io
 import json
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 # Disposable fixture tools use argv and shell=False.
 import tempfile
 import time
 import uuid
@@ -20,6 +20,7 @@ class MemoryS3:
     """An in-memory S3 transport; all MySQL export/import work remains real."""
 
     def __init__(self):
+        """Keep archive and manifest bytes in this fixture only."""
         self.parts = []
         self.objects = {}
 
@@ -59,30 +60,39 @@ class ContainerDatabase(Database):
 
     client = ""
 
+    def executable(self, tool):
+        """Use the fixed tool paths in the official MySQL fixture image."""
+        if tool not in ("mysql", "mysqldump"):
+            raise BackupError("Unsupported fixture database executable")
+        return f"/usr/bin/{tool}"
+
     def command(self, tool, defaults):
         args = super().command(tool, defaults)
         # Docker Desktop presents Windows bind files as world-writable; MySQL
         # correctly refuses such option files. Copy into private tmpfs instead.
-        private = f"/tmp/{Path(defaults).name}"
-        subprocess.run(
+        private = f"/run/backup-client/{Path(defaults).name}"
+        subprocess.run(  # nosec B603 # Static shell program; private path is quoted $1.
             [
-                "docker",
+                host_executable("docker"),
                 "exec",
                 "-i",
                 self.client,
                 "sh",
                 "-c",
-                f"umask 077; cat > {private}",
+                'umask 077; cat > "$1"',
+                "backup-options",
+                private,
             ],
             input=Path(defaults).read_bytes(),
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            shell=False,
         )
         args[1] = f"--defaults-file={private}"
         if self.ca:
             args[-1] = "--ssl-ca=/tls/server.pem"
-        return ["docker", "exec", "-i", self.client, *args]
+        return [host_executable("docker"), "exec", "-i", self.client, *args]
 
     def query(self, sql, directory):
         try:
@@ -92,12 +102,15 @@ class ContainerDatabase(Database):
             # credentials. Production deliberately never prints SQL stderr.
             config = self.defaults(directory)
             try:
-                result = subprocess.run(
+                # Only owned fixture containers and private defaults files, no host shell.
+                # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+                result = subprocess.run(  # nosec B603 # Fixed CLI and fixture-only argv.
                     self.command("mysql", config),
                     input=sql.encode(),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     check=False,
+                    shell=False,
                 )
                 print(result.stderr.decode("utf-8", errors="replace"))
             finally:
@@ -105,12 +118,25 @@ class ContainerDatabase(Database):
             raise
 
 
+def host_executable(tool):
+    """Find the two fixture tools without relying on implicit process path lookup."""
+    if tool not in ("docker", "openssl"):
+        raise BackupError("Unsupported fixture host executable")
+    resolved = shutil.which(tool)
+    if not resolved and tool == "openssl" and os.name == "nt":
+        resolved = "C:/Program Files/Git/usr/bin/openssl.exe"
+    if not resolved or not Path(resolved).is_file():
+        raise BackupError("Required fixture executable is unavailable")
+    return str(Path(resolved).resolve())
+
+
 def docker(*args, capture=True):
-    return subprocess.run(
-        ["docker", *args],
+    return subprocess.run(  # nosec B603 # Resolved Docker executable, owned fixture argv.
+        [host_executable("docker"), *args],
         check=True,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE,
+        shell=False,
     ).stdout
 
 
@@ -147,12 +173,11 @@ def run():
         work = root / "work"
         for directory in [tls, initial, work]:
             directory.mkdir()
-        openssl = shutil.which("openssl")
-        if not openssl and os.name == "nt":
-            openssl = "C:/Program Files/Git/usr/bin/openssl.exe"
-        subprocess.run(
+        # Absolute OpenSSL executable and generated fixture paths, no shell.
+        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+        subprocess.run(  # nosec B603 # Fixed certificate operation and fixture-only argv.
             [
-                openssl,
+                host_executable("openssl"),
                 "req",
                 "-x509",
                 "-newkey",
@@ -172,6 +197,7 @@ def run():
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            shell=False,
         )
         # Only disposable test keys are world-readable inside this private fixture.
         (tls / "server.key").chmod(0o644)
@@ -232,6 +258,8 @@ def run():
                     raise RuntimeError(
                         "Disposable MySQL fixture did not become healthy within 60 seconds"
                     )
+                # Conditional health poll bounded by the unchanged 60-second deadline.
+                # nosemgrep: python.lang.best-practice.sleep.arbitrary-sleep
                 time.sleep(1)
             docker(
                 "run",
@@ -245,7 +273,7 @@ def run():
                 "--cap-drop=ALL",
                 "--security-opt=no-new-privileges",
                 "--tmpfs",
-                "/tmp:rw,nosuid,nodev,noexec,size=16m,mode=0700",
+                "/run/backup-client:rw,nosuid,nodev,noexec,size=16m,mode=0700",
                 "-v",
                 f"{tls}:/tls:ro",
                 "--entrypoint",
