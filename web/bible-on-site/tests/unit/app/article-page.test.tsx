@@ -432,6 +432,7 @@ describe("[slug] page", () => {
 			});
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [
@@ -760,6 +761,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -792,6 +794,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -827,6 +830,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [
@@ -858,6 +862,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -885,6 +890,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: rawNote }],
@@ -908,6 +914,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: "דעת זקנים",
 				parshanName: "בעלי התוספות",
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -964,6 +971,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "note" }],
@@ -996,6 +1004,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -1028,6 +1037,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
