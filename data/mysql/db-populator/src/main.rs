@@ -300,8 +300,6 @@ async fn main() -> Result<()> {
 
         // Website push subscriptions (#1096); standalone, idempotent table.
         apply_web_push_upgrade(&mut conn, base_path).await?;
-
-        apply_external_reference_structure(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -372,6 +370,7 @@ struct TanahpediaScripts {
     place_eretz_yisrael: std::path::PathBuf,
     entry_synonym: std::path::PathBuf,
     edge_lab: std::path::PathBuf,
+    external_reference_structure: std::path::PathBuf,
 }
 
 impl TanahpediaScripts {
@@ -393,6 +392,7 @@ impl TanahpediaScripts {
             place_eretz_yisrael: base_path.join(&cli.tanahpedia_place_eretz_yisrael_script),
             entry_synonym: base_path.join(&cli.tanahpedia_entry_synonym_script),
             edge_lab: base_path.join(&cli.tanahpedia_edge_lab_script),
+            external_reference_structure: base_path.join("../external_reference_structure.sql"),
         }
     }
 }
@@ -402,7 +402,9 @@ async fn apply_tanahpedia_rebuild_structure(
     scripts: &TanahpediaScripts,
 ) -> Result<()> {
     execute_optional_script(conn, &scripts.structure, "tanahpedia-structure").await?;
-    apply_tanahpedia_safe_upgrades(conn, scripts).await
+    apply_tanahpedia_safe_upgrades(conn, scripts).await?;
+    // sameAs links mostly describe Tanahpedia entities, so the table ships with its structure.
+    apply_external_reference_structure(conn, &scripts.external_reference_structure).await
 }
 
 async fn apply_tanahpedia_safe_structure(
@@ -600,16 +602,8 @@ async fn apply_dedication_upgrade(conn: &mut MySqlConnection, base_path: &Path) 
 
 /// Creates the JSON-LD `sameAs` authority-link table (#1840). Additive
 /// `CREATE TABLE IF NOT EXISTS`, so it is safe to re-run.
-async fn apply_external_reference_structure(
-    conn: &mut MySqlConnection,
-    base_path: &Path,
-) -> Result<()> {
-    execute_script(
-        conn,
-        &base_path.join("../external_reference_structure.sql"),
-        "external-reference-structure",
-    )
-    .await
+async fn apply_external_reference_structure(conn: &mut MySqlConnection, path: &Path) -> Result<()> {
+    execute_script(conn, path, "external-reference-structure").await
 }
 
 /// Creates the shared reading-metrics tables (#2607). Runs last: the metric
@@ -1477,8 +1471,8 @@ SELECT 1";
                 0
             );
 
-            apply_external_reference_structure(&mut conn, base_path).await?;
-            apply_external_reference_structure(&mut conn, base_path).await?;
+            apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
+            apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             assert_eq!(table_count(&mut conn, "external_reference").await?, 0);
 
             conn.close().await.ok();
