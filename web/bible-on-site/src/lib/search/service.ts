@@ -8,15 +8,15 @@
  */
 
 import { entryHref } from "@/lib/tanahpedia/synonym-resolution";
+import { searchPerakim, searchPesukim } from "./corpus";
 import {
+	perushHitReference,
 	searchArticles,
 	searchAuthors,
 	searchPerushNotes,
 	searchTanahpediaEntries,
-	perushHitReference,
 } from "./db-content";
 import { normalizeSearchText } from "./normalize";
-import { searchPerakim, searchPesukim } from "./corpus";
 import { searchSnippet } from "./snippet";
 import type {
 	SearchResponse,
@@ -28,6 +28,7 @@ import {
 	SEARCH_LIMIT_MAX,
 	SEARCH_QUERY_MAX_CHARS,
 	SEARCH_QUERY_MAX_TERMS,
+	SEARCH_TYPE_ORDER,
 } from "./types";
 
 const AVAILABILITY_MESSAGES: Record<SearchResultType, string> = {
@@ -66,20 +67,20 @@ export async function searchSite(
 		return response;
 	}
 
+	const hitsByType = new Map<SearchResultType, SearchResultItem[]>();
+	const failedTypes = new Set<SearchResultType>();
 	const add = (type: SearchResultType, items: SearchResultItem[]) => {
-		response.results.push(...items);
-		response.counts[type] = items.length;
+		hitsByType.set(type, items);
 	};
 	const fail = (type: SearchResultType, error: unknown) => {
 		console.warn(
 			`[search] ${type} provider failed:`,
 			error instanceof Error ? error.message : error,
 		);
-		response.availability.push(AVAILABILITY_MESSAGES[type]);
+		failedTypes.add(type);
 	};
 
-	// In-memory providers run synchronously; DB providers are async. Run
-	// everything concurrently so total latency is the slowest provider.
+	// In-memory providers run synchronously, then DB providers run concurrently.
 	const tasks: Promise<void>[] = [];
 	if (types.includes("perek")) {
 		try {
@@ -193,5 +194,17 @@ export async function searchSite(
 		);
 	}
 	await Promise.all(tasks);
+	// Provider completion depends on database scheduling. Keep section order,
+	// counts and degradation notices stable for identical requests.
+	for (const type of SEARCH_TYPE_ORDER) {
+		const hits = hitsByType.get(type);
+		if (hits) {
+			response.results.push(...hits);
+			response.counts[type] = hits.length;
+		}
+		if (failedTypes.has(type)) {
+			response.availability.push(AVAILABILITY_MESSAGES[type]);
+		}
+	}
 	return response;
 }

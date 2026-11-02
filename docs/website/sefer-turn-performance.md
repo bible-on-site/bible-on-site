@@ -45,8 +45,9 @@ checks or layout reads between turns.
 | Maximum frame gap | 100ms |
 | Frame gap p95 | 50ms |
 
-The rebuilt source with published flip-book alpha.102 passes all 12 reader
-cases and the deliberate-stall control in each environment below, without
+Reader source tree `caeba53083d653790ed8d9b9ee6c3c200f05ee93`, rebuilt with
+published flip-book alpha.102, passed all 12 reader cases and the deliberate-stall
+control in each environment below, without
 retries. Both use full Chromium 156.0.8078.4, the viewport and slowdown above,
 and the full-content fixture. These are separate environment results, not a
 headed/headless before-and-after comparison. Values are the worst across all
