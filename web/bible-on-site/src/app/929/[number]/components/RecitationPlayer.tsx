@@ -48,6 +48,7 @@ interface RecitationTextState {
 const NO_RECITATION_WORDS: RecitationWord[] = [];
 const ignoreRecitation = () => {};
 const RecitationTextContext = createContext<RecitationTextState | null>(null);
+const RecitationEnabledContext = createContext(false);
 const RecitationContext = createContext<
 	| (RecitationTextState & {
 			controls: ReactNode;
@@ -55,6 +56,11 @@ const RecitationContext = createContext<
 	  })
 	| null
 >(null);
+
+/** Mode changes rebuild a scripture body; playback frames update its words. */
+export function useRecitationEnabled() {
+	return useContext(RecitationEnabledContext);
+}
 
 export function RecitationHeader({ title }: { title: string }) {
 	const context = useContext(RecitationContext);
@@ -640,7 +646,9 @@ export default function RecitationPlayer({
 			}}
 		>
 			<RecitationTextContext.Provider value={textState}>
-				{children}
+				<RecitationEnabledContext.Provider value={textEnabled}>
+					{children}
+				</RecitationEnabledContext.Provider>
 			</RecitationTextContext.Provider>
 		</RecitationContext.Provider>
 	);

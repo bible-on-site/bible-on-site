@@ -71,6 +71,7 @@ import RecitationPlayer, {
 	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
+	useRecitationEnabled,
 } from "./RecitationPlayer";
 import { SeferPanel } from "./SeferPanel";
 import { SeferPasukNumber } from "./SeferPasukNumber";
@@ -119,6 +120,7 @@ function SeferScriptureText({
 	pagePerekId: number;
 	perekLookup: ReturnType<typeof buildEntityRefLookup>;
 }) {
+	const recitationEnabled = useRecitationEnabled();
 	return (
 		<article className={styles.perekText}>
 			{perek.pesukim.map((pasuk, pasukIdx) => {
@@ -150,15 +152,17 @@ function SeferScriptureText({
 							{children}
 						</RecitationLink>
 					),
-					(pasuk, segment, text) => (
-						<RecitationWordControl
-							pasuk={pasuk}
-							segment={segment}
-							plainWhenInactive
-						>
-							{text}
-						</RecitationWordControl>
-					),
+					recitationEnabled
+						? (pasuk, segment, text) => (
+								<RecitationWordControl
+									pasuk={pasuk}
+									segment={segment}
+									plainWhenInactive
+								>
+									{text}
+								</RecitationWordControl>
+							)
+						: undefined,
 				);
 				return (
 					<RecitationVerse key={pasukKey} pasuk={pasukKey}>

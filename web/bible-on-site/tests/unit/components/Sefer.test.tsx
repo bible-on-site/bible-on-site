@@ -4,7 +4,23 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { BookmarkProvider } from "html-flip-book-react";
 import { renderPasukWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
+import {
+	RecitationWordControl,
+	useRecitationEnabled,
+} from "@/app/929/[number]/components/RecitationPlayer";
 import { sampleImage } from "./perek-image-fixture";
+
+jest.mock("@/app/929/[number]/components/RecitationPlayer", () => {
+	const actual = jest.requireActual(
+		"@/app/929/[number]/components/RecitationPlayer",
+	);
+	return {
+		__esModule: true,
+		...actual,
+		RecitationWordControl: jest.fn(actual.RecitationWordControl),
+		useRecitationEnabled: jest.fn(actual.useRecitationEnabled),
+	};
+});
 
 jest.mock("@/app/929/[number]/components/pasuk-renderer", () => {
 	const actual = jest.requireActual(
@@ -259,6 +275,34 @@ const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
 );
 
 describe("Sefer component", () => {
+	it("does not mount word controls while listening is inactive", () => {
+		jest.mocked(RecitationWordControl).mockClear();
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		expect(screen.getByTestId("mock-flipbook")).toHaveTextContent("הָאָ֖רֶץ");
+		expect(RecitationWordControl).not.toHaveBeenCalled();
+	});
+	it("mounts word controls when listening is enabled", () => {
+		jest.mocked(useRecitationEnabled).mockReturnValueOnce(true);
+		jest.mocked(RecitationWordControl).mockClear();
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		expect(RecitationWordControl).toHaveBeenCalledTimes(2);
+		expect(screen.getByTestId("mock-flipbook")).toHaveTextContent("הָאָ֖רֶץ");
+	});
+
 	it("builds scripture only when its page enters the mounted book window", async () => {
 		const summaries = Promise.resolve({});
 		mockGetPerekSummariesBatch.mockReturnValueOnce(summaries);
@@ -388,6 +432,12 @@ describe("Sefer component", () => {
 	});
 
 	beforeEach(() => {
+		jest
+			.mocked(useRecitationEnabled)
+			.mockImplementation(
+				jest.requireActual("@/app/929/[number]/components/RecitationPlayer")
+					.useRecitationEnabled,
+			);
 		mockVisiblePageIndices = undefined;
 		capturedFlipBookProps = {};
 		capturedTocProps = {};

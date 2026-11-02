@@ -20,9 +20,12 @@ cannot change the paper edge.
 
 Inactive listening words omit their inert inline boxes in the book. Their
 original text nodes and boundaries stay separate; joining adjacent text changes
-Hebrew shaping. Enabling listening restores the original inline controls. A
-held-turn image guard restores inert inline boxes and the original transparent
-scripture scroller as an independent control in each bookmark mode. The whole
+Hebrew shaping. The body observes only listening-mode changes and mounts word
+components after aligned audio is ready. Progress and playback frames update
+their own consumers without rebuilding the body. Enabling listening restores
+the original inline controls. A held-turn image guard restores inert inline
+boxes and the original transparent scripture scroller as an independent control
+in each bookmark mode. The whole
 book must retain every pixel, with identical recorded paper transforms and clip
 paths. Its positive control restores more than 100 boxes, so comparing two
 inactive setups cannot pass. The original 0.05px character-position guard stays
@@ -41,6 +44,34 @@ checks or layout reads between turns.
 | Input response p95 | 200ms |
 | Maximum frame gap | 100ms |
 | Frame gap p95 | 50ms |
+
+The rebuilt source with published flip-book alpha.102 passes all 12 reader
+cases and the deliberate-stall control in each environment below, without
+retries. Both use full Chromium 156.0.8078.4, the viewport and slowdown above,
+and the full-content fixture. These are separate environment results, not a
+headed/headless before-and-after comparison. Values are the worst across all
+12 cases; first-turn and consecutive-turn windows also pass independently.
+
+| Environment | Response p95 | Maximum gap | Gap p95 | First-turn gap p95 | Consecutive gap p95 |
+| --- | --- | --- | --- | --- | --- |
+| Active Windows desktop, headed | 112.6ms | 66.8ms | 33.4ms | 33.4ms | 33.4ms |
+| Linux, headless, four shared CPUs | 112.8ms | 66.7ms | 33.4ms | 49.9ms | 33.4ms |
+
+The desktop has GPU compositing enabled; Linux uses SwiftShader software
+rendering. Keep their raw GPU metadata with the timing samples.
+
+The normal Linux build generates all 20,504 routes / 20,497 prerenders. The
+complete desktop performance suite passes 35 checks. Separate interaction
+checks pass with real MP3 and Opus playback. The three held-page image guards
+preserve every pixel; 36 additional comparisons cover rest, straight and
+angled folds in every bookmark mode across light, dark and high-contrast
+themes. These captures from the passing leaf-bookmark guard show the live
+original inline-box control beside the optimized body. The two PNG attachments
+are byte-identical.
+
+| Original inline-box control | Optimized body |
+| --- | --- |
+| ![Original held page](images/sefer-turn-lag/reader-held-original.png) | ![Optimized held page](images/sefer-turn-lag/reader-held-optimized.png) |
 
 The [public baseline](sefer-turn-performance.public-baseline.json) retains all
 available samples against website 0.2.600 and explicitly records failed cases

@@ -12,6 +12,7 @@ import RecitationPlayer, {
 	RecitationPasukControl,
 	RecitationWordControl,
 	stopRecitation,
+	useRecitationEnabled,
 } from "@/app/929/[number]/components/RecitationPlayer";
 import { RecitationAudio } from "@/lib/recitation-audio";
 import {
@@ -138,6 +139,18 @@ afterEach(() => {
 	jest.restoreAllMocks();
 });
 
+function ModeAwareScripture({ onRender }: { onRender: () => void }) {
+	const enabled = useRecitationEnabled();
+	onRender();
+	return enabled ? (
+		<RecitationWordControl pasuk={1} segment={1}>
+			בְּרֵאשִׁית
+		</RecitationWordControl>
+	) : (
+		<>בְּרֵאשִׁית</>
+	);
+}
+
 async function openPlayer() {
 	const view = render(
 		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
@@ -180,6 +193,38 @@ test("reader words can omit inactive wrappers while the default keeps them", () 
 	expect(screen.getByTestId("default-word").firstElementChild?.tagName).toBe(
 		"SPAN",
 	);
+});
+
+test("scripture mode consumers stay stable through progress and playback frames", async () => {
+	let bodyRenders = 0;
+	const pending = deferred<void>();
+	prepare.mockReturnValueOnce(pending.promise);
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+			<ModeAwareScripture onRender={() => bodyRenders++} />
+		</RecitationPlayer>,
+	);
+	const initialRenders = bodyRenders;
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	fireEvent.click(toggle);
+	await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
+	act(() => downloadProgress(42));
+	expect(bodyRenders).toBe(initialRenders);
+	await act(async () => pending.resolve());
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	const enabledRenders = bodyRenders;
+	expect(enabledRenders).toBeGreaterThan(initialRenders);
+	fireEvent.click(word);
+	await screen.findByText("משמיע…");
+	frame(1300);
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(bodyRenders).toBe(enabledRenders);
+	fireEvent.click(toggle);
+	expect(bodyRenders).toBeGreaterThan(enabledRenders);
+	expect(
+		screen.queryByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" }),
+	).toBeNull();
 });
 
 test("plain reader words regain playback controls only when listening is ready", async () => {
