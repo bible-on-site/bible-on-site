@@ -13,6 +13,12 @@ region il-central-1, cluster `bible-on-site-cluster`, service
 x86 task with 256 CPU units and 2048 MiB. The image follows
 `bible-on-site:latest`; the website EventBridge rule owns ordinary deployments.
 
+That is the dated architecture-migration baseline. The subsequent
+[completed CPU research](../performance/website-cpu-2026-11-02/README.md) selects
+512 CPU units with unchanged 2048 MiB. Architecture admission, canaries and
+rollout must use the current live CPU/memory and preserve it; do not restore
+the historical 256-unit setting during an architecture-only change.
+
 Migrate the website processor architecture to ARM64. Preserve capacity,
 roles and secret mappings, networking and discovery, public/crawled URLs,
 database content, application behavior, cache policy, the existing readiness
