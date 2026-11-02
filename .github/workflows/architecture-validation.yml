@@ -54,7 +54,10 @@ jobs:
           node-version-file: devops/package.json
 
       - name: Test native image verifier
-        run: node --test devops/github/ci/verify-native-image.test.mjs
+        run: >-
+          node --test devops/github/ci/verify-native-image.test.mjs
+          devops/github/ci/native-api-fixture.test.mjs
+          devops/github/ci/verify-api-native.test.mjs
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -73,30 +76,14 @@ jobs:
           cache-from: type=gha,scope=native-validation-${{ inputs.service }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=native-validation-${{ inputs.service }}-${{ matrix.arch }}
 
-      - name: Install isolated API fixture database
+      - name: Pull the isolated API fixture image
         if: ${{ inputs.service == 'api' }}
-        uses: shogo82148/actions-setup-mysql@v1
-        with:
-          mysql-version: "8.4"
-          root-password: test_123
-          distribution: mysql
-          auto-start: true
-
-      - name: Create empty API smoke database
-        if: ${{ inputs.service == 'api' }}
-        env:
-          MYSQL_PWD: test_123
-        run: |
-          mysql --host=127.0.0.1 --user=root --execute='CREATE DATABASE native_image_smoke'
-          mysql --host=127.0.0.1 --user=root native_image_smoke < data/mysql/tanah_dynamic_structure.sql
+        run: docker pull mysql:8.4
 
       - name: Verify the native image at deployed resource limits
-        env:
-          SMOKE_DB_URL: ${{ inputs.service == 'api' && 'mysql://root:test_123@127.0.0.1:3306/native_image_smoke' || '' }}
         run: |
           mkdir -p candidate
           ARGS=(--service "$SERVICE" --image "$IMAGE" --arch "$ARCH")
-          if [ "$SERVICE" = api ]; then ARGS+=(--db-url "$SMOKE_DB_URL"); fi
           node devops/github/ci/verify-native-image.mjs "${ARGS[@]}" | tee candidate/native-smoke.json
 
       # These are research candidates only. Standard release tar names and

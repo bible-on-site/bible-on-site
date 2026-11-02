@@ -1,6 +1,6 @@
-# Email brand and contact assets
+# Bulletin brand and contact assets
 
-These are versions of existing project artwork for use in email. The JPEG is copied byte for byte from `app/BibleOnSite/Resources/Images/logo_header.jpg`; its original dimensions are 591 × 295. Preserve that aspect ratio when displaying it.
+These are versions of existing project artwork for use in email and the daily PDF. The PDF embeds the same original bytes and does not fetch public assets while rendering. The JPEG is copied byte for byte from `app/BibleOnSite/Resources/Images/logo_header.jpg`; its original dimensions are 591 × 295. Preserve that aspect ratio when displaying it.
 
 The four contact PNGs rasterize the website's existing SVG icons at 36 × 36, with transparent backgrounds and the original black artwork. Their shapes retain their aspect ratios inside the square canvas without redrawing or recoloring. The globe PNG uses the project-authored 24 × 24 SVG in `source/globe.svg`, rasterized with the same 36 × 36 transparent canvas. Display these icons at 16 or 18 CSS pixels.
 

@@ -63,6 +63,15 @@ export default createServerEntry({
 	async fetch(request) {
 		await ensureEmailWorkerStarted();
 		const url = new URL(request.url);
+		if (url.pathname.startsWith("/api/bulletin-documents/")) {
+			const { handleBulletinDocument } = await import(
+				"./server/bulletin-document.server"
+			);
+			return (
+				(await handleBulletinDocument(request)) ??
+				new Response("Not found", { status: 404 })
+			);
+		}
 
 		// E2E coverage drain: instrumented SSR modules write istanbul coverage to
 		// this realm's globalThis; the Playwright fixture fetches it per test.

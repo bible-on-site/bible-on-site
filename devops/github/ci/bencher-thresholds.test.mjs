@@ -89,6 +89,21 @@ test("cls_ratio uses a static Lighthouse-good bound and no sampling options", ()
 		assert.equal(cls[option], undefined, `${option} is invalid for static`);
 });
 
+test("frame blocking uses the existing calibrated test budget without history", () => {
+	// A 1.85ms historical mean produced an 11.1ms percentage limit and
+	// alerted on one 16.6ms blocked frame, despite the same run's 4000ms
+	// browser limit. Normalize by that existing per-run limit, not a fixed
+	// millisecond allowance or a percentage of potentially zero history.
+	const frames = thresholdGroups().get("frame_budget_ratio");
+	assert.ok(frames, "frame_budget_ratio threshold group must exist");
+	assert.equal(frames["threshold-test"], "static");
+	assert.equal(Number(frames["threshold-upper-boundary"]), 1);
+	assert.equal(frames["threshold-lower-boundary"], "_");
+	assert.equal(frames["threshold-max-sample-size"], "_");
+	for (const option of ["threshold-min-sample-size", "threshold-window"])
+		assert.equal(frames[option], undefined, `${option} is invalid for static`);
+});
+
 test("every threshold group uses the same option set", () => {
 	// Bencher pairs the Nth occurrence of each --threshold-* option with the
 	// Nth --threshold-measure. A group that omits an option the others use

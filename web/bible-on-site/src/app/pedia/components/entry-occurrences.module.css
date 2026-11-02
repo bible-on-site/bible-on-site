@@ -5,7 +5,7 @@
 
 .heading {
 	margin: 0 0 16px;
-	color: #1c2c5d;
+	color: var(--accent-900);
 	font-size: 1.3rem;
 	font-weight: 600;
 }
@@ -68,7 +68,7 @@
 
 @media (prefers-color-scheme: dark) {
 	.heading {
-		color: #a8b9ff;
+		color: var(--accent-200);
 	}
 
 	.table th {
@@ -77,7 +77,7 @@
 	}
 
 	.source a {
-		color: #7eb0ff;
+		color: var(--accent-300);
 	}
 
 	.citation {
