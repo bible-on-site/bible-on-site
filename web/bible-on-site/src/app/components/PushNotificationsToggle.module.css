@@ -1,0 +1,36 @@
+.push {
+	max-width: 600px;
+	margin: 0 auto;
+	padding: 0.5em 1em 0;
+	color: var(--pasuk-num-color, #1c2c5d);
+}
+
+.push h3 {
+	font-size: 1.1em;
+	margin: 0.3em 0;
+	color: var(--link-accent, #1552ac);
+}
+
+.toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5em;
+	cursor: pointer;
+}
+
+.toggle input[type="checkbox"] {
+	width: 1.1em;
+	height: 1.1em;
+	accent-color: var(--link-accent, #1552ac);
+}
+
+.toggle input:disabled {
+	cursor: progress;
+}
+
+.status {
+	min-height: 1.2em;
+	margin: 0.5em 0 0;
+	font-size: 0.95em;
+	color: var(--muted-text, #666);
+}
