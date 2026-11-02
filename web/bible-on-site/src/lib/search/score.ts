@@ -106,12 +106,25 @@ export function scorePrepared(
 		return 100;
 	}
 	const words = normalized.split(" ").filter((word) => word.length > 0);
-	const scores = terms.map((term) =>
-		words
-			.map((word) => tokenScore(word, term))
-			.reduce((best, score) => Math.max(best, score), 0),
-	);
-	return scores.every((score) => score > 0)
-		? scores.reduce((min, score) => Math.min(min, score))
-		: 0;
+	let minimum = 90;
+	for (const term of terms) {
+		// Find the strongest tier first. A prefix/exact match makes edit
+		// distance work on every other word unnecessary; one fuzzy hit also
+		// determines that tier once stronger matches have been excluded.
+		let best = 0;
+		if (words.includes(term)) best = 90;
+		else if (words.some((word) => word.startsWith(term))) best = 80;
+		else {
+			const edits = maxEdits(term);
+			if (
+				edits > 0 &&
+				words.some((word) => editDistance(word, term, edits) <= edits)
+			) {
+				best = 60;
+			}
+		}
+		if (best === 0) return 0;
+		minimum = Math.min(minimum, best);
+	}
+	return minimum;
 }
