@@ -135,9 +135,9 @@ const ClientWrapper = (props: {
 				searchParams.toString(),
 				true,
 			);
-			router.replace(next, { scroll: false });
+			window.history.replaceState(null, "", next);
 		}
-	}, [isWideEnough, pathname, router, searchParams]);
+	}, [isWideEnough, pathname, searchParams]);
 
 	// URL is source of truth: persist when user lands with ?book
 	useEffect(() => {
@@ -165,7 +165,11 @@ const ClientWrapper = (props: {
 				? searchParams.toString()
 				: window.location.search;
 			const next = pathnameWithBookQuery(togglePath, search, wantBook);
-			router.replace(next, { scroll: false });
+			// Opening changes only reader presentation. A server navigation can
+			// suspend this transition behind unrelated prefetches and prevent the
+			// lazy book from mounting. Closing still loads the facing flat page.
+			if (wantBook) window.history.replaceState(null, "", next);
+			else router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},
 		[

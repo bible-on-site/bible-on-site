@@ -13,7 +13,6 @@ const flipBookMountTimeoutMs = isCI || shouldMeasureCov ? 60_000 : 20_000;
  */
 export class SeferPage {
 	private readonly page: Page;
-	private readonly baseUrl = "http://localhost:3001/929";
 
 	constructor(page: Page) {
 		this.page = page;
@@ -23,7 +22,7 @@ export class SeferPage {
 	 * Navigate to a specific perek by its ID
 	 */
 	async navigateToPerek(perekId: number): Promise<void> {
-		await this.page.goto(`${this.baseUrl}/${perekId}`);
+		await this.page.goto(`/929/${perekId}`);
 	}
 
 	/**

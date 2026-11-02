@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
@@ -132,6 +132,46 @@ test.describe("Sefer view", () => {
 			}
 		});
 	}
+
+	test("opening book view does not wait for a server navigation for its display preference", async ({
+		page,
+		baseURL,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const reader = new SeferPage(page);
+		await reader.navigateToPerek(1);
+		expect(new URL(page.url()).origin).toBe(new URL("/", baseURL).origin);
+		const blocked: Route[] = [];
+		await page.route(
+			(url) =>
+				url.pathname === "/929/1" &&
+				url.searchParams.has("book") &&
+				url.searchParams.has("_rsc"),
+			(route) => {
+				if (route.request().method() === "GET") {
+					// A display preference must not suspend the lazy book behind
+					// a server-component request. Keep an accidental request pending.
+					blocked.push(route);
+					return;
+				}
+				return route.continue();
+			},
+		);
+		try {
+			await reader.openSeferView();
+			await waitForVisibleTurnContent(page);
+			expect(blocked).toHaveLength(0);
+		} finally {
+			// A deadline can close the page before its held request is aborted.
+			await Promise.all(
+				blocked.map((route) =>
+					route.abort().catch((error) => {
+						if (!page.isClosed()) throw error;
+					}),
+				),
+			);
+		}
+	});
 
 	test("TOC links open chapter routes with modifiers and turn pages on regular click", async ({
 		page,

@@ -14,6 +14,9 @@ the existing 80ms buffer recenter; sampling also continues for 200ms after the
 last turn. Both current pages must contain visible text before and after the
 timing window. Separate functional tests check visibility after every turn in
 all three bookmark modes. Mounted content hidden by page buffering does not qualify.
+A zero content buffer must keep both current faces, moving faces and their
+underlays readable. Preserve opaque paper surfaces so skipping covered text
+cannot change the paper edge.
 
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
@@ -53,7 +56,9 @@ the sample-validity rules. The scripture-renderer test separately bounds a
 This prevents redundant word/space wrappers from multiplying layout work while
 preserving the original text shaping and character positions.
 
-Build against the test database using `.test.env`, then run:
+Build against the test database using `.test.env`, populated with the same
+commentary data as CI. A minimal seed can hide substantial rendering work. Record
+the fixture counts, build ID and actual library source/package with each run, then run:
 
 ```sh
 bun run test:perf tests/perf/sefer-consecutive-turns.test.ts --project=Desktop --workers=1 --retries=0
