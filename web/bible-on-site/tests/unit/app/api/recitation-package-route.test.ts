@@ -1,5 +1,11 @@
 /** @jest-environment node */
 jest.mock("@/data/perek-dto", () => ({ getPerekByPerekId: jest.fn() }));
+// These fixtures contain recitation metadata, not the full search corpus.
+// Search readiness and its failures have their own health-route tests.
+jest.mock("@/lib/search/corpus", () => ({
+	getPerekIndex: jest.fn(),
+	getPasukIndex: jest.fn(),
+}));
 jest.mock("@/lib/api-client", () => ({
 	query: jest.fn().mockResolvedValue([{ authorCount: 64, articleCount: 2681 }]),
 }));

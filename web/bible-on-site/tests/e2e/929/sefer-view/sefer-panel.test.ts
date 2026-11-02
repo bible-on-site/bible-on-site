@@ -187,7 +187,7 @@ test.describe("Sefer left-page panel", () => {
 		await expect(blank).toContainText("כל פסוקי הפרק");
 	});
 
-	test("opens an article from the masonry grid and toggles article-only fullscreen", async ({
+	test("opens an article into the unified command row and toggles article-only fullscreen (#2786)", async ({
 		page,
 	}) => {
 		test.setTimeout(90_000);
@@ -207,25 +207,100 @@ test.describe("Sefer left-page panel", () => {
 		await expect(fullscreenButton).toBeVisible({ timeout: 30_000 });
 		await expect(blank.getByText("פתיחה")).toBeVisible();
 
+		// One labelled group at the top of the article carries all three
+		// commands sharing a single base control treatment.
+		const commandRow = blank.getByRole("group", { name: "פעולות מאמר" });
+		await expect(commandRow).toBeVisible();
+		const backButton = commandRow.getByRole("button", {
+			name: "חזרה למאמרים",
+		});
+		const shareButton = commandRow.getByRole("button", { name: "שתף" });
+		const geometry = await commandRow.evaluate((row) => {
+			const rowBox = row.getBoundingClientRect();
+			const buttons = Array.from(row.querySelectorAll("button")).map(
+				(button) => {
+					const box = button.getBoundingClientRect();
+					const computed = getComputedStyle(button);
+					return {
+						left: box.left,
+						right: box.right,
+						top: box.top,
+						height: box.height,
+						borderRadius: computed.borderRadius,
+						background: computed.backgroundColor,
+						border: computed.borderColor,
+						fontSize: computed.fontSize,
+					};
+				},
+			);
+			const articleTop = (
+				row.parentElement as HTMLElement
+			).getBoundingClientRect().top;
+			return { rowBox, buttons, articleTop };
+		});
+		expect(geometry.buttons).toHaveLength(3);
+		// The row sits at the top edge of the article, above the header.
+		expect(geometry.rowBox.top - geometry.articleTop).toBeLessThan(40);
+		const [back, share, fullscreen] = geometry.buttons;
+		// Identical computed control treatment — height, radius, colours, type.
+		for (const key of [
+			"height",
+			"borderRadius",
+			"background",
+			"border",
+			"fontSize",
+		] as const) {
+			expect(share[key]).toBe(back[key]);
+			expect(fullscreen[key]).toBe(back[key]);
+		}
+		// RTL: return navigation is the logical leading (rightmost) command;
+		// share + fullscreen cluster at the trailing (left) edge, fullscreen
+		// outermost.
+		expect(back.left).toBeGreaterThan(share.left);
+		expect(back.left).toBeGreaterThan(fullscreen.left);
+		expect(fullscreen.right).toBeLessThanOrEqual(share.left);
+		// No command reaches the bottom of the article — the old footer row is gone.
+		await expect(
+			blank.getByRole("button", { name: "חזרה למאמרים →" }),
+		).toHaveCount(0);
+		// Icons replaced the emoji/bare-text affordances.
+		await expect(backButton.locator("svg")).toBeVisible();
+		await expect(shareButton.locator("svg")).toBeVisible();
+		expect(await shareButton.textContent()).not.toContain("🔗");
+
 		// Article-only fullscreen is a dialog over the book, not book fullscreen.
 		await fullscreenButton.click();
 		const dialog = page.getByRole("dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByRole("button", { name: "צמצם" })).toBeVisible();
+		const exitFullscreen = dialog.getByRole("button", {
+			name: "יציאה ממסך מלא",
+		});
+		await expect(exitFullscreen).toBeVisible();
+		// Focus entered the modal; the panel behind is inert.
+		await expect(exitFullscreen).toBeFocused();
 		await test.info().attach("article-fullscreen-dialog", {
 			body: await page.screenshot(),
 			contentType: "image/png",
 		});
-		await dialog.getByRole("button", { name: "צמצם" }).click();
+		await exitFullscreen.click();
 		await expect(dialog).toBeHidden();
+		// Exit returns to the same article — not to the grid.
+		await expect(
+			blank.getByRole("heading", { name: /בראשית ברא/ }),
+		).toBeVisible();
+		await expect(fullscreenButton).toBeFocused();
 
-		// Back returns to the grid on the מאמרים tab.
-		await blank.getByRole("button", { name: "חזרה למאמרים →" }).click();
+		// From fullscreen, חזרה למאמרים lands on the articles grid directly.
+		await fullscreenButton.click();
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole("button", { name: "חזרה למאמרים" }).click();
+		await expect(dialog).toBeHidden();
 		await expect(blank.locator("a#article-1")).toBeVisible();
 		await expect(blank.getByRole("tab", { name: "מאמרים" })).toHaveAttribute(
 			"aria-selected",
 			"true",
 		);
+		await expect(blank.locator("a#article-1")).toBeFocused();
 	});
 
 	test("deep-linked perush view selects only that perush without touching defaults", async ({

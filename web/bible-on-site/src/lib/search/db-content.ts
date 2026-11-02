@@ -338,12 +338,13 @@ function matchClauses(
  * then `LEAST` over the terms' word-level score estimates, mirroring
  * the scorer's minimum-term rule. A single-term query skips the phrase
  * flag: the estimate's exact flag is the same pattern, and the
- * estimate's 90 tier already sorts those rows first. Each term's estimate is
- * `10*exact + 20*prefix + 60*candidate` evaluated on a single
- * `REGEXP_LIKE` per {@link termRankPatterns pattern}: the patterns are
- * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so the sum lands on 90,
- * 80, 60, or 0 — the tier `tokenScore` gives the term's best word in
- * that fragment. The `60*candidate` flag is the length-windowed
+ * estimate's 90 tier already sorts those rows first. The patterns are
+ * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so CASE returns the same
+ * 90/80/60/0 tiers as `10*exact + 20*prefix + 60*candidate`, without
+ * evaluating the expensive fuzzy pattern after an exact/prefix hit.
+ * The final `60*candidate` also preserves SQL NULL for a NULL field,
+ * including its existing ordering below a nonmatching non-NULL field.
+ * The candidate flag is the length-windowed
  * {@link termRegexp}: WHERE admits rows on the cheaper
  * {@link termGateRegexp} superset, so a chunk inside an over-long
  * word still reaches ORDER BY — but its flag is 0, which pushes the
@@ -372,7 +373,8 @@ function rankPredicates(
 	const singleTerm = terms.length === 1;
 	const estimate = (predicate: string) => {
 		const estimates = terms.map(
-			() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
+			() =>
+				`(CASE WHEN ${predicate} THEN 90 WHEN ${predicate} THEN 80 ELSE 60*${predicate} END)`,
 		);
 		// LEAST takes two or more arguments — a single-term query emits
 		// the bare estimate.

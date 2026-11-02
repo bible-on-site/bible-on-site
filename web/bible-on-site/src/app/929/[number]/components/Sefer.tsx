@@ -382,14 +382,18 @@ const Sefer = (props: {
 	);
 
 	const { onPageFlipped: onContentPageFlipped } = contentNavigation;
+	const [activePerekId, setActivePerekId] = useState<number | undefined>(() =>
+		initialBookPage ? undefined : perekObj.perekId,
+	);
 	const handlePageFlipped = useCallback(() => {
 		onContentPageFlipped();
 		// Fired once the new page is committed, just before the history write;
 		// the settled index comes from the book so rapid turns cannot go stale.
 		const pageIndex = flipBookRef.current?.getCurrentPageIndex();
 		if (pageIndex == null) return;
+		setActivePerekId(perekIds?.[Math.floor((pageIndex - CONTENT_OFFSET) / 2)]);
 		setBookPageTitle(documentTitleResolver(pageIndex));
-	}, [onContentPageFlipped, documentTitleResolver]);
+	}, [onContentPageFlipped, documentTitleResolver, perekIds]);
 
 	const initialTurnedLeaves = useMemo(
 		() =>
@@ -627,6 +631,11 @@ const Sefer = (props: {
 				return (
 					<React.Fragment key={blankKey}>
 						<SeferPanel
+							isActive={
+								isVisible &&
+								pagePerekId != null &&
+								pagePerekId === activePerekId
+							}
 							articles={
 								perekIdx === currentPerekIdx
 									? articles
@@ -662,6 +671,8 @@ const Sefer = (props: {
 			perekIds,
 			perekObj.sefer,
 			currentPerekIdx,
+			activePerekId,
+			isVisible,
 			articles,
 			perushim,
 			batchSummaries,

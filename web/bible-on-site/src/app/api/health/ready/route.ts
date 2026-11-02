@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { query } from "@/lib/api-client";
 import { recitationResponse } from "@/lib/recitation-response";
+import { getPasukIndex, getPerekIndex } from "@/lib/search/corpus";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
  * Prepare the full validated recitation body before admitting public traffic.
  * Load the server HTML sanitizer here too: its first JSDOM/CSS-parser load is
  * synchronous and otherwise blocks unrelated requests on the first SSR page.
+ * Build the process-shared chapter and verse search indexes before admission.
  * Liveness can pass before this cold load completes, so ECS must use this endpoint
  * before replacing the old task. Public articles and their authors must also
  * be available. Bulletin approval is independent of website visibility.
@@ -30,6 +32,8 @@ function warmCriticalPaths(): void {
 	if (DOMPurify.sanitize("<p>ready</p>") !== "<p>ready</p>") {
 		throw new Error("HTML sanitizer is unavailable");
 	}
+	getPerekIndex();
+	getPasukIndex();
 
 	isWarmed = true;
 }
