@@ -288,7 +288,9 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: "256" # 0.25 vCPU
+      # Proposed capacity: docs/aws/website-cpu-capacity/README.md.
+      # This reference template does not resize the live service.
+      Cpu: "512" # 0.5 vCPU; live application requires approval of the capacity PR
       Memory: "2048" # 2 GB (reduced OOM; was 1024)
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt WebsiteTaskRole.Arn
