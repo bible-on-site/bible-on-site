@@ -19,6 +19,7 @@ const result = spawnSync(
 		"--test-coverage-include=devops/github/ci/verify-api-native.mjs",
 		"--test-coverage-include=devops/github/ci/native-api-fixture.mjs",
 		"--test-coverage-include=web/api/tests/coverage-file.mjs",
+		"--test-coverage-include=web/bible-on-site/scripts/start-server.mjs",
 		"--test-coverage-exclude=**/*.test.*",
 		"--test-reporter=spec",
 		"--test-reporter-destination=stdout",
@@ -31,6 +32,7 @@ const result = spawnSync(
 		"devops/deploy/ecr-deploy/resume-image.test.mts",
 		"devops/deploy/ecr-deploy/ecr-client.test.mts",
 		"devops/deploy/ecr-deploy/api-images.test.mts",
+		"devops/deploy/ecr-deploy/website-soci.test.mts",
 		"devops/deploy/ecr-deploy/api-public-transport.test.mjs",
 		"devops/deploy/ecr-deploy/api-public-monitor.test.mjs",
 		"devops/deploy/ecr-deploy/api-task-protection.test.mjs",
@@ -45,6 +47,7 @@ const result = spawnSync(
 		"devops/github/ci/verify-api-native.test.mjs",
 		"devops/github/ci/native-api-fixture.test.mjs",
 		"web/api/tests/coverage-file.test.mjs",
+		"web/bible-on-site/scripts/start-server.test.mjs",
 	],
 	{ cwd: root, stdio: "inherit" },
 );
@@ -63,6 +66,7 @@ if (result.status === 0) {
 		"devops/assets-cdn-check.mjs",
 		"devops/deploy/ecr-deploy/api-images.mts",
 		"devops/deploy/ecr-deploy/website-images.mts",
+		"devops/deploy/ecr-deploy/website-soci.mts",
 		"devops/deploy/ecr-deploy/api-public-transport.mjs",
 		"devops/deploy/ecr-deploy/api-public-monitor.mjs",
 		"devops/deploy/ecr-deploy/api-task-protection.mjs",
@@ -76,6 +80,7 @@ if (result.status === 0) {
 		"devops/github/ci/verify-api-native.mjs",
 		"devops/github/ci/native-api-fixture.mjs",
 		"web/api/tests/coverage-file.mjs",
+		"web/bible-on-site/scripts/start-server.mjs",
 	]) {
 		if (!records.includes(`SF:${file}`))
 			throw new Error(`Release regression coverage is missing ${file}`);
