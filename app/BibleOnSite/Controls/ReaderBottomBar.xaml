@@ -114,7 +114,7 @@
         <Button x:Name="FullScreenButton"
                 AutomationId="FullScreenButton"
                 SemanticProperties.Description="מסך מלא"
-                ToolTipProperties.Text="מסך מלא"
+                ToolTipProperties.Text="{OnPlatform Default='מסך מלא', WinUI='מסך מלא (F11)'}"
                 Text="{x:Static fonts:FluentUI.full_screen_maximize_24_regular}"
                 FontFamily="FluentIcons"
                 FontSize="22"

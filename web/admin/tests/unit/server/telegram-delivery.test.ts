@@ -870,6 +870,7 @@ describe("Telegram durable attempt and recovery", () => {
 		expect(mocks.send.mock.calls[0][0]).toMatchObject({
 			pdf,
 			caption: "frozen caption",
+			bulletinDate: date,
 			botId: 123456,
 			chatId: -100111,
 			filename: "daily.pdf",

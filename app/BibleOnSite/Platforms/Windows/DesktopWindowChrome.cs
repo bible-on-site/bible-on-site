@@ -18,7 +18,8 @@ namespace BibleOnSite;
 /// - Keyboard shortcuts on the window content root: Alt+Left and the mouse
 ///   Back button ride the same Back pipeline as the title-bar button
 ///   (flyout → page surfaces → in-app navigation); Esc peels transient
-///   surfaces only and never navigates; Ctrl+F opens the reader search.
+///   surfaces only and never navigates; Ctrl+F opens the reader search;
+///   F11 toggles the reader's fullscreen presentation.
 /// - Initial focus: after every Shell navigation, the current page's
 ///   <see cref="IWindowsDesktopSurface.FocusInitialElement"/> runs so a
 ///   keyboard-only session lands on a real focus target.
@@ -73,7 +74,32 @@ internal sealed class DesktopWindowChrome
 		// not a navigation — so the startup reader's focus only arrives via
 		// the CurrentPage property change.
 		shell.PropertyChanged += chrome.OnShellPropertyChanged;
+		shell.HandlerChanged += OnShellHandlerChanged;
 		return chrome;
+	}
+
+	/// <summary>
+	/// Every Shell page draws the shared top-bar hamburger, so the native
+	/// NavigationView pane toggle in the title bar was a second menu button
+	/// with an English UIA name ("Open Navigation") that swapped sides with
+	/// the title-bar Back between root and pushed pages. MAUI re-shows it on
+	/// flyout/navigation updates, hence the property callback.
+	/// </summary>
+	private static void OnShellHandlerChanged(object? sender, EventArgs e)
+	{
+		if (sender is Shell { Handler.PlatformView: Microsoft.UI.Xaml.Controls.NavigationView nav })
+		{
+			nav.IsPaneToggleButtonVisible = false;
+			nav.RegisterPropertyChangedCallback(
+				Microsoft.UI.Xaml.Controls.NavigationView.IsPaneToggleButtonVisibleProperty,
+				static (d, _) =>
+				{
+					if (d is Microsoft.UI.Xaml.Controls.NavigationView { IsPaneToggleButtonVisible: true } view)
+					{
+						view.IsPaneToggleButtonVisible = false;
+					}
+				});
+		}
 	}
 
 	#region Placement
@@ -216,6 +242,7 @@ internal sealed class DesktopWindowChrome
 		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.Left, VirtualKeyModifiers.Menu, OnBackAcceleratorInvoked));
 		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.Escape, VirtualKeyModifiers.None, OnEscapeAcceleratorInvoked));
 		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.F, VirtualKeyModifiers.Control, OnSearchAcceleratorInvoked));
+		owner.KeyboardAccelerators.Add(Accelerator(VirtualKey.F11, VirtualKeyModifiers.None, OnFullscreenAcceleratorInvoked));
 	}
 
 	private static KeyboardAccelerator Accelerator(
@@ -262,6 +289,15 @@ internal sealed class DesktopWindowChrome
 		{
 			args.Handled = true;
 			search.OpenDesktopSearch();
+		}
+	}
+
+	private void OnFullscreenAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+	{
+		if (!_shell.FlyoutIsPresented && _shell.CurrentPage is IWindowsFullscreenSurface reader)
+		{
+			args.Handled = true;
+			reader.ToggleDesktopFullscreen();
 		}
 	}
 
