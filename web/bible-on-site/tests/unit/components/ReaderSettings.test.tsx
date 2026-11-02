@@ -32,6 +32,9 @@ beforeEach(() => {
 // carrying the property is enough.
 const storageEvent = (key: string | null) =>
 	Object.assign(new Event("storage"), { key });
+// Secondary display settings sit in collapsed groups until revealed.
+const expand = (name: string) =>
+	fireEvent.click(screen.getByRole("button", { name }));
 test("one settings button opens display controls and preserves existing preferences", () => {
 	localStorage.setItem(
 		READER_SETTINGS_STORAGE_KEY,
@@ -41,6 +44,7 @@ test("one settings button opens display controls and preserves existing preferen
 	expect(screen.queryByRole("dialog")).toBeNull();
 	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
 	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("3");
+	expand("ריווח");
 	expect(screen.getByRole("slider", { name: "ריווח אנכי" })).toHaveValue("1");
 	fireEvent.change(screen.getByRole("slider", { name: "ריווח אופקי" }), {
 		target: { value: "4" },
@@ -78,6 +82,7 @@ test("using the open panel does not close popovers underneath it", () => {
 test("a fresh reader selects spacing level 3 / 3 and vertical spacing reaches level 5", () => {
 	render(<ReaderSettings />);
 	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	expand("ריווח");
 	const horizontal = screen.getByRole("slider", { name: "ריווח אופקי" });
 	const vertical = screen.getByRole("slider", { name: "ריווח אנכי" });
 	expect(horizontal).toHaveValue("2");
@@ -207,6 +212,7 @@ test("display section exposes הסתר שם השם toggle and per-name choices",
 	render(<ReaderSettings />);
 	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
 	const toggle = screen.getByRole("checkbox", { name: "הסתר שם השם" });
+	expand("כתיב השמות");
 	// #2404: masking is on by default and אל defaults to א-ל.
 	expect(toggle).toBeChecked();
 	expect(screen.getByRole("radio", { name: "א-ל" })).toBeChecked();
@@ -299,6 +305,7 @@ test("הסתר שם השם is one group whose sub-options are disabled while it 
 	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
 	const group = screen.getByRole("group", { name: "הסתר שם השם" });
 	const toggle = within(group).getByRole("checkbox", { name: "הסתר שם השם" });
+	expand("כתיב השמות");
 	const radios = within(group).getAllByRole("radio");
 	const elohimCustom = within(group).getByRole("textbox", {
 		name: "כתיב חלופי עבור אלהים",
@@ -348,6 +355,7 @@ test("סימניות controls persist chapter-tab preferences and gate option ed
 	const toggle = within(group).getByRole("checkbox", {
 		name: "סימניות פרקים",
 	});
+	expand("אפשרויות סימניות");
 	const placement = within(group).getByRole("combobox", {
 		name: "מיקום סימניות",
 	});
@@ -380,4 +388,42 @@ test("סימניות controls persist chapter-tab preferences and gate option ed
 	expect(getSeferBookmarkSettings().placement).toBe("top");
 	fireEvent.click(toggle);
 	expect(placement).toBeEnabled();
+});
+test("secondary display settings stay collapsed behind groups that keep their state across reopening", () => {
+	render(<ReaderSettings />);
+	const opener = screen.getByRole("button", { name: "הגדרות קריאה" });
+	fireEvent.click(opener);
+	// Primary controls are always visible.
+	expect(screen.getByRole("slider", { name: "גודל גופן" })).toBeVisible();
+	expect(screen.getByRole("combobox", { name: "גופן פסוקים" })).toBeVisible();
+	expect(screen.getByRole("checkbox", { name: "הסתר שם השם" })).toBeVisible();
+	expect(screen.getByRole("checkbox", { name: "סימניות פרקים" })).toBeVisible();
+	const groups = {
+		ריווח: () => screen.queryByRole("slider", { name: "ריווח אופקי" }),
+		"כתיב השמות": () => screen.queryByRole("radio", { name: "א-ל" }),
+		"אפשרויות סימניות": () =>
+			screen.queryByRole("combobox", { name: "מיקום סימניות" }),
+	};
+	for (const [name, control] of Object.entries(groups)) {
+		const header = screen.getByRole("button", { name });
+		expect(header).toHaveAttribute("aria-expanded", "false");
+		expect(control()).toBeNull();
+		header.focus();
+		fireEvent.click(header);
+		expect(header).toHaveAttribute("aria-expanded", "true");
+		expect(header).toHaveFocus();
+		const body = document.getElementById(
+			header.getAttribute("aria-controls") ?? "",
+		);
+		expect(body).toContainElement(control());
+	}
+	fireEvent.click(screen.getByRole("button", { name: "סגירת הגדרות" }));
+	fireEvent.click(opener);
+	for (const control of Object.values(groups)) expect(control()).toBeVisible();
+	expand("ריווח");
+	expect(screen.getByRole("button", { name: "ריווח" })).toHaveAttribute(
+		"aria-expanded",
+		"false",
+	);
+	expect(groups.ריווח()).toBeNull();
 });
