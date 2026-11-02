@@ -3,11 +3,57 @@ import { constants } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** Log only the image loader, so deployment evidence can confirm lazy loading. */
+export async function reportImageSnapshotter({
+	uri = process.env.ECS_CONTAINER_METADATA_URI_V4,
+	request = fetch,
+	log = console.log,
+} = {}) {
+	if (!uri) return false;
+	try {
+		const url = new URL(uri);
+		if (
+			url.protocol !== "http:" ||
+			url.hostname !== "169.254.170.2" ||
+			url.port ||
+			url.username ||
+			url.password ||
+			url.search ||
+			url.hash ||
+			!/^\/v4\/[a-zA-Z0-9-]+$/.test(url.pathname)
+		)
+			return false;
+		const response = await request(url, {
+			signal: AbortSignal.timeout(2_000),
+			redirect: "error",
+		});
+		if (!response.ok || !response.body) return false;
+		const chunks = [];
+		let size = 0;
+		for await (const chunk of response.body) {
+			size += chunk.length;
+			if (size > 64 * 1024) return false;
+			chunks.push(Buffer.from(chunk));
+		}
+		const { Snapshotter } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+		if (Snapshotter !== "soci" && Snapshotter !== "overlayfs") return false;
+		log(JSON.stringify({ websiteImageSnapshotter: Snapshotter }));
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /** Keep accepting requests while Cloud Map removal reaches cached DNS answers. */
 export function startServer({ drainMs = 90_000, cwd = process.cwd() } = {}) {
 	if (!Number.isSafeInteger(drainMs) || drainMs < 0 || drainMs > 90_000)
-		throw new RangeError("Website drain must be between 0 and 90000 milliseconds");
-	const child = spawn(process.execPath, ["server.js"], { cwd, stdio: "inherit" });
+		throw new RangeError(
+			"Website drain must be between 0 and 90000 milliseconds",
+		);
+	const child = spawn(process.execPath, ["server.js"], {
+		cwd,
+		stdio: "inherit",
+	});
 	let drainTimer;
 	let stopping = false;
 	const forward = (signal) => {
@@ -41,5 +87,7 @@ export function startServer({ drainMs = 90_000, cwd = process.cwd() } = {}) {
 	return child;
 }
 
-if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url))
+if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
 	startServer();
+	void reportImageSnapshotter();
+}
