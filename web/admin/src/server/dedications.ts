@@ -591,9 +591,3 @@ export const deleteDedication = createServerFn({ method: "POST" })
 		clearDedicationExpiry(id);
 		return { id };
 	});
-
-/** The public line the website renders — mirrors formatDedication (#2731). */
-export function previewDedicationLine(subject: string, purposes: string[]): string {
-	const clean = purposes.filter((p) => p.trim().length > 0);
-	return clean.length === 0 ? `מוקדש ל${subject}` : `מוקדש ל${subject} (${clean.join(", ")})`;
-}

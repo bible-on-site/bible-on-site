@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliDecompressSync } from "node:zlib";
 import getPort from "get-port";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -38,7 +39,13 @@ async function largestJavaScript(directory) {
 
 const canonicalFile = "src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json";
 const original = await fingerprint(path.join(website, canonicalFile));
-const standalone = await fingerprint(path.join(website, ".next/standalone", canonicalFile));
+const compressed = path.join(website, ".next/standalone", `${canonicalFile}.br`);
+const decompressed = brotliDecompressSync(readFileSync(compressed));
+const standalone = {
+	bytes: decompressed.length,
+	sha256: createHash("sha256").update(decompressed).digest("hex"),
+	compressedBytes: (await stat(compressed)).size,
+};
 if (original.bytes !== standalone.bytes || original.sha256 !== standalone.sha256)
 	throw new Error("Standalone canonical data differs from the original source bytes");
 const largest = await largestJavaScript(path.join(website, ".next/standalone/.next/server"));
