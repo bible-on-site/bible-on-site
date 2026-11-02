@@ -2,6 +2,7 @@ import * as dotenv from "dotenv";
 import yargs from "yargs";
 import { AdminECRDeployer } from "./admin-deployer.mts";
 import { APIECRDeployer } from "./api-deployer.mts";
+import { deployAPIWithHandover } from "./api-rollout-cli.mjs";
 import { createECRClient, getECRConfig } from "./ecr-client.mts";
 import type { ECRDeployerBase } from "./ecr-deployer-base.mts";
 import { WebsiteECRDeployer } from "./website-deployer.mts";
@@ -44,15 +45,15 @@ async function main() {
 			type: "string",
 		})
 		.option("docker-image-arm64", {
-			describe: "Path to the native ARM64 API Docker archive",
+			describe: "Path to the native ARM64 API or website Docker archive",
 			type: "string",
 		})
 		.option("source-ref", {
-			describe: "Full source Git SHA carried by both API images",
+			describe: "Full source Git SHA carried by both native images",
 			type: "string",
 		})
 		.option("publish-index", {
-			describe: "Publish the verified amd64/arm64 API OCI index",
+			describe: "Publish the verified amd64/arm64 OCI index",
 			type: "boolean",
 			default: false,
 		})
@@ -69,14 +70,19 @@ async function main() {
 				args.dockerImageArm64 !== undefined ||
 				args.sourceRef !== undefined ||
 				args.publishIndex;
-			if (args.moduleName !== "api" && (dual || indexSpecified))
-				throw new Error("Dual archives and publish-index are API-only");
+			if (
+				!["api", "website"].includes(args.moduleName) &&
+				(dual || indexSpecified)
+			)
+				throw new Error(
+					"Dual archives and publish-index are API-only or website options",
+				);
 			if (
 				dual &&
 				(!args.dockerImage || !args.dockerImageArm64 || !args.sourceRef)
 			)
 				throw new Error(
-					"API dual publication requires docker-image, docker-image-arm64 and source-ref",
+					"Native dual publication requires docker-image, docker-image-arm64 and source-ref",
 				);
 			if (
 				args.sourceRef !== undefined &&
@@ -127,7 +133,11 @@ async function main() {
 		deployer.setLocalVersion(moduleVersion);
 		deployer.setDockerImagePath(dockerImagePath);
 		if (argv.dockerImageArm64 || argv.sourceRef || argv.publishIndex) {
-			deployer.setAPIImageOptions({
+			const configure =
+				moduleName === "website"
+					? deployer.setWebsiteImageOptions
+					: deployer.setAPIImageOptions;
+			configure.call(deployer, {
 				arm64ArchivePath: argv.dockerImageArm64,
 				sourceRef: argv.sourceRef,
 				publishIndex: argv.publishIndex,
@@ -135,7 +145,8 @@ async function main() {
 		}
 
 		// Deploy
-		await deployer.deploy();
+		if (moduleName === "api") await deployAPIWithHandover({ config, deployer });
+		else await deployer.deploy();
 
 		console.info("ECR deployment process finished successfully.");
 	} catch (error) {

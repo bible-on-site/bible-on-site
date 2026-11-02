@@ -1,6 +1,9 @@
-/* Set the nav background color for perek pages */
+/* Set the nav background color for perek pages. The z-index lifts the bar
+   (and the accessibility popover it contains) above .perekContainer
+   (z-index: 6), which otherwise paints over the open popover. */
 body:has(.perek-layout) .top-nav {
   background-color: var(--accent-600);
+  z-index: 7;
 }
 
 /* Contain horizontal overflow (issue #1270) so the page does not scroll horizontally */
