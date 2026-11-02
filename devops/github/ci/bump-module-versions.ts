@@ -146,15 +146,19 @@ export function rewriteAppVersions(
 		/(<ApplicationDisplayVersion>)[^<]+(<\/ApplicationDisplayVersion>)/g,
 		`$1${nextVersion}$2`,
 	);
+	// The Microsoft Store reserves the MSIX revision component; it stays 0 while
+	// the leading display version keeps package versions strictly increasing.
 	text = replaceOnce(
 		text,
-		/(<ApplicationVersion Condition="[^"]*== 'android'">)\d+(<\/ApplicationVersion>)/g,
-		`$1${major * 10_000_000 + minor * 100_000 + patch}$2`,
+		/(<ApplicationVersion Condition="[^"]*== 'windows'">)\d+(<\/ApplicationVersion>)/g,
+		`$1${0}$2`,
 	);
+	// Android versionCode and Apple CFBundleVersion share one build number that
+	// also advances when a minor/major bump resets the semantic patch to zero.
 	return replaceOnce(
 		text,
-		/(<ApplicationVersion Condition="[^"]*!= 'android'">)\d+(<\/ApplicationVersion>)/g,
-		`$1${patch}$2`,
+		/(<ApplicationVersion Condition="[^"]*!= 'windows'">)\d+(<\/ApplicationVersion>)/g,
+		`$1${major * 10_000_000 + minor * 100_000 + patch}$2`,
 	);
 }
 

@@ -5,18 +5,100 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { reportImageSnapshotter } from "./start-server.mjs";
 
 const entry = new URL("./start-server.mjs", import.meta.url).href;
 const nativeSignals = { skip: process.platform === "win32", timeout: 10_000 };
 
+test("snapshotter evidence logs only the allowed loader field", async () => {
+	for (const Snapshotter of ["soci", "overlayfs"]) {
+		const lines = [];
+		assert.equal(
+			await reportImageSnapshotter({
+				uri: "http://169.254.170.2/v4/owned-container",
+				request: async (url, options) => {
+					assert.equal(url.hostname, "169.254.170.2");
+					assert.equal(options.redirect, "error");
+					assert.ok(options.signal);
+					return Response.json({
+						Snapshotter,
+						LogOptions: { private: "never log" },
+						ContainerARN: "private task",
+					});
+				},
+				log: (line) => lines.push(line),
+			}),
+			true,
+		);
+		assert.deepEqual(lines, [
+			JSON.stringify({ websiteImageSnapshotter: Snapshotter }),
+		]);
+	}
+});
+test("metadata diagnostics reject foreign addresses, redirects and unknown loader values", async () => {
+	for (const uri of [
+		"",
+		"http://other.example/v4/container",
+		"https://169.254.170.2/v4/container",
+		"http://user@169.254.170.2/v4/container",
+		"http://169.254.170.2:8000/v4/container",
+		"http://169.254.170.2/v4/container?extra=1",
+		"http://169.254.170.2/v4/container#fragment",
+		"http://169.254.170.2/task",
+		"not a url",
+	]) {
+		assert.equal(
+			await reportImageSnapshotter({
+				uri,
+				request: async () => {
+					throw new Error("must not request");
+				},
+				log: () => assert.fail("must not log"),
+			}),
+			false,
+		);
+	}
+	for (const response of [
+		new Response(null, { status: 302 }),
+		new Response(null),
+		Response.json({ Snapshotter: "unrecognized" }),
+		new Response("malformed"),
+		new Response(" ".repeat(64 * 1024 + 1)),
+	]) {
+		assert.equal(
+			await reportImageSnapshotter({
+				uri: "http://169.254.170.2/v4/container",
+				request: async () => response,
+				log: () => assert.fail("must not log"),
+			}),
+			false,
+		);
+	}
+	assert.equal(
+		await reportImageSnapshotter({
+			uri: "http://169.254.170.2/v4/container",
+			request: async () => {
+				throw new Error("bounded transport failure");
+			},
+			log: () => assert.fail("must not log"),
+		}),
+		false,
+	);
+});
+
 async function fixture(t, source, options = {}) {
-	const directory = await mkdtemp(path.join(os.tmpdir(), "bible-handover-test-"));
+	const directory = await mkdtemp(
+		path.join(os.tmpdir(), "bible-handover-test-"),
+	);
 	await writeFile(path.join(directory, "server.js"), source);
 	const launcher = path.join(directory, "launcher.mjs");
-	await writeFile(launcher, `
+	await writeFile(
+		launcher,
+		`
 const { startServer } = await import(process.argv[2]);
 startServer({ cwd: process.argv[3], drainMs: Number(process.argv[4]) });
-`);
+`,
+	);
 	const wrapper = spawn(
 		process.execPath,
 		[
@@ -33,13 +115,17 @@ startServer({ cwd: process.argv[3], drainMs: Number(process.argv[4]) });
 		output += data;
 		serverPid = Number(output.match(/READY (\d+) /)?.[1]) || serverPid;
 	});
-	wrapper.stderr.on("data", (data) => { output += data; });
+	wrapper.stderr.on("data", (data) => {
+		output += data;
+	});
 	const exited = once(wrapper, "close");
 	t.after(async () => {
 		if (wrapper.exitCode === null && wrapper.signalCode === null) {
 			wrapper.kill("SIGKILL");
 			if (serverPid) {
-				try { process.kill(serverPid, "SIGKILL"); } catch (error) {
+				try {
+					process.kill(serverPid, "SIGKILL");
+				} catch (error) {
 					if (error.code !== "ESRCH") throw error;
 				}
 			}
@@ -67,34 +153,48 @@ process.on('SIGTERM', () => server.close(() => process.exit(143)));
 process.on('SIGINT', () => server.close(() => process.exit(130)));
 `;
 
-test("SIGTERM retains a real listener during DNS drain, then forwards and exits", nativeSignals, async (t) => {
-	const server = await fixture(t, httpServer, { drainMs: 500 });
-	await server.waitFor("READY ");
-	const port = Number(server.output().match(/READY \d+ (\d+)/)[1]);
-	server.wrapper.kill("SIGTERM");
-	await server.waitFor("Website draining");
-	server.wrapper.kill("SIGTERM");
-	const response = await fetch(`http://127.0.0.1:${port}`, { signal: AbortSignal.timeout(1_000) });
-	assert.equal(response.status, 200);
-	assert.equal(await response.text(), "unchanged reader");
-	assert.deepEqual(await server.exited, [143, null]);
-	assert.equal(server.output().match(/Website draining/g).length, 1);
-});
+test(
+	"SIGTERM retains a real listener during DNS drain, then forwards and exits",
+	nativeSignals,
+	async (t) => {
+		const server = await fixture(t, httpServer, { drainMs: 500 });
+		await server.waitFor("READY ");
+		const port = Number(server.output().match(/READY \d+ (\d+)/)[1]);
+		server.wrapper.kill("SIGTERM");
+		await server.waitFor("Website draining");
+		server.wrapper.kill("SIGTERM");
+		const response = await fetch(`http://127.0.0.1:${port}`, {
+			signal: AbortSignal.timeout(1_000),
+		});
+		assert.equal(response.status, 200);
+		assert.equal(await response.text(), "unchanged reader");
+		assert.deepEqual(await server.exited, [143, null]);
+		assert.equal(server.output().match(/Website draining/g).length, 1);
+	},
+);
 
-test("SIGINT interrupts without waiting for the production drain", nativeSignals, async (t) => {
-	const server = await fixture(t, httpServer);
-	await server.waitFor("READY ");
-	server.wrapper.kill("SIGINT");
-	assert.deepEqual(await server.exited, [130, null]);
-	assert.ok(!server.output().includes("Website draining"));
-});
+test(
+	"SIGINT interrupts without waiting for the production drain",
+	nativeSignals,
+	async (t) => {
+		const server = await fixture(t, httpServer);
+		await server.waitFor("READY ");
+		server.wrapper.kill("SIGINT");
+		assert.deepEqual(await server.exited, [130, null]);
+		assert.ok(!server.output().includes("Website draining"));
+	},
+);
 
-test("child startup failures keep their nonzero exit code", { timeout: 10_000 }, async (t) => {
+test("child startup failures keep their nonzero exit code", {
+	timeout: 10_000,
+}, async (t) => {
 	const server = await fixture(t, "process.exit(7)");
 	assert.deepEqual(await server.exited, [7, null]);
 });
 
-test("spawn errors fail instead of leaving a healthy wrapper", { timeout: 10_000 }, async (t) => {
+test("spawn errors fail instead of leaving a healthy wrapper", {
+	timeout: 10_000,
+}, async (t) => {
 	const server = await fixture(t, "", { cwd: "missing" });
 	assert.deepEqual(await server.exited, [1, null]);
 	assert.ok(server.output().includes("Website server could not start"));

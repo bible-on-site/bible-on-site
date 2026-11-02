@@ -46,6 +46,7 @@ import {
 import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
+import { sameAsFor } from "../../../../lib/seo/same-as";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import {
@@ -54,6 +55,7 @@ import {
 } from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
 import { ReadingTime } from "@/app/components/ReadingTime";
+import { ArticleActions } from "../components/ArticleActions";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerekHeading } from "../components/PerekHeading";
@@ -357,11 +359,16 @@ export default async function ArticlePage({
 							}}
 						/>
 					)}
-
+					{/* The unified article command row (#2786) trails the article
+					 * here — review ask: the standalone route keeps its main
+					 * content on top and its commands at the bottom. */}
 					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
+						<ArticleActions
+							backLabel="חזרה לפרק"
+							backHref={`/929/${perekId}`}
+							canonicalPath={`/929/${perekId}/${article.id}`}
+							shareTitle={`${article.name} - ${article.authorName}`}
+						/>
 					</div>
 				</section>
 				<Suspense>
@@ -415,10 +422,17 @@ export default async function ArticlePage({
 	if (!perushDetail) {
 		notFound();
 	}
+	const parshanSameAs = await sameAsFor("PARSHAN", perushDetail.parshanId);
 
 	return (
 		<>
-			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
+			<JsonLd
+				data={buildPerushGraph({
+					perush: perushDetail,
+					perekObj,
+					sameAs: parshanSameAs,
+				})}
+			/>
 			<ScrollToSlug targetId="perush-view" />
 			<Suspense fallback={null}>
 				<ScrollToPerushPasukNote />

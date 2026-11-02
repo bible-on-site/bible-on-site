@@ -38,6 +38,11 @@ export type APIArchive = {
 	architecture: Architecture;
 	configDigest: string;
 	layerCount: number;
+	ociSource?: {
+		config: TarEntry;
+		layers: TarEntry[];
+		diffIds: string[];
+	};
 };
 export type PreparedAPIArchives = {
 	directory: string;
@@ -256,11 +261,25 @@ async function inspectArchive(
 			if (`sha256:${hash.digest("hex")}` !== diffs[index])
 				throw new Error("Docker layer does not match its config diff_id");
 		}
+		const checkedEntry = (name: string): TarEntry => {
+			const entry = entries.get(archiveName(name));
+			if (!entry) throw new Error("Missing validated OCI source entry");
+			return entry;
+		};
 		return {
 			path: archive,
 			architecture,
 			configDigest: digest,
 			layerCount: image.Layers.length,
+			...(labels?.["io.bible-on-site.image-delivery"] === "soci-v2"
+				? {
+						ociSource: {
+							config: checkedEntry(image.Config),
+							layers: image.Layers.map(checkedEntry),
+							diffIds: diffs,
+						},
+					}
+				: {}),
 		};
 	} finally {
 		await handle.close();
@@ -305,7 +324,19 @@ export async function prepareAPIArchives(
 	}
 }
 
-type RegistryImage = { manifest: string; mediaType: string; digest: string };
+export type RegistryImage = {
+	manifest: string;
+	mediaType: string;
+	digest: string;
+};
+export type ImageDescriptor = {
+	mediaType: string;
+	digest: string;
+	size: number;
+	platform: { architecture: string; os: string };
+	annotations?: Record<string, string>;
+	artifactType?: string;
+};
 async function readTagDigest(
 	client: ECRClient,
 	repositoryName: string,
@@ -595,6 +626,10 @@ export type APIPublishOptions = {
 	publishIndex?: boolean;
 	mutableTags?: readonly string[];
 	pushArchive?: (archive: string, reference: string) => Promise<void>;
+	indexManifests?: (
+		children: ImageDescriptor[],
+		staged: ReadonlyMap<Architecture, RegistryImage>,
+	) => Promise<ImageDescriptor[]>;
 };
 /** No canonical/latest write occurs until both immutable children have been verified. */
 export async function publishAPIImages(
@@ -608,6 +643,8 @@ export async function publishAPIImages(
 		version,
 		publishIndex = false,
 	} = options;
+	if (options.indexManifests && !publishIndex)
+		throw new Error("Custom index descriptors require index publication");
 	if (
 		version !== prepared.version ||
 		prepared.images.length !== 2 ||
@@ -683,7 +720,7 @@ export async function publishAPIImages(
 			);
 		staged.set(archive.architecture, verifiedChild(image, archive));
 	}
-	const children = prepared.images.map((archive) => {
+	let children: ImageDescriptor[] = prepared.images.map((archive) => {
 		const child = staged.get(archive.architecture);
 		if (!child) throw new Error(`Missing ${archive.architecture} child`);
 		return {
@@ -693,6 +730,9 @@ export async function publishAPIImages(
 			platform: { architecture: archive.architecture, os: "linux" },
 		};
 	});
+	if (options.indexManifests) {
+		children = await options.indexManifests(children, staged);
+	}
 	const amd64 = staged.get("amd64");
 	if (!amd64) throw new Error("Missing canonical amd64 child");
 	const manifest = publishIndex

@@ -358,10 +358,11 @@ export async function getPerushDetail(
 	try {
 		const metaRows = await query<{
 			perush_name: string;
+			parshan_id: number;
 			parshan_name: string;
 			parshan_birth_year: number | null;
 		}>(
-			`SELECT p.name AS perush_name, pa.name AS parshan_name, pa.birth_year AS parshan_birth_year
+			`SELECT p.name AS perush_name, p.parshan_id, pa.name AS parshan_name, pa.birth_year AS parshan_birth_year
 			 FROM perush p
 			 JOIN parshan pa ON p.parshan_id = pa.id
 			 WHERE p.id = ?`,
@@ -382,6 +383,7 @@ export async function getPerushDetail(
 		return {
 			id: perushId,
 			name: r.perush_name,
+			parshanId: r.parshan_id,
 			parshanName: r.parshan_name,
 			...(r.parshan_birth_year != null && {
 				parshanBirthYear: r.parshan_birth_year,
