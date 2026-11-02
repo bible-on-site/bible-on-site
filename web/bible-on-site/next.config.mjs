@@ -143,7 +143,7 @@ const nextConfig = {
 		cssChunking: process.env.TURBOPACK ? "graph" : true,
 		esmExternals: true,
 		externalDir: true,
-		turbopackFileSystemCacheForDev: true,
+		turbopackFileSystemCacheForDev: false,
 		// Only include coverage instrumentation in non-production builds
 		...(isProduction
 			? {}
