@@ -104,7 +104,6 @@ describe("explicit service release recovery selection", () => {
 });
 
 describe("detectChanges", () => {
-
 	describe("documentation preserves every migration routing decision", () => {
 		for (const migrations of [
 			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
@@ -1439,7 +1438,8 @@ describe("merge-group workflow contract", () => {
 						"bash.exe",
 					)
 				: "bash";
-		const scenarios: { label: string; succeeds: boolean; script: string }[] = [];
+		const scenarios: { label: string; succeeds: boolean; script: string }[] =
+			[];
 		const evaluate = (
 			event: string,
 			failedJob?: string,
@@ -1453,6 +1453,11 @@ describe("merge-group workflow contract", () => {
 				/\$\{\{ ([^}]+) \}\}/g,
 				(_match, expression: string) => {
 					if (expression === "github.event_name") return event;
+					if (
+						expression === "github.repository" ||
+						expression === "github.event.pull_request.head.repo.full_name"
+					)
+						return "test/repo";
 					if (expression.endsWith(".result")) {
 						return expression === `needs.${failedJob}.result`
 							? "skipped"
@@ -1462,6 +1467,11 @@ describe("merge-group workflow contract", () => {
 						return versions.amd64;
 					if (expression === "needs.package_api_arm64.outputs.module_version")
 						return versions.arm64;
+					if (
+						expression === "needs.package_website.outputs.module_version" ||
+						expression === "needs.package_website_arm64.outputs.module_version"
+					)
+						return "0.2.600";
 					if (expression.includes("_ci_changed")) return String(ciChanged);
 					if (expression.includes("_module_changed")) return "false";
 					if (expression.includes(".outputs.is_"))
@@ -1469,12 +1479,18 @@ describe("merge-group workflow contract", () => {
 					throw new Error(`Unexpected prerequisite expression: ${expression}`);
 				},
 			);
-			scenarios.push({ label: `${event}/${failedJob ?? "all"}`, succeeds, script });
+			scenarios.push({
+				label: `${event}/${failedJob ?? "all"}`,
+				succeeds,
+				script,
+			});
 		};
 		evaluate("merge_group", undefined, true, true, true);
 		// Paired-image guards may arrive independently of the queue fixture.
 		// Keep output substitution strict and exercise missing/mismatched versions.
-		const versionGate = prerequisites + `
+		const versionGate =
+			prerequisites +
+			`
 if [ -z "\${{ needs.package_api.outputs.module_version }}" ] ||
    [ "\${{ needs.package_api.outputs.module_version }}" != "\${{ needs.package_api_arm64.outputs.module_version }}" ]; then
   exit 1
@@ -1487,12 +1503,27 @@ fi
 			["", "0.1.96"],
 			["0.1.96", ""],
 		] as const) {
-			evaluate("merge_group", undefined, true, true,
-				amd64 !== "" && amd64 === arm64, { amd64, arm64 }, versionGate);
+			evaluate(
+				"merge_group",
+				undefined,
+				true,
+				true,
+				amd64 !== "" && amd64 === arm64,
+				{ amd64, arm64 },
+				versionGate,
+			);
 		}
 		assert.throws(
-			() => evaluate("merge_group", undefined, true, true, false, undefined,
-				prerequisites + "\n${{ needs.unknown.outputs.module_version }}"),
+			() =>
+				evaluate(
+					"merge_group",
+					undefined,
+					true,
+					true,
+					false,
+					undefined,
+					prerequisites + "\n${{ needs.unknown.outputs.module_version }}",
+				),
 			/Unexpected prerequisite expression/,
 		);
 		for (const name of [
@@ -1530,21 +1561,30 @@ fi
 		// Run the real shell gates in isolated subshells without paying native Bash
 		// startup once for each scenario, which exceeded the unchanged 5s deadline.
 		const result = spawnSync(bash, ["--noprofile", "--norc", "-s"], {
-			input: scenarios.map(({ script }, index) =>
-				`( set -e\n${script}\n)\nprintf 'GATE_RESULT_${index}=%s\\n' "$?"`,
-			).join("\n"),
+			input: scenarios
+				.map(
+					({ script }, index) =>
+						`( set -e\n${script}\n)\nprintf 'GATE_RESULT_${index}=%s\\n' "$?"`,
+				)
+				.join("\n"),
 			encoding: "utf8",
 		});
 		assert.ifError(result.error);
 		assert.equal(result.status, 0, result.stdout + result.stderr);
 		const outcomes = [...result.stdout.matchAll(/^GATE_RESULT_(\d+)=(\d+)$/gm)];
-		assert.equal(outcomes.length, scenarios.length, result.stdout + result.stderr);
+		assert.equal(
+			outcomes.length,
+			scenarios.length,
+			result.stdout + result.stderr,
+		);
 		for (const [index, scenario] of scenarios.entries()) {
 			assert.equal(Number(outcomes[index][1]), index);
-			assert.equal(Number(outcomes[index][2]) === 0, scenario.succeeds,
-				`${scenario.label}: ${result.stdout}${result.stderr}`);
+			assert.equal(
+				Number(outcomes[index][2]) === 0,
+				scenario.succeeds,
+				`${scenario.label}: ${result.stdout}${result.stderr}`,
+			);
 		}
-
 	});
 
 	test("queue validation cannot run production website packaging or release jobs", () => {

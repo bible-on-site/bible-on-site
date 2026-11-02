@@ -112,6 +112,11 @@ EC2 instance running nginx as reverse proxy.
 - Routes to ECS via Cloud Map DNS (`website.bible-on-site.local`)
 - VPC DNS resolver (`172.31.0.2`) for service discovery
 
+Replacement sizing/architecture (t4g Graviton candidates, validation harness,
+staged DNS canary and EIP cutover) is analyzed in
+[../router-replacement-validation.md](../router-replacement-validation.md) —
+issue #2561.
+
 > **Note**: Key pair and SSL certificates must be set up manually.
 
 ### 5. `github-oidc.yaml`
@@ -252,12 +257,26 @@ validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/
   aliases, so no DNS/ACM change is needed to validate
 - `Managed-CachingDisabled` cache policy + `Managed-AllViewerExceptHostHeader`
   origin request policy (pass-through to the canonical nginx vhost)
-- Dedicated standard-access-log S3 bucket (parameter-gated) for request-mix
-  evidence
+- No access-log bucket: nginx logs cover forwarded origin requests and
+  CloudWatch standard metrics cover edge request/byte/error totals
 
 > **Note**: Validation-only candidate. See
 > [edge-rollout-validation.md](../edge-rollout-validation.md) for the full
 > plan, staged migration and rollback. No production routing is changed.
+> The candidate hostname is public. The live DNS and cost findings in
+> [edge-research-2026-10-27.md](../edge-research-2026-10-27.md) are preconditions
+> for any later rollout, including explicit API/admin DNS isolation.
+
+### Asset-only candidate: `cloudfront-assets.yaml`
+
+Reference-only proposal for an additive CloudFront pay-as-you-go endpoint in
+front of the existing public assets bucket. It has no aliases, OAC, bucket/IAM
+changes or automatic ECS/URL activation. Success caching is disabled and error
+TTLs are explicitly zero. A custom origin policy forwards CORS inputs and all
+query parameters. This is separate from the full-website edge candidate above.
+See the [S3 bill reassessment and approval-gated runbook](../s3-delivery-cost-2026-11-01.md)
+for costs, compatibility checks, CLI request generation and rollback. Never
+deploy this reference file as a CloudFormation stack.
 
 ## Data Flow: ECR → ECS → nginx → Internet
 

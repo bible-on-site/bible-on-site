@@ -1,0 +1,6 @@
+// Install in /etc/apt/apt.conf.d/. Existing apt-daily-upgrade.timer owns cleanup.
+// Downloaded packages can be fetched again; installed packages are never removed.
+APT::Periodic::CleanInterval "7";
+APT::Periodic::MaxAge "30";
+APT::Periodic::MinAge "2";
+APT::Periodic::MaxSize "100";

@@ -103,6 +103,13 @@
                                             AutomationId="FlyoutAuthors"
                                             Activated="OnAuthorsTapped"/>
 
+                    <!-- עלון יומי — join cards (#2806) -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.news_24_regular}"
+                                            Title="עלון יומי"
+                                            Subtitle="במייל, בטלגרם ובווטסאפ"
+                                            AutomationId="FlyoutDailyBulletin"
+                                            Activated="OnDailyBulletinTapped"/>
+
                     <!-- תנאי שימוש -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.shield_question_24_regular}"
                                             Title="תנאי שימוש"
