@@ -148,9 +148,29 @@ or deployed; `cross_module_ci` gates them under the same triggers. Any
 Dockerfile under a module dir counts as `module_changed`; the shared
 `web/.dockerignore` context, `shared-dockerize.yml` (API) and
 `web/api/entities` (compiled into the Bulletin image) count as `ci_changed`.
-Package Website stays master-only: its SSG image build reads the production
-DB (SSM + RDS allow-listing), which PR runs must not access; Website
-Performance builds the same Next.js app pre-merge.
+Website packaging also validates both native architectures on same-repository
+PRs and merge-queue events, without publishing release artifacts. Its SSG build
+uses the production DB through SSM and temporary RDS access. Fork PRs cannot
+run this privileged packaging path. Master pushes package website releases
+when website content changes; Website Performance validates the app pre-merge.
+
+The shared package job normally removes its temporary database ingress in an
+`always()` step. If its hosted runner disappears, that step cannot run.
+[`rds-build-access-cleanup.yml`](../../../../.github/workflows/rds-build-access-cleanup.yml)
+therefore also cleans access after CI completes, using trusted default-branch
+code and the existing deployment role. It verifies the exact repository,
+workflow, attempt and every completed job before using AWS credentials. It
+reads the actual `tanah-mysql` security groups, validates all matching leases,
+then rechecks each rule's ownership before revoking its exact ID and confirming
+absence. Only tagged website build leases for that completed attempt qualify;
+active attempts and other rules are preserved. No new IAM permission, database
+credential, service setting or public URL is needed.
+
+For an older completed run, manually dispatch **Clean completed CI database
+access** with its exact `run_id` and `run_attempt`. Repeating a completed cleanup
+is harmless. Incomplete metadata or changed ownership fails the job without
+guessing. Reverting the cleanup workflow disables independent recovery while
+retaining the package job's ordinary cleanup.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|
