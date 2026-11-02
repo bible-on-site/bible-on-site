@@ -25,7 +25,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 ready=false
-for i in $(seq 1 60); do
+for attempt in $(seq 1 60); do
     if ! kill -0 "$mongod_pid" 2>/dev/null; then
         echo "MongoDB exited before the build restore" >&2
         exit 1
@@ -34,6 +34,7 @@ for i in $(seq 1 60); do
         ready=true
         break
     fi
+    echo "Waiting for build MongoDB: attempt $attempt/60"
     sleep 1
 done
 if [ "$ready" != true ]; then
