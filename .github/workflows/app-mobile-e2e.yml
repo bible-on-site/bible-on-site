@@ -162,7 +162,7 @@ jobs:
         with:
           name: app-mobile-e2e-plan.${{ github.run_id }}.ios
           path: ${{ runner.temp }}/ios-plan/
-          retention-days: 1
+          retention-days: 14
           if-no-files-found: error
 
   ios:
