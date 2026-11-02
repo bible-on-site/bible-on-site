@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::{Result, ensure};
 
 use super::{
-    PdfRequest, TypstFiles, compile_pdf, html_to_typst, pasuk_markup, split_article_header,
+    PdfRequest, TypstFiles, compile_pdf, daily_html_to_typst, pasuk_markup, split_article_header,
     strip_taamim, to_hebrew_letter, typst_escape, typst_string,
 };
 
@@ -34,14 +34,14 @@ const ICONS: [(&str, &[u8]); 5] = [
 
 fn section(markup: &mut String, title: &str) {
     markup.push_str(&format!(
-        "#block(width: 100%, fill: rgb(\"F5F1E6\"), inset: (x: 9pt, y: 5pt), radius: 3pt, above: 0.8em, below: 0.55em, sticky: true)[#text(font: \"Frank Ruhl Libre\", size: 12pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]]\n",
+        "#block(width: 100%, fill: rgb(\"F5F1E6\"), inset: (x: 9pt, y: 5pt), radius: 3pt, above: 0.8em, below: 0.55em, sticky: true)[#text(font: \"Frank Ruhl Libre\", size: 14pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]]\n",
         typst_escape(title)
     ));
 }
 
 fn contact(icon: &str, url: &str, label: &str, ltr: bool) -> String {
     format!(
-        "#box[#box(image(\"daily-{icon}.png\", width: 9pt, height: 9pt))#h(4pt)#link({url})[#text(dir: {direction})[{label}]]]",
+        "#box[#box(image(\"daily-{icon}.png\", width: 11pt, height: 11pt))#h(4pt)#link({url})[#text(dir: {direction})[{label}]]]",
         url = typst_string(url),
         label = typst_escape(label),
         direction = if ltr { "ltr" } else { "rtl" },
@@ -60,21 +60,21 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
     let mut out = String::from(
         r##"#set document(title: "תנ\"ך על הפרק", author: "תנ\"ך על הפרק")
 #set page(paper: "a4", fill: rgb("F5F9FA"), margin: (top: 14mm, bottom: 18mm, left: 13mm, right: 13mm))
-#set text(font: ("Taamey D", "Frank Ruhl Libre"), size: 11.5pt, fill: rgb("233D48"), dir: rtl, lang: "he")
+#set text(font: ("Taamey D", "Frank Ruhl Libre"), size: 13pt, fill: rgb("233D48"), dir: rtl, lang: "he")
 #set par(justify: true, leading: 0.4em, spacing: 0.35em)
-#set page(footer: context align(center, text(font: "Frank Ruhl Libre", size: 8pt, fill: rgb("637780"))[תנ\"ך על הפרק #h(6pt) · #h(6pt) #counter(page).display()]))
+#set page(footer: context align(center, text(font: "Frank Ruhl Libre", size: 9.5pt, fill: rgb("637780"))[תנ\"ך על הפרק #h(6pt) · #h(6pt) #counter(page).display()]))
 #block(width: 100%, fill: white, inset: 12pt, radius: 6pt, breakable: true)[
 #align(center, image("daily-logo.jpg", width: 40mm))
 #v(3pt)
 "##,
     );
     out.push_str(&format!(
-        "#align(center, text(font: \"Frank Ruhl Libre\", size: 19pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}])\n#align(center, text(size: 10pt, fill: rgb(\"637780\"))[{}])\n",
+        "#align(center, text(font: \"Frank Ruhl Libre\", size: 22pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}])\n#align(center, text(size: 11.5pt, fill: rgb(\"637780\"))[{}])\n",
         typst_escape(&source), typst_escape(date),
     ));
     if !perek.header.trim().is_empty() {
         out.push_str(&format!(
-            "#v(3pt)\n#align(center, text(size: 10.5pt, fill: rgb(\"28758A\"))[{}])\n",
+            "#v(3pt)\n#align(center, text(size: 12pt, fill: rgb(\"28758A\"))[{}])\n",
             typst_escape(&strip_taamim(&perek.header)),
         ));
     }
@@ -82,7 +82,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
         "#v(4pt)\n#line(length: 100%, stroke: (paint: rgb(\"D8BD82\"), thickness: 1pt))\n",
     );
     if !dedications.is_empty() {
-        out.push_str("#block(width: 100%, inset: (y: 5pt), below: 0.3em)[#text(size: 9.5pt, fill: rgb(\"637780\"))[הלימוד מוקדש\n");
+        out.push_str("#block(width: 100%, inset: (y: 5pt), below: 0.3em)[#text(size: 11pt, fill: rgb(\"637780\"))[הלימוד מוקדש\n");
         for dedication in dedications {
             out.push_str(&format!("#linebreak(){}\n", typst_escape(dedication)));
         }
@@ -95,7 +95,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
         let verse = pasuk_markup(segments);
         if !verse.is_empty() {
             out.push_str(&format!(
-                "#text(size: 9.5pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]~{} ",
+                "#text(size: 11.5pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]~{} ",
                 typst_escape(&to_hebrew_letter(index + 1)),
                 verse,
             ));
@@ -108,26 +108,26 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
             let (heading, body) = split_article_header(html);
             let heading = heading.unwrap_or_else(|| title.trim().to_string());
             out.push_str(&format!(
-                "#block(sticky: true, above: 0.4em, below: 0.45em)[#text(font: \"Frank Ruhl Libre\", size: 13pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}]",
+                "#block(sticky: true, above: 0.4em, below: 0.45em)[#text(font: \"Frank Ruhl Libre\", size: 15.5pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}]",
                 typst_escape(&heading),
             ));
             if !author.trim().is_empty() {
                 out.push_str(&format!(
-                    "#linebreak()#text(size: 10pt, fill: rgb(\"637780\"))[{}]",
+                    "#linebreak()#text(size: 11.5pt, fill: rgb(\"637780\"))[{}]",
                     typst_escape(author.trim()),
                 ));
             }
             out.push_str("]\n");
-            let body = html_to_typst(&body, &mut files);
+            let body = daily_html_to_typst(&body, &mut files);
             if !body.trim().is_empty() {
-                out.push_str("#{ set text(size: 11pt)\n[\n");
+                out.push_str("#{ set text(font: \"Frank Ruhl Libre\", size: 12.5pt)\nshow heading: it => block(width: 100%, above: 0.85em, below: 0.35em, sticky: true)[#text(size: (18pt, 16.5pt, 15.5pt, 14.5pt, 14pt, 13.5pt).at(it.level - 1), weight: \"bold\", fill: rgb(\"173E52\"))[#it.body]]\n[\n");
                 out.push_str(body.trim());
                 out.push_str("\n] }\n\n");
             }
         }
     }
     out.push_str(&format!(
-        "#block(width: 100%, fill: rgb(\"F5F9FA\"), inset: 7pt, radius: 4pt, above: 0.5em, breakable: false)[\n#set text(size: 9pt)\n#align(center)[{} #h(9pt) {}]\n#v(2pt)\n#align(center)[{} #h(9pt) {} #h(9pt) {}]\n]\n]\n",
+        "#block(width: 100%, fill: rgb(\"F5F9FA\"), inset: 7pt, radius: 4pt, above: 0.5em, breakable: false)[\n#set text(size: 10.5pt)\n#align(center)[{} #h(9pt) {}]\n#v(2pt)\n#align(center)[{} #h(9pt) {} #h(9pt) {}]\n]\n]\n",
         contact("email", "mailto:tanah.site@gmail.com", "tanah.site@gmail.com", true),
         contact("phone", "tel:+37257078640", "+372-57078640", true),
         contact("whatsapp", "https://wa.me/37257078640", "ווטסאפ", false),
@@ -232,6 +232,45 @@ mod tests {
         let fonts = Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts");
         let bytes = build(&request(), &fonts, "יח חשוון תשפז", &[]).unwrap();
         assert!(bytes.starts_with(b"%PDF"));
+    }
+
+    #[test]
+    fn readable_daily_article_compiles_every_heading_and_editor_emphasis() {
+        let mut req = request();
+        let mut html = String::from(
+            "<h1>כותרת המאמר</h1><p>פתיחה <span style='font-weight:bold'>כאשר</span></p>",
+        );
+        for level in 1..=6 {
+            html.push_str(&format!("<h{level}>כותרת משנה {level}</h{level}><p>תוכן <span style='font-style:italic; text-decoration:underline'>מודגש</span></p>"));
+        }
+        req.perakim[0].articles[0].2 = html;
+        let (source, _) = markup(&req, "כא חשוון תשפז", &[]);
+        assert!(source.contains("size: 13pt") && source.contains("size: 12.5pt"));
+        assert!(
+            source.contains("show heading: it =>") && source.contains("#text(weight: 700)[כאשר]")
+        );
+        let fonts = Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts");
+        let bytes = build(&req, &fonts, "כא חשוון תשפז", &[]).unwrap();
+        let document = lopdf::Document::load_mem(&bytes).unwrap();
+        let faces: Vec<_> = document
+            .objects
+            .values()
+            .filter_map(|object| object.as_dict().ok()?.get(b"BaseFont").ok()?.as_name().ok())
+            .map(|name| String::from_utf8_lossy(name).into_owned())
+            .collect();
+        // Compiling style markup is insufficient: the exported PDF must embed
+        // real bold and italic faces, rather than silently selecting regular.
+        assert!(
+            faces
+                .iter()
+                .any(|name| name.contains("FrankRuhlLibre-Bold"))
+        );
+        assert!(
+            faces
+                .iter()
+                .any(|name| name.contains("Oblique") || name.contains("Italic")),
+            "{faces:?}"
+        );
     }
 
     #[test]

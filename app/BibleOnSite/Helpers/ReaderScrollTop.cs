@@ -123,21 +123,5 @@ public static class ReaderScrollTop
     internal static Action<ScrollView, Action> DispatchReissue { get; set; } =
         (scrollView, action) => scrollView.Dispatcher.Dispatch(action);
 
-    private static bool PlatformPrefersAnimatedScroll()
-    {
-#if IOS || MACCATALYST
-        return !UIKit.UIAccessibility.IsReduceMotionEnabled;
-#elif ANDROID
-        // The accessibility "remove animations" setting zeroes the animator
-        // scale; when it does, land the scroll instantly instead of animating.
-        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-        var scale = context?.ContentResolver is { } resolver
-            ? Android.Provider.Settings.Global.GetFloat(resolver,
-                Android.Provider.Settings.Global.AnimatorDurationScale, 1f)
-            : 1f;
-        return scale > 0f;
-#else
-        return true;
-#endif
-    }
+    private static bool PlatformPrefersAnimatedScroll() => MotionPreferences.PlatformPrefersMotion();
 }
