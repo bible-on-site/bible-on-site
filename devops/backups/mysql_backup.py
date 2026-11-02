@@ -188,8 +188,8 @@ def catalog(database, directory):
             "COLUMNS",
             "TABLE_NAME,ORDINAL_POSITION",
             "'table',TABLE_NAME,'ordinal',ORDINAL_POSITION,'name',COLUMN_NAME,"
-            "'type',COLUMN_TYPE,'nullable',IS_NULLABLE,'default',COLUMN_DEFAULT,"
-            "'extra',EXTRA,'collation',COLLATION_NAME,'generation',GENERATION_EXPRESSION",
+            + "'type',COLUMN_TYPE,'nullable',IS_NULLABLE,'default',COLUMN_DEFAULT,"
+            + "'extra',EXTRA,'collation',COLLATION_NAME,'generation',GENERATION_EXPRESSION",
         ),
         (
             "STATISTICS",
@@ -205,8 +205,8 @@ def catalog(database, directory):
             "KEY_COLUMN_USAGE",
             "TABLE_NAME,CONSTRAINT_NAME,ORDINAL_POSITION",
             "'table',TABLE_NAME,'constraint',CONSTRAINT_NAME,'ordinal',ORDINAL_POSITION,"
-            "'column',COLUMN_NAME,'referenceTable',REFERENCED_TABLE_NAME,"
-            "'referenceColumn',REFERENCED_COLUMN_NAME",
+            + "'column',COLUMN_NAME,'referenceTable',REFERENCED_TABLE_NAME,"
+            + "'referenceColumn',REFERENCED_COLUMN_NAME",
         ),
         (
             "REFERENTIAL_CONSTRAINTS",
@@ -227,8 +227,8 @@ def catalog(database, directory):
             "TRIGGERS",
             "TRIGGER_NAME",
             "'name',TRIGGER_NAME,'table',EVENT_OBJECT_TABLE,'event',EVENT_MANIPULATION,"
-            "'timing',ACTION_TIMING,'order',ACTION_ORDER,'definition',ACTION_STATEMENT,"
-            "'definer',DEFINER,'mode',SQL_MODE",
+            + "'timing',ACTION_TIMING,'order',ACTION_ORDER,'definition',ACTION_STATEMENT,"
+            + "'definer',DEFINER,'mode',SQL_MODE",
         ),
         (
             "ROUTINES",
@@ -239,16 +239,16 @@ def catalog(database, directory):
             "PARAMETERS",
             "SPECIFIC_NAME,ORDINAL_POSITION",
             "'routine',SPECIFIC_NAME,'ordinal',ORDINAL_POSITION,'name',PARAMETER_NAME,"
-            "'mode',PARAMETER_MODE,'type',DTD_IDENTIFIER,'charset',CHARACTER_SET_NAME,"
-            "'collation',COLLATION_NAME",
+            + "'mode',PARAMETER_MODE,'type',DTD_IDENTIFIER,'charset',CHARACTER_SET_NAME,"
+            + "'collation',COLLATION_NAME",
         ),
         (
             "EVENTS",
             "EVENT_NAME",
             "'name',EVENT_NAME,'definition',EVENT_DEFINITION,'definer',DEFINER,"
-            "'status',STATUS,'mode',SQL_MODE,'type',EVENT_TYPE,'at',EXECUTE_AT,"
-            "'interval',INTERVAL_VALUE,'unit',INTERVAL_FIELD,'start',STARTS,"
-            "'end',ENDS,'completion',ON_COMPLETION,'zone',TIME_ZONE",
+            + "'status',STATUS,'mode',SQL_MODE,'type',EVENT_TYPE,'at',EXECUTE_AT,"
+            + "'interval',INTERVAL_VALUE,'unit',INTERVAL_FIELD,'start',STARTS,"
+            + "'end',ENDS,'completion',ON_COMPLETION,'zone',TIME_ZONE",
         ),
     ]
     result = {}
@@ -328,6 +328,8 @@ def restore_archive(database, path, directory, source_uuid, sha256):
         raise BackupError("Refusing to overwrite an existing database")
     config = database.defaults(directory)
     try:
+        # Absolute allowlisted CLI; the archived SQL flows through stdin only.
+        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
         with subprocess.Popen(  # nosec B603 # Fixed CLI, private options, no shell.
             # Fixed executable/flags, private defaults file; dump is stdin, never argv.
             # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
@@ -492,6 +494,7 @@ def preflight(session, directory):
         )
     ca = Path(directory) / "rds-ca.pem"
     # Fixed AWS HTTPS trust store, with normal certificate validation and no user URL.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urlopen(  # nosec B310 # Only this literal HTTPS URL can be requested.
         "https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem",
         timeout=30,
