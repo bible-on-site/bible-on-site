@@ -86,15 +86,21 @@ export function RecitationWordControl({
 	pasuk,
 	segment,
 	children,
+	plainWhenInactive = false,
 }: {
 	pasuk: number;
 	segment: number;
 	children: ReactNode;
+	/** The reader can keep the original text without an inert layout box. */
+	plainWhenInactive?: boolean;
 }) {
 	const context = useContext(RecitationTextContext);
 	const word = context?.enabled
 		? context.words.find((w) => w.pasuk === pasuk && w.segment === segment)
 		: undefined;
+	// Keep the text-node boundaries: joining adjacent words changes Hebrew
+	// shaping. Listening still restores the original inline control and events.
+	if (plainWhenInactive && !word) return <>{children}</>;
 	const key = `${pasuk}:${segment}`;
 	return (
 		<InlineRecitationControl

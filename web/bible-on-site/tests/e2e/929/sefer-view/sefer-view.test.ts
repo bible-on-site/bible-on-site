@@ -101,7 +101,7 @@ test.describe("Sefer view", () => {
 		void skipOnNotWideEnough;
 	});
 	for (const mode of ["leaf", "pinned", "hidden"] as const) {
-		test(`preparing scripture for animation preserves held page pixels with ${mode} bookmarks`, async ({
+		test(`inactive listening controls preserve held page pixels with ${mode} bookmarks`, async ({
 			page,
 		}, testInfo) => {
 			await page.setViewportSize({ width: 1440, height: 900 });
@@ -120,6 +120,11 @@ test.describe("Sefer view", () => {
 			}, mode);
 			await page.goto("/929/300?book");
 			await waitForVisibleTurnContent(page);
+			await expect(
+				page.locator(
+					'.he-book .page.current-page article span[class$="_word"]',
+				),
+			).toHaveCount(0);
 			const point = await prepareTurnInput(page, "drag");
 			await page.mouse.move(point.x, point.y);
 			await page.mouse.down();
@@ -130,28 +135,57 @@ test.describe("Sefer view", () => {
 				await expect(
 					page.locator(".he-book .page.page--folded.page--flipping"),
 				).toHaveCount(2);
-				const scroller = page
-					.locator(
-						".he-book .page.current-page [class*=perekTextScrollWrapper]",
-					)
-					.first();
-				const appearance = () =>
-					scroller.evaluate((element) => {
-						const style = getComputedStyle(element);
-						return [style.willChange, style.backgroundColor];
-					});
-				const preparedAppearance = await appearance();
+				// Commit the last queued native pointer pose before comparing pixels.
+				await page.evaluate(
+					() =>
+						new Promise<void>((resolve) =>
+							requestAnimationFrame(() =>
+								requestAnimationFrame(() => resolve()),
+							),
+						),
+				);
+				const pose = () =>
+					page.locator(".he-book .page--flipping").evaluateAll((pages) =>
+						pages.map((page) => ({
+							transform: (page as HTMLElement).style.transform,
+							clip: (page as HTMLElement).style.clipPath,
+						})),
+					);
+				const heldPose = await pose();
 				const book = page.locator('[class*="bookArea"]');
 				const prepared = await book.screenshot({ animations: "disabled" });
+				const restored = await page.evaluate(() => {
+					const nodes: Text[] = [];
+					for (const article of document.querySelectorAll(".he-book article")) {
+						const walker = document.createTreeWalker(
+							article,
+							NodeFilter.SHOW_TEXT,
+						);
+						for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+							if (node.textContent?.trim()) nodes.push(node as Text);
+						}
+					}
+					// Restore the original inert inline-box styling as an independent
+					// appearance control. Keep every original text node and boundary.
+					for (const node of nodes) {
+						const span = document.createElement("span");
+						span.dataset.readerOriginalWord = "";
+						span.style.cssText =
+							"display:inline;border:0;padding:0;margin:0;border-radius:var(--radius-sm);background:transparent;color:inherit;font:inherit;line-height:inherit;letter-spacing:inherit;word-spacing:inherit;text-align:inherit";
+						node.replaceWith(span);
+						span.appendChild(node);
+					}
+					return nodes.length;
+				});
 				const controlStyle = await page.addStyleTag({
 					content:
 						".he-book [class*=perekTextScrollWrapper] { will-change: auto !important; background-color: transparent !important; }",
 				});
 				try {
-					// The control must actually remove preparation; an inactive cache
-					// cannot turn this into a comparison of two identical setups.
-					expect(await appearance()).not.toEqual(preparedAppearance);
+					// A missing control must never pass as two identical setups.
+					expect(restored).toBeGreaterThan(100);
 					const original = await book.screenshot({ animations: "disabled" });
+					expect(await pose()).toEqual(heldPose);
 					await testInfo.attach("prepared-page", {
 						body: prepared,
 						contentType: "image/png",
@@ -169,20 +203,18 @@ test.describe("Sefer view", () => {
 						.raw()
 						.toBuffer();
 					expect(preparedPixels.length).toBe(originalPixels.length);
-					let colorError = 0;
-					for (let index = 0; index < preparedPixels.length; index++) {
-						colorError += Math.abs(
-							preparedPixels[index] - originalPixels[index],
-						);
-					}
-					// Opaque compositing can round one dark-image channel by one
-					// level. Bound the total error across the entire capture, so a
-					// changed glyph, edge, color or even a second pixel still fails.
-					expect(colorError).toBeLessThanOrEqual(1);
+					expect(preparedPixels.equals(originalPixels)).toBe(true);
 				} finally {
 					await controlStyle.evaluate((element) =>
 						element.parentNode?.removeChild(element),
 					);
+					await page.evaluate(() => {
+						for (const span of document.querySelectorAll(
+							"[data-reader-original-word]",
+						)) {
+							span.replaceWith(...span.childNodes);
+						}
+					});
 				}
 			} finally {
 				await page.mouse.up();

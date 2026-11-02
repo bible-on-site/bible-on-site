@@ -100,7 +100,7 @@ beforeEach(() => {
 		clipEnded = ended;
 		return true;
 	});
-	prepare.mockResolvedValue(undefined);
+	prepare.mockReset().mockResolvedValue(undefined);
 	playRanges.mockImplementation(async (_ranges, _pauseMs, ended) => {
 		positionMs = _ranges[0]?.startMs ?? null;
 		clipEnded = ended;
@@ -158,6 +158,60 @@ async function openPlayer() {
 	await screen.findByRole("button", { name: "השמעת כל הפרק" });
 	return view;
 }
+
+test("reader words can omit inactive wrappers while the default keeps them", () => {
+	render(
+		<>
+			<div data-testid="reader-word">
+				<RecitationWordControl pasuk={1} segment={1} plainWhenInactive>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+			<div data-testid="default-word">
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+		</>,
+	);
+	const reader = screen.getByTestId("reader-word");
+	expect(reader.textContent).toBe("בְּרֵאשִׁית");
+	expect(reader.childElementCount).toBe(0);
+	expect(screen.getByTestId("default-word").firstElementChild?.tagName).toBe(
+		"SPAN",
+	);
+});
+
+test("plain reader words regain playback controls only when listening is ready", async () => {
+	const pending = deferred<void>();
+	prepare.mockReturnValueOnce(pending.promise);
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+			<div data-testid="reader-word">
+				<RecitationWordControl pasuk={1} segment={1} plainWhenInactive>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+		</RecitationPlayer>,
+	);
+	const reader = screen.getByTestId("reader-word");
+	expect(reader.childElementCount).toBe(0);
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	fireEvent.click(toggle);
+	await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
+	expect(reader.childElementCount).toBe(0);
+	await act(async () => pending.resolve());
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	expect(word).toHaveAttribute("tabindex", "0");
+	fireEvent.keyDown(word, { key: "Enter" });
+	await waitFor(() =>
+		expect(clipPlay).toHaveBeenCalledWith(1200, 1800, expect.any(Function)),
+	);
+	fireEvent.click(toggle);
+	expect(reader.childElementCount).toBe(0);
+	expect(reader.textContent).toBe("בְּרֵאשִׁית");
+});
 
 test("pasuk control navigates to the open perush instead of playing", async () => {
 	const navigate = jest.fn();

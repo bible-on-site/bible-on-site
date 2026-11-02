@@ -151,7 +151,11 @@ function SeferScriptureText({
 						</RecitationLink>
 					),
 					(pasuk, segment, text) => (
-						<RecitationWordControl pasuk={pasuk} segment={segment}>
+						<RecitationWordControl
+							pasuk={pasuk}
+							segment={segment}
+							plainWhenInactive
+						>
 							{text}
 						</RecitationWordControl>
 					),

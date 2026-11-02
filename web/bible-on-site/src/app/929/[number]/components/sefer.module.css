@@ -51,14 +51,10 @@
 
 /* Scroll wrapper outside the text only; scrollbar on outer edge (RTL = left) */
 .perekTextScrollWrapper {
-	/* Reuse the scripture's pixels while the paper's crease and shading move.
-	   Matching its opaque paper background preserves the original text raster. */
-	background-color: var(--surface-elevated, white);
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
 	direction: rtl;
-	will-change: opacity;
 	scrollbar-width: thin;
 	scrollbar-color: var(--scrollbarBG) var(--scrollbarBG);
 	--scrollbarBG: #cfd8dc;

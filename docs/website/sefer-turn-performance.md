@@ -18,14 +18,16 @@ A zero content buffer must keep both current faces, moving faces and their
 underlays readable. Preserve opaque paper surfaces so skipping covered text
 cannot change the paper edge.
 
-The scripture scroller uses its existing opaque paper color to let the browser
-reuse its rendering while the paper moves. A separate held-turn image guard
-compares the complete book with and without that preparation in each bookmark
-mode. Its control must change the computed preparation styles. It allows only
-one color-channel step in total across the entire image: dark compositing can
-round a single channel by one level. Changed text, wrapping, paper edges or
-colors exceed that bound. Resting/held captures also cover dark and high-contrast
-themes; the original 0.05px character-position guard remains independent.
+Inactive listening words omit their inert inline boxes in the book. Their
+original text nodes and boundaries stay separate; joining adjacent text changes
+Hebrew shaping. Enabling listening restores the original inline controls. A
+held-turn image guard restores inert inline boxes and the original transparent
+scripture scroller as an independent control in each bookmark mode. The whole
+book must retain every pixel, with identical recorded paper transforms and clip
+paths. Its positive control restores more than 100 boxes, so comparing two
+inactive setups cannot pass. The original 0.05px character-position guard stays
+independent. An opaque scroller cache was rejected because a straight fold
+changed text rasterization despite preserving diagonal-fold captures.
 
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
