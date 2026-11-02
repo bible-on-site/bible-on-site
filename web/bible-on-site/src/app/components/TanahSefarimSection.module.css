@@ -44,7 +44,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #d8ebff;
-  border-top-color: #1552ac;
+  border-top-color: var(--accent-600);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -115,11 +115,11 @@
   }
 
   .header h3 {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .spinner {
     border-color: #2d3548;
-    border-top-color: #7eb0ff;
+    border-top-color: var(--accent-300);
   }
 }

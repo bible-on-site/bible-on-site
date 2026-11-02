@@ -44,10 +44,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
-                // A proxied command cut at the driver timeout is one failed
-                // poll, not a dead session — the next lookup retries fresh.
+                // An observation timeout can retry within this deadline.
+                // Appium's session-ending proxy timeout must reach recovery.
             }
             Thread.Sleep(200);
         }
@@ -82,10 +82,9 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
-                // A proxied command cut at the driver timeout is one failed
-                // poll, not a dead session — the next lookup retries fresh.
+                // Only observation timeouts retry; dead sessions escape.
             }
             Thread.Sleep(200);
         }
@@ -116,7 +115,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
                 }
                 frame = current;
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
                 // A straggler lookup or frame read retries within the budget.
             }
@@ -181,7 +180,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 reader = null;
             }
-            catch (WebDriverTimeoutException)
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
             {
                 // A straggler command during scroll churn retries the whole
                 // iteration instead of ending the return budget early.
@@ -222,6 +221,88 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }
         var menuCenter = (buttons[0].Location.X + buttons[0].Size.Width / 2.0) / window.Width;
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
+    }
+
+    // Every element read is a WDA round-trip on iOS; hundreds of displayed/
+    // text/rect/label calls ran about five minutes inside a shard's 15-minute
+    // wall clock. The snapshot driver carries text, visibility and frames for
+    // every match in a single lookup response, and there a labeled cell's text
+    // is its accessibility description. Share that single-scan read so tests
+    // never fall back to per-element property queries on the live elements.
+    public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
+        RenderedElements(string automationId) =>
+        RenderedElements(automationId, element => element.Text);
+
+    /// <summary>
+    /// Same single-scan read as <see cref="RenderedElements(string)"/>, but
+    /// callers choose how the Android fallback extracts text (the snapshot
+    /// path on iOS always carries the announced label).
+    /// </summary>
+    public IReadOnlyList<(AppiumElement Element, string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
+        RenderedElements(string automationId, Func<AppiumElement, string> text)
+    {
+        if (driver is IosSnapshotDriver snapshots)
+        {
+            return snapshots.FindSnapshots(platform.AutomationId(automationId))
+                .Where(match => match.Snapshot.Displayed)
+                .Select(match => (match.Element, match.Snapshot.Text.Trim(),
+                    (new System.Drawing.Point(Convert.ToInt32(match.Snapshot.X),
+                        Convert.ToInt32(match.Snapshot.Y)),
+                     new System.Drawing.Size(Convert.ToInt32(match.Snapshot.Width),
+                        Convert.ToInt32(match.Snapshot.Height)))))
+                .ToArray();
+        }
+        return driver!.FindElements(platform.AutomationId(automationId))
+            .Where(element => element.Displayed)
+            .Select(element => (element, text(element).Trim(),
+                MobilePlatformAdapter.ReadFrame(element)))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The announced label/description of the first visible match, captured
+    /// inside the poll's snapshot — unlike <c>WaitFor(...).Text</c> or a later
+    /// GetAttribute call, this costs no extra device round-trip on iOS.
+    /// </summary>
+    public string WaitForSpoken(string automationId) =>
+        WaitForSpoken(automationId, _ => true);
+
+    /// <inheritdoc cref="WaitForSpoken(string)"/>
+    public string WaitForSpoken(string automationId, Func<string, bool> accept) =>
+        WaitForSpoken(automationId, accept, TimeSpan.FromSeconds(45));
+
+    private string WaitForSpoken(string automationId, Func<string, bool> accept, TimeSpan timeout)
+    {
+        var locator = platform.AutomationId(automationId);
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                // FindVisible applies the same center-in-viewport rule as
+                // WaitFor, and on iOS the condition element answers Text from
+                // the poll's own snapshot — no second attribute request.
+                var spoken = FindVisible(locator)
+                    .Select(match => driver is IosSnapshotDriver
+                        ? match.ConditionElement.Text.Trim()
+                        : (platform.SemanticDescription(match.Element) ?? match.Element.Text).Trim())
+                    .FirstOrDefault(accept);
+                if (spoken != null)
+                {
+                    return spoken;
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The carousel can replace its native views between lookup and inspection.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // Only observation timeouts retry; dead sessions escape.
+            }
+            Thread.Sleep(200);
+        }
+        throw new WebDriverTimeoutException($"No visible element matching {locator} announced an accepted text within {timeout.TotalSeconds} seconds.");
     }
 
     private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement);

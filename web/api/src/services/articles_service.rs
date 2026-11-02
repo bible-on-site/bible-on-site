@@ -208,12 +208,7 @@ pub async fn search_articles(
         None => None,
     };
     let page = index
-        .search(
-            phrase,
-            limit as usize,
-            offset as usize,
-            author_ids.as_ref(),
-        )
+        .search(phrase, limit as usize, offset as usize, author_ids.as_ref())
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
@@ -310,9 +305,7 @@ async fn article_ids_by_author(
         .into_tuple::<i32>()
         .all(db.get_connection())
         .await
-        .map_err(|db_err| {
-            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-        })
+        .map_err(|db_err| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err)))
         .map(|ids| ids.into_iter().collect())
 }
 
@@ -735,11 +728,13 @@ mod tests {
                             article_search::store::SCHEMA_VERSION.into(),
                         ),
                         ("model_epoch", 4_i32.into()),
+                        ("doc_count", 1_i32.into()),
                         ("model", serialize_model(&model).into()),
                     ])],
                     vec![mock_row([
                         ("article_id", 42_i32.into()),
                         ("plain_len", 10_i32.into()),
+                        ("model_epoch", 4_i32.into()),
                         ("vector", serialize_vector(&[1.0]).into()),
                         ("terms", serialize_terms(&[(0, 2)]).into()),
                     ])],
@@ -813,18 +808,21 @@ mod tests {
                             article_search::store::SCHEMA_VERSION.into(),
                         ),
                         ("model_epoch", 4_i32.into()),
+                        ("doc_count", 2_i32.into()),
                         ("model", serialize_model(&model).into()),
                     ])],
                     vec![
                         mock_row([
                             ("article_id", 42_i32.into()),
                             ("plain_len", 10_i32.into()),
+                            ("model_epoch", 4_i32.into()),
                             ("vector", serialize_vector(&[1.0]).into()),
                             ("terms", serialize_terms(&[(0, 2)]).into()),
                         ]),
                         mock_row([
                             ("article_id", 43_i32.into()),
                             ("plain_len", 10_i32.into()),
+                            ("model_epoch", 4_i32.into()),
                             ("vector", serialize_vector(&[1.0]).into()),
                             ("terms", serialize_terms(&[(0, 40)]).into()),
                         ]),
@@ -884,16 +882,22 @@ mod tests {
             .expect("search");
         assert_eq!(results.total, 0);
         assert!(results.hits.is_empty());
-        assert!(search_articles(&db, &index, "alpha", None, None, Some(0))
-            .await
-            .is_err());
-        assert!(search_articles(&db, &index, "alpha", None, None, Some(-3))
-            .await
-            .is_err());
+        assert!(
+            search_articles(&db, &index, "alpha", None, None, Some(0))
+                .await
+                .is_err()
+        );
+        assert!(
+            search_articles(&db, &index, "alpha", None, None, Some(-3))
+                .await
+                .is_err()
+        );
         let db_err = create_mock_db_with_query_error("author ids query failed");
-        assert!(search_articles(&db_err, &index, "alpha", None, None, Some(9))
-            .await
-            .is_err());
+        assert!(
+            search_articles(&db_err, &index, "alpha", None, None, Some(9))
+                .await
+                .is_err()
+        );
     }
 
     fn covering_source_model(article_id: i32, perek_id: i32, pasuk: i16) -> CoveringSourceModel {
@@ -904,7 +908,8 @@ mod tests {
             created_at: chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
-                .unwrap(),
+                .unwrap()
+                .and_utc(),
         }
     }
 

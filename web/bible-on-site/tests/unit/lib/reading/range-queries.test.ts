@@ -128,9 +128,11 @@ describe("getPerushimForRanges", () => {
 		expect(result.map((r) => r.id)).toEqual([1, 2]);
 	});
 
-	it("returns empty array when the query fails", async () => {
+	it("rethrows when the query fails so a false empty is never cached", async () => {
 		mockQuery.mockRejectedValue(new Error("DB error"));
-		expect(await getPerushimForRanges(CROSS_PEREK)).toEqual([]);
+		await expect(getPerushimForRanges(CROSS_PEREK)).rejects.toThrow(
+			"DB error",
+		);
 	});
 });
 
@@ -174,9 +176,11 @@ describe("getPerushNotesForRanges", () => {
 		expect(result.map((n) => n.perekId)).toEqual([100, 1]);
 	});
 
-	it("returns empty array on query failure", async () => {
+	it("rethrows on query failure so a false empty is never cached", async () => {
 		mockQuery.mockRejectedValue(new Error("timeout"));
-		expect(await getPerushNotesForRanges(5, CROSS_PEREK)).toEqual([]);
+		await expect(getPerushNotesForRanges(5, CROSS_PEREK)).rejects.toThrow(
+			"timeout",
+		);
 	});
 });
 

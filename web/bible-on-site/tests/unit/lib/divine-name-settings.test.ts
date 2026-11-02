@@ -144,7 +144,7 @@ describe("persistence and change notifications", () => {
 		expect(seen).toEqual(["dalet"]);
 	});
 	it("re-reads localStorage on cross-tab storage events", () => {
-		subscribeDivineNameMasking(() => {});
+		const unsubscribe = subscribeDivineNameMasking(() => {});
 		expect(getDivineNameMaskingSnapshot().enabled).toBe(true);
 		localStorage.setItem(
 			DIVINE_NAME_MASKING_KEY,
@@ -155,6 +155,52 @@ describe("persistence and change notifications", () => {
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("heh");
 		window.dispatchEvent(storageEvent(DIVINE_NAME_MASKING_KEY));
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
+		unsubscribe();
+	});
+	it("refreshes the stale snapshot when the first subscriber returns", () => {
+		const first = subscribeDivineNameMasking(() => {});
+		expect(getDivineNameMaskingSnapshot().yhwh).toBe("heh");
+		first();
+		// Another tab writes while no storage listener is attached; the
+		// cached snapshot can no longer observe the change.
+		localStorage.setItem(
+			DIVINE_NAME_MASKING_KEY,
+			JSON.stringify({ enabled: true, yhwh: "dalet" }),
+		);
+		const seen: string[] = [];
+		const second = subscribeDivineNameMasking(() =>
+			seen.push(getDivineNameMaskingSnapshot().yhwh),
+		);
+		expect(getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
+		expect(seen).toEqual(["dalet"]);
+		second();
+	});
+	it("does not notify the first subscriber when nothing changed", () => {
+		const first = subscribeDivineNameMasking(() => {});
+		first();
+		let calls = 0;
+		const second = subscribeDivineNameMasking(() => {
+			calls += 1;
+		});
+		expect(calls).toBe(0);
+		second();
+	});
+	it("seeds the snapshot for a first subscriber that never read it", async () => {
+		// A fresh module has snapshot === null — reachable for a direct
+		// (non-useSyncExternalStore) subscriber before any snapshot read.
+		jest.resetModules();
+		const fresh = await import("@/lib/divine-name-settings");
+		localStorage.setItem(
+			fresh.DIVINE_NAME_MASKING_KEY,
+			JSON.stringify({ enabled: true, yhwh: "dalet" }),
+		);
+		const seen: string[] = [];
+		const unsubscribe = fresh.subscribeDivineNameMasking(() =>
+			seen.push(fresh.getDivineNameMaskingSnapshot().yhwh),
+		);
+		expect(fresh.getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
+		expect(seen).toEqual(["dalet"]);
+		unsubscribe();
 	});
 	it("keeps the snapshot object stable between changes", () => {
 		const first = getDivineNameMaskingSnapshot();
@@ -163,6 +209,57 @@ describe("persistence and change notifications", () => {
 			normalizeDivineNameMasking({ enabled: true }),
 		);
 		expect(getDivineNameMaskingSnapshot()).not.toBe(first);
+	});
+	it("multiplexes many subscribers over one pair of window listeners (#2805)", () => {
+		// A reader page mounts hundreds of DivineNameText segments and the
+		// flip book's leaf buffer remounts pages on every turn — shared
+		// window listeners keep per-flip add/removeEventListener churn at O(1).
+		const addSpy = jest.spyOn(window, "addEventListener");
+		const removeSpy = jest.spyOn(window, "removeEventListener");
+		try {
+			const seen: number[] = [];
+			const unsubscribers = Array.from({ length: 400 }, (_, i) =>
+				subscribeDivineNameMasking(() => seen.push(i)),
+			);
+			const added = addSpy.mock.calls.filter(
+				([type]) => type === DIVINE_NAME_MASKING_EVENT || type === "storage",
+			);
+			expect(added).toHaveLength(2);
+			expect(added.map(([type]) => type)).toEqual([
+				DIVINE_NAME_MASKING_EVENT,
+				"storage",
+			]);
+			saveDivineNameMaskingSettings(
+				normalizeDivineNameMasking({ enabled: true, yhwh: "dalet" }),
+			);
+			expect(seen).toHaveLength(400);
+			for (const unsubscribe of unsubscribers) unsubscribe();
+			expect(
+				removeSpy.mock.calls.filter(
+					([type]) => type === DIVINE_NAME_MASKING_EVENT || type === "storage",
+				),
+			).toHaveLength(2);
+		} finally {
+			addSpy.mockRestore();
+			removeSpy.mockRestore();
+		}
+	});
+	it("keeps notifying remaining subscribers after some unsubscribe", () => {
+		let first = 0;
+		let second = 0;
+		const unsubFirst = subscribeDivineNameMasking(() => {
+			first += 1;
+		});
+		const unsubSecond = subscribeDivineNameMasking(() => {
+			second += 1;
+		});
+		unsubFirst();
+		saveDivineNameMaskingSettings(
+			normalizeDivineNameMasking({ enabled: true, yhwh: "dalet" }),
+		);
+		expect(first).toBe(0);
+		expect(second).toBe(1);
+		unsubSecond();
 	});
 	it("feeds masked rendering end-to-end", () => {
 		saveDivineNameMaskingSettings(

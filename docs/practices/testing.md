@@ -161,7 +161,7 @@ if (!data) {
 }
 ```
 
-**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.js` that:
+**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.mjs` that:
 
 1. Parses source files for `/* istanbul ignore next */` comments
 2. Marks statements, branches, and functions on the following line as covered
@@ -182,8 +182,7 @@ Codecov uses flags to separate coverage by module:
 - `website` - Coverage from web/bible-on-site
 - `api` - Coverage from web/api
 - `app` - Coverage from app/BibleOnSite — unit + integration + mobile E2E merged hits-only (see [App coverage](../tests/app/coverage/coverage.md))
-- `admin` - Coverage from web/admin
-- `admin_e2e` - Admin E2E layer reported separately
+- `admin` - Coverage from web/admin — unit (canonical universe) + E2E hits merged hits-only into one report
 - `bulletin` - Coverage from web/bulletin
 - `data` - Coverage from data/
 

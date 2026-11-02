@@ -1,9 +1,18 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
 import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
-import { getLighthouseMeasure, reportBenchmark } from "../util/benchmark";
+import {
+	lighthouseBenchmarkName,
+	saveLighthouseReport,
+	writePerformanceIndex,
+} from "../../scripts/performance-report.mjs";
+import {
+	getLighthouseMeasure,
+	reportBenchmark,
+	webVitalsMeasure,
+} from "../util/benchmark";
 import { test as base, expect } from "../util/playwright/test-fixture";
 
 type DeviceStrategy = "mobile" | "desktop";
@@ -26,6 +35,10 @@ const STRATEGIES: DeviceStrategy[] = ["mobile", "desktop"];
 
 type ResultKey = `${string}-${DeviceStrategy}`;
 type LighthouseResultsMap = Map<ResultKey, Result>;
+const REPORTS_DIR = resolve(
+	__dirname,
+	"../../.playwright-report/perf/diagnostics/lighthouse",
+);
 
 function getResultKey(path: string, strategy: DeviceStrategy): ResultKey {
 	return `${path}-${strategy}`;
@@ -49,6 +62,7 @@ const test = base.extend<
 	lighthouseResults: [
 		async ({ lighthousePort }, use) => {
 			const results: LighthouseResultsMap = new Map();
+			const reports: ReturnType<typeof saveLighthouseReport>[] = [];
 
 			// Launch browser once for all audits
 			const context = await chromium.launchPersistentContext(
@@ -76,7 +90,8 @@ const test = base.extend<
 
 						// Run Lighthouse
 						const lhr = await runLighthouseAudit(url, strategy, lighthousePort);
-						saveReport(lhr, strategy, path);
+						reports.push(saveReport(lhr, strategy));
+						writePerformanceIndex(REPORTS_DIR, reports);
 						results.set(getResultKey(path, strategy), lhr);
 					}
 				}
@@ -439,18 +454,17 @@ async function runLighthouseAudit(
 	return runnerResult.lhr;
 }
 
-function saveReport(lhr: Result, strategy: DeviceStrategy, path: string) {
-	const reportsDir = resolve(__dirname, "../../.lighthouse-reports");
-	mkdirSync(reportsDir, { recursive: true });
-
-	const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-	const safePath = path.replace(/\//g, "_");
-	const reportPath = resolve(
-		reportsDir,
-		`${strategy}${safePath}-${timestamp}.json`,
-	);
-	writeFileSync(reportPath, JSON.stringify(lhr, null, 2));
-	// Report saved silently - path available in .lighthouse-reports directory
+function saveReport(lhr: Result, strategy: DeviceStrategy) {
+	const report = saveLighthouseReport(REPORTS_DIR, lhr, {
+		device: strategy,
+		knownIssues: [...KNOWN_ISSUES.values()]
+			.filter(
+				(issue) => issue.strategy === "all" || issue.strategy === strategy,
+			)
+			.map((issue) => issue.id),
+	});
+	console.log(`Lighthouse ${report.url} (${strategy}):`, report.metrics);
+	return report;
 }
 
 test.describe("Lighthouse", () => {
@@ -475,7 +489,11 @@ test.describe("Lighthouse", () => {
 						const score = category?.score ?? 0;
 
 						reportBenchmark({
-							name: `category: ${categoryId}`,
+							name: lighthouseBenchmarkName(
+								path,
+								strategy,
+								`category: ${categoryId}`,
+							),
 							measure: "score",
 							value: score,
 							lowerValue: minScore,
@@ -521,10 +539,14 @@ test.describe("Lighthouse", () => {
 						const audit = lhr.audits[metric.id];
 						const value = audit?.numericValue ?? 0;
 
-						// Use 'ratio' for CLS (unitless), 'time_ms' for timing metrics
-						const measure = metric.name === "CLS" ? "ratio" : "time_ms";
+						// Use 'cls_ratio' for CLS (unitless), 'time_ms' for timing metrics
+						const measure = webVitalsMeasure(metric.name);
 						reportBenchmark({
-							name: `metric: ${metric.name}`,
+							name: lighthouseBenchmarkName(
+								path,
+								strategy,
+								`metric: ${metric.name}`,
+							),
 							measure,
 							value: value,
 							upperValue: metric.threshold,
@@ -570,11 +592,22 @@ test.describe("Lighthouse", () => {
 						// Report to Bencher using unified measure names based on numericUnit.
 						// This groups audits by scale (time_ms, bytes, count, score) to prevent
 						// sparse matrices in Bencher reports.
-						const measure = getLighthouseMeasure(audit.numericUnit);
+						// `cls_ratio` is only for the real CLS value: when the audit
+						// lacks a numericValue the fallback below emits its 0-1 score,
+						// which must not feed the static CLS boundary.
+						const measure =
+							auditId === "cumulative-layout-shift" &&
+							audit.numericValue !== undefined
+								? "cls_ratio"
+								: getLighthouseMeasure(audit.numericUnit);
 						const benchmarkValue =
 							audit.numericValue !== undefined ? audit.numericValue : score;
 						reportBenchmark({
-							name: `audit: ${auditId}`,
+							name: lighthouseBenchmarkName(
+								path,
+								strategy,
+								`audit: ${auditId}`,
+							),
 							measure,
 							value: benchmarkValue,
 						});

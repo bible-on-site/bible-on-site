@@ -75,9 +75,11 @@ public class AtomicFileTests
         await using var storage = new TestStorage();
         const string name = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
         await storage.BundleDatabaseAsync(name, "CREATE TABLE sample (value TEXT)", "INSERT INTO sample VALUES ('complete')");
+        await using var interrupted = new BrokenReadStream();
+        await using var packaged = new MemoryStream(storage.PackageFiles[name]);
         storage.FileSystem.SetupSequence(f => f.OpenAppPackageFileAsync(name))
-            .ReturnsAsync(new BrokenReadStream())
-            .ReturnsAsync(new MemoryStream(storage.PackageFiles[name]));
+            .ReturnsAsync(interrupted)
+            .ReturnsAsync(packaged);
         var service = new LocalDatabaseService(storage.FileSystem.Object);
         await FluentActions.Awaiting(() => service.InitializeAsync()).Should().ThrowAsync<IOException>();
         File.Exists(Path.Join(storage.Root, name)).Should().BeFalse();

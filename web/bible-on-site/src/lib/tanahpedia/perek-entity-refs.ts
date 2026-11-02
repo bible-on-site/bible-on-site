@@ -1,46 +1,95 @@
-import { unstable_cache } from "next/cache";
+import { isMissingMysqlSchema } from "@/lib/mysql-errors";
 import {
-	getEntityReferencesForPerek,
-	getMentionReferencesForPerek,
+	COLLECTION_TAGS,
+	cachedPerKey,
+	entityRefsTag,
+	mentionRefsTag,
+} from "@/lib/revalidate/tags";
+import {
+	getEntityReferencesForPereks,
+	getMentionReferencesForPereks,
 	type PerekEntityReference,
+	type PerekScopedEntityReference,
 } from "./service";
 
-const getCachedEntityRefs = unstable_cache(
-	async (perekId: number) => getEntityReferencesForPerek(perekId),
-	["tanahpedia-entity-refs"],
-	{
-		tags: ["tanahpedia-entity-refs"],
-		revalidate: false,
-	},
+// Each entry retains its collection tag and every requested chapter tag,
+// comfortably below Next's 128-tag limit without widening its query scope.
+const REFERENCE_BATCH_SIZE = 64;
+const keyOf = (ids: number[]) => ids.join(",");
+
+const getCachedEntityRefs = cachedPerKey(
+	"tanahpedia-entity-refs-batch",
+	keyOf,
+	(key) => [
+		COLLECTION_TAGS.pediaEntityRefs,
+		...key.split(",").map((id) => entityRefsTag(Number(id))),
+	],
+	(ids: number[]) => getEntityReferencesForPereks(ids),
 );
 
-// Mention decorations (#2516) resolve against live entries at presentation
-// time — the cache expires on entry lifecycle events via the
-// `tanahpedia-mention-refs` tag the admin pediaInvalidation emits.
-const getCachedMentionRefs = unstable_cache(
-	async (perekId: number) => getMentionReferencesForPerek(perekId),
-	["tanahpedia-mention-refs"],
-	{
-		tags: ["tanahpedia-mention-refs"],
-		revalidate: false,
-	},
+// Live name resolution keeps the existing collection-level invalidation;
+// every chapter in this exact batch also keeps its scoped mention tag.
+const getCachedMentionRefs = cachedPerKey(
+	"tanahpedia-mention-refs-batch",
+	keyOf,
+	(key) => [
+		COLLECTION_TAGS.pediaMentionRefs,
+		...key.split(",").map((id) => mentionRefsTag(Number(id))),
+	],
+	(ids: number[]) => getMentionReferencesForPereks(ids),
 );
+
+/** Missing schemas degrade outside the cache so recovery always retries. */
+async function refsOrEmpty(
+	cached: (ids: number[]) => Promise<PerekScopedEntityReference[]>,
+	ids: number[],
+): Promise<PerekScopedEntityReference[]> {
+	try {
+		return await cached(ids);
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) return [];
+		throw error;
+	}
+}
 
 /** References for the visible perek and the other pages in its book view. */
 export async function fetchAllEntityRefs(
 	perekIds: number[],
 ): Promise<Record<number, PerekEntityReference[]>> {
-	const [allRefs, allMentions] = await Promise.all([
-		Promise.all(perekIds.map((id) => getCachedEntityRefs(id))),
-		Promise.all(perekIds.map((id) => getCachedMentionRefs(id))),
-	]);
+	// Canonicalize both the cache definition and its invocation arguments:
+	// unstable_cache includes JSON.stringify(args) in the stored cache key.
+	const ids = [...new Set(perekIds)].sort((a, b) => a - b);
+	const requested = new Set(ids);
+	const batches: number[][] = [];
+	for (let i = 0; i < ids.length; i += REFERENCE_BATCH_SIZE) {
+		batches.push(ids.slice(i, i + REFERENCE_BATCH_SIZE));
+	}
+	const rows = await Promise.all(
+		batches.map(async (batch) => {
+			const [curated, mentions] = await Promise.all([
+				refsOrEmpty(getCachedEntityRefs, batch),
+				refsOrEmpty(getCachedMentionRefs, batch),
+			]);
+			// Curated refs win overlapping segments. Preserve the service's
+			// order within each family, including manual-mention precedence.
+			return [...curated, ...mentions];
+		}),
+	);
 	const result: Record<number, PerekEntityReference[]> = {};
-	for (let i = 0; i < perekIds.length; i++) {
-		// Curated entity refs come first — getSegmentRuns resolves the first
-		// ref covering a segment, so human-curated links win over decorations.
-		const combined = [...allRefs[i], ...allMentions[i]];
-		if (combined.length > 0) {
-			result[perekIds[i]] = combined;
+	for (const batch of rows) {
+		for (const row of batch) {
+			if (!requested.has(row.perekId)) continue;
+			const refs = result[row.perekId] ?? [];
+			refs.push({
+				entityId: row.entityId,
+				entityName: row.entityName,
+				entityType: row.entityType,
+				entryUniqueName: row.entryUniqueName,
+				pasukNumber: row.pasukNumber,
+				segmentStart: row.segmentStart,
+				segmentEnd: row.segmentEnd,
+			});
+			result[row.perekId] = refs;
 		}
 	}
 	return result;

@@ -166,7 +166,28 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
             HorizontalOptions = LayoutOptions.Fill
         };
         view.SetDynamicResource(HtmlView.FontSizeProperty, "ArticleFontSize");
+        view.LinkTapped += OnArticleLinkTapped;
         return view;
+    }
+
+    /// <summary>
+    /// Article HTML links perakim and articles with site-relative hrefs such as
+    /// <c>/929/125/337</c>; those navigate natively (#1227).
+    /// </summary>
+    private async void OnArticleLinkTapped(object? sender, LinkTappedEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            await AppLinkHelper.FollowContentLinkAsync(e.Url, uri => Launcher.OpenAsync(uri));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
+        {
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Article link navigation failed for {e.Url}: {ex}");
+        }
     }
 
     private View CreateVideoPlayer(string url)
@@ -201,12 +222,12 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
         {
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
             StrokeThickness = 1,
-            Stroke = Application.Current?.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#444444")
-                : Color.FromArgb("#e0e0e0"),
             Padding = 0,
             Content = host
         };
+        container.SetAppTheme(Border.StrokeProperty,
+            new SolidColorBrush(Color.FromArgb("#e0e0e0")),
+            new SolidColorBrush(Color.FromArgb("#444444")));
         return container;
     }
 

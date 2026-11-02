@@ -15,6 +15,12 @@ public enum TriCheckState
 /// </summary>
 public sealed class TriStateCheckBox : ContentView
 {
+    /// <summary>Touch-target height shared by every filter row control.</summary>
+    public static double RowHeight => 44;
+
+    /// <summary>Same control width the native CheckBox style enforces (44).</summary>
+    public static double RowWidth => 44;
+
     public static readonly BindableProperty StateProperty = BindableProperty.Create(
         nameof(State), typeof(TriCheckState), typeof(TriStateCheckBox), TriCheckState.Unchecked,
         propertyChanged: (bindable, _, _) => ((TriStateCheckBox)bindable).ApplyState());
@@ -33,15 +39,18 @@ public sealed class TriStateCheckBox : ContentView
     private static readonly Color BorderColorLight = Color.FromArgb("#52647C");
     private static readonly Color BorderColorDark = Color.FromArgb("#B2C2D8");
 
-    private readonly Border _box;
-    private readonly Microsoft.Maui.Controls.Shapes.Polyline _check;
-    private readonly BoxView _dash;
+    internal readonly Border _box;
+    internal readonly Microsoft.Maui.Controls.Shapes.Polyline _check;
+    internal readonly BoxView _dash;
 
     public TriStateCheckBox()
     {
+        // Point bounds (4.5–15.5 × 6–14) center at (10,10) — the middle of the
+        // 20×20 square — so the drawn mark (stroke included) lands centered in
+        // both axes instead of sitting slightly high (#2724).
         _check = new Microsoft.Maui.Controls.Shapes.Polyline
         {
-            Points = new PointCollection([new(4.5, 10), new(8.5, 14), new(15.5, 5.5)]),
+            Points = new PointCollection([new(4.5, 10.5), new(8.5, 14), new(15.5, 6)]),
             Stroke = new SolidColorBrush(Colors.White),
             StrokeThickness = 2,
             StrokeLineJoin = Microsoft.Maui.Controls.Shapes.PenLineJoin.Round,
@@ -54,6 +63,10 @@ public sealed class TriStateCheckBox : ContentView
             WidthRequest = 10,
             HeightRequest = 2,
             Color = Colors.White,
+            // Center keeps the 10×2 dash a dash — default Fill would stretch it
+            // over the whole square (#2724).
+            HorizontalOptions = LayoutOptions.Center,
+            VerticalOptions = LayoutOptions.Center,
             InputTransparent = true,
             IsVisible = false
         };
@@ -64,15 +77,20 @@ public sealed class TriStateCheckBox : ContentView
             StrokeThickness = 1.5,
             StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 3 },
             Padding = 0,
-            Content = new Grid { _check, _dash },
+            // Artwork is LTR-fixed: PlatformGraphicsView mirrors its canvas when
+            // the ambient layout direction is RTL, which turned the check mark
+            // into a reversed symbol inside the RTL sheet (#2724).
+            Content = new Grid { FlowDirection = FlowDirection.LeftToRight, Children = { _check, _dash } },
+            // The native row checkbox centers its square inside a 44-wide
+            // control — match that so both squares share the same x (#2724).
             HorizontalOptions = LayoutOptions.Center,
             VerticalOptions = LayoutOptions.Center
         };
         _box.SetAppTheme(Border.StrokeProperty, new SolidColorBrush(BorderColorLight), new SolidColorBrush(BorderColorDark));
         Content = _box;
-        // Same hit target the row checkboxes use.
-        WidthRequest = 32;
-        HeightRequest = 44;
+        // Same hit target the row checkboxes use (44×44 via the CheckBox style).
+        WidthRequest = RowWidth;
+        HeightRequest = RowHeight;
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => Toggle();
         GestureRecognizers.Add(tap);

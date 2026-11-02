@@ -35,6 +35,7 @@ import {
 	getAuthors,
 	updateAuthor,
 } from "~/server/authors";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 describe("authors api", () => {
 	beforeEach(() => {
@@ -151,6 +152,7 @@ describe("author saves invalidate the website", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -164,63 +166,65 @@ describe("author saves invalidate the website", () => {
 		fetchSpy.mockRestore();
 	});
 
-	it("expires authors and articles tags after a commit", async () => {
-		queryOneMock.mockResolvedValue({ id: 3, name: 'רד"ק', details: "ד" });
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
+	}
+
+	it("sends the author change after a commit", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ name: 'רד"ק' })
+			.mockResolvedValueOnce({ id: 3, name: 'רד"ק', details: "ד" });
 
 		await updateAuthor({ data: { id: 3, name: 'רד"ק', details: "ד" } });
 
-		const tags = fetchSpy.mock.calls.map((call: unknown[]) =>
-			new URL(String(call[0])).searchParams.get("tag"),
-		);
-		expect(tags).toEqual(["authors", "articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "author", id: 3, name: 'רד"ק' },
+		]);
 	});
 
-	function notifiedUrls(callIndex: number): string[] {
-		const url = new URL(String(fetchSpy.mock.calls[callIndex][0]));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports both the old and new public urls after a rename", async () => {
+	it("carries the pre-rename name so the stale slug expires", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ name: "ישן" })
 			.mockResolvedValueOnce({ id: 3, name: "חדש", details: "ד" });
 
 		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
 
-		// The urls ride on the second (articles-tag) invalidation call.
-		expect(notifiedUrls(1)).toEqual([
-			`/929/authors/${encodeURIComponent("חדש")}`,
-			`/929/authors/${encodeURIComponent("ישן")}`,
+		expect(sentChanges()).toEqual([
+			{ kind: "author", id: 3, name: "חדש", oldName: "ישן" },
 		]);
 	});
 
-	it("reports only the new url when the previous row is missing", async () => {
+	it("carries only the new name when the previous row is missing", async () => {
 		queryOneMock
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce({ id: 3, name: "חדש", details: "ד" });
 
 		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
 
-		expect(notifiedUrls(1)).toEqual([
-			`/929/authors/${encodeURIComponent("חדש")}`,
+		expect(sentChanges()).toEqual([
+			{ kind: "author", id: 3, name: "חדש" },
 		]);
 	});
 
-	it("reports the removed author url after a delete", async () => {
+	it("carries the removed author's name after a delete", async () => {
 		queryOneMock.mockResolvedValue({ name: "נמחק" });
 
 		await deleteAuthor({ data: 3 });
 
-		expect(notifiedUrls(1)).toEqual([
-			`/929/authors/${encodeURIComponent("נמחק")}`,
+		expect(sentChanges()).toEqual([
+			{ kind: "author", id: 3, name: "נמחק" },
 		]);
 	});
 
-	it("sends no url when the deleted author row was already gone", async () => {
+	it("sends nothing when the deleted author row was already gone", async () => {
 		queryOneMock.mockResolvedValue(null);
 
 		await deleteAuthor({ data: 3 });
 
-		expect(notifiedUrls(1)).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 });

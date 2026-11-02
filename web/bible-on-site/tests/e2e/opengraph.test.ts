@@ -90,7 +90,7 @@ test.describe("Open Graph metadata", () => {
 		["rabbis blessing", "/rabbis-blessing"],
 		["accessibility", "/accessibility"],
 		["parasha landing", `/${encodeURIComponent("פרשה")}`],
-		["parasha unit", `/${encodeURIComponent("פרשה")}/1`],
+		["parasha unit", `/${encodeURIComponent("פרשה")}/${encodeURIComponent("בראשית")}`],
 	];
 
 	for (const [label, path] of websiteRoutes) {
@@ -107,8 +107,9 @@ test.describe("Open Graph metadata", () => {
 	test("author profile emits og:type profile with the portrait image", async ({
 		request,
 	}) => {
-		const html = await htmlFor(request, "/929/authors/1");
-		expectCompleteOg(html, "/929/authors/1");
+		const path = `/929/authors/${encodeURIComponent("הרב לדוגמא שליטא")}`;
+		const html = await htmlFor(request, path);
+		expectCompleteOg(html, path);
 		expect(tagsFor(html, "og:type")[0]).toBe("profile");
 		expect(tagsFor(html, "og:image")[0]).not.toBe(
 			`${SITE_ORIGIN}/images/og/default.jpg`,

@@ -24,7 +24,9 @@ public class BottomBarDrawable : IDrawable
 
         // Determine if dark mode
         var isDarkMode = Application.Current?.RequestedTheme == AppTheme.Dark;
-        var barColor = BarColor ?? (isDarkMode ? Color.FromArgb("#1C1C1E") : Colors.White);
+        // Match SurfaceDark (#2D2D2D) so the bar reads as a raised surface on
+        // OffBlack pages rather than a different black-ish plane.
+        var barColor = BarColor ?? (isDarkMode ? Color.FromArgb("#2D2D2D") : Colors.White);
 
         // Create path for the bar with curved edges and deep notch
         var path = new PathF();

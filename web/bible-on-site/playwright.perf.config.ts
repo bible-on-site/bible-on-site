@@ -9,6 +9,13 @@ const baseConfig = getBaseConfig(TestType.PERF);
 
 export default defineConfig({
 	...baseConfig,
+	globalSetup: "./playwright-perf-setup.mjs",
+	globalTeardown: [
+		"./playwright-perf-teardown.mjs",
+		...(typeof baseConfig.globalTeardown === "string"
+			? [baseConfig.globalTeardown]
+			: baseConfig.globalTeardown || []),
+	],
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: "bun run start",
