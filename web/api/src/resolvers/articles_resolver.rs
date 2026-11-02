@@ -49,6 +49,16 @@ impl ArticlesQuery {
         )
         .await
         .map_err(|e| e.extend())?;
+        // Legacy clients do not select readingMetric. Avoid touching its
+        // optional schema unless the hit fields actually request it.
+        if !ctx
+            .look_ahead()
+            .field("hits")
+            .field("readingMetric")
+            .exists()
+        {
+            return Ok(results);
+        }
         // One batched lookup so hit lists can render the same estimate badges
         // as every other article list (issue #2607).
         let ids: Vec<i32> = results.hits.iter().map(|hit| hit.article_id).collect();
@@ -69,7 +79,9 @@ impl ArticlesQuery {
                 .await
                 .map_err(|e| e.extend())?,
         );
-        attach_article_reading_metrics(db, std::slice::from_mut(&mut article)).await?;
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, std::slice::from_mut(&mut article)).await?;
+        }
         Ok(article)
     }
 
@@ -82,7 +94,9 @@ impl ArticlesQuery {
             .into_iter()
             .map(Into::into)
             .collect();
-        attach_article_reading_metrics(db, &mut articles).await?;
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, &mut articles).await?;
+        }
         Ok(articles)
     }
 
@@ -99,7 +113,9 @@ impl ArticlesQuery {
             .into_iter()
             .map(Into::into)
             .collect();
-        attach_article_reading_metrics(db, &mut articles).await?;
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, &mut articles).await?;
+        }
         Ok(articles)
     }
 }
