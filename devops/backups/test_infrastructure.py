@@ -80,11 +80,15 @@ class InfrastructureTests(unittest.TestCase):
         ]:
             self.assertNotIn(forbidden, actions)
         indexed = {s["Sid"]: s for s in statements}
+        revocations = [
+            s for s in statements if s["Action"] == "ec2:RevokeSecurityGroupIngress"
+        ]
+        self.assertEqual(len(revocations), 1)
         self.assertEqual(
-            indexed["RevokeOnlyBackupRules"]["Condition"]["StringEquals"][
-                "ec2:ResourceTag/Job"
-            ],
-            "backup",
+            revocations[0]["Resource"],
+            {
+                "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${RdsSecurityGroupId}"
+            },
         )
         self.assertEqual(
             indexed["LeaseOnlyTheDatabaseGroup"]["Condition"]["StringEquals"][
