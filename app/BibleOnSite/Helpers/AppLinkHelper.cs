@@ -58,6 +58,72 @@ public static class AppLinkHelper
         return true;
     }
 
+    /// <summary>Hosts the website is served from; in-content links to any
+    /// other host are external.</summary>
+    private static readonly string[] SiteHosts = ["xn--febl3a.co.il", "xn--febl3a.com"];
+
+    /// <summary>Base for site-relative hrefs (e.g. <c>/929/125/337</c>).</summary>
+    private static readonly Uri SiteBase = new("https://xn--febl3a.co.il");
+
+    /// <summary>
+    /// Resolves an href from database HTML content (articles) against the
+    /// website: site-relative paths and absolute website URLs become an
+    /// absolute website URI. Returns false for other hosts and non-web
+    /// schemes, so callers open those in the browser.
+    /// </summary>
+    public static bool TryResolveSiteUrl(string? href, out Uri siteUrl)
+    {
+        siteUrl = SiteBase;
+        if (string.IsNullOrWhiteSpace(href))
+        {
+            return false;
+        }
+        var trimmed = href.Trim();
+        // Checked before absolute parsing: Unix runtimes read "/929/1" as a file URI.
+        if (trimmed.StartsWith('/') && !trimmed.StartsWith("//", StringComparison.Ordinal))
+        {
+            return Uri.TryCreate(SiteBase, trimmed, out siteUrl!);
+        }
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            return false;
+        }
+        var host = uri.IdnHost.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+            ? uri.IdnHost[4..]
+            : uri.IdnHost;
+        if (!SiteHosts.Contains(host, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        siteUrl = uri;
+        return true;
+    }
+
+    /// <summary>
+    /// Follows a link tapped in article HTML (#1227): <c>/929/...</c> perek and
+    /// article links navigate natively through <see cref="Request"/>; other
+    /// website pages and external links open via <paramref name="openInBrowser"/>.
+    /// Fragment-only and other unresolvable hrefs are ignored.
+    /// </summary>
+    public static async Task FollowContentLinkAsync(string? href, Func<Uri, Task> openInBrowser)
+    {
+        if (TryResolveSiteUrl(href, out var siteUrl))
+        {
+            if (TryParse(siteUrl.AbsoluteUri, out var target))
+            {
+                Request(target);
+                return;
+            }
+            await openInBrowser(siteUrl);
+            return;
+        }
+        if (Uri.TryCreate(href?.Trim(), UriKind.Absolute, out var uri) && !uri.IsFile)
+        {
+            await openInBrowser(uri);
+        }
+    }
+
     /// <summary>Stores the requested target and notifies any running reader.</summary>
     public static void Request(AppLinkTarget target)
     {

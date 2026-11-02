@@ -54,6 +54,7 @@ import {
 } from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
 import { ReadingTime } from "@/app/components/ReadingTime";
+import { ArticleActions } from "../components/ArticleActions";
 import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
 import { PerekHeading } from "../components/PerekHeading";
@@ -357,11 +358,16 @@ export default async function ArticlePage({
 							}}
 						/>
 					)}
-
+					{/* The unified article command row (#2786) trails the article
+					 * here — review ask: the standalone route keeps its main
+					 * content on top and its commands at the bottom. */}
 					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
+						<ArticleActions
+							backLabel="חזרה לפרק"
+							backHref={`/929/${perekId}`}
+							canonicalPath={`/929/${perekId}/${article.id}`}
+							shareTitle={`${article.name} - ${article.authorName}`}
+						/>
 					</div>
 				</section>
 				<Suspense>
