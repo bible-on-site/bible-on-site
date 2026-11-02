@@ -1,5 +1,9 @@
 import type { Page } from "@playwright/test";
-import type { TurnInput, TurnSamples } from "./turn-metrics";
+import type {
+	TurnInput,
+	TurnLongAnimationFrame,
+	TurnSamples,
+} from "./turn-metrics";
 
 declare global {
 	interface Window {
@@ -7,6 +11,12 @@ declare global {
 			inputs: TurnInput[];
 			frames: number[];
 			repeatedFrameTimestamps: number[];
+			startedAt: number;
+			stoppedAt: number | undefined;
+			longAnimationFramesSupported: boolean;
+			longAnimationFrames: TurnLongAnimationFrame[];
+			observer: PerformanceObserver | undefined;
+			recordLongFrames: (entries: PerformanceEntry[]) => void;
 			raf: number;
 			listener: (event: Event) => void;
 			eventType: string;
@@ -24,6 +34,24 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 			inputs: [] as TurnInput[],
 			frames: [] as number[],
 			repeatedFrameTimestamps: [] as number[],
+			startedAt: performance.now(),
+			stoppedAt: undefined as number | undefined,
+			longAnimationFramesSupported:
+				PerformanceObserver.supportedEntryTypes.includes(
+					"long-animation-frame",
+				),
+			longAnimationFrames: [] as TurnLongAnimationFrame[],
+			observer: undefined as PerformanceObserver | undefined,
+			recordLongFrames: (entries: PerformanceEntry[]): void => {
+				for (const entry of entries) {
+					if (
+						entry.startTime + entry.duration > probe.startedAt &&
+						entry.startTime < (probe.stoppedAt ?? Infinity)
+					) {
+						probe.longAnimationFrames.push(entry.toJSON());
+					}
+				}
+			},
 			raf: 0,
 			eventType: inputGesture === "drag" ? "pointerdown" : "click",
 			listener: (event: Event) => {
@@ -49,6 +77,14 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 			},
 		};
 		window.__seferTurns = probe;
+		// Browser-produced records explain a slow CI frame without tracing,
+		// polling layout, or adding synchronous work to each animation frame.
+		if (probe.longAnimationFramesSupported) {
+			probe.observer = new PerformanceObserver((entries) =>
+				probe.recordLongFrames(entries.getEntries()),
+			);
+			probe.observer.observe({ type: "long-animation-frame", buffered: true });
+		}
 		document.addEventListener(probe.eventType, probe.listener, true);
 		let previous: number | null = null;
 		const tick = (now: number) => {
@@ -85,13 +121,20 @@ export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
 	return page.evaluate(() => {
 		const probe = window.__seferTurns;
 		if (!probe) throw new Error("Turn probe missing");
+		probe.stoppedAt = performance.now();
 		window.__seferTurns = undefined;
 		cancelAnimationFrame(probe.raf);
 		document.removeEventListener(probe.eventType, probe.listener, true);
+		if (probe.observer) {
+			probe.recordLongFrames(probe.observer.takeRecords());
+			probe.observer.disconnect();
+		}
 		return {
 			inputs: probe.inputs,
 			frames: probe.frames,
 			repeatedFrameTimestamps: probe.repeatedFrameTimestamps,
+			longAnimationFramesSupported: probe.longAnimationFramesSupported,
+			longAnimationFrames: probe.longAnimationFrames,
 		};
 	});
 }

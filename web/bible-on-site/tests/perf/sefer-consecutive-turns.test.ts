@@ -1,6 +1,10 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
+import {
+	captureTurnFailureTrace,
+	exerciseConsecutiveTurns,
+} from "../util/turn-failure-trace";
 import { dispatchTurnInput, prepareTurnInput } from "../util/turn-input";
 import {
 	reduceTurnSamples,
@@ -96,14 +100,13 @@ for (const [chapter, bookmarks] of [
 				await startTurnProbe(page, gesture);
 				let samples: Awaited<ReturnType<typeof stopTurnProbe>>;
 				try {
-					// Immediate handoffs plus the existing 80ms buffer recenter window.
-					for (const [index, gap] of [0, 0, 100, 0, 100, 0].entries()) {
-						if (gap) await page.waitForTimeout(gap);
-						await dispatchTurnInput(client, gesture, inputPoint);
-						await waitForTurnCommit(page, chapter + index + 1);
-						await markTurnSettled(page);
-					}
-					await page.waitForTimeout(200);
+					await exerciseConsecutiveTurns(
+						page,
+						client,
+						gesture,
+						inputPoint,
+						chapter,
+					);
 				} finally {
 					samples = await stopTurnProbe(page);
 					const samplePath = testInfo.outputPath("turn-samples.json");
@@ -165,9 +168,25 @@ for (const [chapter, bookmarks] of [
 							upperValue: limit,
 						});
 				}
-				expect(turnBudgetFailures(metrics), JSON.stringify(metrics)).toEqual(
-					[],
-				);
+				const failures = turnBudgetFailures(metrics);
+				if (failures.length) {
+					try {
+						await captureTurnFailureTrace(
+							page,
+							browser,
+							chapter,
+							mode,
+							gesture,
+						);
+					} catch (error) {
+						// A diagnostic failure cannot replace the original timing failure.
+						await testInfo.attach("turn-trace-error", {
+							body: String(error),
+							contentType: "text/plain",
+						});
+					}
+				}
+				expect(failures, JSON.stringify(metrics)).toEqual([]);
 			});
 		}
 	}

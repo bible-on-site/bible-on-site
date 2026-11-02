@@ -122,6 +122,18 @@ CPU profiles. An inactive Windows desktop or screensaver cannot qualify a
 desktop measurement. Hardware-rendered desktop results and software-rendered CI
 results both retain the limits above; label their environments separately.
 
+Samples also retain the browser's passive long-animation-frame records when
+supported. They identify script invokers, forced layout and the start of the
+rendering work without enabling a profiler during qualification. These records
+are optional; their absence is not a timing pass. The native response and
+cadence samples remain authoritative, including
+the deliberate 250ms stall control. Diagnostic records do not filter or adjust
+any timing sample.
+After a cadence failure, a separate sequence also captures a Chromium trace and
+CPU profile under `diagnostics/sefer-turn-traces`. These profiled samples are
+labelled diagnostic-only and never replace the failed qualification samples.
+Both sequences share the same native inputs and retain the original test deadline.
+
 For the user's desktop Chrome/Edge profile, run the same matrix in a visible
 browser window on an active desktop:
 

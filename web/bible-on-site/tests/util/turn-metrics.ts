@@ -23,6 +23,28 @@ export interface TurnSamples {
 	inputs: TurnInput[];
 	frames: number[];
 	repeatedFrameTimestamps?: number[];
+	longAnimationFramesSupported?: boolean;
+	longAnimationFrames?: TurnLongAnimationFrame[];
+}
+
+/** Passive browser diagnostics; these never change the cadence reduction. */
+export interface TurnLongAnimationFrame {
+	startTime: number;
+	duration: number;
+	blockingDuration: number;
+	firstUIEventTimestamp: number;
+	renderStart: number;
+	styleAndLayoutStart: number;
+	scripts: {
+		startTime: number;
+		duration: number;
+		executionStart: number;
+		forcedStyleAndLayoutDuration: number;
+		invoker: string;
+		invokerType: string;
+		sourceURL: string;
+		sourceFunctionName: string;
+	}[];
 }
 
 // Keep elapsed clock arithmetic in integer microseconds. Native timestamps
