@@ -63,6 +63,71 @@ test.describe("Article page", () => {
 		await expect(page).toHaveURL(/\/929\/1$/);
 	});
 
+	test("aligns article-route controls in the unified command row (#2786)", async ({
+		page,
+	}) => {
+		await page.goto("/929/1/1");
+
+		const articleView = page.locator("#article-view");
+		const commandRow = articleView.getByRole("group", {
+			name: "פעולות מאמר",
+		});
+		await expect(commandRow).toBeVisible();
+
+		// The row trails the article — the main content stays on top
+		// (review ask: on the standalone route the commands sit at the
+		// bottom).
+		const ordering = await articleView.evaluate((article) => {
+			const children = Array.from(article.children);
+			const row = article.querySelector('[data-flipbook-no-flip]');
+			const header = article.querySelector("header");
+			const body = article.querySelector('[class*="articleBody"]');
+			const follows = (before: Element | null, after: Element | null) =>
+				before != null &&
+				after != null &&
+				!!(before.compareDocumentPosition(after) &
+					Node.DOCUMENT_POSITION_FOLLOWING);
+			return {
+				rowLast: children[children.length - 1] === row?.parentElement,
+				rowAfterHeader: follows(header, row),
+				rowAfterBody: follows(body, row),
+			};
+		});
+		expect(ordering).toEqual({
+			rowLast: true,
+			rowAfterHeader: true,
+			rowAfterBody: true,
+		});
+
+		// Return is a real link to the perek route; share is a command button.
+		await expect(
+			commandRow.getByRole("link", { name: "חזרה לפרק" }),
+		).toHaveAttribute("href", "/929/1");
+		const share = commandRow.getByRole("button", { name: "שתף" });
+		await expect(share).toBeVisible();
+		// Both commands share the one base control treatment.
+		const treatment = await commandRow.evaluate((row) =>
+			Array.from(row.querySelectorAll("[data-article-action]")).map((el) => {
+				const computed = getComputedStyle(el);
+				return {
+					height: el.getBoundingClientRect().height,
+					radius: computed.borderRadius,
+					background: computed.backgroundColor,
+					border: computed.borderColor,
+				};
+			}),
+		);
+		expect(treatment.length).toBe(2);
+		expect(treatment[1]).toEqual(treatment[0]);
+
+		// No fullscreen command on a route that already is a full page, and
+		// the old bottom-only back row is gone.
+		await expect(
+			commandRow.getByRole("button", { name: "מסך מלא" }),
+		).toHaveCount(0);
+		await expect(articleView.getByText("חזרה לפרק →")).toHaveCount(0);
+	});
+
 	test("opening article from carousel shows same article content", async ({
 		page,
 	}) => {
