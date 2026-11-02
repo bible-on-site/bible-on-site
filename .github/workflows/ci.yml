@@ -3069,6 +3069,10 @@ jobs:
           flags: website # Assuming you want to flag these as website tests
           report_type: test_results
 
+  database_backups:
+    name: Database backup recovery
+    uses: ./.github/workflows/ci-db-backup.yml
+
   cross_module_ci:
     name: Cross Module CI
     runs-on: ubuntu-latest
@@ -3095,6 +3099,7 @@ jobs:
         data_ci,
         recitation_ci,
         deploy_verifier,
+        database_backups,
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
@@ -3113,6 +3118,11 @@ jobs:
       - name: Check Prerequisites
         id: check_prerequisites
         run: |
+          if [ "${{ needs.database_backups.result }}" != "success" ]; then
+            echo "Database backup and restore validation did not pass."
+            exit 1
+          fi
+
           if [ "${{ needs.determine_changes.result }}" != "success" ]; then
             echo "Could not determine module changes."
             echo "Overall status: failure"
@@ -3519,6 +3529,12 @@ jobs:
         uses: ./.github/actions/save-bun-store
         with:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
+
+      - name: Restore database backup coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: database-backup-coverage-${{ github.run_id }}
+          path: .coverage/db-backup
 
       - name: Measure release and image-publisher regression coverage
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
