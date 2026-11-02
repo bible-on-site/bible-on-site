@@ -11,12 +11,14 @@ spliced over the spoken בַּת. The archival original, its hash and the publis
 S3 object are unchanged. Full source/edit/donor provenance, verification notes
 and remaining acceptance steps are in `edition.json`.
 
-Status: third build. The first rendered בןבן (donor window ran past בֶּן into
+Status: fourth build. The first rendered בןבן (donor window ran past בֶּן into
 בְּתוּאֵל's opening); the second clipped יִשְׁמָעֵאל's tail (in-joint at 91.19 s
-sat inside the word's final vowel). This build splices בֶּן alone
+sat inside the word's final vowel); the third still rode the tail's decay
+(in-joint at 91.34 s). This build splices בֶּן alone
 (50.42-50.74 s, pinned by Whisper word timestamps) with the in-joint a little
-after יִשְׁמָעֵאל completes, at 91.34 s — verified by direct listening and
-re-transcription. Acceptance still
+after יִשְׁמָעֵאל's tail fully settles, at 91.43 s — verified by envelope
+analysis (tail sample-identical through the joint, בַּת burst absent, no
+clips). Acceptance still
 requires rerunning the unchanged full-quality alignment pipeline on the
 edition's own source hash plus canonical/timing and packaging verification —
 see `edition.json.remaining`.
