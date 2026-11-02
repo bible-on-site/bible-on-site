@@ -83,6 +83,22 @@ COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
 COPY --chown=nextjs:nodejs bible-on-site/scripts/start-server.mjs ./start-server.mjs
 
+# Validate the traced runtime, rather than only the build-stage dependencies.
+# A missing or wrong-architecture libvips must fail before an image is published.
+ARG TARGETARCH
+RUN node --input-type=module -e '\
+    import assert from "node:assert/strict"; \
+    import sharp from "sharp"; \
+    assert.ok(["amd64", "arm64"].includes(process.argv[1])); \
+    assert.equal(process.platform, "linux"); \
+    assert.equal(process.arch, process.argv[1] === "amd64" ? "x64" : "arm64"); \
+    const source = await sharp({create:{width:12,height:8,channels:3,background:{r:220,g:30,b:10}}}).jpeg().toBuffer(); \
+    const resized = await sharp(source).resize({width:6}).jpeg().toBuffer(); \
+    const image = await sharp(resized).metadata(); \
+    assert.equal(image.format, "jpeg"); assert.equal(image.width, 6); assert.equal(image.height, 4); \
+    const {data} = await sharp(resized).raw().toBuffer({resolveWithObject:true}); \
+    assert.ok(data[0] > 200 && data[1] < 50 && data[2] < 30);' "$TARGETARCH"
+
 USER 1001
 
 EXPOSE 3000

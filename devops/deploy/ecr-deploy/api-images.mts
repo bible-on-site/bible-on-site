@@ -9,6 +9,8 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import {
 	BatchGetImageCommand,
+	DescribeImagesCommand,
+	type DescribeImagesCommandOutput,
 	DescribeRepositoriesCommand,
 	type ECRClient,
 	PutImageCommand,
@@ -304,6 +306,67 @@ export async function prepareAPIArchives(
 }
 
 type RegistryImage = { manifest: string; mediaType: string; digest: string };
+async function readTagDigest(
+	client: ECRClient,
+	repositoryName: string,
+	tag: string,
+): Promise<string | undefined> {
+	// A tag's manifest read can lag behind its metadata after a retag.
+	let result: DescribeImagesCommandOutput;
+	try {
+		result = await client.send(
+			new DescribeImagesCommand({
+				repositoryName,
+				imageIds: [{ imageTag: tag }],
+			}),
+		);
+	} catch (error) {
+		if ((error as Error).name === "ImageNotFoundException") return undefined;
+		throw error;
+	}
+	const images = result?.imageDetails;
+	// The tag selector resolves the digest even when imageTags still lists only
+	// older aliases. That cached list is not a second tag lookup.
+	if (images?.length !== 1 || !isDigest(images[0].imageDigest))
+		throw new Error(`Invalid registry tag metadata for ${tag}`);
+	return images[0].imageDigest;
+}
+
+async function readImageByDigest(
+	client: ECRClient,
+	repositoryName: string,
+	digest: string,
+): Promise<RegistryImage> {
+	const result = await client.send(
+		new BatchGetImageCommand({
+			repositoryName,
+			imageIds: [{ imageDigest: digest }],
+		}),
+	);
+	const images = result?.images ?? [];
+	if (result?.failures?.length || !images.length)
+		throw new Error(`Unable to inspect registry digest ${digest}`);
+	// ECR may return one identical record per associated tag. Verify every
+	// record against the requested immutable bytes, including its media type.
+	const first = images[0];
+	const manifest = first.imageManifest;
+	const mediaType = first.imageManifestMediaType;
+	if (!manifest || !mediaType)
+		throw new Error(`Invalid registry manifest for digest ${digest}`);
+	for (const image of images) {
+		if (
+			image.imageId?.imageDigest !== digest ||
+			!image.imageManifest ||
+			!image.imageManifestMediaType ||
+			sha256(image.imageManifest) !== digest ||
+			image.imageManifest !== first.imageManifest ||
+			image.imageManifestMediaType !== first.imageManifestMediaType
+		)
+			throw new Error(`Invalid registry manifest for digest ${digest}`);
+	}
+	return { manifest, mediaType, digest };
+}
+
 async function readImage(
 	client: ECRClient,
 	repositoryName: string,
@@ -376,7 +439,7 @@ async function putImage(
 	tag: string,
 	image: RegistryImage,
 ): Promise<void> {
-	await client.send(
+	const receipt = await client.send(
 		new PutImageCommand({
 			repositoryName,
 			imageTag: tag,
@@ -385,9 +448,32 @@ async function putImage(
 			imageDigest: image.digest,
 		}),
 	);
-	const stored = await readImage(client, repositoryName, tag);
-	if (stored?.digest !== image.digest)
-		throw new Error(`Registry did not preserve the exact digest for ${tag}`);
+	const written = receipt.image;
+	if (
+		written?.repositoryName !== repositoryName ||
+		written.imageId?.imageTag !== tag ||
+		written.imageId?.imageDigest !== image.digest ||
+		written.imageManifest !== image.manifest ||
+		written.imageManifestMediaType !== image.mediaType
+	)
+		throw new Error(
+			`Registry write receipt does not match the exact image for ${tag}`,
+		);
+	// BatchGetImage's manifest-by-tag path can return the previous image after
+	// a successful retag. Verify the exact write acknowledgement above and the
+	// tag-selected digest here, without sleeping, retrying or accepting another
+	// digest. imageTags can still omit the newly added alias for an existing index.
+	const result = await client.send(
+		new DescribeImagesCommand({
+			repositoryName,
+			imageIds: [{ imageTag: tag }],
+		}),
+	);
+	const stored = result.imageDetails;
+	if (stored?.length !== 1 || stored[0].imageDigest !== image.digest)
+		throw new Error(
+			`Registry tag metadata does not preserve the exact digest for ${tag}`,
+		);
 }
 
 async function immutableImage(
@@ -424,6 +510,7 @@ async function immutableImage(
 export async function assertAPIRepositoryPolicy(
 	client: ECRClient,
 	repositoryName: string,
+	mutableTags: readonly string[] = ["latest"],
 ): Promise<void> {
 	const result = await client.send(
 		new DescribeRepositoriesCommand({ repositoryNames: [repositoryName] }),
@@ -434,12 +521,17 @@ export async function assertAPIRepositoryPolicy(
 	const exclusions = repository?.imageTagMutabilityExclusionFilters;
 	if (
 		repository?.imageTagMutability !== "IMMUTABLE_WITH_EXCLUSION" ||
-		exclusions?.length !== 1 ||
-		exclusions[0].filterType !== "WILDCARD" ||
-		exclusions[0].filter !== "latest"
+		exclusions?.length !== mutableTags.length ||
+		new Set(mutableTags).size !== mutableTags.length ||
+		!mutableTags.includes("latest") ||
+		!mutableTags.every((tag) =>
+			exclusions.some(
+				(entry) => entry.filterType === "WILDCARD" && entry.filter === tag,
+			),
+		)
 	)
 		throw new Error(
-			"API repository must use IMMUTABLE_WITH_EXCLUSION with only latest mutable",
+			`Image repository must use IMMUTABLE_WITH_EXCLUSION with only ${mutableTags.join(", ")} mutable`,
 		);
 }
 
@@ -462,15 +554,16 @@ export async function assertAPILatestMode(
 	publishIndex: boolean,
 ): Promise<void> {
 	if (publishIndex) return;
-	let latest: RegistryImage | undefined;
+	let digest: string | undefined;
 	try {
-		latest = await readImage(client, repositoryName, "latest");
+		digest = await readTagDigest(client, repositoryName, "latest");
 	} catch (error) {
 		if ((error as Error).name === "RepositoryNotFoundException") return;
 		throw error;
 	}
+	if (!digest) return;
+	const latest = await readImageByDigest(client, repositoryName, digest);
 	if (
-		latest &&
 		[
 			OCI_INDEX,
 			"application/vnd.docker.distribution.manifest.list.v2+json",
@@ -480,6 +573,19 @@ export async function assertAPILatestMode(
 			"API latest is already an index; every subsequent release requires both native archives and publish-index",
 		);
 	}
+	const manifest = JSON.parse(latest.manifest);
+	if (
+		!IMAGE_TYPES.has(latest.mediaType) ||
+		manifest.schemaVersion !== 2 ||
+		manifest.manifests ||
+		!isDigest(manifest.config?.digest) ||
+		!Array.isArray(manifest.layers) ||
+		(manifest.mediaType !== undefined &&
+			manifest.mediaType !== latest.mediaType)
+	)
+		throw new Error(
+			"API latest has an unsupported image manifest; refusing a publication mode change",
+		);
 }
 export type APIPublishOptions = {
 	client: ECRClient;
@@ -487,6 +593,7 @@ export type APIPublishOptions = {
 	repositoryUri: string;
 	version: string;
 	publishIndex?: boolean;
+	mutableTags?: readonly string[];
 	pushArchive?: (archive: string, reference: string) => Promise<void>;
 };
 /** No canonical/latest write occurs until both immutable children have been verified. */
@@ -510,7 +617,7 @@ export async function publishAPIImages(
 		throw new Error(
 			"Publication must use the exact validated API version and architecture pair",
 		);
-	await assertAPIRepositoryPolicy(client, repositoryName);
+	await assertAPIRepositoryPolicy(client, repositoryName, options.mutableTags);
 	await assertAPILatestMode(client, repositoryName, publishIndex);
 	await assertNewest(client, repositoryName, version);
 	const versionTag = `v${version}`;
@@ -604,8 +711,8 @@ export async function publishAPIImages(
 	// Workflow concurrency serializes releases; recheck immediately before moving latest.
 	await assertAPILatestMode(client, repositoryName, publishIndex);
 	await assertNewest(client, repositoryName, version);
-	const latest = await readImage(client, repositoryName, "latest");
-	if (latest?.digest !== canonical.digest)
+	const latest = await readTagDigest(client, repositoryName, "latest");
+	if (latest !== canonical.digest)
 		await putImage(client, repositoryName, "latest", canonical);
 	return {
 		versionTag,

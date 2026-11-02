@@ -32,4 +32,3 @@ public sealed class CoverageEndpointSchedulingTests
         }
     }
 }
-
