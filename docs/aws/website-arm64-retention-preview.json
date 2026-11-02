@@ -1,0 +1,24 @@
+{
+  "purpose": "ECR lifecycle preview validation only; no live policy or image changes",
+  "repository": "bible-on-site",
+  "observedAt": "2026-11-01T13:51:56.192938+00:00",
+  "proposedPolicySHA256": "2048cdd908607577003fd361045dca1405e56a1a70260eb407e86666aea1f51d",
+  "actualProposalPreview": {
+    "status": "COMPLETE",
+    "passed": true,
+    "selectedImages": 6
+  },
+  "higherPriorityRetentionExperiment": {
+    "status": "COMPLETE",
+    "protectedImageTag": "v0.2.589",
+    "protectedImageDigest": "sha256:e77142b2cc4772936799cd8c98caac01bc5508c2f61755a435e297fe50267da1",
+    "protectedOldImagePreserved": true,
+    "lowerPriorityKeepCountForPreviewOnly": 1,
+    "otherImagesSelectedForExpiration": 19,
+    "explanation": "An existing older canonical image was selected by a higher-priority one-image rule. A lower-priority keep-one experiment still could not expire it. The actual proposed policy uses a reserved rollback prefix and retains the existing general count of15."
+  },
+  "livePolicyChanged": false,
+  "imagesDeleted": false,
+  "productionComputeChanged": false,
+  "applyCommandsIncluded": false
+}
