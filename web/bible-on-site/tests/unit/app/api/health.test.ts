@@ -10,14 +10,19 @@ test("liveness returns immediately without depending on content", async () => {
 describe("GET /api/health/ready", () => {
 	let mockQuery: jest.Mock;
 	let mockPerek: jest.Mock;
+	let mockRecitation: jest.Mock;
 	beforeEach(() => {
 		jest.resetModules();
 		mockQuery = jest
 			.fn()
 			.mockResolvedValue([{ authorCount: 64, articleCount: 2681 }]);
 		mockPerek = jest.fn();
+		mockRecitation = jest.fn();
 		jest.doMock("@/lib/api-client", () => ({ query: mockQuery }));
 		jest.doMock("@/data/perek-dto", () => ({ getPerekByPerekId: mockPerek }));
+		jest.doMock("@/lib/recitation-response", () => ({
+			recitationResponse: mockRecitation,
+		}));
 		jest.spyOn(console, "error").mockImplementation(() => {});
 	});
 	afterEach(() => jest.restoreAllMocks());
@@ -39,6 +44,20 @@ describe("GET /api/health/ready", () => {
 		expect((await GET()).status).toBe(503);
 		expect(mockPerek).toHaveBeenCalledTimes(2);
 		expect(mockQuery).toHaveBeenCalledTimes(2);
+	});
+	test("rechecks recitation preparation after warming and recovers from failure", async () => {
+		const { GET } = await import("@/app/api/health/ready/route");
+		expect((await GET()).status).toBe(200);
+		mockRecitation.mockImplementationOnce(() => {
+			throw new Error("Recitation validation failed");
+		});
+		const failed = await GET();
+		expect(failed.status).toBe(503);
+		expect((await failed.json()).message).toBe("Recitation validation failed");
+		expect(mockQuery).toHaveBeenCalledTimes(1);
+		expect((await GET()).status).toBe(200);
+		expect(mockPerek).toHaveBeenCalledTimes(2);
+		expect(mockRecitation).toHaveBeenCalledTimes(3);
 	});
 	test.each([
 		{ rows: [] },
