@@ -4,7 +4,7 @@ import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { supervise } from "./supervise.mjs";
+import { MAX_PILOT_TIMEOUT_MS, PILOT_TIMEOUT_MS, pilotTimeoutMs, supervise } from "./supervise.mjs";
 
 for (const code of [0, 7]) {
   test(`preserves a completed harness exit ${code}`, async () => {
@@ -146,4 +146,12 @@ test("the production clock expires without waiting for child progress", async ()
     try { process.kill(run.child.pid, "SIGKILL"); }
     catch (error) { if (error.code !== "ESRCH") throw error; }
   }
+});
+
+test("a planned shard's deadline scales with its estimate within fixed bounds", () => {
+  assert.equal(pilotTimeoutMs(undefined), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(0), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(5 * 60_000), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(25 * 60_000), 42.5 * 60_000);
+  assert.equal(pilotTimeoutMs(60 * 60_000), MAX_PILOT_TIMEOUT_MS);
 });
