@@ -18,6 +18,15 @@ A zero content buffer must keep both current faces, moving faces and their
 underlays readable. Preserve opaque paper surfaces so skipping covered text
 cannot change the paper edge.
 
+The scripture scroller uses its existing opaque paper color to let the browser
+reuse its rendering while the paper moves. A separate held-turn image guard
+compares the complete book with and without that preparation in each bookmark
+mode. Its control must change the computed preparation styles. It allows only
+one color-channel step in total across the entire image: dark compositing can
+round a single channel by one level. Changed text, wrapping, paper edges or
+colors exceed that bound. Resting/held captures also cover dark and high-contrast
+themes; the original 0.05px character-position guard remains independent.
+
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
 completed motion and nonempty page text. Visibility and geometry queries can

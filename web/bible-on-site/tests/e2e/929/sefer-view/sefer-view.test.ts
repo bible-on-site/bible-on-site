@@ -2,6 +2,7 @@ import { expect, type Page, type Route } from "@playwright/test";
 import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
+import { prepareTurnInput } from "../../../util/turn-input";
 import { waitForVisibleTurnContent } from "../../../util/turn-probe";
 
 /**
@@ -100,6 +101,94 @@ test.describe("Sefer view", () => {
 		void skipOnNotWideEnough;
 	});
 	for (const mode of ["leaf", "pinned", "hidden"] as const) {
+		test(`preparing scripture for animation preserves held page pixels with ${mode} bookmarks`, async ({
+			page,
+		}, testInfo) => {
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await page.addInitScript((attachment) => {
+				localStorage.setItem(
+					"seferBookmarks",
+					JSON.stringify({
+						enabled: attachment !== "hidden",
+						placement: "sides",
+						orientation: "perpendicular",
+						attachment: attachment === "pinned" ? "pinned" : "leaf",
+						order: "page",
+						upcomingOnly: false,
+					}),
+				);
+			}, mode);
+			await page.goto("/929/300?book");
+			await waitForVisibleTurnContent(page);
+			const point = await prepareTurnInput(page, "drag");
+			await page.mouse.move(point.x, point.y);
+			await page.mouse.down();
+			try {
+				await page.mouse.move(point.x + point.width * 0.7, point.y, {
+					steps: 6,
+				});
+				await expect(
+					page.locator(".he-book .page.page--folded.page--flipping"),
+				).toHaveCount(2);
+				const scroller = page
+					.locator(
+						".he-book .page.current-page [class*=perekTextScrollWrapper]",
+					)
+					.first();
+				const appearance = () =>
+					scroller.evaluate((element) => {
+						const style = getComputedStyle(element);
+						return [style.willChange, style.backgroundColor];
+					});
+				const preparedAppearance = await appearance();
+				const book = page.locator('[class*="bookArea"]');
+				const prepared = await book.screenshot({ animations: "disabled" });
+				const controlStyle = await page.addStyleTag({
+					content:
+						".he-book [class*=perekTextScrollWrapper] { will-change: auto !important; background-color: transparent !important; }",
+				});
+				try {
+					// The control must actually remove preparation; an inactive cache
+					// cannot turn this into a comparison of two identical setups.
+					expect(await appearance()).not.toEqual(preparedAppearance);
+					const original = await book.screenshot({ animations: "disabled" });
+					await testInfo.attach("prepared-page", {
+						body: prepared,
+						contentType: "image/png",
+					});
+					await testInfo.attach("original-page", {
+						body: original,
+						contentType: "image/png",
+					});
+					const preparedPixels = await sharp(prepared)
+						.ensureAlpha()
+						.raw()
+						.toBuffer();
+					const originalPixels = await sharp(original)
+						.ensureAlpha()
+						.raw()
+						.toBuffer();
+					expect(preparedPixels.length).toBe(originalPixels.length);
+					let colorError = 0;
+					for (let index = 0; index < preparedPixels.length; index++) {
+						colorError += Math.abs(
+							preparedPixels[index] - originalPixels[index],
+						);
+					}
+					// Opaque compositing can round one dark-image channel by one
+					// level. Bound the total error across the entire capture, so a
+					// changed glyph, edge, color or even a second pixel still fails.
+					expect(colorError).toBeLessThanOrEqual(1);
+				} finally {
+					await controlStyle.evaluate((element) =>
+						element.parentNode?.removeChild(element),
+					);
+				}
+			} finally {
+				await page.mouse.up();
+			}
+		});
+
 		test(`both current pages retain visible text after every turn with ${mode} bookmarks`, async ({
 			page,
 		}) => {
@@ -373,7 +462,7 @@ test.describe("Sefer view", () => {
 		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
-		const text = page.locator(".he-book article:visible").first();
+		const text = page.locator(".he-book .page.current-page article").first();
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
 		const initialPage = await indicator.inputValue();
@@ -420,7 +509,7 @@ test.describe("Sefer view", () => {
 		await seferPage.verifyPesukimAreVisible();
 		await page.getByRole("button", { name: "בחירת טקסט עם העכבר" }).click();
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -432,15 +521,7 @@ test.describe("Sefer view", () => {
 		await page.mouse.down();
 		await page.waitForTimeout(500);
 		await page.mouse.move(x + 200, y, { steps: 5 });
-		expect(
-			await page
-				.locator(".he-book .page")
-				.evaluateAll((pages) =>
-					pages.some(
-						(page) => (page as HTMLElement).style.willChange === "transform",
-					),
-				),
-		).toBe(false);
+		expect(await page.locator(".he-book .page--flipping").count()).toBe(0);
 		await page.mouse.up();
 		await expect
 			.poll(() =>
@@ -456,7 +537,7 @@ test.describe("Sefer view", () => {
 		await seferPage.openSeferViewForPerek(1);
 		await seferPage.verifyPesukimAreVisible();
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -487,7 +568,7 @@ test.describe("Sefer view", () => {
 		await seferPage.openSeferViewForPerek(1);
 		await seferPage.verifyPesukimAreVisible();
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -589,7 +670,7 @@ test.describe("Sefer view", () => {
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");

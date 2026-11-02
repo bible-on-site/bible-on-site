@@ -63,19 +63,9 @@ test.describe("Sefer commentary navigation", () => {
 						touchPoints: [{ x: x - Math.round((step * distance) / 12), y }],
 					});
 					if (step === 6) {
-						await expect
-							.poll(() =>
-								page
-									.locator(".he-book .page")
-									.evaluateAll((pages) =>
-										pages.some(
-											(element) =>
-												(element as HTMLElement).style.willChange ===
-												"transform",
-										),
-									),
-							)
-							.toBe(true);
+						await expect(
+							page.locator(".he-book .page.page--folded.page--flipping"),
+						).toHaveCount(2);
 					}
 				}
 				// Complete the held turn by distance, independent of CI's input speed.
