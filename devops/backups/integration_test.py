@@ -71,6 +71,8 @@ class ContainerDatabase(Database):
         # Docker Desktop presents Windows bind files as world-writable; MySQL
         # correctly refuses such option files. Copy into private tmpfs instead.
         private = f"/run/backup-client/{Path(defaults).name}"
+        # Static shell script, quoted positional path, fixed Docker exec operation.
+        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
         subprocess.run(  # nosec B603 # Static shell program; private path is quoted $1.
             [
                 host_executable("docker"),
@@ -131,6 +133,8 @@ def host_executable(tool):
 
 
 def docker(*args, capture=True):
+    # Absolute Docker executable; callers supply argv only for owned fixture resources.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
     return subprocess.run(  # nosec B603 # Resolved Docker executable, owned fixture argv.
         [host_executable("docker"), *args],
         check=True,
