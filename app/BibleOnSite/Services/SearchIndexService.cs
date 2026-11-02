@@ -905,13 +905,15 @@ public sealed class SearchIndexService : IAsyncDisposable
                 await gate.WaitAsync();
             }
             try { await _index.CloseAsync(); }
-            finally
-            {
-                foreach (var gate in _gates.Values)
-                {
-                    gate.Dispose();
-                }
-            }
+            finally { DisposeGates(); }
+        }
+    }
+
+    private void DisposeGates()
+    {
+        foreach (var gate in _gates.Values)
+        {
+            gate.Dispose();
         }
     }
 

@@ -10,6 +10,9 @@ import subprocess  # nosec B404: only ever invokes the fixed argv 'aa extract' b
 import tempfile
 import zipfile
 
+PACK_MANIFEST = "asset-packs.json"
+CONTENT_FORMAT = "asset-pack-content/v1"
+
 
 def digest(path):
     with path.open("rb") as source:
@@ -117,6 +120,7 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
         if not staged.is_file() or digest(staged) != book["sha256"]:
             raise ValueError(f"Missing or mismatched release payload: {staged}")
     verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract)
+    write_pack_manifest(asset_pack_dir, archive_dir)
 
 
 def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract):
@@ -152,6 +156,52 @@ def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract):
             if digest(archived) != digest(source):
                 raise ValueError(f"Missing or mismatched archived payload in {archive_path}")
 
+
+def content_fingerprint(manifest_bytes, payloads):
+    """Stable per-pack content identity: semantic manifest + every payload byte."""
+    # payloads are (name, sha256hex, size) triples. Container/archive metadata
+    # is deliberately excluded — two bit-different .aar encodings of the same
+    # payload share one fingerprint, so app-only releases can reuse a pack
+    # version instead of forcing a new App Store upload.
+    fingerprint = hashlib.sha256()
+    fingerprint.update(CONTENT_FORMAT.encode("utf-8") + b"\n")
+    fingerprint.update(hashlib.sha256(manifest_bytes).hexdigest().encode("ascii") + b"\n")
+    for name, file_sha, size in sorted(payloads):
+        fingerprint.update(f"{name}\0{file_sha}\0{size}\n".encode("utf-8"))
+    return fingerprint.hexdigest()
+
+
+def write_pack_manifest(asset_pack_dir, archive_dir):
+    """Record the verified per-pack plan the App Store upload step reuses from."""
+    # Emitted only after every pack check passed: each entry ties the semantic
+    # content fingerprint (manifest + payload inventory bytes) to the transport
+    # archive digest. `cd-app.yml` compares both against App Store Connect state
+    # to skip uploads whose live pack version already carries identical content.
+    packs = []
+    for manifest_path in sorted(asset_pack_dir.glob("*/Manifest.json")):
+        directory = manifest_path.parent
+        archive_path = archive_dir / f"{directory.name}.aar"
+        if not archive_path.is_file():
+            raise ValueError(f"Missing asset-pack archive: {archive_path}")
+        manifest_bytes = manifest_path.read_bytes()
+        files = [(payload.name, digest(payload), payload.stat().st_size)
+                 for payload in directory.iterdir()
+                 if payload.is_file() and payload.name != "Manifest.json"]
+        if not files:
+            raise ValueError(f"Asset pack carries no payload files: {directory.name}")
+        packs.append({
+            "id": directory.name,
+            "archive": archive_path.name,
+            "archiveSha256": digest(archive_path),
+            "archiveBytes": archive_path.stat().st_size,
+            "manifest": json.loads(manifest_bytes),
+            "files": [{"name": name, "sha256": file_sha, "bytes": size}
+                      for name, file_sha, size in sorted(files)],
+            "contentSha256": content_fingerprint(manifest_bytes, files),
+        })
+    plan = {"version": 1, "packs": packs}
+    (archive_dir / PACK_MANIFEST).write_text(
+        json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def verify_windows(archive, catalog, names):

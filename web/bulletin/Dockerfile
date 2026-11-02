@@ -18,6 +18,7 @@ COPY bulletin/Cargo.toml ./bulletin/Cargo.toml
 COPY bulletin/Cargo.lock ./bulletin/Cargo.lock
 COPY bulletin/data ./bulletin/data
 COPY bulletin/fonts ./bulletin/fonts
+COPY bulletin/assets/email ./bulletin/assets/email
 COPY api/entities ./api/entities
 
 WORKDIR /app/bulletin

@@ -14,7 +14,16 @@ public partial class MainPage : ContentPage
 
 	private async void OnGoToPerekClicked(object sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("//PerekPage");
+		try
+		{
+			await ShellAppNavigator.Instance.GoToAsync("//PerekPage");
+		}
+#pragma warning disable S2221 // Deliberate failure boundary: navigation failure is log-only
+		catch (Exception ex) //NOSONAR — navigation failure is log-only.
+		{
+#pragma warning restore S2221
+			Console.Error.WriteLine($"Navigation to PerekPage failed: {ex}");
+		}
 	}
 
 	private async void OnCounterClicked(object sender, EventArgs e)

@@ -1,14 +1,17 @@
+using BibleOnSite.Controls;
 using BibleOnSite.Services;
 
 namespace BibleOnSite.Helpers;
 
 /// <summary>
 /// Applies <see cref="BackChromePolicy"/> to a navigated page (#2467): the
-/// Shell nav-bar Back/Up arrow on pages that keep the native bar, and the
-/// shared "BackButton" of custom-chrome pages. Invoked by the Shell on every
-/// navigation and again when the Android preference changes, so both existing
-/// and newly opened pages pick up the current choice. Visibility only —
-/// system Back, gestures, history, and modal dismissal are untouched.
+/// Shell nav-bar Back/Up arrow on any page that still keeps the native bar,
+/// and the hamburger/Back capsule of every <see cref="SharedTopBar"/> in the
+/// page — including the ones inside a preferences control template. Invoked
+/// by the Shell on every navigation and again when the Android preference
+/// changes, so both existing and newly opened pages pick up the current
+/// choice. Visibility and enabled-state only — system Back, gestures,
+/// history, and modal dismissal are untouched.
 /// </summary>
 public static class BackChrome
 {
@@ -25,31 +28,30 @@ public static class BackChrome
 
 	public static void Apply(ContentPage page)
 	{
-		var show = BackChromePolicy.ShowInAppBack(CurrentPlatform, PreferencesService.Instance.InAppBackButton);
-		if (page is BibleOnSite.Controls.PreferencesPageBase preferences)
+		var preference = PreferencesService.Instance.InAppBackButton;
+		var capsuleShow = BackChromePolicy.ShowCapsuleBack(CurrentPlatform, preference);
+		if (page is PreferencesPageBase preferences)
 		{
-			preferences.ShowBack = show;
+			preferences.ShowBack = capsuleShow;
 		}
 
-		// Pages that hide the nav bar (reader, custom-chrome pages) own their
-		// chrome; a hidden bar makes the behavior moot, and PerekPage toggles
-		// it for search state on its own.
+		// Pages that hide the nav bar (every migrated page) own their chrome —
+		// a hidden bar makes the behavior moot, and PerekPage toggles it for
+		// search state on its own.
 		if (Shell.GetNavBarIsVisible(page))
 		{
 			var isPushed = page.Navigation.NavigationStack.Count > 1;
 			Shell.SetBackButtonBehavior(page, new BackButtonBehavior
 			{
-				IsVisible = BackChromePolicy.ShowNavBarBack(isPushed, CurrentPlatform,
-					PreferencesService.Instance.InAppBackButton),
+				IsVisible = BackChromePolicy.ShowNavBarBack(isPushed, CurrentPlatform, preference),
 			});
 		}
 
-		// Custom-chrome pushed pages name their in-content "חזור" button
-		// "BackButton"; on Android it follows the same preference.
-		if (Microsoft.Maui.Controls.Internals.NameScope.GetNameScope(page)
-				?.FindByName("BackButton") is VisualElement backButton)
+		var stackDepth = page.Navigation.NavigationStack.Count;
+		foreach (var bar in page.GetVisualTreeDescendants().OfType<SharedTopBar>())
 		{
-			backButton.IsVisible = show;
+			bar.ShowBack = capsuleShow;
+			bar.RefreshBackState(stackDepth);
 		}
 	}
 }

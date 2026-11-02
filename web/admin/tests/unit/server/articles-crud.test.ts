@@ -35,6 +35,7 @@ import {
 	getArticlesByPerek,
 	updateArticle,
 } from "~/server/articles";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 const article = {
 	perek_id: 1,
@@ -799,6 +800,7 @@ describe("website cache invalidation", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -812,92 +814,133 @@ describe("website cache invalidation", () => {
 		fetchSpy.mockRestore();
 	});
 
-	function revalidatedTags(): string[] {
-		return fetchSpy.mock.calls.map((call: unknown[]) =>
-			new URL(String(call[0])).searchParams.get("tag"),
-		) as string[];
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
 	}
 
-	it("expires the website's articles tag after a committed create", async () => {
+	it("sends the article change after a committed create", async () => {
 		mocks.txExecute.mockResolvedValue({ insertId: 7 });
-		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQueryOne.mockResolvedValue({
+			id: 7,
+			name: "מאמר",
+			perek_id: 5,
+			author_id: 2,
+		});
 
 		await createArticle({ data: article });
 
-		expect(revalidatedTags()).toEqual(["articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+		]);
 		const [, init] = fetchSpy.mock.calls[0];
 		expect(init?.method).toBe("POST");
+		expect(new Headers(init?.headers).get("content-type")).toBe(
+			"application/json",
+		);
 	});
 
-	it("expires the website's articles tag after a committed update", async () => {
+	it("sends the article change after a committed update", async () => {
 		mocks.txExecute.mockResolvedValue({});
-		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQuery.mockResolvedValue([]);
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
 
 		await updateArticle({ data: { ...article, id: 7 } });
 
-		expect(revalidatedTags()).toEqual(["articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [1], authorIds: [2] },
+		]);
 	});
 
-	it("expires the website's articles tag after a committed delete", async () => {
+	it("sends the deleted article's associations after a committed delete", async () => {
+		mocks.queryOne.mockResolvedValue({ perek_id: 5, author_id: 2 });
+		mocks.query.mockResolvedValue([]);
 		mocks.txExecute.mockResolvedValue({});
 
 		await deleteArticle({ data: 7 });
 
-		expect(revalidatedTags()).toEqual(["articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+		]);
 	});
 
-	function notifiedUrls(callIndex = 0): string[] {
-		const url = new URL(String(fetchSpy.mock.calls[callIndex][0]));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports the new article url after a committed create", async () => {
-		mocks.txExecute.mockResolvedValue({ insertId: 7 });
-		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 5 });
-
-		await createArticle({ data: article });
-
-		expect(notifiedUrls()).toEqual(["/929/5/7"]);
-	});
-
-	it("reports the new url plus the stale one after a perek move", async () => {
+	it("carries both the new and stale perek ids after a perek move", async () => {
 		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([]);
 		mocks.txQueryOne
-			.mockResolvedValueOnce({ perek_id: 5 })
-			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9 });
+			.mockResolvedValueOnce({ perek_id: 5, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9, author_id: 2 });
 
 		await updateArticle({ data: { ...article, id: 7, perek_id: 9 } });
 
-		expect(notifiedUrls()).toEqual(["/929/9/7", "/929/5/7"]);
+		const change = sentChanges()[0];
+		expect(change).toMatchObject({ kind: "article", id: 7 });
+		expect([...((change?.perekIds ?? []) as number[])].sort()).toEqual([
+			5, 9,
+		]);
+		expect(change?.authorIds).toEqual([2]);
 	});
 
-	it("reports only the new url when the article row was already gone", async () => {
+	it("carries both the new and stale author ids after an author move", async () => {
 		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([]);
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 3 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7, author_id: 2 } });
+
+		const change = sentChanges()[0];
+		expect(change?.perekIds).toEqual([1]);
+		expect([...((change?.authorIds ?? []) as number[])].sort()).toEqual([
+			2, 3,
+		]);
+	});
+
+	it("carries the destroyed coverage spans after a coverage replace", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([
+			{ perek_id: 5, pasuk: 1 },
+			{ perek_id: 5, pasuk: 2 },
+		]);
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7 } });
+
+		expect(sentChanges()[0]?.coveringSpans).toEqual([
+			{ perekId: 5, pasukFrom: 1, pasukTo: 2 },
+		]);
+	});
+
+	it("carries only the new perek when the article row was already gone", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([]);
 		mocks.txQueryOne
 			.mockResolvedValueOnce(null)
-			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9 });
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9, author_id: 2 });
 
 		await updateArticle({ data: { ...article, id: 7, perek_id: 9 } });
 
-		expect(notifiedUrls()).toEqual(["/929/9/7"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [9], authorIds: [2] },
+		]);
 	});
 
-	it("reports the removed article url after a delete", async () => {
-		mocks.queryOne.mockResolvedValue({ perek_id: 5 });
-		mocks.txExecute.mockResolvedValue({});
-
-		await deleteArticle({ data: 7 });
-
-		expect(notifiedUrls()).toEqual(["/929/5/7"]);
-	});
-
-	it("sends no url when the deleted article row was already gone", async () => {
+	it("sends nothing when the deleted article row was already gone", async () => {
 		mocks.queryOne.mockResolvedValue(null);
+		mocks.query.mockResolvedValue([]);
 		mocks.txExecute.mockResolvedValue({});
 
 		await deleteArticle({ data: 7 });
 
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it("still resolves the save when the website is unreachable", async () => {

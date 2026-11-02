@@ -13,7 +13,7 @@
 # hash, so the FROM line is the only lever that forces a rebuild when the base
 # moves. 9.0.4 recognizes Ubuntu's backported kernel patch level
 # (SERVER-131779), which lets mongod start on ubuntu-26.04 runners (#2524).
-FROM mongo:9.0.4@sha256:dc28ed5a9d0fc616903c3f463bb1e53b92b49f441721b91926e87d90bf957ce8
+FROM mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
 
 # Fail the build if any stage of a pipeline (e.g. find | head) exits nonzero.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]

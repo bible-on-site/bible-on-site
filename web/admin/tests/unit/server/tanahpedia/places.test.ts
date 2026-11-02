@@ -25,6 +25,7 @@ vi.mock("~/server/db", () => ({
 }));
 
 import { createPlace, deletePlace } from "~/server/tanahpedia/places";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 describe("tanahpedia places api", () => {
 	beforeEach(() => {
@@ -76,6 +77,7 @@ describe("place saves invalidate the website", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -89,12 +91,16 @@ describe("place saves invalidate the website", () => {
 		fetchSpy.mockRestore();
 	});
 
-	it("expires pedia surfaces after a place create", async () => {
+	it("sends the created entity's change after a place create", async () => {
 		await createPlace({ data: { name: "ירושלים" } });
 
-		const calls = fetchSpy.mock.calls.map((call: unknown[]) =>
-			new URL(String(call[0])).searchParams.get("tag"),
-		);
-		expect(calls).toContain("tanahpedia-entity-refs");
+		expect(fetchSpy).toHaveBeenCalled();
+		const changes = fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
+		expect(changes).toHaveLength(1);
+		expect(changes[0]).toMatchObject({ kind: "pedia-entity" });
+		expect(typeof changes[0].entityId).toBe("string");
 	});
 });

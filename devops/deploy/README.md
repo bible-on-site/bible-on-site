@@ -57,7 +57,9 @@ from the repository root to verify that additive migrations preserve existing ro
 
 Data CI and parser tests still run for migration-only changes. When there is at
 least one changed file under data/ and every such file matches
-data/mysql/tanahpedia_alter_*.sql, the master release skips the full data CD job.
+data/mysql/tanahpedia_alter_*.sql or the daily-bulletin/WhatsApp upgrades, the
+master release skips the full data CD job. A bulletin upgrade may include its
+bootstrap invocation and preservation fixture in db-populator/src/main.rs.
 Related deploy-tooling, parser, test, and documentation changes do not turn that
 case into a bootstrap deployment. Static/scripture SQL, pipeline data, and mixed
 data changes retain the normal full-release path.

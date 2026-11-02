@@ -28,9 +28,16 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
     private List<ParashaUnit> _unitsInSefer = [];
     private ParashaUnit? _selectedUnit;
 
+    // Per-column boundary arrows — shared with the perek and masora pickers
+    // through PickerScrollColumns (#2573).
+    private readonly PickerScrollColumns _scrollColumns;
+
     public ParashaUnitPickerPopup()
     {
         InitializeComponent();
+        _scrollColumns = new PickerScrollColumns(Dispatcher,
+            new PickerScrollColumn(SeferList, SeferUpArrow, SeferDownArrow, SeferItemSizer),
+            new PickerScrollColumn(UnitList, UnitUpArrow, UnitDownArrow, UnitItemSizer));
     }
 
     /// <summary>Shows the picker popup.</summary>
@@ -38,6 +45,7 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
     {
         LoadSefarim();
         IsVisible = true;
+        _scrollColumns.RefreshAllDeferred();
     }
 
     /// <summary>Shows the picker popup, pre-selecting the given unit.</summary>
@@ -46,6 +54,7 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
         LoadSefarim();
         IsVisible = true;
         PreSelectUnit(currentUnitId);
+        _scrollColumns.RefreshAllDeferred();
     }
 
     /// <summary>Hides the picker popup.</summary>
@@ -62,6 +71,7 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
             ? []
             : parashiot.GroupBy(unit => unit.SeferId).Select(g => g.First()).ToList();
         SeferList.ItemsSource = _sefarim;
+        _scrollColumns.RefreshDeferred(SeferList);
     }
 
     private void OnSeferSelected(object? sender, SelectionChangedEventArgs e)
@@ -74,6 +84,7 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
         _unitsInSefer = ParashaDataService.Instance.Parashiot?
             .Where(unit => unit.SeferId == sefer.SeferId).ToList() ?? [];
         UnitList.ItemsSource = _unitsInSefer;
+        _scrollColumns.RefreshDeferred(UnitList);
     }
 
     private void OnUnitSelected(object? sender, SelectionChangedEventArgs e)
@@ -104,6 +115,12 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
             UnitList.ScrollTo(UnitList.SelectedItem, position: ScrollToPosition.Center, animate: false);
         }
     }
+
+    private void OnColumnScrolled(object? sender, ItemsViewScrolledEventArgs e) =>
+        _scrollColumns.HandleScrolled(sender, e.FirstVisibleItemIndex, e.LastVisibleItemIndex);
+
+    private void OnColumnSizeChanged(object? sender, EventArgs e) =>
+        _scrollColumns.HandleSizeChanged(sender);
 
     private void OnBackgroundTapped(object? sender, TappedEventArgs e)
     {

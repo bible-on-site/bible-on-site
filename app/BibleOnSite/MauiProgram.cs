@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using CommunityToolkit.Maui;
 using Microsoft.Maui.LifecycleEvents;
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
@@ -24,6 +25,21 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
+        // A managed exception that reaches a native boundary is a SIGABRT and
+        // the .ips report strips its stack — log every fatal channel to the
+        // device console before the runtime kills the process.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Console.Error.WriteLine($"Unhandled exception (terminating={e.IsTerminating}): {e.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Console.Error.WriteLine($"Unobserved task exception: {e.Exception}");
+            e.SetObserved();
+        };
+#if IOS || MACCATALYST
+        ObjCRuntime.Runtime.MarshalManagedException += (_, e) =>
+            Console.Error.WriteLine($"Managed exception escaping to native ({e.ExceptionMode}): {e.Exception}");
+#endif
+
         var builder = MauiApp.CreateBuilder();
 #pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices
         builder
@@ -36,11 +52,19 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
+                // The native pasuk face (#2623) — packaged offline via MauiFont
+                // (Resources\Fonts\*.ttf glob), license beside the file.
+                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.Family);
             })
             .ConfigureMauiHandlers(handlers =>
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
                 handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
+#if WINDOWS
+                // Native Button host gives flyout rows keyboard focus,
+                // Enter/Space activation and hover/focus visuals (#2766).
+                handlers.AddHandler<FlyoutMenuRow, FlyoutMenuRowHandler>();
+#endif
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
 				// Keep the Items2 handlers (.NET 10 default) but pin every native
@@ -52,6 +76,23 @@ public static class MauiProgram
 #endif
             });
 
+#if WINDOWS
+        // Readable Narrator names for every CollectionView row (#2766).
+        Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
+            {
+                ListItemAutomationNames.Attach(list);
+            }
+        });
+        Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
+            {
+                ListItemAutomationNames.Attach(list);
+            }
+        });
+#endif
 #if ANDROID
         // Increase CarouselView's internal RecyclerView cache so pre-rendered views
         // aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting

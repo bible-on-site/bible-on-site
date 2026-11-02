@@ -16,6 +16,7 @@ import {
 
 const UNIT: ParashaBookUnit = {
 	unitId: 42,
+	slug: "מטות",
 	name: "מטות",
 	order: 42,
 	refSpan: "במדבר ל-לב",
@@ -42,12 +43,12 @@ describe("buildParashaHistoryMapper", () => {
 		);
 	});
 
-	it("maps content pages to unit routes with haftara flag", () => {
+	it("maps content pages to canonical slug routes with haftara flag", () => {
 		expect(mapper.pageToRoute(PARASHA_CONTENT_OFFSET, undefined)).toBe(
-			`${PARASHA_ROOT}/42?book`,
+			`${PARASHA_ROOT}/מטות?book`,
 		);
 		expect(mapper.pageToRoute(PARASHA_CONTENT_OFFSET + 2, undefined)).toBe(
-			`${PARASHA_ROOT}/42?book&haftara`,
+			`${PARASHA_ROOT}/מטות?book&haftara`,
 		);
 	});
 
@@ -59,15 +60,19 @@ describe("buildParashaHistoryMapper", () => {
 });
 
 describe("parashaBookExitPath", () => {
-	it("lands on the unit a book-content path names", () => {
-		expect(parashaBookExitPath("/פרשה/42", 7)).toBe(`${PARASHA_ROOT}/42`);
+	it("lands on the canonical path for the unit a book-content path names", () => {
+		expect(parashaBookExitPath("/פרשה/מטות", 7)).toBe(
+			`${PARASHA_ROOT}/מטות`,
+		);
+		// A legacy numeric segment canonicalizes on the way out.
+		expect(parashaBookExitPath("/פרשה/42", 7)).toBe(`${PARASHA_ROOT}/מטות`);
 	});
 
 	it("falls back on book chrome and unmatched paths", () => {
 		expect(parashaBookExitPath("/פרשה/במדבר/תוכן", 7)).toBe(
-			`${PARASHA_ROOT}/7`,
+			`${PARASHA_ROOT}/ויצא`,
 		);
-		expect(parashaBookExitPath("/929/1", 7)).toBe(`${PARASHA_ROOT}/7`);
+		expect(parashaBookExitPath("/929/1", 7)).toBe(`${PARASHA_ROOT}/ויצא`);
 	});
 });
 

@@ -4,19 +4,14 @@ import { CONTENT_OFFSET, toHebrewChapterNumber } from "./sefer-page-utils";
 
 /**
  * Chapter-tab payload carried in `Bookmark.data`. Compact tabs show only the
- * letters; expanded/hover state shows the perek title, "פרק X" and source
- * context. Labels keep canonical book/additional naming (שמואל ב ה).
+ * chapter reference; expanded/hover state shows that reference and the perek
+ * title. Accessible labels keep the full canonical source (שמואל ב ה).
  */
 export type SeferBookmarkData = {
 	/** Compact tab text: chapter letter(s), plus the additional's letter for
 	 * split sefarim (e.g. "ב ג" for שמואל ב פרק ג) so identical chapter
 	 * letters across parts stay distinguishable. */
 	compact: string;
-	/** Chapter Hebrew letter(s) for the expanded "פרק X" line. */
-	perekHeb: string;
-	/** Sefer + additional source context ("שמואל ב"; just the sefer name when
-	 * the sefer is not split). */
-	unitSource: string;
 	/** Canonical full source ("שמואל ב ה"). */
 	source: string;
 	/** Optional perek title/header text. */
@@ -24,8 +19,6 @@ export type SeferBookmarkData = {
 };
 
 export type SeferChapterBookmark = Bookmark & { data: SeferBookmarkData };
-
-type BookmarkUnit = { source: string; additionalLetter?: string };
 
 /**
  * One chapter tab per perek of the loaded sefer, targeting its text page.
@@ -39,44 +32,39 @@ export function buildSeferChapterBookmarks(
 	perekIds: number[] | undefined,
 ): SeferChapterBookmark[] {
 	const units: {
-		unit: BookmarkUnit;
+		additionalLetter?: string;
 		perakimCount: number;
 		headers: (string | undefined)[];
 	}[] =
 		"perakim" in sefer
 			? [
 					{
-						unit: { source: sefer.name },
 						perakimCount: sefer.perakim.length,
 						headers: sefer.perakim.map((p) => p.header),
 					},
 				]
 			: sefer.additionals.map((additional) => ({
-					unit: {
-						source: `${sefer.name} ${additional.letter}`,
-						additionalLetter: additional.letter,
-					},
+					additionalLetter: additional.letter,
 					perakimCount: additional.perakim.length,
 					headers: additional.perakim.map((p) => p.header),
 				}));
 
 	const bookmarks: SeferChapterBookmark[] = [];
 	let perekIdx = 0;
-	for (const { unit, perakimCount, headers } of units) {
+	for (const { additionalLetter, perakimCount, headers } of units) {
 		for (let i = 0; i < perakimCount; i++, perekIdx++) {
 			const perekHeb = toHebrewChapterNumber(i + 1);
 			const title = headers[i];
-			const source = `${unit.source} ${perekHeb}`;
+			const compact = additionalLetter
+				? `${additionalLetter} ${perekHeb}`
+				: perekHeb;
+			const source = `${sefer.name} ${compact}`;
 			bookmarks.push({
 				id: `perek-${perekIds?.[perekIdx] ?? `idx-${perekIdx}`}`,
 				pageIndex: CONTENT_OFFSET + perekIdx * 2,
 				label: title ? `${source} - ${title}` : source,
 				data: {
-					compact: unit.additionalLetter
-						? `${unit.additionalLetter} ${perekHeb}`
-						: perekHeb,
-					perekHeb,
-					unitSource: unit.source,
+					compact,
 					source,
 					...(title ? { title } : {}),
 				},

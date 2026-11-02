@@ -11,10 +11,125 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 import zipfile
 
-from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, book_archive, prepare_assets, recording
+from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, asset_download_url, audio_cache_key, book_archive, main, playback_recording, prepare_assets, recording
 
 
 class RecitationAssetsTests(unittest.TestCase):
+    def audio_inventory(self):
+        database = self.root / "cache-identity.sqlite"
+        with closing(sqlite3.connect(database)) as connection:
+            connection.executescript("CREATE TABLE recitation_track(perek_id,audio_sha256,alignment_status);")
+            connection.executemany("INSERT INTO recitation_track VALUES (?,?,?)", [(1, self.sha, "pending"), (2, "a" * 64, "ready")])
+            connection.commit()
+        return database
+
+    def test_audio_cache_survives_timing_edits_order_and_duplicate_recordings(self):
+        database = self.audio_inventory()
+        original = audio_cache_key("Windows", database)
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute("UPDATE recitation_track SET alignment_status='ready'")
+            connection.execute("INSERT INTO recitation_track VALUES (3,?,'pending')", (self.sha,))
+            connection.commit()
+        self.assertEqual(audio_cache_key("Windows", database), original)
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute("UPDATE recitation_track SET audio_sha256=? WHERE perek_id=2", ("b" * 64,))
+            connection.commit()
+        self.assertNotEqual(audio_cache_key("Windows", database), original)
+
+    def test_mobile_cache_identity_follows_derived_bytes_and_is_shared_between_mobile_platforms(self):
+        database = self.audio_inventory()
+        with patch("prepare_recitation_assets.load_playback", return_value={"sha256": "c" * 64}) as playback:
+            android = audio_cache_key("Android", database)
+            self.assertEqual(audio_cache_key("iOS", database), android)
+            self.assertNotEqual(audio_cache_key("Windows", database), android)
+            self.assertEqual(playback.call_count, 4)
+        with patch("prepare_recitation_assets.load_playback", return_value={"sha256": "d" * 64}):
+            self.assertNotEqual(audio_cache_key("Android", database), android)
+
+    def test_invalid_or_absent_cache_inventory_fails_without_creating_a_database(self):
+        missing = self.root / "missing.sqlite"
+        with self.assertRaises(sqlite3.OperationalError):
+            audio_cache_key("Windows", missing)
+        self.assertFalse(missing.exists())
+        database = self.audio_inventory()
+        for statement in ["UPDATE recitation_track SET audio_sha256='invalid'", "DELETE FROM recitation_track"]:
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute(statement)
+                connection.commit()
+            with self.assertRaisesRegex(ValueError, "identity inventory"):
+                audio_cache_key("Windows", database)
+
+    def test_cache_key_cli_sets_only_the_action_output_without_preparing_or_downloading(self):
+        output = self.root / "action-output"
+        with patch("sys.argv", ["prepare_recitation_assets.py", "--platform", "Windows", "--cache-key"]), \
+                patch.dict("os.environ", {"GITHUB_OUTPUT": str(output)}), \
+                patch("prepare_recitation_assets.audio_cache_key", return_value="recitation-audio-v2-mp3-identity"), \
+                patch("prepare_recitation_assets.prepare_assets", side_effect=AssertionError("Unexpected preparation")), \
+                patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            main()
+        self.assertEqual(output.read_text(), "key=recitation-audio-v2-mp3-identity\n")
+        self.assertEqual(stdout.getvalue(), "recitation-audio-v2-mp3-identity\n")
+
+    def test_opt_in_delivery_preserves_object_paths_and_original_fallback(self):
+        source = "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"
+        self.assertEqual(asset_download_url(source), source)
+        self.assertEqual(asset_download_url(source, ""), source)
+        self.assertEqual(asset_download_url(source, "https://d123.cloudfront.net/"),
+                         "https://d123.cloudfront.net/recordings/1_record.mp3")
+        for origin in ["http://cdn.example", "https://user:pass@cdn.example", "https://cdn.example/path",
+                       "https://cdn.example/?key=value", "https://cdn.example/#x", "https://cdn.example:8443"]:
+            with self.subTest(origin=origin), self.assertRaisesRegex(ValueError, "bare HTTPS"):
+                asset_download_url(source, origin)
+
+    def test_cdn_fetch_keeps_checksum_and_canonical_descriptor(self):
+        track = {**self.track, "audioUrl": "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"}
+        response = io.BytesIO(self.audio)
+        response.status = 200
+        with patch.dict("os.environ", {"RECITATION_ASSETS_ORIGIN": "https://d123.cloudfront.net"}), \
+                patch("prepare_recitation_assets.open_https", return_value=response) as transport:
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+            transport.assert_called_once_with("https://d123.cloudfront.net/recordings/1_record.mp3")
+        self.assertEqual(track["audioUrl"], "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3")
+        self.assertEqual(track["audioSha256"], self.sha)
+        with patch("prepare_recitation_assets.open_https", side_effect=AssertionError("cached byte download")):
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+
+    def test_cdn_corruption_still_fails_without_caching_or_direct_s3_fallback(self):
+        track = {**self.track, "audioUrl": "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"}
+        response = io.BytesIO(b"corrupted")
+        response.status = 200
+        with patch.dict("os.environ", {"RECITATION_ASSETS_ORIGIN": "https://d123.cloudfront.net"}), \
+                patch("prepare_recitation_assets.open_https", return_value=response) as transport:
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                recording(track, self.cache)
+            transport.assert_called_once()
+        self.assertEqual(list(self.cache.iterdir()), [])
+
+    def test_cdn_delivers_derived_playback_with_the_same_size_and_hash_checks(self):
+        track = {**self.track, "audioUrl": "https://bucket.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"}
+        audio = b"OggS derived playback"
+        sha = hashlib.sha256(audio).hexdigest()
+        metadata = {"sha256": sha, "sizeBytes": len(audio), "key": f"recordings/opus-24k/{sha}.ogg"}
+        with patch.dict("os.environ", {"RECITATION_ASSETS_ORIGIN": "https://d123.cloudfront.net"}), \
+                patch("prepare_recitation_assets.load_playback", return_value=metadata), \
+                patch("prepare_recitation_assets.open_https") as transport:
+            response = io.BytesIO(b"bad playback")
+            response.status = 200
+            transport.return_value = response
+            with self.assertRaisesRegex(ValueError, "Derived playback checksum"):
+                playback_recording(track, self.cache)
+            self.assertEqual(list(self.cache.iterdir()), [])
+            response = io.BytesIO(audio)
+            response.status = 200
+            transport.return_value = response
+            self.assertEqual(playback_recording(track, self.cache).read_bytes(), audio)
+            self.assertEqual(transport.call_args.args, (f"https://d123.cloudfront.net/{metadata['key']}",))
+            transport.reset_mock()
+            playback_recording(track, self.cache)
+            transport.assert_not_called()
+        self.assertEqual(track["audioSha256"], self.sha)
+        self.assertEqual(track["playback"]["sha256"], sha)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

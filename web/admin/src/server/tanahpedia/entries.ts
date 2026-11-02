@@ -16,8 +16,7 @@ import {
 } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
 import {
-	pediaEntryPath,
-	pediaInvalidation,
+	pediaEntryChange,
 	revalidateWebsite,
 } from "../website-revalidate";
 import {
@@ -25,7 +24,7 @@ import {
 	keepOldNameAsAliasInTx,
 } from "./alias-ops.server";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { pediaInvalidationForEntryIds } from "./paths";
+import { pediaChangesForEntryIds } from "./paths";
 import {
 	assertEntryFieldsValid,
 	saveEntryRevisioned,
@@ -309,9 +308,9 @@ export const createEntry = createServerFn({ method: "POST" })
 			await recomputeEntryMetrics(conn, data.id, entry.content);
 			return { ...entry, headRevisionId: headId };
 		});
-		await revalidateWebsite(
-			pediaInvalidation(pediaEntryPath(created.unique_name)),
-		);
+		await revalidateWebsite([
+			pediaEntryChange({ uniqueName: created.unique_name }),
+		]);
 		return created;
 	});
 
@@ -367,12 +366,15 @@ export const updateEntry = createServerFn({ method: "POST" })
 		});
 		// A no-op save changes no public content, so nothing expires.
 		if (!updated.unchanged) {
-			// A rename leaves the old URL stale — notify both.
-			const urls = new Set([pediaEntryPath(updated.unique_name)]);
-			if (updated.previousUniqueName) {
-				urls.add(pediaEntryPath(updated.previousUniqueName));
-			}
-			await revalidateWebsite(pediaInvalidation(...urls));
+			// A rename leaves the old URL stale — the change carries both names.
+			await revalidateWebsite([
+				pediaEntryChange({
+					uniqueName: updated.unique_name,
+					...(updated.previousUniqueName
+						? { oldUniqueName: updated.previousUniqueName }
+						: {}),
+				}),
+			]);
 		}
 		// previousUniqueName is notification bookkeeping, not part of the
 		// handler's public result.
@@ -383,29 +385,11 @@ export const updateEntry = createServerFn({ method: "POST" })
 export const deleteEntry = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
-		// Resolve the public URL before the delete — the row is gone after.
-		const previous = await queryOne<{ unique_name: string }>(
-			"SELECT unique_name FROM tanahpedia_entry WHERE id = ?",
-			[id],
-		);
-		// Alias/disambiguation names this entry is a target of — their public
-		// pages lose a target (FK cascade), so they expire too.
-		const aliasNames = await query<{ name: string }>(
-			`SELECT DISTINCT name FROM (
-			   SELECT s.name AS name FROM tanahpedia_entry_synonym s WHERE s.entry_id = ?
-			   UNION
-			   SELECT s2.name AS name
-			     FROM tanahpedia_entry_synonym_disambiguation d
-			     JOIN tanahpedia_entry_synonym s2 ON s2.id = d.synonym_id
-			    WHERE d.entry_id = ?
-			 ) names`,
-			[id, id],
-		);
+		// Resolve the change's dependencies before the delete — afterwards the
+		// row and its entity/synonym/source links are unresolvable.
+		const changes = await pediaChangesForEntryIds([id]);
 		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
-		const urls = new Set<string>();
-		if (previous) urls.add(pediaEntryPath(previous.unique_name));
-		for (const { name } of aliasNames) urls.add(pediaEntryPath(name));
-		await revalidateWebsite(pediaInvalidation(...urls));
+		await revalidateWebsite(changes);
 		return { success: true };
 	});
 
@@ -430,9 +414,7 @@ export const assignEntity = createServerFn({ method: "POST" })
 			"INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
 			[data.id, data.entry_id, data.entity_id],
 		);
-		await revalidateWebsite(
-			await pediaInvalidationForEntryIds([data.entry_id]),
-		);
+		await revalidateWebsite(await pediaChangesForEntryIds([data.entry_id]));
 		return { success: true };
 	});
 
@@ -446,7 +428,7 @@ export const removeEntity = createServerFn({ method: "POST" })
 		);
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds(link ? [link.entry_id] : []),
+			await pediaChangesForEntryIds(link ? [link.entry_id] : []),
 		);
 		return { success: true };
 	});

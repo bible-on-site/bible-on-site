@@ -18,12 +18,12 @@
 .breadcrumb li:not(:last-child)::after {
   content: ">";
   margin: 0 8px;
-  color: #999;
+  color: var(--muted-text, #999);
   font-weight: normal;
 }
 
 .breadcrumb li a {
-  color: #1c2c5d;
+  color: var(--accent-900);
   text-decoration: none;
 }
 
@@ -31,8 +31,10 @@
   text-decoration: underline;
 }
 
+/* #9a92d1 measured 2.84:1 on white — below AA even for large text; the
+   deeper indigo keeps the accent identity at a passing ratio (#2767). */
 .breadcrumb li.active {
-  color: #9a92d1;
+  color: var(--hc-accent, #6f63b8);
   font-weight: 600;
 }
 
@@ -51,14 +53,14 @@
 .pageTitle {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 24px 0;
   text-align: right;
 }
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
 }
 
@@ -74,7 +76,7 @@
   align-items: center;
   gap: 16px;
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   border: 1px solid #e5e7eb;
   text-decoration: none;
@@ -84,7 +86,7 @@
 }
 
 .authorCard:hover {
-  border-color: #1c2c5d;
+  border-color: var(--accent-900);
   box-shadow: 0 4px 12px rgba(28, 44, 93, 0.12);
   transform: translateY(-2px);
 }
@@ -112,7 +114,7 @@
   align-items: center;
   justify-content: center;
   font-size: 32px;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
 }
 
 .authorInfo {
@@ -123,14 +125,14 @@
 .authorName {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 6px 0;
   line-height: 1.3;
 }
 
 .authorDetails {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
   line-height: 1.5;
   display: -webkit-box;
@@ -143,7 +145,7 @@
 .emptyState {
   text-align: center;
   padding: 64px 24px;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   font-size: 1rem;
 }
 
@@ -169,13 +171,13 @@
   }
 
   .breadcrumb li:not(:last-child)::after {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .breadcrumb li a,
   .pageTitle,
   .authorName {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .breadcrumb li.active {
@@ -184,7 +186,7 @@
 
   .pageSubtitle,
   .authorDetails {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .authorCard {
@@ -193,7 +195,7 @@
   }
 
   .authorCard:hover {
-    border-color: #a8b9ff;
+    border-color: var(--accent-200);
   }
 
   .authorImageContainer {
@@ -202,6 +204,6 @@
   }
 
   .authorPlaceholder {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 }

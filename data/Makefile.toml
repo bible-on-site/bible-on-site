@@ -392,68 +392,42 @@ description = "Create unit coverage output directory"
 command = "mkdir"
 args = ["-p", ".coverage/unit"]
 
-[tasks.coverage-unit-lcov]
-description = "Run unit tests with coverage and generate lcov.info"
-dependencies = ["coverage-unit-dir-create"]
+[tasks.coverage-unit]
+description = "Run unit tests once with lcov coverage and JUnit output"
+dependencies = ["coverage-unit-dir-create", "test-unit-dir-create"]
 command = "cargo"
 args = [
     "llvm-cov",
-    "test",
+    "nextest",
     "--workspace",
+    "--profile",
+    "ci",
     "--lcov",
     "--output-path",
     ".coverage/unit/lcov.info",
 ]
-
-[tasks.coverage-unit-junit]
-description = "Run unit tests with JUnit output for CI reporting"
-dependencies = ["test-unit-dir-create"]
-command = "cargo"
-args = ["nextest", "run", "--workspace", "--profile", "ci"]
-
-# TODO: run unit tests only once and report both lcov and junit
-[tasks.coverage-unit]
-description = "Run unit tests with both coverage (lcov) and JUnit output"
-dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
 
 [tasks.coverage-integration-dir-create]
 description = "Create integration coverage output directory"
 command = "mkdir"
 args = ["-p", ".coverage/integration"]
 
-[tasks.coverage-integration-lcov]
-description = "Run integration tests with coverage and generate lcov.info"
-dependencies = ["coverage-integration-dir-create"]
+[tasks.coverage-integration]
+description = "Run integration tests once with lcov coverage and JUnit output"
+dependencies = ["coverage-integration-dir-create", "test-integration-dir-create"]
 command = "cargo"
 args = [
     "llvm-cov",
-    "test",
-    "--workspace",
-    "--features",
-    "integration",
-    "--lcov",
-    "--output-path",
-    ".coverage/integration/lcov.info",
-]
-
-[tasks.coverage-integration-junit]
-description = "Run integration tests with JUnit output for CI reporting"
-dependencies = ["test-integration-dir-create"]
-command = "cargo"
-args = [
     "nextest",
-    "run",
     "--workspace",
     "--features",
     "integration",
     "--profile",
     "ci-integration",
+    "--lcov",
+    "--output-path",
+    ".coverage/integration/lcov.info",
 ]
-
-# TODO: run integration tests only once and report both lcov and junit
-[tasks.coverage-integration]
-description = "Run integration tests with both coverage (lcov) and JUnit output"
-dependencies = ["coverage-integration-lcov", "coverage-integration-junit"]
 
 [tasks.coverage-merged-dir-create]
 description = "Create merged coverage output directory"

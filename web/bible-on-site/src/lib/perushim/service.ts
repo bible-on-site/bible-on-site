@@ -74,7 +74,8 @@ export async function getPerushimByPerekId(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -215,7 +216,8 @@ export async function getPerushimForRanges(
 			"Failed to fetch perushim for ranges:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -259,7 +261,8 @@ export async function getPerushNotesForRanges(
 			perushId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -292,7 +295,8 @@ export async function getPerushNotes(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -339,7 +343,8 @@ export async function getPerushNotesBatch(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return {};
+		// Reject so a failed fetch cannot become a cached empty panel.
+		throw error;
 	}
 }
 
@@ -390,6 +395,7 @@ export async function getPerushDetail(
 			perushId,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		// Reject so a failed fetch cannot become a cached false 404.
+		throw error;
 	}
 }

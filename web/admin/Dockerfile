@@ -16,6 +16,10 @@ COPY admin/ ./
 COPY shared/ ../shared/
 
 ENV NODE_ENV=production
+# Public website origin for browser-facing links — inlined into the bundle.
+# Distinct from the runtime VITE_WEBSITE_URL, which names the cluster-internal
+# revalidation endpoint (#2763).
+ENV VITE_PUBLIC_WEBSITE_URL=https://xn--febl3a.co.il
 RUN bun run build
 
 FROM base AS runner

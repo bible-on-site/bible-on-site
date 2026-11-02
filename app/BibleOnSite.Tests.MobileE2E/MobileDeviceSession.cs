@@ -93,6 +93,16 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
             // so the live session is retried once rather than rebuilt.
             Adapter.RestartApp(Driver!, environment);
         }
+        catch (WebDriverTimeoutException)
+        {
+            // A restart command that gets no response at all means the agent
+            // wedged — the launch lands or hangs inside WDA/UiAutomator2 while
+            // the session id stays allocated (iOS shard: 'mobileLaunchApp' did
+            // not receive any response within 120000 ms). Rebuild once rather
+            // than issue the launch again into the same dead agent.
+            Rebuild();
+            Adapter.RestartApp(Driver!, environment);
+        }
     }
 
     private void Rebuild()

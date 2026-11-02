@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
@@ -7,9 +6,14 @@ import {
 	authorNameToSlug,
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
-	getAuthorById,
 	getAuthorByName,
 } from "../../../../lib/authors";
+import {
+	authorArticlesTag,
+	authorTag,
+	cachedPerKey,
+	COLLECTION_TAGS,
+} from "../../../../lib/revalidate/tags";
 import { authorPath, buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { JsonLd } from "../../../components/JsonLd";
@@ -18,8 +22,8 @@ import styles from "./page.module.css";
 
 /**
  * Authors are pre-generated at build time using normalised-name slugs.
- * dynamicParams is true so numeric-ID URLs (legacy / backward-compat) still
- * resolve on-demand rather than returning 404.
+ * dynamicParams is true so authors added after the build still render
+ * on demand.
  */
 export const dynamicParams = true;
 
@@ -33,43 +37,39 @@ export async function generateStaticParams() {
 }
 
 /**
- * Resolve the `authorParam` segment to an AuthorDetails.
- * Tries numeric ID first (backward-compat), then normalised-name match.
+ * Resolve the `authorParam` segment (a percent-encoded normalised author
+ * name) to an AuthorDetails. Author pages are addressed by name only.
  */
 async function resolveAuthor(
 	authorParam: string,
 ): Promise<AuthorDetails | null> {
-	const maybeId = Number.parseInt(authorParam, 10);
-	if (!Number.isNaN(maybeId) && String(maybeId) === authorParam) {
-		return getAuthorById(maybeId);
-	}
-	// Decode percent-encoded Hebrew name and resolve by normalised match
-	const decoded = decodeURIComponent(authorParam);
-	return getAuthorByName(decoded);
+	return getAuthorByName(decodeURIComponent(authorParam));
 }
 
 /**
- * Cache author data with on-demand revalidation support.
+ * Author data keyed by the URL param (normalised name slug) with
+ * entity-scoped tags: an author change expires exactly the
+ * `author:{param}` entries that name it, not every author's page.
  */
-const getCachedAuthor = unstable_cache(
-	async (param: string) => resolveAuthor(param),
-	["author-by-param"],
-	{
-		tags: ["authors"],
-		revalidate: false,
-	},
+const getCachedAuthor = cachedPerKey(
+	"author-by-param",
+	(param: string) => param,
+	(key) => [COLLECTION_TAGS.authors, authorTag(key)],
+	(param: string) => resolveAuthor(param),
 );
 
 /**
  * Cache author's articles with on-demand revalidation support.
  */
-const getCachedAuthorArticles = unstable_cache(
-	async (authorId: number) => getArticlesByAuthorId(authorId),
-	["author-articles"],
-	{
-		tags: ["articles", "authors"],
-		revalidate: false,
-	},
+const getCachedAuthorArticles = cachedPerKey(
+	"author-articles",
+	(authorId: number) => String(authorId),
+	(key) => [
+		COLLECTION_TAGS.articles,
+		COLLECTION_TAGS.authors,
+		authorArticlesTag(Number(key)),
+	],
+	(authorId: number) => getArticlesByAuthorId(authorId),
 );
 
 export async function generateMetadata({
@@ -91,8 +91,6 @@ export async function generateMetadata({
 		description: author.details
 			? author.details.slice(0, 160)
 			: `מאמרים מאת ${author.name}`,
-		// The canonical author URL is name-slug based even when the page was
-		// reached through a legacy numeric-ID param.
 		canonical: authorPath(authorNameToSlug(author.name)),
 		type: "profile",
 		image: {

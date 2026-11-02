@@ -26,8 +26,12 @@ export function BreadcrumbDropdown({
 	children: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const [interactive, setInteractive] = useState(false);
 	const itemRef = useRef<HTMLLIElement>(null);
 	const buttonRef = useRef<HTMLButtonElement>(null);
+
+	// The server preview must not accept an action before its handlers exist.
+	useEffect(() => setInteractive(true), []);
 
 	useEffect(() => {
 		if (!open) return;
@@ -65,6 +69,7 @@ export function BreadcrumbDropdown({
 			<button
 				ref={buttonRef}
 				type="button"
+				disabled={!interactive}
 				aria-haspopup="true"
 				aria-expanded={open}
 				aria-label={ariaLabel}

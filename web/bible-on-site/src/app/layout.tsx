@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
+import { SITE_A11Y_BOOTSTRAP } from "@/lib/site-a11y-settings";
 import {
 	buildGraph,
 	organizationNode,
@@ -18,22 +18,15 @@ import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
 import { TopNav } from "./components/TopNav";
 
-/* istanbul ignore next */
-const geistSans = localFont({
-	src: "./fonts/GeistVF.woff",
-	variable: "--font-geist-sans",
-});
-/* istanbul ignore next */
-const geistMono = localFont({
-	src: "./fonts/GeistMonoVF.woff",
-	variable: "--font-geist-mono",
-});
-
 export const metadata: Metadata = {
 	metadataBase: new URL(SITE_ORIGIN),
 	title: SITE_NAME,
 	applicationName: SITE_NAME,
 	description: SITE_DESCRIPTION,
+	// Probed by crawlers and Lighthouse; real files under public/ so the
+	// requests resolve instead of 404ing through the app router (#1022).
+	manifest: "/manifest.json",
+	icons: { apple: "/apple-touch-icon.png" },
 	openGraph: siteOpenGraph({
 		title: SITE_NAME,
 		description: SITE_DESCRIPTION,
@@ -63,11 +56,14 @@ export default function RootLayout({
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>
+				{/* Site-wide accessibility preferences (contrast/links) — same
+				    pre-paint contract for the root data attributes (#2767). */}
+				<script>{SITE_A11Y_BOOTSTRAP}</script>
 				<AhrefsAnalytics />
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />
 			</head>
-			<body className={`${geistSans.variable} ${geistMono.variable}`}>
+			<body>
 				<TopNav />
 
 				<NavBar />

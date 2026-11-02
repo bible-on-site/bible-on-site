@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolveSqlArtifact } from "./data-artifact.mjs";
 import { startDeployment } from "./deployment-state.mjs";
 import { ghApi } from "./gh-api.mjs";
-import { releasePayload } from "./release-provenance.mjs";
+import { nativeImageArtifacts, releasePayload } from "./release-provenance.mjs";
 
 const api = (endpoint) => ghApi(endpoint);
 const directories = {
@@ -66,6 +66,8 @@ export function checkDeployment(
 		runAttempt,
 		artifactId,
 		artifactDigest,
+		sourceRunId,
+		sourceRef,
 	},
 	request = api,
 ) {
@@ -186,7 +188,7 @@ export function checkDeployment(
 			);
 		checkQuality(root, runId, runAttempt, request);
 		const artifact = resolveSqlArtifact(
-			{ repo, runId, ref, artifactId, artifactDigest },
+			{ repo, runId, ref, artifactId, artifactDigest, sourceRunId, sourceRef },
 			request,
 		);
 		if (
@@ -238,8 +240,19 @@ export function checkDeployment(
 		if (runAttempt > currentAttempt)
 			throw new Error("Published CI attempt exceeds source CI");
 	}
+	const platformArtifacts = nativeImageArtifacts(provenance);
 	checkQuality(root, runId, runAttempt, request);
-	return { deploy: true, ref, version, runAttempt };
+	return {
+		deploy: true,
+		ref,
+		version,
+		runAttempt,
+		...(platformArtifacts
+			? moduleName === "api"
+				? { apiArm64: true }
+				: { websiteArm64: true }
+			: {}),
+	};
 }
 
 if (
@@ -262,6 +275,8 @@ if (
 		runAttempt: payload.ci_run_attempt,
 		artifactId: payload.sql_artifact_id,
 		artifactDigest: payload.sql_artifact_digest,
+		sourceRunId: payload.sql_source_run_id,
+		sourceRef: payload.sql_source_ref,
 	});
 	if (result.deploy) {
 		const state = startDeployment({
@@ -287,7 +302,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\n`,
 	);
 	if (result.version)
 		appendFileSync(

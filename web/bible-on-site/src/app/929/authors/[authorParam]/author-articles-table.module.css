@@ -16,7 +16,7 @@
 	padding: 8px 12px;
 	font-size: 0.95rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 }
@@ -25,7 +25,7 @@
 	padding: 8px 12px;
 	font-size: 0.95rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 }
@@ -33,7 +33,7 @@
 .tableWrap {
 	overflow-x: auto;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 }
 
 .table {

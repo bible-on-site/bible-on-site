@@ -21,7 +21,8 @@ public class PerekDataService
 
     private Dictionary<int, Perek>? _perakim;
     private Dictionary<int, Sefer>? _sefarim;
-    private bool _isLoaded;
+    /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
+    private volatile bool _isLoaded;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
     private readonly LocalDatabaseService _databaseService;
@@ -204,6 +205,55 @@ public class PerekDataService
 
         var additionalPart = perek.Additional.HasValue ? $"{perek.Additional.Value.ToHebrewLetters()} " : string.Empty;
         return $"{perek.SeferName} {additionalPart}{perek.PerekNumber.ToHebrewLetters()}";
+    }
+
+    /// <summary>
+    /// Readable label for a set of reviewed perakim (#2365), e.g. "בראשית א-ה".
+    /// A contiguous run inside one sefer collapses to "ספר א-ה"; a run that
+    /// crosses a sefer boundary spells both ends out; non-contiguous material
+    /// lists each run so the label never implies unstudied perakim.
+    /// </summary>
+    public string GetPerekRangeSource(IReadOnlyList<int> perekIds)
+    {
+        if (perekIds.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var runs = new List<List<int>> { new List<int> { perekIds[0] } };
+        foreach (var id in perekIds.Skip(1))
+        {
+            var run = runs[^1];
+            if (id == run[^1] + 1)
+            {
+                run.Add(id);
+            }
+            else
+            {
+                runs.Add([id]);
+            }
+        }
+
+        var labels = runs.Select(run =>
+        {
+            var first = GetPerek(run[0]);
+            var last = GetPerek(run[^1]);
+            if (first is null || last is null || run.Count == 1)
+            {
+                return first is null ? string.Empty : GetPerekSource(run[0]) ?? string.Empty;
+            }
+            if (first.SeferId == last.SeferId && first.Additional == last.Additional)
+            {
+                var additionalPart = first.Additional.HasValue
+                    ? $"{first.Additional.Value.ToHebrewLetters()} "
+                    : string.Empty;
+                return $"{first.SeferName} {additionalPart}" +
+                    $"{first.PerekNumber.ToHebrewLetters()}-{last.PerekNumber.ToHebrewLetters()}";
+            }
+            return $"{GetPerekSource(run[0])} - {GetPerekSource(run[^1])}";
+        }).Where(label => label.Length > 0).ToList();
+
+        return string.Join(" ", labels.Select((label, index) => index == 0 ? label : "ו" + label));
     }
 
     /// <summary>

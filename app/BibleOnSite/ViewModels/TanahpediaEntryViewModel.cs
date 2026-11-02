@@ -22,6 +22,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
     private readonly PerekDataService _perekData;
+    private readonly IDedicationService _dedicationService;
 
     /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid link or
     /// badge taps must not stack duplicate pushed pages (#2640).</summary>
@@ -47,15 +48,23 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     public TanahpediaEntryViewModel() : this(
         TanahpediaService.Instance,
         ShellAppNavigator.Instance,
-        PerekDataService.Instance)
+        PerekDataService.Instance,
+        DedicationService.Instance)
     {
     }
 
     public TanahpediaEntryViewModel(ITanahpediaService service, IAppNavigator navigator, PerekDataService perekData)
+        : this(service, navigator, perekData, DedicationService.Instance)
+    {
+    }
+
+    public TanahpediaEntryViewModel(ITanahpediaService service, IAppNavigator navigator,
+        PerekDataService perekData, IDedicationService dedicationService)
     {
         _service = service;
         _navigator = navigator;
         _perekData = perekData;
+        _dedicationService = dedicationService;
     }
 
 #pragma warning disable MVVMTK0045
@@ -103,6 +112,11 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasMap))]
     private List<TanahpediaPlaceMarker> _placeMarkers = [];
 
+    /// <summary>Formatted dedication lines targeted at this entry's canonical id (#2731).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDedications))]
+    private List<string> _dedicationLines = [];
+
     /// <summary>True when the name resolved to several possible entries.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEntry))]
@@ -120,6 +134,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     public bool HasOccurrences => Occurrences.Count > 0;
     public bool HasFamily => FamilyTree is not null;
     public bool HasMap => PlaceMarkers.Count > 0;
+    public bool HasDedications => DedicationLines.Count > 0;
 
     /// <summary>Empty-entry notice - the website shows it only when neither
     /// content, a map nor occurrences give the page a body.</summary>
@@ -255,6 +270,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         PlaceMarkers = [];
         Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+        DedicationLines = [];
         OnPropertyChanged(nameof(HasContent));
         OnPropertyChanged(nameof(HasEntities));
         OnPropertyChanged(nameof(HasOccurrences));
@@ -269,6 +285,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         PlaceMarkers = [];
         Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
         SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+        DedicationLines = [];
 
         Title = detail.Title;
         Content = TanahpediaFootnotes.Normalize(detail.Content);
@@ -280,8 +297,39 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
         await Task.WhenAll(
             LoadOccurrencesAsync(detail.Occurrences),
-            LoadEntityExtrasAsync(detail));
+            LoadEntityExtrasAsync(detail),
+            LoadDedicationsAsync(detail.Id));
         OnPropertyChanged(nameof(ShowNoContentNotice));
+    }
+
+    /// <summary>
+    /// Entry-scoped dedications (#2731), targeted by the canonical entry id.
+    /// Best-effort secondary content: a failure drops the lines, not the page.
+    /// An in-place entry hop must not show the previous entry's lines — stale
+    /// responses are discarded by the entry load version.
+    /// </summary>
+    private async Task LoadDedicationsAsync(string entryId)
+    {
+        var version = _loadVersion;
+        try
+        {
+            var dedications = await _dedicationService.GetDedicationsAsync(
+                new DedicationContext { EntryIds = [entryId] }, CancellationToken.None);
+            if (version == _loadVersion)
+            {
+                DedicationLines = DedicationFormatter.FormatAll(dedications);
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
+        catch (Exception ex) //NOSONAR — dedication lines are best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Dedication load failed for entry {entryId}: {ex}");
+            if (version == _loadVersion)
+            {
+                DedicationLines = [];
+            }
+        }
     }
 
     /// <summary>
@@ -412,8 +460,17 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
-        await _navigationGate.RunAsync(() =>
-            _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+        try
+        {
+            await _navigationGate.RunAsync(() =>
+                _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Entry navigation failed for {uniqueName}: {ex}");
+        }
     }
 
     /// <summary>
@@ -430,6 +487,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
 
         _entryHistory.Push(UniqueName);
+        OnPropertyChanged(nameof(HasEntryHistory));
         UniqueName = uniqueName;
         await SwitchToCurrentEntryAsync();
     }
@@ -450,7 +508,16 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
-        await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        try
+        {
+            await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Category navigation failed for {route}: {ex}");
+        }
     }
 
     /// <summary>
@@ -460,17 +527,27 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [RelayCommand]
     public async Task GoBackAsync()
     {
-        await _goBackGate.RunAsync(async () =>
+        try
         {
-            if (_entryHistory.Count > 0)
+            await _goBackGate.RunAsync(async () =>
             {
-                UniqueName = _entryHistory.Pop();
-                await SwitchToCurrentEntryAsync();
-                return;
-            }
+                if (_entryHistory.Count > 0)
+                {
+                    UniqueName = _entryHistory.Pop();
+                    OnPropertyChanged(nameof(HasEntryHistory));
+                    await SwitchToCurrentEntryAsync();
+                    return;
+                }
 
-            await _navigator.GoToAsync("..");
-        });
+                await _navigator.GoToAsync("..");
+            });
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Back navigation failed: {ex}");
+        }
     }
 }
 

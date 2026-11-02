@@ -24,9 +24,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_HEAD: ${{ github.ref_name }}
+          PR_HEAD_SHA: ${{ github.sha }}
         run: |
-          # Stacked PRs may target another feature branch. They already own this head.
-          PR_EXISTS=$(gh pr list --state open --head "$PR_HEAD" --json number --jq 'length')
+          # Stacked PRs own the branch; a merged/closed PR owns its exact event head.
+          # Delayed jobs must not recreate a PR after its branch was deleted.
+          PR_HISTORY=$(gh pr list --state all --head "$PR_HEAD" --limit 100 --json state,headRefOid)
+          PR_EXISTS=$(printf '%s' "$PR_HISTORY" | node devops/github/ci/pr-head-already-owned.mjs "$PR_HEAD_SHA")
           echo "exists=$PR_EXISTS" >> $GITHUB_OUTPUT
 
       - name: Extract commit message
@@ -56,6 +59,7 @@ jobs:
           PR_TITLE: ${{ steps.commit-msg.outputs.title }}
           PR_BODY: ${{ steps.commit-msg.outputs.body }}
           PR_HEAD: ${{ github.ref_name }}
+          PR_HEAD_SHA: ${{ github.sha }}
         run: |
           # Use --body-file with stdin to avoid shell quoting issues with special characters
           if ! printf '%s\n' "$PR_BODY" | gh pr create \
@@ -64,7 +68,8 @@ jobs:
             --base master \
             --head "$PR_HEAD"; then
             # Another actor can create the PR after the initial existence check.
-            # Preserve real creation/API failures unless that exact PR now exists.
-            PR_EXISTS=$(gh pr list --state open --head "$PR_HEAD" --json number --jq 'length')
+            # Preserve real failures unless an open PR or this exact delivered head exists.
+            PR_HISTORY=$(gh pr list --state all --head "$PR_HEAD" --limit 100 --json state,headRefOid)
+            PR_EXISTS=$(printf '%s' "$PR_HISTORY" | node devops/github/ci/pr-head-already-owned.mjs "$PR_HEAD_SHA")
             if [ "$PR_EXISTS" -eq 0 ]; then exit 1; fi
           fi

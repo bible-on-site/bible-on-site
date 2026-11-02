@@ -21,7 +21,12 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     private readonly IAppNavigator _navigator;
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
+    private readonly IDedicationService _dedicationService;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Perek> _readerPerakim = new();
+
+    /// <summary>Serializes dedication loads so a fast perek flip cannot show a
+    /// stale perek's lines — the latest perek always wins (#2731).</summary>
+    private int _dedicationVersion;
 
     /// <summary>Reports whether a perek has downloaded recitation audio (production: RecitationService).</summary>
     private readonly Func<int, bool>? _hasPerekAudio;
@@ -187,6 +192,48 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
         RefreshRecitationAvailability(newValue);
+        if (newValue is null)
+        {
+            // Invalidate any in-flight dedication load for the previous perek.
+            ++_dedicationVersion;
+            DedicationLines = [];
+        }
+        else if (newValue.PerekId != oldValue?.PerekId)
+        {
+            _ = LoadDedicationsAsync(newValue.PerekId);
+        }
+    }
+
+    /// <summary>
+    /// The perek's dedication lines (#2731) — direct perek ranges plus
+    /// sefer/helek ancestors, resolved server-side. Best-effort secondary
+    /// content: a load failure shows no lines rather than failing the page.
+    /// </summary>
+    private async Task LoadDedicationsAsync(int perekId)
+    {
+        var version = ++_dedicationVersion;
+        // Clear eagerly — a swiped perek must never inherit its neighbour's lines.
+        DedicationLines = [];
+        try
+        {
+            var dedications = await _dedicationService.GetDedicationsAsync(
+                new DedicationContext { PerekIds = [perekId] }, CancellationToken.None);
+            if (version != _dedicationVersion || Perek?.PerekId != perekId)
+            {
+                return;
+            }
+            DedicationLines = DedicationFormatter.FormatAll(dedications);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
+        catch (Exception ex) //NOSONAR — dedication lines are best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Dedication load failed for perek {perekId}: {ex}");
+            if (version == _dedicationVersion)
+            {
+                DedicationLines = [];
+            }
+        }
     }
 
     /// <summary>
@@ -231,6 +278,16 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         PerekDataService? perekDataService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, IAppNavigator? navigator,
         IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio)
+        : this(preferencesService, perekLoader, perekDataService, catalogService, notesService,
+            navigator, fileSystem, share, hasPerekAudio, null)
+    {
+    }
+
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
+        PerekDataService? perekDataService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio,
+        IDedicationService? dedicationService)
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? (_ => null);
@@ -241,6 +298,7 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
         _hasPerekAudio = hasPerekAudio;
+        _dedicationService = dedicationService ?? DedicationService.Instance;
         _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
@@ -271,6 +329,15 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     // The default loader returns null — perek content is loaded asynchronously
     // through PerekDataService.LoadByPerekIdAsync() instead.
     #region Perek Properties
+
+#pragma warning disable MVVMTK0045
+    /// <summary>Formatted dedication lines applying to the displayed perek (#2731).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDedications))]
+    private List<string> _dedicationLines = [];
+#pragma warning restore MVVMTK0045
+
+    public bool HasDedications => DedicationLines.Count > 0;
 
     public int PerekId => Perek?.PerekId ?? 0;
 

@@ -1,12 +1,14 @@
 namespace BibleOnSite.Controls;
 
+using BibleOnSite.Helpers;
+
 /// <summary>
 /// The reader's notched bottom bar — perushim chevron, text-mode, articles
 /// (with count badge) and fullscreen buttons — shared by the perek, parasha
 /// and masora readers so the layer cannot drift.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
-public partial class ReaderBottomBar : Grid
+public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 #pragma warning restore S2333
 {
     /// <summary>Height of the bar before the safe-area inset is added.</summary>
@@ -62,7 +64,23 @@ public partial class ReaderBottomBar : Grid
     public ReaderBottomBar()
     {
         InitializeComponent();
+        // The bar fill is resolved from the requested theme inside
+        // BottomBarDrawable.Draw — repaint it when the theme flips (#2601).
+        if (Microsoft.Maui.Controls.Application.Current is { } app)
+        {
+            // Loaded/Unloaded so a re-presented bar re-subscribes and repaints
+            // with the theme that is active then.
+            Loaded += (_, _) =>
+            {
+                app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+                BarSurface.Invalidate();
+            };
+            Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
+        }
     }
+
+    private void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
+        BarSurface.Invalidate();
 
     private void ApplyBadgeCount(int count)
     {
@@ -84,10 +102,18 @@ public partial class ReaderBottomBar : Grid
     {
         PerushimChevronButton.IsEnabled = !isActive;
         PerushimChevronButton.Opacity = isActive ? 0.4 : 1;
-        var dark = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark;
-        ArticlesButton.TextColor = isActive
-            ? (dark ? Color.FromArgb("#BB86FC") : Color.FromArgb("#512BD4"))
-            : (dark ? Color.FromArgb("#9CA3AF") : Color.FromArgb("#6B7280"));
+        // Brand accent marks the active state, muted gray marks inactive.
+        // SetAppThemeColor keeps this live on theme flips.
+        if (isActive)
+        {
+            ArticlesButton.SetAppThemeColor(Button.TextColorProperty,
+                Color.FromArgb("#512BD4"), Color.FromArgb("#AACBFF"));
+        }
+        else
+        {
+            ArticlesButton.SetAppThemeColor(Button.TextColorProperty,
+                Color.FromArgb("#6B7280"), Color.FromArgb("#9CA3AF"));
+        }
     }
 
     private void OnPerushimChevronClicked(object? sender, EventArgs e) =>

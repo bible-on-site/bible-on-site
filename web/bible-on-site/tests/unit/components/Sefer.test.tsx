@@ -2,10 +2,22 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { BookmarkProvider } from "html-flip-book-react";
+import { renderPasukWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
 import { sampleImage } from "./perek-image-fixture";
 
+jest.mock("@/app/929/[number]/components/pasuk-renderer", () => {
+	const actual = jest.requireActual(
+		"@/app/929/[number]/components/pasuk-renderer",
+	);
+	return {
+		...actual,
+		renderPasukWithEntityRefs: jest.fn(actual.renderPasukWithEntityRefs),
+	};
+});
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
+var mockVisiblePageIndices: number[] | undefined;
 var mockPathname = "/929/1";
 jest.mock("next/navigation", () => ({
 	usePathname: () => mockPathname,
@@ -27,7 +39,9 @@ jest.mock("next/dynamic", () => {
 			}));
 			return (
 				<div data-testid="mock-flipbook">
-					{props.pages as React.ReactNode[]}
+					{(props.pages as React.ReactNode[]).filter(
+						(_page, index) => mockVisiblePageIndices?.includes(index) ?? true,
+					)}
 				</div>
 			);
 		});
@@ -61,6 +75,22 @@ jest.mock(
 			</button>
 		),
 		BookshelfIcon: () => <span>shelf</span>,
+		BookmarkToggleButton: ({
+			enabled,
+			onChange,
+			ariaLabel,
+		}: {
+			enabled: boolean;
+			onChange: (enabled: boolean) => void;
+			ariaLabel?: string;
+		}) => (
+			<button
+				type="button"
+				onClick={() => onChange(!enabled)}
+				aria-label={ariaLabel}
+				aria-pressed={enabled}
+			/>
+		),
 		DownloadDropdown: () => <div />,
 		FirstPageButton: () => <div />,
 		FullscreenButton: () => <div />,
@@ -185,6 +215,7 @@ import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
 import {
 	DEFAULT_SEFER_BOOKMARK_SETTINGS,
+	getSeferBookmarkSettings,
 	saveSeferBookmarkSettings,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
@@ -229,7 +260,136 @@ const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
 );
 
 describe("Sefer component", () => {
+	it("builds scripture only when its page enters the mounted book window", async () => {
+		const summaries = Promise.resolve({});
+		mockGetPerekSummariesBatch.mockReturnValueOnce(summaries);
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const sefer = {
+			...original,
+			perakim: [
+				chapter,
+				{
+					...chapter,
+					pesukim: [
+						{
+							segments: [
+								{
+									type: "qri" as const,
+									value: "בהמשך הספר",
+									recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+								},
+							],
+						},
+					],
+				},
+			],
+		};
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer,
+		};
+		mockVisiblePageIndices = [];
+		jest.mocked(renderPasukWithEntityRefs).mockClear();
+		const { rerender } = render(<SeferContents {...props} />);
+		await act(async () => {
+			await summaries;
+		});
+		expect(renderPasukWithEntityRefs).not.toHaveBeenCalled();
+		mockVisiblePageIndices = [3];
+		rerender(<SeferContents {...props} />);
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("בהמשך הספר")).not.toBeInTheDocument();
+		mockVisiblePageIndices = [5];
+		rerender(<SeferContents {...props} />);
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(2);
+		expect(screen.getByText("בהמשך הספר")).toBeInTheDocument();
+	});
+	it("does not rebuild scripture when background summaries arrive", async () => {
+		let finish!: (value: unknown) => void;
+		mockGetPerekSummariesBatch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2]}
+			/>,
+		);
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		await act(async () => finish({ "2": { articles: [], perushim: [] } }));
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("updates commentary selection without rebuilding scripture", () => {
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		const panel = () =>
+			(
+				capturedFlipBookProps.pages as React.ReactElement<{
+					children: React.ReactElement<{
+						initialSlug?: string;
+						onNavigate: (slug?: string) => void;
+					}>;
+				}>[]
+			)[4].props.children.props;
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		act(() => panel().onNavigate('רש"י'));
+		expect(panel().initialSlug).toBe('רש"י');
+		act(() => panel().onNavigate());
+		expect(panel().initialSlug).toBeUndefined();
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("refreshes scripture when the book corpus changes", () => {
+		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
+		const sefer = getSeferByName(minimalPerek.sefer);
+		const { rerender } = render(<SeferContents {...props} sefer={sefer} />);
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		const chapter =
+			"perakim" in sefer ? sefer.perakim[0] : sefer.additionals[0].perakim[0];
+		const changed = {
+			...sefer,
+			perakim: [
+				{
+					...chapter,
+					pesukim: [
+						{
+							segments: [
+								{
+									type: "qri" as const,
+									value: "חדש",
+									recordingTimeFrame: timeframe("00:00:00", "00:00:01"),
+								},
+							],
+						},
+					],
+				},
+			],
+		};
+		rerender(<SeferContents {...props} sefer={changed} />);
+		expect(
+			jest.mocked(renderPasukWithEntityRefs).mock.calls.length,
+		).toBeGreaterThan(renders);
+		expect(screen.getByText("חדש")).toBeInTheDocument();
+	});
+
 	beforeEach(() => {
+		mockVisiblePageIndices = undefined;
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
 		mockDownloadSefer.mockReset();
@@ -476,23 +636,7 @@ describe("Sefer component", () => {
 
 	describe("chapter tabs (#2543)", () => {
 		const provider = () =>
-			capturedFlipBookProps.bookmarkProvider as {
-				getBookmarks: (context: {
-					currentPageIndex: number;
-					currentLeafIndex: number;
-					direction: "ltr" | "rtl";
-				}) => readonly {
-					id: string;
-					pageIndex: number;
-					label: string;
-					data?: unknown;
-				}[];
-				placement?: string;
-				orientation?: string;
-				attachment?: string;
-				order?: unknown;
-				className?: string;
-			};
+			capturedFlipBookProps.bookmarkProvider as BookmarkProvider;
 
 		beforeEach(() => {
 			localStorage.clear();
@@ -530,6 +674,72 @@ describe("Sefer component", () => {
 			]);
 		});
 
+		it.each([
+			{ name: "בראשית", additional: undefined, chapter: "יב" },
+			{ name: "מלכים", additional: "א", chapter: "א יב" },
+			{ name: "מלכים", additional: "ב", chapter: "ב יב" },
+		])(
+			"keeps the expanded chapter reference scoped to $name $chapter",
+			({ name, additional, chapter }) => {
+				const perakim = Array.from({ length: 12 }, () => ({
+					header: "כותרת הפרק",
+					date: [],
+					star_rise: [],
+					pesukim: [],
+				}));
+				const metadata = {
+					name,
+					helek: name === "בראשית" ? "תורה" : "נביאים",
+					tanachUsName: name,
+					pesukimCount: 0,
+					perekFrom: 1,
+					perekTo: perakim.length,
+				};
+				const sefer: ComponentProps<typeof SeferContents>["sefer"] = additional
+					? {
+							...metadata,
+							perekTo: perakim.length * 2,
+							additionals: [
+								{ ...metadata, letter: "א", perakim },
+								{
+									...metadata,
+									letter: "ב",
+									perakim,
+									perekFrom: perakim.length + 1,
+									perekTo: perakim.length * 2,
+								},
+							],
+						}
+					: { ...metadata, perakim };
+				render(
+					<SeferContents
+						perekObj={{ ...minimalPerek, sefer: name }}
+						sefer={sefer}
+						articles={[]}
+						perushim={[]}
+					/>,
+				);
+				const p = provider();
+				const bookmark = p.getBookmarks({
+					currentPageIndex: 0,
+					currentLeafIndex: 0,
+					direction: "rtl",
+				})[additional === "ב" ? 23 : 11];
+				const { container } = render(p.renderExpandedBookmark?.(bookmark));
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-perek"),
+				).toHaveTextContent(`פרק ${chapter}`);
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-title"),
+				).toHaveTextContent("כותרת הפרק");
+				expect(container).not.toHaveTextContent(name);
+				expect(
+					container.querySelector(".sefer-bookmark-expanded-source"),
+				).toBeNull();
+				expect(bookmark.label).toBe(`${name} ${chapter} - כותרת הפרק`);
+			},
+		);
+
 		it("hides the tabs when סימניות is disabled", () => {
 			saveSeferBookmarkSettings({ enabled: false });
 			render(
@@ -540,6 +750,58 @@ describe("Sefer component", () => {
 					perekIds={[1]}
 				/>,
 			);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+		});
+
+		it("toggles the tabs from the toolbar through the shared persisted state", () => {
+			saveSeferBookmarkSettings({ placement: "top", upcomingOnly: true });
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			const hide = screen.getByRole("button", { name: "הסתרת סימניות" });
+			expect(hide).toHaveAttribute("aria-pressed", "true");
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+
+			fireEvent.click(hide);
+			// One persisted state drives the preference, the toolbar control and
+			// the library flag — and the display options survive the toggle.
+			expect(getSeferBookmarkSettings()).toMatchObject({
+				enabled: false,
+				placement: "top",
+				upcomingOnly: true,
+			});
+			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
+
+			// The control stays reachable while tabs are hidden so they can be
+			// shown again, now announcing the show action.
+			const show = screen.getByRole("button", { name: "הצגת סימניות" });
+			expect(show).toHaveAttribute("aria-pressed", "false");
+			fireEvent.click(show);
+			expect(getSeferBookmarkSettings().enabled).toBe(true);
+			expect(capturedFlipBookProps.enableBookmarks).toBe(true);
+		});
+
+		it("mirrors an external סימניות preference change in the toolbar control", () => {
+			render(
+				<Sefer
+					perekObj={minimalPerek}
+					articles={[]}
+					perushim={[]}
+					perekIds={[1]}
+				/>,
+			);
+			expect(
+				screen.getByRole("button", { name: "הסתרת סימניות" }),
+			).toBeInTheDocument();
+			act(() => saveSeferBookmarkSettings({ enabled: false }));
+			expect(
+				screen.getByRole("button", { name: "הצגת סימניות" }),
+			).toHaveAttribute("aria-pressed", "false");
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 		});
 
@@ -789,7 +1051,7 @@ describe("Sefer component", () => {
 		expect(result).toEqual({ ext: "pdf", data: "base64data" });
 	});
 
-	it("onDownloadSefer returns null on error", async () => {
+	it("onDownloadSefer resolves to null when the export is unavailable, and renders no app-side alert", async () => {
 		mockDownloadSefer.mockResolvedValue({ error: "not_implemented" });
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = capturedFlipBookProps.downloadConfig as {
@@ -798,9 +1060,9 @@ describe("Sefer component", () => {
 		await act(async () => {
 			expect(await config.onDownloadSefer()).toBeNull();
 		});
-		expect(screen.getByRole("alert")).toHaveTextContent(
-			"יצירת קובץ ה-PDF נכשלה",
-		);
+		// Errors surface inside the library's menu (role=alert on its own
+		// element); the app no longer renders a duplicate alert of its own.
+		expect(screen.queryByRole("alert")).toBeNull();
 	});
 
 	it.each([undefined, [], [1, 2]])(
@@ -833,23 +1095,34 @@ describe("Sefer component", () => {
 		},
 	);
 
-	it("shows a visible download error and clears it on a successful retry", async () => {
+	it("rejects a failed range export so the menu can show its error and retry", async () => {
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		const config = () =>
 			capturedFlipBookProps.downloadConfig as {
 				onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
+				onDownloadError: (error: unknown) => unknown;
 			};
 		mockDownloadPageRanges.mockResolvedValueOnce({
 			error: "service_unavailable",
 			message: "לא ניתן היה לטעון את האיור של בראשית ב",
 		});
+		let failure: unknown;
 		await act(async () => {
-			expect(
-				await config().onDownloadPageRange([3], [], { seferName: "בראשית" }),
-			).toBeNull();
+			failure = await config()
+				.onDownloadPageRange([3], [], { seferName: "בראשית" })
+				.then(
+					() => null,
+					(e) => e,
+				);
 		});
-		expect(screen.getByRole("alert")).toHaveTextContent(
+		// The rejection carries the action's safe message; the library shows it
+		// through onDownloadError inside the open menu with a retry path.
+		expect(failure).toBeInstanceOf(Error);
+		expect(config().onDownloadError(failure)).toBe(
 			"לא ניתן היה לטעון את האיור של בראשית ב",
+		);
+		expect(config().onDownloadError(new Error("internal"))).toBe(
+			"יצירת קובץ ה-PDF נכשלה. נסו להוריד שוב בעוד רגע.",
 		);
 
 		localStorage.setItem(
@@ -865,7 +1138,6 @@ describe("Sefer component", () => {
 				data: "ok",
 			});
 		});
-		expect(screen.queryByRole("alert")).toBeNull();
 		expect(mockDownloadPageRanges).toHaveBeenLastCalledWith([3], [], {
 			seferName: "בראשית",
 			divineNameMasking: expect.objectContaining({

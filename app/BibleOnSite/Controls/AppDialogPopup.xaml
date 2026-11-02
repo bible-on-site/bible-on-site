@@ -21,7 +21,7 @@
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="LineBreakMode" Value="WordWrap"/>
             <Setter Property="Padding" Value="0,10"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
         </Style>
         <Style x:Key="AppDialogDestructiveAction" TargetType="Button" BasedOn="{StaticResource AppDialogAction}">
             <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"/>

@@ -1,0 +1,161 @@
+name: Calendar PDF Artifacts
+
+# Owns the out-of-band half of #2608: the bounded month/year/cycle PDF set is
+# generated here — with a persistent, content-addressed cache — and published
+# to the public assets bucket under additive object keys, ending with the
+# manifest flip that lets /api/calendar-pdf redirect to them.
+#
+# Keeping full (re)generation in this workflow is deliberate: cold or broadly
+# invalidated runs can take minutes, and that cost must never land on the main
+# CI pipeline (main CI only runs the ~30s `check:calendar-pdf` verification).
+#
+# Rollback: artifacts are content-addressed and never deleted. Re-publishing a
+# prior manifest is a single object copy — archives are keyed by fingerprint +
+# manifest-content hash (manifest-<fp>-<sha12>.json), so distinct artifact sets
+# under one fingerprint keep distinct restorable copies:
+#   aws s3 cp s3://bible-on-site-assets/generated/calendar-pdf/manifest-<fp>-<sha12>.json \
+#             s3://bible-on-site-assets/generated/calendar-pdf/manifest.json
+
+on:
+  push:
+    branches: [master]
+    # Mirrors every fingerprinted input (see scripts/calendar-pdf-inputs.mjs)
+    # plus the package manifests that pin the hashed dependency versions.
+    paths:
+      - ".github/workflows/calendar-pdf-publish.yml"
+      - "web/bible-on-site/bun.lock"
+      - "web/bible-on-site/package.json"
+      - "web/bible-on-site/scripts/calendar-pdf-inputs.mjs"
+      - "web/bible-on-site/scripts/generate-calendar-pdfs.mts"
+      - "web/bible-on-site/scripts/generate-client-catalog.mjs"
+      - "web/bible-on-site/scripts/publish-calendar-pdfs.mts"
+      - "web/bible-on-site/src/data/db/cycles-types.ts"
+      - "web/bible-on-site/src/data/db/cycles.json"
+      - "web/bible-on-site/src/data/db/cycles.ts"
+      - "web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json"
+      - "web/bible-on-site/src/data/learning-schedule.ts"
+      - "web/bible-on-site/src/lib/download/**"
+      - "web/bible-on-site/src/util/hebdates-util.ts"
+  workflow_dispatch:
+    inputs:
+      extra_keys:
+        description: >-
+          Comma-separated extra canonical keys (month:YYYYMM / year:YYYY /
+          cycle:N) generated out of band on top of the bounded set.
+        required: false
+        type: string
+      publish_from_this_ref:
+        description: >-
+          Publish to S3 from this ref instead of generate-only. Intended for
+          pre-merge seeding: artifacts are content-addressed and nothing
+          references the manifest until the redirect route ships.
+        required: true
+        type: boolean
+        default: false
+
+# Publications are strictly ordered (objects verified before the manifest
+# flip); never let two runs interleave writes.
+concurrency:
+  group: calendar-pdf-artifacts
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # Required for OIDC authentication with AWS
+
+env:
+  WEBSITE_DIRECTORY: web/bible-on-site
+  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/bun.lock
+  WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+  S3_BUCKET: bible-on-site-assets
+
+jobs:
+  publish:
+    name: Generate and publish calendar PDFs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The generated catalog is a fingerprinted input — regenerate before
+      # hashing so the fingerprint always reflects current data.
+      - name: Generate client catalog
+        run: node scripts/generate-client-catalog.mjs
+
+      - name: Compute calendar-PDF input fingerprint
+        id: fp
+        run: echo "fingerprint=$(node scripts/calendar-pdf-inputs.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore calendar-PDF artifact cache
+        id: artifacts-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.cache/calendar-pdf
+          # Content-addressed key: a relevant-input change opens a new cache
+          # lineage while the previous one is still restored for partial
+          # regeneration (per-artifact input shas decide what re-renders).
+          key: ${{ runner.os }}-calendar-pdf-${{ steps.fp.outputs.fingerprint }}
+          restore-keys: ${{ runner.os }}-calendar-pdf-
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+
+      - name: Restore bun store cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-bun-website-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate artifacts
+        env:
+          # Dispatch input arrives via env, never interpolated into the script —
+          # this job can assume the AWS deploy role, so the input must never
+          # be evaluated as shell. The generator validates each key itself.
+          EXTRA_KEYS: ${{ inputs.extra_keys }}
+        run: |
+          if [ -n "$EXTRA_KEYS" ]; then
+            bun run generate:calendar-pdf -- --include "$EXTRA_KEYS"
+          else
+            bun run generate:calendar-pdf
+          fi
+
+      - name: Save artifact cache
+        if: ${{ steps.artifacts-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.cache/calendar-pdf
+          key: ${{ runner.os }}-calendar-pdf-${{ steps.fp.outputs.fingerprint }}
+
+      # Publishing requires the deploy role to carry the S3CalendarPdfArtifacts
+      # statement (docs/aws/cloudformation/github-oidc.yaml). Without it — or
+      # without the secret (forks) — the run still validates generation.
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' && (github.event_name == 'push' || inputs.publish_from_this_ref) }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Publish artifacts and manifest to S3
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' && (github.event_name == 'push' || inputs.publish_from_this_ref) }}
+        run: bun run publish:calendar-pdf -- --yes
+
+      - name: Publication skipped — missing AWS role or dispatch opt-in
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN == '' || (github.event_name == 'workflow_dispatch' && !inputs.publish_from_this_ref) }}
+        run: |
+          bun run publish:calendar-pdf
+          echo "::notice::Generation validated; publish skipped (no AWS_DEPLOY_ROLE_ARN or publish_from_this_ref=false)."

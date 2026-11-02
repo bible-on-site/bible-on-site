@@ -349,6 +349,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             {
                 builder.SetSpan(new URLSpan(url), span.Start, span.End, flags);
             }
+            if (span.Accent)
+            {
+                builder.SetSpan(new AccentColorSpan(), span.Start, span.End, flags);
+            }
         }
         return new RenderedContent(plan.Text, new SpannableString(builder));
     }
@@ -614,6 +618,23 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             var flags = builder.GetSpanFlags(urlSpan);
             builder.RemoveSpan(urlSpan);
             builder.SetSpan(new TanahLinkSpan(url, view), start, end, flags);
+        }
+    }
+
+    /// <summary>Paints a run with the view's resolved link color without any
+    /// link behavior — generated note-list markers share the inline
+    /// reference's color without inventing a link target (#2723). The color
+    /// resolves through <see cref="TextPaint.LinkColor"/> the same way
+    /// <see cref="ClickableSpan.UpdateDrawState"/> reads it, so it follows the
+    /// theme like a real link.</summary>
+    private sealed class AccentColorSpan : CharacterStyle
+    {
+        public override void UpdateDrawState(TextPaint? ds)
+        {
+            if (ds != null)
+            {
+                ds.Color = new Android.Graphics.Color(ds.LinkColor);
+            }
         }
     }
 

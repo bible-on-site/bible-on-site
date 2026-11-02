@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
+import { DedicationLines } from "@/app/components/dedications/DedicationLines";
 import { demoteHeadings } from "@/lib/html-headings";
 import articleStyles from "../[slug]/page.module.css";
 import { ShareButton } from "./ShareButton";
@@ -12,6 +13,9 @@ import styles from "./sefer.module.css";
 
 interface ArticleFullViewProps {
 	article: Article;
+	/** The article's own scope dedication lines (#2731) — the standalone
+	 * route renders the same set under its title. */
+	dedicationLines?: string[];
 	onBack: () => void;
 	/** When true, layout fills container: header fixed, body scrolls (flipbook blank page). */
 	fullPage?: boolean;
@@ -27,6 +31,7 @@ interface ArticleFullViewProps {
  */
 export function ArticleFullView({
 	article,
+	dedicationLines = [],
 	onBack,
 	fullPage = false,
 	fullscreen = false,
@@ -85,6 +90,10 @@ export function ArticleFullView({
 					</button>
 				)}
 			</header>
+
+			{/* The article's own dedication scope under its title — same slot
+			 * the standalone /929/{perek}/{article} route uses (#2731). */}
+			<DedicationLines lines={dedicationLines} compact />
 
 			{article.content && (
 				<div className={fullPage ? styles.articleBodyWrapper : undefined}>

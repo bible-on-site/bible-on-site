@@ -12,7 +12,7 @@
   padding: 20px 18px 24px 21px;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
   border: 1px solid #c7d2fe;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   border-right: 4px solid #6366f1;
   /* אחיד עם גופן הגוף (כולל עברית); ז/נ יורשים ולא נופלים ל־fallback במשקל כבד */
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
@@ -38,7 +38,7 @@
   margin: 0;
   text-align: center;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid #c7d2fe;
   box-shadow: 0 1px 4px rgba(99, 102, 241, 0.08);
 }
@@ -138,7 +138,7 @@
   max-width: 280px;
   padding: 12px 14px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid #e2e8f0;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
   text-align: center;
@@ -150,7 +150,7 @@
   max-width: 280px;
   padding: 12px 14px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid #818cf8;
   box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
   text-align: center;
@@ -166,7 +166,7 @@
 .cardCitationLine {
   font-size: 0.68rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   line-height: 1.4;
 }
 
@@ -186,7 +186,7 @@
   line-height: 1;
   color: #475569;
   border: 1px solid #cbd5e1;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 6px;
   background: #f8fafc;
 }
@@ -268,7 +268,7 @@
   text-align: center;
   font-size: 0.72rem;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
 }
 
 .relationRibbonMain {
@@ -278,7 +278,7 @@
 
 .relationRibbonSep {
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--muted-text, #94a3b8);
 }
 
 .relationRibbonSubRow {
@@ -317,7 +317,7 @@
 .relationRibbonMeta {
   font-size: 0.68rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   line-height: 1.4;
 }
 
@@ -660,7 +660,7 @@
   /* transparent: the family-tree surface (and the center connector line)
      shows through; a solid pill clashes with the section gradient */
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .spouseTierCards {
@@ -892,7 +892,7 @@
 .childTimelineCell .relationRibbonCitation,
 .childTimelineCell .relationRibbonCitationLine {
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 2px 4px;
 }
 
@@ -904,14 +904,14 @@
   align-items: center;
   justify-content: center;
   border: 1px dashed #cbd5e1;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: #f8fafc;
 }
 
 .marriageColumnLooseTitle {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   letter-spacing: 0.04em;
 }
 
@@ -1020,7 +1020,7 @@
     position: relative;
     z-index: 2;
     background: transparent;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -1057,7 +1057,7 @@
   position: relative;
   z-index: 2;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* פריסה אנכית מוכללת (מסכים צרים): כל הקשרים על ציר אנכי אחד — הורים, מוקד,
@@ -1152,7 +1152,7 @@
   /* transparent: no line passes behind in the stacked layout, and a solid pill
      clashes with the section gradient */
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .matrixMobileStack {
@@ -1289,7 +1289,7 @@
   .relationRibbon,
   .relationRibbonMeta,
   .marriageColumnLooseTitle {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .sexMark {
@@ -1324,7 +1324,7 @@
   }
 
   .relationRibbonSep {
-    color: #64748b;
+    color: var(--muted-text, #64748b);
   }
 
   .citationTanachLink {

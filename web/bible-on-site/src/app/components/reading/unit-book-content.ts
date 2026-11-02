@@ -58,11 +58,13 @@ export function unitBookContentSlug(
  * Parses the selected in-book content from a book route. Both the
  * public Hebrew root ("/מסורה", "/פרשה") and its ASCII route dir
  * ("/masora", "/parasha") are accepted so popstate and internal routes
- * resolve identically.
+ * resolve identically. The default unit segment is the decimal unitId;
+ * divisions with named public slugs pass `unitIdFor` (issue #2738).
  */
 export function unitBookContentFromRoute(
 	route: string,
 	rootPaths: string | readonly string[],
+	unitIdFor?: (segment: string) => number | null,
 ): UnitBookContent | null {
 	const [pathname, query = ""] = route.split("?");
 	const params = new URLSearchParams(query);
@@ -74,11 +76,9 @@ export function unitBookContentFromRoute(
 			decoded.startsWith(`${candidate}/`) || decoded === candidate,
 	);
 	if (!root || decoded === root) return null;
-	const unitId = Number.parseInt(
-		decoded.slice(root.length + 1).split("/")[0],
-		10,
-	);
-	if (!Number.isInteger(unitId) || unitId < 1) return null;
+	const segment = decoded.slice(root.length + 1).split("/")[0];
+	const unitId = unitIdFor ? unitIdFor(segment) : Number.parseInt(segment, 10);
+	if (unitId === null || !Number.isInteger(unitId) || unitId < 1) return null;
 	return {
 		unitId,
 		haftara: params.has("haftara"),
@@ -118,7 +118,7 @@ export function unitBookContentHref(
  */
 export function writeUnitBookContentHistory(
 	rootPath: string,
-	unitId: number,
+	unitSegment: string | number,
 	scope: UnitBookScope,
 	kind?: UnitBookContentKind,
 	slug?: string,
@@ -131,7 +131,7 @@ export function writeUnitBookContentHistory(
 	params.delete(unitBookContentParam(scope, "perush"));
 	params.delete(unitBookContentParam(scope, "article"));
 	if (kind && slug) params.set(unitBookContentParam(scope, kind), slug);
-	const route = `${rootPath}/${unitId}?${params.toString()}`;
+	const route = `${rootPath}/${unitSegment}?${params.toString()}`;
 	const state = { ...history.state, route };
 	const method = replace
 		? History.prototype.replaceState

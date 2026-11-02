@@ -56,6 +56,10 @@ const ClientWrapper = (props: {
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
 	imagesByPerek?: Record<number, PerekIllustration[]>;
+	/** Sefer-scoped dedication lines for the book cover (#2731). */
+	seferDedications?: string[];
+	/** Perek-scoped dedication lines by canonical perek id (#2731). */
+	perekDedications?: Record<number, string[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -74,9 +78,23 @@ const ClientWrapper = (props: {
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState("none");
+	const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	const handleToggle = useCallback(
 		(wantBook: boolean, immediately = false) => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
 			if (wantBook) {
 				// Show the overlay immediately so the toggle animation is responsive.
 				setDisplay("initial");
@@ -92,7 +110,8 @@ const ClientWrapper = (props: {
 				if (immediately) {
 					setDisplay("none");
 				} else {
-					setTimeout(() => {
+					hideTimerRef.current = setTimeout(() => {
+						hideTimerRef.current = null;
 						setDisplay("none");
 					}, 300);
 				}
@@ -145,11 +164,7 @@ const ClientWrapper = (props: {
 			const search = wantBook
 				? searchParams.toString()
 				: window.location.search;
-			const next = pathnameWithBookQuery(
-				togglePath,
-				search,
-				wantBook,
-			);
+			const next = pathnameWithBookQuery(togglePath, search, wantBook);
 			router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},
@@ -215,6 +230,8 @@ const ClientWrapper = (props: {
 						perekIds={props.perekIds}
 						entityRefsByPerek={props.entityRefsByPerek}
 						imagesByPerek={props.imagesByPerek}
+						seferDedications={props.seferDedications}
+						perekDedications={props.perekDedications}
 						initialSlug={props.initialSlug}
 						initialBookPage={initialBookPage}
 						isVisible={currentlyToggled}

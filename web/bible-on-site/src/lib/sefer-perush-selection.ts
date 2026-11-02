@@ -1,8 +1,7 @@
 /**
  * Sefer-view perush selection (#2544): which perushim the commentary panel
  * shows. The user's selection is the Tanach-wide default; a sefer may carry
- * an explicit override that takes over for that sefer alone until it is
- * cleared back to inheriting.
+ * a saved selection that takes over when returning to that sefer.
  *
  * Stored ids are stable perush identities (the `id` from PerushSummary), not
  * names — a name edit in the catalog must not silently drop a selection.
@@ -118,9 +117,8 @@ export function resolveSeferPerushSelection(seferName: string): {
 }
 
 /**
- * Writes the current sefer's selection. While the sefer inherits, a change
- * updates the shared global default (one selection follows the user across
- * the Tanach); once overridden, changes stay scoped to that sefer.
+ * Saves a selection automatically for this sefer and as the default for new
+ * sefarim. Previously visited sefarim retain their own saved selections.
  */
 export function setSeferPerushSelection(
 	seferName: string,
@@ -128,11 +126,8 @@ export function setSeferPerushSelection(
 ): void {
 	const stored = getStoredSeferPerushSelection();
 	const normalized = normalizeIds(ids);
-	if (seferName in stored.sefer) {
-		stored.sefer[seferName] = normalized;
-	} else {
-		stored.global = normalized;
-	}
+	stored.global = normalized;
+	stored.sefer[seferName] = normalized;
 	writeSelection(stored);
 }
 

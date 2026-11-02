@@ -62,7 +62,11 @@ public class ParashaViewModelTests
                 // Never touch RecitationService.Instance — its lazy filesystem
                 // singleton has no host in a unit-test process.
                 hasPerekAudio ?? (_ => false),
-                hebrewDateProvider, null, null, null);
+                hebrewDateProvider, null, null, null,
+                // No-op stub — Unit changes fire a best-effort dedication
+                // load, and a real endpoint must never be hit from unit
+                // tests (#2731).
+                StubDedicationService.Instance);
         }
 
         /// <summary>
