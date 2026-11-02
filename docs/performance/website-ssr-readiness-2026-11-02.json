@@ -1,0 +1,409 @@
+{
+	"purpose": "Diagnose first SSR initialization that blocks concurrent requests after critical-data readiness",
+	"publishedWebsite": "0.2.604",
+	"publishedSource": "d377abd1a9ee4e540d0bf068f5ff1605911bd053",
+	"publishedAMD64Manifest": "sha256:0205169d3681a3d252e2addd7c022e89b734d6131c9f2a526b75e31347821100",
+	"capacity": {
+		"cpus": 0.5,
+		"memoryMiB": 2048
+	},
+	"fixture": {
+		"publicTables": 92,
+		"publicRows": 348659,
+		"readOnlyWebsiteUser": true,
+		"productionWrites": false,
+		"removedAfterEachExperiment": true
+	},
+	"admission": {
+		"criticalRoutes": [
+			"/api/health/ready",
+			"/api/recitation",
+			"/api/recitation/2"
+		],
+		"healthIntervalSeconds": 30,
+		"healthTimeoutSeconds": 10,
+		"healthStartPeriodSeconds": 120,
+		"healthRetries": 5,
+		"perRouteCurlSeconds": 3,
+		"waitedForHealthyBeforeMeasuredBurst": true
+	},
+	"requestBudgetMs": 2000,
+	"requestRetries": 0,
+	"coldBurstConcurrency": 4,
+	"profiler": "Node V8 CPU sampling, attached only to owned local diagnostic process",
+	"diagnosticComparison": "Identical published image and full copied data; the treatment preloads the traced jsdom dependency with node --require jsdom before starting Next. The repository fix warms DOMPurify itself during readiness. Native qualification of the new published source remains required.",
+	"baseline": {
+		"diagnosticOnly": true,
+		"qualificationPassed": false,
+		"cold": [
+			{
+				"path": "/api/health/ready",
+				"bytes": 0,
+				"headersMs": null,
+				"elapsedMs": 2005.5294999999999,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"failed": true,
+				"error": "Absolute2sDeadline"
+			},
+			{
+				"path": "/929/authors",
+				"bytes": 0,
+				"headersMs": null,
+				"elapsedMs": 2002.9602000000002,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"failed": true,
+				"error": "Absolute2sDeadline"
+			},
+			{
+				"path": "/pedia",
+				"bytes": 0,
+				"headersMs": null,
+				"elapsedMs": 2002.6691,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"failed": true,
+				"error": "Absolute2sDeadline"
+			},
+			{
+				"path": "/calendar",
+				"bytes": 19,
+				"headersMs": 102.58559999999994,
+				"elapsedMs": 102.9214,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 308
+			}
+		],
+		"hot": [
+			{
+				"path": "/api/health/ready",
+				"bytes": 81,
+				"headersMs": 701.4093999999996,
+				"elapsedMs": 701.6207999999997,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/929/authors",
+				"bytes": 21105,
+				"headersMs": 914.8229000000001,
+				"elapsedMs": 991.9798000000001,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/pedia",
+				"bytes": 11338,
+				"headersMs": 901.2222000000002,
+				"elapsedMs": 914.0088000000001,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/calendar",
+				"bytes": 19,
+				"headersMs": 801.8678999999997,
+				"elapsedMs": 802.0596,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 308
+			}
+		],
+		"cpuProfileMicros": 2350744,
+		"topSelfCpuMs": [
+			{
+				"frame": "wrapSafe node:internal/modules/cjs/loader:1857",
+				"ms": 751.266
+			},
+			{
+				"frame": "(program) :-1",
+				"ms": 399.968
+			},
+			{
+				"frame": "compileSourceTextModule node:internal/modules/esm/utils:337",
+				"ms": 197.832
+			},
+			{
+				"frame": "(garbage collector) :-1",
+				"ms": 141.24
+			},
+			{
+				"frame": "ModuleWrap :-1",
+				"ms": 80.609
+			},
+			{
+				"frame": "preprocessAtrules file:///app/node_modules/css-tree/cjs/data.cjs:11",
+				"ms": 78.285
+			},
+			{
+				"frame": "Lexer file:///app/node_modules/css-tree/cjs/lexer/Lexer.cjs:105",
+				"ms": 71.447
+			},
+			{
+				"frame": "parse :-1",
+				"ms": 67.131
+			},
+			{
+				"frame": "createContext node:vm:225",
+				"ms": 64.55
+			},
+			{
+				"frame": " node:internal/modules/cjs/loader:2115",
+				"ms": 63.269
+			},
+			{
+				"frame": " node:internal/modules/cjs/loader:783",
+				"ms": 61.978
+			},
+			{
+				"frame": "resolvePackageTarget node:internal/modules/esm/resolve:448",
+				"ms": 57.639
+			},
+			{
+				"frame": "readFileUtf8 :-1",
+				"ms": 21.144
+			},
+			{
+				"frame": "internalModuleStat :-1",
+				"ms": 20.233
+			},
+			{
+				"frame": "instantiateModule file:///app/.next/server/chunks/ssr/[turbopack]_runtime.js:1004",
+				"ms": 19.198
+			},
+			{
+				"frame": " file:///app/node_modules/jsdom/lib/jsdom/living/css/CSSStyleProperties-impl.js:0",
+				"ms": 14.989
+			},
+			{
+				"frame": "realpathSync node:fs:3357",
+				"ms": 10.894
+			},
+			{
+				"frame": " node:internal/modules/cjs/loader:1918",
+				"ms": 7.436
+			},
+			{
+				"frame": "(idle) :-1",
+				"ms": 6.068
+			},
+			{
+				"frame": " node:internal/modules/cjs/loader:1340",
+				"ms": 6.035
+			},
+			{
+				"frame": "readPackageJSON :-1",
+				"ms": 5.728
+			},
+			{
+				"frame": "mix file:///app/node_modules/css-tree/cjs/syntax/config/mix.cjs:37",
+				"ms": 4.781
+			},
+			{
+				"frame": " file:///app/node_modules/@asamuzakjp/css-color/dist/esm/index.js:0",
+				"ms": 4.522
+			},
+			{
+				"frame": "resolveSync node:internal/modules/esm/loader:743",
+				"ms": 4.423
+			}
+		]
+	},
+	"jsdomPreloaded": {
+		"diagnosticOnly": true,
+		"qualificationPassed": false,
+		"cold": [
+			{
+				"path": "/api/health/ready",
+				"bytes": 81,
+				"headersMs": 523.6429,
+				"elapsedMs": 523.8504,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/929/authors",
+				"bytes": 21105,
+				"headersMs": 1099.8111,
+				"elapsedMs": 1195.8201,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/pedia",
+				"bytes": 11338,
+				"headersMs": 999.2992000000002,
+				"elapsedMs": 1099.0992,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/calendar",
+				"bytes": 19,
+				"headersMs": 27.749500000000012,
+				"elapsedMs": 28.075800000000015,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 308
+			}
+		],
+		"hot": [
+			{
+				"path": "/api/health/ready",
+				"bytes": 81,
+				"headersMs": 86.98399999999992,
+				"elapsedMs": 87.30169999999998,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/929/authors",
+				"bytes": 21105,
+				"headersMs": 87.63360000000011,
+				"elapsedMs": 89.85789999999997,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/pedia",
+				"bytes": 11338,
+				"headersMs": 95.86170000000016,
+				"elapsedMs": 99.00940000000014,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 200
+			},
+			{
+				"path": "/calendar",
+				"bytes": 19,
+				"headersMs": 2.044300000000021,
+				"elapsedMs": 2.123399999999947,
+				"originalBudgetMs": 2000,
+				"retries": 0,
+				"status": 308
+			}
+		],
+		"cpuProfileMicros": 1459310,
+		"topSelfCpuMs": [
+			{
+				"frame": "(program) :-1",
+				"ms": 204.187
+			},
+			{
+				"frame": "(idle) :-1",
+				"ms": 161.848
+			},
+			{
+				"frame": "exports.installInterfaces file:///app/node_modules/jsdom/lib/jsdom/living/interfaces.js:255",
+				"ms": 103.927
+			},
+			{
+				"frame": "(garbage collector) :-1",
+				"ms": 103.154
+			},
+			{
+				"frame": "a.s.@context file:///app/.next/server/chunks/ssr/src_lib_seo_opengraph_ts_0fgkg9q85viy5._.js:0",
+				"ms": 90.72
+			},
+			{
+				"frame": "Stream node:internal/streams/legacy:10",
+				"ms": 90.467
+			},
+			{
+				"frame": "runInAsyncScope node:async_hooks:218",
+				"ms": 89.371
+			},
+			{
+				"frame": " file:///app/.next/server/chunks/ssr/node_modules_next_dist_0joxsz2q5dh6c._.js:11",
+				"ms": 84.941
+			},
+			{
+				"frame": "module.exports.b.exports.shiftjis.type file:///app/.next/server/chunks/ssr/_1mwyybrj7fif8._.js:0",
+				"ms": 70.769
+			},
+			{
+				"frame": " file:///app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:1",
+				"ms": 64.212
+			},
+			{
+				"frame": "c.createLRU file:///app/.next/server/chunks/ssr/_1mwyybrj7fif8._.js:0",
+				"ms": 62.03
+			},
+			{
+				"frame": "onEof file:///app/node_modules/parse5/dist/parser/index.js:1061",
+				"ms": 56.288
+			},
+			{
+				"frame": " file:///app/.next/server/chunks/ssr/_1mwyybrj7fif8._.js:4",
+				"ms": 51.625
+			},
+			{
+				"frame": "instantiateModule file:///app/.next/server/chunks/ssr/[turbopack]_runtime.js:1004",
+				"ms": 35.759
+			},
+			{
+				"frame": "getTimeZoneDateTimeFormatter file:///app/.next/server/chunks/ssr/src_util_hebdates-util_ts_1o6he24iww_vd._.js:0",
+				"ms": 11.953
+			},
+			{
+				"frame": "wrapSafe node:internal/modules/cjs/loader:1857",
+				"ms": 6.547
+			},
+			{
+				"frame": "ez file:///app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:14",
+				"ms": 3.355
+			},
+			{
+				"frame": "module.exports.c.NOT_NULL file:///app/.next/server/chunks/ssr/_1mwyybrj7fif8._.js:0",
+				"ms": 3.19
+			},
+			{
+				"frame": "ac file:///app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:1",
+				"ms": 2.386
+			},
+			{
+				"frame": "get file:///app/node_modules/next/dist/server/lib/incremental-cache/file-system-cache.js:104",
+				"ms": 2.248
+			},
+			{
+				"frame": " file:///app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:17",
+				"ms": 2.243
+			},
+			{
+				"frame": "al file:///app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:1",
+				"ms": 2.217
+			},
+			{
+				"frame": "wrappedFn node:internal/errors:541",
+				"ms": 2.214
+			},
+			{
+				"frame": "rJ file:///app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:17",
+				"ms": 2.207
+			}
+		]
+	},
+	"cpuProfileSHA256": {
+		"baseline": "7b6c20f4cb5f50b57c0b8d79261a7742fcea4275d193425000b88d4fcd0f53c3",
+		"jsdomPreloaded": "721015572b72ee46eca23b0cb2dc1b15e0b44c84aeb43f183c7a933c25e3d4c0"
+	},
+	"observations": {
+		"baselineColdTimeouts": 3,
+		"treatmentColdTimeouts": 0,
+		"treatmentColdMaximumMs": 1195.8201,
+		"treatmentHotMaximumMs": 99.00940000000014,
+		"calendarContract": "/calendar remains an HTTP308 alias; full qualification separately requests the canonical Hebrew calendar path."
+	},
+	"AWSChanges": false,
+	"productionArchitectureChanged": false
+}

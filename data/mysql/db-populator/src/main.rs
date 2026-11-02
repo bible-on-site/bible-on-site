@@ -297,6 +297,9 @@ async fn main() -> Result<()> {
         // tables and adds the scope link tables; runs after the Tanahpedia
         // structure so the entry link FK resolves.
         apply_dedication_upgrade(&mut conn, base_path).await?;
+
+        // Website push subscriptions (#1096); standalone, idempotent table.
+        apply_web_push_upgrade(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -341,6 +344,9 @@ async fn main() -> Result<()> {
 
         // Same for the dedication scope/expiry upgrade (#2731).
         apply_dedication_upgrade(&mut conn, base_path).await?;
+
+        // Same for the web push subscriptions table (#1096).
+        apply_web_push_upgrade(&mut conn, base_path).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -597,6 +603,17 @@ async fn apply_reading_metrics_upgrade(conn: &mut MySqlConnection, base_path: &P
         conn,
         &base_path.join("../tanah_reading_metrics_upgrade.sql"),
         "reading-metrics-upgrade",
+    )
+    .await
+}
+
+/// Creates the website push-subscription table (#1096). Idempotent and
+/// non-destructive, so it runs in both phases.
+async fn apply_web_push_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_web_push_upgrade.sql"),
+        "web-push-upgrade",
     )
     .await
 }
@@ -1436,6 +1453,13 @@ SELECT 1";
             ] {
                 assert_eq!(table_count(&mut conn, table).await?, 0, "{table}");
             }
+
+            apply_web_push_upgrade(&mut conn, base_path).await?;
+            apply_web_push_upgrade(&mut conn, base_path).await?;
+            assert_eq!(
+                table_count(&mut conn, "tanah_web_push_subscription").await?,
+                0
+            );
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())

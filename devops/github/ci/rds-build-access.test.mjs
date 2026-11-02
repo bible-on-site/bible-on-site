@@ -377,7 +377,7 @@ test("manifest replay passes the derived database URL as literal data", () => {
 	const script = step
 		.slice(start + marker.length)
 		.split("\n")
-		.map((line) => line.replace(/^          /, ""))
+		.map((line) => line.replace(/^ {10}/, ""))
 		.join("\n");
 	const url = "mysql://root:test_123@127.0.0.1:3306/db$(unsafe)";
 	const shell =
@@ -391,9 +391,13 @@ test("manifest replay passes the derived database URL as literal data", () => {
 			"-c",
 			String.raw`python3() { printf '%s\0' "$@"; }; unsafe() { printf INJECTION_EXECUTED; };` +
 				"\n" +
-				script.replace("${{ steps.dump_prod.outputs.local_db_url }}", url),
+				script,
 		],
-		{ encoding: "utf8", timeout: 5000, env: { ...process.env, LOCAL_DB_URL: url } },
+		{
+			encoding: "utf8",
+			timeout: 5000,
+			env: { ...process.env, LOCAL_DB_URL: url },
+		},
 	);
 	assert.ifError(result.error);
 	assert.equal(result.status, 0, result.stderr);
@@ -408,3 +412,109 @@ test("manifest replay passes the derived database URL as literal data", () => {
 		url,
 	]);
 });
+
+function productionDumpScript() {
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/shared-dockerize.yml", import.meta.url),
+		"utf8",
+	).replace(/\r\n/g, "\n");
+	const step = workflow
+		.split("      - name: Dump production data into local MySQL\n")[1]
+		?.split("      - name: Replay the deploy manifest on the local dump\n")[0];
+	assert.ok(step, "The real production dump step must exist");
+	const marker = "        run: |\n";
+	assert.ok(step.includes(marker));
+	return step
+		.slice(step.indexOf(marker) + marker.length)
+		.split("\n")
+		.map((line) => line.replace(/^ {10}/, ""))
+		.join("\n");
+}
+
+function dumpFixture(t, failures = {}) {
+	const dir = mkdtempSync(join(tmpdir(), "rds-tls-fixture "));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const env = {
+		...process.env,
+		CURL_EXIT: "0",
+		DUMP_EXIT: "0",
+		IMPORT_EXIT: "0",
+		RUNNER_TEMP: dir.replace(/\\/g, "/"),
+		GITHUB_OUTPUT: join(dir, "output").replace(/\\/g, "/"),
+		CURL_ARGS: join(dir, "curl.args").replace(/\\/g, "/"),
+		DUMP_ARGS: join(dir, "dump.args").replace(/\\/g, "/"),
+		IMPORT_ARGS: join(dir, "import.args").replace(/\\/g, "/"),
+		IMPORTED_SQL: join(dir, "import.sql").replace(/\\/g, "/"),
+		...failures,
+	};
+	const shell =
+		process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+	const stub = String.raw`
+python3() { case "$*" in *u.hostname*) printf 'db.fixture.example 3306 ci fixture\n';; *) printf 'fixture-password';; esac; }
+curl() { printf '%s\0' "$@" > "$CURL_ARGS"; return "$CURL_EXIT"; }
+mysqldump() { printf '%s\0' "$@" > "$DUMP_ARGS"; printf 'CREATE DATABASE fixture;\n'; return "$DUMP_EXIT"; }
+mysql() { printf '%s\0' "$@" > "$IMPORT_ARGS"; cat > "$IMPORTED_SQL"; return "$IMPORT_EXIT"; }
+`;
+	const result = spawnSync(
+		shell,
+		["--noprofile", "--norc", "-e", "-c", stub + productionDumpScript()],
+		{ env, encoding: "utf8", timeout: 5000 },
+	);
+	assert.ifError(result.error);
+	return {
+		result,
+		env,
+		args: (file) => readFileSync(file, "utf8").split("\0").filter(Boolean),
+	};
+}
+
+test("production export overrides setup-mysql's local CA and verifies the RDS hostname", (t) => {
+	const f = dumpFixture(t);
+	assert.equal(f.result.status, 0, f.result.stderr);
+	const bundle = `${f.env.RUNNER_TEMP}/rds-ca-bundle.pem`;
+	assert.deepEqual(f.args(f.env.CURL_ARGS), [
+		"--fail",
+		"--silent",
+		"--show-error",
+		"--proto",
+		"=https",
+		"--tlsv1.2",
+		"https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem",
+		"--output",
+		bundle,
+	]);
+	const dump = f.args(f.env.DUMP_ARGS);
+	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
+	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
+	assert.ok(dump.includes("--single-transaction"));
+	assert.ok(dump.includes("--ignore-table=fixture.note"));
+	assert.deepEqual(f.args(f.env.IMPORT_ARGS), [
+		"-h",
+		"127.0.0.1",
+		"-u",
+		"root",
+		"-ptest_123",
+	]);
+	assert.match(
+		readFileSync(f.env.IMPORTED_SQL, "utf8"),
+		/CREATE DATABASE fixture;/,
+	);
+	assert.equal(
+		readFileSync(f.env.GITHUB_OUTPUT, "utf8"),
+		"local_db_url=mysql://root:test_123@127.0.0.1:3306/fixture\n",
+	);
+});
+
+for (const [stage, failure] of [
+	["CA download", { CURL_EXIT: "22" }],
+	["production dump", { DUMP_EXIT: "2" }],
+	["local import", { IMPORT_EXIT: "1" }],
+]) {
+	test(`failed ${stage} prevents manifest replay handoff`, (t) => {
+		const f = dumpFixture(t, failure);
+		assert.notEqual(f.result.status, 0);
+		assert.throws(() => readFileSync(f.env.GITHUB_OUTPUT), { code: "ENOENT" });
+		if (failure.CURL_EXIT)
+			assert.throws(() => readFileSync(f.env.DUMP_ARGS), { code: "ENOENT" });
+	});
+}

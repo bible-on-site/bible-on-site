@@ -593,7 +593,7 @@ describe("cached loader tag contracts", () => {
 			if (seferId === undefined) throw new Error(`Unknown sefer: ${name}`);
 			await getSeferPerekDedicationLines(seferId);
 			const tags = stampedTags(
-				"sefer-perek-dedication-lines-v2",
+				"sefer-perek-dedication-lines-v3",
 				String(seferId),
 			);
 			expect(tags.length).toBeLessThanOrEqual(128);
@@ -623,7 +623,7 @@ describe("cached loader tag contracts", () => {
 			"../../../src/lib/dedications/loaders"
 		);
 		await getSeferPerekDedicationLines(BERESHIT_SEFER_ID);
-		const tags = stampedTags("sefer-perek-dedication-lines-v2", "1");
+		const tags = stampedTags("sefer-perek-dedication-lines-v3", "1");
 		expect(tags).toEqual(["dedications", "sefer:1:perek-dedications"]);
 	});
 
@@ -646,14 +646,14 @@ describe("cached loader tag contracts", () => {
 			"../../../src/lib/dedications/loaders"
 		);
 		expect(await getSeferPerekDedicationLines(25)).toEqual({
-			717: ["מוקדש לlast chapter"],
+			717: ["last chapter"],
 		});
 		await getPerekDedications(717);
-		const tags = stampedTags("sefer-perek-dedication-lines-v2", "25");
+		const tags = stampedTags("sefer-perek-dedication-lines-v3", "25");
 		expect(tags).toEqual(["dedications", "sefer:25:perek-dedications"]);
 		expect(tags.length).toBeLessThanOrEqual(128);
 		expect(
-			stampedOpts("sefer-perek-dedication-lines-v2", "25")?.revalidate,
+			stampedOpts("sefer-perek-dedication-lines-v3", "25")?.revalidate,
 		).toBe(false);
 
 		const { resolveEntityChanges } = await import(
@@ -725,10 +725,10 @@ describe("getSeferPerekDedicationLines", () => {
 			dedication: [{ id: 10, subject: "one dedication", expires_at: null }],
 		});
 		expect(await load(1)).toEqual({
-			1: ["מוקדש לone dedication"],
-			2: ["מוקדש לone dedication"],
-			3: ["מוקדש לone dedication"],
-			4: ["מוקדש לone dedication"],
+			1: ["one dedication"],
+			2: ["one dedication"],
+			3: ["one dedication"],
+			4: ["one dedication"],
 		});
 	});
 
@@ -754,9 +754,9 @@ describe("getSeferPerekDedicationLines", () => {
 		});
 		const map = await load(BERESHIT_SEFER_ID);
 		expect(map[1]).toBeUndefined();
-		expect(map[2]).toEqual(["מוקדש לראובן בן יקוט (לרפואה)"]);
-		expect(map[3]).toEqual(["מוקדש לראובן בן יקוט (לרפואה)"]);
-		expect(map[4]).toEqual(["מוקדש לראובן בן יקוט (לרפואה)"]);
+		expect(map[2]).toEqual(["לרפואת ראובן בן יקוט"]);
+		expect(map[3]).toEqual(["לרפואת ראובן בן יקוט"]);
+		expect(map[4]).toEqual(["לרפואת ראובן בן יקוט"]);
 		expect(map[5]).toBeUndefined();
 	});
 
@@ -827,8 +827,8 @@ describe("getSeferPerekDedicationLines", () => {
 			],
 		});
 		const map = await load(BERESHIT_SEFER_ID);
-		expect(map[7]).toEqual(["מוקדש לa", "מוקדש לb"]);
-		expect(map[8]).toEqual(["מוקדש לb"]);
+		expect(map[7]).toEqual(["a", "b"]);
+		expect(map[8]).toEqual(["b"]);
 	});
 });
 
@@ -951,27 +951,30 @@ describe("getBookshelfDedicationLines", () => {
 			"../../../src/lib/dedications/loaders"
 		);
 		const lines = await getBookshelfDedicationLines();
-		expect(lines.bySefer.בראשית).toEqual(['מוקדש לראובן (לע"נ)']);
-		expect(lines.byHelek.תורה).toEqual(["מוקדש לשמעון"]);
+		expect(lines.bySefer.בראשית).toEqual(['לע"נ ראובן']);
+		expect(lines.byHelek.תורה).toEqual(["שמעון"]);
 	});
 });
 
 describe("formatDedication", () => {
-	it("joins purposes in parentheses after the subject", () => {
-		expect(
-			formatDedication({ subject: "מרדכי בן זאב", purposes: ['לע"נ'] }),
-		).toBe('מוקדש למרדכי בן זאב (לע"נ)');
-	});
-
-	it("omits the parentheses when no purposes exist", () => {
-		expect(formatDedication({ subject: "יעל בת רחל", purposes: [] })).toBe(
-			"מוקדש ליעל בת רחל",
-		);
-	});
-
-	it("skips blank purposes", () => {
-		expect(formatDedication({ subject: "x", purposes: ["  ", 'לע"נ'] })).toBe(
-			'מוקדש לx (לע"נ)',
-		);
+	// Shared wording contract (#2849) — the same table drives the admin
+	// preview and native DedicationFormatter tests.
+	it.each([
+		["לרפואה", ["לרפואה"], "מזל בת רחל", "לרפואת מזל בת רחל"],
+		["רפואה שלימה", ["רפואה שלימה"], "מזל בת רחל", "לרפואת מזל בת רחל"],
+		["already normalized לרפואת", ["לרפואת"], "ראובן בן יקוט", "לרפואת ראובן בן יקוט"],
+		["padded healing variant", ["  רפואה   שלמה "], "מזל בת רחל", "לרפואת מזל בת רחל"],
+		['לע"נ', ['לע"נ'], "יעל בת רחל", 'לע"נ יעל בת רחל'],
+		["legacy gershayim", ["לע״נ"], "יעל בת רחל", 'לע"נ יעל בת רחל'],
+		["no purposes", [], "יעל בת רחל", "יעל בת רחל"],
+		["blank purposes only", ["  ", ""], "יעל בת רחל", "יעל בת רחל"],
+		["multiple and custom purposes", ["רפואה שלימה", "להצלחת"], "מזל בת רחל", "לרפואת ולהצלחת מזל בת רחל"],
+		["duplicate healing variants", ["לרפואה", "רפואה שלימה"], "מזל בת רחל", "לרפואת מזל בת רחל"],
+		["subject starting with ל kept exactly", ["לרפואה"], "לאה בת שרה", "לרפואת לאה בת שרה"],
+	])("renders %s purpose-first", (_case, purposes, subject, expected) => {
+		const line = formatDedication({ subject, purposes });
+		expect(line).toBe(expected);
+		expect(line).not.toContain("מוקדש");
+		expect(line).not.toMatch(/[()]/);
 	});
 });

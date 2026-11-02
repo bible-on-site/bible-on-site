@@ -76,6 +76,23 @@ public static class MauiProgram
 #endif
             });
 
+#if WINDOWS
+        // Readable Narrator names for every CollectionView row (#2766).
+        Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
+            {
+                ListItemAutomationNames.Attach(list);
+            }
+        });
+        Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
+            {
+                ListItemAutomationNames.Attach(list);
+            }
+        });
+#endif
 #if ANDROID
         // Increase CarouselView's internal RecyclerView cache so pre-rendered views
         // aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
