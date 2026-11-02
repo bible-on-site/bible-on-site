@@ -7,6 +7,7 @@
  * available.
  */
 
+import { setImmediate } from "node:timers/promises";
 import { entryHref } from "@/lib/tanahpedia/synonym-resolution";
 import { searchPerakim, searchPesukim } from "./corpus";
 import {
@@ -80,40 +81,10 @@ export async function searchSite(
 		failedTypes.add(type);
 	};
 
-	// In-memory providers run synchronously, then DB providers run concurrently.
+	// Start database work before scoring the in-memory corpora. Yield once
+	// after scheduling it so pooled queries can reach MySQL while the CPU
+	// scores scripture, instead of adding both costs to the request latency.
 	const tasks: Promise<void>[] = [];
-	if (types.includes("perek")) {
-		try {
-			add(
-				"perek",
-				searchPerakim(phrase, limit).map(({ entry, score }) => ({
-					type: "perek" as const,
-					title: entry.source,
-					snippetHtml: searchSnippet(entry.header, phrase),
-					href: `/929/${entry.perekId}`,
-					score,
-				})),
-			);
-		} catch (error) {
-			fail("perek", error);
-		}
-	}
-	if (types.includes("pasuk")) {
-		try {
-			add(
-				"pasuk",
-				searchPesukim(phrase, limit).map(({ entry, score }) => ({
-					type: "pasuk" as const,
-					title: entry.reference,
-					snippetHtml: searchSnippet(entry.text, phrase),
-					href: `/929/${entry.perekId}#pasuk-${entry.pasukNum}`,
-					score,
-				})),
-			);
-		} catch (error) {
-			fail("pasuk", error);
-		}
-	}
 	if (types.includes("perush")) {
 		tasks.push(
 			searchPerushNotes(phrase, limit)
@@ -192,6 +163,39 @@ export async function searchSite(
 				)
 				.catch((error) => fail("tanahpedia", error)),
 		);
+	}
+	if (tasks.length > 0) await setImmediate();
+	if (types.includes("perek")) {
+		try {
+			add(
+				"perek",
+				searchPerakim(phrase, limit).map(({ entry, score }) => ({
+					type: "perek" as const,
+					title: entry.source,
+					snippetHtml: searchSnippet(entry.header, phrase),
+					href: `/929/${entry.perekId}`,
+					score,
+				})),
+			);
+		} catch (error) {
+			fail("perek", error);
+		}
+	}
+	if (types.includes("pasuk")) {
+		try {
+			add(
+				"pasuk",
+				searchPesukim(phrase, limit).map(({ entry, score }) => ({
+					type: "pasuk" as const,
+					title: entry.reference,
+					snippetHtml: searchSnippet(entry.text, phrase),
+					href: `/929/${entry.perekId}#pasuk-${entry.pasukNum}`,
+					score,
+				})),
+			);
+		} catch (error) {
+			fail("pasuk", error);
+		}
 	}
 	await Promise.all(tasks);
 	// Provider completion depends on database scheduling. Keep section order,
