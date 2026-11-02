@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import sqlite3
 import sys
 import tempfile
@@ -180,6 +181,23 @@ class LambdaParserSafetyTests(unittest.TestCase):
         self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|REPLACE|CREATE)\b")
         for subject in ("מרדכי בן זאב", "יעל בת רחל", "מזל בת רחל", "עלושה בת גֿזלה", "ראובן בן יקוט"):
             self.assertIn(subject, processed)
+
+    def test_external_reference_schema_precedes_its_seed_and_never_drops(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        for name in ("perushim_data.sql", "tanahpedia_seed_data.sql", "external_reference_structure.sql"):
+            self.assertLess(manifest.index(name), manifest.index("external_reference_data.sql"))
+        structure = LAMBDA.preprocess_sql((ROOT / "data/mysql/external_reference_structure.sql").read_text(encoding="utf-8"))
+        self.assertRegex(structure, r"CREATE TABLE IF NOT EXISTS `external_reference`")
+        self.assertNotRegex(structure, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
+        path = ROOT / "data/mysql/external_reference_data.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        seed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
+        # 2 session settings + PARSHAN rebuild (DELETE + INSERT) + entity upsert.
+        self.assertEqual(len(LAMBDA.parse_statements(seed)), 5)
+        # Only the regenerated PARSHAN rows are ever wiped.
+        self.assertEqual([m.strip() for m in re.findall(r"(?im)^\s*DELETE\b.*$", seed)], ["DELETE FROM external_reference WHERE subject_kind = 'PARSHAN';"])
+        self.assertNotRegex(seed, r"(?im)^\s*(?:DROP|TRUNCATE|CREATE)\b")
+        self.assertNotIn("'TANAH_AUTHOR'", seed)
 
     def test_mention_schema_is_in_manifest_and_remains_one_additive_statement(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
