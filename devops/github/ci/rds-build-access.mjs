@@ -18,6 +18,16 @@ function awsCli(args) {
 	);
 }
 
+function githubCli(endpoint) {
+	return JSON.parse(
+		execFileSync("gh", ["api", "--method", "GET", endpoint], {
+			encoding: "utf8",
+			timeout: 20_000,
+			maxBuffer: 4 * 1024 * 1024,
+		}),
+	);
+}
+
 export function runnerIpv4(value) {
 	const ip = value.trim();
 	if (isIP(ip) !== 4)
@@ -243,6 +253,205 @@ export async function cleanupAccess(env, { aws = awsCli } = {}) {
 	);
 }
 
+/** Read the exact completed attempt, including every job before allowing cleanup. */
+export async function completedBuildRun(env, { github = githubCli } = {}) {
+	const repository = env.GITHUB_REPOSITORY;
+	const run = env.RDS_BUILD_TARGET_RUN_ID;
+	const attempt = env.RDS_BUILD_TARGET_RUN_ATTEMPT;
+	if (
+		!/^[\w.-]+\/[\w.-]+$/.test(repository ?? "") ||
+		repository.split("/").some((part) => part === "." || part === "..") ||
+		!/^[1-9]\d*$/.test(run ?? "") ||
+		!/^[1-9]\d*$/.test(attempt ?? "")
+	)
+		throw new Error("Invalid completed build identity");
+	const prefix = `repos/${repository}/actions/runs/${run}/attempts/${attempt}`;
+	const metadata = await github(prefix);
+	if (
+		String(metadata.id) !== run ||
+		String(metadata.run_attempt) !== attempt ||
+		metadata.name !== "Continuous Integration" ||
+		metadata.path?.split("@")[0] !== ".github/workflows/ci.yml" ||
+		metadata.repository?.full_name !== repository ||
+		metadata.head_repository?.full_name !== repository ||
+		metadata.status !== "completed" ||
+		!metadata.conclusion ||
+		!/^[a-f0-9]{40}$/.test(metadata.head_sha ?? "")
+	)
+		throw new Error("Cleanup requires the repository's completed CI attempt");
+	const jobs = [];
+	const ids = new Set();
+	let total;
+	for (let page = 1; page <= 10; page++) {
+		const result = await github(`${prefix}/jobs?per_page=100&page=${page}`);
+		total ??= result.total_count;
+		if (
+			!Number.isSafeInteger(total) ||
+			total < 0 ||
+			total > 1_000 ||
+			result.total_count !== total ||
+			!Array.isArray(result.jobs) ||
+			result.jobs.length > 100
+		)
+			throw new Error("Invalid CI job inventory");
+		for (const job of result.jobs) {
+			if (
+				!Number.isSafeInteger(job.id) ||
+				ids.has(job.id) ||
+				String(job.run_id) !== run ||
+				String(job.run_attempt) !== attempt ||
+				job.head_sha !== metadata.head_sha ||
+				job.status !== "completed" ||
+				!job.conclusion
+			)
+				throw new Error(
+					"CI jobs are active, incomplete or belong to another attempt",
+				);
+			ids.add(job.id);
+			jobs.push(job);
+		}
+		if (jobs.length === total)
+			return { repository, run, attempt, source: metadata.head_sha, jobs };
+		if (jobs.length > total || result.jobs.length === 0)
+			throw new Error("Incomplete CI job inventory");
+	}
+	throw new Error("CI job inventory exceeds the cleanup bound");
+}
+
+function recoveryRules(response) {
+	if (!Array.isArray(response?.SecurityGroupRules) || response.NextToken)
+		throw new Error("Missing or incomplete build access rule inventory");
+	return response.SecurityGroupRules;
+}
+
+async function databaseGroups(aws, account) {
+	const database = await aws([
+		"rds",
+		"describe-db-instances",
+		"--db-instance-identifier",
+		"tanah-mysql",
+	]);
+	const instance = database.DBInstances?.[0];
+	if (
+		database.Marker ||
+		database.DBInstances?.length !== 1 ||
+		instance.DBInstanceIdentifier !== "tanah-mysql" ||
+		instance.DBInstanceArn !==
+			`arn:aws:rds:${REGION}:${account}:db:tanah-mysql` ||
+		!Array.isArray(instance.VpcSecurityGroups) ||
+		!instance.VpcSecurityGroups.length
+	)
+		throw new Error("Unexpected database security group inventory");
+	const groups = instance.VpcSecurityGroups.map((group) => {
+		if (
+			group.Status !== "active" ||
+			!/^sg-(?:[a-f0-9]{8}|[a-f0-9]{17})$/.test(group.VpcSecurityGroupId)
+		)
+			throw new Error("Unexpected database security group");
+		return group.VpcSecurityGroupId;
+	});
+	if (new Set(groups).size !== groups.length)
+		throw new Error("Duplicate database security group");
+	return groups;
+}
+
+function recoveryLease(rule, group, account, build) {
+	const tags = new Map((rule.Tags ?? []).map(({ Key, Value }) => [Key, Value]));
+	const expected = {
+		account,
+		region: REGION,
+		group,
+		run: build.run,
+		attempt: build.attempt,
+	};
+	const lease = {
+		...expected,
+		job: tags.get("Job"),
+		nonce: tags.get("BuildLease"),
+		ip: rule.CidrIpv4?.split("/")[0],
+		cidr: rule.CidrIpv4,
+		ruleId: rule.SecurityGroupRuleId,
+	};
+	if (
+		lease.job !== "package" ||
+		!build.jobs.some((job) =>
+			/^Package Website(?: ARM64)? \/ Package$/.test(job.name),
+		)
+	)
+		throw new Error("Rule does not belong to a completed website build");
+	validateLease(lease, expected);
+	validateRule(rule, lease);
+	return lease;
+}
+
+async function completedBuildLeases(aws, groups, account, build) {
+	const leases = [];
+	for (const group of groups) {
+		const rules = recoveryRules(
+			await aws([
+				"ec2",
+				"describe-security-group-rules",
+				"--filters",
+				`Name=group-id,Values=${group}`,
+				`Name=tag:Source,Values=${SOURCE}`,
+				`Name=tag:RunId,Values=${build.run}`,
+				`Name=tag:RunAttempt,Values=${build.attempt}`,
+			]),
+		);
+		for (const rule of rules) {
+			leases.push(recoveryLease(rule, group, account, build));
+		}
+	}
+	if (
+		leases.length > 2 ||
+		new Set(leases.map((lease) => lease.nonce)).size !== leases.length
+	)
+		throw new Error("Ambiguous website build access ownership");
+	return leases;
+}
+
+/** Recover access even when a lost runner could not execute its post steps. */
+export async function cleanupCompletedBuild(
+	env,
+	{ aws = awsCli, github = githubCli } = {},
+) {
+	const build = await completedBuildRun(env, { github });
+	if (env.AWS_REGION !== REGION) throw new Error("Unexpected AWS region");
+	const account = deploymentAccount(env.RDS_BUILD_ACCESS_ROLE);
+	await checkAccount(aws, account);
+	const groups = await databaseGroups(aws, account);
+	// Validate the entire inventory before revoking any rule.
+	const leases = await completedBuildLeases(aws, groups, account, build);
+	const removed = [];
+	for (const lease of leases) {
+		const query = [
+			"ec2",
+			"describe-security-group-rules",
+			"--filters",
+			`Name=group-id,Values=${lease.group}`,
+			`Name=security-group-rule-id,Values=${lease.ruleId}`,
+		];
+		const fresh = recoveryRules(await aws(query));
+		if (!fresh.length) continue;
+		if (fresh.length !== 1) throw new Error("Ambiguous build access rule");
+		validateRule(fresh[0], lease);
+		const result = await aws([
+			"ec2",
+			"revoke-security-group-ingress",
+			"--group-id",
+			lease.group,
+			"--security-group-rule-ids",
+			lease.ruleId,
+		]);
+		if (result.Return !== true)
+			throw new Error("AWS did not confirm build access removal");
+		if (recoveryRules(await aws(query)).length)
+			throw new Error("Build access rule still present after removal");
+		removed.push(lease.ruleId);
+	}
+	return { run: build.run, attempt: build.attempt, removed };
+}
+
 export function databaseHost(value) {
 	let url;
 	try {
@@ -274,8 +483,24 @@ if (
 			case "host":
 				console.log(databaseHost(process.env.PROD_DB_URL));
 				break;
+			case "check-run": {
+				const build = await completedBuildRun(process.env);
+				console.log(
+					JSON.stringify({
+						run: build.run,
+						attempt: build.attempt,
+						completedJobs: build.jobs.length,
+					}),
+				);
+				break;
+			}
+			case "cleanup-run":
+				console.log(JSON.stringify(await cleanupCompletedBuild(process.env)));
+				break;
 			default:
-				throw new Error("Usage: rds-build-access.mjs grant|cleanup|host");
+				throw new Error(
+					"Usage: rds-build-access.mjs grant|cleanup|host|check-run|cleanup-run",
+				);
 		}
 	} catch (error) {
 		console.error(error.message);
