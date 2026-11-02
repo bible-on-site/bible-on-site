@@ -7,10 +7,14 @@ of 0.25 vCPU and 2 GiB. Repeated delivery work, first-use page-cache work and
 CPU throttling deserve attention before treating a capacity increase as the
 only solution. Calendar PDF rendering has already moved off this request path.
 
-Implementation is queued for Devin in
-[#2949](https://github.com/bible-on-site/bible-on-site/issues/2949), on the
-website project with the `Devin Backlog` label. This report is investigation
-evidence; that task owns the implementation and its separately approved rollout.
+The RCA is partial: the cached-page experiment does not identify every
+production CPU consumer, particularly database-backed commentary and server
+actions. On November 2, Dorad clarified that Devin has no AWS access and
+must receive only defined implementation fixes after the required RCA.
+The investigation/choice task has therefore been withdrawn from Devin.
+Codex owns [#2949](https://github.com/bible-on-site/bible-on-site/issues/2949)
+and the [0.5-vCPU capacity increase](../../aws/website-cpu-capacity/README.md).
+That operational change requires approval of its specific PR before application.
 
 ## Production observations
 
@@ -101,6 +105,9 @@ Containers run locally on Docker Desktop/Linux amd64 with 2 GiB memory,
 256 or 512 CPU units equivalent, and no production credentials or database
 access. Node's inspector samples the main thread. Linux cgroup v1 counters
 and per-thread CPU ticks provide separate total-CPU and throttling evidence.
+Docker CPU quotas approximate the requested allocation; they are not an exact
+model of Fargate CPU shares. The throttled-period counts describe the local
+containers and do not prove that production was throttled by that mechanism.
 The default image health command is disabled in the experiment; the harness
 sends its own independent liveness checks. No workload is replayed against
 production.
@@ -176,12 +183,17 @@ Repeated requests can hide it. Existing startup checks warm health,
 readiness and recitation routes; they do not warm the thousands of page
 cache entries exercised by crawlers and reader navigation.
 
-## Implementation decision
+## Current implementation decision
 
-The implementation task should first remove or relocate avoidable request
-work. Evaluate compression on the existing proxy or bounded precompression,
-and reduce measured first-use page-cache/payload work where the profile
-supports it. Preserve compressed delivery of HTML **and** `text/x-component`,
+Proceed with the [Codex-owned capacity increase](../../aws/website-cpu-capacity/README.md)
+from 0.25 to 0.5 vCPU, retaining 2 GiB, one task and the existing architecture.
+No further AWS investigation or capacity decision is delegated to Devin.
+
+Compression relocation, bounded precompression and reducing first-use page-cache
+or payload work remain candidate optimizations, not fully diagnosed production
+fixes. A future implementation delegation needs a completed scoped RCA,
+an exact code change and a local reproduction that does not require AWS access.
+Such a fix must preserve compressed delivery of HTML **and** `text/x-component`,
 cache variation, conditional GET/HEAD, ranges, RSC navigation and invalidation.
 Next.js explicitly supports handing compression to a separately configured
 server: [compression configuration](https://nextjs.org/docs/app/api-reference/config/next-config-js/compress).
@@ -197,9 +209,9 @@ dynamic commentary/server-action paths separately against an isolated local
 database. Production-wide CPU attribution still needs those paths; this
 experiment establishes a sufficient cached-page delivery mechanism.
 
-If the best safe implementation still misses the retained latency target,
-prepare a **0.5-vCPU / 2-GiB** website alternative with an equivalent fresh
-container comparison, immutable image identity and rollback. The one-minute
+The selected **0.5-vCPU / 2-GiB** increase uses the existing fresh-container
+comparison and the separate capacity plan's immutable image and rollback
+requirements. It is a capacity mitigation, not completion of the RCA. The one-minute
 service average understates brief throttled bursts; see
 [AWS task sizing guidance](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/capacity-tasksize.html).
 
