@@ -215,17 +215,12 @@ partial class Build
                 Serilog.Log.Information($"Copied {aab.Name} to {ArtifactsDirectory}");
             }
 
-            // Play Console wants the unstripped .so set (ABI dirs at zip root)
-            // for native crash symbolication; the AAB itself ships stripped libs.
-            var objDir = MainProject.Parent / "obj" / Configuration;
-            var sharedLibsDir = objDir
-                .GlobDirectories("**/app_shared_libraries")
-                .FirstOrDefault()
-                ?? throw new InvalidOperationException(
-                    $"app_shared_libraries not found under {objDir}");
+            // Select the published framework/RID, never a stale sibling build.
+            var sharedLibsDir = MainProject.Parent / "obj" / Configuration /
+                "net10.0-android" / "android-arm64" / "app_shared_libraries";
             var symbolsZip = ArtifactsDirectory /
                 $"{aabFiles.First().Name.Replace("-Signed.aab", "")}-native-symbols.zip";
-            ZipFile.CreateFromDirectory(sharedLibsDir.ToString(), symbolsZip.ToString());
+            AndroidNativeSymbols.Create(sharedLibsDir, ArtifactsDirectory / aabFiles.First().Name, symbolsZip);
             Serilog.Log.Information($"Created native symbols zip {symbolsZip.Name}");
         }
         else
