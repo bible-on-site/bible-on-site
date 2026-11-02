@@ -507,6 +507,7 @@ const Sefer = (props: {
 
 	// Keep scripture independent of async summaries and commentary selection.
 	// Those updates must not rebuild or reconcile every word in the book.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the stale-read exclusion is intentional - scripture must not rebuild when background summaries or the current perek's metrics resolve
 	const scripturePages = useMemo(
 		() =>
 			perakim.map((perek, perekIdx) => {
@@ -676,8 +677,6 @@ const Sefer = (props: {
 			articles,
 			perushim,
 			batchSummaries,
-			perekMetric,
-			perekPasukUnits,
 			hebrewDateStr,
 			seferPerekTitles,
 			contentNavigation.content,
