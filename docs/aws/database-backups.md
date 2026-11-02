@@ -34,7 +34,12 @@ administrator. No cross-account protection is claimed.
 
 The existing owned-rule helper grants this job's runner IPv4 `/32` access to
 port 3306 and removes only its tagged rule in an `always()` cleanup step. The
-role is scoped to the RDS security group and `Job=backup` rules. Initial
+role's network permissions are scoped to the RDS security group. EC2 authorizes
+revocation on that group and cannot enforce rule-tag ownership in IAM: the
+trusted cleanup helper validates account, group, exact rule ID, TCP port 3306,
+runner `/32` and all lease tags before removing its rule. The role could revoke
+other rules in that one group if its credentials or trusted workflow were
+compromised; it has no revocation grant for other groups. Initial
 preflight checks the account, RDS engine, source credential, attached security
 group and S3 protection before that grant. A changed security group fails closed
 and requires the workflow/role parameters to be updated together.
@@ -101,7 +106,9 @@ changes. Use existing SSO profile `AdministratorAccess-250598594267` and verify
    in a `finally` cleanup. If credential storage fails, remove only the newly
    created backup user; application credentials are preserved.
 3. Verify that the writer's policies restrict SSM to that one parameter, S3 to
-   the new bucket/prefixes and ingress cleanup to its own backup-tagged rules.
+   the new bucket/prefixes and network changes to the verified database group.
+   Recheck the helper's complete lease ownership validation before cleanup;
+   per-rule revocation ownership is enforced by that code, not IAM.
    Set repository variable `PRODUCTION_BACKUPS_ENABLED=true` only after the
    merged workflow's checks pass. Before this variable exists, every scheduled
    and manual backup job is skipped.
@@ -194,4 +201,5 @@ a claim of a production S3 upload, IAM authorization or production-data restore.
 
 References: [mysqldump privileges and snapshot limits](https://dev.mysql.com/doc/refman/8.4/en/mysqldump.html),
 [S3 Object Lock and lifecycle](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock-managing.html),
+[EC2 action and resource authorization](https://docs.aws.amazon.com/service-authorization/latest/reference/list_ec2.html),
 [GitHub scheduled-event limits](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).

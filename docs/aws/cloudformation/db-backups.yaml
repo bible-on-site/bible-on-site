@@ -165,6 +165,8 @@ Resources:
                     aws:RequestTag/Source: github-actions-build
                     aws:RequestTag/Job: backup
               - Sid: RevokeFromDatabaseGroupOnly
+                # EC2 authorizes revocation on the group, not tagged rule ARNs.
+                # The existing helper verifies the complete owned lease before revoke.
                 Effect: Allow
                 Action: ec2:RevokeSecurityGroupIngress
                 Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${RdsSecurityGroupId}
@@ -185,15 +187,6 @@ Resources:
                     ec2:CreateAction: AuthorizeSecurityGroupIngress
                     aws:RequestTag/Source: github-actions-build
                     aws:RequestTag/Job: backup
-              - Sid: RevokeOnlyBackupRules
-                Effect: Allow
-                Action: ec2:RevokeSecurityGroupIngress
-                Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group-rule/*
-                Condition:
-                  StringEquals:
-                    ec2:ResourceTag/Source: github-actions-build
-                    ec2:ResourceTag/Job: backup
-
 Outputs:
   BucketName:
     Value: !Ref BackupBucket
