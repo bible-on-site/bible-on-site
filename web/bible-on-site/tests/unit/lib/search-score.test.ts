@@ -20,6 +20,38 @@ describe("maxEdits", () => {
 });
 
 describe("editDistance", () => {
+	it("preserves bounded Levenshtein results for every one-edit operation", () => {
+		const words = [""];
+		let level = [""];
+		for (let size = 0; size < 4; size++) {
+			level = level.flatMap((word) => [`${word}א`, `${word}ב`]);
+			words.push(...level);
+		}
+		words.push("בראשית", "בראשת", "בראישית", "בראשים", "😀", "😁", "a😀");
+		const reference = (left: string, right: string) => {
+			const rows = Array.from({ length: left.length + 1 }, (_, i) =>
+				Array.from({ length: right.length + 1 }, (_, j) => (i === 0 ? j : i)),
+			);
+			for (let i = 1; i <= left.length; i++) {
+				for (let j = 1; j <= right.length; j++) {
+					rows[i][j] = Math.min(
+						rows[i - 1][j] + 1,
+						rows[i][j - 1] + 1,
+						rows[i - 1][j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
+					);
+				}
+			}
+			return rows[left.length][right.length];
+		};
+		for (const left of words) {
+			for (const right of words) {
+				expect(editDistance(left, right, 1)).toBe(
+					Math.min(reference(left, right), 2),
+				);
+			}
+		}
+	});
+
 	it("returns the Levenshtein distance within the limit", () => {
 		expect(editDistance("בראשית", "בראשית", 2)).toBe(0);
 		expect(editDistance("בראשית", "בראשים", 1)).toBe(1);
