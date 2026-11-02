@@ -161,6 +161,10 @@
           "type": "string",
           "description": "Android keystore password"
         },
+        "AndroidSymbolsPath": {
+          "type": "string",
+          "description": "Path to native debug symbols zip for Google Play upload"
+        },
         "ApiEnv": {
           "type": "string",
           "description": "API environment: dev (local) or prod (remote). Default: dev"
