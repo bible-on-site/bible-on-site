@@ -237,27 +237,9 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
     let mut q = y;
     orthonormalize(&mut q, n_docs, sketch);
     // B = Qᵀ·A — sketch × terms
-    let mut b = vec![0.0f32; sketch * n_terms];
-    for (d, doc) in docs.iter().enumerate() {
-        for &(tid, w) in doc {
-            for j in 0..sketch {
-                b[j * n_terms + tid as usize] += q[d * sketch + j] * w;
-            }
-        }
-    }
+    let b = compressed_matrix(docs, &q, n_terms, sketch);
     // Eigen-decompose B·Bᵀ (sketch × sketch) → U_b and σ².
-    let mut bbt = vec![0.0f32; sketch * sketch];
-    for i in 0..sketch {
-        for j in i..sketch {
-            let mut acc = 0.0f64;
-            for t in 0..n_terms {
-                acc += (b[i * n_terms + t] as f64) * (b[j * n_terms + t] as f64);
-            }
-            let v = acc as f32;
-            bbt[i * sketch + j] = v;
-            bbt[j * sketch + i] = v;
-        }
-    }
+    let bbt = gram_matrix(&b, n_terms, sketch);
     let (eigenvalues, eigenvectors) = jacobi_eigendecomposition(&bbt, sketch);
     // Order directions by descending eigenvalue; keep numerically non-zero ones.
     let mut order: Vec<usize> = (0..sketch).collect();
@@ -272,51 +254,165 @@ fn randomized_svd(docs: &[SparseVector], n_terms: usize, sketch: usize) -> Optio
         .filter(|&j| eigenvalues[j] > max_sigma * max_sigma * 1e-7)
         .take(MAX_DIMS)
         .collect();
-    // V = Bᵀ·U_b·Σ⁻¹ for the kept directions → terms × k.
-    let k = keep.len();
-    let mut v = vec![0.0f32; n_terms * k];
-    for (col, &j) in keep.iter().enumerate() {
-        let sigma = eigenvalues[j].max(f32::EPSILON).sqrt();
-        let inv_sigma = 1.0 / sigma;
-        for t in 0..n_terms {
-            let mut acc = 0.0f32;
-            for i in 0..sketch {
-                acc += b[i * n_terms + t] * eigenvectors[i * sketch + j];
+    Some(project_basis(
+        &b,
+        n_terms,
+        sketch,
+        &eigenvalues,
+        &eigenvectors,
+        &keep,
+    ))
+}
+
+/// Four independent Gram cells share the same ascending term scan.
+/// Each accumulator retains the scalar f64 addition order; no partial sums.
+fn gram_matrix(b: &[f32], n_terms: usize, sketch: usize) -> Vec<f32> {
+    let mut gram = vec![0.0f32; sketch * sketch];
+    for i in 0..sketch {
+        let row = &b[i * n_terms..(i + 1) * n_terms];
+        let mut j = i;
+        while j + 4 <= sketch {
+            let row0 = &b[j * n_terms..(j + 1) * n_terms];
+            let row1 = &b[(j + 1) * n_terms..(j + 2) * n_terms];
+            let row2 = &b[(j + 2) * n_terms..(j + 3) * n_terms];
+            let row3 = &b[(j + 3) * n_terms..(j + 4) * n_terms];
+            let (mut acc0, mut acc1, mut acc2, mut acc3) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+            for t in 0..n_terms {
+                let value = row[t] as f64;
+                acc0 += value * (row0[t] as f64);
+                acc1 += value * (row1[t] as f64);
+                acc2 += value * (row2[t] as f64);
+                acc3 += value * (row3[t] as f64);
             }
-            v[t * k + col] = acc * inv_sigma;
+            for (offset, value) in [acc0 as f32, acc1 as f32, acc2 as f32, acc3 as f32]
+                .into_iter()
+                .enumerate()
+            {
+                gram[i * sketch + j + offset] = value;
+                gram[(j + offset) * sketch + i] = value;
+            }
+            j += 4;
+        }
+        // Keep the scalar path for the partial output block.
+        for j in j..sketch {
+            let mut acc = 0.0f64;
+            for t in 0..n_terms {
+                acc += (row[t] as f64) * (b[j * n_terms + t] as f64);
+            }
+            let value = acc as f32;
+            gram[i * sketch + j] = value;
+            gram[j * sketch + i] = value;
         }
     }
-    Some(v)
+    gram
+}
+
+/// Accumulate each term contiguously, then transpose without arithmetic.
+/// Every matrix cell keeps the original document/entry addition order.
+fn compressed_matrix(docs: &[SparseVector], q: &[f32], n_terms: usize, sketch: usize) -> Vec<f32> {
+    let mut term_major = vec![0.0f32; n_terms * sketch];
+    for (d, doc) in docs.iter().enumerate() {
+        let q_row = &q[d * sketch..(d + 1) * sketch];
+        for &(tid, weight) in doc {
+            let row = &mut term_major[tid as usize * sketch..(tid as usize + 1) * sketch];
+            for (value, coefficient) in row.iter_mut().zip(q_row) {
+                *value += *coefficient * weight;
+            }
+        }
+    }
+    let mut b = vec![0.0f32; n_terms * sketch];
+    const TERM_BLOCK: usize = 32;
+    for start in (0..n_terms).step_by(TERM_BLOCK) {
+        let end = (start + TERM_BLOCK).min(n_terms);
+        for j in 0..sketch {
+            for term in start..end {
+                b[j * n_terms + term] = term_major[term * sketch + j];
+            }
+        }
+    }
+    b
+}
+
+/// V = Bᵀ·U_b·Σ⁻¹ for the retained directions, stored as terms × dimensions.
+/// Keep each term's output row contiguous so the inner loop updates independent
+/// directions together. Each coordinate still sums sketch rows in ascending
+/// order before applying its scale, preserving the original floating-point result.
+fn project_basis(
+    b: &[f32],
+    n_terms: usize,
+    sketch: usize,
+    eigenvalues: &[f32],
+    eigenvectors: &[f32],
+    keep: &[usize],
+) -> Vec<f32> {
+    let k = keep.len();
+    if k == 0 || n_terms == 0 {
+        return Vec::new();
+    }
+    let directions: Vec<f32> = eigenvectors
+        .chunks_exact(sketch)
+        .flat_map(|row| keep.iter().map(|&j| row[j]))
+        .collect();
+    let inverse_scales: Vec<f32> = keep
+        .iter()
+        .map(|&j| 1.0 / eigenvalues[j].max(f32::EPSILON).sqrt())
+        .collect();
+    let mut basis = vec![0.0f32; n_terms * k];
+    for (term, output) in basis.chunks_exact_mut(k).enumerate() {
+        for (i, direction) in directions.chunks_exact(k).enumerate() {
+            let weight = b[i * n_terms + term];
+            for (value, coefficient) in output.iter_mut().zip(direction) {
+                *value += weight * coefficient;
+            }
+        }
+        for (value, inverse_scale) in output.iter_mut().zip(&inverse_scales) {
+            *value *= inverse_scale;
+        }
+    }
+    basis
 }
 
 /// In-place modified Gram–Schmidt (two passes) over a row-major m×n matrix
 /// treated as n column vectors. Columns that lose all norm are zeroed.
+/// Contiguous scratch columns preserve each row-order reduction and both passes.
 fn orthonormalize(q: &mut [f32], rows: usize, cols: usize) {
+    let mut columns = vec![0.0f32; rows * cols];
+    for r in 0..rows {
+        for col in 0..cols {
+            columns[col * rows + r] = q[r * cols + col];
+        }
+    }
     for col in 0..cols {
+        let (previous, tail) = columns.split_at_mut(col * rows);
+        let current = &mut tail[..rows];
         for _ in 0..2 {
             for prev in 0..col {
+                let previous = &previous[prev * rows..(prev + 1) * rows];
                 let mut dot = 0.0f64;
                 for r in 0..rows {
-                    dot += (q[r * cols + col] as f64) * (q[r * cols + prev] as f64);
+                    dot += (current[r] as f64) * (previous[r] as f64);
                 }
                 for r in 0..rows {
-                    q[r * cols + col] -= (dot as f32) * q[r * cols + prev];
+                    current[r] -= (dot as f32) * previous[r];
                 }
             }
         }
         let mut norm = 0.0f64;
-        for r in 0..rows {
-            norm += (q[r * cols + col] as f64) * (q[r * cols + col] as f64);
+        for value in current.iter() {
+            norm += (*value as f64) * (*value as f64);
         }
         let norm = norm.sqrt() as f32;
         if norm > f32::EPSILON {
-            for r in 0..rows {
-                q[r * cols + col] /= norm;
+            for value in current.iter_mut() {
+                *value /= norm;
             }
         } else {
-            for r in 0..rows {
-                q[r * cols + col] = 0.0;
-            }
+            current.fill(0.0);
+        }
+    }
+    for r in 0..rows {
+        for col in 0..cols {
+            q[r * cols + col] = columns[col * rows + r];
         }
     }
 }
@@ -569,8 +665,159 @@ impl<'a> Cursor<'a> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn compressed_layout_keeps_every_scalar_addition_and_partial_block() {
+        for (terms, sketch) in [(31, 144), (32, 144), (33, 144), (65, 7), (0, 144), (33, 0)] {
+            let docs: Vec<SparseVector> = (0..5)
+                .map(|d| {
+                    if terms == 0 {
+                        vec![]
+                    } else {
+                        vec![
+                            (0, 1.0),
+                            ((d % terms) as u32, -0.25),
+                            (0, 2.0),
+                            (((d * 7) % terms) as u32, 0.125),
+                        ]
+                    }
+                })
+                .collect();
+            let mut rng = SplitMix64(RNG_SEED);
+            let q: Vec<f32> = (0..docs.len() * sketch)
+                .map(|_| rng.next_gaussian())
+                .collect();
+            let mut expected = vec![0.0f32; terms * sketch];
+            for (d, doc) in docs.iter().enumerate() {
+                for &(tid, w) in doc {
+                    for j in 0..sketch {
+                        expected[j * terms + tid as usize] += q[d * sketch + j] * w;
+                    }
+                }
+            }
+            let actual = compressed_matrix(&docs, &q, terms, sketch);
+            assert_eq!(
+                actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(compressed_matrix(&[], &[], 33, 144), vec![0.0; 33 * 144]);
+    }
+
+    #[test]
+    fn compressed_layout_does_not_reassociate_duplicate_or_document_terms() {
+        let docs = vec![
+            vec![(0, 100_000_000.0), (0, 1.0)],
+            vec![(0, -100_000_000.0)],
+            vec![(0, 3.0)],
+        ];
+        assert_eq!(compressed_matrix(&docs, &[1.0; 3], 1, 1), vec![3.0]);
+    }
+
     fn counts(pairs: &[(&str, u32)]) -> HashMap<String, u32> {
         pairs.iter().map(|(t, c)| (t.to_string(), *c)).collect()
+    }
+
+    // Original scalar projection: preserve the numerical contract while
+    // production changes only the memory traversal of independent coordinates.
+    fn scalar_projection(
+        b: &[f32],
+        n_terms: usize,
+        sketch: usize,
+        eigenvalues: &[f32],
+        eigenvectors: &[f32],
+        keep: &[usize],
+    ) -> Vec<f32> {
+        let k = keep.len();
+        let mut basis = vec![0.0f32; n_terms * k];
+        for (col, &j) in keep.iter().enumerate() {
+            let inverse_scale = 1.0 / eigenvalues[j].max(f32::EPSILON).sqrt();
+            for term in 0..n_terms {
+                let mut value = 0.0f32;
+                for i in 0..sketch {
+                    value += b[i * n_terms + term] * eigenvectors[i * sketch + j];
+                }
+                basis[term * k + col] = value * inverse_scale;
+            }
+        }
+        basis
+    }
+
+    #[test]
+    fn basis_projection_preserves_scalar_results_at_full_and_partial_widths() {
+        for (terms, sketch, dims) in [(1, 4, 1), (37, 144, 128), (65, 19, 7), (4, 3, 3)] {
+            let mut rng = SplitMix64(RNG_SEED);
+            let b: Vec<f32> = (0..terms * sketch).map(|_| rng.next_gaussian()).collect();
+            let eigenvectors: Vec<f32> =
+                (0..sketch * sketch).map(|_| rng.next_gaussian()).collect();
+            let eigenvalues: Vec<f32> = (0..sketch).map(|i| (i + 1) as f32).collect();
+            let keep: Vec<usize> = (0..dims).map(|i| sketch - 1 - i).collect();
+            let expected = scalar_projection(&b, terms, sketch, &eigenvalues, &eigenvectors, &keep);
+            let actual = project_basis(&b, terms, sketch, &eigenvalues, &eigenvectors, &keep);
+            assert_eq!(
+                actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+
+            let vocab: Vec<String> = (0..terms).map(|i| format!("term{i}")).collect();
+            let reference = LsaModel {
+                dims,
+                index: vocab
+                    .iter()
+                    .enumerate()
+                    .map(|(i, term)| (term.clone(), i as u32))
+                    .collect(),
+                vocab,
+                idf: vec![1.0; terms],
+                basis: expected,
+            };
+            let optimized = LsaModel {
+                basis: actual,
+                ..reference.clone()
+            };
+            assert_eq!(serialize_model(&optimized), serialize_model(&reference));
+            let docs: Vec<SparseVector> = (0..8)
+                .map(|doc| {
+                    (0..terms)
+                        .filter(|&term| (term + doc) % 3 == 0 || term == 0)
+                        .map(|term| (term as u32, 1.0 / (term + doc + 1) as f32))
+                        .collect()
+                })
+                .collect();
+            let query = vec![(0, 1.0)];
+            let mut rankings = Vec::new();
+            for model in [&reference, &optimized] {
+                let query = model.embed(&query);
+                let mut scores: Vec<(usize, f32)> = docs
+                    .iter()
+                    .enumerate()
+                    .map(|(id, doc)| {
+                        let embedded = model.embed(doc);
+                        assert_eq!(
+                            serialize_vector(&embedded),
+                            serialize_vector(&reference.embed(doc))
+                        );
+                        (id, cosine(&query, &embedded))
+                    })
+                    .collect();
+                scores.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+                rankings.push(scores);
+            }
+            assert_eq!(rankings[0], rankings[1]);
+        }
+    }
+
+    #[test]
+    fn basis_projection_preserves_cancellation_and_empty_shapes() {
+        // Reassociating this dot product changes 3.0 to 4.0.
+        let b = [100_000_000.0, 1.0, -100_000_000.0, 3.0];
+        let eigenvalues = [1.0; 4];
+        let eigenvectors = [1.0; 16];
+        assert_eq!(
+            project_basis(&b, 1, 4, &eigenvalues, &eigenvectors, &[0]),
+            vec![3.0]
+        );
+        assert!(project_basis(&b, 1, 4, &eigenvalues, &eigenvectors, &[]).is_empty());
+        assert!(project_basis(&[], 0, 4, &eigenvalues, &eigenvectors, &[0]).is_empty());
     }
 
     #[test]
@@ -764,6 +1011,144 @@ mod tests {
         if model.dims > 0 {
             let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
             assert!(norm - 1.0 < 1e-4 || norm == 0.0 || model.dims == 0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod gram_ortho_parity {
+    use super::*;
+
+    fn scalar_gram(b: &[f32], n_terms: usize, sketch: usize) -> Vec<f32> {
+        let mut bbt = vec![0.0f32; sketch * sketch];
+        for i in 0..sketch {
+            for j in i..sketch {
+                let mut acc = 0.0f64;
+                for t in 0..n_terms {
+                    acc += (b[i * n_terms + t] as f64) * (b[j * n_terms + t] as f64);
+                }
+                let v = acc as f32;
+                bbt[i * sketch + j] = v;
+                bbt[j * sketch + i] = v;
+            }
+        }
+        bbt
+    }
+    fn scalar_orthonormalize(q: &mut [f32], rows: usize, cols: usize) {
+        for col in 0..cols {
+            for _ in 0..2 {
+                for prev in 0..col {
+                    let mut dot = 0.0f64;
+                    for r in 0..rows {
+                        dot += (q[r * cols + col] as f64) * (q[r * cols + prev] as f64);
+                    }
+                    for r in 0..rows {
+                        q[r * cols + col] -= (dot as f32) * q[r * cols + prev];
+                    }
+                }
+            }
+            let mut norm = 0.0f64;
+            for r in 0..rows {
+                norm += (q[r * cols + col] as f64) * (q[r * cols + col] as f64);
+            }
+            let norm = norm.sqrt() as f32;
+            if norm > f32::EPSILON {
+                for r in 0..rows {
+                    q[r * cols + col] /= norm;
+                }
+            } else {
+                for r in 0..rows {
+                    q[r * cols + col] = 0.0;
+                }
+            }
+        }
+    }
+
+    fn assert_bits(actual: &[f32], expected: &[f32], shape: (usize, usize), mode: usize) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            assert_eq!(
+                actual.to_bits(),
+                expected.to_bits(),
+                "shape={shape:?} mode={mode} index={index}"
+            );
+        }
+    }
+
+    fn matrix(rows: usize, cols: usize, mode: usize) -> Vec<f32> {
+        let mut random = SplitMix64(RNG_SEED ^ 0x4752414d);
+        (0..rows)
+            .flat_map(|r| (0..cols).map(move |c| (r, c)))
+            .map(|(r, c)| match mode {
+                0 => random.next_gaussian(),
+                1 => {
+                    ((r % 11) as f32 - 5.0) * ((c % 5 + 1) as f32)
+                        + ((r % 3) as f32) * f32::EPSILON * ((c + 1) as f32)
+                }
+                2 => {
+                    if (r + c) % 2 == 0 {
+                        0.0
+                    } else {
+                        -0.0
+                    }
+                }
+                3 => match (r + c) % 4 {
+                    0 => 1.0e20,
+                    1 => -1.0e20,
+                    2 => 1.0e-20,
+                    _ => -1.0e-20,
+                },
+                _ => unreachable!(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gram_four_cells_preserve_scalar_term_order_full_and_tail_blocks() {
+        for (terms, sketch) in [
+            (0, 0),
+            (0, 7),
+            (1, 1),
+            (3, 3),
+            (5, 4),
+            (11, 5),
+            (17, 7),
+            (31, 15),
+            (37, 17),
+            (41, 144),
+        ] {
+            for mode in 0..4 {
+                let b = matrix(sketch, terms, mode);
+                assert_bits(
+                    &gram_matrix(&b, terms, sketch),
+                    &scalar_gram(&b, terms, sketch),
+                    (terms, sketch),
+                    mode,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn column_storage_preserves_two_pass_scalar_orthonormalization() {
+        for (rows, cols) in [
+            (0, 0),
+            (0, 7),
+            (1, 1),
+            (3, 2),
+            (5, 4),
+            (5, 7),
+            (17, 5),
+            (37, 17),
+            (193, 144),
+        ] {
+            for mode in 0..3 {
+                let mut expected = matrix(rows, cols, mode);
+                let mut actual = expected.clone();
+                scalar_orthonormalize(&mut expected, rows, cols);
+                orthonormalize(&mut actual, rows, cols);
+                assert_bits(&actual, &expected, (rows, cols), mode);
+            }
         }
     }
 }

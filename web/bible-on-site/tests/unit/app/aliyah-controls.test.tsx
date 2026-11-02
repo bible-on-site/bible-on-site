@@ -16,7 +16,9 @@ jest.mock("next/navigation", () => ({
 	useSearchParams: () => currentParams,
 }));
 
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { type ReactNode, useLayoutEffect } from "react";
+import { renderToString } from "react-dom/server";
 import { AliyahControls } from "../../../src/app/parasha/[unit]/components/AliyahControls";
 import type { UnitAliyahContextOption } from "../../../src/data/parasha/parasha-aliyot";
 
@@ -63,6 +65,23 @@ function renderLayer(params = "") {
 			utils.rerender(makeJsx());
 		},
 	};
+}
+
+// Deliver a queued hydration event before passive URL initialization.
+// dispatchEvent models React replay, bypassing the native disabled hit test.
+function ChooseDuringHydration({
+	children,
+	label,
+}: {
+	children: ReactNode;
+	label: string;
+}) {
+	useLayoutEffect(() => {
+		screen
+			.getByRole("button", { name: label })
+			.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+	}, [label]);
+	return children;
 }
 
 const markers = () =>
@@ -251,15 +270,9 @@ describe("AliyahControls — minhag variants", () => {
 			<div data-unit-text="">
 				<span data-aliyah-marker="" data-aliyah-key="vayigash:shabbat" />
 				<span data-aliyah-marker="" data-aliyah-key="vayigash:weekday" />
-				<span
-					data-aliyah-marker=""
-					data-aliyah-key={'vayigash:shabbat:חב"ד'}
-				/>
+				<span data-aliyah-marker="" data-aliyah-key={'vayigash:shabbat:חב"ד'} />
 			</div>
-			<AliyahControls
-				contexts={[WITH_VARIANT]}
-				defaultKey="vayigash:shabbat"
-			/>
+			<AliyahControls contexts={[WITH_VARIANT]} defaultKey="vayigash:shabbat" />
 		</>
 	);
 
@@ -310,6 +323,61 @@ describe("AliyahControls — minhag variants", () => {
 		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
 	});
 
+	it("keeps the first variant click before the initial passive effects", () => {
+		const utils = render(
+			<ChooseDuringHydration label={'חב"ד'}>
+				{makeVariantJsx()}
+			</ChooseDuringHydration>,
+		);
+
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith(
+			`/פרשה/42?variant=${encodeURIComponent('חב"ד')}`,
+			{ scroll: false },
+		);
+		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
+		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+	});
+
+	it("disables server-rendered controls until the first click can be handled", () => {
+		const container = document.createElement("div");
+		const serverDocument = new DOMParser().parseFromString(
+			renderToString(makeVariantJsx()),
+			"text/html",
+		);
+		container.replaceChildren(...serverDocument.body.childNodes);
+		document.body.append(container);
+		const controls = container.querySelector("fieldset");
+		expect(controls).toBeDisabled();
+		for (const button of container.querySelectorAll("button")) {
+			expect(button).toBeDisabled();
+		}
+
+		const utils = render(makeVariantJsx(), { container, hydrate: true });
+		expect(controls).not.toBeDisabled();
+		fireEvent.click(pressed(utils, 'חב"ד'));
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
+		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+	});
+
+	it("resyncs variant markers when back and forward commit URL changes", () => {
+		const utils = renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
+		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+
+		currentParams = new URLSearchParams();
+		utils.rerender(makeVariantJsx());
+		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
+		expect(pressed(utils, "נפוץ").getAttribute("aria-pressed")).toBe("true");
+
+		currentParams = new URLSearchParams(
+			`variant=${encodeURIComponent('חב"ד')}`,
+		);
+		utils.rerender(makeVariantJsx());
+		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
+	});
+
 	it("honors a ?variant= param from the URL", () => {
 		renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
 
@@ -323,9 +391,7 @@ describe("AliyahControls — minhag variants", () => {
 	});
 
 	it("drops the variant when the base split is re-selected", () => {
-		const utils = renderVariantLayer(
-			`variant=${encodeURIComponent('חב"ד')}`,
-		);
+		const utils = renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
 
 		fireEvent.click(pressed(utils, "נפוץ"));
 
@@ -333,9 +399,7 @@ describe("AliyahControls — minhag variants", () => {
 	});
 
 	it("drops the variant on scheme switch — variants never carry", () => {
-		const utils = renderVariantLayer(
-			`variant=${encodeURIComponent('חב"ד')}`,
-		);
+		const utils = renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
 
 		fireEvent.click(pressed(utils, "חול"));
 

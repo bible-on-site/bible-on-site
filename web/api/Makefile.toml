@@ -160,10 +160,46 @@ args = [
   "test(=services::mysql_timestamps::mysql_timestamp_columns_preserve_public_contract)",
 ]
 
+# Run a separate exact selection so missing tests fail and the shared fixture
+# is never mutated by concurrent nextest processes. Accumulate existing profiles.
+[tasks.coverage-full-retrain-documents]
+dependencies = ["coverage-unit-dir-create", "coverage-mysql-timestamps"]
+command = "cargo"
+args = [
+  "llvm-cov", "nextest", "--locked", "--no-clean", "--lcov",
+  "--output-path", ".coverage/unit/lcov.info",
+  "--run-ignored", "only", "--no-tests", "fail", "-E",
+  "test(=services::article_search::tests::mysql_full_retrain_prunes_removed_and_out_of_scope_documents)",
+]
+
+# Run a separate exact selection so missing tests fail and the shared fixture
+# is never mutated by concurrent nextest processes. Accumulate existing profiles.
+[tasks.coverage-batched-publication]
+dependencies = ["coverage-unit-dir-create", "coverage-full-retrain-documents"]
+command = "cargo"
+args = [
+  "llvm-cov", "nextest", "--locked", "--no-clean", "--lcov",
+  "--output-path", ".coverage/unit/lcov.info",
+  "--run-ignored", "only", "--no-tests", "fail", "-E",
+  "test(=services::article_search::tests::mysql_batched_publication_matches_scalar_and_rolls_back)",
+]
+
 # CI provides a separate empty MySQL database. Preserve the unit profiles and
 # fail if the ignored real-session regression is missing or renamed.
+[tasks.coverage-cold-start-wait]
+dependencies = ["coverage-unit-dir-create", "coverage-batched-publication"]
+command = "cargo"
+args = [
+  "llvm-cov", "nextest", "--locked", "--no-clean", "--lcov",
+  "--output-path", ".coverage/unit/lcov.info",
+  "--run-ignored", "only", "--no-tests", "fail", "-E",
+  "test(=services::article_search::tests::mysql_cold_start_wait_is_session_scoped_and_cancellable)",
+]
+
+# Keep this final exact regression after every other real-MySQL case, so
+# fixture tables and the server-global named lock are never mutated in parallel.
 [tasks.coverage-article-search-lock]
-dependencies = ["coverage-unit-dir-create", "coverage-mysql-timestamps"]
+dependencies = ["coverage-unit-dir-create", "coverage-cold-start-wait"]
 command = "cargo"
 args = [
   "llvm-cov",

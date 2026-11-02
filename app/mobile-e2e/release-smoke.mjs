@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { incrementalInstallSupported } from "./android-install.mjs";
 import { startNativeLog } from "./native-logs.mjs";
 
 export const APP_PACKAGE = "com.tanah.daily929";
@@ -188,6 +189,7 @@ async function main() {
   await waitForAndroidDevice({ adb, udid, execute,
     observe: (observation) => appendFileSync(readinessLog, `${JSON.stringify(observation)}\n`) });
   await shell("wm", "dismiss-keyguard");
+  const noIncremental = await incrementalInstallSupported({ adb, udid, execute });
 
   const summary = {
     kind: "android-release-smoke/1",
@@ -251,7 +253,10 @@ async function main() {
     };
     try {
       if (install !== "none") {
-        const out = await device("install", "-r", apk);
+        // IncFS incremental installs can SIGSEGV Xamarin in
+        // open_from_bundles (#2773) — pin the deterministic path.
+        const out = await device("install", "-r",
+          ...(noIncremental ? ["--no-incremental"] : []), apk);
         log(`${name}: install says ${out.trim().split("\n").pop()}`);
         if (!/Success/.test(out)) return fail(`install failed: ${out.trim()}`);
         if (install === "fresh") await shell("pm", "clear", APP_PACKAGE);

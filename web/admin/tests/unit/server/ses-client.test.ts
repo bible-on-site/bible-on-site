@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), config: vi.fn() }));
 vi.mock("@aws-sdk/client-sesv2", () => ({
@@ -78,6 +78,7 @@ function parseEmail(html: string): Document {
 
 describe("SES managed-subscription transport", () => {
 	beforeEach(() => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
 		mocks.send.mockReset();
 		mocks.config.mockReset();
 		mocks.send.mockImplementation(async (command) => {
@@ -85,6 +86,101 @@ describe("SES managed-subscription transport", () => {
 			if (command.kind === "send") return { MessageId: "ses-message-123" };
 			return { $metadata: { httpStatusCode: 200 } };
 		});
+	});
+	afterEach(() => vi.restoreAllMocks());
+
+	it.each([
+		["get", "get-contact"],
+		["create", "create-contact"],
+		["update", "update-contact"],
+		["send", "send-email"],
+	])(
+		"records safe diagnostics for a rejected %s operation",
+		async (kind, operation) => {
+			const requestId = "d5131f88-c653-4c5e-84b0-74790a91a732";
+			const error = Object.assign(sdkError(403, "AccessDeniedException"), {
+				$metadata: { httpStatusCode: 403, requestId },
+				requestPayload: request,
+			});
+			mocks.send.mockImplementation(async (command) => {
+				if (command.kind === "get" && kind === "create")
+					throw sdkError(404, "NotFoundException");
+				if (command.kind === "get" && kind !== "get") return contact();
+				throw error;
+			});
+			const client = new SesClient(config);
+			const result =
+				kind === "get"
+					? client.getContact(request.to)
+					: kind === "create"
+						? client.ensureSubscribedContact(request.to, "test")
+						: kind === "update"
+							? client.unsubscribeContact(request.to)
+							: client.sendOne(request);
+			await expect(result).rejects.toMatchObject({ outcome: "failed" });
+			expect(console.error).toHaveBeenCalledExactlyOnceWith(
+				"SES operation failed",
+				{
+					operation,
+					code: "AccessDeniedException",
+					httpStatus: 403,
+					requestId,
+				},
+			);
+		},
+	);
+
+	it.each([
+		{
+			name: "reader@example.com\nsecret",
+			$metadata: { httpStatusCode: "private", requestId: request.to },
+		},
+		{ name: 42, $metadata: { httpStatusCode: 403.5, requestId: 123 } },
+		{
+			name: "x".repeat(81),
+			$metadata: { httpStatusCode: 600, requestId: "x".repeat(100) },
+		},
+		{ name: "", $metadata: { httpStatusCode: -1 } },
+	])(
+		"drops untrusted diagnostic fields instead of logging request data (%j)",
+		async (error) => {
+			mocks.send.mockRejectedValueOnce({
+				...error,
+				message: "private credentials",
+				request,
+			});
+			await expect(
+				new SesClient(config).getContact(request.to),
+			).rejects.toBeInstanceOf(SesError);
+			expect(console.error).toHaveBeenCalledExactlyOnceWith(
+				"SES operation failed",
+				{
+					operation: "get-contact",
+					code: "UnknownError",
+					httpStatus: null,
+					requestId: null,
+				},
+			);
+		},
+	);
+
+	it("identifies a failed final send guard without sending or exposing its error", async () => {
+		const beforeSend = vi
+			.fn()
+			.mockRejectedValue(new Error("private database details"));
+		await expect(
+			new SesClient({ ...config, beforeSend }).sendOne(request),
+		).rejects.toMatchObject({ outcome: "failed" });
+		expect(calls("send")).toHaveLength(0);
+		expect(console.error).toHaveBeenCalledExactlyOnceWith(
+			"SES operation failed",
+			{
+				operation: "before-send",
+				code: "Error",
+				httpStatus: null,
+				requestId: null,
+			},
+		);
 	});
 
 	it("uses the configured region with one SDK attempt, never automatic send retries", () => {

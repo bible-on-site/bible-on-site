@@ -53,7 +53,7 @@ public class DedicationViewModelTests
 
         viewModel.LoadByPerekId(17);
 
-        viewModel.DedicationLines.Should().Equal("מוקדש לFulano de Tal (Falecimento)");
+        viewModel.DedicationLines.Should().Equal("Falecimento Fulano de Tal");
         viewModel.HasDedications.Should().BeTrue();
         dedications.Contexts.Should().ContainSingle()
             .Which.PerekIds.Should().Equal(17);
@@ -103,13 +103,13 @@ public class DedicationViewModelTests
         viewModel.LoadByPerekId(1); // dedication load stays pending on the gate
         viewModel.LoadByPerekId(2); // swiped: second load completes immediately
 
-        viewModel.DedicationLines.Should().Equal("מוקדש לDois");
+        viewModel.DedicationLines.Should().Equal("Dois");
 
         // The first perek's response arriving late must not overwrite the second's lines.
         gate.SetResult([new Dedication { Subject = "Um" }]);
         await Task.Yield();
 
-        viewModel.DedicationLines.Should().Equal("מוקדש לDois");
+        viewModel.DedicationLines.Should().Equal("Dois");
     }
 
     private static Perek CreatePerek(int perekId) => new()
@@ -159,7 +159,7 @@ public class DedicationViewModelTests
 
         viewModel.Unit = CreateUnit(30);
 
-        viewModel.DedicationLines.Should().Equal("מוקדש לFulano de Tal");
+        viewModel.DedicationLines.Should().Equal("Fulano de Tal");
         viewModel.HasDedications.Should().BeTrue();
         dedications.Contexts.Should().ContainSingle()
             .Which.ParashaIds.Should().Equal(30);
@@ -216,7 +216,7 @@ public class DedicationViewModelTests
 
         viewModel.Unit = CreateUnit(1);
         viewModel.Unit = CreateUnit(2);
-        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+        viewModel.DedicationLines.Should().Equal("שרה");
 
         if (fails)
         {
@@ -228,7 +228,7 @@ public class DedicationViewModelTests
         }
         await Task.Yield();
 
-        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+        viewModel.DedicationLines.Should().Equal("שרה");
         viewModel.HasDedications.Should().BeTrue();
     }
 
@@ -294,7 +294,7 @@ public class DedicationViewModelTests
         await viewModel.LoadAsync();
 
         viewModel.ShowEntry.Should().BeTrue();
-        viewModel.DedicationLines.Should().Equal("מוקדש לFulano de Tal (Falecimento)");
+        viewModel.DedicationLines.Should().Equal("Falecimento Fulano de Tal");
         viewModel.HasDedications.Should().BeTrue();
         dedications.Contexts.Should().ContainSingle()
             .Which.EntryIds.Should().Equal("e7");
@@ -341,7 +341,7 @@ public class DedicationViewModelTests
         dedications.Contexts.Should().ContainSingle();
 
         await viewModel.OpenPersonEntryAsync("אהרן");
-        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+        viewModel.DedicationLines.Should().Equal("שרה");
 
         if (fails)
         {
@@ -355,7 +355,7 @@ public class DedicationViewModelTests
 
         viewModel.Title.Should().Be("אהרן");
         viewModel.ShowEntry.Should().BeTrue();
-        viewModel.DedicationLines.Should().Equal("מוקדש לשרה");
+        viewModel.DedicationLines.Should().Equal("שרה");
         dedications.Contexts.SelectMany(context => context.EntryIds!).Should().Equal("e1", "e2");
     }
 

@@ -83,12 +83,15 @@ describe("scheduled bulletin orchestration", () => {
 			expectedAudience: "real",
 			expectedRevision: 3,
 		});
-		expect(m.whatsapp).toHaveBeenCalledExactlyOnceWith({
-			date: "2026-10-29",
-			requestKey: scheduledBulletinRequestKey("2026-10-29", "whatsapp"),
-			expectedAudience: "real",
-			expectedRevision: 4,
-		});
+		expect(m.whatsapp).toHaveBeenCalledExactlyOnceWith(
+			{
+				date: "2026-10-29",
+				requestKey: scheduledBulletinRequestKey("2026-10-29", "whatsapp"),
+				expectedAudience: "real",
+				expectedRevision: 4,
+			},
+			{ refreshRealTarget: true },
+		);
 	});
 	it("redelivery reuses every durable request key; distinct dates/channels stay distinct", async () => {
 		await run();

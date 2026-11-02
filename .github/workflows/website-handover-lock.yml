@@ -1,0 +1,59 @@
+name: Website migration deployment lock
+run-name: Hold website deployment queue for ARM handover ${{ inputs.nonce }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: Dedicated website-arm64-migration deployment record ID
+        type: string
+        required: true
+      nonce:
+        description: Exact 32-character lowercase hexadecimal owner nonce
+        type: string
+        required: true
+      source_ref:
+        description: Full merged control-source SHA already approved for the migration
+        type: string
+        required: true
+
+# This is the same lock as cd-aws.yml for module_name=website.
+concurrency:
+  group: ${{ github.repository }}-cd-website
+  cancel-in-progress: false
+  queue: max
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+      MIGRATION_NONCE: ${{ inputs.nonce }}
+      SOURCE_REF: ${{ inputs.source_ref }}
+    steps:
+      - name: Require a merged control source
+        run: |
+          [[ "$SOURCE_REF" =~ ^[a-f0-9]{40}$ ]]
+          STATUS=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_REF...master" --jq '.status')
+          test "$STATUS" = ahead || test "$STATUS" = identical
+
+      - name: Checkout the merged control source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      # No AWS credentials or IAM permissions are available to this job.
+      # The operator performs only the separately approved, qualified handover.
+      - name: Hold until verified completion or explicit recovery
+        run: node devops/github/release/website-handover-lock.mjs

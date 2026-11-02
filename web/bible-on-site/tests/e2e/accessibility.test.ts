@@ -67,7 +67,10 @@ test.describe("Accessibility statement page", () => {
 		page,
 	}) => {
 		await page.goto("/accessibility");
-		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+		const trigger = page.getByRole("button", {
+			name: "התאמות נגישות",
+			disabled: false,
+		});
 		await trigger.press("Enter");
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
 		await expect(menu).toBeVisible();
@@ -140,6 +143,10 @@ test.describe("Accessibility statement page", () => {
 		await trigger.click();
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
 		await expect(menu).toBeVisible();
+		// Playwright refuses clicks on obscured elements, so this fails if the
+		// perek text paints over the popover.
+		await menu.getByRole("button", { name: "איפוס התאמות נגישות" }).click();
+		await expect(menu.locator('p[role="status"]')).not.toBeEmpty();
 		await page.keyboard.press("Escape");
 		await expect(menu).toHaveCount(0);
 		await expect(trigger).toBeFocused();
@@ -162,9 +169,7 @@ test.describe("Accessibility statement page", () => {
 					exact: true,
 				}),
 			).toHaveCount(0);
-			await expect(
-				page.getByRole("link", { name: "חיפוש" }),
-			).toHaveCount(0);
+			await expect(page.getByRole("link", { name: "חיפוש" })).toHaveCount(0);
 
 			const box = await trigger.boundingBox();
 			expect(box).not.toBeNull();
@@ -227,16 +232,53 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 	};
 
 	const openMenu = async (page: Page) => {
-		const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+		const trigger = page.getByRole("button", {
+			name: "התאמות נגישות",
+			disabled: false,
+		});
 		const menu = page.getByRole("dialog", { name: "התאמות נגישות" });
-		// Route hydration can lag first paint in dev — Enter toggles, so retry
-		// only while the popover is still closed.
-		await expect(async () => {
-			if ((await menu.count()) === 0) await trigger.press("Enter");
-			await expect(menu).toBeVisible({ timeout: 750 });
-		}).toPass();
+		await trigger.press("Enter");
+		await expect(menu).toBeVisible({ timeout: 750 });
 		return menu;
 	};
+
+	test("menu is unavailable until its client controls are ready", async ({
+		page,
+	}, testInfo) => {
+		const { promise: scriptsReady, resolve: releaseScripts } =
+			Promise.withResolvers<void>();
+		await page.route(/\/_next\/.*\.js(?:\?|$)/, async (route) => {
+			await scriptsReady;
+			await route.continue();
+		});
+		try {
+			await page.goto("/accessibility", { waitUntil: "commit" });
+			const trigger = page.getByRole("button", { name: "התאמות נגישות" });
+			await expect(trigger).toBeVisible();
+			const initialCapture = testInfo.outputPath("initial-control.png");
+			const viewport = page.viewportSize();
+			await page.screenshot({
+				path: initialCapture,
+				clip: { x: 0, y: 0, width: viewport?.width ?? 1280, height: 160 },
+			});
+			await testInfo.attach("Initial accessibility control", {
+				path: initialCapture,
+				contentType: "image/png",
+			});
+			await expect(trigger).toBeDisabled();
+
+			releaseScripts();
+			await page
+				.getByRole("button", { name: "התאמות נגישות", disabled: false })
+				.press("Enter");
+			await expect(
+				page.getByRole("dialog", { name: "התאמות נגישות" }),
+			).toBeVisible({ timeout: 750 });
+		} finally {
+			releaseScripts();
+			await page.unrouteAll({ behavior: "wait" });
+		}
+	});
 
 	test("toggles persist, re-apply before paint and survive client navigation", async ({
 		page,
@@ -308,13 +350,12 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		// Opt-in: every a[href] gains the persistent cue, including the
 		// marker and the menu's own statement link.
 		const menu = await openMenu(page);
-		await menu
-			.getByRole("checkbox", { name: "קו תחתון לקישורים" })
-			.check();
+		await menu.getByRole("checkbox", { name: "קו תחתון לקישורים" }).check();
 		await expect(marker).toHaveCSS("text-decoration-line", /underline/);
-		await expect(
-			menu.getByRole("link", { name: "הצהרת נגישות" }),
-		).toHaveCSS("text-decoration-line", /underline/);
+		await expect(menu.getByRole("link", { name: "הצהרת נגישות" })).toHaveCSS(
+			"text-decoration-line",
+			/underline/,
+		);
 	});
 
 	test("reset clears both site toggles and preserves unrelated data", async ({
@@ -326,13 +367,9 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		);
 		const menu = await openMenu(page);
 		await menu.getByRole("checkbox", { name: "ניגודיות גבוהה" }).check();
-		await menu
-			.getByRole("checkbox", { name: "קו תחתון לקישורים" })
-			.check();
+		await menu.getByRole("checkbox", { name: "קו תחתון לקישורים" }).check();
 
-		await menu
-			.getByRole("button", { name: "איפוס התאמות נגישות" })
-			.click();
+		await menu.getByRole("button", { name: "איפוס התאמות נגישות" }).click();
 		const html = page.locator("html");
 		await expect(html).not.toHaveAttribute("data-a11y-contrast", "high");
 		await expect(html).not.toHaveAttribute("data-a11y-links", "underlined");
@@ -427,9 +464,8 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		// The global `a { color: inherit }` would hide link identity under
 		// forced colors — the media query hands it back LinkText + underline.
 		const [linkColor, bodyColor] = await page.evaluate(() => [
-			getComputedStyle(
-				document.querySelector('a[href^="mailto:"]') as Element,
-			).color,
+			getComputedStyle(document.querySelector('a[href^="mailto:"]') as Element)
+				.color,
 			getComputedStyle(document.body).color,
 		]);
 		expect(linkColor).not.toBe(bodyColor);
@@ -444,9 +480,7 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 		test.slow();
 		await page.goto("/");
 		const menu = await openMenu(page);
-		await menu
-			.getByRole("checkbox", { name: "קו תחתון לקישורים" })
-			.check();
+		await menu.getByRole("checkbox", { name: "קו תחתון לקישורים" }).check();
 		await expect(page.locator("html")).toHaveAttribute(
 			"data-a11y-links",
 			"underlined",
@@ -497,9 +531,8 @@ test.describe("Site-wide accessibility preferences (#2767)", () => {
 	test("viewport meta never blocks pinch-zoom (SC 1.4.4)", async ({ page }) => {
 		await page.goto("/");
 		const content =
-			(await page
-				.locator('meta[name="viewport"]')
-				.getAttribute("content")) ?? "";
+			(await page.locator('meta[name="viewport"]').getAttribute("content")) ??
+			"";
 		expect(content).not.toMatch(/user-scalable\s*=\s*(no|0)/);
 		expect(content).not.toMatch(/maximum-scale\s*=\s*1(\.0)?\b/);
 	});

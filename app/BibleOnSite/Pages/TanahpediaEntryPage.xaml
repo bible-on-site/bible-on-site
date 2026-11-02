@@ -4,6 +4,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.TanahpediaEntryPage"
              x:Name="Page"
              x:DataType="viewmodels:TanahpediaEntryViewModel"
@@ -34,6 +35,17 @@
             <ScrollView x:Name="EntryScroll"
                         IsVisible="{Binding ShowEntry}">
                 <VerticalStackLayout Padding="16" Spacing="14">
+                <VerticalStackLayout.MaximumWidthRequest>
+                    <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                    <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                        <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                    </OnPlatform>
+                </VerticalStackLayout.MaximumWidthRequest>
+                <VerticalStackLayout.HorizontalOptions>
+                    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                        <On Platform="Windows" Value="Center"/>
+                    </OnPlatform>
+                </VerticalStackLayout.HorizontalOptions>
                     <VerticalStackLayout IsVisible="{Binding IsDisambiguation, Converter={StaticResource InvertedBoolConverter}}"
                                          Spacing="14">
                         <Label Text="{Binding Title}"

@@ -82,8 +82,7 @@ export const perushDetailTag = (perushId: number, perekId: number) =>
 
 /**
  * Author page data for `/929/authors/{authorParam}` — the param is the
- * normalised-name slug, with the legacy numeric id form still resolving.
- * Resolution emits both forms.
+ * normalised-name slug.
  */
 export const authorTag = (authorParam: string) => `author:${authorParam}`;
 

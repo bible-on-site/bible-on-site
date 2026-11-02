@@ -446,8 +446,8 @@ jobs:
 
   package_website:
     name: Package Website
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
     permissions:
       contents: write
       actions: read
@@ -456,6 +456,28 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
+
+  package_website_arm64:
+    name: Package Website ARM64
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write # Required for AWS OIDC authentication to access RDS during SSG build
+    secrets: inherit
+    uses: ./.github/workflows/shared-dockerize.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      image_arch: arm64
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
 
   # Master pushes package the release; other events (PR, merge queue) build the
   # same release Docker configuration as a pre-merge check without uploading it,
@@ -472,6 +494,20 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
+
+  package_api_arm64:
+    name: Package API ARM64
+    needs: [setup_env, determine_changes]
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.api_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true')) }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write # Required by shared-dockerize.yml
+    secrets: inherit
+    uses: ./.github/workflows/shared-dockerize.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      image_arch: arm64
 
   package_app:
     name: Package App
@@ -547,7 +583,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Get Module Version
         id: get_version
@@ -852,7 +889,8 @@ jobs:
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -950,6 +988,8 @@ jobs:
           # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
           # options positionally across groups, so cls_ratio must pass
           # --threshold-max-sample-size _ to leave it unset (#2718).
+          # Frame blocking can also be zero. Its normalized measure uses
+          # the browser test's existing CPU-scaled budget: 1 means the limit.
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
@@ -965,6 +1005,7 @@ jobs:
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
             --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
+            --threshold-measure frame_budget_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 1.0 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
@@ -1081,7 +1122,8 @@ jobs:
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -1359,6 +1401,13 @@ jobs:
       # modules and compile-variant coordinates can never reach the merge
       # (#2670).
       - name: Merge Test Coverage (Unit + E2E)
+        id: coverage-merge
+        # Run when the e2e step executed at all (success or failure): jest and
+        # monocart write their lcov even for failing tests, so the report can
+        # still be produced. Skip only when e2e never ran (e.g. unit failure)
+        # because the --require inputs would be absent and the merge could
+        # never produce a report anyway.
+        if: ${{ !cancelled() && steps.bun-e2e-test.outcome != 'skipped' }}
         run: bun run coverage:merge
 
       - name: Store Coverage Debug Snippets
@@ -1372,6 +1421,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Store Website Coverage Report (wf)
+        # Upload the report whenever the merge step produced one — including
+        # failed test runs, which still carry the coverage they collected.
+        if: ${{ !cancelled() && steps.coverage-merge.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
@@ -1474,7 +1526,8 @@ jobs:
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -1787,7 +1840,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2122,21 +2176,36 @@ jobs:
         with:
           distribution: "microsoft"
           java-version: "17"
+          verify-signature: true
 
       - name: Setup Python for recitation extension packaging
         uses: actions/setup-python@v7
         with:
           python-version: "3.15"
 
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python3 devops/prepare_recitation_assets.py --platform Android --cache-key
+
       - name: Restore original recitation audio cache
-        uses: actions/cache@v6
+        id: recitation_audio
+        uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare release recitation book packs
         run: python3 devops/prepare_recitation_assets.py --platform Android
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
+
+      - name: Save verified recitation audio cache
+        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       - name: Verify Android release package
         run: |
@@ -2161,6 +2230,27 @@ jobs:
 
       - name: Verify packaged Android recitation modules
         run: python3 devops/verify_recitation_assets.py --platform Android --catalog BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      # This job has finished validating the real AAB. The following .NET test
+      # projects include product sources directly and do not consume its bin/obj.
+      # Retaining those large intermediates exhausted the hosted runner before
+      # MySQL could start (#2921); keep raw audio cached, not redundant build ZIPs.
+      - name: Release validated Android build intermediates
+        run: |
+          set -euo pipefail
+          workspace=$(realpath -e "${GITHUB_WORKSPACE:?}")
+          product=$(realpath -e "$workspace/app/BibleOnSite")
+          test "$product" = "$workspace/app/BibleOnSite"
+          df -h "$workspace"
+          for directory in "$product/bin" "$product/obj"; do
+            if [ -d "$directory" ]; then du -sh -- "$directory"; fi
+          done
+          dotnet build-server shutdown
+          rm -rf -- "$product/bin" "$product/obj"
+          audio_cache=$(realpath -e "$workspace/.cache/recitation-assets")
+          test "$audio_cache" = "$workspace/.cache/recitation-assets"
+          rm -f -- "$audio_cache"/*.zip
+          df -h "$workspace"
 
       - name: Test recitation extension packaging
         run: python3 -m unittest discover -s devops -p 'test_*recitation_assets.py'
@@ -2214,7 +2304,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2392,7 +2483,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2491,7 +2583,9 @@ jobs:
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts
+        run: |
+          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts github/ci/website-image-gates.test.mjs github/release/website-handover-lock.test.mjs
+          bun run test:api-handover
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2564,6 +2658,20 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # The restored Mongo image, its writable copy and Rust coverage artifacts
+      # exceed the default free disk space on the hosted runner. Reclaim unused
+      # SDKs/images before either cache restoration or the parallel image pull.
+      - name: Free space for Sefaria and Rust
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -2571,7 +2679,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       # Per-job key: rust-cache never overwrites an existing key, so a shared key is owned by whichever job saves first.
       - name: Cache Cargo dependencies
@@ -2777,6 +2886,20 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # The restored Mongo image, its writable copy and Rust coverage artifacts
+      # exceed the default free disk space on the hosted runner. Reclaim unused
+      # SDKs/images before either cache restoration or the parallel image pull.
+      - name: Free space for Sefaria and Rust
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       # Same overlap as data_ci: the image pull (or artifact download + load)
       # only depends on the needs/ outputs, so it runs in the background while
       # the toolchain installs; `wait` below is the gate before the container.
@@ -2949,6 +3072,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       [
+        setup_env,
         determine_changes,
         website_performance,
         website_e2e,
@@ -2959,6 +3083,9 @@ jobs:
         package_ios_pr,
         package_windows_pr,
         package_api,
+        package_api_arm64,
+        package_website,
+        package_website_arm64,
         package_bulletin,
         package_admin,
         app_mobile_e2e,
@@ -3046,16 +3173,30 @@ jobs:
             fi
           fi
 
-          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ]; then WEBSITE_MODULE_CHANGED=true; else WEBSITE_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ]; then WEBSITE_CI_CHANGED=true; else WEBSITE_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ]; then WEBSITE_MASTER_COVERAGE_AVAILABLE=true; else WEBSITE_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.website_e2e.result }}" = "success" ]; then E2E_STATUS=success; else E2E_STATUS=failure; fi
             # The performance job owns production-build validation, including
             # coverage-baseline recovery runs with no source changes.
-            PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.website_performance.result }}" = "success" ]; then PERFORMANCE_STATUS=success; else PERFORMANCE_STATUS=failure; fi
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+
+          # Match both native website package jobs. Fork PRs retain credential-free
+          # native dependency checks; full SSG requires the trusted repository secrets.
+          if { [ "${{ github.event_name }}" = push ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = true ] && [ "$WEBSITE_MODULE_CHANGED" = true ]; } ||
+             { [ "${{ github.event_name }}" != push ] && { [ "${{ github.event_name }}" != pull_request ] || [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; } && { [ "$WEBSITE_MODULE_CHANGED" = true ] || [ "$WEBSITE_CI_CHANGED" = true ]; }; }; then
+            if [ "${{ needs.package_website.result }}" != success ] || [ "${{ needs.package_website_arm64.result }}" != success ]; then
+              echo "Both native website release images must pass or the build did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_website.outputs.module_version }}" ] || [ "${{ needs.package_website.outputs.module_version }}" != "${{ needs.package_website_arm64.outputs.module_version }}" ]; then
+              echo "Both website images must have the same nonempty release version"
               exit 1
             fi
           fi
@@ -3069,25 +3210,30 @@ jobs:
             fi
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ]; then API_MODULE_CHANGED=true; else API_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ]; then API_CI_CHANGED=true; else API_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ]; then API_MASTER_COVERAGE_AVAILABLE=true; else API_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.api_e2e.result }}" = "success" ]; then API_STATUS=success; else API_STATUS=failure; fi
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
-          if [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_api.result }}" != "success" ]; then
-              echo "API release Docker build failed or did not run"
+          if { [ "${{ github.event_name }}" = "push" ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = "true" ] && [ "$API_MODULE_CHANGED" = "true" ]; } ||
+            { [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; }; then
+            if [ "${{ needs.package_api.result }}" != "success" ] || [ "${{ needs.package_api_arm64.result }}" != "success" ]; then
+              echo "An API release Docker build failed or did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_api.outputs.module_version }}" ] || [ "${{ needs.package_api.outputs.module_version }}" != "${{ needs.package_api_arm64.outputs.module_version }}" ]; then
+              echo "API architecture builds require the same nonempty release version"
               exit 1
             fi
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ]; then APP_MODULE_CHANGED=true; else APP_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ]; then APP_CI_CHANGED=true; else APP_CI_CHANGED=false; fi
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
             if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
@@ -3098,9 +3244,9 @@ jobs:
               exit 1
             fi
           fi
-          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ]; then APP_MASTER_COVERAGE_AVAILABLE=true; else APP_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.app_ci.result }}" = "success" ]; then APP_STATUS=success; else APP_STATUS=failure; fi
             if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3121,12 +3267,12 @@ jobs:
             fi
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ]; then BULLETIN_MODULE_CHANGED=true; else BULLETIN_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ]; then BULLETIN_CI_CHANGED=true; else BULLETIN_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ]; then BULLETIN_MASTER_COVERAGE_AVAILABLE=true; else BULLETIN_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             # A triggered suite that did not complete (failure, skip, cancel) blocks the merge.
-            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.bulletin_ci.result }}" = "success" ]; then BULLETIN_STATUS=success; else BULLETIN_STATUS=failure; fi
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3139,11 +3285,11 @@ jobs:
             fi
           fi
 
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ]; then ADMIN_MODULE_CHANGED=true; else ADMIN_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then ADMIN_CI_CHANGED=true; else ADMIN_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ]; then ADMIN_MASTER_COVERAGE_AVAILABLE=true; else ADMIN_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.admin_ci.result }}" = "success" ]; then ADMIN_STATUS=success; else ADMIN_STATUS=failure; fi
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3156,23 +3302,23 @@ jobs:
             fi
           fi
 
-          DATA_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ]; then DATA_MODULE_CHANGED=true; else DATA_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then DATA_CI_CHANGED=true; else DATA_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ]; then DATA_MASTER_COVERAGE_AVAILABLE=true; else DATA_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$DATA_CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.data_ci.result }}" = "success" ]; then DATA_STATUS=success; else DATA_STATUS=failure; fi
             if [ "$DATA_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          PERUSHIM_PIPELINE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_PIPELINE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_DATA_SQL_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_NOTES_SQLITE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.perushim_pipeline_ci_changed }}" = "true" ]; then PERUSHIM_PIPELINE_CI_CHANGED=true; else PERUSHIM_PIPELINE_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ]; then PERUSHIM_PIPELINE_MODULE_CHANGED=true; else PERUSHIM_PIPELINE_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ]; then PERUSHIM_DATA_SQL_AVAILABLE=true; else PERUSHIM_DATA_SQL_AVAILABLE=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ]; then PERUSHIM_NOTES_SQLITE_AVAILABLE=true; else PERUSHIM_NOTES_SQLITE_AVAILABLE=false; fi
           if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || { [ "${{ github.event_name }}" = "merge_group" ] && [ "$PERUSHIM_PIPELINE_CI_CHANGED" = "true" ]; } || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
-            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.perushim_data.result }}" = "success" ]; then PERUSHIM_STATUS=success; else PERUSHIM_STATUS=failure; fi
             if [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3372,11 +3518,17 @@ jobs:
         with:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
+      - name: Measure release and image-publisher regression coverage
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: bun run coverage:release
+
       - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs
           bun run test:review-audit
+          node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
@@ -3575,10 +3727,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_changes, cross_module_ci, package_website]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website_arm64.result == 'success' && needs.package_website.outputs.module_version == needs.package_website_arm64.outputs.module_version && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3590,15 +3742,15 @@ jobs:
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
       extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_website_arm64, package_app, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3608,15 +3760,15 @@ jobs:
       module_name: api
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
       module_version: ${{ needs.package_api.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_api_arm64.outputs.docker_artifact_name }}", "path": "web/api/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_changes, cross_module_ci, package_app]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_website_arm64, package_api, package_api_arm64, package_bulletin, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3632,6 +3784,7 @@ jobs:
         [
           {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "**/BibleOnSite*.msix", "label": "Windows (MSIX)", "cd_key": "windows_artifact_name"},
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*-native-symbols.zip", "label": "Android native debug symbols", "cd_key": "android_symbols_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.aar", "label": "iOS asset packs (.aar — Apple-hosted Background Assets)", "cd_key": "ios_assetpacks_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/asset-packs.json", "label": "iOS asset-pack plan (verified pack manifest for release-time reuse)", "cd_key": "ios_packplan_artifact_name"},
@@ -3641,10 +3794,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_admin]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3659,8 +3812,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_changes, cross_module_ci, package_admin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read

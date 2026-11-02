@@ -293,6 +293,7 @@ Resources:
             Resource:
               - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${BulletinEmailIdentity}"
               - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${BulletinConfigurationSet}"
+              - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:contact-list/${BulletinContactList}"
             Condition:
               StringEquals:
                 ses:FromAddress: !Ref FromAddress

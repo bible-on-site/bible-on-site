@@ -18,7 +18,9 @@ Metadata:
     - No Aliases and the default *.cloudfront.net viewer certificate: the
       candidate is reachable only as https://<id>.cloudfront.net. No Route53,
       ACM, nginx, ECS, DNS or registrar change is needed to run validation,
-      and no published/crawled URL can point at it.
+      and existing public DNS is unchanged. The cloudfront.net hostname is
+      still public and crawlable; approve an access/indexing policy and
+      teardown plan before creating it (see the rollout document).
     - Origin is the canonical apex domain over HTTPS. The origin already
       resolves to the running nginx EIP and the existing Let's Encrypt
       certificate covers the origin name, so the edge-to-origin TLS and Host
@@ -26,10 +28,11 @@ Metadata:
       later DNS cutover the origin MUST move to a dedicated origin hostname
       (see docs/aws/edge-rollout-validation.md) so the apex record can move
       to the edge without creating an origin-resolution loop.
-    - Managed-CachingDisabled cache policy: every request reaches the origin,
-      X-Cache reports Miss, and no object, variant, redirect or 404 can be
-      stored. Origin ISR/tag revalidation therefore stays authoritative
-      during validation; there is no second cache to invalidate.
+    - Managed-CachingDisabled cache policy: origin-bound requests are uncached,
+      successful origin fetches report Miss, and no object, variant,
+      redirect or 404 can be stored. Uncached errors may report Error from
+      cloudfront; check Age/origin evidence too. Origin ISR/tag revalidation
+      stays authoritative during validation; there is no second cache to invalidate.
     - Managed-AllViewerExceptHostHeader origin request policy forwards every
       viewer header (except Host), cookie and query string. Host is
       rewritten to the origin domain so nginx keeps serving the canonical
@@ -38,14 +41,18 @@ Metadata:
     - All seven HTTP methods are allowed so POST/GraphQL-style requests
       reach the origin; with caching disabled nothing is stored regardless
       of method.
-    - redirect-to-https mirrors the nginx port-80 redirect at the edge.
-    - http2 (not http3) and Compress=false keep protocol/encoding parity
-      with the current nginx responses while compatibility is diffed;
-      enabling either is a separate measured step.
-    - No access logging: with caching disabled every edge request reaches
-      the origin, so the existing nginx access log already IS the request
-      mix; CloudWatch distribution metrics cover edge-side volume, latency
-      and error rates. Legacy DistributionConfig.Logging is not used — it
+    - redirect-to-https enforces viewer HTTPS. Compare its redirect statuses
+      and method preservation with nginx before any public alias cutover.
+    - http2 (not http3) leaves HTTP/3 for a separately measured step.
+      Compress=false avoids adding edge compression during the initial
+      comparison. Live nginx already has gzip on; verify actual response
+      encodings rather than assuming compression is absent.
+    - No access logging: nginx logs measure requests forwarded to the
+      origin, while CloudWatch standard distribution metrics cover total
+      edge requests, bytes and errors. Edge redirects/rejections never reach
+      nginx; these are not identical streams. Latency measurements come from
+      the probe tools (additional OriginLatency metrics need separate approval).
+      Legacy DistributionConfig.Logging is not used — it
       requires an ACL-enabled bucket, and S3 ownership enforcement is the
       required posture. If viewer-level logs are needed later, use standard
       logging v2 (CloudWatch Logs delivery resources, configured through the
@@ -101,7 +108,9 @@ Resources:
             DomainName: !Ref OriginDomain
             CustomOriginConfig:
               OriginProtocolPolicy: https-only
-              OriginSSLProtocols: [TLSv1.2, TLSv1.3]
+              # TLSv1.3 is negotiated automatically where supported, but is
+              # not a valid OriginSSLProtocols API enum value.
+              OriginSSLProtocols: [TLSv1.2]
               # Keep CloudFront defaults (30s read / 5s keepalive): do not
               # extend origin timeouts to mask slow upstreams (#2016 class).
               OriginReadTimeout: 30
@@ -119,7 +128,7 @@ Resources:
           # Managed-AllViewerExceptHostHeader — every viewer header/cookie/
           # query reaches the origin; Host stays the origin domain so nginx
           # serves the canonical vhost.
-          OriginRequestPolicyId: b689b0a8-53d0-40ab-b8f2-59037dcd2058
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
         ViewerCertificate:
           # The default *.cloudfront.net certificate serves the candidate
           # hostname; CloudFront pins its minimum protocol to TLSv1 for the

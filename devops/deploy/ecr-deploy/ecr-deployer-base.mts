@@ -6,14 +6,20 @@ import type { ECRClient } from "@aws-sdk/client-ecr";
 import * as semver from "semver";
 import { DeployerBase } from "../deployer-base.mts";
 import {
+	assertAPILatestMode,
+	prepareAPIArchives,
+	publishAPIImages,
+} from "./api-images.mts";
+import {
 	type ECRConfig,
 	ensureRepositoryExists,
 	getAuthorizationToken,
+	getECRRepositoryUri,
 	getRemoteImageTags,
 	withRetry,
 } from "./ecr-client.mts";
-
 import { resumePublishedImage } from "./resume-image.mts";
+import { publishWebsiteImages } from "./website-images.mts";
 
 export const Diff = {
 	LocalNewer: "LocalNewer",
@@ -26,6 +32,11 @@ export abstract class ECRDeployerBase extends DeployerBase {
 	protected wrappedLocalVersion?: string;
 	protected dockerImagePath?: string;
 	private alreadyPublished = false;
+	private nativeImageOptions?: {
+		arm64ArchivePath: string;
+		sourceRef: string;
+		publishIndex: boolean;
+	};
 	protected readonly dockerImageName: string;
 	protected readonly ecrRepositoryName: string;
 	protected readonly client: ECRClient;
@@ -63,6 +74,50 @@ export abstract class ECRDeployerBase extends DeployerBase {
 		this.dockerImagePath = imagePath;
 	}
 
+	public setAPIImageOptions(options: {
+		arm64ArchivePath?: string;
+		sourceRef?: string;
+		publishIndex?: boolean;
+	}): void {
+		if (this.moduleName !== "api")
+			throw new Error(
+				"Dual archives and publish-index are supported only for API releases",
+			);
+		if (
+			!options.arm64ArchivePath ||
+			!options.sourceRef ||
+			!this.dockerImagePath
+		)
+			throw new Error(
+				"API dual publication requires docker-image, docker-image-arm64 and source-ref",
+			);
+		this.nativeImageOptions = {
+			arm64ArchivePath: options.arm64ArchivePath,
+			sourceRef: options.sourceRef,
+			publishIndex: options.publishIndex ?? false,
+		};
+	}
+	public setWebsiteImageOptions(options: {
+		arm64ArchivePath?: string;
+		sourceRef?: string;
+		publishIndex?: boolean;
+	}): void {
+		if (this.moduleName !== "website")
+			throw new Error("Website image options require the website deployer");
+		if (
+			!options.arm64ArchivePath ||
+			!options.sourceRef ||
+			!this.dockerImagePath
+		)
+			throw new Error(
+				"Website dual publication requires docker-image, docker-image-arm64 and source-ref",
+			);
+		this.nativeImageOptions = {
+			arm64ArchivePath: options.arm64ArchivePath,
+			sourceRef: options.sourceRef,
+			publishIndex: options.publishIndex ?? false,
+		};
+	}
 	protected abstract getLocalVersion(): Promise<string>;
 	protected abstract getDockerImageTag(): Promise<string>;
 	protected abstract getDockerImageArchivePath(): Promise<string>;
@@ -169,9 +224,54 @@ export abstract class ECRDeployerBase extends DeployerBase {
 		this.info("Postconditions for deployment passed.");
 	}
 
+	private async assertLatestPromotion(): Promise<void> {
+		if ((await this.localRemoteVersionDiff()) === Diff.RemoteNewer) {
+			throw new Error(
+				"A newer canonical version exists; refusing a latest downgrade",
+			);
+		}
+		if (this.moduleName === "api" || this.moduleName === "website") {
+			await assertAPILatestMode(this.client, this.ecrRepositoryName, false);
+		}
+	}
 	protected override async coreDeploy(): Promise<void> {
 		this.info("Starting core deployment to ECR...");
 
+		if (this.nativeImageOptions) {
+			const version = await this.getLocalVersion();
+			if (!this.dockerImagePath)
+				throw new Error("The canonical amd64 archive is required");
+			const prepared = await prepareAPIArchives({
+				amd64ArchivePath: this.dockerImagePath,
+				arm64ArchivePath: this.nativeImageOptions.arm64ArchivePath,
+				sourceRef: this.nativeImageOptions.sourceRef,
+				version,
+			});
+			try {
+				const publish =
+					this.moduleName === "website"
+						? publishWebsiteImages
+						: publishAPIImages;
+				const result = await publish(prepared, {
+					client: this.client,
+					repositoryName: this.ecrRepositoryName,
+					repositoryUri: getECRRepositoryUri(
+						this.config,
+						this.ecrRepositoryName,
+					),
+					version,
+					publishIndex: this.nativeImageOptions.publishIndex,
+				});
+				this.info(
+					`Verified ${this.moduleName} image publication: ${JSON.stringify(result)}`,
+				);
+			} finally {
+				await prepared.dispose();
+			}
+			return;
+		}
+		if (this.moduleName === "api" || this.moduleName === "website")
+			await assertAPILatestMode(this.client, this.ecrRepositoryName, false);
 		// Ensure repository exists
 		const repositoryUri = await ensureRepositoryExists(
 			this.client,
@@ -180,6 +280,7 @@ export abstract class ECRDeployerBase extends DeployerBase {
 		this.info(`Using ECR repository: ${repositoryUri}`);
 
 		if (this.alreadyPublished) {
+			await this.assertLatestPromotion();
 			await resumePublishedImage(
 				this.client,
 				this.ecrRepositoryName,
@@ -349,6 +450,7 @@ export abstract class ECRDeployerBase extends DeployerBase {
 			// Push to ECR
 			this.info(`Pushing image to ECR: ${ecrImageUri}`);
 			execSync(`docker push ${ecrImageUri}`, { stdio: "inherit" });
+			await this.assertLatestPromotion();
 			this.info(`Pushing latest tag to ECR: ${ecrLatestUri}`);
 			execSync(`docker push ${ecrLatestUri}`, { stdio: "inherit" });
 		}
@@ -401,6 +503,7 @@ export abstract class ECRDeployerBase extends DeployerBase {
 		});
 
 		// Also push as latest
+		await this.assertLatestPromotion();
 		this.info(`Pushing latest tag to ECR: ${ecrLatestUri}`);
 		execSync(`crane push "${actualPath}" "${ecrLatestUri}"`, {
 			stdio: "inherit",
