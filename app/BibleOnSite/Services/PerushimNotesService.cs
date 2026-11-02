@@ -1049,10 +1049,153 @@ public class PerushimNotesService
             .ToList();
     }
 
+    /// <summary>
+    /// Reading metric for one perush's notes on a perek, read from the notes
+    /// pack (issue #2607). Null when the pack predates the metric tables or
+    /// has no row — the reader keeps working either way.
+    /// </summary>
+    public async Task<ReadingMetric?> GetPerushReadingMetricAsync(int perushId, int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<PerushMetricRow>(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perush_metric WHERE perush_id = ? AND perek_id = ?",
+                perushId, perekId);
+            var row = rows.FirstOrDefault();
+            return row == null
+                ? null
+                : new ReadingMetric
+                {
+                    WordCount = row.WordCount,
+                    EstimatedSeconds = row.EstimatedSeconds,
+                    WordsPerMinute = row.WordsPerMinute,
+                    CalcVersion = row.CalcVersion,
+                    SourceHash = row.SourceHash ?? string.Empty
+                };
+        }
+        catch (SQLiteException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Ordered note progress units for a perush on a perek (issue #2607),
+    /// cumulative across the perush's notes in (pasuk, note_idx) order.
+    /// Empty when the metric table is absent.
+    /// </summary>
+    public async Task<IReadOnlyList<ReadingProgressUnit>> GetNoteProgressUnitsAsync(int perushId, int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return Array.Empty<ReadingProgressUnit>();
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<NoteMetricRow>(
+                "SELECT pasuk, note_idx, word_count, cumulative_words " +
+                "FROM tanah_note_metric WHERE perush_id = ? AND perek_id = ? ORDER BY pasuk, note_idx",
+                perushId, perekId);
+            return rows
+                .Select(r => new ReadingProgressUnit
+                {
+                    Key = $"{r.Pasuk}:{r.NoteIdx}",
+                    WordCount = r.WordCount,
+                    CumulativeWords = r.CumulativeWords
+                })
+                .ToList();
+        }
+        catch (SQLiteException)
+        {
+            return Array.Empty<ReadingProgressUnit>();
+        }
+    }
+
+    /// <summary>
+    /// All stored perush reading metrics for a perek in one query (issue
+    /// #2607) — the sheet's badge source. Empty when the pack predates the
+    /// metric tables.
+    /// </summary>
+    public virtual async Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return new Dictionary<int, ReadingMetric>();
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<PerushMetricRow>(
+                "SELECT perush_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perush_metric WHERE perek_id = ?",
+                perekId);
+            return rows.ToDictionary(
+                r => r.PerushId,
+                r => new ReadingMetric
+                {
+                    WordCount = r.WordCount,
+                    EstimatedSeconds = r.EstimatedSeconds,
+                    WordsPerMinute = r.WordsPerMinute,
+                    CalcVersion = r.CalcVersion,
+                    SourceHash = r.SourceHash ?? string.Empty
+                });
+        }
+        catch (SQLiteException)
+        {
+            return new Dictionary<int, ReadingMetric>();
+        }
+    }
+
     private class MetadataRow
     {
         [Column("Value")]
         public string? Value { get; set; }
+    }
+
+    private class PerushMetricRow
+    {
+        [Column("perush_id")]
+        public int PerushId { get; set; }
+
+        [Column("word_count")]
+        public int? WordCount { get; set; }
+
+        [Column("estimated_seconds")]
+        public int? EstimatedSeconds { get; set; }
+
+        [Column("words_per_minute")]
+        public int WordsPerMinute { get; set; }
+
+        [Column("calc_version")]
+        public int CalcVersion { get; set; }
+
+        [Column("source_hash")]
+        public string? SourceHash { get; set; }
+    }
+
+    private class NoteMetricRow
+    {
+        [Column("pasuk")]
+        public int Pasuk { get; set; }
+
+        [Column("note_idx")]
+        public int NoteIdx { get; set; }
+
+        [Column("word_count")]
+        public int WordCount { get; set; }
+
+        [Column("cumulative_words")]
+        public int CumulativeWords { get; set; }
     }
 
     private class IdRow

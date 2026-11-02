@@ -275,6 +275,9 @@ public partial class ArticlesViewModel : ObservableObject
             PerekDisplayName = string.IsNullOrEmpty(hit.Source)
                 ? _perekDataService.GetPerekSource(hit.PerekId)
                 : hit.Source,
+            // The hit excerpt is the *match context*; the badge still uses the
+            // stored full-article metric (#2607).
+            ReadingMetric = hit.ReadingMetric,
             Author = author
         };
     }

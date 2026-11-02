@@ -116,19 +116,26 @@
                                 </MultiBinding>
                             </CheckBox.IsChecked>
                         </CheckBox>
-                        <Label Grid.Column="1"
-                               Text="{Binding Name}"
-                               FontSize="16"
-                               FlowDirection="RightToLeft"
-                               VerticalOptions="Center">
-                            <Label.Triggers>
-                                <DataTrigger TargetType="Label"
-                                             Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
-                                             Value="False">
-                                    <Setter Property="Opacity" Value="0.4"/>
-                                </DataTrigger>
-                            </Label.Triggers>
-                        </Label>
+                        <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                            <Label Text="{Binding Name}"
+                                   FontSize="16"
+                                   FlowDirection="RightToLeft">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                                 Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
+                                                 Value="False">
+                                        <Setter Property="Opacity" Value="0.4"/>
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                            <!-- Perush's stored reading metric for this perek (issue #2607). -->
+                            <Label Text="{Binding ReadingTimeBadge}"
+                                   IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
+                                   FontSize="11"
+                                   AutomationId="PerushReadingTimeBadge"
+                                   FlowDirection="RightToLeft"
+                                   TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+                        </VerticalStackLayout>
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
