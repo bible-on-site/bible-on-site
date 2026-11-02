@@ -58,6 +58,17 @@
     "ordinaryRealAppBeforeAfterRunsPassed": true,
     "timingRaceReproducedByThoseBrowserRuns": false,
     "pageErrors": 0,
+    "visibleChapterLoading": {
+      "beforeServerActionRequests": 13,
+      "afterServerActionRequests": 3,
+      "unchangedSummaryRequestsPerRun": 2,
+      "method": "Same real app TOC chapter2-to1 and fast commentary selection, original animation and five-second visibility assertion; compare browser network traces before and after limiting new commentary reads to the displayed chapter",
+      "visibleCommentaryPassedBeforeAndAfter": true,
+      "hiddenPagesRetainCompletedNotes": true,
+      "baselineVisibleChapterRegressionTestFailed": true,
+      "fixedSeferAndPanelTestsPassed": 81,
+      "intermittentCIFailureMustStillBeChecked": true
+    },
     "screenshots": ["website-reader-selection-2026-11-02/before.png", "website-reader-selection-2026-11-02/after.png"],
     "titleContract": "Closing the book after returning to chapter2 preserves chapter2 URL, heading and title"
   },

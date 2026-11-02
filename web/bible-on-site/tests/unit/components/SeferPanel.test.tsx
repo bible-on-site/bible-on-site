@@ -119,6 +119,25 @@ const renderPanel = async (ui: React.ReactElement) => {
 	return view;
 };
 
+test("loads commentary for the visible chapter and keeps completed notes when paging", async () => {
+	setSeferPerushSelection("בראשית", [RASHI.id]);
+	const panels = (chapter: number) => (
+		<>
+			<SeferPanel {...PROPS} isActive={chapter === 1} />
+			<SeferPanel {...PROPS} perekId={2} isActive={chapter === 2} />
+		</>
+	);
+	const view = await renderPanel(panels(1));
+	expect(mockGetPerushNotesBatch.mock.calls).toEqual([[1, [RASHI.id]]]);
+	await act(async () => view.rerender(panels(2)));
+	expect(mockGetPerushNotesBatch.mock.calls).toEqual([
+		[1, [RASHI.id]],
+		[2, [RASHI.id]],
+	]);
+	await act(async () => view.rerender(panels(1)));
+	expect(mockGetPerushNotesBatch).toHaveBeenCalledTimes(2);
+});
+
 beforeEach(() => {
 	jest.clearAllMocks();
 	localStorage.clear();
