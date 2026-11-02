@@ -61,6 +61,18 @@ test("a timed-out runner or failed scenario cannot publish a complete union", ()
   assert.throws(() => validateRunnerEvidence([{ timing, evidence: [{ ...evidence("a"), outcome: "failed" }] }, part("b")], ["a", "b"]), /Unsuccessful/);
 });
 
+test("a single-shard plan reads the artifact download-artifact extracted into the inputs root", () => {
+  const root = mkdtempSync(join(tmpdir(), "shard-inputs-"));
+  try {
+    assert.throws(() => discoverShardInputs(root, plan(["a"])), /Missing artifacts for iOS shard 1/);
+    writeFileSync(join(root, "case-manifest.json"), "{}");
+    assert.deepEqual(discoverShardInputs(root, plan(["a"])), [root]);
+    assert.throws(() => discoverShardInputs(root, plan(["a"], ["b"])), /Missing artifacts for iOS shard 1/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("locates shard artifact directories by the shard number in their name", () => {
   const root = mkdtempSync(join(tmpdir(), "shard-inputs-"));
   try {
