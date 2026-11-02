@@ -19,6 +19,12 @@ globalThis.WritableStream ??= WritableStream;
 globalThis.TransformStream ??= TransformStream;
 globalThis.MessagePort ??= MessagePort;
 
+// Keep valid HTML search markup and React's unknown-tag diagnostics accurate.
+const {
+	installHtmlSearchElementSupport,
+} = require("./tests/util/jsdom-html-search.cjs");
+installHtmlSearchElementSupport(globalThis);
+
 // Mock isomorphic-dompurify so we don't need to transform its ESM deps (jsdom, @exodus/bytes, etc.)
 jest.mock("isomorphic-dompurify", () => ({
 	__esModule: true,

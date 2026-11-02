@@ -155,7 +155,8 @@ repos:
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^app/
         pass_filenames: false
-        priority: 10
+        # Reuses the analyzer gate's build outputs; avoid concurrent writers.
+        priority: 20
       # C# analyzer gate (#2114): builds each touched app/ project so the
       # SonarAnalyzer.CSharp severities in .editorconfig fail locally instead
       # of first surfacing as post-push Codacy/Qodana annotations. Skips
@@ -165,7 +166,7 @@ repos:
         entry: node devops/precommit-dotnet.mjs
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
-        files: ^(app/.*\.(cs|csproj)|\.editorconfig|global\.json|app/Directory\.Build\.props)$
+        files: ^(app/.*\.(cs|csproj)|\.editorconfig|(app/)?global\.json|app/Directory\.Build\.props)$
         pass_filenames: false
         priority: 10
       # Generic-catch justification gate (#2114 second wave): S2221 does not

@@ -2,7 +2,7 @@
 	display: inline-block;
 	margin-inline-start: 12px;
 	padding: 2px 10px;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: rgba(21, 82, 172, 0.08);
 	color: var(--pasuk-num-color, #1c2c5d);
 	font-size: 0.65em;
@@ -26,7 +26,7 @@
 	gap: 4px;
 	padding: 10px 16px;
 	border: 1px solid rgba(21, 82, 172, 0.25);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	text-decoration: none;
 	color: var(--pasuk-num-color, #1c2c5d);
 	transition: background-color 0.2s ease;

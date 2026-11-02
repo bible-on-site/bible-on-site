@@ -5,6 +5,7 @@ import { DivineNameText } from "@/app/929/[number]/components/DivineNameText";
 import type { Segment } from "@/data/db/tanah-view-types";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import { getPerekByPerekId } from "@/data/perek-dto";
+import { containsDivineName } from "@/lib/divine-name-masking";
 import type { EntryTanahOccurrence } from "@/lib/tanahpedia/service";
 import styles from "./entry-occurrences.module.css";
 
@@ -24,13 +25,16 @@ function OccurrenceCitation({
 				range.segmentEnd === null ||
 				(index >= range.segmentStart && index <= range.segmentEnd),
 		);
+		const value = containsDivineName(segment.value) ? (
+			<DivineNameText value={segment.value} />
+		) : (
+			segment.value
+		);
 		const text =
 			segment.type === "qri" && isQriDifferentThanKtiv(segment) ? (
-				<>
-					(<DivineNameText value={segment.value} />)
-				</>
+				<>({value})</>
 			) : (
-				<DivineNameText value={segment.value} />
+				value
 			);
 		return (
 			// biome-ignore lint/suspicious/noArrayIndexKey: references address immutable canonical segment positions

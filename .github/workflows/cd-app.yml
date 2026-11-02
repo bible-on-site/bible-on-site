@@ -81,6 +81,23 @@ jobs:
           echo "AAB_FILE=$AAB_FILE" >> $GITHUB_OUTPUT
           echo "Found AAB: $AAB_FILE"
 
+      # Releases built before symbols packaging (#1162) carry no symbols asset;
+      # warn-and-skip so a rollback of such a release still deploys.
+      - name: Restore native debug symbols
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: find_symbols
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/releases/tags/app-v${{ env.MODULE_VERSION }}" --jq '.assets[].name' | grep -q '\-native-symbols\.zip$'; then
+            gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*-native-symbols.zip" --dir "${{ env.APP_DIRECTORY }}/.artifacts" --clobber
+            SYMBOLS_FILE=$(realpath $(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*-native-symbols.zip" | head -1))
+            echo "SYMBOLS_FILE=$SYMBOLS_FILE" >> $GITHUB_OUTPUT
+            echo "Found native symbols: $SYMBOLS_FILE"
+          else
+            echo "::warning::No native debug symbols asset on release app-v${{ env.MODULE_VERSION }} — uploading bundle without them"
+          fi
+
       - name: Setup .NET
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
@@ -117,6 +134,7 @@ jobs:
         run: |
           dotnet run --project devops -- DeployGooglePlay \
             --aab-path "${{ steps.find_aab.outputs.AAB_FILE }}" \
+            --android-symbols-path "${{ steps.find_symbols.outputs.SYMBOLS_FILE }}" \
             --google-play-key-file "${{ runner.temp }}/service-account.json"
 
       - name: Record deployment result

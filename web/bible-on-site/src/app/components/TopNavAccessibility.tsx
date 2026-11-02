@@ -58,19 +58,25 @@ const sameA11y = (a: SiteA11ySettings, b: SiteA11ySettings) =>
 export function TopNavAccessibility() {
 	const pathname = usePathname();
 	const [open, setOpen] = useState(false);
+	const [ready, setReady] = useState(false);
 	const [settings, setSettings] = useState<ReaderSettings>(
 		DEFAULT_READER_SETTINGS,
 	);
-	const [a11y, setA11y] = useState<SiteA11ySettings>(DEFAULT_SITE_A11Y_SETTINGS);
+	const [a11y, setA11y] = useState<SiteA11ySettings>(
+		DEFAULT_SITE_A11Y_SETTINGS,
+	);
 	const [announce, setAnnounce] = useState("");
 	const [lastPathname, setLastPathname] = useState(pathname);
+	const [openedPathname, setOpenedPathname] = useState<string | null>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 
 	// Route changes dismiss the popover (same convention as NavBar).
 	if (pathname !== lastPathname) {
 		setLastPathname(pathname);
-		setOpen(false);
+		// A click can already belong to the browser's destination before
+		// usePathname catches up. Preserve that opening on the same route.
+		if (openedPathname !== pathname) setOpen(false);
 		setAnnounce("");
 	}
 
@@ -100,6 +106,8 @@ export function TopNavAccessibility() {
 		window.addEventListener(READER_SETTINGS_EVENT, updated);
 		window.addEventListener(SITE_A11Y_EVENT, a11yUpdated);
 		window.addEventListener("storage", stored);
+		// Server HTML is visible before event handlers and stored settings are ready.
+		setReady(true);
 		return () => {
 			window.removeEventListener(READER_SETTINGS_EVENT, updated);
 			window.removeEventListener(SITE_A11Y_EVENT, a11yUpdated);
@@ -191,7 +199,11 @@ export function TopNavAccessibility() {
 				aria-haspopup="dialog"
 				aria-expanded={open}
 				aria-controls={open ? PANEL_ID : undefined}
-				onClick={() => setOpen((v) => !v)}
+				disabled={!ready}
+				onClick={() => {
+					setOpenedPathname(window.location.pathname);
+					setOpen((v) => !v);
+				}}
 			>
 				{/* Always visible at first paint — eager so the icon can never
 				    arrive after paint and feed a layout-shift candidate. */}
@@ -293,7 +305,9 @@ export function TopNavAccessibility() {
 							<input
 								type="checkbox"
 								checked={a11y.links}
-								onChange={(event) => updateA11y({ links: event.target.checked })}
+								onChange={(event) =>
+									updateA11y({ links: event.target.checked })
+								}
 							/>
 						</label>
 					</div>

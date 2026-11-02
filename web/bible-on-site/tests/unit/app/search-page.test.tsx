@@ -60,7 +60,15 @@ describe("SearchPage", () => {
 		const page = await SearchPage({ searchParams: paramsFor({}) });
 		expect(renderToString(page)).not.toMatch(/<input[^>]*disabled/);
 		render(page);
-		expect(screen.getByRole("searchbox", { name: "מונח חיפוש" })).toBeEnabled();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		expect(input).toBeEnabled();
+		const form = input.closest("form");
+		// The current accessibility-query data predates HTML search's implicit role.
+		expect(form?.parentElement?.tagName).toBe("SEARCH");
+		expect(form?.parentElement).toBeInstanceOf(HTMLElement);
+		expect(form).toHaveAttribute("action", "/search");
+		expect(form).toHaveAttribute("method", "get");
+		expect(form).toContainElement(input);
 	});
 
 	it("adopts text typed before hydration instead of dropping it", async () => {

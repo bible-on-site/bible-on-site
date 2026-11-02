@@ -1,4 +1,5 @@
 import {
+	containsDivineName,
 	DEFAULT_DIVINE_NAME_MASKING,
 	type DivineNameMaskingSettings,
 	maskDivineNameText,
@@ -236,4 +237,57 @@ describe("maskDivineNameText", () => {
 				enabled: false,
 			}),
 		).toBe("יְהוָ֑ה אֱלֹהִ֖ים"));
+});
+
+describe("containsDivineName", () => {
+	it.each([
+		"יְהוָ֑ה",
+		"אֱלֹהִ֑ים",
+		"אֵ֑ל",
+		"אל",
+		"שַׁדַּ֥י",
+		"שדי",
+		"בּאל",
+		"מֵהָאֱלֹהִים֙",
+		"בְּרֵאשִׁית אֱלֹהִ֑ים",
+		"יְהוָה־אֱלֹהֵינוּ֙",
+		"שְׂדֵ֖י־שַׁדַּ֥י",
+		"  ־ יְהוָ֣ה ׀  ",
+		"וּמֵאֵ֗ל יִקְרָא֙",
+	])("keeps a reactive boundary for the supported name in %s", (text) => {
+		expect(containsDivineName(text)).toBe(true);
+		expect(maskDivineNameText(text, enabled())).not.toBe(text);
+	});
+
+	it.each([
+		"",
+		"  ־ ־ ",
+		"בְּרֵאשִׁית",
+		"אֵ֣לֶּה",
+		"אֶ֖ל",
+		"אַ֣ל",
+		"וְאֶל־",
+		"שְׂדֵ֖י",
+		"שָׂדַ֖י",
+		"שָׁדַ֖י",
+		"שְׁמוּאֵ֑ל",
+		"יְהוֹשֻׁ֑עַ",
+		"ְאל",
+		"שלום אֶל־שְׂדֵ֖י",
+		"שלום\tיהוה",
+		"\nיהוה",
+	])("leaves invariant text static: %s", (text) => {
+		expect(containsDivineName(text)).toBe(false);
+		expect(maskDivineNameText(text, enabled())).toBe(text);
+	});
+
+	it("retains names whose current or default preference leaves them unchanged", () => {
+		const text = "שַׁדַּ֥י";
+		expect(maskDivineNameText(text, DEFAULT_DIVINE_NAME_MASKING)).toBe(text);
+		expect(maskDivineNameText(text, enabled({ enabled: false }))).toBe(text);
+		expect(containsDivineName(text)).toBe(true);
+		expect(maskDivineNameText(text, enabled({ shaddai: "hyphen" }))).toBe(
+			"שד-י",
+		);
+	});
 });

@@ -95,9 +95,7 @@ test.describe("פרשה reading root", () => {
 			const location = response.headers().location ?? "";
 			// The proxy emits a same-origin (relative) Location — resolve it.
 			expect(
-				decodeURIComponent(
-					new URL(location, "http://127.0.0.1:3001").pathname,
-				),
+				decodeURIComponent(new URL(location, "http://127.0.0.1:3001").pathname),
 				legacy,
 			).toBe(slug);
 		}
@@ -205,7 +203,7 @@ test.describe("פרשה reading root", () => {
 
 	test("aliyah markers and the מנהג variant swap in place", async ({
 		page,
-	}) => {
+	}, testInfo) => {
 		// פרשת ויגש (unit 11): the documented חב"ד division re-slices
 		// עליות ג-ה — רביעי moves from בראשית מה יט to מה כח (#2519).
 		await page.goto(unitPath("ויגש"));
@@ -228,31 +226,31 @@ test.describe("פרשה reading root", () => {
 
 		// The מנהג group offers the documented חב"ד variant. The layer
 		// swaps instantly without remounting scripture — it must not
-		// wait for the soft-navigation round-trip. The click may race
-		// hydration, so retry until the press lands.
-		const chabadButton = page.getByRole('button', { name: 'חב"ד' });
-		await expect(async () => {
-			if ((await chabadButton.getAttribute("aria-pressed")) !== "true") {
-				await chabadButton.click();
-			}
-			await expect(chabadButton).toHaveAttribute("aria-pressed", "true");
-		}).toPass({ timeout: 15_000 });
+		// wait for the soft-navigation round-trip. The first click must
+		// survive hydration without a second user action.
+		const chabadButton = page.getByRole("button", { name: 'חב"ד' });
+		await chabadButton.click();
+		await expect(chabadButton).toHaveAttribute("aria-pressed", "true");
 		await expect(markerAt("pasuk-45-19")).toHaveCount(0);
 		await expect(markerAt("pasuk-45-28").first()).toHaveText("רביעי");
 		await expect(markerAt("pasuk-46-8").first()).toHaveText("חמישי");
+		await testInfo.attach("aliyah-first-variant-click", {
+			body: await page.getByRole("group", { name: "חלוקת עליות" }).screenshot(),
+			contentType: "image/png",
+		});
 		// The choice mirrors into ?variant= once the soft navigation
 		// commits — dev-server RSC renders can take tens of seconds.
 		await expect(page).toHaveURL(/variant=/, { timeout: 60_000 });
 
 		// Re-selecting the common split clears the selection params.
 		const commonButton = page.getByRole("button", { name: "נפוץ" });
-		await expect(async () => {
-			if ((await commonButton.getAttribute("aria-pressed")) !== "true") {
-				await commonButton.click();
-			}
-			await expect(commonButton).toHaveAttribute("aria-pressed", "true");
-		}).toPass({ timeout: 15_000 });
+		await commonButton.click();
+		await expect(commonButton).toHaveAttribute("aria-pressed", "true");
 		await expect(markerAt("pasuk-45-19").first()).toHaveText("רביעי");
+		await testInfo.attach("aliyah-first-common-click", {
+			body: await page.getByRole("group", { name: "חלוקת עליות" }).screenshot(),
+			contentType: "image/png",
+		});
 	});
 
 	test("joined parashot keep separate unit identities", async ({ page }) => {

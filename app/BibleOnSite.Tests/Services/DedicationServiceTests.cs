@@ -201,36 +201,26 @@ public class DedicationServiceTests
 
 public class DedicationFormatterTests
 {
-    [Fact]
-    public void Format_subject_only()
+    // Same wording table as the website formatDedication and admin
+    // previewDedicationLine tests (#2849).
+    [Theory]
+    [InlineData(new[] { "לרפואה" }, "מזל בת רחל", "לרפואת מזל בת רחל")]
+    [InlineData(new[] { "רפואה שלימה" }, "מזל בת רחל", "לרפואת מזל בת רחל")]
+    [InlineData(new[] { "לרפואת" }, "ראובן בן יקוט", "לרפואת ראובן בן יקוט")]
+    [InlineData(new[] { "  רפואה   שלמה " }, "מזל בת רחל", "לרפואת מזל בת רחל")]
+    [InlineData(new[] { "לע\"נ" }, "יעל בת רחל", "לע\"נ יעל בת רחל")]
+    [InlineData(new[] { "לע״נ" }, "יעל בת רחל", "לע\"נ יעל בת רחל")]
+    [InlineData(new string[0], "יעל בת רחל", "יעל בת רחל")]
+    [InlineData(new[] { "  ", "" }, "יעל בת רחל", "יעל בת רחל")]
+    [InlineData(new[] { "רפואה שלימה", "להצלחת" }, "מזל בת רחל", "לרפואת ולהצלחת מזל בת רחל")]
+    [InlineData(new[] { "לרפואה", "רפואה שלימה" }, "מזל בת רחל", "לרפואת מזל בת רחל")]
+    [InlineData(new[] { "לרפואה" }, "לאה בת שרה", "לרפואת לאה בת שרה")]
+    public void Format_renders_purpose_first(string[] purposes, string subject, string expected)
     {
-        var dedication = new Dedication { Subject = "Fulano de Tal" };
+        var line = DedicationFormatter.Format(new Dedication { Subject = subject, Purposes = [.. purposes] });
 
-        DedicationFormatter.Format(dedication).Should().Be("מוקדש לFulano de Tal");
-    }
-
-    [Fact]
-    public void Format_subject_with_purposes()
-    {
-        var dedication = new Dedication
-        {
-            Subject = "Fulano de Tal",
-            Purposes = ["Falecimento", "Em louvor a Deus"],
-        };
-
-        DedicationFormatter.Format(dedication).Should().Be("מוקדש לFulano de Tal (Falecimento, Em louvor a Deus)");
-    }
-
-    [Fact]
-    public void Format_blank_purposes_are_dropped()
-    {
-        var dedication = new Dedication
-        {
-            Subject = "Fulano de Tal",
-            Purposes = ["Falecimento", "  ", ""],
-        };
-
-        DedicationFormatter.Format(dedication).Should().Be("מוקדש לFulano de Tal (Falecimento)");
+        line.Should().Be(expected);
+        line.Should().NotContain("מוקדש").And.NotContainAny("(", ")");
     }
 
     [Fact]
@@ -243,6 +233,6 @@ public class DedicationFormatterTests
         };
 
         DedicationFormatter.FormatAll(dedications)
-            .Should().Equal("מוקדש לA", "מוקדש לB (P)");
+            .Should().Equal("A", "P B");
     }
 }

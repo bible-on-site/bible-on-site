@@ -1,6 +1,7 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 
@@ -15,6 +16,7 @@ namespace BibleOnSite.Tests.Helpers;
 /// real device builds. The page-level delegation contract lives in
 /// <c>ReaderPlatformChromeContractTests</c>.
 /// </summary>
+[Collection(PreferencesServiceCollection.Name)]
 public class ReaderPlatformChromeTests : IDisposable
 {
     private sealed class FakeSearchSurface : IReaderSearchSurface

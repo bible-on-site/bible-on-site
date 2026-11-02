@@ -80,7 +80,7 @@ const CANONICAL_SWC_OPTIONS = {
 const universeCache = new Map();
 
 // @swc/core is loaded lazily: a top-level import would crash every module that
-// pulls in sanitize-coverage.js — including plain `test:e2e` runs that never
+// pulls in sanitize-coverage.mjs — including plain `test:e2e` runs that never
 // collect coverage — on machines where the native binding cannot load.
 let swcModule;
 function loadSwc() {

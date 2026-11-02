@@ -68,9 +68,35 @@ export interface DedicationContext {
 	masora?: boolean;
 }
 
+const HEALING_PURPOSES = new Set([
+	"רפואה",
+	"לרפואה",
+	"לרפואת",
+	"רפואה שלמה",
+	"רפואה שלימה",
+	"לרפואה שלמה",
+	"לרפואה שלימה",
+]);
+
 /**
- * The rendered Hebrew line for one dedication: the honoured subject with
- * its purposes in parentheses — `מוקדש למרדכי בן זאב (לע"נ)`.
+ * One stored purpose in its purpose-first display form: whitespace
+ * collapsed, legacy gershayim/geresh/typographic quotes mapped to ASCII,
+ * healing variants (לרפואה, רפואה שלימה, ...) folded to the construct form
+ * לרפואת. Other purposes (לע"נ, custom wording) keep their meaning.
+ */
+export function displayPurpose(purpose: string): string {
+	const clean = purpose
+		.trim()
+		.replace(/\s+/g, " ")
+		.replace(/[״“”„]/g, '"')
+		.replace(/[׳‘’]/g, "'");
+	return HEALING_PURPOSES.has(clean) ? "לרפואת" : clean;
+}
+
+/**
+ * The rendered Hebrew line for one dedication: the purposes directly
+ * before the exact subject — `לרפואת מזל בת רחל`, `לע"נ יעל בת רחל` —
+ * multiple purposes joined with ו, the subject alone when none is given.
  * Kept content-only (no markup) so admin previews, the bulletin and the
  * native app can share the same presentation string.
  */
@@ -78,8 +104,10 @@ export function formatDedication(dedication: {
 	subject: string;
 	purposes: string[];
 }): string {
-	const purposes = dedication.purposes.filter((p) => p.trim().length > 0);
+	const purposes = [
+		...new Set(dedication.purposes.map(displayPurpose).filter(Boolean)),
+	];
 	return purposes.length === 0
-		? `מוקדש ל${dedication.subject}`
-		: `מוקדש ל${dedication.subject} (${purposes.join(", ")})`;
+		? dedication.subject
+		: `${purposes.join(" ו")} ${dedication.subject}`;
 }

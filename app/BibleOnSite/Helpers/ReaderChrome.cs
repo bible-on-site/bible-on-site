@@ -213,6 +213,19 @@ public sealed class ReaderChrome
         _actions.FullscreenStateChanged?.Invoke(false);
     }
 
+    /// <summary>Desktop F11 — flips between fullscreen and the normal reader chrome.</summary>
+    public void ToggleFullScreen()
+    {
+        if (_ui.ExitFullscreenButton.IsVisible)
+        {
+            ExitFullScreen();
+        }
+        else
+        {
+            EnterFullScreen();
+        }
+    }
+
     /// <summary>Returns to the reading view from the articles view.</summary>
     private void ShowTextView()
     {

@@ -5,7 +5,7 @@ import {
 	isCovIgnored,
 	projectCounters,
 	rewriteToCanonical,
-} from "./coverage-universe.js";
+} from "./coverage-universe.mjs";
 
 /**
  * @typedef {Object} Position

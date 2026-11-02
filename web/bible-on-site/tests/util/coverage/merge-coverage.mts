@@ -55,7 +55,7 @@ function mergeCoverage(): void {
  * #2670 contract.
  *
  * Both reports enumerate the same canonical universe: sanitizeCoverage
- * (tests/util/coverage/coverage-universe.js) rewrites every collected record
+ * (tests/util/coverage/coverage-universe.mjs) rewrites every collected record
  * onto the coordinates jest's transform emits for the file and drops records
  * that name no real instrumentable src file — the dev server's generated
  * modules (data<hash> chunks, `[json].cjs` wrappers, font chunks) and stale
