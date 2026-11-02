@@ -26,21 +26,16 @@ const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
  * punctuation collapsed to single spaces.
  */
 export function normalizeSearchText(text: string): string {
-	let builder = "";
-	for (const char of text.normalize("NFD")) {
-		if (MARKS.test(char)) {
-			continue;
-		}
-		if (QUOTES.has(char)) {
-			continue;
-		}
-		if (LETTER_OR_DIGIT.test(char)) {
-			builder += char.toLowerCase();
-		} else if (builder.length > 0 && !builder.endsWith(" ")) {
-			builder += " ";
-		}
-	}
-	return builder.trim();
+	return (
+		text
+			.normalize("NFD")
+			.replace(/[\p{Mn}\p{Mc}'"׳״‘’“”]/gu, "")
+			.replace(/[^\p{L}\p{N}]+/gu, " ")
+			.trim()
+			// Preserve per-code-point casing: whole-string lowercasing changes
+			// final Greek sigma. Hebrew text needs no callback at all.
+			.replace(/[\p{Uppercase}\p{Lt}]/gu, (char) => char.toLowerCase())
+	);
 }
 
 /** Normalized query/content split into terms. */

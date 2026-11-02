@@ -14,6 +14,7 @@ import { demoteHeadings } from "@/lib/html-headings";
 import { getEntryProgressUnits, metricOrFallback } from "@/lib/reading-metrics";
 import { plainText } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
+import { sameAsFor } from "@/lib/seo/same-as";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
@@ -116,8 +117,20 @@ export async function EntryView({ slug }: { slug: string }) {
 	const entryDedications = dedicationLines(
 		await getEntryDedications(entry.id),
 	);
+	const sameAsByEntityId = Object.fromEntries(
+		await Promise.all(
+			entry.entities.map(
+				async (ee) =>
+					[
+						ee.entityId,
+						await sameAsFor("TANAHPEDIA_ENTITY", ee.entityId),
+					] as const,
+			),
+		),
+	);
 	const entryGraph = buildEntryGraph({
 		entry,
+		sameAsByEntityId,
 		personFamily,
 		placeMarkers: placeMapMarkers,
 		category: primaryEntity
