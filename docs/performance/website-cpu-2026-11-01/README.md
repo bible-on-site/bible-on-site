@@ -7,10 +7,10 @@ of 0.25 vCPU and 2 GiB. Repeated delivery work, first-use page-cache work and
 CPU throttling deserve attention before treating a capacity increase as the
 only solution. Calendar PDF rendering has already moved off this request path.
 
-Implementation is queued for Devin in
-[#2949](https://github.com/bible-on-site/bible-on-site/issues/2949), on the
-website project with the `Devin Backlog` label. This report is investigation
-evidence; that task owns the implementation and its separately approved rollout.
+The [completed November 2 research and capacity decision](../website-cpu-2026-11-02/README.md)
+supersede this initial experiment's implementation hypotheses. Codex owns the
+AWS rollout in [#2949](https://github.com/bible-on-site/bible-on-site/issues/2949);
+Devin receives only the separately reproduced implementation fixes.
 
 ## Production observations
 
@@ -176,7 +176,7 @@ Repeated requests can hide it. Existing startup checks warm health,
 readiness and recitation routes; they do not warm the thousands of page
 cache entries exercised by crawlers and reader navigation.
 
-## Implementation decision
+## Initial implementation hypotheses (superseded by the November 2 decision)
 
 The implementation task should first remove or relocate avoidable request
 work. Evaluate compression on the existing proxy or bounded precompression,
