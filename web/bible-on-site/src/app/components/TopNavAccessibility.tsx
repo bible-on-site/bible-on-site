@@ -58,6 +58,7 @@ const sameA11y = (a: SiteA11ySettings, b: SiteA11ySettings) =>
 export function TopNavAccessibility() {
 	const pathname = usePathname();
 	const [open, setOpen] = useState(false);
+	const [ready, setReady] = useState(false);
 	const [settings, setSettings] = useState<ReaderSettings>(
 		DEFAULT_READER_SETTINGS,
 	);
@@ -105,6 +106,8 @@ export function TopNavAccessibility() {
 		window.addEventListener(READER_SETTINGS_EVENT, updated);
 		window.addEventListener(SITE_A11Y_EVENT, a11yUpdated);
 		window.addEventListener("storage", stored);
+		// Server HTML is visible before event handlers and stored settings are ready.
+		setReady(true);
 		return () => {
 			window.removeEventListener(READER_SETTINGS_EVENT, updated);
 			window.removeEventListener(SITE_A11Y_EVENT, a11yUpdated);
@@ -196,6 +199,7 @@ export function TopNavAccessibility() {
 				aria-haspopup="dialog"
 				aria-expanded={open}
 				aria-controls={open ? PANEL_ID : undefined}
+				disabled={!ready}
 				onClick={() => {
 					setOpenedPathname(window.location.pathname);
 					setOpen((v) => !v);

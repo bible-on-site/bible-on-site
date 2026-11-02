@@ -478,6 +478,7 @@ export async function processTelegramJob(
 			pdf,
 			filename: row.filename,
 			caption: row.caption,
+			bulletinDate: row.bulletin_date,
 			beforeSend: async () => {
 				signal?.throwIfAborted();
 				await reserveTelegramSendSlot(id, token, signal);
