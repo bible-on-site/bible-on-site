@@ -151,11 +151,11 @@ jest.mock("@/app/929/[number]/components/sefer-document-title", () => ({
 
 import { setUnitOpenPerush } from "@/app/components/reading/unit-book-navigation";
 import ParashaSefer from "@/app/parasha/[unit]/components/ParashaSefer";
-import { parashaUnitDocumentTitle } from "@/app/parasha/[unit]/components/parasha-book-utils";
 import type {
 	BookPage,
 	ParashaBookUnit,
 } from "@/app/parasha/[unit]/components/parasha-book-utils";
+import { parashaUnitDocumentTitle } from "@/app/parasha/[unit]/components/parasha-book-utils";
 import type { Perek } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
 
@@ -272,6 +272,53 @@ const baseProps = () => ({
 });
 
 describe("ParashaSefer", () => {
+	it("does not rerender scripture when background summaries arrive", async () => {
+		let finish!: (value: unknown) => void;
+		mockSummariesBatch
+			.mockReturnValueOnce(
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+			)
+			.mockResolvedValueOnce({});
+		render(<ParashaSefer {...baseProps()} />);
+		const renders = mockUnitTextBodies.length;
+		await act(async () =>
+			finish({
+				"2": { articles: [], perushim: currentUnitSummaries.perushim },
+			}),
+		);
+		expect(mockBlankPages.get("2:torah")?.perushim).toBe(
+			currentUnitSummaries.perushim,
+		);
+		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("updates commentary selection without rerendering scripture", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const renders = mockUnitTextBodies.length;
+		const navigate = mockBlankPages.get("1:torah")?.onNavigate as (
+			kind?: string,
+			slug?: string,
+		) => void;
+		act(() => navigate("perush", 'רש"י'));
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		act(() => navigate());
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("refreshes scripture when the chapter corpus changes", () => {
+		const props = baseProps();
+		const { rerender } = render(<ParashaSefer {...props} />);
+		const renders = mockUnitTextBodies.length;
+		const updated = new Map(props.perekById);
+		updated.set(1, perek(7));
+		rerender(<ParashaSefer {...props} perekById={updated} />);
+		expect(mockUnitTextBodies.length).toBeGreaterThan(renders);
+		expect(
+			(mockUnitTextBodies[renders].pasukCount as (id: number) => number)(1),
+		).toBe(7);
+	});
+
 	beforeEach(() => {
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
@@ -476,7 +523,9 @@ describe("ParashaSefer", () => {
 		// Defensive end of the slug lookup: a currentUnitId no rendered
 		// unit claims can't produce a Hebrew slug — routes and the flat
 		// title degrade to the id rather than crashing the book.
-		render(<ParashaSefer {...baseProps()} currentUnitId={99} isVisible={false} />);
+		render(
+			<ParashaSefer {...baseProps()} currentUnitId={99} isVisible={false} />,
+		);
 		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalledWith(
 			parashaUnitDocumentTitle(""),
 		);

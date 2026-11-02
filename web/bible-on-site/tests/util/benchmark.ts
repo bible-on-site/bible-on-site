@@ -11,6 +11,9 @@ import { writeBenchmark } from "../../scripts/benchmark-store.cjs";
  * - `size_mb`: File/directory sizes in megabytes (standalone bundle, .next dir)
  * - `score`: Pass/fail or 0-1 scores (audit scores, category scores)
  * - `ratio`: Ratios/proportions (sefer flip 929-vs-dev ratio)
+ * - `frame_budget_ratio`: Blocked frame time divided by the existing CPU-scaled
+ *   test budget. A static bound of 1 preserves that budget even when healthy
+ *   frame blocking is zero or close to zero.
  * - `cls_ratio`: Cumulative Layout Shift. CLS gets its own measure so the
  *   Bencher threshold can use a static bound: a percentage threshold on a
  *   zero CLS baseline collapses the upper boundary limit to 0 and alerts on
@@ -24,6 +27,7 @@ export type BencherMeasure =
 	| "size_mb"
 	| "score"
 	| "ratio"
+	| "frame_budget_ratio"
 	| "cls_ratio"
 	| "bytes"
 	| "count";
@@ -53,6 +57,20 @@ const BENCHMARK_OUTPUT_DIR = resolve(
  */
 export function reportBenchmark(entry: BenchmarkEntry): void {
 	writeBenchmark(BENCHMARK_OUTPUT_DIR, entry);
+}
+
+/** Report frame blocking against the same calibrated bound as the browser test. */
+export function reportFrameBlockingBenchmark(
+	name: string,
+	blockedMs: number,
+	budgetMs: number,
+): void {
+	reportBenchmark({
+		name,
+		measure: "frame_budget_ratio",
+		value: blockedMs / budgetMs,
+		upperValue: 1,
+	});
 }
 
 /**
