@@ -5,35 +5,39 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { main, verifyAPIImageAssets } from "./api-image-assets.mjs";
-import { apiImageArtifacts } from "./release-provenance.mjs";
+import {
+	apiImageArtifacts,
+	nativeImageArtifacts,
+} from "./release-provenance.mjs";
 
 const sourceRef = "a".repeat(40);
-function fixture(t) {
+function fixture(t, moduleName = "api") {
+	const image =
+		moduleName === "website" ? "bible-on-site" : "bible-on-site-api";
 	const directory = mkdtempSync(join(tmpdir(), "api-release-assets-"));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const payload = {
-		module_name: "api",
+		module_name: moduleName,
 		module_version: "1.2.3",
 		ref: sourceRef,
 		ci_run_id: 10,
-		released_artifact_name: "bible-on-site-api-docker-10",
-		released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64",
+		released_artifact_name: `${image}-docker-10`,
+		released_arm64_artifact_name: `${image}-docker-10-arm64`,
 	};
-	const assets = [
-		"bible-on-site-api-v1.2.3.tar.gz",
-		"bible-on-site-api-v1.2.3-arm64.tar.gz",
-	].map((name, index) => {
-		const bytes = Buffer.from(`platform-archive-${index}`);
-		writeFileSync(join(directory, name), bytes);
-		return {
-			name,
-			state: "uploaded",
-			size: bytes.length,
-			digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
-		};
-	});
+	const assets = [`${image}-v1.2.3.tar.gz`, `${image}-v1.2.3-arm64.tar.gz`].map(
+		(name, index) => {
+			const bytes = Buffer.from(`platform-archive-${index}`);
+			writeFileSync(join(directory, name), bytes);
+			return {
+				name,
+				state: "uploaded",
+				size: bytes.length,
+				digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+			};
+		},
+	);
 	const release = {
-		tag_name: "api-v1.2.3",
+		tag_name: `${moduleName}-v1.2.3`,
 		draft: false,
 		prerelease: false,
 		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
@@ -43,7 +47,7 @@ function fixture(t) {
 		directory,
 		payload,
 		release,
-		options: { version: "1.2.3", sourceRef, directory },
+		options: { version: "1.2.3", sourceRef, directory, moduleName },
 	};
 }
 
@@ -53,6 +57,51 @@ test("both downloaded platform archives match published source, lengths and dige
 		verifyAPIImageAssets(release, options),
 		release.assets.map((asset) => asset.name),
 	);
+});
+
+test("website archives retain their own module, CI provenance and canonical filenames", (t) => {
+	const { release, payload, options } = fixture(t, "website");
+	assert.deepEqual(
+		verifyAPIImageAssets(release, options),
+		release.assets.map((asset) => asset.name),
+	);
+	assert.deepEqual(nativeImageArtifacts(payload), {
+		amd64: "bible-on-site-docker-10",
+		arm64: "bible-on-site-docker-10-arm64",
+	});
+	assert.throws(() => apiImageArtifacts(payload), /API platform/);
+	assert.throws(
+		() => verifyAPIImageAssets(release, { ...options, moduleName: "api" }),
+		/published canonical/,
+	);
+	assert.deepEqual(
+		main(
+			{
+				MODULE_NAME: "website",
+				MODULE_VERSION: "1.2.3",
+				IMAGE_RELEASE_SOURCE: sourceRef,
+				DOCKER_IMAGE_OUTPUT_DIR: options.directory,
+			},
+			(_repo, tag) => {
+				assert.equal(tag, "website-v1.2.3");
+				return release;
+			},
+		),
+		release.assets.map((asset) => asset.name),
+	);
+	assert.throws(
+		() => main({ MODULE_NAME: "admin" }),
+		/Invalid native image module/,
+	);
+	assert.throws(
+		() => nativeImageArtifacts({ ...payload, module_name: "admin" }),
+		/published CI provenance/,
+	);
+	for (const module_name of ["constructor", "toString", "__proto__"])
+		assert.throws(
+			() => nativeImageArtifacts({ ...payload, module_name }),
+			/published CI provenance/,
+		);
 });
 
 test("the CLI entry binds lookup to the canonical API version", (t) => {
