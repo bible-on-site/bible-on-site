@@ -46,6 +46,8 @@ const NO_LINES: string[] = [];
 const COMMENTARY_SKELETON_KEYS = ["a", "b", "c"];
 
 interface SeferPanelProps {
+	/** Only the displayed chapter may start commentary reads. */
+	isActive?: boolean;
 	articles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
@@ -115,6 +117,7 @@ interface PasukGroup {
  * grid that keeps its place while an article opens over it.
  */
 export function SeferPanel({
+	isActive = true,
 	articles = NO_ARTICLES,
 	perushim = NO_PERUSHIM,
 	perekId = 0,
@@ -389,6 +392,9 @@ export function SeferPanel({
 		.sort((a, b) => a - b)
 		.join(",");
 	useEffect(() => {
+		// Neighboring buffered pages share the selection, but their reads must
+		// not queue ahead of the chapter the reader is actually viewing.
+		if (!isActive) return;
 		const missing = wantedIds
 			.split(",")
 			.filter(Boolean)
@@ -423,7 +429,7 @@ export function SeferPanel({
 				setFailedIds((prev) => new Set([...prev, ...missing]));
 				for (const id of missing) requestedIds.current.delete(id);
 			});
-	}, [wantedIds, notesByPerush, failedIds, perekId]);
+	}, [isActive, wantedIds, notesByPerush, failedIds, perekId]);
 
 	const retryPerush = useCallback((perushId: number) => {
 		setFailedIds((prev) => {

@@ -436,6 +436,38 @@ describe("Sefer component", () => {
 		expect(blankProps().initialSlug).toBeUndefined();
 	});
 
+	it("activates commentary only on the displayed chapter and pauses it on the TOC or close", async () => {
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1],
+			initialBookPage: "toc" as const,
+		};
+		const { rerender } = render(<Sefer {...props} />);
+		const active = () => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{
+				children: React.ReactElement<{ isActive: boolean }>;
+			}>[];
+			return pages[4].props.children.props.isActive;
+		};
+		const handlers = capturedFlipBookProps.handlers as {
+			onPageFlipped: () => void;
+		};
+		expect(active()).toBe(false);
+		mockGetCurrentPageIndex.mockReturnValue(4);
+		await act(async () => handlers.onPageFlipped());
+		expect(active()).toBe(true);
+		mockGetCurrentPageIndex.mockReturnValue(2);
+		await act(async () => handlers.onPageFlipped());
+		expect(active()).toBe(false);
+		mockGetCurrentPageIndex.mockReturnValue(3);
+		await act(async () => handlers.onPageFlipped());
+		expect(active()).toBe(true);
+		rerender(<Sefer {...props} isVisible={false} />);
+		expect(active()).toBe(false);
+	});
+
 	it("keeps entity links on the correct chapter when other chapters have no references", async () => {
 		const reference: PerekEntityReference = {
 			entityId: "creation",

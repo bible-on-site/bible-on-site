@@ -29,6 +29,7 @@ import {
 	publishWebsiteImages,
 	WEBSITE_MUTABLE_TAGS,
 } from "./website-images.mts";
+import { SOCI_TYPE } from "./website-soci.mts";
 
 const sourceRef = "a".repeat(40);
 const version = "0.1.96";
@@ -73,6 +74,7 @@ function dockerArchive(
 		revision?: string;
 		version?: string;
 		wrongLayer?: boolean;
+		sociDelivery?: boolean;
 		extra?: { name: string; bytes: Buffer; type?: string }[];
 	} = {},
 ): Buffer {
@@ -85,6 +87,9 @@ function dockerArchive(
 				Labels: {
 					"org.opencontainers.image.revision": overrides.revision ?? sourceRef,
 					"org.opencontainers.image.version": overrides.version ?? version,
+					...(overrides.sociDelivery
+						? { "io.bible-on-site.image-delivery": "soci-v2" }
+						: {}),
 				},
 			},
 			rootfs: {
@@ -120,6 +125,7 @@ async function fixture(
 		prepared: PreparedAPIArchives,
 		paths: { amd64: string; arm64: string },
 	) => Promise<void>,
+	sociDelivery = false,
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "api-publisher-test-"));
 	let prepared: PreparedAPIArchives | undefined;
@@ -128,8 +134,11 @@ async function fixture(
 			amd64: join(directory, "amd64 image.tar"),
 			arm64: join(directory, "arm64 image.tar.gz"),
 		};
-		await writeFile(paths.amd64, dockerArchive("amd64"));
-		await writeFile(paths.arm64, gzipSync(dockerArchive("arm64")));
+		await writeFile(paths.amd64, dockerArchive("amd64", { sociDelivery }));
+		await writeFile(
+			paths.arm64,
+			gzipSync(dockerArchive("arm64", { sociDelivery })),
+		);
 		prepared = await prepareAPIArchives({
 			amd64ArchivePath: paths.amd64,
 			arm64ArchivePath: paths.arm64,
@@ -342,6 +351,174 @@ test("validates both native configs and privately decompresses without modifying
 			(await readFile(prepared.images[0].path)).toString(),
 			"changed after validation",
 		);
+	}));
+
+test("marked website replay builds the bound four-descriptor index without a new conversion", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry("bible-on-site");
+		registry.exclusions = WEBSITE_MUTABLE_TAGS.map((filter) => ({
+			filterType: "WILDCARD",
+			filter,
+		}));
+		const mediaType = "application/vnd.oci.image.manifest.v1+json";
+		for (const image of prepared.images) {
+			assert.ok(image.ociSource);
+			const layer = {
+				mediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+				digest: digest(`compressed-${image.architecture}`),
+				size: 33,
+			};
+			const artifactManifest = JSON.stringify({
+				schemaVersion: 2,
+				mediaType,
+				config: { mediaType: SOCI_TYPE, digest: digest("{}"), size: 2 },
+				layers: [
+					{
+						mediaType: "application/octet-stream",
+						digest: digest(`ztoc-${image.architecture}`),
+						size: 4,
+						annotations: {
+							"com.amazon.soci.image-layer-digest": layer.digest,
+							"com.amazon.soci.image-layer-mediaType": layer.mediaType,
+							"com.amazon.soci.span-size": "4194304",
+						},
+					},
+				],
+			});
+			const artifact = {
+				manifest: artifactManifest,
+				mediaType,
+				digest: digest(artifactManifest),
+			};
+			registry.images.set(`fixture-artifact-${image.architecture}`, artifact);
+			const manifest = JSON.stringify({
+				schemaVersion: 2,
+				mediaType,
+				config: {
+					mediaType: "application/vnd.oci.image.config.v1+json",
+					digest: image.configDigest,
+					size: image.ociSource.config.size,
+				},
+				layers: [layer],
+				annotations: { "com.amazon.soci.index-digest": artifact.digest },
+			});
+			registry.images.set(`v${version}-${image.architecture}`, {
+				manifest,
+				mediaType,
+				digest: digest(manifest),
+			});
+		}
+		const options = {
+			...registry.options(prepared, true),
+			pushArchive: undefined,
+		};
+		const result = await publishWebsiteImages(prepared, options);
+		assert.equal(result.children.length, 4);
+		assert.deepEqual(
+			result.children.map((x) => x.platform.architecture),
+			["amd64", "arm64", "amd64", "arm64"],
+		);
+		for (const [index, arch] of ["amd64", "arm64"].entries()) {
+			assert.equal(
+				result.children[index].annotations?.["com.amazon.soci.index-digest"],
+				result.children[index + 2].digest,
+			);
+			assert.equal(
+				result.children[index + 2].annotations?.[
+					"com.amazon.soci.image-manifest-digest"
+				],
+				result.children[index].digest,
+			);
+			assert.equal(result.children[index + 2].artifactType, SOCI_TYPE);
+			assert.equal(result.children[index].platform.architecture, arch);
+		}
+		assert.deepEqual(registry.pushed, []);
+		assert.deepEqual(registry.puts, [`v${version}`, "latest"]);
+		registry.puts = [];
+		assert.equal(
+			(await publishWebsiteImages(prepared, options)).canonicalDigest,
+			result.canonicalDigest,
+		);
+		assert.deepEqual(registry.puts, []);
+	}, true));
+
+test("only marked, fully validated archives expose OCI config and layer ranges", async () => {
+	await fixture(async (prepared) => {
+		assert.ok(prepared.images.every((image) => image.ociSource === undefined));
+	});
+	await fixture(async (prepared) => {
+		for (const image of prepared.images) {
+			const source = image.ociSource;
+			assert.ok(source);
+			const raw = await readFile(image.path),
+				config = raw.subarray(
+					source.config.offset,
+					source.config.offset + source.config.size,
+				);
+			assert.equal(digest(config), image.configDigest);
+			assert.equal(
+				JSON.parse(config.toString()).config.Labels[
+					"io.bible-on-site.image-delivery"
+				],
+				"soci-v2",
+			);
+			assert.equal(source.layers.length, image.layerCount);
+			assert.deepEqual(
+				source.diffIds,
+				JSON.parse(config.toString()).rootfs.diff_ids,
+			);
+			for (const [index, entry] of source.layers.entries())
+				assert.equal(
+					digest(raw.subarray(entry.offset, entry.offset + entry.size)),
+					source.diffIds[index],
+				);
+		}
+	}, true);
+});
+test("SOCI marked archives reject legacy mode, mixed pairs and publisher overrides before writes", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry("bible-on-site"),
+			options = { ...registry.options(prepared, true), pushArchive: undefined };
+		await assert.rejects(
+			publishWebsiteImages(prepared, { ...options, publishIndex: false }),
+			/SOCI publication/,
+		);
+		await assert.rejects(
+			publishWebsiteImages(prepared, {
+				...options,
+				pushArchive: async () => {
+					throw new Error("caller publisher must not run");
+				},
+			}),
+			/SOCI publication/,
+		);
+		await assert.rejects(
+			publishWebsiteImages(prepared, {
+				...options,
+				indexManifests: async (children) => children,
+			}),
+			/SOCI publication/,
+		);
+		prepared.images[1].ociSource = undefined;
+		await assert.rejects(
+			publishWebsiteImages(prepared, options),
+			/SOCI publication/,
+		);
+		assert.deepEqual(registry.puts, []);
+		assert.deepEqual(registry.pushed, []);
+	}, true));
+test("a custom index factory cannot be used in single-manifest mode", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		await assert.rejects(
+			publishAPIImages(prepared, {
+				...registry.options(prepared, false),
+				indexManifests: async (children) => children,
+			}),
+			/Custom index descriptors/,
+		);
+		assert.deepEqual(registry.puts, []);
+		assert.deepEqual(registry.pushed, []);
 	}));
 
 for (const publishIndex of [false, true]) {

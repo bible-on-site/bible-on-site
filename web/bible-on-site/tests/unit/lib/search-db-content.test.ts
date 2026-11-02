@@ -346,7 +346,7 @@ describe("searchPerushNotes", () => {
 		// single-term query orders straight by the tier estimate (the
 		// phrase flag would repeat the exact flag's pattern).
 		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining("ORDER BY (10*REGEXP_LIKE"),
+			expect.stringContaining("ORDER BY (CASE WHEN REGEXP_LIKE"),
 			expect.anything(),
 		);
 		expect(hits).toHaveLength(1);
@@ -392,7 +392,7 @@ describe("searchPerushNotes", () => {
 		// follow-up).
 		expect(sql.match(/LEAST\(/g)).toBeNull();
 		expect(sql).toContain(
-			"(10*REGEXP_LIKE(LEFT(n2.note_content, 2048), ?, 'i') + 20*REGEXP_LIKE(LEFT(n2.note_content, 2048), ?, 'i') + 60*REGEXP_LIKE(LEFT(n2.note_content, 2048), ?, 'i')) DESC",
+			"(CASE WHEN REGEXP_LIKE(LEFT(n2.note_content, 2048), ?, 'i') THEN 90 WHEN REGEXP_LIKE(LEFT(n2.note_content, 2048), ?, 'i') THEN 80 ELSE 60*REGEXP_LIKE(LEFT(n2.note_content, 2048), ?, 'i') END) DESC",
 		);
 		expect(params?.slice(1)).toEqual(termRankPatterns("ירושלימ"));
 	});
@@ -530,7 +530,7 @@ describe("searchAuthors", () => {
 		// first anyway. Each flag reads a LEFT-bounded field slice so a
 		// giant field can't exhaust regexp_time_limit (#2140 follow-up).
 		expect(sql).toContain(
-			"ORDER BY (10*REGEXP_LIKE(LEFT(a.name, 2048), ?, 'i') + 20*REGEXP_LIKE(LEFT(a.name, 2048), ?, 'i') + 60*REGEXP_LIKE(LEFT(a.name, 2048), ?, 'i')) DESC, (10*REGEXP_LIKE(LEFT(a.details, 2048), ?, 'i') + 20*REGEXP_LIKE(LEFT(a.details, 2048), ?, 'i') + 60*REGEXP_LIKE(LEFT(a.details, 2048), ?, 'i')) DESC",
+			"ORDER BY (CASE WHEN REGEXP_LIKE(LEFT(a.name, 2048), ?, 'i') THEN 90 WHEN REGEXP_LIKE(LEFT(a.name, 2048), ?, 'i') THEN 80 ELSE 60*REGEXP_LIKE(LEFT(a.name, 2048), ?, 'i') END) DESC, (CASE WHEN REGEXP_LIKE(LEFT(a.details, 2048), ?, 'i') THEN 90 WHEN REGEXP_LIKE(LEFT(a.details, 2048), ?, 'i') THEN 80 ELSE 60*REGEXP_LIKE(LEFT(a.details, 2048), ?, 'i') END) DESC",
 		);
 		expect(params).toEqual([
 			termGateRegexp("לוי"),
