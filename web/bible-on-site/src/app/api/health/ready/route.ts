@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { query } from "@/lib/api-client";
+import { recitationResponse } from "@/lib/recitation-response";
 
 export const dynamic = "force-dynamic";
 
 /**
  * ECS readiness probe. Importing perek-dto initializes the canonical server data
  * shared by chapter and recitation routes; the sample lookups verify it is usable.
+ * Prepare the full validated recitation body before admitting public traffic.
  * Liveness can pass before this cold load completes, so ECS must use this endpoint
  * before replacing the old task. Public articles and their authors must also
  * be available. Bulletin approval is independent of website visibility.
@@ -28,6 +30,7 @@ function warmCriticalPaths(): void {
 export async function GET(): Promise<NextResponse> {
 	try {
 		warmCriticalPaths();
+		recitationResponse();
 		const [content] = await query<{
 			authorCount: number;
 			articleCount: number;
