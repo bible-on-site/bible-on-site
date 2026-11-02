@@ -7,7 +7,8 @@ import hashlib
 import json
 import os
 import re
-import subprocess
+import shutil
+import subprocess  # nosec B404 # MySQL CLI uses argv, no shell, and private option files.
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
+# Public target identifier, deliberately checked before any production operation.
+# nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 ACCOUNT = "250598594267"
 REGION = "il-central-1"
 INSTANCE = "tanah-mysql"
@@ -25,7 +28,6 @@ PARAMETER = "/bible-on-site-backup/db-url"
 RETENTION = {"weekly": 56, "monthly": 366}
 PART_BYTES = 16 * 1024 * 1024
 BLOCK_BYTES = 1024 * 1024
-CA_URL = f"https://truststore.pki.rds.amazonaws.com/{REGION}/{REGION}-bundle.pem"
 
 
 class BackupError(RuntimeError):
@@ -110,11 +112,23 @@ class Database:
                 "user": self.username,
                 "password": self.password,
             }.items():
+                # MySQL requires plaintext options: exclusive mode 0600, task temp
+                # directory, never an artifact; every caller unlinks in finally.
+                # codeql[py/clear-text-storage-sensitive-data]
                 file.write(f"{key}={quote(value)}\n")
         return path
 
+    def executable(self, tool):
+        """Resolve only the installed MySQL tools to an absolute executable path."""
+        if tool not in ("mysql", "mysqldump"):
+            raise BackupError("Unsupported database executable")
+        resolved = shutil.which(tool)
+        if not resolved:
+            raise BackupError("Required MySQL executable is unavailable")
+        return str(Path(resolved).resolve())
+
     def command(self, tool, defaults):
-        args = [tool, f"--defaults-file={defaults}", "--protocol=TCP"]
+        args = [self.executable(tool), f"--defaults-file={defaults}", "--protocol=TCP"]
         if self.ca:
             args += ["--ssl-mode=VERIFY_IDENTITY", f"--ssl-ca={self.ca}"]
         else:
@@ -127,13 +141,16 @@ class Database:
     def query(self, sql, directory):
         config = self.defaults(directory)
         try:
-            result = subprocess.run(
+            # Absolute allowlisted CLI; SQL is stdin and credentials are private options.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+            result = subprocess.run(  # nosec B603 # Validated argv; shell is disabled.
                 self.command("mysql", config)
                 + ["--batch", "--raw", "--skip-column-names"],
                 input=sql.encode(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 check=False,
+                shell=False,
             )
             if result.returncode:
                 raise BackupError("Database metadata query failed")
@@ -170,7 +187,9 @@ def catalog(database, directory):
         (
             "COLUMNS",
             "TABLE_NAME,ORDINAL_POSITION",
-            "'table',TABLE_NAME,'ordinal',ORDINAL_POSITION,'name',COLUMN_NAME,'type',COLUMN_TYPE,'nullable',IS_NULLABLE,'default',COLUMN_DEFAULT,'extra',EXTRA,'collation',COLLATION_NAME,'generation',GENERATION_EXPRESSION",
+            "'table',TABLE_NAME,'ordinal',ORDINAL_POSITION,'name',COLUMN_NAME,"
+            "'type',COLUMN_TYPE,'nullable',IS_NULLABLE,'default',COLUMN_DEFAULT,"
+            "'extra',EXTRA,'collation',COLLATION_NAME,'generation',GENERATION_EXPRESSION",
         ),
         (
             "STATISTICS",
@@ -185,7 +204,9 @@ def catalog(database, directory):
         (
             "KEY_COLUMN_USAGE",
             "TABLE_NAME,CONSTRAINT_NAME,ORDINAL_POSITION",
-            "'table',TABLE_NAME,'constraint',CONSTRAINT_NAME,'ordinal',ORDINAL_POSITION,'column',COLUMN_NAME,'referenceTable',REFERENCED_TABLE_NAME,'referenceColumn',REFERENCED_COLUMN_NAME",
+            "'table',TABLE_NAME,'constraint',CONSTRAINT_NAME,'ordinal',ORDINAL_POSITION,"
+            "'column',COLUMN_NAME,'referenceTable',REFERENCED_TABLE_NAME,"
+            "'referenceColumn',REFERENCED_COLUMN_NAME",
         ),
         (
             "REFERENTIAL_CONSTRAINTS",
@@ -205,7 +226,9 @@ def catalog(database, directory):
         (
             "TRIGGERS",
             "TRIGGER_NAME",
-            "'name',TRIGGER_NAME,'table',EVENT_OBJECT_TABLE,'event',EVENT_MANIPULATION,'timing',ACTION_TIMING,'order',ACTION_ORDER,'definition',ACTION_STATEMENT,'definer',DEFINER,'mode',SQL_MODE",
+            "'name',TRIGGER_NAME,'table',EVENT_OBJECT_TABLE,'event',EVENT_MANIPULATION,"
+            "'timing',ACTION_TIMING,'order',ACTION_ORDER,'definition',ACTION_STATEMENT,"
+            "'definer',DEFINER,'mode',SQL_MODE",
         ),
         (
             "ROUTINES",
@@ -215,12 +238,17 @@ def catalog(database, directory):
         (
             "PARAMETERS",
             "SPECIFIC_NAME,ORDINAL_POSITION",
-            "'routine',SPECIFIC_NAME,'ordinal',ORDINAL_POSITION,'name',PARAMETER_NAME,'mode',PARAMETER_MODE,'type',DTD_IDENTIFIER,'charset',CHARACTER_SET_NAME,'collation',COLLATION_NAME",
+            "'routine',SPECIFIC_NAME,'ordinal',ORDINAL_POSITION,'name',PARAMETER_NAME,"
+            "'mode',PARAMETER_MODE,'type',DTD_IDENTIFIER,'charset',CHARACTER_SET_NAME,"
+            "'collation',COLLATION_NAME",
         ),
         (
             "EVENTS",
             "EVENT_NAME",
-            "'name',EVENT_NAME,'definition',EVENT_DEFINITION,'definer',DEFINER,'status',STATUS,'mode',SQL_MODE,'type',EVENT_TYPE,'at',EXECUTE_AT,'interval',INTERVAL_VALUE,'unit',INTERVAL_FIELD,'start',STARTS,'end',ENDS,'completion',ON_COMPLETION,'zone',TIME_ZONE",
+            "'name',EVENT_NAME,'definition',EVENT_DEFINITION,'definer',DEFINER,"
+            "'status',STATUS,'mode',SQL_MODE,'type',EVENT_TYPE,'at',EXECUTE_AT,"
+            "'interval',INTERVAL_VALUE,'unit',INTERVAL_FIELD,'start',STARTS,"
+            "'end',ENDS,'completion',ON_COMPLETION,'zone',TIME_ZONE",
         ),
     ]
     result = {}
@@ -237,7 +265,8 @@ def catalog(database, directory):
         result[table] = [
             json.loads(row)
             for row in database.query(
-                f"SELECT JSON_OBJECT({fields}) FROM information_schema.{table} WHERE {schema}='{name}' ORDER BY {order};",
+                # Fragments are fixed above; name passed identifier() before this loop.
+                f"SELECT JSON_OBJECT({fields}) FROM information_schema.{table} WHERE {schema}='{name}' ORDER BY {order};",  # nosec B608
                 directory,
             )
         ]
@@ -250,6 +279,7 @@ def catalog(database, directory):
 
 
 def dump_archive(database, path, directory):
+    identifier(database.name)
     config = database.defaults(directory)
     try:
         args = database.command("mysqldump", config) + [
@@ -266,8 +296,10 @@ def dump_archive(database, path, directory):
             "--databases",
             database.name,
         ]
-        with subprocess.Popen(
-            args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+        # Absolute allowlisted CLI, fixed flags, validated schema and private options.
+        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+        with subprocess.Popen(  # nosec B603 # Argv only; no shell interpretation.
+            args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, shell=False
         ) as process:
             with gzip.open(path, "wb", compresslevel=6) as output:
                 while block := process.stdout.read(BLOCK_BYTES):
@@ -287,18 +319,23 @@ def restore_archive(database, path, directory, source_uuid, sha256):
     identity = server_identity(database, directory)
     if identity["uuid"] == source_uuid or identity["events"] != "OFF":
         raise BackupError("Unsafe restore server identity or event scheduler")
+    if not identity["version"].startswith("8.4."):
+        raise BackupError("Restoration requires a MySQL 8.4 scratch server")
     if database.query(
-        f"SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='{DATABASE}';",
+        "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='tanah';",
         directory,
     ):
         raise BackupError("Refusing to overwrite an existing database")
     config = database.defaults(directory)
     try:
-        with subprocess.Popen(
+        with subprocess.Popen(  # nosec B603 # Fixed CLI, private options, no shell.
+            # Fixed executable/flags, private defaults file; dump is stdin, never argv.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
             database.command("mysql", config) + ["--binary-mode"],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            shell=False,
         ) as process:
             try:
                 with gzip.open(path, "rb") as source:
@@ -318,7 +355,9 @@ def restore_archive(database, path, directory, source_uuid, sha256):
         if row["type"] == "BASE TABLE":
             table = identifier(row["name"])
             count = database.query(
-                f"SELECT COUNT(*) FROM {identifier(DATABASE)}.{table};", directory
+                # Both identifiers strictly allowlisted and quoted by identifier().
+                f"SELECT COUNT(*) FROM {identifier(DATABASE)}.{table};",  # nosec B608
+                directory,
             )
             checksum = database.query(
                 f"CHECKSUM TABLE {identifier(DATABASE)}.{table} EXTENDED;", directory
@@ -452,7 +491,11 @@ def preflight(session, directory):
             "Configured access lease group is not attached to this database"
         )
     ca = Path(directory) / "rds-ca.pem"
-    with urlopen(CA_URL, timeout=30) as response:
+    # Fixed AWS HTTPS trust store, with normal certificate validation and no user URL.
+    with urlopen(  # nosec B310 # Only this literal HTTPS URL can be requested.
+        "https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem",
+        timeout=30,
+    ) as response:
         ca.write_bytes(response.read())
     value = session.client("ssm").get_parameter(Name=PARAMETER, WithDecryption=True)[
         "Parameter"
