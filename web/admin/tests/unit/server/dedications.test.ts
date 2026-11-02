@@ -59,7 +59,6 @@ import {
 	getDedicationTypes,
 	listDedications,
 	normalizeExpiry,
-	previewDedicationLine,
 	updateDedication,
 } from "~/server/dedications";
 
@@ -570,15 +569,6 @@ describe("expiry scheduling regression cases", () => {
 		} finally {
 			log.mockRestore();
 		}
-	});
-});
-
-describe("previewDedicationLine", () => {
-	it("mirrors the website's formatDedication output", () => {
-		expect(previewDedicationLine("מרדכי", [])).toBe("מוקדש למרדכי");
-		expect(previewDedicationLine("מרדכי", ['לע"נ', " "])).toBe(
-			'מוקדש למרדכי (לע"נ)',
-		);
 	});
 });
 

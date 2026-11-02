@@ -216,11 +216,9 @@ const ParashaSefer = (props: {
 			: `${PARASHA_ROOT}/${currentSlug}?book${haftara ? "&haftara" : ""}`,
 	);
 
-	// The page tree must stay referentially stable across renders: every
-	// committed flip updates the document-title state, and rebuilding this
-	// flatMap then re-rendered every mounted reader page mid-animation
-	// (#2805).
-	const contentPages = useMemo(
+	// Keep scripture independent of async summaries and commentary selection.
+	// Those updates must not rebuild or reconcile every word in the book.
+	const scripturePages = useMemo(
 		() =>
 			units.flatMap((unit) => {
 				const pasukCount = (perekId: number) =>
@@ -233,21 +231,8 @@ const ParashaSefer = (props: {
 						source: perekSources[perekId] ?? "",
 					};
 				};
-				const scopeSummaries = (
-					scope: UnitBookScope,
-				): UnitBookSummaries | undefined => {
-					if (unit.unitId === currentUnitId) {
-						return scope === "haftara"
-							? { articles: haftaraArticles, perushim: haftaraPerushim }
-							: { articles, perushim };
-					}
-					return batchSummaries[scope][String(unit.unitId)];
-				};
-				const unitPath = `${PARASHA_ROOT}/${unit.slug}`;
 				const torahKey = unitBookKey(unit.unitId, "torah");
 				const haftaraKey = unitBookKey(unit.unitId, "haftara");
-				const torahSummaries = scopeSummaries("torah");
-				const haftaraSummaries = scopeSummaries("haftara");
 				return [
 					<React.Fragment key={`parasha-${unit.unitId}`}>
 						<section
@@ -302,38 +287,6 @@ const ParashaSefer = (props: {
 								</article>
 							</div>
 						</section>
-					</React.Fragment>,
-					<React.Fragment key={`blank-torah-${unit.unitId}`}>
-						<UnitBlankPageContent
-							division="parasha"
-							unitId={unit.unitId}
-							scope="torah"
-							unitPath={unitPath}
-							articles={torahSummaries?.articles ?? []}
-							perushim={torahSummaries?.perushim ?? []}
-							perekSources={perekSources}
-							hebrewDateStr={hebrewDateStr}
-							initialSlug={unitBookContentSlug(
-								contentNavigation.content,
-								unit.unitId,
-								"torah",
-							)}
-							onNavigate={(kind, slug) =>
-								contentNavigation.navigate(unit.unitId, "torah", kind, slug)
-							}
-							fallbackPerekId={unit.ranges[0]?.start.perekId ?? 0}
-							titles={{
-								perushim: "פרשנים על הפרשה",
-								articles: "מאמרים על הפרשה",
-								perushEmpty: "אין פרשנות לפרשה זו",
-								articleEmpty: "אין מאמרים לפרשה זו",
-							}}
-							scrollStorageKey={`parasha-${unit.unitId}-torah`}
-							perushTitle={(name) =>
-								parashaPerushDocumentTitle(name, unit.name, false)
-							}
-							onContentTitle={setInBookContentTitle}
-						/>
 					</React.Fragment>,
 					<React.Fragment key={`haftara-${unit.unitId}`}>
 						<section
@@ -403,6 +356,66 @@ const ParashaSefer = (props: {
 							</div>
 						</section>
 					</React.Fragment>,
+				];
+			}),
+		[
+			units,
+			seferName,
+			perekSources,
+			entityRefsByPerek,
+			perekById,
+			dedicationsByUnit,
+		],
+	);
+
+	const panelPages = useMemo(
+		() =>
+			units.flatMap((unit) => {
+				const scopeSummaries = (
+					scope: UnitBookScope,
+				): UnitBookSummaries | undefined => {
+					if (unit.unitId === currentUnitId)
+						return scope === "haftara"
+							? { articles: haftaraArticles, perushim: haftaraPerushim }
+							: { articles, perushim };
+					return batchSummaries[scope][String(unit.unitId)];
+				};
+				const unitPath = `${PARASHA_ROOT}/${unit.slug}`;
+				const torahSummaries = scopeSummaries("torah");
+				const haftaraSummaries = scopeSummaries("haftara");
+				return [
+					<React.Fragment key={`blank-torah-${unit.unitId}`}>
+						<UnitBlankPageContent
+							division="parasha"
+							unitId={unit.unitId}
+							scope="torah"
+							unitPath={unitPath}
+							articles={torahSummaries?.articles ?? []}
+							perushim={torahSummaries?.perushim ?? []}
+							perekSources={perekSources}
+							hebrewDateStr={hebrewDateStr}
+							initialSlug={unitBookContentSlug(
+								contentNavigation.content,
+								unit.unitId,
+								"torah",
+							)}
+							onNavigate={(kind, slug) =>
+								contentNavigation.navigate(unit.unitId, "torah", kind, slug)
+							}
+							fallbackPerekId={unit.ranges[0]?.start.perekId ?? 0}
+							titles={{
+								perushim: "פרשנים על הפרשה",
+								articles: "מאמרים על הפרשה",
+								perushEmpty: "אין פרשנות לפרשה זו",
+								articleEmpty: "אין מאמרים לפרשה זו",
+							}}
+							scrollStorageKey={`parasha-${unit.unitId}-torah`}
+							perushTitle={(name) =>
+								parashaPerushDocumentTitle(name, unit.name, false)
+							}
+							onContentTitle={setInBookContentTitle}
+						/>
+					</React.Fragment>,
 					<React.Fragment key={`blank-haftara-${unit.unitId}`}>
 						<UnitBlankPageContent
 							division="parasha"
@@ -443,21 +456,22 @@ const ParashaSefer = (props: {
 			}),
 		[
 			units,
-			seferName,
-			dedicationsByUnit,
-			perekSources,
-			hebrewDateStr,
-			entityRefsByPerek,
 			currentUnitId,
 			articles,
 			perushim,
-			haftaraArticles,
-			haftaraPerushim,
 			batchSummaries,
+			perekSources,
+			hebrewDateStr,
 			contentNavigation.content,
 			contentNavigation.navigate,
-			perekById,
+			haftaraArticles,
+			haftaraPerushim,
 		],
+	);
+
+	const contentPages = useMemo(
+		() => scripturePages.flatMap((page, index) => [page, panelPages[index]]),
+		[scripturePages, panelPages],
 	);
 
 	return (

@@ -1,5 +1,8 @@
 # Router configuration validation
 
+For host disk cleanup, retention settings, and the completed November 2026
+maintenance, see [proxy disk housekeeping](../housekeeping/README.md).
+
 Validate the complete installed Nginx configuration with `sudo nginx -t` before
 gracefully reloading it. Preserve the live worker user, includes, and temporary
 paths. A root-run configuration test can change temporary-directory ownership;
