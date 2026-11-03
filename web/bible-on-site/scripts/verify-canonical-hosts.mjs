@@ -95,6 +95,52 @@ export async function verifyCanonicalHosts(
 		}
 	}
 
+	// The legacy public sitemap URL must permanently redirect into the
+	// single canonical document — a 404 or an HTML body here is the
+	// reported defect (#2935). The exact supplied URL starts on the www
+	// host, so the compatibility chain is asserted on both host variants:
+	// www → bare → /sitemap.xml, permanent hops only.
+	for (const sitemapStart of [
+		`${bare}/sitemap_www.xml`,
+		`${www}/sitemap_www.xml`,
+	]) {
+		const sitemapResult = await chain(sitemapStart, fetchPage, BROWSER_UA);
+		assertEndsAt(
+			sitemapStart,
+			sitemapResult,
+			`${bare}/sitemap.xml`,
+			200,
+		);
+		for (const hop of sitemapResult.hops) {
+			if (hop.status !== 301 && hop.status !== 308) {
+				throw new Error(
+					`${sitemapStart}: redirect to ${hop.location} used non-permanent HTTP ${hop.status}`,
+				);
+			}
+		}
+	}
+
+	// A router-owned static miss must surface the app's branded Hebrew 404
+	// at a real 404 status — never nginx's stock page or a soft-200. The
+	// router re-dispatches misses through the app proxy keeping the real
+	// path (#2935); the branded title proves it was the app that answered.
+	const staticMissing = `/www/no-such-file-${Date.now()}.html`;
+	const staticResponse = await fetchPage(`${bare}${staticMissing}`, {
+		redirect: "manual",
+		signal: AbortSignal.timeout(30_000),
+		headers: { "user-agent": BROWSER_UA },
+	});
+	if (staticResponse.status !== 404) {
+		throw new Error(
+			`${bare}${staticMissing}: expected 404, got ${staticResponse.status}`,
+		);
+	}
+	if (!(await staticResponse.text()).includes("העמוד לא נמצא")) {
+		throw new Error(
+			`${bare}${staticMissing}: missing static file did not render the branded Hebrew 404`,
+		);
+	}
+
 	// The seed crawler must observe the same canonical redirect as browsers.
 	assertEndsAt(
 		`${www}/`,

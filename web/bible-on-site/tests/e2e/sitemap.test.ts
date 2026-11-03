@@ -187,3 +187,34 @@ test.describe("sitemap.xml", () => {
 		}
 	});
 });
+
+// /sitemap_www.xml is a legacy public sitemap URL external consumers still
+// fetch. It must permanently redirect into the single canonical document —
+// a 200 HTML missing-page is a regression, not a fix (issue #2935).
+test.describe("sitemap_www.xml compatibility", () => {
+	test("answers a permanent redirect to the canonical sitemap", async ({
+		request,
+	}) => {
+		const response = await request.get("/sitemap_www.xml", {
+			maxRedirects: 0,
+		});
+
+		expect(response.status()).toBe(308);
+		expect(response.headers().location).toMatch(/\/sitemap\.xml$/);
+	});
+
+	test("following the chain serves valid sitemap XML, not an HTML error page", async ({
+		request,
+	}) => {
+		const response = await request.get("/sitemap_www.xml");
+
+		expect(response.status()).toBe(200);
+		expect(response.headers()["content-type"]).toContain("application/xml");
+		const body = await response.text();
+		expect(body).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+		expect(body).toContain("http://www.sitemaps.org/schemas/sitemap/0.9");
+		expect(body).toContain("<urlset");
+		expect(body).toContain("<loc>");
+		expect(body).not.toMatch(/<!doctype html|<html[\s>]/i);
+	});
+});

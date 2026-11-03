@@ -13,6 +13,7 @@ import { getEntryDedications } from "@/lib/dedications/loaders";
 import { demoteHeadings } from "@/lib/html-headings";
 import { getEntryProgressUnits, metricOrFallback } from "@/lib/reading-metrics";
 import { plainText } from "@/lib/seo/jsonld";
+import { NOT_FOUND_METADATA } from "@/lib/seo/missing-page";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { sameAsFor } from "@/lib/seo/same-as";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
@@ -51,10 +52,11 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 		if (resolution.kind === "disambiguation") {
 			return disambiguationMetadata(name);
 		}
-		// "Not found" metadata only for a confirmed-missing slug: a lookup
+		// Missing-page metadata only for a confirmed-missing slug: a lookup
 		// failure propagates so the stale page (or a failed render) is kept
-		// instead of caching a false negative.
-		return { title: "לא נמצא" };
+		// instead of caching a false negative. The shared contract keeps
+		// every 404's title/OG identical to app/not-found (issue #2935).
+		return NOT_FOUND_METADATA;
 	}
 	/* Stored footnote markers are decorative — normalized HTML keeps them
 	   out of the extracted description (#2615). */

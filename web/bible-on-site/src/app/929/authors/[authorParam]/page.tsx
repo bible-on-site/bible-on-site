@@ -15,6 +15,7 @@ import {
 	COLLECTION_TAGS,
 } from "../../../../lib/revalidate/tags";
 import { authorPath, buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
+import { NOT_FOUND_METADATA } from "../../../../lib/seo/missing-page";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { sameAsFor } from "../../../../lib/seo/same-as";
 import { JsonLd } from "../../../components/JsonLd";
@@ -82,9 +83,9 @@ export async function generateMetadata({
 	const author = await getCachedAuthor(authorParam);
 
 	if (!author) {
-		return {
-			title: 'הרב לא נמצא | תנ"ך באתר',
-		};
+		// The render below calls notFound(); the shared contract keeps the
+		// title/OG identical to app/not-found (issue #2935).
+		return NOT_FOUND_METADATA;
 	}
 
 	return pageMetadata({

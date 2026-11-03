@@ -148,6 +148,7 @@ import {
 	getPerushimByPerekId,
 } from "../../../src/lib/perushim";
 import { SITE_ORIGIN } from "../../../src/lib/seo/jsonld";
+import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
 import type { PerekIllustration } from "../../../src/lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../src/lib/seo/perek-images-data";
 
@@ -346,9 +347,7 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "999" }),
 			});
 
-			expect(result).toEqual({
-				title: 'מאמר לא נמצא | תנ"ך על הפרק',
-			});
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 
 		it("returns perush metadata when slug is non-numeric (perush name)", async () => {
@@ -467,7 +466,7 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "unknown" }),
 			});
 
-			expect(result).toEqual({ title: 'פירוש לא נמצא | תנ"ך על הפרק' });
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 
 		it("prefers the perek illustration over the author portrait and emits the sefer section", async () => {
@@ -496,16 +495,31 @@ describe("[slug] page", () => {
 			);
 		});
 
-		it("omits article:section for an out-of-range perek number", async () => {
-			mockGetArticleById.mockResolvedValue(sampleArticle);
-
+		it("returns shared missing-page metadata for an out-of-range perek", async () => {
+			// The render now 404s out-of-range perekIds like /929/999999 does;
+			// metadata stays on the identical contract without a DB lookup
+			// (issue #2935).
 			const result = await generateMetadata({
 				params: Promise.resolve({ number: "930", slug: "42" }),
 			});
 
-			expect(
-				(result.openGraph as { section?: string } | null)?.section,
-			).toBeUndefined();
+			expect(result).toEqual(NOT_FOUND_METADATA);
+			expect(mockGetArticleById).not.toHaveBeenCalled();
+		});
+
+		it("returns shared missing-page metadata for a perek-mismatched article", async () => {
+			// /929/5/<article-on-perek-6> renders notFound() — the metadata
+			// must not advertise the article title/OG on a 404 (issue #2935).
+			mockGetArticleById.mockResolvedValue({
+				...sampleArticle,
+				perekId: 6,
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 
 		it("falls back to the author portrait when the illustration map is unavailable", async () => {
@@ -716,6 +730,20 @@ describe("[slug] page", () => {
 			await expect(
 				ArticlePage({
 					params: Promise.resolve({ number: "abc", slug: "42" }),
+				}),
+			).rejects.toThrow("NEXT_NOT_FOUND");
+
+			expect(notFound).toHaveBeenCalled();
+		});
+
+		it("calls notFound for an out-of-range perek instead of 500ing", async () => {
+			// Live hole closed by #2935: /929/999999/1 used to throw inside
+			// getPerekByPerekId and answer 500. It must 404 like /929/999999.
+			const { notFound } = jest.requireMock("next/navigation");
+
+			await expect(
+				ArticlePage({
+					params: Promise.resolve({ number: "999999", slug: "42" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
