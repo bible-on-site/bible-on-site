@@ -6,6 +6,7 @@ import {
 	maxEdits,
 	prepareQuery,
 	scorePrepared,
+	scorePreparedText,
 	searchScore,
 	tokenScore,
 } from "@/lib/search/score";
@@ -142,6 +143,60 @@ describe("searchScore", () => {
 					expect(scorePrepared(text, prepared)).toBe(expected);
 				}
 			}
+		}
+	});
+});
+
+describe("scorePreparedText", () => {
+	it("preserves full-text scoring across phrase boundaries and Unicode normalization", () => {
+		const texts = [
+			"",
+			"בראשית",
+			"  בראשית  ",
+			"מבוא בראשית סיום",
+			"מבוא בראשית",
+			"בראשית סיום",
+			"מבוא (בראשית) סיום",
+			"מבואאבראשית סיום",
+			"מבוא בראשיתו סיום",
+			"מבוא בראשיתו עוד בראשית סיום",
+			"מבוא בְּרֵאשִׁית סיום",
+			"מבוא אב'בראשית סיום",
+			"מבוא בראשית  ברא סיום",
+			"מבוא בראשית ברא סיום",
+			"alpha κόσμος Σ 𐐨abcdefg omega",
+		];
+		for (const text of texts) {
+			for (const query of [
+				"",
+				"בראשית",
+				"בראשית ברא",
+				"ירושלימ",
+				"κόσμοσ",
+				"𐐨abcdefh",
+			]) {
+				expect(scorePreparedText(text, prepareQuery(query))).toBe(
+					searchScore(text, query),
+				);
+			}
+		}
+	});
+
+	it("scores a proven phrase in a large body without normalizing the entire body", () => {
+		const prepared = prepareQuery("בראשית");
+		const text = `${"מבוא ".repeat(10_000)}בראשית ${"סיום ".repeat(10_000)}`;
+		const normalize = String.prototype.normalize;
+		const spy = jest
+			.spyOn(String.prototype, "normalize")
+			.mockImplementation(function (this: string, form?: string) {
+				if (this.length > 256)
+					throw new Error("Unnecessary full-body normalization");
+				return normalize.call(this, form);
+			});
+		try {
+			expect(scorePreparedText(text, prepared)).toBe(100);
+		} finally {
+			spy.mockRestore();
 		}
 	});
 });
