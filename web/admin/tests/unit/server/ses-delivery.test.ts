@@ -345,19 +345,24 @@ function write(sqlRaw: string, p: unknown[] = []) {
 		return result();
 	}
 	if (sql.startsWith("INSERT INTO tanah_daily_bulletin_email_recipient")) {
-		state.recipients.push({
-			id: state.recipients.length + 1,
-			job_id: String(p[0]),
-			subscriber_id: Number(p[1]),
-			email: String(p[2]),
-			status: "queued",
-			attempt_token: null,
-			message_id: null,
-			started_at: null,
-			event_at: null,
-			last_error: null,
-		});
-		return result();
+		const confirmed = state.subscribers.filter(
+			(s) => s.audience === p[1] && s.consent_status === "confirmed",
+		);
+		for (const s of confirmed) {
+			state.recipients.push({
+				id: state.recipients.length + 1,
+				job_id: String(p[0]),
+				subscriber_id: s.id,
+				email: s.email.toLowerCase(),
+				status: "queued",
+				attempt_token: null,
+				message_id: null,
+				started_at: null,
+				event_at: null,
+				last_error: null,
+			});
+		}
+		return result(confirmed.length);
 	}
 	if (sql.startsWith("UPDATE tanah_daily_bulletin_email_job")) {
 		const row = state.jobs.find((j) => j.id === p[2]);
@@ -514,8 +519,12 @@ beforeEach(() => {
 			release = resolve;
 		});
 		await previous;
+		const snapshot = structuredClone(state);
 		try {
 			return await callback({});
+		} catch (error) {
+			state = snapshot;
+			throw error;
 		} finally {
 			release();
 		}

@@ -390,26 +390,22 @@ export async function enqueueBulletinEmail(
 			)
 				throw new Error("קיים ניסיון דיוור קודם לתאריך זה ונדרשת בדיקה");
 		}
-		const subscribers = await txQuery<{ id: number; email: string }>(
-			connection,
-			"SELECT id, email FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed' ORDER BY id FOR UPDATE",
-			[expected.audience],
-		);
-		if (!subscribers.length)
-			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
 		const id = randomUUID();
 		await txExecute(
 			connection,
 			"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision) VALUES (?, ?, ?, ?, ?)",
 			[id, date, expected.audience, key, expected.revision],
 		);
-		for (const subscriber of subscribers) {
-			await txExecute(
-				connection,
-				"INSERT INTO tanah_daily_bulletin_email_recipient (job_id, subscriber_id, email) VALUES (?, ?, ?)",
-				[id, subscriber.id, subscriber.email.toLowerCase()],
-			);
-		}
+		// Consent is re-verified per recipient at send time, so this snapshot needs no row locks.
+		const recipients = await txExecute(
+			connection,
+			`INSERT INTO tanah_daily_bulletin_email_recipient (job_id, subscriber_id, email)
+			 SELECT ?, id, LOWER(email) FROM tanah_daily_bulletin_subscriber
+			 WHERE audience = ? AND consent_status = 'confirmed'`,
+			[id, expected.audience],
+		);
+		if (recipients.affectedRows === 0)
+			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
 		if (expected.audience === "real") {
 			const reserved = await txExecute(
 				connection,
