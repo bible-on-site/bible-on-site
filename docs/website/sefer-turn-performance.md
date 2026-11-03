@@ -5,6 +5,31 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
+The latest [retained-layout repair](https://github.com/doradsoft/html-flip-book/pull/376)
+keeps the engine's bounded layout window aligned with the chapters React still
+mounts through a turn and its staged retirement. Previously the engine discarded
+that layout at completion. Moving bookmarks also capture their host coordinate
+system once per turn instead of reading it separately for every tab part.
+Both defects have unit regressions that fail against the prior implementation;
+the bookmark guard preserves independent scales and border offsets.
+
+The [complete candidate qualification](sefer-turn-performance.retained-layout.json)
+preserves all twelve scenarios, including the prior failures. The full reader
+with the exact repaired library source passes all 13 original Windows 4x checks,
+all 35 Linux checks and 57 functional checks with one existing conditional skip.
+All 24 appearance pairs and eight text-position comparisons have zero movement.
+An additional ordinary desktop profile passes all 13 checks, with first-turn
+and consecutive-turn frame-gap p95 at most 16.9ms in every bookmark mode,
+response p95 at most 49ms and maximum frame gap 50ms. The original 4x budgets
+remain unchanged. These local-copy results are recorded separately from the
+required published-package build, current-head CI and public verification.
+
+The library's hosted turn scenarios also report no regression. Its sole
+inconclusive metric is resize timing for 1,000 pages: A/A noise 61.4ms exceeds
+the 40ms budget, with a negative candidate median difference and no invalid
+samples. This is retained as inconclusive, without a speedup claim or a rerun
+selected for passing. The deliberately delayed self-check detects regressions.
+
 The historical
 [hosted run on `ffa3126`](https://github.com/bible-on-site/bible-on-site/actions/runs/41602765877)
 failed its performance gate.
