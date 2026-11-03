@@ -91,6 +91,9 @@
     <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
     <!-- Exercise calendar date-refresh lifecycle with the test XAML shell. -->
     <Compile Include="..\BibleOnSite\Pages\LearningCalendarPage.xaml.cs" Link="Pages\LearningCalendarPage.xaml.cs" />
+    <!-- Exercise the section=packs overview/pack-view swap on the real page with the test XAML shells. -->
+    <Compile Include="..\BibleOnSite\Pages\PreferencesPage.xaml.cs" Link="Pages\PreferencesPage.xaml.cs" />
+    <Compile Include="..\BibleOnSite\Controls\ExtensionPacksView.xaml.cs" Link="Controls\ExtensionPacksView.xaml.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\IPerushimSheetViewModel.cs" Link="ViewModels\IPerushimSheetViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />
