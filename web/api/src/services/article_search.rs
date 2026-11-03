@@ -7,8 +7,9 @@
 //! - a durable queue table — write paths enqueue the changed article id after a
 //!   successful write, and a worker drains it (idempotent upserts; deleted
 //!   articles are purged from the index);
-//! - a reconcile sweep — periodically diffs server-side content hashes so any
-//!   missed enqueue, failed write, or external data change is detected and
+//! - a reconcile sweep — periodically diffs the persisted `content_hash`
+//!   generated column so any missed enqueue, failed write, or external data
+//!   change is detected and
 //!   re-indexed, and stale model epochs are folded back in;
 //! - full retrains — when drift crosses a threshold the whole basis is rebuilt
 //!   under a `GET_LOCK` advisory lock so concurrent API instances never train
@@ -51,7 +52,7 @@ use text::{distance, max_edits, strip_html, tokenize};
 const DRAIN_BATCH: u32 = 256;
 /// How often the worker drains the queue.
 const TICK_SECS: u64 = 15;
-/// How often the full reconcile sweep runs (cheap: hashes only).
+/// How often the full reconcile sweep runs (cheap: reads stored hashes only).
 const SWEEP_EVERY_TICKS: u32 = 40; // 40 * 15s = 10 minutes
 /// Retrain the whole model when this many articles drifted.
 const RETRAIN_MIN_DIRTY: usize = 32;
@@ -512,9 +513,9 @@ async fn drain_queue(
     Ok(drifted)
 }
 
-/// Diffs `tanah_article` against `article_search_doc` via server-side content
-/// hashes and enqueues anything missing, changed, or carrying a stale model
-/// epoch; deletes index rows whose articles vanished.
+/// Diffs `tanah_article` against `article_search_doc` on the persisted
+/// `content_hash` generated column and enqueues anything missing, changed, or
+/// carrying a stale model epoch; deletes index rows whose articles vanished.
 async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
     let indexed: HashMap<i32, [u8; 16]> = store::indexed_hashes(conn).await?.into_iter().collect();
     let mut dirty = 0usize;
