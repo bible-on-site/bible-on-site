@@ -558,10 +558,7 @@ async fn apply_article_covering_source_upgrade(
     .await
 }
 
-async fn apply_article_index_upgrade(
-    conn: &mut MySqlConnection,
-    base_path: &Path,
-) -> Result<()> {
+async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
     execute_script(
         conn,
         &base_path.join("../tanah_article_index_upgrade.sql"),
