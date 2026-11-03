@@ -800,6 +800,20 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2 # Inspect the actual base of the tested PR merge.
 
+      # Dependency/build caches and the SSG output can exhaust a hosted
+      # runner. Reclaim unused SDKs/images before restoring those caches;
+      # preserve browser packages, installed runtimes and swap for benchmarks.
+      - name: Free space for the website production build
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Merge and audit approved recitation timings
         run: |
           python ../../data/recitation/publish.py
@@ -912,6 +926,9 @@ jobs:
         run: |
           cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
           cargo make mysql-populate
+
+      - name: Report disk space before website build
+        run: df -h .
 
       - name: Build
         id: bun-build
