@@ -41,10 +41,10 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	will-change: transform, clip-path;
 }
 
-/* Keep covered retained content out of painting without discarding its layout.
-   The library removes this class before exposing a page or its underlays;
-   its existing opacity, input and accessibility masks remain in place. */
-.he-book .flipbook-layout-dormant {
+/* Skip covered pane painting while retaining its layout and existing masks.
+   Keep page boxes available for back-face preparation; the library clears
+   the pane mask before exposing its content. */
+.he-book .flipbook-page-scrollport.flipbook-layout-dormant {
 	visibility: hidden !important;
 }
 

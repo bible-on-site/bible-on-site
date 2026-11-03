@@ -19,6 +19,10 @@ Numbers: frame-gap p95 was 66.6ms, above 50ms. Its response p95 was 113.6ms
 and maximum gap 83.3ms; every consecutive-turn scope passed. Website runtime
 bytes were unchanged between these hosted runs, so their different failure
 counts do not establish an improvement. Both failed runs remain recorded.
+The [run on `5527b5daa`](https://github.com/bible-on-site/bible-on-site/actions/runs/41631360042)
+also failed cadence in nine scenarios, including first moving-bookmark turns.
+Every response stayed below 200ms; cadence p95 reached 66.7ms. Passing local
+results do not replace these hosted failures.
 
 The fixed desktop profile uses full Chromium, visible scrollbars, a 1440x900
 viewport, 4x CPU slowdown, one worker and zero retries. The performance
@@ -39,6 +43,22 @@ Hebrew shaping. The body observes only listening-mode changes and mounts word
 components after aligned audio is ready. Progress and playback frames update
 their own consumers without rebuilding the body. Enabling listening restores
 the original inline controls.
+
+The host skips painting covered retained panes with `visibility: hidden` while
+keeping their existing opacity, input and accessibility masks. Their layout
+stays available, and the engine clears the mask before exposing content.
+Outer page boxes retain their original visibility for back-face preparation.
+A broader prototype that also hid those boxes failed the complete local suite:
+33/35 checks passed, but consecutive Kings toolbar turns reached a 516.6ms
+gap and pinned dragging exceeded the cadence limit. That failure remains
+recorded and the broad rule is not used.
+
+An original-4x comparison separately checks every mask's computed state before
+timing. All eighteen original-control, page-only and pane-only cases pass.
+The selected pane-only variant has toolbar response p95 of 49.7/53.9ms versus
+65.8/73.3ms in the original controls; cadence p95 is 33.4ms in both candidates.
+These diagnostic comparisons do not replace full production qualification or
+hosted CI. The existing deadline and appearance guards remain unchanged.
 
 Ordinary words remain separate primitive children. They allocate no React
 elements, fragment nodes or segment keys. In a captured Kings chapter this
