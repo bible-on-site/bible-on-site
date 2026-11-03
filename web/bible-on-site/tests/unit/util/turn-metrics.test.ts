@@ -1,9 +1,19 @@
 /** @jest-environment node */
+import panelBaseline from "../../../../../docs/website/sefer-turn-performance.panel-baseline.json";
 import {
 	reduceTurnSamples,
 	type TurnSamples,
 	turnBudgetFailures,
 } from "../../util/turn-metrics";
+
+it.each(panelBaseline.cases)(
+	"preserves every native timing and failure in $case",
+	(record) => {
+		const metrics = reduceTurnSamples(record.samples, record.chapter, 6);
+		expect(metrics).toEqual(record.metrics);
+		expect(turnBudgetFailures(metrics)).toEqual(record.failures);
+	},
+);
 
 function healthy(): TurnSamples {
 	return {

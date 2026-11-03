@@ -52,6 +52,11 @@ content. Regression tests check that an unchanged covered panel repeats no
 commentary eligibility work, activation still updates it, and navigation follows
 new chapter IDs when the corpus changes.
 
+Moving bookmarks keep the same book colors as their resting tabs. Their parent
+changes from the bookmark layer to a fold surface during a turn; theme selectors
+must match both parents. A browser regression checks the background, text and
+border colors on every visible surface at two held fold positions.
+
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
 completed motion and nonempty page text. Visibility and geometry queries can
@@ -92,6 +97,12 @@ Response stayed below 200ms and maximum gaps below 100ms; first-turn gap p95
 reached 83.3ms and consecutive-turn gap p95 reached 66.7ms. The paper opacity
 animations were absent in those diagnostics. Keep these failures alongside the
 local passes: the released shadow fix alone does not establish hosted delivery.
+
+The subsequent panel-cache-only head also retained four failures in its full
+local matrix. Its [complete native samples](sefer-turn-performance.panel-baseline.json)
+remain unqualified, including the 250.1ms maximum gap. Independent candidate
+comparisons do not replace that failed run. Reducer regression tests replay all
+12 native cases and preserve every reported timing and failure.
 
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
