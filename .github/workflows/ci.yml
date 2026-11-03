@@ -997,7 +997,7 @@ jobs:
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
             "${BENCHER_COMPARISON_ARGS[@]}" \
-            --testbed ubuntu-latest \
+            --testbed ubuntu-latest-lh-cpu-m500-d1500-v1 \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file .playwright-report/perf/bencher/benchmark.json \
