@@ -2,7 +2,7 @@
  * Integration tests for the bulletin PDF service client.
  *
  * Tests validate:
- * - Request payload construction (just perek IDs — no text data)
+ * - Request payload construction, including website-rendered chapter content
  * - Binary invocation via subprocess (mocked execFileSync) — dev mode
  * - Lambda invocation via AWS SDK (mocked @aws-sdk/client-lambda) — production mode
  * - Error handling (binary not found, crash, empty output, Lambda errors)
@@ -24,7 +24,7 @@ jest.mock("node:fs", () => ({
 	readFileSync: jest.fn().mockReturnValue(new Uint8Array([0, 1, 2, 3])),
 }));
 
-jest.mock("@/lib/download/tanach-pdf", () => ({
+jest.mock("@/lib/download/semantic-pages", () => ({
 	semanticPagesToPerekIds: jest.fn(
 		(semanticPages: Array<{ title: string }>, _seferName: string) =>
 			semanticPages.map((_sp, i) => i + 1),
@@ -390,7 +390,7 @@ describe("bulletin-client", () => {
 
 		it("throws when no content pages in range", async () => {
 			const { semanticPagesToPerekIds } = jest.requireMock(
-				"@/lib/download/tanach-pdf",
+				"@/lib/download/semantic-pages",
 			);
 			semanticPagesToPerekIds.mockReturnValueOnce([]);
 
