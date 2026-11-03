@@ -30,6 +30,38 @@ describe("normalizeSearchText", () => {
 		expect(normalizeSearchText("פרק 32")).toBe("פרק 32");
 	});
 
+	it("preserves mapped normalization throughout the Hebrew and ASCII fast path", () => {
+		for (const [first, last] of [
+			[0, 0x7f],
+			[0x590, 0x5ff],
+			[0x2000, 0x206f],
+		]) {
+			for (let code = first; code <= last; code++) {
+				const char = String.fromCodePoint(code);
+				const text = `א${char}A${char}בְּרֵאשִׁית`;
+				expect(normalizeSearchText(text)).toBe(
+					normalizeWithMap(text).normalized,
+				);
+			}
+		}
+	});
+
+	it("does not decompose large text containing only Hebrew, ASCII and punctuation", () => {
+		const text = 'בְּרֵאשִׁית Hello—תנ"ך '.repeat(10_000);
+		const spy = jest
+			.spyOn(String.prototype, "normalize")
+			.mockImplementation(() => {
+				throw new Error("Unnecessary Unicode decomposition");
+			});
+		try {
+			expect(normalizeSearchText(text)).toBe(
+				"בראשית hello תנך ".repeat(10_000).trim(),
+			);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
 	it("preserves per-code-point Greek, titlecase and Roman-numeral casing", () => {
 		expect(normalizeSearchText("ΟΣ ΣΣ ǅ Ⅰ Ⅱ")).toBe("οσ σσ ǆ ⅰ ⅱ");
 		expect(normalizeSearchText("א\u20ddב \ud800x\udc00")).toBe("א ב x");
@@ -85,6 +117,28 @@ describe("htmlToPlainText", () => {
 			"<script",
 		);
 		expect(htmlToPlainText("א<<b>b>ב")).not.toContain("<");
+	});
+
+	it("stops scanning a large plain remainder for tags once all openers are removed", () => {
+		const plain = "שלום ".repeat(10_000).trim();
+		const replace = String.prototype.replace;
+		const spy = jest
+			.spyOn(String.prototype, "replace")
+			.mockImplementation(function (this: string, pattern, replacement) {
+				if (
+					pattern instanceof RegExp &&
+					pattern.source.includes("<") &&
+					!this.includes("<")
+				) {
+					throw new Error("Unnecessary full-body tag scan");
+				}
+				return replace.call(this, pattern, replacement);
+			});
+		try {
+			expect(htmlToPlainText(`<p>${plain}</p>`)).toBe(plain);
+		} finally {
+			spy.mockRestore();
+		}
 	});
 
 	it("decodes named and numeric entities", () => {

@@ -574,6 +574,85 @@ describe("searchArticles", () => {
 		jest.clearAllMocks();
 	});
 
+	it("skips a losing body when even fuzzy titles outrank an exact body match", async () => {
+		const readLosingContent = jest.fn(() => "<p>ירושלימ</p>");
+		mockQuery.mockResolvedValue([
+			{
+				id: 7,
+				perek_id: 1,
+				name: "מבוא",
+				author_name: "הרב",
+				get content() {
+					return readLosingContent();
+				},
+				abstract: null,
+			},
+			...[
+				{
+					id: 9,
+					name: "על ירושלימ",
+					content: "<p>הקדמה</p>",
+					abstract: "<p>ירושלימ</p>",
+				},
+				{ id: 5, name: "ירושלים", content: "<p>צפון</p>", abstract: null },
+				{ id: 1, name: "ירושלימ", content: "<p>ירושלימ</p>", abstract: null },
+			].map((row) => ({ ...row, perek_id: 1, author_name: "הרב" })),
+		]);
+
+		const hits = await searchArticles("ירושלימ", 3);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual([1, 9, 5]);
+		expect(hits.map(({ score }) => score)).toEqual([220, 200, 120]);
+		expect(hits.map(({ entry }) => entry.plain)).toEqual([
+			"ירושלימ",
+			"ירושלימ",
+			"צפון",
+		]);
+		expect(readLosingContent).not.toHaveBeenCalled();
+	});
+
+	it("orders equal dominant titles by id before limiting", async () => {
+		mockQuery.mockResolvedValue(
+			[3, 1, 2].map((id) => ({
+				id,
+				perek_id: 1,
+				name: "בראשית",
+				author_name: "הרב",
+				content: `<p>פתיחה ${id}</p>`,
+				abstract: null,
+			})),
+		);
+
+		const hits = await searchArticles("בראשית", 2);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual([1, 2]);
+		expect(hits.map(({ entry }) => entry.plain)).toEqual([
+			"פתיחה 1",
+			"פתיחה 2",
+		]);
+	});
+
+	it("keeps body matches when titles alone cannot fill the result limit", async () => {
+		mockQuery.mockResolvedValue(
+			[
+				{ id: 1, name: "מבוא", content: "<p>ירושלימ</p>" },
+				{ id: 2, name: "ירושלים", content: null },
+				{ id: 3, name: "מבוא", content: "<p>על ירושלימ</p>" },
+			].map((row) => ({
+				...row,
+				perek_id: 1,
+				author_name: "הרב",
+				abstract: null,
+			})),
+		);
+
+		const hits = await searchArticles("ירושלימ", 2);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual([2, 1]);
+		expect(hits.map(({ score }) => score)).toEqual([120, 110]);
+		expect(hits[1].entry.plain).toBe("ירושלימ");
+	});
+
 	it("excludes articles outside the 929 chapter range", async () => {
 		mockQuery.mockResolvedValue([]);
 
