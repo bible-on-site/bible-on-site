@@ -26,6 +26,19 @@ const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
  * punctuation collapsed to single spaces.
  */
 export function normalizeSearchText(text: string): string {
+	if (!/[^\p{ASCII}\u0590-\u05ff\u2000-\u206f]/u.test(text)) {
+		// These ranges have no letters requiring NFD decomposition or
+		// contextual casing. Explicit classes avoid Unicode property scans
+		// over the ordinary Hebrew corpus; other scripts keep the full path.
+		return text
+			.replace(
+				/[\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7'"׳״‘’“”]/g,
+				"",
+			)
+			.replace(/[^A-Za-z0-9\u05d0-\u05ea\u05ef-\u05f2]+/g, " ")
+			.trim()
+			.toLowerCase();
+	}
 	return (
 		text
 			.normalize("NFD")
@@ -150,7 +163,7 @@ export function htmlToPlainText(html: string): string {
 	// fragments (e.g. "<scr<script>ipt>" first reduces to "<script>").
 	let text = html;
 	let previous = "";
-	while (text !== previous) {
+	while (text !== previous && text.includes("<")) {
 		previous = text;
 		text = text
 			.replace(SCRIPT_STYLE, " ")
