@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
     tanahpedia_entry_revision_history_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-entity unique-pair upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_entity_unique.sql")]
+    tanahpedia_entry_entity_unique_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -362,6 +366,7 @@ struct TanahpediaScripts {
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
     entry_revision_history_upgrade: std::path::PathBuf,
+    entry_entity_unique_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -384,6 +389,8 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             entry_revision_history_upgrade: base_path
                 .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
+            entry_entity_unique_upgrade: base_path
+                .join(&cli.tanahpedia_entry_entity_unique_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -450,7 +457,8 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
-    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await
+    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
+    apply_entry_entity_unique_upgrade(conn, &scripts.entry_entity_unique_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -680,6 +688,77 @@ async fn apply_entry_revision_history_upgrade(
         "CHAR(36) NULL COMMENT 'APPLIED head this change was based on'",
     )
     .await
+}
+
+/// Collapse duplicate entry-entity link rows and add UNIQUE(entry_id, entity_id).
+async fn apply_entry_entity_unique_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    const TABLE: &str = "tanahpedia_entry_entity";
+    const INDEX: &str = "uk_entry_entity_pair";
+
+    if index_exists(conn, TABLE, INDEX).await? {
+        println!("Index '{}.{}' already exists", TABLE, INDEX);
+        return Ok(());
+    }
+
+    if !script_path.exists() {
+        println!(
+            "Skipping missing Tanahpedia upgrade script at {:?}",
+            script_path
+        );
+        return Ok(());
+    }
+
+    // One link row per (entry_id, entity_id) before the unique key goes on.
+    raw_sql(AssertSqlSafe(
+        "DELETE ee FROM tanahpedia_entry_entity ee \
+         JOIN ( \
+             SELECT entry_id, entity_id, MIN(id) AS keep_id \
+             FROM tanahpedia_entry_entity \
+             GROUP BY entry_id, entity_id \
+             HAVING COUNT(*) > 1 \
+         ) dup ON dup.entry_id = ee.entry_id \
+              AND dup.entity_id = ee.entity_id \
+              AND ee.id <> dup.keep_id",
+    ))
+    .execute(&mut *conn)
+    .await
+    .context("Failed to deduplicate 'tanahpedia_entry_entity'")?;
+
+    raw_sql(AssertSqlSafe(format!(
+        "ALTER TABLE `{}` ADD UNIQUE KEY `{}` (entry_id, entity_id)",
+        quote_mysql_identifier_part(TABLE),
+        quote_mysql_identifier_part(INDEX),
+    )))
+    .execute(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to add index '{}.{}'", TABLE, INDEX))?;
+
+    println!("Index '{}.{}' added successfully", TABLE, INDEX);
+    Ok(())
+}
+
+async fn index_exists(
+    conn: &mut MySqlConnection,
+    table_name: &str,
+    index_name: &str,
+) -> Result<bool> {
+    let count: i64 = query_scalar::<MySql, i64>(
+        "SELECT COUNT(*) \
+         FROM information_schema.STATISTICS \
+         WHERE TABLE_SCHEMA = DATABASE() \
+           AND TABLE_NAME = ? \
+           AND INDEX_NAME = ?",
+    )
+    .bind(table_name)
+    .bind(index_name)
+    .fetch_one(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to check index '{}.{}'", table_name, index_name))?;
+
+    Ok(count > 0)
 }
 
 async fn apply_column_add_if_missing(

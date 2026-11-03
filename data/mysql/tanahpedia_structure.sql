@@ -204,6 +204,7 @@ CREATE TABLE `tanahpedia_entry_entity` (
     `entry_id` char(36) NOT NULL,
     `entity_id` char(36) NOT NULL,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_entry_entity_pair` (`entry_id`, `entity_id`),
     KEY `idx_entry_entity_entry` (`entry_id`),
     KEY `idx_entry_entity_entity` (`entity_id`),
     CONSTRAINT `fk_entry_entity_entry` FOREIGN KEY (`entry_id`) REFERENCES `tanahpedia_entry` (`id`) ON DELETE CASCADE,
