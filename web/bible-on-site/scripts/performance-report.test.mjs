@@ -56,6 +56,22 @@ function fixture(url = "https://example.com/", lcp = 2000) {
 	};
 }
 
+test("the CPU profile is retained beside the raw Lighthouse settings", () => {
+	const lhr = fixture();
+	lhr.cpuCalibration = {
+		profile: "cpu-m500-d1500-v1",
+		hostBenchmarkIndex: 2449,
+		targetBenchmarkIndex: 500,
+		cpuSlowdownMultiplier: 4.898,
+	};
+	lhr.configSettings.throttling = { cpuSlowdownMultiplier: 4.898 };
+	const summary = summarizeLighthouse(lhr, { device: "mobile" });
+	assert.deepEqual(summary.cpuCalibration, lhr.cpuCalibration);
+	assert.deepEqual(summary.settings.throttling, {
+		cpuSlowdownMultiplier: 4.898,
+	});
+});
+
 test("page and device benchmark keys retain all four measurements", () => {
 	const keys = new Set();
 	for (const path of ["/", "/929/686"])

@@ -51,6 +51,10 @@ const parashaSeferFirstSlugs = Object.entries(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	// Route handlers and SSR have separate bundle runtimes. Use Node's shared
+	// module cache so readiness warms the same sanitizer used by public pages,
+	// rather than constructing a second JSDOM window on their first request.
+	serverExternalPackages: ["isomorphic-dompurify"],
 	// Route-cache keys are built from decoded pathnames, so quoted Hebrew slugs
 	// like רש"י produce filenames NTFS rejects. The handler subclasses the
 	// default filesystem cache and encodes unsafe filesystem path segments,

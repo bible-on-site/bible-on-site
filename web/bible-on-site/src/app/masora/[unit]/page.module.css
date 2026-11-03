@@ -33,8 +33,10 @@
 	max-width: 48%;
 }
 
-.unitNavLink:hover {
-	background-color: rgba(21, 82, 172, 0.06);
+@media (hover: hover) {
+	.unitNavLink:hover {
+		background-color: rgba(21, 82, 172, 0.06);
+	}
 }
 
 .unitNavNext {

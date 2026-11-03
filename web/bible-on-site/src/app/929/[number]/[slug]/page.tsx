@@ -29,6 +29,13 @@ import {
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
 import {
+	getArticleProgressUnits,
+	getPerekMetric,
+	getPerekProgressUnits,
+	getPerushProgressUnits,
+	metricOrFallback,
+} from "../../../../lib/reading-metrics";
+import {
 	articleTag,
 	cachedPerKey,
 	COLLECTION_TAGS,
@@ -46,6 +53,7 @@ import {
 import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
+import { sameAsFor } from "../../../../lib/seo/same-as";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import {
@@ -53,6 +61,7 @@ import {
 	dedicationLines,
 } from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { ArticleActions } from "../components/ArticleActions";
 import { ArticlesSection } from "../components/ArticlesSection";
@@ -151,6 +160,54 @@ const getCachedPerushDetail = cachedPerKey(
 		];
 	},
 	(perushId: number, perekId: number) => getPerushDetail(perushId, perekId),
+);
+
+/**
+ * Progress-unit reads for the two reader bodies on this route (#2607).
+ * Content-keyed rows ride the entity's own cache: the article/perush tag
+ * already expires when the body text (and therefore its metric) changes,
+ * and `reading-metrics` lets an operator flush a counting-policy redeploy.
+ */
+const getCachedArticleProgressUnits = cachedPerKey(
+	"article-progress-units",
+	(id: number) => String(id),
+	(key) => [
+		"reading-metrics",
+		COLLECTION_TAGS.articles,
+		articleTag(Number(key)),
+	],
+	(id: number) => getArticleProgressUnits(id),
+);
+
+const getCachedPerushProgressUnits = cachedPerKey(
+	"perush-progress-units",
+	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
+	(key) => {
+		const [perushId, perekId] = key.split(":").map(Number);
+		return [
+			"reading-metrics",
+			COLLECTION_TAGS.perushim,
+			perushDetailTag(perushId, perekId),
+		];
+	},
+	(perushId: number, perekId: number) =>
+		getPerushProgressUnits(perushId, perekId),
+);
+
+/** Per-pasuk units for the flipbook page of this route's perek (#2607). */
+const getCachedPerekProgressUnits = cachedPerKey(
+	"perek-progress-units",
+	(perekId: number) => String(perekId),
+	() => ["reading-metrics"],
+	(perekId: number) => getPerekProgressUnits(perekId),
+);
+
+/** Perek-level metric for the flipbook page's badge (#2607). */
+const getCachedPerekMetric = cachedPerKey(
+	"perek-metric",
+	(perekId: number) => String(perekId),
+	() => ["reading-metrics"],
+	(perekId: number) => getPerekMetric(perekId),
 );
 
 export async function generateMetadata({
@@ -281,6 +338,16 @@ export default async function ArticlePage({
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
+	const perekPasukUnits = await metricOrFallback(
+		`perek ${perekId} progress`,
+		[],
+		() => getCachedPerekProgressUnits(perekId),
+	);
+	const perekMetric = await metricOrFallback(
+		`perek ${perekId} metric`,
+		null,
+		() => getCachedPerekMetric(perekId),
+	);
 
 	// Dedications (#2731): the book keeps the sefer+helek cover set and the
 	// perek-scoped spread lines regardless of the route it opens from — the
@@ -305,6 +372,11 @@ export default async function ArticlePage({
 		// Mention decorations (#2516) resolve against live entries per
 		// render; unresolved targets stay plain text.
 		article = await decorateArticleContent(article);
+		const articleProgressUnits = await metricOrFallback(
+			`article ${article.id} progress`,
+			[],
+			() => getCachedArticleProgressUnits(article.id),
+		);
 
 		// The article's own dedication scope renders under its title (#2731).
 		const articleDedicationLines = dedicationLines(
@@ -325,6 +397,12 @@ export default async function ArticlePage({
 					<ScrollToArticleMatch />
 				</Suspense>
 				<section id="article-view" className={styles.expandedArticle}>
+					<ReadingProgress
+						units={articleProgressUnits}
+						scope={`.${styles.expandedArticle}`}
+						content={`.${styles.articleBody}`}
+						stickyTop="72px"
+					/>
 					<header className={styles.articleHeader}>
 						<Link
 							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
@@ -381,6 +459,8 @@ export default async function ArticlePage({
 						seferDedications={seferDedicationLines}
 						perekDedications={perekDedications}
 						initialSlug={slug}
+						perekPasukUnits={perekPasukUnits}
+						perekMetric={perekMetric}
 					/>
 				</Suspense>
 				<div className={styles.articlePerekContainer}>
@@ -421,15 +501,35 @@ export default async function ArticlePage({
 	if (!perushDetail) {
 		notFound();
 	}
+	const parshanSameAs = await sameAsFor("PARSHAN", perushDetail.parshanId);
+
+	const perushProgressUnits = await metricOrFallback(
+		`perush ${perush.id} perek ${perekId} progress`,
+		[],
+		() => getCachedPerushProgressUnits(perush.id, perekId),
+	);
 
 	return (
 		<>
-			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
+			<JsonLd
+				data={buildPerushGraph({
+					perush: perushDetail,
+					perekObj,
+					sameAs: parshanSameAs,
+				})}
+			/>
 			<ScrollToSlug targetId="perush-view" />
 			<Suspense fallback={null}>
 				<ScrollToPerushPasukNote />
 			</Suspense>
 			<section id="perush-view" className={styles.expandedPerush}>
+				<ReadingProgress
+					units={perushProgressUnits}
+					scope={`.${styles.expandedPerush}`}
+					content={`.${styles.perushContent}`}
+					unitSelector='[data-perush-pasuk="{k1}"][data-perush-note="{k2}"]'
+					stickyTop="72px"
+				/>
 				<header className={styles.perushHeader}>
 					<h1 className={styles.perushTitle}>
 						{perushDetail.name} על {perekObj.source}
@@ -494,6 +594,8 @@ export default async function ArticlePage({
 					seferDedications={seferDedicationLines}
 					perekDedications={perekDedications}
 					initialSlug={slug}
+					perekPasukUnits={perekPasukUnits}
+					perekMetric={perekMetric}
 				/>
 			</Suspense>
 			<div className={styles.articlePerekContainer}>

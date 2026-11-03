@@ -41,8 +41,10 @@ impl StarterQuery {
             })
             .collect();
 
-        // Convert articles to DTOs
-        let articles: Vec<Article> = all_articles.into_iter().map(Article::from).collect();
+        // Convert articles to DTOs, then batch-attach reading metrics — one
+        // IN query so `readingMetric` on the starter list stays O(1) (#2607).
+        let mut articles: Vec<Article> = all_articles.into_iter().map(Article::from).collect();
+        super::articles_resolver::attach_article_reading_metrics(db, &mut articles).await?;
 
         Ok(Starter {
             authors: authors_with_counts,

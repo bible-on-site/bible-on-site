@@ -527,10 +527,12 @@ jobs:
   # Compile and inspect the actual signed distribution on relevant PRs too.
   # Simulator builds cannot detect missing App Groups provisioning or a broken
   # embedded downloader; publication remains in the master-only job above.
+  # Pull requests only: the ~17-minute macOS job already gated the PR, and
+  # repeating it per merge_group entry doubles scarce macOS runner time.
   package_ios_pr:
     name: Validate iOS Distribution
     needs: [setup_env, determine_changes, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    if: ${{ always() && !cancelled() && !failure() && github.event_name == 'pull_request' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
       actions: read
@@ -995,7 +997,7 @@ jobs:
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
             "${BENCHER_COMPARISON_ARGS[@]}" \
-            --testbed ubuntu-latest \
+            --testbed ubuntu-latest-lh-cpu-m500-d1500-v1 \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file .playwright-report/perf/bencher/benchmark.json \
@@ -2564,7 +2566,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "26.12.1"
+          node-version: "26.13.0"
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
@@ -2772,15 +2774,22 @@ jobs:
         env:
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
+          mongo_started_at=$SECONDS
+          docker run -d --name sefaria-mongo -p 27017:27017 \
+            --entrypoint docker-entrypoint.sh "$SEFARIA_MONGO_IMAGE" \
+            mongod --dbpath /mongodb-data
           echo "Waiting for MongoDB to be ready..."
-          # Data was restored at Docker BUILD time to /mongodb-data
-          # On first container startup, entrypoint.sh copies it to /data/db
-          # This should take ~15-30 seconds vs 5+ minutes for runtime mongorestore
+          # Reuse the database restored at build time without a full startup copy.
+          # Keep the existing 60 attempts and two-second interval.
           for i in {1..60}; do
+            if [ "$((SECONDS - mongo_started_at))" -ge 120 ]; then
+              break
+            fi
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
-            if [ "$count" != "0" ] && [ -n "$count" ]; then
+            if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+              test "$((SECONDS - mongo_started_at))" -lt 120
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              echo "MongoDB startup took $((SECONDS - mongo_started_at)) seconds"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
               expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
@@ -2947,12 +2956,21 @@ jobs:
         env:
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
+          mongo_started_at=$SECONDS
+          docker run -d --name sefaria-mongo -p 27017:27017 \
+            --entrypoint docker-entrypoint.sh "$SEFARIA_MONGO_IMAGE" \
+            mongod --dbpath /mongodb-data
           echo "Waiting for MongoDB to be ready..."
+          # Reuse the restored fixture within the original startup budget.
           for i in {1..60}; do
+            if [ "$((SECONDS - mongo_started_at))" -ge 120 ]; then
+              break
+            fi
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
-            if [ "$count" != "0" ] && [ -n "$count" ]; then
+            if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+              test "$((SECONDS - mongo_started_at))" -lt 120
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              echo "MongoDB startup took $((SECONDS - mongo_started_at)) seconds"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
               expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
@@ -3072,6 +3090,10 @@ jobs:
           flags: website # Assuming you want to flag these as website tests
           report_type: test_results
 
+  database_backups:
+    name: Database backup recovery
+    uses: ./.github/workflows/ci-db-backup.yml
+
   cross_module_ci:
     name: Cross Module CI
     runs-on: ubuntu-latest
@@ -3098,6 +3120,7 @@ jobs:
         data_ci,
         recitation_ci,
         deploy_verifier,
+        database_backups,
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
@@ -3116,6 +3139,11 @@ jobs:
       - name: Check Prerequisites
         id: check_prerequisites
         run: |
+          if [ "${{ needs.database_backups.result }}" != "success" ]; then
+            echo "Database backup and restore validation did not pass."
+            exit 1
+          fi
+
           if [ "${{ needs.determine_changes.result }}" != "success" ]; then
             echo "Could not determine module changes."
             echo "Overall status: failure"
@@ -3240,7 +3268,7 @@ jobs:
           if [ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ]; then APP_MODULE_CHANGED=true; else APP_MODULE_CHANGED=false; fi
           if [ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ]; then APP_CI_CHANGED=true; else APP_CI_CHANGED=false; fi
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
               exit 1
             fi
@@ -3522,6 +3550,12 @@ jobs:
         uses: ./.github/actions/save-bun-store
         with:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
+
+      - name: Restore database backup coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: database-backup-coverage-${{ github.run_id }}
+          path: .coverage/db-backup
 
       - name: Measure release and image-publisher regression coverage
         working-directory: ${{ env.DEVOPS_DIRECTORY }}

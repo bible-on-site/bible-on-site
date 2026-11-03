@@ -7,6 +7,23 @@ jest.mock("../../../src/lib/perushim", () => ({
 	getPerushNotesBatch: jest.fn(),
 	getPerushimByPerekId: jest.fn(),
 }));
+jest.mock("../../../src/lib/reading-metrics", () => ({
+	getArticleProgressUnits: jest.fn(),
+	getPerekMetrics: jest.fn(),
+	getPerekProgressUnitsBatch: jest.fn(),
+	getPerushProgressUnitsBatch: jest.fn(),
+	// Faithful passthrough: resolves the read, falls back on rejection —
+	// the contract under test is that metric failures degrade, not reject.
+	metricOrFallback: jest.fn(
+		async (_label: string, fallback: unknown, read: () => Promise<unknown>) => {
+			try {
+				return await read();
+			} catch {
+				return fallback;
+			}
+		},
+	),
+}));
 jest.mock("../../../src/lib/download/handlers", () => ({
 	getSeferDownloadHandler: jest.fn(),
 	getPageRangesDownloadHandler: jest.fn(),
@@ -29,7 +46,9 @@ import {
 	downloadPageRanges,
 	downloadSefer,
 	getArticleForBook,
+	getArticleProgressUnitsForBook,
 	getArticleSummariesForPerek,
+	getNoteProgressUnitsForPerekBatch,
 	getPerekSummariesBatch,
 	getPerushimSummariesForPerek,
 	getPerushNotesForPage,
@@ -50,6 +69,12 @@ import {
 	getPerushNotes,
 	getPerushNotesBatch,
 } from "../../../src/lib/perushim";
+import {
+	getArticleProgressUnits,
+	getPerekMetrics,
+	getPerekProgressUnitsBatch,
+	getPerushProgressUnitsBatch,
+} from "../../../src/lib/reading-metrics";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
@@ -77,6 +102,21 @@ const mockGetSeferDownloadHandler =
 const mockGetPageRangesDownloadHandler =
 	getPageRangesDownloadHandler as jest.MockedFunction<
 		typeof getPageRangesDownloadHandler
+	>;
+const mockGetArticleProgressUnits =
+	getArticleProgressUnits as jest.MockedFunction<
+		typeof getArticleProgressUnits
+	>;
+const mockGetPerekMetrics = getPerekMetrics as jest.MockedFunction<
+	typeof getPerekMetrics
+>;
+const mockGetPerekProgressUnitsBatch =
+	getPerekProgressUnitsBatch as jest.MockedFunction<
+		typeof getPerekProgressUnitsBatch
+	>;
+const mockGetPerushProgressUnitsBatch =
+	getPerushProgressUnitsBatch as jest.MockedFunction<
+		typeof getPerushProgressUnitsBatch
 	>;
 
 describe("getArticleForBook", () => {
@@ -267,6 +307,20 @@ describe("getPerekSummariesBatch", () => {
 		mockGetPerushimByPerekId.mockImplementation(
 			async (id) => perushSummaries.get(id) ?? [],
 		);
+		const pasukUnits5 = [
+			{ key: "1", wordCount: 10, cumulativeWords: 10 },
+			{ key: "2", wordCount: 20, cumulativeWords: 30 },
+		];
+		const perekMetric6 = {
+			wordCount: 40,
+			estimatedSeconds: 11,
+			wordsPerMinute: 220,
+			calcVersion: 1,
+		};
+		mockGetPerekProgressUnitsBatch.mockResolvedValue(
+			new Map([[5, pasukUnits5]]),
+		);
+		mockGetPerekMetrics.mockResolvedValue(new Map([[6, perekMetric6]]));
 
 		const result = await getPerekSummariesBatch([5, 6]);
 
@@ -274,14 +328,57 @@ describe("getPerekSummariesBatch", () => {
 			"5": {
 				articles: articleSummaries.get(5),
 				perushim: perushSummaries.get(5),
+				pasukUnits: pasukUnits5,
+				perekMetric: null,
 			},
 			"6": {
 				articles: articleSummaries.get(6),
 				perushim: perushSummaries.get(6),
+				pasukUnits: [],
+				perekMetric: perekMetric6,
 			},
 		});
 		expect(mockGetArticleSummariesByPerekId).toHaveBeenCalledTimes(2);
 		expect(mockGetPerushimByPerekId).toHaveBeenCalledTimes(2);
+		expect(mockGetPerekProgressUnitsBatch).toHaveBeenCalledWith([5, 6]);
+		expect(mockGetPerekMetrics).toHaveBeenCalledWith([5, 6]);
+	});
+});
+
+describe("getArticleProgressUnitsForBook", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("delegates to getArticleProgressUnits", async () => {
+		const units = [{ key: null, wordCount: 12, cumulativeWords: 12 }];
+		mockGetArticleProgressUnits.mockResolvedValue(units);
+
+		const result = await getArticleProgressUnitsForBook(42);
+
+		expect(mockGetArticleProgressUnits).toHaveBeenCalledWith(42);
+		expect(result).toEqual(units);
+	});
+});
+
+describe("getNoteProgressUnitsForPerekBatch", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("returns the stored note units keyed by perush id", async () => {
+		const units = [{ key: "3:1", wordCount: 7, cumulativeWords: 7 }];
+		mockGetPerushProgressUnitsBatch.mockResolvedValue(
+			new Map([
+				[10, units],
+				[11, []],
+			]),
+		);
+
+		const result = await getNoteProgressUnitsForPerekBatch(5, [10, 11]);
+
+		expect(mockGetPerushProgressUnitsBatch).toHaveBeenCalledWith(5, [10, 11]);
+		expect(result).toEqual({ "10": units, "11": [] });
 	});
 });
 
