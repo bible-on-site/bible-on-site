@@ -3,7 +3,7 @@
 
 use crate::db::Database;
 use entities::article::{Column as ArticleCol, Entity as ArticleEntity, Model as Article};
-use entities::author::{Entity as AuthorEntity, Model as Author};
+use entities::author::{Column as AuthorCol, Entity as AuthorEntity, Model as Author};
 use entities::perek::{Column as PerekCol, Entity as PerekEntity, Model as Perek};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
@@ -17,20 +17,23 @@ pub async fn get_perek(db: &Database, perek_id: i32) -> anyhow::Result<Perek> {
         .ok_or_else(|| anyhow::anyhow!("Perek {} not found", perek_id))
 }
 
-/// Fetch all articles for a given perek.
-pub async fn get_articles_by_perek(db: &Database, perek_id: i32) -> anyhow::Result<Vec<Article>> {
+/// Fetch all articles for the given perakim in a single query.
+pub async fn get_articles_by_perakim(
+    db: &Database,
+    perakim_ids: &[i32],
+) -> anyhow::Result<Vec<Article>> {
     Ok(ArticleEntity::find()
-        .filter(ArticleCol::PerekId.eq(perek_id as i16))
+        .filter(ArticleCol::PerekId.is_in(perakim_ids.iter().map(|&id| id as i16)))
         .all(db.get_connection())
         .await?)
 }
 
-/// Fetch author by ID.
-pub async fn get_author(db: &Database, author_id: i32) -> anyhow::Result<Author> {
-    AuthorEntity::find_by_id(author_id)
-        .one(db.get_connection())
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Author {} not found", author_id))
+/// Fetch authors by IDs in a single query.
+pub async fn get_authors(db: &Database, author_ids: &[i32]) -> anyhow::Result<Vec<Author>> {
+    Ok(AuthorEntity::find()
+        .filter(AuthorCol::Id.is_in(author_ids.iter().copied()))
+        .all(db.get_connection())
+        .await?)
 }
 
 #[cfg(test)]
@@ -106,36 +109,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_articles_by_perek_returns_all_articles() {
+    async fn get_articles_by_perakim_returns_all_articles() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<Article, Vec<Article>, _>([vec![
                     article_model(1, 5, 10),
                     article_model(2, 5, 11),
+                    article_model(3, 6, 10),
                 ]])
                 .into_connection(),
         );
 
-        let articles = get_articles_by_perek(&db, 5).await.unwrap();
+        let articles = get_articles_by_perakim(&db, &[5, 6]).await.unwrap();
 
-        assert_eq!(articles.len(), 2);
+        assert_eq!(articles.len(), 3);
         assert_eq!(articles[0].perek_id, 5);
         assert_eq!(articles[1].author_id, 11);
+        assert_eq!(articles[2].perek_id, 6);
     }
 
     #[tokio::test]
-    async fn get_author_returns_author_or_not_found() {
+    async fn get_authors_returns_matching_authors() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<Author, Vec<Author>, _>([vec![author_model(4)]])
-                .append_query_results::<Author, Vec<Author>, _>([vec![]])
+                .append_query_results::<Author, Vec<Author>, _>([vec![
+                    author_model(4),
+                    author_model(7),
+                ]])
                 .into_connection(),
         );
 
-        let author = get_author(&db, 4).await.unwrap();
-        assert_eq!(author.name, "Author 4");
+        let authors = get_authors(&db, &[4, 7]).await.unwrap();
 
-        let err = get_author(&db, 404).await.unwrap_err();
-        assert!(err.to_string().contains("Author 404 not found"));
+        assert_eq!(authors.len(), 2);
+        assert_eq!(authors[0].name, "Author 4");
+        assert_eq!(authors[1].id, 7);
     }
 }
