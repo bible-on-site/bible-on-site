@@ -57,6 +57,17 @@ changes from the bookmark layer to a fold surface during a turn; theme selectors
 must match both parents. A browser regression checks the background, text and
 border colors on every visible surface at two held fold positions.
 
+These original browser-test attachments show the same held Kings turn before
+and after the theme repair. The moving tab retains the book's blue background;
+the corrected theme is independent of the remaining cadence failures.
+
+| Before the theme repair | After the theme repair |
+| --- | --- |
+| ![Moving tab loses its book color](images/sefer-turn-lag/moving-bookmark-before.png) | ![Moving tab keeps its book color](images/sefer-turn-lag/moving-bookmark-after.png) |
+
+The [capture provenance](images/sefer-turn-lag/moving-bookmark-theme.json)
+records the production-build source and original attachment hashes.
+
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
 completed motion and nonempty page text. Visibility and geometry queries can
