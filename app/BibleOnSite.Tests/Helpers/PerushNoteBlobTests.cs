@@ -202,4 +202,82 @@ public class PerushNoteBlobTests
 
         act.Should().Throw<InvalidDataException>().WithMessage("*implausibly large*");
     }
+
+    [Fact]
+    public void SplitByPasuk_ChunksDecodeToExactlyTheirPesukimNotes()
+    {
+        List<PerushNoteBlob.Note> notes =
+        [
+            new(1, 1, 1, "second"), new(2, 1, 0, "other source"),
+            new(1, 1, 0, "first"), new(1, 2, 0, "other verse"),
+            new(3, 4, 0, "far verse"),
+        ];
+
+        var chunks = PerushNoteBlob.SplitByPasuk(PerushNoteBlob.Encode(notes), CompressionLevel.Fastest);
+
+        chunks.Keys.Should().BeEquivalentTo([1, 2, 4]);
+        foreach (var (pasuk, chunk) in chunks)
+        {
+            PerushNoteBlob.Decode(chunk).Should().Equal(notes.Where(n => n.Pasuk == pasuk),
+                "each chunk must hold a self-contained PNB1 buffer of its own pasuk's records");
+        }
+    }
+
+    [Fact]
+    public void SplitByPasuk_EmptyBlob_ReturnsNoChunks()
+    {
+        PerushNoteBlob.SplitByPasuk(PerushNoteBlob.Encode([]), CompressionLevel.Fastest)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SplitByPasuk_BadMagic_Throws()
+    {
+        var blob = RawBlob(writer =>
+        {
+            writer.Write("PNB2"u8.ToArray());
+            writer.Write(0u);
+        });
+
+        var act = () => PerushNoteBlob.SplitByPasuk(blob, CompressionLevel.Fastest);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*magic*");
+    }
+
+    [Fact]
+    public void SplitByPasuk_TruncatedContent_Throws()
+    {
+        var blob = RawBlob(writer =>
+        {
+            writer.Write("PNB1"u8.ToArray());
+            writer.Write(1u);
+            writer.Write(7u);
+            writer.Write(3u);
+            writer.Write(0u);
+            writer.Write(100u); // declares 100 bytes…
+            writer.Write("abc"u8.ToArray()); // …but only 3 follow
+        });
+
+        var act = () => PerushNoteBlob.SplitByPasuk(blob, CompressionLevel.Fastest);
+
+        act.Should().Throw<EndOfStreamException>();
+    }
+
+    [Fact]
+    public void SplitByPasuk_ImplausiblyLargeRecord_Throws()
+    {
+        var blob = RawBlob(writer =>
+        {
+            writer.Write("PNB1"u8.ToArray());
+            writer.Write(1u);
+            writer.Write(7u);
+            writer.Write(3u);
+            writer.Write(0u);
+            writer.Write(uint.MaxValue); // declared length exceeds MaxContentBytes
+        });
+
+        var act = () => PerushNoteBlob.SplitByPasuk(blob, CompressionLevel.Fastest);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*implausibly large*");
+    }
 }
