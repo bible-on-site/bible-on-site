@@ -3,7 +3,11 @@
 //! `tanahpedia_entry_revision`, a separate admin workflow; everything here
 //! reads the live tables only and requires no authentication.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock, Mutex},
+    time::{Duration, Instant},
+};
 
 use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
@@ -530,8 +534,43 @@ pub async fn get_entities_with_entries(
 pub async fn get_today_entities(
     db: &Database,
     month_day: i32,
-) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
+) -> Result<Arc<Vec<TanahpediaEntityWithEntries>>, ServiceError> {
     tracing::info_span!("tanahpedia_entries_service::get_today_entities", %month_day);
+    let now = Instant::now();
+    {
+        let cache = today_entities_cache_entry();
+        if let Some((key, loaded_at, entities)) = cache.as_ref()
+            && *key == month_day
+            && now.duration_since(*loaded_at) < TODAY_ENTITIES_TTL
+        {
+            return Ok(Arc::clone(entities));
+        }
+    }
+    let entities = Arc::new(fetch_today_entities(db, month_day).await?);
+    *today_entities_cache_entry() = Some((month_day, Instant::now(), Arc::clone(&entities)));
+    Ok(entities)
+}
+
+/// One cached "today" result: the whole query is the same for every request
+/// of the same calendar day, so repeat calls in the app share one DB round
+/// trip for a short TTL instead of re-running it per request.
+type TodayEntitiesCache = Option<(i32, Instant, Arc<Vec<TanahpediaEntityWithEntries>>)>;
+
+static TODAY_ENTITIES_CACHE: LazyLock<Mutex<TodayEntitiesCache>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn today_entities_cache_entry() -> std::sync::MutexGuard<'static, TodayEntitiesCache> {
+    TODAY_ENTITIES_CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+const TODAY_ENTITIES_TTL: Duration = Duration::from_secs(300);
+
+async fn fetch_today_entities(
+    db: &Database,
+    month_day: i32,
+) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
     let rows = TodayEntityRow::find_by_statement(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
         r#"SELECT DISTINCT
@@ -1178,7 +1217,7 @@ mod tests {
                 .into_connection(),
         );
 
-        let entities = get_today_entities(&db, 925).await.unwrap();
+        let entities = get_today_entities(&db, 9999).await.unwrap();
 
         assert_eq!(entities.len(), 2);
         assert_eq!(entities[0].entity_type, "PERSON");
@@ -1186,6 +1225,57 @@ mod tests {
         assert_eq!(entities[0].linked_entries[0].unique_name, "מתתיהו-החשמונאי");
         assert_eq!(entities[1].entity_type, "EVENT");
         assert!(entities[1].linked_entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_today_entities_caches_results_per_day() {
+        // Unique month_day values so the shared cache cannot leak between tests.
+        let today = 9801;
+        let tomorrow = 9802;
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("entity_id", "entity-today".into()),
+                        ("entity_name", "מתתיהו".into()),
+                        ("entity_type", "PERSON".into()),
+                        ("entry_id", Value::String(None)),
+                        ("entry_unique_name", Value::String(None)),
+                        ("entry_title", Value::String(None)),
+                    ])] as Vec<BTreeMap<String, Value>>,
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("entity_id", "entity-tomorrow".into()),
+                        ("entity_name", "יהודה".into()),
+                        ("entity_type", "PERSON".into()),
+                        ("entry_id", Value::String(None)),
+                        ("entry_unique_name", Value::String(None)),
+                        ("entry_title", Value::String(None)),
+                    ])] as Vec<BTreeMap<String, Value>>,
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    Vec::<BTreeMap<String, Value>>::new(),
+                ])
+                .into_connection(),
+        );
+
+        let first = get_today_entities(&db, today).await.unwrap();
+        let second = get_today_entities(&db, today).await.unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].entity_name, "מתתיהו");
+        assert!(Arc::ptr_eq(&first, &second));
+
+        // A different day is a cache miss and queries the database.
+        let other_day = get_today_entities(&db, tomorrow).await.unwrap();
+        assert_eq!(other_day.len(), 1);
+        assert_eq!(other_day[0].entity_name, "יהודה");
+
+        // `tomorrow` replaced the cached `today` entry, so going back to
+        // `today` queries again — the third (empty) result set answers it.
+        let back = get_today_entities(&db, today).await.unwrap();
+        assert!(back.is_empty());
+        assert!(!Arc::ptr_eq(&first, &back));
     }
 
     #[tokio::test]
