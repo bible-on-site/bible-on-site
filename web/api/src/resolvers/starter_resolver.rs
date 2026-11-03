@@ -15,22 +15,18 @@ impl StarterQuery {
     async fn starter(&self, ctx: &Context<'_>) -> Result<Starter> {
         let db = ctx.data::<Database>()?;
 
-        // Fetch authors, articles, and counts in parallel-friendly single queries
+        // Fetch authors and articles (starter fields only — no full HTML content)
         let authors = authors_service::find_all(db)
             .await
             .map_err(|e| e.extend())?;
 
-        let all_articles = articles_service::find_all(db)
+        let article_summaries = articles_service::find_all_without_content(db)
             .await
             .map_err(|e| e.extend())?;
 
-        let author_article_counts = articles_service::count_by_author(db)
-            .await
-            .map_err(|e| e.extend())?;
-
-        let perek_articles_counters = articles_service::count_by_perek(db)
-            .await
-            .map_err(|e| e.extend())?;
+        // Counts derive from the rows already fetched — no extra aggregate scans
+        let author_article_counts = articles_service::count_by_author(&article_summaries);
+        let perek_articles_counters = articles_service::count_by_perek(&article_summaries);
 
         // Map authors with their pre-computed article counts
         let authors_with_counts: Vec<Author> = authors
@@ -43,7 +39,7 @@ impl StarterQuery {
 
         // Convert articles to DTOs, then batch-attach reading metrics — one
         // IN query so `readingMetric` on the starter list stays O(1) (#2607).
-        let mut articles: Vec<Article> = all_articles.into_iter().map(Article::from).collect();
+        let mut articles: Vec<Article> = article_summaries.into_iter().map(Article::from).collect();
         super::articles_resolver::attach_article_reading_metrics(db, &mut articles).await?;
 
         Ok(Starter {

@@ -59,6 +59,25 @@ impl From<Model> for Article {
     }
 }
 
+/// Starter-list conversion: the summary query never reads `content`, so
+/// `articleContent` resolves to `null` on starter articles. Clients that need
+/// the body select it through `articleById`, which loads the full model.
+impl From<articles_service::ArticleSummary> for Article {
+    fn from(value: articles_service::ArticleSummary) -> Self {
+        Self {
+            id: value.id,
+            perek_id: value.perek_id as i32,
+            author_id: value.author_id as i32,
+            article_abstract: value.article_abstract,
+            article_content: None,
+            name: value.name,
+            priority: value.priority as i32,
+            coverage_verified: value.coverage_verified,
+            reading_metric: None,
+        }
+    }
+}
+
 #[ComplexObject]
 impl Article {
     /// The article's persisted covering sources, ordered by coordinate.
