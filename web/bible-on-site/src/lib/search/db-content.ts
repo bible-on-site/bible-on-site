@@ -14,7 +14,7 @@
  * also selected (#2140) — the same typo tolerance the in-memory
  * corpora get by scoring everything.
  *
- * The scan runs in two stages with different cost profiles: WHERE
+ * Pools that can exceed the output cap use two SQL stages: WHERE
  * holds only the anchor-free chunk gate — the one pattern shape a
  * giant field can't make ICU backtrack on — under an inner
  * location-ordered LIMIT that early-terminates via an index for dense
@@ -599,6 +599,8 @@ export interface ArticleHit {
  * scored article hits out) should replace/augment this provider — see
  * docs/website/search.md for the expected request/response contract.
  * Keep `searchArticles` as the only call site so the swap touches one file.
+ * Its location-ordered candidate pool fits the output cap completely, so
+ * the exact JS scorer ranks it without a redundant SQL rank estimate.
  */
 export async function searchArticles(
 	phrase: string,
@@ -611,7 +613,9 @@ export async function searchArticles(
 		["a.name", "a.abstract", "a.content"],
 		terms,
 	);
-	const rank = rankClauses(["a2.name", "a2.abstract", "a2.content"], terms);
+	// This existing pool holds at most 666 rows, below CANDIDATE_LIMIT.
+	// SQL ranking cannot discard any of them; the exact JS scoring below
+	// already ranks the complete pool. Keep its size and id ordering.
 	const rows = await queryText<{
 		id: number;
 		perek_id: number;
@@ -630,9 +634,9 @@ export async function searchArticles(
 			 LIMIT ${innerCandidateLimit(3, terms.length)}
 		 ) a2
 		 JOIN tanah_author au ON a2.author_id = au.id
-		 ORDER BY ${rank.orderBy}, a2.id
+		 ORDER BY a2.id
 		 LIMIT ${CANDIDATE_LIMIT}`,
-		[...params, ...rank.params],
+		params,
 	);
 	return rows
 		.map((row) => {
