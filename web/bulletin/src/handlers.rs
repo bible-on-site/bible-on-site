@@ -1,6 +1,7 @@
 //! Request handlers — Lambda (production) and CLI stdin/stdout (dev).
 //! Both share the same core logic via `generate_pdf_core`.
 
+use std::collections::HashMap;
 use std::env;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -34,18 +35,22 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         None
     };
 
+    // Batch-fetch articles for all requested perakim (2 queries total) to avoid
+    // a per-perek article query plus a per-article author query.
+    let articles_by_perek = if let Some(ref db) = db {
+        fetch_articles_batched(db, &req)
+            .await
+            .map_err(|e| format!("Failed to fetch articles: {}", e))?
+    } else {
+        HashMap::new()
+    };
+
     // Resolve perek data from embedded Tanach text and attach articles per-perek
     let mut perakim: Vec<pdf::PdfPerekInput> = Vec::with_capacity(req.perakim_ids.len());
     for &id in &req.perakim_ids {
         let data = tanach::get_perek(id).ok_or_else(|| format!("Unknown perekId: {}", id))?;
 
-        let articles = if let Some(ref db) = db {
-            fetch_articles_for_perek(db, id, &req)
-                .await
-                .map_err(|e| format!("Failed to fetch articles: {}", e))?
-        } else {
-            vec![]
-        };
+        let articles = articles_by_perek.get(&id).cloned().unwrap_or_default();
 
         let content = req.perakim_content.iter().find(|c| c.perek_id == id);
         let (pesukim, images) = match content {
@@ -152,32 +157,45 @@ fn content_images(content: &PerekContentInput) -> Result<Vec<pdf::PdfImage>, Str
         .collect()
 }
 
-/// Fetch articles for a single perek, applying optional filters.
-async fn fetch_articles_for_perek(
+/// Fetch articles for all requested perakim, applying optional filters, in two
+/// queries: one article lookup over `perakim_ids` and one author lookup over the
+/// distinct `author_id`s, grouped per perek for the PDF input.
+async fn fetch_articles_batched(
     db: &Database,
-    perek_id: i32,
     req: &GeneratePdfRequest,
-) -> anyhow::Result<Vec<(String, String, String)>> {
-    let mut perek_articles = services::get_articles_by_perek(db, perek_id).await?;
+) -> anyhow::Result<HashMap<i32, Vec<(String, String, String)>>> {
+    let mut articles = services::get_articles_by_perakim(db, &req.perakim_ids).await?;
 
     if !req.article_ids.is_empty() {
-        perek_articles.retain(|a| req.article_ids.contains(&a.id));
+        articles.retain(|a| req.article_ids.contains(&a.id));
     }
     if !req.author_ids.is_empty() {
-        perek_articles.retain(|a| req.author_ids.contains(&(a.author_id as i32)));
+        articles.retain(|a| req.author_ids.contains(&(a.author_id as i32)));
     }
 
-    let mut articles = Vec::new();
-    for article in perek_articles {
-        let author = services::get_author(db, article.author_id as i32).await?;
-        articles.push((
+    let mut author_ids: Vec<i32> = articles.iter().map(|a| a.author_id as i32).collect();
+    author_ids.sort_unstable();
+    author_ids.dedup();
+
+    let author_names: HashMap<i32, String> = services::get_authors(db, &author_ids)
+        .await?
+        .into_iter()
+        .map(|a| (a.id, a.name))
+        .collect();
+
+    let mut by_perek: HashMap<i32, Vec<(String, String, String)>> = HashMap::new();
+    for article in articles {
+        let author_name = author_names
+            .get(&(article.author_id as i32))
+            .ok_or_else(|| anyhow::anyhow!("Author {} not found", article.author_id))?;
+        by_perek.entry(article.perek_id as i32).or_default().push((
             article.name.clone(),
-            author.name.clone(),
+            author_name.clone(),
             article.content.clone().unwrap_or_default(),
         ));
     }
 
-    Ok(articles)
+    Ok(by_perek)
 }
 
 fn build_filename(sefer_name: &str, perakim_ids: &[i32]) -> String {
@@ -342,6 +360,109 @@ mod tests {
             Body::Text(text) => text,
             _ => panic!("expected text body"),
         }
+    }
+
+    fn article_model(id: i32, perek_id: i16, author_id: i16) -> entities::article::Model {
+        entities::article::Model {
+            id,
+            perek_id,
+            author_id,
+            article_abstract: None,
+            name: format!("Article {id}"),
+            priority: 0,
+            content: Some(format!("content-{id}")),
+            coverage_verified: false,
+        }
+    }
+
+    fn author_model(id: i32) -> entities::author::Model {
+        entities::author::Model {
+            id,
+            name: format!("Author {id}"),
+            details: String::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_articles_batched_groups_by_perek_and_applies_filters() {
+        use sea_orm::{DatabaseBackend, MockDatabase};
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![
+                        article_model(1, 5, 10),
+                        article_model(2, 5, 11),
+                        article_model(3, 6, 10),
+                    ]],
+                )
+                .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
+                    vec![author_model(10), author_model(11)],
+                ])
+                .into_connection(),
+        );
+
+        let req: GeneratePdfRequest =
+            serde_json::from_str(r#"{"perakimIds":[5,6,7],"includeArticles":true}"#).unwrap();
+        let by_perek = fetch_articles_batched(&db, &req).await.unwrap();
+
+        assert_eq!(by_perek.len(), 2);
+        assert_eq!(
+            by_perek[&5],
+            vec![
+                (
+                    "Article 1".to_string(),
+                    "Author 10".to_string(),
+                    "content-1".to_string()
+                ),
+                (
+                    "Article 2".to_string(),
+                    "Author 11".to_string(),
+                    "content-2".to_string()
+                ),
+            ]
+        );
+        assert_eq!(by_perek[&6].len(), 1);
+        assert!(!by_perek.contains_key(&7));
+
+        // Author filter retains only matching articles and fetches only their authors.
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![article_model(1, 5, 10), article_model(2, 5, 11)]],
+                )
+                .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
+                    vec![author_model(10)],
+                ])
+                .into_connection(),
+        );
+        let req: GeneratePdfRequest =
+            serde_json::from_str(r#"{"perakimIds":[5],"includeArticles":true,"authorIds":[10]}"#)
+                .unwrap();
+        let by_perek = fetch_articles_batched(&db, &req).await.unwrap();
+        assert_eq!(by_perek[&5].len(), 1);
+        assert_eq!(by_perek[&5][0].0, "Article 1");
+    }
+
+    #[tokio::test]
+    async fn fetch_articles_batched_reports_missing_author() {
+        use sea_orm::{DatabaseBackend, MockDatabase};
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![article_model(1, 5, 99)]],
+                )
+                .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+
+        let req: GeneratePdfRequest =
+            serde_json::from_str(r#"{"perakimIds":[5],"includeArticles":true}"#).unwrap();
+        let err = fetch_articles_batched(&db, &req).await.unwrap_err();
+        assert!(err.to_string().contains("Author 99 not found"), "{err}");
     }
 
     #[test]
