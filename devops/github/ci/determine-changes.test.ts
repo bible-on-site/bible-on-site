@@ -621,6 +621,48 @@ describe("detectChanges", () => {
 		assert.equal(changes.app.module_changed, true);
 	});
 
+	test("MongoDB fixture changes run Data CI without production data delivery", () => {
+		for (const file of [
+			"data/sefaria/mongodb-docker/Dockerfile",
+			"data/sefaria/mongodb-docker/restore.sh",
+			"data/sefaria/mongodb-docker/entrypoint.sh",
+			"data/sefaria/mongodb-docker/README.md",
+		]) {
+			const changes = detectChanges([file]);
+			assert.deepEqual(changes.data, {
+				module_changed: false,
+				ci_changed: true,
+			});
+			assert.equal(changes.perushim_pipeline.module_changed, false);
+			assert.equal(isDataDeployChange([file]), false);
+		}
+	});
+
+	test("the MongoDB fixture exception preserves adjacent production inputs", () => {
+		for (const file of [
+			"data/sefaria/mongodb-docker.sql",
+			"data/sefaria/mongodb-docker-backup/Dockerfile",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+		]) {
+			assert.equal(detectChanges([file]).data.module_changed, true, file);
+		}
+		assert.equal(
+			detectChanges([
+				"data/sefaria/mongodb-docker/restore.sh",
+				"data/mysql/tanah_test_data.sql",
+			]).data.module_changed,
+			true,
+		);
+		const migration = ["data/mysql/tanahpedia_alter_mention_decoration.sql"];
+		assert.equal(
+			isSchemaOnlyDataChange([
+				...migration,
+				"data/sefaria/mongodb-docker/restore.sh",
+			]),
+			isSchemaOnlyDataChange(migration),
+		);
+	});
+
 	test("the perushim pipeline is also part of the data module", () => {
 		const changes = detectChanges([
 			"data/sefaria/pipelines/perushim-view/src/main.rs",
@@ -1433,7 +1475,7 @@ fi
 					true,
 					false,
 					undefined,
-					prerequisites + "\n${{ needs.unknown.outputs.module_version }}",
+					`${prerequisites}\n\${{ needs.unknown.outputs.module_version }}`,
 				),
 			/Unexpected prerequisite expression/,
 		);
