@@ -7,20 +7,20 @@ import {
 	SendMessageBatchCommand,
 	SQSClient,
 } from "@aws-sdk/client-sqs";
+import type { PoolConnection } from "mysql2/promise";
 import {
 	type EmailJobStatus,
 	type EmailJobSummary,
 	validateEmailQueueRequest,
 } from "~/lib/bulletin-email";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
-import { readPreparedBulletin } from "./daily-bulletins.server";
+import { readBulletinEmailContent } from "./daily-bulletins.server";
 import {
 	execute,
 	query,
 	queryOne,
 	transaction,
 	txExecute,
-	txQuery,
 	txQueryOne,
 } from "./db";
 import { runOutboxSweep } from "./outbox-deadline.server";
@@ -90,6 +90,7 @@ interface JobRow {
 	audience: SesAudience;
 	settings_revision: number;
 	status: EmailJobStatus;
+	last_error: string | null;
 	created_at: Date | string;
 }
 interface RecipientRow {
@@ -161,56 +162,75 @@ async function summary(job: JobRow): Promise<EmailJobSummary> {
 	};
 }
 
-async function refreshJob(jobId: string, signal?: AbortSignal): Promise<void> {
-	await transaction(async (connection) => {
-		signal?.throwIfAborted();
-		// Lock before counting: concurrent event handlers cannot publish stale totals.
-		const job = await txQueryOne<JobRow>(
-			connection,
-			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date FROM tanah_daily_bulletin_email_job j WHERE id = ? FOR UPDATE",
-			[jobId],
-		);
-		signal?.throwIfAborted();
-		if (!job) return;
-		const rows = await txQuery<CountRow>(
-			connection,
-			"SELECT status, COUNT(*) AS count FROM tanah_daily_bulletin_email_recipient WHERE job_id = ? GROUP BY status",
-			[jobId],
-		);
-		signal?.throwIfAborted();
-		const status = aggregate(countsMap(rows));
-		const error =
-			status === "uncertain" ? UNCERTAIN : status === "failed" ? FAILED : null;
-		await txExecute(
-			connection,
-			"UPDATE tanah_daily_bulletin_email_job SET status = ?, last_error = ? WHERE id = ?",
-			[status, error, jobId],
-		);
-		signal?.throwIfAborted();
-		if (job.audience === "real") {
-			const channelStatus =
-				status === "delivered"
-					? "sent"
-					: status === "uncertain"
-						? "uncertain"
-						: status === "failed" || status === "suppressed"
-							? "failed"
-							: "sending";
-			await txExecute(
-				connection,
-				`UPDATE tanah_daily_bulletin_delivery SET status = ?, provider_message_id = ?, last_error = ?,
-				 sent_at = CASE WHEN ? = 'sent' THEN COALESCE(sent_at, UTC_TIMESTAMP()) ELSE sent_at END
-				 WHERE bulletin_date = ? AND channel = 'email'`,
-				[
-					channelStatus,
-					`ses:${jobId}`,
-					error,
-					channelStatus,
-					dateOnly(job.bulletin_date),
-				],
-			);
-		}
-	});
+// Status counters kept on the job row; bounced/complained share the failed
+// bucket because aggregate() never distinguishes them.
+function counterColumn(status: RecipientStatus): string {
+	return status === "bounced" || status === "complained"
+		? "cnt_failed"
+		: `cnt_${status}`;
+}
+
+// Derives the job status from its stored counters; must mirror aggregate()'s precedence.
+const JOB_STATUS_FROM_COUNTERS = `CASE
+	WHEN cnt_uncertain > 0 THEN 'uncertain'
+	WHEN cnt_sending > 0 THEN 'sending'
+	WHEN cnt_queued > 0 THEN 'queued'
+	WHEN cnt_accepted > 0 THEN 'accepted'
+	WHEN cnt_failed > 0 THEN 'failed'
+	WHEN cnt_delivered > 0 THEN 'delivered'
+	ELSE 'suppressed' END`;
+
+// Moves one recipient between status buckets on the job row and mirrors the
+// resulting aggregate into the delivery ledger. Runs inside the caller's
+// transaction so counters cannot diverge from the recipient write.
+async function applyRecipientTransition(
+	connection: PoolConnection,
+	jobId: string,
+	from: RecipientStatus,
+	to: RecipientStatus,
+	signal?: AbortSignal,
+): Promise<void> {
+	if (from === to) return;
+	await txExecute(
+		connection,
+		`UPDATE tanah_daily_bulletin_email_job SET
+			${counterColumn(from)} = ${counterColumn(from)} - 1,
+			${counterColumn(to)} = ${counterColumn(to)} + 1,
+			status = ${JOB_STATUS_FROM_COUNTERS},
+			last_error = CASE status WHEN 'uncertain' THEN ? WHEN 'failed' THEN ? ELSE NULL END
+		 WHERE id = ?`,
+		[UNCERTAIN, FAILED, jobId],
+	);
+	signal?.throwIfAborted();
+	// Lock before mirroring: concurrent transitions cannot publish stale status.
+	const job = await txQueryOne<JobRow>(
+		connection,
+		"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date FROM tanah_daily_bulletin_email_job j WHERE id = ? FOR UPDATE",
+		[jobId],
+	);
+	signal?.throwIfAborted();
+	if (job?.audience !== "real") return;
+	const channelStatus =
+		job.status === "delivered"
+			? "sent"
+			: job.status === "uncertain"
+				? "uncertain"
+				: job.status === "failed" || job.status === "suppressed"
+					? "failed"
+					: "sending";
+	await txExecute(
+		connection,
+		`UPDATE tanah_daily_bulletin_delivery SET status = ?, provider_message_id = ?, last_error = ?,
+		 sent_at = CASE WHEN ? = 'sent' THEN COALESCE(sent_at, UTC_TIMESTAMP()) ELSE sent_at END
+		 WHERE bulletin_date = ? AND channel = 'email'`,
+		[
+			channelStatus,
+			`ses:${jobId}`,
+			job.last_error,
+			channelStatus,
+			dateOnly(job.bulletin_date),
+		],
+	);
 }
 
 export async function readLatestEmailJob(
@@ -291,21 +311,26 @@ async function reconcileEmailOutbox(
 		 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND) ORDER BY id LIMIT 100`,
 		);
 		signal.throwIfAborted();
-		const jobs = new Set<string>();
 		for (const row of stale) {
 			signal.throwIfAborted();
-			const changed = await execute(
-				`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
-			 WHERE id = ? AND status = 'sending'
-			 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)`,
-				[UNCERTAIN, row.id],
-			);
-			signal.throwIfAborted();
-			if (changed.affectedRows === 1) jobs.add(row.job_id);
-		}
-		for (const id of jobs) {
-			signal.throwIfAborted();
-			await refreshJob(id, signal);
+			await transaction(async (connection) => {
+				const changed = await txExecute(
+					connection,
+					`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
+				 WHERE id = ? AND status = 'sending'
+				 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)`,
+					[UNCERTAIN, row.id],
+				);
+				signal.throwIfAborted();
+				if (changed.affectedRows === 1)
+					await applyRecipientTransition(
+						connection,
+						row.job_id,
+						"sending",
+						"uncertain",
+						signal,
+					);
+			});
 		}
 		signal.throwIfAborted();
 		// The committed rows form an outbox. Re-publishing is safe because send claims
@@ -335,9 +360,9 @@ export async function enqueueBulletinEmail(
 		(expected.audience === "real" && !readiness.canUseReal)
 	)
 		throw new Error("הדיוור אינו מוכן לשליחה");
-	if (!(await readPreparedBulletin(date)))
-		throw new Error("יש להכין את העלון לפני השליחה");
 	const key = expected.audience === "real" ? "production" : requestKey;
+	if (!(await readBulletinEmailContent(date)))
+		throw new Error("יש להכין את העלון לפני השליחה");
 	const job = await transaction(async (connection) => {
 		const settings = await txQueryOne<{
 			audience: SesAudience;
@@ -390,12 +415,12 @@ export async function enqueueBulletinEmail(
 			)
 				throw new Error("קיים ניסיון דיוור קודם לתאריך זה ונדרשת בדיקה");
 		}
-		const subscribers = await txQuery<{ id: number; email: string }>(
+		const confirmed = await txQueryOne<{ n: number | string }>(
 			connection,
-			"SELECT id, email FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed' ORDER BY id FOR UPDATE",
+			"SELECT COUNT(*) AS n FROM tanah_daily_bulletin_subscriber WHERE audience = ? AND consent_status = 'confirmed'",
 			[expected.audience],
 		);
-		if (!subscribers.length)
+		if (!Number(confirmed?.n))
 			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
 		const id = randomUUID();
 		await txExecute(
@@ -403,13 +428,21 @@ export async function enqueueBulletinEmail(
 			"INSERT INTO tanah_daily_bulletin_email_job (id, bulletin_date, audience, idempotency_key, settings_revision) VALUES (?, ?, ?, ?, ?)",
 			[id, date, expected.audience, key, expected.revision],
 		);
-		for (const subscriber of subscribers) {
-			await txExecute(
-				connection,
-				"INSERT INTO tanah_daily_bulletin_email_recipient (job_id, subscriber_id, email) VALUES (?, ?, ?)",
-				[id, subscriber.id, subscriber.email.toLowerCase()],
-			);
-		}
+		// One set-based insert instead of a row per subscriber under the locks.
+		const enrolled = await txExecute(
+			connection,
+			`INSERT INTO tanah_daily_bulletin_email_recipient (job_id, subscriber_id, email)
+			 SELECT ?, s.id, LOWER(s.email) FROM tanah_daily_bulletin_subscriber s
+			 WHERE s.audience = ? AND s.consent_status = 'confirmed' ORDER BY s.id`,
+			[id, expected.audience],
+		);
+		if (!enrolled.affectedRows)
+			throw new Error("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+		await txExecute(
+			connection,
+			"UPDATE tanah_daily_bulletin_email_job SET cnt_queued = ? WHERE id = ?",
+			[enrolled.affectedRows, id],
+		);
 		if (expected.audience === "real") {
 			const reserved = await txExecute(
 				connection,
@@ -449,26 +482,39 @@ export async function processEmailRecipient(id: number): Promise<void> {
 	if (!row) return;
 	if (row.status === "sending") {
 		// A process can die after SES accepted mail. An expired attempt is never resent.
-		await execute(
-			`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
-			 WHERE id = ? AND status = 'sending'
-			 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)`,
-			[UNCERTAIN, id],
-		);
-		await refreshJob(row.job_id);
+		await transaction(async (connection) => {
+			const changed = await txExecute(
+				connection,
+				`UPDATE tanah_daily_bulletin_email_recipient SET status = 'uncertain', last_error = ?
+				 WHERE id = ? AND status = 'sending'
+				 AND (started_at IS NULL OR started_at < UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)`,
+				[UNCERTAIN, id],
+			);
+			if (changed.affectedRows === 1)
+				await applyRecipientTransition(
+					connection,
+					row.job_id,
+					"sending",
+					"uncertain",
+				);
+		});
 		return;
 	}
-	if (row.status !== "queued") {
-		await refreshJob(row.job_id);
-		return;
-	}
+	// Nothing changed for terminal statuses; the counters already reflect them.
+	if (row.status !== "queued") return;
 	const token = randomUUID();
-	const claim = await execute(
-		`UPDATE tanah_daily_bulletin_email_recipient SET status = 'sending', attempt_token = ?, started_at = UTC_TIMESTAMP(3), last_error = NULL
-		 WHERE id = ? AND status = 'queued'`,
-		[token, id],
-	);
-	if (claim.affectedRows !== 1) return;
+	const claimed = await transaction(async (connection) => {
+		const claim = await txExecute(
+			connection,
+			`UPDATE tanah_daily_bulletin_email_recipient SET status = 'sending', attempt_token = ?, started_at = UTC_TIMESTAMP(3), last_error = NULL
+			 WHERE id = ? AND status = 'queued'`,
+			[token, id],
+		);
+		if (claim.affectedRows !== 1) return false;
+		await applyRecipientTransition(connection, row.job_id, "queued", "sending");
+		return true;
+	});
+	if (!claimed) return;
 	let providerStarted = false;
 	let suppressed = false;
 	try {
@@ -481,7 +527,9 @@ export async function processEmailRecipient(id: number): Promise<void> {
 			current.email.toLowerCase() !== current.subscriber_email.toLowerCase()
 		)
 			throw new DeliverySuppressed();
-		const bulletin = await readPreparedBulletin(dateOnly(row.bulletin_date));
+		const bulletin = await readBulletinEmailContent(
+			dateOnly(row.bulletin_date),
+		);
 		if (!bulletin) throw new SesError(FAILED, "failed");
 		const client = new SesClient({
 			...runtime,
@@ -513,14 +561,33 @@ export async function processEmailRecipient(id: number): Promise<void> {
 			externalId: `${id}_${token}`,
 		});
 		providerStarted = true;
-		const saved = await execute(
-			`UPDATE tanah_daily_bulletin_email_recipient SET message_id = ?,
-			 last_error = CASE WHEN status IN ('sending', 'uncertain', 'accepted') THEN NULL ELSE last_error END,
-			 status = CASE WHEN status IN ('sending', 'uncertain') THEN 'accepted' ELSE status END
-			 WHERE id = ? AND attempt_token = ? AND (message_id IS NULL OR message_id = ?)`,
-			[messageId, id, token, messageId],
-		);
-		if (saved.affectedRows !== 1) throw new Error(UNCERTAIN);
+		const persisted = await transaction(async (connection) => {
+			const current = await txQueryOne<RecipientRow>(
+				connection,
+				"SELECT r.* FROM tanah_daily_bulletin_email_recipient r WHERE id = ? FOR UPDATE",
+				[id],
+			);
+			if (!current || current.attempt_token !== token) return false;
+			const saved = await txExecute(
+				connection,
+				`UPDATE tanah_daily_bulletin_email_recipient SET message_id = ?,
+				 last_error = CASE WHEN status IN ('sending', 'uncertain', 'accepted') THEN NULL ELSE last_error END,
+				 status = CASE WHEN status IN ('sending', 'uncertain') THEN 'accepted' ELSE status END
+				 WHERE id = ? AND attempt_token = ? AND (message_id IS NULL OR message_id = ?)`,
+				[messageId, id, token, messageId],
+			);
+			if (saved.affectedRows !== 1) return false;
+			await applyRecipientTransition(
+				connection,
+				row.job_id,
+				current.status,
+				["sending", "uncertain"].includes(current.status)
+					? "accepted"
+					: current.status,
+			);
+			return true;
+		});
+		if (!persisted) throw new Error(UNCERTAIN);
 	} catch (error) {
 		const state =
 			suppressed ||
@@ -532,22 +599,41 @@ export async function processEmailRecipient(id: number): Promise<void> {
 					: providerStarted
 						? "uncertain"
 						: "failed";
-		await execute(
-			`UPDATE tanah_daily_bulletin_email_recipient SET status = ?, last_error = ?
-			 WHERE id = ? AND attempt_token = ? AND status IN ('sending', 'uncertain')`,
-			[
-				state,
-				state === "uncertain"
-					? UNCERTAIN
-					: state === "suppressed"
-						? SUPPRESSED
-						: FAILED,
-				id,
-				token,
-			],
-		);
+		await transaction(async (connection) => {
+			const current = await txQueryOne<RecipientRow>(
+				connection,
+				"SELECT r.* FROM tanah_daily_bulletin_email_recipient r WHERE id = ? AND attempt_token = ? FOR UPDATE",
+				[id, token],
+			);
+			if (
+				!current ||
+				(current.status !== "sending" && current.status !== "uncertain")
+			)
+				return;
+			const changed = await txExecute(
+				connection,
+				`UPDATE tanah_daily_bulletin_email_recipient SET status = ?, last_error = ?
+				 WHERE id = ? AND attempt_token = ? AND status IN ('sending', 'uncertain')`,
+				[
+					state,
+					state === "uncertain"
+						? UNCERTAIN
+						: state === "suppressed"
+							? SUPPRESSED
+							: FAILED,
+					id,
+					token,
+				],
+			);
+			if (changed.affectedRows === 1)
+				await applyRecipientTransition(
+					connection,
+					row.job_id,
+					current.status,
+					state,
+				);
+		});
 	}
-	await refreshJob(row.job_id);
 }
 
 export async function applySesEvent(event: SesEvent): Promise<void> {
@@ -579,7 +665,7 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 	const id = Number(event.attemptId.slice(0, separator));
 	const token = event.attemptId.slice(separator + 1);
 	if (separator < 1 || !Number.isSafeInteger(id) || id <= 0 || !token) return;
-	const matched = await transaction(async (connection) => {
+	await transaction(async (connection) => {
 		const row = await txQueryOne<RecipientRow>(
 			connection,
 			"SELECT r.*, DATE_FORMAT(r.event_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS event_at FROM tanah_daily_bulletin_email_recipient r WHERE id = ? FOR UPDATE",
@@ -636,7 +722,7 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 			(older && status !== "bounced" && status !== "complained") ||
 			(equal && (priority[row.status] ?? 0) >= (priority[status] ?? 0))
 		)
-			return row.job_id;
+			return;
 		// Delivery cannot undo a bounce/complaint, and a delayed send cannot undo delivery.
 		const keepTerminal = (priority[row.status] ?? 0) > (priority[status] ?? 0);
 		const nextStatus = keepTerminal ? row.status : status;
@@ -660,9 +746,13 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 				event.messageId,
 			],
 		);
-		return row.job_id;
+		await applyRecipientTransition(
+			connection,
+			row.job_id,
+			row.status,
+			nextStatus,
+		);
 	});
-	if (matched) await refreshJob(matched);
 }
 
 export async function startEmailWorker(signal: AbortSignal): Promise<void> {
