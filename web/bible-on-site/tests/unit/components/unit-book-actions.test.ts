@@ -9,12 +9,12 @@
  */
 
 jest.mock("../../../src/lib/perushim", () => ({
-	getPerushimForRanges: jest.fn(),
+	getPerushimForRangeGroups: jest.fn(),
 	getPerushNotesForRanges: jest.fn(),
 }));
 
 jest.mock("../../../src/lib/articles/service", () => ({
-	getArticleSummariesForRanges: jest.fn(),
+	getArticleSummariesForRangeGroups: jest.fn(),
 }));
 
 import {
@@ -26,30 +26,35 @@ import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "../../../src/data/parasha/parasha-units";
-import { getArticleSummariesForRanges } from "../../../src/lib/articles/service";
+import { getArticleSummariesForRangeGroups } from "../../../src/lib/articles/service";
 import {
-	getPerushimForRanges,
+	getPerushimForRangeGroups,
 	getPerushNotesForRanges,
 } from "../../../src/lib/perushim";
 
-const mockGetPerushimForRanges = getPerushimForRanges as jest.MockedFunction<
-	typeof getPerushimForRanges
->;
+const mockGetPerushimForRangeGroups =
+	getPerushimForRangeGroups as jest.MockedFunction<
+		typeof getPerushimForRangeGroups
+	>;
 const mockGetPerushNotesForRanges =
 	getPerushNotesForRanges as jest.MockedFunction<
 		typeof getPerushNotesForRanges
 	>;
-const mockGetArticleSummariesForRanges =
-	getArticleSummariesForRanges as jest.MockedFunction<
-		typeof getArticleSummariesForRanges
+const mockGetArticleSummariesForRangeGroups =
+	getArticleSummariesForRangeGroups as jest.MockedFunction<
+		typeof getArticleSummariesForRangeGroups
 	>;
 
 describe("getUnitScopeSummariesBatch", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.spyOn(console, "warn").mockImplementation(() => {});
-		mockGetArticleSummariesForRanges.mockResolvedValue([]);
-		mockGetPerushimForRanges.mockResolvedValue([]);
+		mockGetArticleSummariesForRangeGroups.mockImplementation(
+			async (groups) => groups.map(() => []),
+		);
+		mockGetPerushimForRangeGroups.mockImplementation(async (groups) =>
+			groups.map(() => []),
+		);
 	});
 
 	afterEach(() => {
@@ -59,29 +64,31 @@ describe("getUnitScopeSummariesBatch", () => {
 	it("returns per-unit summary pairs keyed by unit id", async () => {
 		const articles = [{ id: 7, name: "מאמר" }];
 		const perushim = [{ id: 38, name: 'רש"י' }];
-		mockGetArticleSummariesForRanges.mockResolvedValue(articles as never);
-		mockGetPerushimForRanges.mockResolvedValue(perushim as never);
+		mockGetArticleSummariesForRangeGroups.mockResolvedValue([
+			articles,
+		] as never);
+		mockGetPerushimForRangeGroups.mockResolvedValue([perushim] as never);
 
 		const result = await getUnitScopeSummariesBatch("masora", [8], "torah");
 
 		expect(result["8"]).toEqual({ articles, perushim });
-		expect(mockGetArticleSummariesForRanges).toHaveBeenCalledWith(
+		expect(mockGetArticleSummariesForRangeGroups).toHaveBeenCalledWith([
 			getMasoraUnitById(8).ranges,
-		);
-		expect(mockGetPerushimForRanges).toHaveBeenCalledWith(
+		]);
+		expect(mockGetPerushimForRangeGroups).toHaveBeenCalledWith([
 			getMasoraUnitById(8).ranges,
-		);
+		]);
 	});
 
 	it("bounds a haftara batch to the parasha's auxiliary readings", async () => {
 		await getUnitScopeSummariesBatch("parasha", [1], "haftara");
 
-		expect(mockGetArticleSummariesForRanges).toHaveBeenCalledWith(
+		expect(mockGetArticleSummariesForRangeGroups).toHaveBeenCalledWith([
 			parashaAuxiliaryRanges(getParashaUnitById(1)),
-		);
-		expect(mockGetArticleSummariesForRanges).not.toHaveBeenCalledWith(
+		]);
+		expect(mockGetArticleSummariesForRangeGroups).not.toHaveBeenCalledWith([
 			getParashaUnitById(1).ranges,
-		);
+		]);
 	});
 
 	it("rejects a scope outside torah/haftara without querying", async () => {
@@ -92,7 +99,7 @@ describe("getUnitScopeSummariesBatch", () => {
 		);
 
 		expect(result).toEqual({});
-		expect(mockGetArticleSummariesForRanges).not.toHaveBeenCalled();
+		expect(mockGetArticleSummariesForRangeGroups).not.toHaveBeenCalled();
 	});
 
 	it("skips non-integer and non-positive unit ids but keeps valid ones", async () => {
@@ -103,7 +110,10 @@ describe("getUnitScopeSummariesBatch", () => {
 		);
 
 		expect(Object.keys(result)).toEqual(["3"]);
-		expect(mockGetArticleSummariesForRanges).toHaveBeenCalledTimes(1);
+		expect(mockGetArticleSummariesForRangeGroups).toHaveBeenCalledTimes(1);
+		expect(mockGetArticleSummariesForRangeGroups).toHaveBeenCalledWith([
+			getMasoraUnitById(3).ranges,
+		]);
 	});
 
 	it("returns empty summaries for a division/scope pair with no ranges", async () => {
@@ -116,8 +126,8 @@ describe("getUnitScopeSummariesBatch", () => {
 		);
 
 		expect(result["8"]).toEqual({ articles: [], perushim: [] });
-		expect(mockGetArticleSummariesForRanges).not.toHaveBeenCalled();
-		expect(mockGetPerushimForRanges).not.toHaveBeenCalled();
+		expect(mockGetArticleSummariesForRangeGroups).toHaveBeenCalledWith([[]]);
+		expect(mockGetPerushimForRangeGroups).toHaveBeenCalledWith([[]]);
 	});
 
 	it("returns empty summaries for an out-of-range unit id", async () => {
@@ -128,11 +138,13 @@ describe("getUnitScopeSummariesBatch", () => {
 		);
 
 		expect(result["999999"]).toEqual({ articles: [], perushim: [] });
-		expect(mockGetArticleSummariesForRanges).not.toHaveBeenCalled();
+		expect(mockGetArticleSummariesForRangeGroups).toHaveBeenCalledWith([[]]);
 	});
 
-	it("returns empty summaries when the range-bound lookups fail", async () => {
-		mockGetArticleSummariesForRanges.mockRejectedValue(new Error("DB down"));
+	it("returns empty summaries when the range-group lookups fail", async () => {
+		mockGetArticleSummariesForRangeGroups.mockRejectedValue(
+			new Error("DB down"),
+		);
 
 		const result = await getUnitScopeSummariesBatch("masora", [8], "torah");
 

@@ -15,6 +15,8 @@ import {
 	getPerushNotesBatch,
 	getPerushNotesForRanges,
 	getPerushimByPerekId,
+	getPerushimByPerekIds,
+	getPerushimForRangeGroups,
 	getPerushimForRanges,
 } from "../../../src/lib/perushim";
 
@@ -618,6 +620,173 @@ describe("perushim service", () => {
 					getPerushNotesForRanges(1, crossPerekRanges),
 				).rejects.toBe("raw error");
 			});
+		});
+	});
+});
+
+describe("batched perushim variants", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.spyOn(console, "warn").mockImplementation(() => {});
+	});
+
+	afterEach(() => {
+		jest.restoreAllMocks();
+	});
+
+	describe("getPerushimByPerekIds", () => {
+		it("returns an empty map without querying for no perakim", async () => {
+			const result = await getPerushimByPerekIds([]);
+			expect(result.size).toBe(0);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("runs one grouped query, groups by perek, and attaches metrics", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perek_id: 5,
+						perush_id: 1,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						note_count: 3,
+						priority: 100,
+					},
+					{
+						perek_id: 6,
+						perush_id: 2,
+						perush_name: "Ibn Ezra",
+						parshan_name: "אבן עזרא",
+						note_count: 4,
+						priority: 50,
+					},
+				])
+				.mockResolvedValueOnce([
+					{
+						perek_id: 6,
+						perush_id: 2,
+						word_count: 50,
+						estimated_seconds: 14,
+					},
+				]);
+
+			const result = await getPerushimByPerekIds([5, 6]);
+
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("n.perek_id IN (?, ?)");
+			expect(sql).toContain("GROUP BY n.perek_id");
+			expect(params).toEqual([5, 6]);
+			expect(result.get(5)).toEqual([
+				{ id: 1, name: "Rashi", parshanName: 'רש"י', noteCount: 3 },
+			]);
+			expect(result.get(6)).toEqual([
+				{
+					id: 2,
+					name: "Ibn Ezra",
+					parshanName: "אבן עזרא",
+					noteCount: 4,
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				},
+			]);
+			// One notes query + one metrics query — never per perek.
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+		});
+
+		it("rethrows on failure so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+			await expect(getPerushimByPerekIds([5])).rejects.toThrow(
+				"connection lost",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for %d perakim:",
+				1,
+				"connection lost",
+			);
+		});
+	});
+
+	describe("getPerushimForRangeGroups", () => {
+		const groupA = [
+			{
+				start: { perekId: 1, pasuk: 30 },
+				end: { perekId: 2, pasuk: 4 },
+			},
+		];
+		const groupB = [
+			{
+				start: { perekId: 10, pasuk: 1 },
+				end: { perekId: 10, pasuk: 3 },
+			},
+		];
+
+		it("returns empty groups without querying when every group has no slices", async () => {
+			const result = await getPerushimForRangeGroups([[], []]);
+			expect(result).toEqual([[], []]);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("runs one grouped query and aggregates per (unit, perush)", async () => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 1,
+					note_count: 3,
+					priority: 100,
+				},
+				{
+					unit_order: 0,
+					first_slice_order: 1,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 2,
+					note_count: 4,
+					priority: 100,
+				},
+				{
+					unit_order: 1,
+					first_slice_order: 0,
+					perush_id: 2,
+					perush_name: "Ibn Ezra",
+					parshan_name: "אבן עזרא",
+					perek_id: 10,
+					note_count: 2,
+					priority: 50,
+				},
+			]);
+
+			const result = await getPerushimForRangeGroups([groupA, groupB]);
+
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("unit_order");
+			expect(sql).toContain("COUNT(DISTINCT n.pasuk) AS note_count");
+			expect(sql).toContain("GROUP BY sm.unit_order");
+			expect(params).toEqual([1, 30, 31, 2, 1, 4, 10, 1, 3]);
+			expect(result).toHaveLength(2);
+			// Rashi's counts merge across perakim; canonical link keeps the
+			// earliest matching slice (perek 1).
+			expect(result[0]).toEqual([
+				expect.objectContaining({ id: 1, perekId: 1, noteCount: 7 }),
+			]);
+			expect(result[1]).toEqual([
+				expect.objectContaining({ id: 2, perekId: 10, noteCount: 2 }),
+			]);
+			expect(mockQuery).toHaveBeenCalledTimes(1);
+		});
+
+		it("rethrows on failure so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+			await expect(getPerushimForRangeGroups([groupA])).rejects.toThrow(
+				"DB error",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for range groups:",
+				"DB error",
+			);
 		});
 	});
 });
