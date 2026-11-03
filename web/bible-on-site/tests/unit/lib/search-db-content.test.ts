@@ -613,12 +613,15 @@ describe("searchArticles", () => {
 
 	it("orders equal dominant titles by id before limiting", async () => {
 		mockQuery.mockResolvedValue(
-			[3, 1, 2].map((id) => ({
-				id,
+			[
+				{ id: 3, content: "<p>פתיחה 3</p>" },
+				{ id: 1, content: "<p>פתיחה 1</p>" },
+				{ id: 2, content: "<p>פתיחה 2</p>" },
+			].map((row) => ({
+				...row,
 				perek_id: 1,
 				name: "בראשית",
 				author_name: "הרב",
-				content: `<p>פתיחה ${id}</p>`,
 				abstract: null,
 			})),
 		);
