@@ -4,17 +4,17 @@ using Xunit;
 
 public class AndroidNativeSymbolsTests : IDisposable
 {
-    private readonly string root = Path.Combine(Path.GetTempPath(), "android-symbols-" + Guid.NewGuid());
-    private string Libraries => Path.Combine(root, "libraries");
-    private string Bundle => Path.Combine(root, "app.aab");
-    private string Output => Path.Combine(root, "symbols.zip");
+    private readonly string root = Path.Join(Path.GetTempPath(), "android-symbols-" + Guid.NewGuid());
+    private string Libraries => Path.Join(root, "libraries");
+    private string Bundle => Path.Join(root, "app.aab");
+    private string Output => Path.Join(root, "symbols.zip");
 
     public AndroidNativeSymbolsTests() => Directory.CreateDirectory(Libraries);
     public void Dispose() => Directory.Delete(root, recursive: true);
 
     private void Library(string name, byte[] bytes)
     {
-        var path = Path.Combine(Libraries, name.Replace('/', Path.DirectorySeparatorChar));
+        var path = Path.Join(Libraries, name.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, bytes);
     }
