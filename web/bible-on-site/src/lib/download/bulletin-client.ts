@@ -13,11 +13,8 @@
 
 import type { DivineNameMaskingSettings } from "@/lib/divine-name-masking";
 import { normalizeDivineNameMasking } from "@/lib/divine-name-settings";
-import {
-	type BulletinPerekContent,
-	buildPerakimContent,
-} from "./perek-export-content";
-import { semanticPagesToPerekIds } from "./tanach-pdf";
+import type { BulletinPerekContent } from "./perek-export-content";
+import { semanticPagesToPerekIds } from "./semantic-pages";
 import type { PageRangesDownloadContext, SemanticPageInfo } from "./types";
 
 /** Shape expected by the bulletin service (camelCase — matches Rust serde config). */
@@ -133,6 +130,9 @@ export async function generatePdfViaBulletin(
 	perekIds: number[],
 	options?: GeneratePdfViaBulletinOptions,
 ): Promise<Uint8Array> {
+	// Reader pages register these handlers during rendering. Image conversion
+	// belongs to an actual export, so its native dependencies load on demand.
+	const { buildPerakimContent } = await import("./perek-export-content");
 	const request: BulletinRequest = {
 		perakimIds: perekIds,
 		includePerushim: false,
