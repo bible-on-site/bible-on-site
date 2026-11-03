@@ -114,8 +114,8 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
 
     private async Task WaitReadyAsync(CancellationToken cancellationToken)
     {
-        // The decoder pushes ready/error by navigating to the notify scheme;
-        // the Navigating handler cancels it and completes the wait.
+        // The decoder reports ready or error through a recitation-status
+        // navigation that the Navigating handler cancels into a completed wait.
         var finished = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Navigating(object? sender, WebNavigatingEventArgs e)
         {
