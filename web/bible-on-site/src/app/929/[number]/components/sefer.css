@@ -34,6 +34,13 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	position: relative;
 }
 
+/* Prepare the covered back face before the next turn starts. Keep the hint
+   off the current spread and hover folds to preserve their text antialiasing.
+   Leaf owns the inline hint throughout an active drag or animation. */
+.he-book .page--paper.even:not(.current-page):not(.page--folded) {
+	will-change: transform, clip-path;
+}
+
 /* Sefer pages are app-like panels — fixed headers/footers with inner
    scroll panes — so every page root carries the library's
    flipbook-page-bounded class (#279) and the scrollport never engages. */
