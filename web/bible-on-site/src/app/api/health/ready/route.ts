@@ -4,6 +4,7 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import { query } from "@/lib/api-client";
 import { recitationResponse } from "@/lib/recitation-response";
 import { getPasukIndex, getPerekIndex } from "@/lib/search/corpus";
+import { warmServerPages } from "@/lib/server-page-readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export async function GET(): Promise<NextResponse> {
 		if (!content || content.authorCount < 1 || content.articleCount < 1) {
 			throw new Error("Public authors and articles are unavailable");
 		}
+		await warmServerPages();
 		return NextResponse.json(
 			{
 				status: "ready",
