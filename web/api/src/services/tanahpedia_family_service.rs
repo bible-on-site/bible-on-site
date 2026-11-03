@@ -769,17 +769,29 @@ pub async fn find_persons_by_name(
         .await
         .map_err(db_error)?;
 
+    let entity_ids = entities
+        .iter()
+        .map(|e| e.id.clone())
+        .collect::<HashSet<_>>();
+    let persons_by_entity = if entity_ids.is_empty() {
+        HashMap::new()
+    } else {
+        person::Entity::find()
+            .filter(person::Column::EntityId.is_in(entity_ids))
+            .all(conn)
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .map(|p| (p.entity_id, p.id))
+            .collect::<HashMap<_, _>>()
+    };
+
     let mut summaries = Vec::with_capacity(entities.len());
     for e in entities {
-        let person = person::Entity::find()
-            .filter(person::Column::EntityId.eq(e.id.clone()))
-            .one(conn)
-            .await
-            .map_err(db_error)?;
-        if let Some(person) = person {
+        if let Some(person_id) = persons_by_entity.get(&e.id) {
             summaries.push(TanahpediaPersonSummary {
                 entity_id: e.id,
-                person_id: person.id,
+                person_id: person_id.clone(),
                 display_name: e.name,
             });
         }
@@ -788,26 +800,42 @@ pub async fn find_persons_by_name(
     Ok(summaries)
 }
 
-/// Looks up the display name of the `PERSON` entity linked to `person_id`, or
-/// `None` if the person row (or its linked entity) no longer exists.
-async fn display_name_for_person(
+/// Looks up the display names of the `PERSON` entities linked to each
+/// `person_id`, in two batched queries (persons, then entities) instead of a
+/// per-row person->entity chain. Missing persons/entities are absent from the
+/// returned map.
+async fn display_names_for_persons(
     conn: &sea_orm::DatabaseConnection,
-    person_id: &str,
-) -> Result<Option<String>, ServiceError> {
-    let Some(person) = person::Entity::find_by_id(person_id.to_string())
-        .one(conn)
-        .await
-        .map_err(db_error)?
-    else {
-        return Ok(None);
-    };
-
-    let entity = entity::Entity::find_by_id(person.entity_id)
-        .one(conn)
+    person_ids: HashSet<String>,
+) -> Result<HashMap<String, String>, ServiceError> {
+    if person_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let persons = person::Entity::find()
+        .filter(person::Column::Id.is_in(person_ids))
+        .all(conn)
         .await
         .map_err(db_error)?;
-
-    Ok(entity.map(|e| e.name))
+    let entity_ids = persons
+        .iter()
+        .map(|p| p.entity_id.clone())
+        .collect::<HashSet<_>>();
+    let entity_names = entity::Entity::find()
+        .filter(entity::Column::Id.is_in(entity_ids))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|e| (e.id, e.name))
+        .collect::<HashMap<_, _>>();
+    Ok(persons
+        .into_iter()
+        .filter_map(|p| {
+            entity_names
+                .get(&p.entity_id)
+                .map(|name| (p.id, name.clone()))
+        })
+        .collect())
 }
 
 /// Lists every union (marriage/pilegesh/betrothal/etc.) link involving
@@ -864,6 +892,18 @@ pub async fn get_person_unions(
             .collect()
     };
 
+    let other_person_ids = unions
+        .iter()
+        .map(|u| {
+            if u.person1_id == person_id {
+                u.person2_id.clone()
+            } else {
+                u.person1_id.clone()
+            }
+        })
+        .collect::<HashSet<_>>();
+    let other_display_names = display_names_for_persons(conn, other_person_ids).await?;
+
     let mut summaries = Vec::with_capacity(unions.len());
     for u in unions {
         let union_type = union_types
@@ -881,8 +921,9 @@ pub async fn get_person_unions(
             u.person1_id.clone()
         };
 
-        let other_display_name = display_name_for_person(conn, &other_person_id)
-            .await?
+        let other_display_name = other_display_names
+            .get(&other_person_id)
+            .cloned()
             .unwrap_or_default();
 
         summaries.push(TanahpediaPersonUnionSummary {
@@ -961,14 +1002,24 @@ pub async fn get_entity_tanah_sources(
         .await
         .map_err(db_error)?;
 
+    let perek_ids = rows.iter().map(|row| row.perek_id).collect::<HashSet<_>>();
+    let perek_rows = if perek_ids.is_empty() {
+        HashMap::new()
+    } else {
+        perek::Entity::find()
+            .filter(perek::Column::Id.is_in(perek_ids))
+            .all(conn)
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .map(|p| (p.id, p))
+            .collect()
+    };
+
     let mut sources = Vec::with_capacity(rows.len());
     for row in rows {
-        let perek_row = perek::Entity::find_by_id(row.perek_id)
-            .one(conn)
-            .await
-            .map_err(db_error)?;
-        let citation = perek_row
-            .as_ref()
+        let citation = perek_rows
+            .get(&row.perek_id)
             .map(|p| format_citation(p, row.pasuk_number))
             .unwrap_or_default();
 
@@ -1008,21 +1059,62 @@ pub async fn get_person_parent_child(
         .await
         .map_err(db_error)?;
 
-    let mut summaries = Vec::with_capacity(rows.len());
-    for row in rows {
-        let relationship_type =
-            lookup_parent_child_type::Entity::find_by_id(row.relationship_type_id.clone())
-                .one(conn)
-                .await
-                .map_err(db_error)?
-                .map(|t| t.name)
-                .unwrap_or_default();
-
-        let parent_role = lookup_parent_role::Entity::find_by_id(row.parent_role_id.clone())
-            .one(conn)
+    let relationship_type_ids = rows
+        .iter()
+        .map(|row| row.relationship_type_id.clone())
+        .collect::<HashSet<_>>();
+    let relationship_types = if relationship_type_ids.is_empty() {
+        HashMap::new()
+    } else {
+        lookup_parent_child_type::Entity::find()
+            .filter(lookup_parent_child_type::Column::Id.is_in(relationship_type_ids))
+            .all(conn)
             .await
             .map_err(db_error)?
-            .map(|t| t.name)
+            .into_iter()
+            .map(|row| (row.id, row.name))
+            .collect()
+    };
+
+    let parent_role_ids = rows
+        .iter()
+        .map(|row| row.parent_role_id.clone())
+        .collect::<HashSet<_>>();
+    let parent_roles = if parent_role_ids.is_empty() {
+        HashMap::new()
+    } else {
+        lookup_parent_role::Entity::find()
+            .filter(lookup_parent_role::Column::Id.is_in(parent_role_ids))
+            .all(conn)
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .map(|row| (row.id, row.name))
+            .collect()
+    };
+
+    let other_person_ids = rows
+        .iter()
+        .map(|row| {
+            if row.parent_id == person_id {
+                row.child_id.clone()
+            } else {
+                row.parent_id.clone()
+            }
+        })
+        .collect::<HashSet<_>>();
+    let other_display_names = display_names_for_persons(conn, other_person_ids).await?;
+
+    let mut summaries = Vec::with_capacity(rows.len());
+    for row in rows {
+        let relationship_type = relationship_types
+            .get(&row.relationship_type_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let parent_role = parent_roles
+            .get(&row.parent_role_id)
+            .cloned()
             .unwrap_or_default();
 
         let queried_is_parent = row.parent_id == person_id;
@@ -1031,8 +1123,9 @@ pub async fn get_person_parent_child(
         } else {
             row.parent_id.clone()
         };
-        let other_display_name = display_name_for_person(conn, &other_person_id)
-            .await?
+        let other_display_name = other_display_names
+            .get(&other_person_id)
+            .cloned()
             .unwrap_or_default();
 
         summaries.push(TanahpediaPersonParentChildSummary {
@@ -1086,13 +1179,28 @@ pub async fn get_person_details(
         .all(conn)
         .await
         .map_err(db_error)?;
-    let mut names = Vec::with_capacity(name_rows.len());
-    for row in name_rows {
-        let name_type = lookup_name_type::Entity::find_by_id(row.name_type_id.clone())
-            .one(conn)
+    let name_type_ids = name_rows
+        .iter()
+        .map(|row| row.name_type_id.clone())
+        .collect::<HashSet<_>>();
+    let name_types = if name_type_ids.is_empty() {
+        HashMap::new()
+    } else {
+        lookup_name_type::Entity::find()
+            .filter(lookup_name_type::Column::Id.is_in(name_type_ids))
+            .all(conn)
             .await
             .map_err(db_error)?
-            .map(|t| t.name)
+            .into_iter()
+            .map(|row| (row.id, row.name))
+            .collect()
+    };
+
+    let mut names = Vec::with_capacity(name_rows.len());
+    for row in name_rows {
+        let name_type = name_types
+            .get(&row.name_type_id)
+            .cloned()
             .unwrap_or_default();
         names.push(TanahpediaPersonName {
             id: row.id,
