@@ -5,6 +5,16 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
+The reader now pins published `0.0.0-alpha.106`. Its
+[bookmark setup repair](https://github.com/doradsoft/html-flip-book/pull/379)
+assembles the first moving surface before inserting it into the live book.
+Before-failing LTR/RTL operation guards require zero changed style writes on
+connected material during that setup. The actual copied-source reader preserves
+all 24 appearance pairs and eight text-position comparisons. This reduces setup
+operations; paired timing differences were mixed and do not establish a
+consistent millisecond gain. Published-package and hosted timing gates remain
+independent requirements.
+
 The latest [retained-layout repair](https://github.com/doradsoft/html-flip-book/pull/376)
 keeps the engine's bounded layout window aligned with the chapters React still
 mounts through a turn and its staged retirement. Previously the engine discarded
