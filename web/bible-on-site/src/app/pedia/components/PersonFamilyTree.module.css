@@ -222,8 +222,10 @@
   white-space: nowrap;
 }
 
-.personLink:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .personLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .personUnlinked {
@@ -328,8 +330,10 @@
   text-underline-offset: 2px;
 }
 
-.citationTanachLink:hover {
-  color: #312e81;
+@media (hover: hover) {
+  .citationTanachLink:hover {
+    color: #312e81;
+  }
 }
 
 /* המשך אנכי מההורים לכיוון מוקד המשפחה */
@@ -1331,8 +1335,10 @@
     color: #a5b4fc;
   }
 
-  .citationTanachLink:hover {
-    color: #c7d2fe;
+  @media (hover: hover) {
+    .citationTanachLink:hover {
+      color: #c7d2fe;
+    }
   }
 
   .spouseOpinionTitleInline {

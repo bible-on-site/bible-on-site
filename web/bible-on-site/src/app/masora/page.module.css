@@ -52,8 +52,10 @@
 	transition: background-color 0.2s ease;
 }
 
-.seferLink:hover {
-	background-color: rgba(21, 82, 172, 0.06);
+@media (hover: hover) {
+	.seferLink:hover {
+		background-color: rgba(21, 82, 172, 0.06);
+	}
 }
 
 .seferName {
