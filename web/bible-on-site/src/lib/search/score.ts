@@ -12,6 +12,9 @@
 
 import { normalizeSearchText } from "./normalize";
 
+/** Highest score for a single field: the entire normalized phrase matches. */
+export const MAX_SEARCH_SCORE = 110;
+
 /** Conservative typo tolerance: edits allowed per term length. */
 export function maxEdits(term: string): number {
 	if (term.length < 4) return 0;
@@ -141,7 +144,7 @@ export function scorePrepared(
 		return 0;
 	}
 	if (normalized === phrase) {
-		return 110;
+		return MAX_SEARCH_SCORE;
 	}
 	if (` ${normalized} `.includes(` ${phrase} `)) {
 		return 100;
