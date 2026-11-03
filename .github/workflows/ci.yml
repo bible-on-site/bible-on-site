@@ -800,6 +800,20 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2 # Inspect the actual base of the tested PR merge.
 
+      # Full-content SSG plus restored Rust/Next caches exceed the runner's
+      # default free space. Reclaim unused SDKs before downloading those caches.
+      # Keep browser/graphics packages, installed runtimes and swap intact.
+      - name: Free space for the full reader build
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Merge and audit approved recitation timings
         run: |
           python ../../data/recitation/publish.py
@@ -917,7 +931,14 @@ jobs:
         id: bun-build
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: bun run build
+        run: |
+          df -h .
+          for path in .next/cache node_modules ../../data/target; do
+            if [ -d "$path" ]; then du -sh "$path"; fi
+          done
+          bun run build
+          df -h .
+          du -sh .next
 
       - name: Save Next.js build cache
         if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
