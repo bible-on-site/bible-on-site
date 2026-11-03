@@ -1296,16 +1296,12 @@ SELECT 1";
             apply_article_content_hash_upgrade(&mut conn, base_path).await?;
             apply_article_content_hash_upgrade(&mut conn, base_path).await?;
             assert_eq!(
-                query_scalar::<MySql, String>(
-                    "SELECT HEX(content_hash) FROM tanah_article WHERE id = 42"
+                query_scalar::<MySql, i64>(
+                    "SELECT content_hash = UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id))) FROM tanah_article WHERE id = 42"
                 )
                 .fetch_one(&mut conn)
                 .await?,
-                query_scalar::<MySql, String>(
-                    "SELECT MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)) FROM tanah_article WHERE id = 42"
-                )
-                .fetch_one(&mut conn)
-                .await?
+                1
             );
             assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
             assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND channel = 'email' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
