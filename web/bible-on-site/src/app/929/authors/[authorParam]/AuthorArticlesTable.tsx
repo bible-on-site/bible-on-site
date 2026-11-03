@@ -46,6 +46,15 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 	const [sort, setSort] = useState<ArticleSort>(DEFAULT_ARTICLE_SORT);
 
 	const sefarim = useMemo(() => distinctSefarim(rows), [rows]);
+	const sanitizedAbstracts = useMemo(() => {
+		const map = new Map<number, string>();
+		for (const row of rows) {
+			if (row.abstract) {
+				map.set(row.id, DOMPurify.sanitize(normalizeAbstractHtml(row.abstract)));
+			}
+		}
+		return map;
+	}, [rows]);
 	const visible = useMemo(
 		() => sortAuthorArticles(filterAuthorArticles(rows, search, sefer), sort),
 		[rows, search, sefer, sort],
@@ -135,14 +144,12 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								<td>{row.sefer}</td>
 								<td>{row.source}</td>
 								<td className={styles.abstractCell}>
-									{row.abstract && (
+									{sanitizedAbstracts.has(row.id) && (
 										<div
 											// nosemgrep -- DOMPurify-sanitized abstract
 											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 											dangerouslySetInnerHTML={{
-												__html: DOMPurify.sanitize(
-													normalizeAbstractHtml(row.abstract),
-												),
+												__html: sanitizedAbstracts.get(row.id) ?? "",
 											}}
 										/>
 									)}
