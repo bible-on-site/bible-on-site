@@ -108,6 +108,7 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.pediaEntityRefs,
 		COLLECTION_TAGS.pediaMentionRefs,
 		COLLECTION_TAGS.dedications,
+		COLLECTION_TAGS.pedia,
 	]);
 	sink.patterns.add("/pedia/[slug]");
 	sink.paths.add("/pedia");
@@ -420,6 +421,8 @@ function addPediaEntryDeps(
 	for (const name of names) {
 		addPath(sink, `/pedia/${name}`);
 	}
+	// The landing page's cached counts/recents/anniversaries.
+	addTag(sink, COLLECTION_TAGS.pedia);
 	addPath(sink, "/pedia");
 	for (const entityType of entityTypes) {
 		const path = categoryPath(entityType);
