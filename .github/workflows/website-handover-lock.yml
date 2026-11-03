@@ -2,6 +2,9 @@ name: Website migration deployment lock
 run-name: Hold website deployment queue for ARM handover ${{ inputs.nonce }}
 
 on:
+  push:
+    branches:
+      - codex/website-queue-registration
   workflow_dispatch:
     inputs:
       deployment_id:
@@ -29,6 +32,8 @@ permissions:
 
 jobs:
   hold:
+    # Register this path without starting a holder on the bootstrap push.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
