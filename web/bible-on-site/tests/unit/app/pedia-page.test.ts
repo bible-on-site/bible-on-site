@@ -334,9 +334,6 @@ describe("pedia/[uniqueName] page", () => {
 					id: "entry-1",
 					uniqueName: "\u05de\u05e9\u05d4-\u05e8\u05d1\u05e0\u05d5",
 					title: "\u05de\u05e9\u05d4 \u05e8\u05d1\u05e0\u05d5",
-					content: null,
-					createdAt: "2024-01-01T00:00:00Z",
-					updatedAt: "2024-01-01T00:00:00Z",
 				},
 			]);
 			mockGetPersonFamilySummary.mockRejectedValue(new Error("family down"));
@@ -427,9 +424,6 @@ describe("pedia/[uniqueName] page", () => {
 					id: "entry-sibling",
 					uniqueName: "sibling",
 					title: "Sibling",
-					content: null,
-					createdAt: "2024-01-01T00:00:00Z",
-					updatedAt: "2024-01-01T00:00:00Z",
 				},
 			]);
 			mockGetEntryByUniqueName.mockResolvedValue({
