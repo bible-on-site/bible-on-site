@@ -52,6 +52,12 @@ content. Regression tests check that an unchanged covered panel repeats no
 commentary eligibility work, activation still updates it, and navigation follows
 new chapter IDs when the corpus changes.
 
+Scripture bodies retain their own memoized trees. Reading estimates and progress
+units can update the surrounding page chrome when background summaries arrive,
+without rebuilding verses or leaving the estimates permanently absent. The
+regression checks both asynchronous chapter metrics and changed current-chapter
+props while preserving the scripture-render count.
+
 Moving bookmarks keep the same book colors as their resting tabs. Their parent
 changes from the bookmark layer to a fold surface during a turn; theme selectors
 must match both parents. A browser regression checks the background, text and

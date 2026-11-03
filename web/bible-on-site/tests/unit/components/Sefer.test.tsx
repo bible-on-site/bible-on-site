@@ -165,6 +165,15 @@ jest.mock("@/app/components/Bookshelf", () => ({
 		) : null,
 }));
 
+jest.mock("@/app/components/ReadingProgress", () => ({
+	ReadingProgress: ({ units }: { units: { key: string | null }[] }) => (
+		<span
+			data-testid="reading-progress"
+			data-unit-keys={units.map((unit) => unit.key).join(",")}
+		/>
+	),
+}));
+
 jest.mock("@/data/db/tanah-view-types", () => ({
 	isQriDifferentThanKtiv: (segment: { value: string }) =>
 		segment.value === "בְּרֵאשִׁית",
@@ -371,6 +380,62 @@ describe("Sefer component", () => {
 		);
 		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
 		await act(async () => finish({ "2": { articles: [], perushim: [] } }));
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("refreshes reading metrics without rebuilding scripture", async () => {
+		let finish!: (value: unknown) => void;
+		mockGetPerekSummariesBatch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer: { ...original, perakim: [chapter, chapter] },
+			perekMetric: { wordCount: 20, estimatedSeconds: 120 },
+			perekPasukUnits: [{ key: "current", wordCount: 20, cumulativeWords: 0 }],
+		};
+		const { container, rerender } = render(<SeferContents {...props} />);
+		const page = (id: number) =>
+			container.querySelector(`[data-sefer-perek="${id}"]`);
+		expect(page(1)).toHaveTextContent("2 דקות");
+		expect(page(2)?.querySelector(".pageHeaderMetric")).toBeNull();
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		await act(async () =>
+			finish({
+				"2": {
+					articles: [],
+					perushim: [],
+					perekMetric: { wordCount: 70, estimatedSeconds: 420 },
+					pasukUnits: [{ key: "later", wordCount: 70, cumulativeWords: 0 }],
+				},
+			}),
+		);
+		expect(page(2)).toHaveTextContent("7 דקות");
+		expect(
+			page(2)?.querySelector('[data-testid="reading-progress"]'),
+		).toHaveAttribute("data-unit-keys", "later");
+		rerender(
+			<SeferContents
+				{...props}
+				perekMetric={{ wordCount: 30, estimatedSeconds: 180 }}
+				perekPasukUnits={[
+					{ key: "updated", wordCount: 30, cumulativeWords: 0 },
+				]}
+			/>,
+		);
+		expect(page(1)).toHaveTextContent("3 דקות");
+		expect(
+			page(1)?.querySelector('[data-testid="reading-progress"]'),
+		).toHaveAttribute("data-unit-keys", "updated");
 		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
 	});
 	it("updates commentary selection without rebuilding scripture", () => {

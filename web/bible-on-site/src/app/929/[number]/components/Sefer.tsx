@@ -26,6 +26,7 @@ import {
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React, {
+	memo,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -116,7 +117,8 @@ import "./sefer.css";
 
 // A page element is cheap to create. Its verse tree is built only when the
 // FlipBook mounts that page inside its buffer, including pages revealed later.
-function SeferScriptureText({
+const EMPTY_ENTITY_REF_LOOKUP = buildEntityRefLookup([]);
+const SeferScriptureText = memo(function SeferScriptureText({
 	perek,
 	pagePerekId,
 	perekLookup,
@@ -177,7 +179,7 @@ function SeferScriptureText({
 			})}
 		</article>
 	);
-}
+});
 
 const Sefer = (props: {
 	perekObj: PerekObj;
@@ -522,7 +524,7 @@ const Sefer = (props: {
 
 	// Keep scripture independent of async summaries and commentary selection.
 	// Those updates must not rebuild or reconcile every word in the book.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the stale-read exclusion is intentional - scripture must not rebuild when background summaries or the current perek's metrics resolve
+	// Page chrome follows reading metrics while the memoized verse tree stays put.
 	const scripturePages = useMemo(
 		() =>
 			perakim.map((perek, perekIdx) => {
@@ -618,7 +620,7 @@ const Sefer = (props: {
 										pagePerekId={pagePerekId ?? 0}
 										perekLookup={
 											entityRefLookupsByPerekIdx[perekIdx] ??
-											buildEntityRefLookup([])
+											EMPTY_ENTITY_REF_LOOKUP
 										}
 									/>
 								</div>
@@ -635,6 +637,10 @@ const Sefer = (props: {
 			entityRefLookupsByPerekIdx,
 			perekObj.sefer,
 			props.perekDedications,
+			batchSummaries,
+			currentPerekIdx,
+			perekMetric,
+			perekPasukUnits,
 		],
 	);
 
