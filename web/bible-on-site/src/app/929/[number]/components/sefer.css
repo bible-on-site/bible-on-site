@@ -41,6 +41,13 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	will-change: transform, clip-path;
 }
 
+/* Keep covered retained content out of painting without discarding its layout.
+   The library removes this class before exposing a page or its underlays;
+   its existing opacity, input and accessibility masks remain in place. */
+.he-book .flipbook-layout-dormant {
+	visibility: hidden !important;
+}
+
 /* Sefer pages are app-like panels — fixed headers/footers with inner
    scroll panes — so every page root carries the library's
    flipbook-page-bounded class (#279) and the scrollport never engages. */
