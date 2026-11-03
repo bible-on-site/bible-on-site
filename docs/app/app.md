@@ -44,12 +44,12 @@ The app integrates with Firebase for:
 
 ### Prerequisites
 
-- .NET 9.0 SDK
+- The .NET SDK pinned in [app/global.json](../../app/global.json)
 - MAUI workloads: `dotnet workload install maui`
 
 ### Build System
 
-The app uses [NUKE](https://nuke.build/) for build automation (similar to cargo-make for Rust).
+The app uses [NUKE](https://github.com/nuke-build/nuke) for build automation (similar to cargo-make for Rust).
 
 ```bash
 cd app
