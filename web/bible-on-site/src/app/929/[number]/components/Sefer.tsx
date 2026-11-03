@@ -113,6 +113,11 @@ import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
+// Memoized so a per-navigation rebuild of panelPages re-renders only the
+// panel whose props actually changed (isActive / initialSlug), not every
+// mounted panel in the book.
+const MemoSeferPanel = React.memo(SeferPanel);
+
 // A page element is cheap to create. Its verse tree is built only when the
 // FlipBook mounts that page inside its buffer, including pages revealed later.
 function SeferScriptureText({
@@ -623,6 +628,16 @@ const Sefer = (props: {
 		],
 	);
 
+	// One stable navigate closure per perek: a fresh inline closure per page
+	// would defeat MemoSeferPanel and re-render every panel on each change.
+	const panelNavigateByPerek = useMemo(() => {
+		const map = new Map<number, (slug?: string) => void>();
+		for (const id of perekIds ?? []) {
+			map.set(id, (slug) => contentNavigation.navigate(id, slug));
+		}
+		return map;
+	}, [perekIds, contentNavigation.navigate]);
+
 	const panelPages = useMemo(
 		() =>
 			perakim.map((_perek, perekIdx) => {
@@ -631,7 +646,7 @@ const Sefer = (props: {
 				const blankKey = `blank-${perekKeyBase}`;
 				return (
 					<React.Fragment key={blankKey}>
-						<SeferPanel
+						<MemoSeferPanel
 							isActive={
 								isVisible &&
 								pagePerekId != null &&
@@ -659,7 +674,7 @@ const Sefer = (props: {
 							onNavigate={
 								pagePerekId == null
 									? undefined
-									: (slug) => contentNavigation.navigate(pagePerekId, slug)
+									: panelNavigateByPerek.get(pagePerekId)
 							}
 							perekTitleParts={seferPerekTitles[perekIdx]}
 							onContentTitle={setInBookContentTitle}
@@ -680,7 +695,7 @@ const Sefer = (props: {
 			hebrewDateStr,
 			seferPerekTitles,
 			contentNavigation.content,
-			contentNavigation.navigate,
+			panelNavigateByPerek,
 		],
 	);
 
