@@ -9,18 +9,34 @@ use entities::article::{Column, Entity, Model};
 use entities::article_covering_source::{
     Column as CoveringSourceColumn, Entity as CoveringSourceEntity, Model as CoveringSourceModel,
 };
-use sea_orm::{ColumnTrait, DbErr, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, DbErr, DerivePartialModel, EntityTrait, QueryFilter, QueryOrder};
 
-/// Returns all articles from the database
-pub async fn find_all(db: &Database) -> Result<Vec<Model>, ServiceError> {
-    tracing::info_span!("articles_service::find_all");
+/// Starter-list projection of `tanah_article`: every column except `content`,
+/// whose full HTML body starter clients never read (bodies load via `article(id)`).
+#[derive(Debug, Clone, DerivePartialModel)]
+#[sea_orm(entity = "Entity")]
+pub struct ArticleSummary {
+    pub id: i32,
+    pub perek_id: i16,
+    pub author_id: i16,
+    pub article_abstract: Option<String>,
+    pub name: String,
+    pub priority: i8,
+    pub coverage_verified: bool,
+}
+
+/// Returns every article's display metadata for the `starter` list, without
+/// transferring each row's full HTML `content` MySQL→API on each app launch.
+pub async fn find_all_summaries(db: &Database) -> Result<Vec<ArticleSummary>, ServiceError> {
+    tracing::info_span!("articles_service::find_all_summaries");
     let articles = Entity::find()
+        .into_partial_model::<ArticleSummary>()
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
-    tracing::info!("Found {} articles", articles.len());
+    tracing::info!("Found {} article summaries", articles.len());
     Ok(articles)
 }
 
@@ -517,15 +533,65 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn find_all_returns_articles_from_database() {
-        let db =
-            create_mock_db_with_articles(vec![article_model(1, 10, 20), article_model(2, 11, 20)]);
+    async fn find_all_summaries_returns_articles_without_content() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        mock_row([
+                            ("id", 1_i32.into()),
+                            ("perek_id", 10_i16.into()),
+                            ("author_id", 20_i16.into()),
+                            ("article_abstract", "abstract-1".into()),
+                            ("name", "Article 1".into()),
+                            ("priority", 1_i8.into()),
+                            ("coverage_verified", false.into()),
+                        ]),
+                        mock_row([
+                            ("id", 2_i32.into()),
+                            ("perek_id", 11_i16.into()),
+                            ("author_id", 20_i16.into()),
+                            ("article_abstract", Value::String(None)),
+                            ("name", "Article 2".into()),
+                            ("priority", 2_i8.into()),
+                            ("coverage_verified", true.into()),
+                        ]),
+                    ],
+                ])
+                .into_connection(),
+        );
 
-        let result = find_all(&db).await.expect("articles should load");
+        let result = find_all_summaries(&db)
+            .await
+            .expect("article summaries should load");
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "Article 1");
+        assert_eq!(result[0].article_abstract.as_deref(), Some("abstract-1"));
         assert_eq!(result[1].perek_id, 11);
+        assert_eq!(result[1].article_abstract, None);
+        assert!(result[1].coverage_verified);
+
+        // The projection must not select the heavy `content` column.
+        let statement = Entity::find()
+            .into_partial_model::<ArticleSummary>()
+            .into_statement(DatabaseBackend::MySql)
+            .to_string();
+        assert!(!statement.contains("content"));
+        assert!(statement.contains("abstract"));
+    }
+
+    #[tokio::test]
+    async fn find_all_summaries_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Connection lost");
+
+        let result = find_all_summaries(&db).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
     }
 
     #[tokio::test]
