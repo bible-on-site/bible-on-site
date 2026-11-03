@@ -36,6 +36,7 @@ const AbstractHtml = memo(function AbstractHtml({
 }: {
 	abstract: string;
 }) {
+	// nosemgrep -- DOMPurify-sanitized abstract
 	return (
 		<div
 			// nosemgrep -- DOMPurify-sanitized abstract
