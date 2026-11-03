@@ -211,6 +211,31 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
   assert.ok(f.calls.every(call => !call.args.includes("spawn") && call.command !== "ps"));
 });
 
+test("a failed debugger still waits for frame capture before releasing the scenario handoff", async t => {
+  const f = diagnosticFixture(t);
+  let finishFrame;
+  const frame = new Promise(resolve => { finishFrame = resolve; });
+  let completed = false;
+  const sampling = samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "failed-debugger"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args) => {
+      if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+      if (args.includes("screenshot")) {
+        await frame;
+        writeFileSync(args.at(-1), "completed frame");
+        return { stdout: "", stderr: "" };
+      }
+      throw new Error("debugger unavailable");
+    } }).then(result => { completed = true; return result; });
+  await new Promise(setImmediate);
+  assert.equal(completed, false);
+  finishFrame();
+  const result = await sampling;
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "debugger unavailable");
+  assert.equal(readFileSync(join(f.directory, "failed-debugger.png"), "utf8"), "completed frame");
+});
+
 for (const [inspector, stderr, message] of [[undefined, "", "prepared native"],
   ["relative-inspector", "", "prepared native"], [inspectorPath, "kernel inspection denied", "kernel inspection denied"]]) {
   test(`failure sampling rejects unavailable ownership proof: ${inspector}/${stderr}`, async t => {
