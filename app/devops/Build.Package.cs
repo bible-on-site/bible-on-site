@@ -220,7 +220,7 @@ partial class Build
                 "net10.0-android" / "android-arm64" / "app_shared_libraries";
             var symbolsZip = ArtifactsDirectory /
                 $"{aabFiles.First().Name.Replace("-Signed.aab", "")}-native-symbols.zip";
-            AndroidNativeSymbols.Create(sharedLibsDir, ArtifactsDirectory / aabFiles.First().Name, symbolsZip);
+            CreateAndValidateAndroidSymbols(sharedLibsDir, ArtifactsDirectory / aabFiles.First().Name, symbolsZip);
             Serilog.Log.Information($"Created native symbols zip {symbolsZip.Name}");
         }
         else
@@ -229,6 +229,71 @@ partial class Build
         }
 
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
+    }
+
+    /// <summary>
+    /// Packages the native debug symbols for an already-built AAB and validates
+    /// the archive. The full Package job is master-only; the app_ci Release
+    /// build runs this target on the pull request so a symbols regression fails
+    /// before merge instead of first at release time (#2970).
+    /// </summary>
+    Target PackageAndroidSymbols => _ => _
+        .Description("Package Android native debug symbols for an already-built AAB and validate the archive")
+        .Requires(() => AabPath)
+        .Requires(() => AndroidSymbolsPath)
+        .Executes(() =>
+        {
+            var aabFile = (AbsolutePath)AabPath!;
+            var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+            Assert.FileExists(aabFile, $"AAB file not found: {aabFile}");
+            // Select the published framework/RID, never a stale sibling build.
+            var sharedLibsDir = MainProject.Parent / "obj" / Configuration /
+                "net10.0-android" / "android-arm64" / "app_shared_libraries";
+            Assert.True(sharedLibsDir.DirectoryExists(),
+                $"Android shared libraries not found at {sharedLibsDir} — build the Android release first");
+            CreateAndValidateAndroidSymbols(sharedLibsDir, aabFile, symbolsFile);
+            Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
+        });
+
+    Target VerifyAndroidSymbols => _ => _
+        .Description("Validate a packaged native-symbols archive against the AAB it ships beside")
+        .Requires(() => AabPath)
+        .Requires(() => AndroidSymbolsPath)
+        .Executes(() =>
+        {
+            var aabFile = (AbsolutePath)AabPath!;
+            var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+            Assert.FileExists(aabFile, $"AAB file not found: {aabFile}");
+            Assert.FileExists(symbolsFile, $"Native symbols file not found: {symbolsFile}");
+            LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsFile, aabFile));
+            Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
+        });
+
+    /// <summary>
+    /// Produces the Play symbols archive beside a built AAB, then proves the
+    /// file on disk — not just the intermediates — meets the contract the
+    /// deploy target re-checks before any store write (#2970).
+    /// </summary>
+    static void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
+    {
+        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip);
+        LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsZip, aab));
+    }
+
+    /// <summary>
+    /// Documents which bundled arm64 libraries ship without debug symbols —
+    /// .NET/Android runtime libraries are stripped-only upstream, and Play
+    /// accepts partial coverage. Reported honestly instead of claiming
+    /// complete symbol coverage (#2970).
+    /// </summary>
+    static void LogSymbolCoverage(IReadOnlyList<string> uncovered)
+    {
+        if (uncovered.Count > 0)
+        {
+            Serilog.Log.Warning(
+                $"No debug symbols for {uncovered.Count} bundled arm64 libraries shipped stripped-only " +
+                $"by the .NET/Android runtime: {string.Join(", ", uncovered)}");
+        }
     }
 
     void PackageIos()

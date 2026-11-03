@@ -2244,6 +2244,16 @@ jobs:
           # enforces each Play score ≥25% over the 10 MB DEX threshold.
           python3 devops/verify_android_dex_metadata.py --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
 
+      # #2970: the release packaging job is master-only. Exercise the real
+      # symbols path here — produce the archive from this build's
+      # app_shared_libraries and validate it against the AAB just built, so a
+      # symbols regression fails on the pull request, not after merge.
+      - name: Verify native symbols archive
+        run: |
+          dotnet run --project devops -- PackageAndroidSymbols --configuration Release \
+            --aab-path "$(realpath "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)")" \
+            --android-symbols-path "$RUNNER_TEMP/native-symbols.zip"
+
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
 
