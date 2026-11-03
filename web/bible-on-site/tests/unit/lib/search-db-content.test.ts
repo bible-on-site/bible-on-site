@@ -21,6 +21,7 @@ import {
 	termRegexp,
 } from "@/lib/search/db-content";
 import { htmlToPlainText, normalizeSearchText } from "@/lib/search/normalize";
+import { SEARCH_QUERY_MAX_TERMS } from "@/lib/search/types";
 
 const mockQuery = queryText as jest.MockedFunction<typeof queryText>;
 
@@ -582,6 +583,46 @@ describe("searchArticles", () => {
 			expect.stringContaining("a.perek_id BETWEEN 1 AND 929"),
 			expect.anything(),
 		);
+	});
+
+	it("keeps every existing article candidate without a redundant SQL rank", async () => {
+		mockQuery.mockResolvedValue([]);
+		for (let terms = 1; terms <= SEARCH_QUERY_MAX_TERMS; terms++) {
+			await searchArticles(Array(terms).fill("בראשית").join(" "), 3);
+			const [sql] = mockQuery.mock.calls[terms - 1];
+			expect(sql).toContain("ORDER BY a2.id");
+			expect(sql).not.toContain("REGEXP_LIKE(LEFT(a2.");
+			// Every legal term count keeps its old pool, which fits the
+			// outer cap completely. Dropping the sort cannot drop a row.
+			expect(
+				[...sql.matchAll(/LIMIT (\d+)/g)].map((hit) => Number(hit[1])),
+			).toEqual([terms === 1 ? 666 : 300, 1000]);
+		}
+	});
+
+	it("ranks the complete article pool independently of database row order", async () => {
+		const rows = [
+			{ id: 1, name: "בראשיתו", content: "מבוא" },
+			{ id: 2, name: "בראשית", content: "מבוא" },
+			{ id: 3, name: "מבוא", content: "על בראשית" },
+			{ id: 7, name: "מבוא", content: "בראשית" },
+			{ id: 9, name: "בראשית", content: "מבוא" },
+		].map((row) => ({
+			...row,
+			perek_id: 1,
+			author_name: "הרב",
+			abstract: null,
+		}));
+		mockQuery
+			.mockResolvedValueOnce(rows)
+			.mockResolvedValueOnce([...rows].reverse());
+
+		const forward = await searchArticles("בראשית", 4);
+		const reverse = await searchArticles("בראשית", 4);
+
+		expect(forward).toEqual(reverse);
+		expect(forward.map(({ entry }) => entry.id)).toEqual([2, 9, 1, 7]);
+		expect(forward.map(({ score }) => score)).toEqual([220, 220, 160, 110]);
 	});
 
 	it("matches article names and strips HTML before scoring", async () => {
