@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
     tanahpedia_entry_revision_history_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-synonym name index upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_synonym_name_index.sql")]
+    tanahpedia_entry_synonym_name_index_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -362,6 +366,7 @@ struct TanahpediaScripts {
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
     entry_revision_history_upgrade: std::path::PathBuf,
+    entry_synonym_name_index_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -384,6 +389,8 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             entry_revision_history_upgrade: base_path
                 .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
+            entry_synonym_name_index_upgrade: base_path
+                .join(&cli.tanahpedia_entry_synonym_name_index_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -450,7 +457,8 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
-    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await
+    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
+    apply_entry_synonym_name_index_upgrade(conn, &scripts.entry_synonym_name_index_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -682,6 +690,20 @@ async fn apply_entry_revision_history_upgrade(
     .await
 }
 
+async fn apply_entry_synonym_name_index_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    apply_index_add_if_missing(
+        conn,
+        script_path,
+        "tanahpedia_entry_synonym",
+        "idx_entry_synonym_name",
+        "`name`",
+    )
+    .await
+}
+
 async fn apply_column_add_if_missing(
     conn: &mut MySqlConnection,
     script_path: &Path,
@@ -736,6 +758,62 @@ async fn column_exists(
     .with_context(|| format!("Failed to check column '{}.{}'", table_name, column_name))?;
 
     Ok(count > 0)
+}
+
+async fn index_exists(
+    conn: &mut MySqlConnection,
+    table_name: &str,
+    index_name: &str,
+) -> Result<bool> {
+    let count: i64 = query_scalar::<MySql, i64>(
+        "SELECT COUNT(DISTINCT INDEX_NAME) \
+         FROM information_schema.STATISTICS \
+         WHERE TABLE_SCHEMA = DATABASE() \
+           AND TABLE_NAME = ? \
+           AND INDEX_NAME = ?",
+    )
+    .bind(table_name)
+    .bind(index_name)
+    .fetch_one(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to check index '{}.{}'", table_name, index_name))?;
+
+    Ok(count > 0)
+}
+
+async fn apply_index_add_if_missing(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+    table_name: &str,
+    index_name: &str,
+    index_columns: &str,
+) -> Result<()> {
+    if index_exists(conn, table_name, index_name).await? {
+        println!("Index '{}.{}' already exists", table_name, index_name);
+        return Ok(());
+    }
+
+    if !script_path.exists() {
+        println!(
+            "Skipping missing Tanahpedia upgrade script at {:?}",
+            script_path
+        );
+        return Ok(());
+    }
+
+    let sql = format!(
+        "ALTER TABLE `{}` ADD INDEX `{}` ({})",
+        quote_mysql_identifier_part(table_name),
+        quote_mysql_identifier_part(index_name),
+        index_columns
+    );
+    raw_sql(AssertSqlSafe(sql))
+        .execute(&mut *conn)
+        .await
+        .with_context(|| format!("Failed to add index '{}.{}'", table_name, index_name))?;
+
+    println!("Added index '{}.{}'", table_name, index_name);
+    Ok(())
 }
 
 async fn tanahpedia_has_entries(conn: &mut MySqlConnection) -> Result<bool> {
@@ -1090,6 +1168,12 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.entry_synonym_name_index_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_entry_synonym_name_index.sql"
+            ),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1357,6 +1441,14 @@ SELECT 1";
             );
             assert!(
                 column_exists(&mut conn, "tanahpedia_person_parent_child", "birth_order").await?
+            );
+            assert!(
+                index_exists(
+                    &mut conn,
+                    "tanahpedia_entry_synonym",
+                    "idx_entry_synonym_name"
+                )
+                .await?
             );
             assert_eq!(table_count(&mut conn, "tanahpedia_god").await?, 1);
             assert_eq!(

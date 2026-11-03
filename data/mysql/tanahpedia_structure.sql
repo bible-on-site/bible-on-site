@@ -184,6 +184,7 @@ CREATE TABLE `tanahpedia_entry_synonym` (
     `entry_id` char(36) NOT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_entry_synonym_entry` (`entry_id`),
+    KEY `idx_entry_synonym_name` (`name`),
     CONSTRAINT `fk_entry_synonym_entry` FOREIGN KEY (`entry_id`) REFERENCES `tanahpedia_entry` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_entry_synonym_disambiguation`;
