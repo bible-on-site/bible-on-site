@@ -76,6 +76,7 @@ video {
 	--link-accent-hover: var(--accent-700);
 	--pasuk-num-color: var(--accent-900);
 	--muted-text: #666666;
+	--press-scale: 0.97;
 	--skeleton-base: #e8ecf2;
 	--skeleton-highlight: #f8fafc;
 }
@@ -250,9 +251,11 @@ html[data-a11y-contrast="high"] ::selection {
 	filter: invert(1);
 }
 
-.top-nav-search:hover {
-	background-color: rgba(255, 255, 255, 0.16);
-	border-color: #fff;
+@media (hover: hover) {
+	.top-nav-search:hover {
+		background-color: rgba(255, 255, 255, 0.16);
+		border-color: #fff;
+	}
 }
 
 .top-nav-search:focus-visible {
@@ -309,12 +312,19 @@ html[data-a11y-contrast="high"] ::selection {
 	opacity: 0.55;
 }
 
-.top-nav-accessibility:enabled:hover {
-	background-color: rgba(255, 255, 255, 0.16);
-	border-color: #fff;
+@media (hover: hover) {
+	.top-nav-accessibility:enabled:hover {
+		background-color: rgba(255, 255, 255, 0.16);
+		border-color: #fff;
+	}
 }
 
 .top-nav-accessibility:focus-visible {
 	outline: 2px solid #fff;
 	outline-offset: 2px;
+}
+
+.top-nav-search:active,
+.top-nav-accessibility:enabled:active {
+	scale: var(--press-scale);
 }

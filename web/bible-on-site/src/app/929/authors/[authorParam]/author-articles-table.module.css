@@ -86,8 +86,10 @@
 	transition: background 0.15s ease;
 }
 
-.row:hover {
-	background: var(--surface-muted);
+@media (hover: hover) {
+	.row:hover {
+		background: var(--surface-muted);
+	}
 }
 
 .nameCell a {
@@ -96,8 +98,10 @@
 	text-decoration: none;
 }
 
-.nameCell a:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.nameCell a:hover {
+		text-decoration: underline;
+	}
 }
 
 .abstractCell {

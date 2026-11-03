@@ -58,3 +58,7 @@
 .controls:disabled .option {
 	cursor: default;
 }
+
+.controls:not(:disabled) .option:active {
+	scale: var(--press-scale);
+}

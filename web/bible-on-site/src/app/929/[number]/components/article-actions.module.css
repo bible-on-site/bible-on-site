@@ -51,9 +51,11 @@
 		border-color 0.15s;
 }
 
-.action:hover {
-	background: #e8e0cc;
-	border-color: var(--hc-muted, #8b7355);
+@media (hover: hover) {
+	.action:hover {
+		background: #e8e0cc;
+		border-color: var(--hc-muted, #8b7355);
+	}
 }
 
 .action:active {
@@ -113,9 +115,11 @@
 		color: var(--hc-muted, #cbb98c);
 	}
 
-	.action:hover {
-		background: #342c1e;
-		border-color: var(--hc-muted, #8b7355);
+	@media (hover: hover) {
+		.action:hover {
+			background: #342c1e;
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.action:active {
