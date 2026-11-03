@@ -18,6 +18,7 @@ import {
 	getPerekProgressUnitsBatch,
 	getPerushMetric,
 	getPerushMetricsByPerekId,
+	getPerushMetricsByPerekIds,
 	getPerushProgressUnits,
 	getPerushProgressUnitsBatch,
 	isReadingMetricsSchemaMissing,
@@ -122,6 +123,40 @@ describe("perush metrics", () => {
 	it("getPerushMetricsByPerekId degrades to an empty map", async () => {
 		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
 		expect((await getPerushMetricsByPerekId(1)).size).toBe(0);
+	});
+
+	it("getPerushMetricsByPerekIds keys by perek then perush id", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ perek_id: 1, perush_id: 3, word_count: 50, estimated_seconds: 14 },
+			{ perek_id: 1, perush_id: 4, word_count: 20, estimated_seconds: 6 },
+			{ perek_id: 2, perush_id: 3, word_count: 70, estimated_seconds: 19 },
+		] as never);
+
+		const map = await getPerushMetricsByPerekIds([1, 2]);
+
+		expect(map.get(1)?.get(3)).toEqual({
+			wordCount: 50,
+			estimatedSeconds: 14,
+		});
+		expect(map.get(1)?.get(4)).toEqual({
+			wordCount: 20,
+			estimatedSeconds: 6,
+		});
+		expect(map.get(2)?.get(3)).toEqual({
+			wordCount: 70,
+			estimatedSeconds: 19,
+		});
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [1, 2]);
+	});
+
+	it("getPerushMetricsByPerekIds returns an empty map for no ids", async () => {
+		expect((await getPerushMetricsByPerekIds([])).size).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
+	it("getPerushMetricsByPerekIds degrades to an empty map on missing schema", async () => {
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect((await getPerushMetricsByPerekIds([1, 2])).size).toBe(0);
 	});
 
 	it("getPerushMetric binds perush and perek", async () => {

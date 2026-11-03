@@ -26,16 +26,12 @@ import {
 } from "@/data/parasha/parasha-units";
 import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 import { getPerekByPerekId } from "@/data/perek-dto";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import { getPerushimForRanges } from "@/lib/perushim/service";
+import {
+	getCachedParashaRangeArticles as getCachedRangeArticles,
+	getCachedParashaRangePerushim as getCachedRangePerushim,
+} from "@/lib/reading/cached-range-summaries";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
 import { unitPerekIds } from "@/lib/reading/ranges";
-import {
-	cachedPerKey,
-	COLLECTION_TAGS,
-	parashaArticlesTag,
-	parashaPerushimTag,
-} from "@/lib/revalidate/tags";
 import { getParashaDedications } from "@/lib/dedications/loaders";
 import {
 	DedicationLines,
@@ -59,42 +55,6 @@ export function generateStaticParams() {
 	// this shape (same convention as the pedia slug route).
 	return getAllParashaUnits().map((unit) => ({ unit: unit.slug }));
 }
-
-const getCachedRangePerushim = cachedPerKey(
-	"parasha-range-perushim",
-	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
-	(key) => {
-		const [unitId, scope] = key.split(":");
-		return [
-			COLLECTION_TAGS.perushim,
-			parashaPerushimTag(Number(unitId), scope),
-		];
-	},
-	async (unitId: number, scope: "torah" | "haftara") => {
-		const unit = getParashaUnitById(unitId);
-		const ranges =
-			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
-		return getPerushimForRanges(ranges);
-	},
-);
-
-const getCachedRangeArticles = cachedPerKey(
-	"parasha-range-article-summaries",
-	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
-	(key) => {
-		const [unitId, scope] = key.split(":");
-		return [
-			COLLECTION_TAGS.articles,
-			parashaArticlesTag(Number(unitId), scope),
-		];
-	},
-	async (unitId: number, scope: "torah" | "haftara") => {
-		const unit = getParashaUnitById(unitId);
-		const ranges =
-			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
-		return getArticleSummariesForRanges(ranges);
-	},
-);
 
 /** Perek ids covering every parasha of a sefer with its Haftarot — the
  * book view reads the whole sefer, so its entity refs arrive up front. */

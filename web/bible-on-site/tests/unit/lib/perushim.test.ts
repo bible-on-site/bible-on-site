@@ -15,6 +15,7 @@ import {
 	getPerushNotesBatch,
 	getPerushNotesForRanges,
 	getPerushimByPerekId,
+	getPerushimByPerekIds,
 	getPerushimForRanges,
 } from "../../../src/lib/perushim";
 
@@ -28,6 +29,100 @@ describe("perushim service", () => {
 
 	afterEach(() => {
 		jest.restoreAllMocks();
+	});
+
+	describe("getPerushimByPerekIds", () => {
+		it("groups rows per perek keeping priority order and decorates metrics", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perek_id: 5,
+						perush_id: 1,
+						perush_name: "Ibn Ezra",
+						parshan_name: "אבן עזרא",
+						note_count: 10,
+						priority: 50,
+					},
+					{
+						perek_id: 5,
+						perush_id: 2,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						note_count: 5,
+						priority: 100,
+					},
+					{
+						perek_id: 6,
+						perush_id: 1,
+						perush_name: "Ibn Ezra",
+						parshan_name: "אבן עזרא",
+						note_count: 7,
+						priority: 50,
+					},
+				])
+				.mockResolvedValueOnce([
+					{ perek_id: 5, perush_id: 2, word_count: 50, estimated_seconds: 14 },
+				]);
+
+			const result = await getPerushimByPerekIds([5, 6]);
+
+			expect(result.get(5)).toEqual([
+				{ id: 1, name: "Ibn Ezra", parshanName: "אבן עזרא", noteCount: 10 },
+				{
+					id: 2,
+					name: "Rashi",
+					parshanName: 'רש"י',
+					noteCount: 5,
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				},
+			]);
+			expect(result.get(6)).toEqual([
+				{ id: 1, name: "Ibn Ezra", parshanName: "אבן עזרא", noteCount: 7 },
+			]);
+			// Two queries total: one grouped summaries query, one metrics `IN`.
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+			expect(mockQuery).toHaveBeenNthCalledWith(
+				1,
+				expect.stringContaining("n.perek_id IN (?, ?)"),
+				[5, 6],
+			);
+			expect(mockQuery).toHaveBeenNthCalledWith(
+				2,
+				expect.stringContaining("perek_id IN (?, ?)"),
+				[5, 6],
+			);
+		});
+
+		it("deduplicates perek ids and skips queries when empty", async () => {
+			expect((await getPerushimByPerekIds([])).size).toBe(0);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("keeps loaded summaries when the metric read fails", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perek_id: 5,
+						perush_id: 1,
+						perush_name: "Ibn Ezra",
+						parshan_name: "אבן עזרא",
+						note_count: 10,
+						priority: 50,
+					},
+				])
+				.mockRejectedValueOnce(new Error("metrics down"));
+
+			const result = await getPerushimByPerekIds([5]);
+
+			expect(result.get(5)).toEqual([
+				{ id: 1, name: "Ibn Ezra", parshanName: "אבן עזרא", noteCount: 10 },
+			]);
+		});
+
+		it("rejects when the summaries query fails", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("DB error"));
+			await expect(getPerushimByPerekIds([1])).rejects.toThrow("DB error");
+		});
 	});
 
 	describe("getPerushimByPerekId", () => {

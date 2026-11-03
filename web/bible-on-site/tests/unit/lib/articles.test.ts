@@ -21,6 +21,7 @@ import {
 	getAllArticlePerekIdPairs,
 	getArticleById,
 	getArticleSummariesByPerekId,
+	getArticleSummariesByPerekIds,
 	getArticleSummariesForRanges,
 	getArticlesByPerekId,
 } from "../../../src/lib/articles";
@@ -292,6 +293,89 @@ describe("articles service", () => {
 
 			await expect(getArticleSummariesByPerekId(1)).rejects.toBe(
 				"string error",
+			);
+		});
+	});
+
+	describe("getArticleSummariesByPerekIds", () => {
+		it("groups summaries per perek keeping priority order", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						id: 1,
+						perek_id: 5,
+						author_id: 10,
+						abstract: "<p>a5</p>",
+						name: "Article 5",
+						priority: 1,
+						author_name: "הרב א",
+					},
+					{
+						id: 2,
+						perek_id: 6,
+						author_id: 11,
+						abstract: "<p>a6</p>",
+						name: "Article 6",
+						priority: 2,
+						author_name: "הרב ב",
+					},
+				])
+				.mockResolvedValueOnce([
+					{ article_id: 2, word_count: 40, estimated_seconds: 11 },
+				]);
+
+			const result = await getArticleSummariesByPerekIds([5, 6]);
+
+			expect(result.get(5)).toEqual([
+				{
+					id: 1,
+					perekId: 5,
+					authorId: 10,
+					abstract: "<p>a5</p>",
+					name: "Article 5",
+					priority: 1,
+					authorName: "הרב א",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+				},
+			]);
+			expect(result.get(6)).toEqual([
+				{
+					id: 2,
+					perekId: 6,
+					authorId: 11,
+					abstract: "<p>a6</p>",
+					name: "Article 6",
+					priority: 2,
+					authorName: "הרב ב",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/11.jpg",
+					metric: { wordCount: 40, estimatedSeconds: 11 },
+				},
+			]);
+			// Two queries total: one `IN` summaries query, one metrics `IN`.
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+			expect(mockQuery).toHaveBeenNthCalledWith(
+				1,
+				expect.stringContaining("a.perek_id IN (?, ?)"),
+				[5, 6],
+			);
+			expect(mockQuery).toHaveBeenNthCalledWith(
+				2,
+				expect.stringContaining("tanah_article_metric"),
+				[1, 2],
+			);
+		});
+
+		it("returns an empty map and skips queries for no ids", async () => {
+			expect((await getArticleSummariesByPerekIds([])).size).toBe(0);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("rejects database failures instead of returning a partial map", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("DB error"));
+			await expect(getArticleSummariesByPerekIds([1])).rejects.toThrow(
+				"DB error",
 			);
 		});
 	});
