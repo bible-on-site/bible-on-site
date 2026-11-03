@@ -667,7 +667,8 @@ describe("[slug] page", () => {
 			);
 			// Different qri keeps its parenthesised text and label.
 			expect(chapterText.querySelector(".qri")?.textContent).toBe("(קרי)");
-			expect(chapterText.querySelector(".qri label")).not.toBeNull();
+			expect(chapterText.querySelector(".qri [data-qri-label]")).not.toBeNull();
+			expect(chapterText.querySelector("label")).toBeNull();
 			expect(within(chapterText).getByTestId("ptuha")).toBeTruthy();
 			expect(within(chapterText).getByTestId("stuma")).toBeTruthy();
 		});

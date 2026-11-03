@@ -30,7 +30,6 @@ export function renderSegmentRange(
 	const content: React.ReactNode[] = [];
 	for (let i = startIdx; i <= endIdx; i++) {
 		const segment = segments[i];
-		const segmentKey = `${pasukIdx + 1}-${i + 1}`;
 		const isQriWithDifferentKtiv =
 			segment.type === "qri" && isQriDifferentThanKtiv(segment);
 		// הסתר שם השם is display-only: the wrapped element reads the stored
@@ -46,38 +45,40 @@ export function renderSegmentRange(
 				segment.value
 			);
 		}
-		const segmentContent = (
-			<>
-				{segment.type === "ktiv" ? (
-					value
-				) : segment.type === "qri" ? (
-					isQriWithDifferentKtiv ? (
-						<>
-							{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-							(<label />
-							{wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value})
-						</>
-					) : (
-						(wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value)
-					)
-				) : segment.type === "ptuha" ? (
-					ptuha()
+		const segmentContent =
+			segment.type === "ktiv" ? (
+				value
+			) : segment.type === "qri" ? (
+				isQriWithDifferentKtiv ? (
+					<>
+						(<span data-qri-label="" />
+						{wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value})
+					</>
 				) : (
-					stuma()
-				)}
-			</>
-		);
+					(wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value)
+				)
+			) : segment.type === "ptuha" ? (
+				ptuha()
+			) : (
+				stuma()
+			);
 		// The recitation control already owns each word's element. Ordinary
 		// words and spaces need no extra layout objects when a chapter mounts.
-		content.push(
-			isQriWithDifferentKtiv ? (
-				<span key={segmentKey} className={qriClassName}>
-					{segmentContent}
-				</span>
-			) : (
-				<React.Fragment key={segmentKey}>{segmentContent}</React.Fragment>
-			),
-		);
+		// Separate primitive array entries also preserve their text-node shaping
+		// boundaries. Do not join them or allocate a fragment/key for each word.
+		if (typeof segmentContent === "string") content.push(segmentContent);
+		else {
+			const segmentKey = `${pasukIdx + 1}-${i + 1}`;
+			content.push(
+				isQriWithDifferentKtiv ? (
+					<span key={segmentKey} className={qriClassName}>
+						{segmentContent}
+					</span>
+				) : (
+					<React.Fragment key={segmentKey}>{segmentContent}</React.Fragment>
+				),
+			);
+		}
 		const needsSpace =
 			i < segments.length - 1 &&
 			!(

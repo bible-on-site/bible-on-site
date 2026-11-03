@@ -23,7 +23,17 @@ original text nodes and boundaries stay separate; joining adjacent text changes
 Hebrew shaping. The body observes only listening-mode changes and mounts word
 components after aligned audio is ready. Progress and playback frames update
 their own consumers without rebuilding the body. Enabling listening restores
-the original inline controls. A held-turn image guard restores inert inline
+the original inline controls.
+
+Ordinary words remain separate primitive children. They allocate no React
+elements, fragment nodes or segment keys. In a captured Kings chapter this
+removes 561 fragment fibers (708 to 147), while preserving all 1,146 text nodes,
+every pixel and every character rectangle. A unit regression bounds 100 ordinary
+words to zero React elements and preserves 198 separate word/space text nodes,
+including the adjacent words separated by a canonical maqaf. These allocation
+counts do not substitute for the independent response and cadence gates.
+
+A held-turn image guard restores inert inline
 boxes and the original transparent scripture scroller as an independent control
 in each bookmark mode. The whole
 book must retain every pixel, with identical recorded paper transforms and clip

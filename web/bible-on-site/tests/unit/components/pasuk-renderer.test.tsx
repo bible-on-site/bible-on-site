@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { act, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import {
 	renderPasukWithEntityRefs,
 	renderSegmentRange,
@@ -85,6 +85,36 @@ it("bounds a long recitation verse to one element per ordinary word", () => {
 	expect(container.querySelectorAll("*").length).toBeLessThanOrEqual(101);
 });
 
+it("keeps ordinary word boundaries without allocating React elements", () => {
+	const values = Array.from({ length: 100 }, () => "בְּרֵאשִׁית");
+	values[0] = "אֶת־";
+	values[1] = "הָעָם";
+	const { content } = renderSegmentRange(
+		values.map((value) => qri(value)),
+		0,
+		values.length - 1,
+		0,
+		() => null,
+		() => null,
+		"qri",
+	);
+	// Element allocations also create React bookkeeping for every plain word.
+	// Keep that cost at zero while preserving the text-node shaping boundaries.
+	expect(content.filter(isValidElement)).toHaveLength(0);
+	const { container } = render(<p>{content}</p>);
+	const paragraph = container.querySelector("p");
+	const nodes = Array.from(paragraph?.childNodes ?? []);
+	expect(nodes).toHaveLength(198);
+	expect(nodes.every((node) => node.nodeType === Node.TEXT_NODE)).toBe(true);
+	expect(nodes.slice(0, 4).map((node) => node.textContent)).toEqual([
+		"אֶת־",
+		"הָעָם",
+		" ",
+		"בְּרֵאשִׁית",
+	]);
+	expect(paragraph).toHaveTextContent(`אֶת־הָעָם ${values.slice(2).join(" ")}`);
+});
+
 it.each([false, true])(
 	"keeps names reactive from unmasked choices (enabled: %s)",
 	(enabled) => {
@@ -139,7 +169,8 @@ it("preserves multi-word qri, maqaf spacing, ktiv and recitation wrapper coordin
 	const { container } = render(<p>{content}</p>);
 	expect(container.textContent).toBe("בָּא־א-להים (א-להים ה')  ");
 	expect(container.querySelector(".qri")).toHaveTextContent("(א-להים ה')");
-	expect(container.querySelector(".qri label")).toBeInTheDocument();
+	expect(container.querySelector(".qri [data-qri-label]")).toBeInTheDocument();
+	expect(container.querySelector("label")).toBeNull();
 	expect(
 		wrapped.mock.calls.map(([pasuk, segment]) => [pasuk, segment]),
 	).toEqual([
