@@ -262,6 +262,146 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn article_queries_without_metrics_only_read_their_content() {
+        for query in [
+            "{ articleById(id: 7) { id name } }",
+            "{ articlesByPerekId(perekId: 42) { id name } }",
+            "{ articlesByAuthorId(authorId: 3) { id name } }",
+        ] {
+            // No optional-schema response is queued: any extra database read
+            // exhausts this mock and makes the GraphQL operation fail.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entities::article::Model, Vec<_>, _>([vec![
+                        article_model(7, 42, 3),
+                    ]])
+                    .into_connection(),
+            );
+            let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+            let response = schema.execute(Request::new(query)).await;
+            assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
+            let json = response.data.into_json().unwrap();
+            assert!(!json.is_null());
+        }
+    }
+
+    #[tokio::test]
+    async fn article_metric_selection_keeps_aliases_and_named_fragments() {
+        for query in [
+            "{ articleById(id: 7) { id ...MetricFields } } fragment MetricFields on Article { estimate: readingMetric { wordCount } }",
+            "{ articlesByAuthorId(authorId: 3) { id estimate: readingMetric { wordCount } } }",
+        ] {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entities::article::Model, Vec<_>, _>([vec![
+                        article_model(7, 42, 3),
+                    ]])
+                    .append_query_results::<entities::tanah_article_metric::Model, Vec<_>, _>([
+                        vec![article_metric_model(7)],
+                    ])
+                    .into_connection(),
+            );
+            let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+            let response = schema.execute(Request::new(query)).await;
+            assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
+            let json = response.data.into_json().unwrap();
+            let article = if query.contains("articlesByAuthorId") {
+                &json["articlesByAuthorId"][0]
+            } else {
+                &json["articleById"]
+            };
+            assert_eq!(article["estimate"]["wordCount"], 500);
+        }
+    }
+
+    #[tokio::test]
+    async fn search_hit_metrics_follow_nested_field_selection() {
+        use crate::services::article_search::{lsa, store};
+        for selected in [false, true] {
+            let model = lsa::LsaModel {
+                dims: 1,
+                vocab: vec!["alpha".into()],
+                index: [("alpha".into(), 0)].into_iter().collect(),
+                idf: vec![1.0],
+                basis: vec![1.0],
+            };
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql).append_query_results([
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 7_i32.into()),
+                    ("doc_count", 1_i32.into()),
+                    ("model", lsa::serialize_model(&model).into()),
+                ])],
+                vec![mock_row([
+                    ("article_id", 7_i32.into()),
+                    ("model_epoch", 7_i32.into()),
+                    ("plain_len", 4_i32.into()),
+                    ("vector", lsa::serialize_vector(&[1.0]).into()),
+                    ("terms", lsa::serialize_terms(&[(0, 4)]).into()),
+                ])],
+                vec![mock_row([("model_epoch", 7_i32.into())])],
+                vec![mock_row([
+                    ("id", 7_i32.into()),
+                    ("perek_id", 42_i16.into()),
+                    ("author_id", 3_i16.into()),
+                    ("author_name", "Fixture author".into()),
+                    ("name", "Alpha article".into()),
+                    ("abstract", Option::<String>::None.into()),
+                    ("content", "alpha article".into()),
+                    ("sefer_name", "Fixture".into()),
+                    ("additional_letter", Option::<String>::None.into()),
+                    ("perek_in_context", 1_i32.into()),
+                ])],
+            ]);
+            if selected {
+                mock = mock
+                    .append_query_results::<entities::tanah_article_metric::Model, Vec<_>, _>([
+                        vec![article_metric_model(7)],
+                    ]);
+            }
+            let db = Database::from_connection(mock.into_connection());
+            let index = ArticleSearchIndex::new(db.clone());
+            index.load().await.unwrap();
+            let schema = build_schema(&db, &index);
+            let fields = if selected {
+                "articleId estimate: readingMetric { wordCount }"
+            } else {
+                "articleId"
+            };
+            let response = schema
+                .execute(Request::new(format!(
+                    "{{ searchArticles(phrase: \"alpha\") {{ total hits {{ {fields} }} }} }}"
+                )))
+                .await;
+            assert!(response.errors.is_empty(), "{:?}", response.errors);
+            let json = response.data.into_json().unwrap();
+            assert_eq!(json["searchArticles"]["total"], 1);
+            let hit = &json["searchArticles"]["hits"][0];
+            assert_eq!(hit["articleId"], 7);
+            if selected {
+                assert_eq!(hit["estimate"]["wordCount"], 500);
+            } else {
+                assert!(hit.get("estimate").is_none());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_search_metric_selection_needs_no_database_rows() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let response = schema.execute(Request::new(
+            "{ searchArticles(phrase: \"בראשית\") { total hits { readingMetric { wordCount } } } }",
+        )).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["searchArticles"]["total"],
+            0
+        );
+    }
+
+    #[tokio::test]
     async fn schema_article_by_id_exposes_verified_covering_sources() {
         let mut verified_article = article_model(7, 42, 3);
         verified_article.coverage_verified = true;
@@ -274,12 +414,6 @@ mod tests {
                 .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
                     [vec![verified_article]],
                 )
-                // Metric attach — no rows means readingMetric resolves null.
-                .append_query_results::<
-                    entities::tanah_article_metric::Model,
-                    Vec<entities::tanah_article_metric::Model>,
-                    _,
-                >([vec![]])
                 .append_query_results::<
                     entities::article_covering_source::Model,
                     Vec<entities::article_covering_source::Model>,

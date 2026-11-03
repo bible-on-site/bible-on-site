@@ -2769,15 +2769,22 @@ jobs:
         env:
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
+          mongo_started_at=$SECONDS
+          docker run -d --name sefaria-mongo -p 27017:27017 \
+            --entrypoint docker-entrypoint.sh "$SEFARIA_MONGO_IMAGE" \
+            mongod --dbpath /mongodb-data
           echo "Waiting for MongoDB to be ready..."
-          # Data was restored at Docker BUILD time to /mongodb-data
-          # On first container startup, entrypoint.sh copies it to /data/db
-          # This should take ~15-30 seconds vs 5+ minutes for runtime mongorestore
+          # Reuse the database restored at build time without a full startup copy.
+          # Keep the existing 60 attempts and two-second interval.
           for i in {1..60}; do
+            if [ "$((SECONDS - mongo_started_at))" -ge 120 ]; then
+              break
+            fi
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
-            if [ "$count" != "0" ] && [ -n "$count" ]; then
+            if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+              test "$((SECONDS - mongo_started_at))" -lt 120
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              echo "MongoDB startup took $((SECONDS - mongo_started_at)) seconds"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
               expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
@@ -2944,12 +2951,21 @@ jobs:
         env:
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
+          mongo_started_at=$SECONDS
+          docker run -d --name sefaria-mongo -p 27017:27017 \
+            --entrypoint docker-entrypoint.sh "$SEFARIA_MONGO_IMAGE" \
+            mongod --dbpath /mongodb-data
           echo "Waiting for MongoDB to be ready..."
+          # Reuse the restored fixture within the original startup budget.
           for i in {1..60}; do
+            if [ "$((SECONDS - mongo_started_at))" -ge 120 ]; then
+              break
+            fi
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
-            if [ "$count" != "0" ] && [ -n "$count" ]; then
+            if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+              test "$((SECONDS - mongo_started_at))" -lt 120
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              echo "MongoDB startup took $((SECONDS - mongo_started_at)) seconds"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
               expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
