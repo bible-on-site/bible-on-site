@@ -238,5 +238,4 @@ mod tests {
         let err = get_author(&db, 404).await.unwrap_err();
         assert!(err.to_string().contains("Author 404 not found"));
     }
-
 }
