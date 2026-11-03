@@ -5,13 +5,20 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
-Delivery remains blocked by the
-[hosted run on `ffa3126`](https://github.com/bible-on-site/bible-on-site/actions/runs/41602765877).
+The historical
+[hosted run on `ffa3126`](https://github.com/bible-on-site/bible-on-site/actions/runs/41602765877)
+failed its performance gate.
 Its full production build succeeded, but eight of the twelve turn scenarios
 failed cadence. Response p95 stayed within 166.5ms and the largest frame gap
 within 83.4ms; failing cadence p95 values ranged from 50.1ms to 83.3ms across
 the first-turn, consecutive-turn and complete-sample checks. The local passes
 recorded below remain separate evidence. The fixed limits still apply to CI.
+The subsequent [run on `b910a5562`](https://github.com/bible-on-site/bible-on-site/actions/runs/41619733383)
+passed eleven scenarios but failed the first hidden-bookmark toolbar turn in
+Numbers: frame-gap p95 was 66.6ms, above 50ms. Its response p95 was 113.6ms
+and maximum gap 83.3ms; every consecutive-turn scope passed. Website runtime
+bytes were unchanged between these hosted runs, so their different failure
+counts do not establish an improvement. Both failed runs remain recorded.
 
 The fixed desktop profile uses full Chromium, visible scrollbars, a 1440x900
 viewport, 4x CPU slowdown, one worker and zero retries. The performance
@@ -199,6 +206,47 @@ evidence, and every earlier failed run remains failed.
 
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
+
+The reader now prepares the covered paper back faces before another turn
+starts, using `will-change: transform, clip-path` within its bounded page buffer.
+The current spread and hover folds retain their original rasterization;
+the library continues to own inline hints during a drag or animation.
+A matched control/candidate/candidate/control diagnostic at 6x CPU slowdown
+reduced the first hidden-bookmark toolbar cadence p95 from 66.7/50ms in the
+controls to 33.4/33.4ms in the candidates. Other stress cases still failed;
+this diagnostic does not replace qualification at the original 4x profile.
+
+The new normal registry build of source tree
+`da51ce090329a87be3b62ee11cc4a1a8e105ea2c`, build
+`N5WBWuRiA4bjxnty-3Wsk`, passes all 35 Linux performance checks, all 13
+active Windows reader checks, and 57 functional checks with one existing
+conditional skip. There are no retries or runtime overrides. The full route
+set and content fixture are unchanged. First turns, consecutive turns and
+complete sequences pass the original limits independently.
+
+| Environment | Response p95 | Maximum gap | Gap p95 | First-turn gap p95 | Consecutive gap p95 |
+| --- | --- | --- | --- | --- | --- |
+| Windows desktop, headed GPU compositing | 124.4ms | 83.4ms | 49.9ms | 50ms | 49.9ms |
+| Linux, headless SwiftShader, four shared CPUs | 91.7ms | 66.7ms | 50ms | 33.4ms | 50ms |
+
+The [qualification record](sefer-turn-performance.covered-back.json) retains
+all twelve cases in each environment. These local results still require
+independent hosted CI and public-reader verification.
+The [actual production capture comparison](images/sefer-turn-lag/reader-covered-back-comparison.json)
+has zero changed pixels across all 24 poses and zero movement in eight
+character comparisons, including real qri captions in both themes. The earlier
+capture chain independently preserves parity with the original word rendering.
+
+| Before covered back-face preparation | After |
+| --- | --- |
+| ![Previous reader](images/sefer-turn-lag/reader-final-after.png) | ![Prepared reader with unchanged appearance](images/sefer-turn-lag/reader-covered-back-after.png) |
+
+An experimental appearance lock used native element view-transition snapshots
+to freeze already painted scripture while a leaf turned. Opaque snapshots
+changed straight-fold text rasterization. Falling back to live text for that
+pose preserved every pixel in the tested rest/straight/angled captures, but
+matched 6x CPU diagnostics worsened moving-bookmark cadence p95 from about
+66.7ms to 100ms. The snapshot experiment is not used by the production reader.
 
 The normal Linux build generates all 20,504 routes / 20,497 prerenders. The
 complete desktop performance suite passes 35 checks. Separate interaction
