@@ -10,6 +10,7 @@ import RecitationPlayer, {
 	RecitationHeader,
 	RecitationLink,
 	RecitationPasukControl,
+	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
 } from "@/app/929/[number]/components/RecitationPlayer";
@@ -926,6 +927,49 @@ test("chapter highlights follow the audio clock, clear in gaps, freeze on pause 
 	await act(async () => clipEnded());
 	expect(second).not.toHaveAttribute("aria-current");
 	expect(frames.size).toBe(0);
+});
+
+test("scripture controls render inertly without a provider and on the server", async () => {
+	render(
+		<>
+			<RecitationWordControl pasuk={1} segment={1}>
+				בְּרֵאשִׁית
+			</RecitationWordControl>
+			<RecitationPasukControl pasuk={1}>א</RecitationPasukControl>
+			<RecitationVerse pasuk={1}>בראשית א</RecitationVerse>
+		</>,
+	);
+	expect(screen.queryByRole("button")).toBeNull();
+	expect(screen.getByText("בראשית א")).toHaveAttribute(
+		"data-sefer-pasuk",
+		"1",
+	);
+	const { renderToString } = await import("react-dom/server");
+	expect(
+		renderToString(
+			<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</RecitationPlayer>,
+		),
+	).toContain("בְּרֵאשִׁית");
+});
+
+test("controls for pesukim without aligned words stay inert while listening", async () => {
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+			<RecitationPasukControl pasuk={3}>ג</RecitationPasukControl>
+			<RecitationWordControl pasuk={3} segment={1}>
+				אין
+			</RecitationWordControl>
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	expect(screen.queryByRole("button", { name: "השמעת פסוק ג" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "השמעת המילה אין" })).toBeNull();
 });
 
 test("verse highlights advance beyond the clicked control and stop cancels the animation", async () => {
