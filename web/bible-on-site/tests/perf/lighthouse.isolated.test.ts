@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
 import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
+import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
+import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
 import {
 	lighthouseBenchmarkName,
 	saveLighthouseReport,
@@ -83,13 +85,23 @@ const test = base.extend<
 					for (const strategy of STRATEGIES) {
 						const page = await context.newPage();
 						const url = `${BASE_URL}${path}`;
+						// Probe the empty page using Lighthouse's own CPU benchmark.
+						// Fixed targets keep heterogeneous runners comparable.
+						const cpuIndex = await page.evaluate(
+							pageFunctions.computeBenchmarkIndex,
+						);
 
 						// Warm up the page
 						await page.goto(url, { waitUntil: "networkidle" });
 						await page.close();
 
 						// Run Lighthouse
-						const lhr = await runLighthouseAudit(url, strategy, lighthousePort);
+						const lhr = await runLighthouseAudit(
+							url,
+							strategy,
+							lighthousePort,
+							cpuIndex,
+						);
 						reports.push(saveReport(lhr, strategy));
 						writePerformanceIndex(REPORTS_DIR, reports);
 						results.set(getResultKey(path, strategy), lhr);
@@ -432,7 +444,9 @@ async function runLighthouseAudit(
 	url: string,
 	strategy: DeviceStrategy,
 	port: number,
+	hostBenchmarkIndex: number,
 ): Promise<Result> {
+	const cpuProfile = lighthouseCpuProfile(hostBenchmarkIndex, strategy);
 	const flags: Flags = {
 		logLevel: "error",
 		output: "json",
@@ -440,6 +454,7 @@ async function runLighthouseAudit(
 		port,
 		// Don't reset storage since we're using Playwright's context
 		disableStorageReset: true,
+		throttling: { cpuSlowdownMultiplier: cpuProfile.cpuSlowdownMultiplier },
 	};
 
 	// Use desktop config for desktop strategy
@@ -451,7 +466,7 @@ async function runLighthouseAudit(
 		throw new Error("Lighthouse audit failed - no result returned");
 	}
 
-	return runnerResult.lhr;
+	return Object.assign(runnerResult.lhr, { cpuCalibration: cpuProfile });
 }
 
 function saveReport(lhr: Result, strategy: DeviceStrategy) {
