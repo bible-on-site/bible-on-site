@@ -17,6 +17,42 @@ jest.mock("../../../src/lib/articles/service", () => ({
 	getArticleSummariesForRanges: jest.fn(),
 }));
 
+// The batch action resolves each unit through the shared cached fetchers;
+// here they delegate to the mocked range services so the tests still verify
+// bounds resolution end to end.
+jest.mock("../../../src/lib/reading/cached-range-summaries", () => {
+	const { getMasoraUnitById } = jest.requireActual<
+		typeof import("../../../src/data/masora/masora-units")
+	>("../../../src/data/masora/masora-units");
+	const { getParashaUnitById, parashaAuxiliaryRanges } = jest.requireActual<
+		typeof import("../../../src/data/parasha/parasha-units")
+	>("../../../src/data/parasha/parasha-units");
+	const { getArticleSummariesForRanges } = jest.requireMock<
+		typeof import("../../../src/lib/articles/service")
+	>("../../../src/lib/articles/service");
+	const { getPerushimForRanges } = jest.requireMock<
+		typeof import("../../../src/lib/perushim")
+	>("../../../src/lib/perushim");
+	const parashaRanges = (unitId: number, scope: string) =>
+		scope === "haftara"
+			? parashaAuxiliaryRanges(getParashaUnitById(unitId))
+			: getParashaUnitById(unitId).ranges;
+	return {
+		getCachedMasoraRangeArticles: jest.fn((unitId: number) =>
+			getArticleSummariesForRanges(getMasoraUnitById(unitId).ranges),
+		),
+		getCachedMasoraRangePerushim: jest.fn((unitId: number) =>
+			getPerushimForRanges(getMasoraUnitById(unitId).ranges),
+		),
+		getCachedParashaRangeArticles: jest.fn((unitId: number, scope: string) =>
+			getArticleSummariesForRanges(parashaRanges(unitId, scope)),
+		),
+		getCachedParashaRangePerushim: jest.fn((unitId: number, scope: string) =>
+			getPerushimForRanges(parashaRanges(unitId, scope)),
+		),
+	};
+});
+
 import {
 	getUnitBookPerushNotes,
 	getUnitScopeSummariesBatch,

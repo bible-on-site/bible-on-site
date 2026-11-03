@@ -1,7 +1,11 @@
 "use server";
 
 import type { Article, ArticleSummary } from "@/lib/articles";
-import { getArticleById, getArticleSummariesByPerekId } from "@/lib/articles";
+import {
+	getArticleById,
+	getArticleSummariesByPerekId,
+	getArticleSummariesByPerekIds,
+} from "@/lib/articles";
 import { ExportError } from "@/lib/download/export-error";
 import type {
 	PageRangesDownloadContext,
@@ -13,6 +17,7 @@ import { formatDedication } from "@/lib/dedications/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
 	getPerushimByPerekId,
+	getPerushimByPerekIds,
 	getPerushNotes,
 	getPerushNotesBatch,
 } from "@/lib/perushim";
@@ -140,24 +145,23 @@ export async function getPerekSummariesBatch(
 			getPerekMetrics(perekIds),
 		),
 	]);
-	const entries = await Promise.all(
-		perekIds.map(async (id) => {
-			const [articles, perushim] = await Promise.all([
-				getArticleSummariesByPerekId(id),
-				getPerushimByPerekId(id),
-			]);
-			return [
-				String(id),
-				{
-					articles,
-					perushim,
-					pasukUnits: pasukUnits.get(id) ?? [],
-					perekMetric: perekMetrics.get(id) ?? null,
-				},
-			] as const;
-		}),
+	// Articles + perushim arrive grouped by perek from one `IN` query per
+	// table — the per-perek fan-out was ~4 queries per perek on every open.
+	const [articlesByPerek, perushimByPerek] = await Promise.all([
+		getArticleSummariesByPerekIds(perekIds),
+		getPerushimByPerekIds(perekIds),
+	]);
+	return Object.fromEntries(
+		perekIds.map((id) => [
+			String(id),
+			{
+				articles: articlesByPerek.get(id) ?? [],
+				perushim: perushimByPerek.get(id) ?? [],
+				pasukUnits: pasukUnits.get(id) ?? [],
+				perekMetric: perekMetrics.get(id) ?? null,
+			},
+		]),
 	);
-	return Object.fromEntries(entries);
 }
 
 /**

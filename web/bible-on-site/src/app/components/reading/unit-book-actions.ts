@@ -12,9 +12,19 @@ import {
 	type RangePerushSummary,
 	type RangedPerushNote,
 } from "@/lib/perushim";
+import {
+	getCachedMasoraRangeArticles,
+	getCachedMasoraRangePerushim,
+	getCachedParashaRangeArticles,
+	getCachedParashaRangePerushim,
+} from "@/lib/reading/cached-range-summaries";
 import type { ArticleSummary } from "@/lib/articles";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
+
+// A cold sefer still resolves ~2 queries per unit; chunking caps how many
+// of those queue on the pool at once instead of bursting all units at once.
+const UNIT_BATCH_CONCURRENCY = 8;
 
 function unitScopeRanges(
 	division: DivisionId,
@@ -51,31 +61,52 @@ export async function getUnitScopeSummariesBatch(
 	scope: UnitBookScope,
 ): Promise<Record<string, UnitBookSummaries>> {
 	if (scope !== "torah" && scope !== "haftara") return {};
-	const entries = await Promise.all(
-		unitIds.map(async (unitId) => {
-			if (!Number.isInteger(unitId) || unitId < 1) return null;
-			try {
-				const ranges = unitScopeRanges(division, unitId, scope);
-				if (ranges.length === 0) {
-					return [String(unitId), { articles: [], perushim: [] }] as const;
-				}
-				const [articles, perushim] = await Promise.all([
-					getArticleSummariesForRanges(ranges),
-					getPerushimForRanges(ranges),
-				]);
-				return [String(unitId), { articles, perushim }] as const;
-			} catch (error) {
-				console.warn(
-					"Failed to resolve %s unit %d %s summaries:",
-					division,
-					unitId,
-					scope,
-					error instanceof Error ? error.message : error,
-				);
-				return [String(unitId), { articles: [], perushim: [] }] as const;
+	const loadUnit = async (
+		unitId: number,
+	): Promise<[string, UnitBookSummaries] | null> => {
+		if (!Number.isInteger(unitId) || unitId < 1) return null;
+		try {
+			const ranges = unitScopeRanges(division, unitId, scope);
+			if (ranges.length === 0) {
+				return [String(unitId), { articles: [], perushim: [] }];
 			}
-		}),
-	);
+			// The cached fetchers share entries with the flat unit pages, so a
+			// book open only queries for units nobody has visited yet.
+			const [articles, perushim] =
+				division === "parasha"
+					? await Promise.all([
+							getCachedParashaRangeArticles(unitId, scope),
+							getCachedParashaRangePerushim(unitId, scope),
+						])
+					: division === "masora" && scope === "torah"
+						? await Promise.all([
+								getCachedMasoraRangeArticles(unitId),
+								getCachedMasoraRangePerushim(unitId),
+							])
+						: await Promise.all([
+								getArticleSummariesForRanges(ranges),
+								getPerushimForRanges(ranges),
+							]);
+			return [String(unitId), { articles, perushim }];
+		} catch (error) {
+			console.warn(
+				"Failed to resolve %s unit %d %s summaries:",
+				division,
+				unitId,
+				scope,
+				error instanceof Error ? error.message : error,
+			);
+			return [String(unitId), { articles: [], perushim: [] }];
+		}
+	};
+	const entries: ([string, UnitBookSummaries] | null)[] = [];
+	for (let i = 0; i < unitIds.length; i += UNIT_BATCH_CONCURRENCY) {
+		entries.push(
+			...(await Promise.all(
+				unitIds.slice(i, i + UNIT_BATCH_CONCURRENCY).map(loadUnit),
+			)),
+		);
+	}
 	return Object.fromEntries(entries.filter((entry) => entry !== null));
 }
 

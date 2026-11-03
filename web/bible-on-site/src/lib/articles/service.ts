@@ -139,6 +139,65 @@ export async function getArticleSummariesByPerekId(
 }
 
 /**
+ * Fetch article summaries for several perakim in one query — the sefer
+ * book-view path where the per-perek fan-out would issue one query each.
+ * Rows arrive grouped per perek, keeping the same per-perek priority
+ * ordering as {@link getArticleSummariesByPerekId}.
+ */
+export async function getArticleSummariesByPerekIds(
+	perekIds: number[],
+): Promise<Map<number, ArticleSummary[]>> {
+	const ids = [...new Set(perekIds)];
+	if (ids.length === 0) return new Map();
+	const placeholders = ids.map(() => "?").join(", ");
+	try {
+		const rows = await query<ArticleSummaryRow>(
+			`SELECT
+				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article a
+			 JOIN tanah_author au ON a.author_id = au.id
+			 WHERE a.perek_id IN (${placeholders}) AND a.perek_id BETWEEN 1 AND 929
+			 ORDER BY a.perek_id ASC, a.priority ASC`,
+			ids,
+		);
+
+		const byPerek = new Map<number, ArticleSummary[]>();
+		for (const row of rows) {
+			const list = byPerek.get(row.perek_id) ?? [];
+			list.push({
+				id: row.id,
+				perekId: row.perek_id,
+				authorId: row.author_id,
+				abstract: row.abstract,
+				name: row.name,
+				priority: row.priority,
+				authorName: row.author_name,
+				authorImageUrl: getAuthorImageUrl(row.author_id),
+			});
+			byPerek.set(row.perek_id, list);
+		}
+		// One metrics query covers the whole sefer — withArticleMetrics takes
+		// the flat list, so decorate then rebucket positionally.
+		const all = [...byPerek.values()].flat();
+		const enriched = await withArticleMetrics(all);
+		let offset = 0;
+		for (const [perekId, list] of byPerek) {
+			byPerek.set(perekId, enriched.slice(offset, offset + list.length));
+			offset += list.length;
+		}
+		return byPerek;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch article summaries for perakim:",
+			error instanceof Error ? error.message : error,
+		);
+		// Reject so a failed build/request cannot cache an empty article list.
+		throw error;
+	}
+}
+
+/**
  * Whether a query rejection means the covering-source schema (#2189)
  * is not deployed yet — the missing `coverage_verified` column or the
  * missing `tanah_article_covering_source` table. Anything else is a

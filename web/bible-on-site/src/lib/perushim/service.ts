@@ -2,6 +2,7 @@ import { query } from "../api-client";
 import {
 	getPerushMetric,
 	getPerushMetricsByPerekId,
+	getPerushMetricsByPerekIds,
 	metricOrFallback,
 } from "../reading-metrics";
 import type { ReadingMetric } from "../reading-metrics";
@@ -72,6 +73,76 @@ export async function getPerushimByPerekId(
 		console.warn(
 			"Failed to fetch perushim for perek %d:",
 			perekId,
+			error instanceof Error ? error.message : error,
+		);
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
+	}
+}
+
+/**
+ * Fetch available perushim for several perakim in one query — the sefer
+ * book-view path where the per-perek fan-out would issue one query each.
+ * Rows arrive grouped per perek, keeping the same per-perek ordering
+ * (priority, then note count) as {@link getPerushimByPerekId}.
+ */
+export async function getPerushimByPerekIds(
+	perekIds: number[],
+): Promise<Map<number, PerushSummary[]>> {
+	const ids = [...new Set(perekIds)];
+	if (ids.length === 0) return new Map();
+	const placeholders = ids.map(() => "?").join(", ");
+	try {
+		const rows = await query<PerushSummaryRow & { perek_id: number }>(
+			`SELECT
+				n.perek_id AS perek_id,
+				p.id AS perush_id,
+				p.name AS perush_name,
+				pa.name AS parshan_name,
+				COUNT(*) AS note_count,
+				p.priority AS priority
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 JOIN parshan pa ON p.parshan_id = pa.id
+			 WHERE n.perek_id IN (${placeholders})
+			 GROUP BY n.perek_id, p.id, p.name, pa.name, p.priority
+			 ORDER BY n.perek_id ASC, p.priority ASC, note_count DESC`,
+			ids,
+		);
+
+		const byPerek = new Map<number, PerushSummary[]>();
+		for (const row of rows) {
+			const list = byPerek.get(row.perek_id) ?? [];
+			list.push({
+				id: row.perush_id,
+				name: row.perush_name,
+				parshanName: row.parshan_name,
+				noteCount: Number(row.note_count),
+			});
+			byPerek.set(row.perek_id, list);
+		}
+		// Same metric decoration as the single-perek path: one `IN` query for
+		// the whole sefer, and a failed metric read must not hide commentaries.
+		const metrics = await metricOrFallback(
+			"perushim perakim",
+			new Map<number, Map<number, ReadingMetric>>(),
+			() => getPerushMetricsByPerekIds(ids),
+		);
+		for (const [perekId, summaries] of byPerek) {
+			const perekMetrics = metrics.get(perekId);
+			if (!perekMetrics) continue;
+			byPerek.set(
+				perekId,
+				summaries.map((summary) => {
+					const metric = perekMetrics.get(summary.id);
+					return metric ? { ...summary, metric } : summary;
+				}),
+			);
+		}
+		return byPerek;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch perushim for perakim:",
 			error instanceof Error ? error.message : error,
 		);
 		// Reject so a failed fetch cannot become a cached empty list.
