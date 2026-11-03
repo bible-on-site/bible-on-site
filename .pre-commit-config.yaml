@@ -71,7 +71,7 @@ repos:
   # no explanatory comment), RET502 (implicit-None returns mixed with returns —
   # the "Explicit returns mixed with implicit returns" finding).
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: v0.17.2
+    rev: v0.17.3
     hooks:
       - id: ruff-check
         args: [--select, "F,D2,BLE001,E722,S110,RET502"]
