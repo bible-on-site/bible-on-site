@@ -14,6 +14,7 @@ describe("GET /api/health/ready", () => {
 	let mockSanitize: jest.Mock;
 	let mockPerekIndex: jest.Mock;
 	let mockPasukIndex: jest.Mock;
+	let mockPages: jest.Mock;
 	beforeEach(() => {
 		jest.resetModules();
 		mockQuery = jest
@@ -24,6 +25,10 @@ describe("GET /api/health/ready", () => {
 		mockSanitize = jest.fn((html: string) => html);
 		mockPerekIndex = jest.fn();
 		mockPasukIndex = jest.fn();
+		mockPages = jest.fn().mockResolvedValue(undefined);
+		jest.doMock("@/lib/server-page-readiness", () => ({
+			warmServerPages: mockPages,
+		}));
 		jest.doMock("@/lib/search/corpus", () => ({
 			getPerekIndex: mockPerekIndex,
 			getPasukIndex: mockPasukIndex,
@@ -50,6 +55,29 @@ describe("GET /api/health/ready", () => {
 			content: { authorCount: 64, articleCount: 2681 },
 		});
 		expect(mockQuery.mock.calls[0][0]).not.toContain("distributable");
+	});
+	test("withholds readiness until page rendering completes and rejects failure", async () => {
+		let finish!: () => void;
+		mockPages.mockReturnValueOnce(
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			}),
+		);
+		const { GET } = await import("@/app/api/health/ready/route");
+		let admitted = false;
+		const pending = GET().then((response) => {
+			admitted = true;
+			return response;
+		});
+		await Promise.resolve();
+		expect(admitted).toBe(false);
+		finish();
+		expect((await pending).status).toBe(200);
+		mockPages.mockRejectedValueOnce(new Error("Page renderer unavailable"));
+		const failed = await GET();
+		expect(failed.status).toBe(503);
+		expect((await failed.json()).message).toBe("Page renderer unavailable");
+		expect((await GET()).status).toBe(200);
 	});
 	test("rechecks the database even after canonical data has warmed", async () => {
 		const { GET } = await import("@/app/api/health/ready/route");
