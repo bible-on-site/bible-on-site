@@ -5,6 +5,14 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
+Delivery remains blocked by the
+[hosted run on `ffa3126`](https://github.com/bible-on-site/bible-on-site/actions/runs/41602765877).
+Its full production build succeeded, but eight of the twelve turn scenarios
+failed cadence. Response p95 stayed within 166.5ms and the largest frame gap
+within 83.4ms; failing cadence p95 values ranged from 50.1ms to 83.3ms across
+the first-turn, consecutive-turn and complete-sample checks. The local passes
+recorded below remain separate evidence. The fixed limits still apply to CI.
+
 The fixed desktop profile uses full Chromium, visible scrollbars, a 1440x900
 viewport, 4x CPU slowdown, one worker and zero retries. The performance
 configuration serializes all projects so another browser test cannot contend
@@ -39,7 +47,7 @@ resting chapter/mode/theme combinations. These include Numbers and Kings, plus
 real qri captions in light and dark themes. The caption marker is a span rather
 than an unassociated form label, with unchanged selector specificity.
 
-| Before the rendering changes | Current production build |
+| Before the rendering changes | Locally built candidate |
 | --- | --- |
 | ![Original word rendering](images/sefer-turn-lag/reader-parts-before.png) | ![Unchanged current reader](images/sefer-turn-lag/reader-final-after.png) |
 
