@@ -80,10 +80,12 @@
   gap: 8px;
 }
 
-.carouselItem:hover {
-  border-color: var(--accent-900);
-  box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .carouselItem:hover {
+    border-color: var(--accent-900);
+    box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
+    transform: translateY(-1px);
+  }
 }
 
 /* Loading placeholder card: same box as a real card, not interactive. */
@@ -228,8 +230,10 @@ button.carouselItem {
     border-color: #2d3548;
   }
 
-  .carouselItem:hover {
-    border-color: var(--accent-200);
+  @media (hover: hover) {
+    .carouselItem:hover {
+      border-color: var(--accent-200);
+    }
   }
 
   .authorImage {
@@ -239,4 +243,8 @@ button.carouselItem {
   .articleAbstract {
     color: #d7dae0;
   }
+}
+
+.carouselItem:active {
+  scale: var(--press-scale);
 }

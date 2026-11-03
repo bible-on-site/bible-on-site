@@ -28,6 +28,8 @@
 	width: fit-content;
 }
 
-.pasukAnchor:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.pasukAnchor:hover {
+		text-decoration: underline;
+	}
 }
