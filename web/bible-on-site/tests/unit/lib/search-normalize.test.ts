@@ -120,7 +120,8 @@ describe("htmlToPlainText", () => {
 	});
 
 	it("stops scanning a large plain remainder for tags once all openers are removed", () => {
-		const plain = "שלום ".repeat(10_000).trim();
+		const html = "<p>שלום </p>".repeat(10_000);
+		const plain = "שלום  ".repeat(10_000).trim();
 		const replace = String.prototype.replace;
 		const spy = jest
 			.spyOn(String.prototype, "replace")
@@ -135,7 +136,7 @@ describe("htmlToPlainText", () => {
 				return replace.call(this, pattern, replacement);
 			});
 		try {
-			expect(htmlToPlainText(`<p>${plain}</p>`)).toBe(plain);
+			expect(htmlToPlainText(html)).toBe(plain);
 		} finally {
 			spy.mockRestore();
 		}
