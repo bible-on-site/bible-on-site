@@ -19,17 +19,13 @@ import {
 	DedicationLines,
 	dedicationLines,
 } from "@/app/components/dedications/DedicationLines";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getMasoraDedications } from "@/lib/dedications/loaders";
-import { getPerushimForRanges } from "@/lib/perushim/service";
 import { rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
 import {
-	cachedPerKey,
-	COLLECTION_TAGS,
-	masoraArticlesTag,
-	masoraPerushimTag,
-} from "@/lib/revalidate/tags";
+	getMasoraRangeArticles,
+	getMasoraRangePerushim,
+} from "@/app/components/reading/unit-range-summaries";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
@@ -48,26 +44,6 @@ export function generateStaticParams() {
 		unit: String(i + 1),
 	}));
 }
-
-const getCachedRangePerushim = cachedPerKey(
-	"range-perushim",
-	(unitId: number) => String(unitId),
-	(key) => [COLLECTION_TAGS.perushim, masoraPerushimTag(Number(key))],
-	async (unitId: number) => {
-		const unit = getMasoraUnitById(unitId);
-		return getPerushimForRanges(unit.ranges);
-	},
-);
-
-const getCachedRangeArticles = cachedPerKey(
-	"range-article-summaries",
-	(unitId: number) => String(unitId),
-	(key) => [COLLECTION_TAGS.articles, masoraArticlesTag(Number(key))],
-	async (unitId: number) => {
-		const unit = getMasoraUnitById(unitId);
-		return getArticleSummariesForRanges(unit.ranges);
-	},
-);
 
 /** Perek ids covering every masora unit of a sefer — the book view
  * reads the whole sefer, so its entity refs arrive up front. */
@@ -130,8 +106,8 @@ export default async function MasoraUnitPage({
 	const unit = getMasoraUnitById(unitId);
 	const [perushim, articles, entityRefsByPerek, masoraDedications] =
 		await Promise.all([
-			getCachedRangePerushim(unitId),
-			getCachedRangeArticles(unitId),
+			getMasoraRangePerushim(unitId),
+			getMasoraRangeArticles(unitId),
 			fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
 			getMasoraDedications(),
 		]);

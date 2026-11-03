@@ -5,16 +5,17 @@ import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import {
-	getPerushimForRanges,
 	getPerushNotesForRanges,
 	type RangePerushSummary,
 	type RangedPerushNote,
 } from "@/lib/perushim";
 import type { ArticleSummary } from "@/lib/articles";
+import type { Pasuk } from "@/data/db/tanah-view-types";
+import { getPerekByPerekId, LAST_PEREK_ID } from "@/data/perek-dto";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
+import { unitRangeArticles, unitRangePerushim } from "./unit-range-summaries";
 
 function unitScopeRanges(
 	division: DivisionId,
@@ -60,8 +61,8 @@ export async function getUnitScopeSummariesBatch(
 					return [String(unitId), { articles: [], perushim: [] }] as const;
 				}
 				const [articles, perushim] = await Promise.all([
-					getArticleSummariesForRanges(ranges),
-					getPerushimForRanges(ranges),
+					unitRangeArticles(division, unitId, scope),
+					unitRangePerushim(division, unitId, scope),
 				]);
 				return [String(unitId), { articles, perushim }] as const;
 			} catch (error) {
@@ -110,4 +111,22 @@ export async function getUnitBookPerushNotes(
 		);
 		return [];
 	}
+}
+
+/**
+ * Range-scoped scripture for the פרשה sefer book's auxiliary (Haftarah)
+ * readings — only the perakim the book actually renders, resolved from
+ * the canonical corpus, instead of whole-sefer JSON downloads per
+ * prophetic sefer the Haftarot touch.
+ */
+export async function getPerakimText(
+	perekIds: number[],
+): Promise<Record<number, { pesukim: Pasuk[] }>> {
+	const result: Record<number, { pesukim: Pasuk[] }> = {};
+	for (const perekId of new Set(perekIds.slice(0, LAST_PEREK_ID))) {
+		if (!Number.isInteger(perekId) || perekId < 1 || perekId > LAST_PEREK_ID)
+			continue;
+		result[perekId] = { pesukim: getPerekByPerekId(perekId).pesukim };
+	}
+	return result;
 }
