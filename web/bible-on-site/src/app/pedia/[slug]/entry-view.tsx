@@ -208,10 +208,9 @@ export async function EntryView({ slug }: { slug: string }) {
 
 			{entry.content ? (
 				<article
-					// nosemgrep -- DOMPurify-sanitized via prepareEntryContentHtml
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
-						__html: prepareEntryContentHtml(entry.content),
+						__html: prepareEntryContentHtml(entry.content), // nosemgrep -- DOMPurify-sanitized via prepareEntryContentHtml
 					}}
 					className={styles.entryContent}
 				/>
