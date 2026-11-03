@@ -33,18 +33,20 @@ words to zero React elements and preserves 198 separate word/space text nodes,
 including the adjacent words separated by a canonical maqaf. These allocation
 counts do not substitute for the independent response and cadence gates.
 
-Actual normal production builds before and after the primitive-word change
+Actual normal production builds before and after the rendering changes
 preserve every pixel across 24 poses and every character rectangle in eight
-resting chapters. These include all bookmark modes in Numbers and Kings, plus
+resting chapter/mode/theme combinations. These include Numbers and Kings, plus
 real qri captions in light and dark themes. The caption marker is a span rather
 than an unassociated form label, with unchanged selector specificity.
 
-| Before the allocation reduction | After the allocation reduction |
+| Before the rendering changes | Current production build |
 | --- | --- |
-| ![Original word rendering](images/sefer-turn-lag/reader-parts-before.png) | ![Separate primitive word parts](images/sefer-turn-lag/reader-parts-after.png) |
+| ![Original word rendering](images/sefer-turn-lag/reader-parts-before.png) | ![Unchanged current reader](images/sefer-turn-lag/reader-final-after.png) |
 
-The [comparison provenance](images/sefer-turn-lag/reader-parts-comparison.json)
-records all 24 pairs, source trees, production build IDs and asset hashes.
+The [final capture provenance](images/sefer-turn-lag/reader-final-comparison.json)
+records all 24 pairs, source trees, production build IDs and asset hashes. The
+[earlier word-only comparison](images/sefer-turn-lag/reader-parts-comparison.json)
+retains the independently captured allocation-change evidence.
 
 The opaque, viewport-sized reader overlay also contains its painting. This
 keeps fold invalidations within the reader's painted bounds; native modal
@@ -53,7 +55,7 @@ preserves every pixel in nine Kings poses across all bookmark modes. Separate
 control/candidate/control traces record 588/532/554ms of main-thread paint work
 over six turns. These diagnostic totals do not establish a cadence pass or a
 repeatable latency gain; the unchanged first/consecutive timing gates remain
-required after the normal production rebuild.
+required after the normal production rebuild, whose results are recorded below.
 
 A held-turn image guard restores inert inline
 boxes and the original transparent scripture scroller as an independent control
@@ -163,8 +165,29 @@ and dragging still fails with overall/consecutive gap p95 66.7ms. Response
 and its separate diagnostic trace; passing desktop or candidate runs do not
 replace it. The same source passes 57 functional checks with one existing
 conditional skip, including MP3/Opus playback, all three zero-pixel held-page
-guards and visibility after every turn. Overlay containment requires a fresh
-production-build qualification.
+guards and visibility after every turn. The subsequent overlay revision has
+its own qualification below.
+
+The normal registry build of source tree
+`1f3bbf0b4b06eee5897bc4b929b7bb8d5056965d`, build
+`9CGBBTasqTMfe4fmB4wWE`, passes all 35 Linux performance checks and all 13
+active Windows desktop reader checks with zero retries. Each environment has
+12 independently guarded cases plus its deliberate-stall control. All three
+limits pass for first turns, consecutive turns and the complete sequence.
+
+| Environment | Response p95 | Maximum gap | Gap p95 | First-turn gap p95 | Consecutive gap p95 |
+| --- | --- | --- | --- | --- | --- |
+| Windows desktop, headed GPU compositing | 125.3ms | 83.2ms | 33.4ms | 50ms | 33.4ms |
+| Linux, headless SwiftShader, four shared CPUs | 109.2ms | 83.4ms | 49.9ms | 49.9ms | 50ms |
+
+This revision also passes 57 functional checks with one existing conditional
+skip, including real MP3/Opus playback, all three strict held-page image guards,
+selection, native drag, TOC/history, commentary and moving-bookmark themes.
+The 24 actual-build appearance pairs and eight character comparisons remain
+identical after overlay containment. Registry validation confirms all 153
+library dist files match executable source `8def6671570e66c223a25609f1a78e0a4dfee818`;
+there is no local override. CI and public measurements are separate delivery
+evidence, and every earlier failed run remains failed.
 
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
