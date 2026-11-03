@@ -30,8 +30,10 @@
 	inset: -2px;
 	border-radius: 50%;
 }
-.button:hover {
-	background: #e9eff8;
+@media (hover: hover) {
+	.button:hover {
+		background: #e9eff8;
+	}
 }
 .button:focus-visible {
 	outline: 2px solid var(--accent-600);
@@ -238,8 +240,10 @@
 	text-align: start;
 	cursor: pointer;
 }
-.disclosureToggle:hover {
-	background: var(--surface-muted, #f8fafc);
+@media (hover: hover) {
+	.disclosureToggle:hover {
+		background: var(--surface-muted, #f8fafc);
+	}
 }
 .disclosureToggle:active {
 	background: var(--border-subtle, #e2e8f0);
@@ -285,8 +289,10 @@
 		color: var(--accent-200);
 	}
 
-	.button:hover {
-		background: #232a45;
+	@media (hover: hover) {
+		.button:hover {
+			background: #232a45;
+		}
 	}
 
 	.panel {
@@ -338,4 +344,8 @@
 
 .panelHeader + .section {
 	margin-top: 16px;
+}
+
+.button:active {
+	scale: var(--press-scale);
 }

@@ -36,9 +36,11 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.videoCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .videoCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .videoWrapper {
@@ -88,9 +90,11 @@
   transition: all 0.2s ease;
 }
 
-.backLink:hover {
-  background: #2a3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .backLink:hover {
+    background: #2a3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 /* ── Poster inside grid card ── */
@@ -161,8 +165,10 @@
   z-index: 1;
 }
 
-.modalClose:hover {
-  transform: scale(1.1);
+@media (hover: hover) {
+  .modalClose:hover {
+    transform: scale(1.1);
+  }
 }
 
 /* ── Responsive ── */
@@ -205,12 +211,18 @@
     color: #16213d;
   }
 
-  .backLink:hover {
-    background: #c7d2fe;
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #c7d2fe;
+    }
   }
 
   .modalClose {
     background: #1a1f2e;
     color: var(--accent-200);
   }
+}
+
+.modalClose:active {
+  scale: var(--press-scale);
 }
