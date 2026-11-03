@@ -309,7 +309,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             if (distance > edits) { continue; }
             // Bounded top-K: insert into the sorted list only when the candidate
             // ranks inside it — no materialized list of every match or full sort.
-            var insertAt = best.BinarySearch((candidate, distance), RankComparer.Instance);
+            var insertAt = best.BinarySearch((candidate, distance), RankComparer.Default);
             if (insertAt < 0) { insertAt = ~insertAt; }
             if (insertAt >= kept) { continue; }
             best.Insert(insertAt, (candidate, distance));
@@ -320,7 +320,7 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     private sealed class RankComparer : IComparer<(string Term, int Distance)>
     {
-        public static readonly RankComparer Instance = new();
+        public static readonly RankComparer Default = new();
         public int Compare((string Term, int Distance) x, (string Term, int Distance) y)
         {
             var byDistance = x.Distance.CompareTo(y.Distance);
