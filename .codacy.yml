@@ -50,6 +50,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_alter_person_source_citation.sql"
   - "data/mysql/tanahpedia_alter_source_citation.sql"
   - "data/mysql/tanahpedia_alter_child_birth_order.sql"
+  - "data/mysql/tanahpedia_alter_today_anniversary_month_day.sql"
   - "data/mysql/tanahpedia_place_jerusalem_data.sql"
   - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"
