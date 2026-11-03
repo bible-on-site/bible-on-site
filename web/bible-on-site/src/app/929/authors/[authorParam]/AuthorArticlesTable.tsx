@@ -3,7 +3,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
 	type ArticleSort,
 	type ArticleSortKey,
@@ -27,6 +27,26 @@ function articleHref(row: AuthorArticleRow): string {
 	return `/929/${row.perekId}/${row.id}`;
 }
 
+/**
+ * Sanitized abstract markup. Memoized so unchanged rows skip the
+ * DOMPurify pass on every parent re-render (search keystrokes, sorting).
+ */
+const AbstractHtml = memo(function AbstractHtml({
+	abstract,
+}: {
+	abstract: string;
+}) {
+	return (
+		<div
+			// nosemgrep -- DOMPurify-sanitized abstract
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+			dangerouslySetInnerHTML={{
+				__html: DOMPurify.sanitize(normalizeAbstractHtml(abstract)),
+			}}
+		/>
+	);
+});
+
 function sortAria(
 	column: ArticleSortKey,
 	sort: ArticleSort,
@@ -46,15 +66,6 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 	const [sort, setSort] = useState<ArticleSort>(DEFAULT_ARTICLE_SORT);
 
 	const sefarim = useMemo(() => distinctSefarim(rows), [rows]);
-	const sanitizedAbstracts = useMemo(() => {
-		const map = new Map<number, string>();
-		for (const row of rows) {
-			if (row.abstract) {
-				map.set(row.id, DOMPurify.sanitize(normalizeAbstractHtml(row.abstract)));
-			}
-		}
-		return map;
-	}, [rows]);
 	const visible = useMemo(
 		() => sortAuthorArticles(filterAuthorArticles(rows, search, sefer), sort),
 		[rows, search, sefer, sort],
@@ -144,15 +155,7 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								<td>{row.sefer}</td>
 								<td>{row.source}</td>
 								<td className={styles.abstractCell}>
-									{sanitizedAbstracts.has(row.id) && (
-										<div
-											// nosemgrep -- DOMPurify-sanitized abstract
-											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-											dangerouslySetInnerHTML={{
-												__html: sanitizedAbstracts.get(row.id) ?? "",
-											}}
-										/>
-									)}
+									{row.abstract && <AbstractHtml abstract={row.abstract} />}
 									<ReadingTime
 										estimatedSeconds={row.metric?.estimatedSeconds}
 										className={styles.abstractReadingTime}
