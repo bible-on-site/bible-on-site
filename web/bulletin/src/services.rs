@@ -65,10 +65,11 @@ pub async fn get_articles_and_authors(
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect();
-    let authors = AuthorEntity::find()
+    let authors_rows = AuthorEntity::find()
         .filter(entities::author::Column::Id.is_in(author_ids_needed))
         .all(db.get_connection())
-        .await?
+        .await?;
+    let authors = authors_rows
         .into_iter()
         .map(|a| (a.id, a.name))
         .collect::<std::collections::HashMap<_, _>>();
@@ -204,6 +205,7 @@ mod tests {
         assert_eq!(perek7.len(), 2);
         assert_eq!(perek7[0].1, "Author 10");
         assert_eq!(perek7[1].1, "Author 11");
+        assert_eq!(db.get_connection().clone().into_transaction_log().len(), 2);
     }
 
     #[tokio::test]
@@ -236,4 +238,5 @@ mod tests {
         let err = get_author(&db, 404).await.unwrap_err();
         assert!(err.to_string().contains("Author 404 not found"));
     }
+
 }
