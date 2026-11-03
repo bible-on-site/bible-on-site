@@ -267,6 +267,45 @@ export async function getPerushNotesForRanges(
 }
 
 /**
+ * Fetch a named perush's notes for a single pasuk in one indexed lookup —
+ * the hover-preview path needs only this pasuk, not the perush's whole
+ * perek notes nor the perek summary + metrics queries.
+ * Empty result when the perush is unknown or has no notes on the pasuk.
+ */
+export async function getPerushNotesForPasuk(
+	perushName: string,
+	perekId: number,
+	pasuk: number,
+): Promise<PerushNote[]> {
+	try {
+		const rows = await query<NoteRow>(
+			`SELECT n.pasuk, n.note_idx, n.note_content
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 WHERE p.name = ? AND n.perek_id = ? AND n.pasuk = ?
+			 ORDER BY n.note_idx ASC`,
+			[perushName, perekId, pasuk],
+		);
+
+		return rows.map((row) => ({
+			pasuk: row.pasuk,
+			noteIdx: row.note_idx,
+			noteContent: row.note_content,
+		}));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch notes for perush %s perek %d pasuk %d:",
+			perushName,
+			perekId,
+			pasuk,
+			error instanceof Error ? error.message : error,
+		);
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
+	}
+}
+
+/**
  * Fetch all notes for a specific perush on a specific perek.
  * Returns notes ordered by pasuk, then note_idx.
  */
