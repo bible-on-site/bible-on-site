@@ -14,7 +14,7 @@
  * also selected (#2140) — the same typo tolerance the in-memory
  * corpora get by scoring everything.
  *
- * The scan runs in two stages with different cost profiles: WHERE
+ * Pools that can exceed the output cap use two SQL stages: WHERE
  * holds only the anchor-free chunk gate — the one pattern shape a
  * giant field can't make ICU backtrack on — under an inner
  * location-ordered LIMIT that early-terminates via an index for dense
@@ -40,7 +40,12 @@ import { queryText } from "@/lib/api-client";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
 import type { Scored } from "./corpus";
 import { htmlToPlainText } from "./normalize";
-import { maxEdits, prepareQuery, scorePreparedText } from "./score";
+import {
+	MAX_SEARCH_SCORE,
+	maxEdits,
+	prepareQuery,
+	scorePreparedText,
+} from "./score";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
@@ -599,6 +604,8 @@ export interface ArticleHit {
  * scored article hits out) should replace/augment this provider — see
  * docs/website/search.md for the expected request/response contract.
  * Keep `searchArticles` as the only call site so the swap touches one file.
+ * Its location-ordered candidate pool fits the output cap completely, so
+ * the exact JS scorer ranks it without a redundant SQL rank estimate.
  */
 export async function searchArticles(
 	phrase: string,
@@ -611,7 +618,9 @@ export async function searchArticles(
 		["a.name", "a.abstract", "a.content"],
 		terms,
 	);
-	const rank = rankClauses(["a2.name", "a2.abstract", "a2.content"], terms);
+	// This existing pool holds at most 666 rows, below CANDIDATE_LIMIT.
+	// SQL ranking cannot discard any of them; the exact JS scoring below
+	// already ranks the complete pool. Keep its size and id ordering.
 	const rows = await queryText<{
 		id: number;
 		perek_id: number;
@@ -630,12 +639,28 @@ export async function searchArticles(
 			 LIMIT ${innerCandidateLimit(3, terms.length)}
 		 ) a2
 		 JOIN tanah_author au ON a2.author_id = au.id
-		 ORDER BY ${rank.orderBy}, a2.id
+		 ORDER BY a2.id
 		 LIMIT ${CANDIDATE_LIMIT}`,
-		[...params, ...rank.params],
+		params,
 	);
-	return rows
-		.map((row) => {
+	const candidates = rows.map((row) => ({
+		row,
+		titleScore: scorePreparedText(row.name, prepared) * 2,
+	}));
+	// A weighted title above the maximum body score cannot be displaced by
+	// an article matching only in its body. When titles fill the requested
+	// results, decode and score only their bodies to preserve snippet choice.
+	const dominantTitles = candidates
+		.filter(({ titleScore }) => titleScore > MAX_SEARCH_SCORE)
+		.sort(
+			(left, right) =>
+				right.titleScore - left.titleScore || left.row.id - right.row.id,
+		)
+		.slice(0, limit);
+	const finalists =
+		dominantTitles.length === limit ? dominantTitles : candidates;
+	return finalists
+		.map(({ row, titleScore }) => {
 			// Name, abstract, and content are each scored on their own: the
 			// SQL candidate may have matched only the abstract, so falling
 			// back to content alone would score a real match as zero.
@@ -656,11 +681,7 @@ export async function searchArticles(
 							? abstractPlain
 							: contentPlain || abstractPlain,
 				},
-				score: Math.max(
-					scorePreparedText(row.name, prepared) * 2,
-					contentScore,
-					abstractScore,
-				),
+				score: Math.max(titleScore, contentScore, abstractScore),
 			};
 		})
 		.filter((hit) => hit.score > 0)

@@ -28,7 +28,7 @@ const WARMUP_ROUTES = [
 	// 929/[number]/[slug]
 	"929/1/1",
 	// 929/authors/[authorParam]
-	"929/authors/1",
+	`929/authors/${encodeURIComponent("הרב לדוגמא שליטא")}`,
 	// pedia/[slug]
 	`pedia/${encodeURIComponent("יעקב")}`,
 	// [section]

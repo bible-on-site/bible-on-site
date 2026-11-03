@@ -800,10 +800,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2 # Inspect the actual base of the tested PR merge.
 
-      # Full-content SSG plus restored Rust/Next caches exceed the runner's
-      # default free space. Reclaim unused SDKs before downloading those caches.
-      # Keep browser/graphics packages, installed runtimes and swap intact.
-      - name: Free space for the full reader build
+      # Dependency/build caches and the SSG output can exhaust a hosted
+      # runner. Reclaim unused SDKs/images before restoring those caches;
+      # preserve browser packages, installed runtimes and swap for benchmarks.
+      - name: Free space for the website production build
         uses: jlumbroso/free-disk-space@v2.0.0
         with:
           preinstalled-runtimes: false
@@ -926,6 +926,9 @@ jobs:
         run: |
           cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
           cargo make mysql-populate
+
+      - name: Report disk space before website build
+        run: df -h .
 
       - name: Build
         id: bun-build

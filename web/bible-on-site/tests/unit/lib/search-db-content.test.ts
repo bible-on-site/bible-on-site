@@ -21,6 +21,7 @@ import {
 	termRegexp,
 } from "@/lib/search/db-content";
 import { htmlToPlainText, normalizeSearchText } from "@/lib/search/normalize";
+import { SEARCH_QUERY_MAX_TERMS } from "@/lib/search/types";
 
 const mockQuery = queryText as jest.MockedFunction<typeof queryText>;
 
@@ -573,6 +574,88 @@ describe("searchArticles", () => {
 		jest.clearAllMocks();
 	});
 
+	it("skips a losing body when even fuzzy titles outrank an exact body match", async () => {
+		const readLosingContent = jest.fn(() => "<p>ירושלימ</p>");
+		mockQuery.mockResolvedValue([
+			{
+				id: 7,
+				perek_id: 1,
+				name: "מבוא",
+				author_name: "הרב",
+				get content() {
+					return readLosingContent();
+				},
+				abstract: null,
+			},
+			...[
+				{
+					id: 9,
+					name: "על ירושלימ",
+					content: "<p>הקדמה</p>",
+					abstract: "<p>ירושלימ</p>",
+				},
+				{ id: 5, name: "ירושלים", content: "<p>צפון</p>", abstract: null },
+				{ id: 1, name: "ירושלימ", content: "<p>ירושלימ</p>", abstract: null },
+			].map((row) => ({ ...row, perek_id: 1, author_name: "הרב" })),
+		]);
+
+		const hits = await searchArticles("ירושלימ", 3);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual([1, 9, 5]);
+		expect(hits.map(({ score }) => score)).toEqual([220, 200, 120]);
+		expect(hits.map(({ entry }) => entry.plain)).toEqual([
+			"ירושלימ",
+			"ירושלימ",
+			"צפון",
+		]);
+		expect(readLosingContent).not.toHaveBeenCalled();
+	});
+
+	it("orders equal dominant titles by id before limiting", async () => {
+		mockQuery.mockResolvedValue(
+			[
+				{ id: 3, content: "<p>פתיחה 3</p>" },
+				{ id: 1, content: "<p>פתיחה 1</p>" },
+				{ id: 2, content: "<p>פתיחה 2</p>" },
+			].map((row) => ({
+				...row,
+				perek_id: 1,
+				name: "בראשית",
+				author_name: "הרב",
+				abstract: null,
+			})),
+		);
+
+		const hits = await searchArticles("בראשית", 2);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual([1, 2]);
+		expect(hits.map(({ entry }) => entry.plain)).toEqual([
+			"פתיחה 1",
+			"פתיחה 2",
+		]);
+	});
+
+	it("keeps body matches when titles alone cannot fill the result limit", async () => {
+		mockQuery.mockResolvedValue(
+			[
+				{ id: 1, name: "מבוא", content: "<p>ירושלימ</p>" },
+				{ id: 2, name: "ירושלים", content: null },
+				{ id: 3, name: "מבוא", content: "<p>על ירושלימ</p>" },
+			].map((row) => ({
+				...row,
+				perek_id: 1,
+				author_name: "הרב",
+				abstract: null,
+			})),
+		);
+
+		const hits = await searchArticles("ירושלימ", 2);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual([2, 1]);
+		expect(hits.map(({ score }) => score)).toEqual([120, 110]);
+		expect(hits[1].entry.plain).toBe("ירושלימ");
+	});
+
 	it("excludes articles outside the 929 chapter range", async () => {
 		mockQuery.mockResolvedValue([]);
 
@@ -582,6 +665,46 @@ describe("searchArticles", () => {
 			expect.stringContaining("a.perek_id BETWEEN 1 AND 929"),
 			expect.anything(),
 		);
+	});
+
+	it("keeps every existing article candidate without a redundant SQL rank", async () => {
+		mockQuery.mockResolvedValue([]);
+		for (let terms = 1; terms <= SEARCH_QUERY_MAX_TERMS; terms++) {
+			await searchArticles(Array(terms).fill("בראשית").join(" "), 3);
+			const [sql] = mockQuery.mock.calls[terms - 1];
+			expect(sql).toContain("ORDER BY a2.id");
+			expect(sql).not.toContain("REGEXP_LIKE(LEFT(a2.");
+			// Every legal term count keeps its old pool, which fits the
+			// outer cap completely. Dropping the sort cannot drop a row.
+			expect(
+				[...sql.matchAll(/LIMIT (\d+)/g)].map((hit) => Number(hit[1])),
+			).toEqual([terms === 1 ? 666 : 300, 1000]);
+		}
+	});
+
+	it("ranks the complete article pool independently of database row order", async () => {
+		const rows = [
+			{ id: 1, name: "בראשיתו", content: "מבוא" },
+			{ id: 2, name: "בראשית", content: "מבוא" },
+			{ id: 3, name: "מבוא", content: "על בראשית" },
+			{ id: 7, name: "מבוא", content: "בראשית" },
+			{ id: 9, name: "בראשית", content: "מבוא" },
+		].map((row) => ({
+			...row,
+			perek_id: 1,
+			author_name: "הרב",
+			abstract: null,
+		}));
+		mockQuery
+			.mockResolvedValueOnce(rows)
+			.mockResolvedValueOnce([...rows].reverse());
+
+		const forward = await searchArticles("בראשית", 4);
+		const reverse = await searchArticles("בראשית", 4);
+
+		expect(forward).toEqual(reverse);
+		expect(forward.map(({ entry }) => entry.id)).toEqual([2, 9, 1, 7]);
+		expect(forward.map(({ score }) => score)).toEqual([220, 220, 160, 110]);
 	});
 
 	it("matches article names and strips HTML before scoring", async () => {
