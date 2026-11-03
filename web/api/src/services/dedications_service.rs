@@ -140,18 +140,14 @@ pub async fn resolve(
     ctx: DedicationContext,
     now: NaiveDateTime,
 ) -> Result<Vec<DedicationAggregate>, ServiceError> {
+    let conn = db.get_connection();
     let needs_ancestors = !ctx.perek_ids.is_empty() || !ctx.sefer_ids.is_empty();
     let (sefers, heleks) = if needs_ancestors {
-        (
-            sefer::Entity::find()
-                .all(db.get_connection())
-                .await
-                .map_err(internal)?,
-            helek::Entity::find()
-                .all(db.get_connection())
-                .await
-                .map_err(internal)?,
+        tokio::try_join!(
+            sefer::Entity::find().all(conn),
+            helek::Entity::find().all(conn),
         )
+        .map_err(internal)?
     } else {
         (Vec::new(), Vec::new())
     };
@@ -159,14 +155,79 @@ pub async fn resolve(
 
     // Link tables are small by design; matching in code keeps the shared
     // resolver legible and lets MockDatabase tests exercise the real filter.
+    // The reads are independent, so they run concurrently — one round trip's
+    // latency instead of ~7 sequential ones.
+    let (perek_rows, sefer_rows, helek_rows, parasha_rows, article_rows, entry_rows, masora_rows) =
+        tokio::try_join!(
+            async {
+                if ctx.perek_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                perek_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+            async {
+                if sefer_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                sefer_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+            async {
+                if helek_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                helek_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+            async {
+                if ctx.parasha_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                parasha_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+            async {
+                if ctx.article_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                article_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+            async {
+                if ctx.entry_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                tanahpedia_entry_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+            async {
+                if !ctx.masora {
+                    return Ok(Vec::new());
+                }
+                masora_dedication::Entity::find()
+                    .all(conn)
+                    .await
+                    .map_err(internal)
+            },
+        )?;
+
     let mut matched: Vec<(i32, ScopeMatch)> = Vec::new();
 
-    if !ctx.perek_ids.is_empty() {
-        for row in perek_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+    {
+        for row in perek_rows {
             if is_active(row.expires_at, now)
                 && ctx
                     .perek_ids
@@ -187,11 +248,7 @@ pub async fn resolve(
         }
     }
     if !sefer_ids.is_empty() {
-        for row in sefer_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+        for row in sefer_rows {
             if is_active(row.expires_at, now) && sefer_ids.contains(&row.sefer_id) {
                 matched.push((
                     row.dedication_id,
@@ -206,11 +263,7 @@ pub async fn resolve(
         }
     }
     if !helek_ids.is_empty() {
-        for row in helek_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+        for row in helek_rows {
             if is_active(row.expires_at, now) && helek_ids.contains(&row.helek_id) {
                 matched.push((
                     row.dedication_id,
@@ -225,11 +278,7 @@ pub async fn resolve(
         }
     }
     if !ctx.parasha_ids.is_empty() {
-        for row in parasha_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+        for row in parasha_rows {
             if is_active(row.expires_at, now) && ctx.parasha_ids.contains(&row.parasha_id) {
                 matched.push((
                     row.dedication_id,
@@ -244,11 +293,7 @@ pub async fn resolve(
         }
     }
     if !ctx.article_ids.is_empty() {
-        for row in article_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+        for row in article_rows {
             if is_active(row.expires_at, now) && ctx.article_ids.contains(&row.article_id) {
                 matched.push((
                     row.dedication_id,
@@ -263,11 +308,7 @@ pub async fn resolve(
         }
     }
     if !ctx.entry_ids.is_empty() {
-        for row in tanahpedia_entry_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+        for row in entry_rows {
             if is_active(row.expires_at, now) && ctx.entry_ids.contains(&row.entry_id) {
                 matched.push((
                     row.dedication_id,
@@ -282,11 +323,7 @@ pub async fn resolve(
         }
     }
     if ctx.masora {
-        for row in masora_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
+        for row in masora_rows {
             if is_active(row.expires_at, now) {
                 matched.push((
                     row.dedication_id,
@@ -307,7 +344,7 @@ pub async fn resolve(
     ids.dedup();
     let dedications = dedication::Entity::find()
         .filter(dedication::Column::Id.is_in(ids))
-        .all(db.get_connection())
+        .all(conn)
         .await
         .map_err(internal)?;
     hydrate(db, dedications, matched, true, now).await
@@ -316,12 +353,30 @@ pub async fn resolve(
 /// Admin listing: every dedication with every assignment, including expired —
 /// management must still inspect and edit lapsed rows.
 pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, ServiceError> {
+    let conn = db.get_connection();
+    let (
+        perek_rows,
+        sefer_rows,
+        helek_rows,
+        parasha_rows,
+        article_rows,
+        entry_rows,
+        masora_rows,
+        dedications,
+    ) = tokio::try_join!(
+        perek_dedication::Entity::find().all(conn),
+        sefer_dedication::Entity::find().all(conn),
+        helek_dedication::Entity::find().all(conn),
+        parasha_dedication::Entity::find().all(conn),
+        article_dedication::Entity::find().all(conn),
+        tanahpedia_entry_dedication::Entity::find().all(conn),
+        masora_dedication::Entity::find().all(conn),
+        dedication::Entity::find().all(conn),
+    )
+    .map_err(internal)?;
+
     let mut matched: Vec<(i32, ScopeMatch)> = Vec::new();
-    for row in perek_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in perek_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -333,11 +388,7 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    for row in sefer_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in sefer_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -348,11 +399,7 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    for row in helek_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in helek_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -363,11 +410,7 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    for row in parasha_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in parasha_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -378,11 +421,7 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    for row in article_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in article_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -393,11 +432,7 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    for row in tanahpedia_entry_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in entry_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -408,11 +443,7 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
             },
         ));
     }
-    for row in masora_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
+    for row in masora_rows {
         matched.push((
             row.dedication_id,
             ScopeMatch {
@@ -424,10 +455,6 @@ pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, Service
     // The dedication table drives the listing — a row with no assignments
     // still appears (empty scope list) so an unassigned creation neither
     // errors the mutation's post-commit read nor hides from the admin list.
-    let dedications = dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?;
     hydrate(db, dedications, matched, false, Utc::now().naive_utc()).await
 }
 
@@ -441,20 +468,21 @@ async fn hydrate(
     active_only: bool,
     now: NaiveDateTime,
 ) -> Result<Vec<DedicationAggregate>, ServiceError> {
+    let conn = db.get_connection();
     let ids: Vec<i32> = dedications.iter().map(|d| d.id).collect();
-    let purpose_links = if ids.is_empty() {
-        Vec::new()
-    } else {
-        dedication_dedication_type::Entity::find()
-            .filter(dedication_dedication_type::Column::DedicationId.is_in(ids))
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-    };
-    let types = dedication_type::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?;
+    let (purpose_links, types) = tokio::try_join!(
+        async {
+            if ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            dedication_dedication_type::Entity::find()
+                .filter(dedication_dedication_type::Column::DedicationId.is_in(ids))
+                .all(conn)
+                .await
+        },
+        dedication_type::Entity::find().all(conn),
+    )
+    .map_err(internal)?;
     let type_names: HashMap<i32, String> =
         types.into_iter().map(|t| (t.id, t.description)).collect();
     let mut purposes_by_dedication: HashMap<i32, Vec<String>> = HashMap::new();
