@@ -40,7 +40,12 @@ import { queryText } from "@/lib/api-client";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
 import type { Scored } from "./corpus";
 import { htmlToPlainText } from "./normalize";
-import { maxEdits, prepareQuery, scorePreparedText } from "./score";
+import {
+	MAX_SEARCH_SCORE,
+	maxEdits,
+	prepareQuery,
+	scorePreparedText,
+} from "./score";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
@@ -638,8 +643,24 @@ export async function searchArticles(
 		 LIMIT ${CANDIDATE_LIMIT}`,
 		params,
 	);
-	return rows
-		.map((row) => {
+	const candidates = rows.map((row) => ({
+		row,
+		titleScore: scorePreparedText(row.name, prepared) * 2,
+	}));
+	// A weighted title above the maximum body score cannot be displaced by
+	// an article matching only in its body. When titles fill the requested
+	// results, decode and score only their bodies to preserve snippet choice.
+	const dominantTitles = candidates
+		.filter(({ titleScore }) => titleScore > MAX_SEARCH_SCORE)
+		.sort(
+			(left, right) =>
+				right.titleScore - left.titleScore || left.row.id - right.row.id,
+		)
+		.slice(0, limit);
+	const finalists =
+		dominantTitles.length === limit ? dominantTitles : candidates;
+	return finalists
+		.map(({ row, titleScore }) => {
 			// Name, abstract, and content are each scored on their own: the
 			// SQL candidate may have matched only the abstract, so falling
 			// back to content alone would score a real match as zero.
@@ -660,11 +681,7 @@ export async function searchArticles(
 							? abstractPlain
 							: contentPlain || abstractPlain,
 				},
-				score: Math.max(
-					scorePreparedText(row.name, prepared) * 2,
-					contentScore,
-					abstractScore,
-				),
+				score: Math.max(titleScore, contentScore, abstractScore),
 			};
 		})
 		.filter((hit) => hit.score > 0)
