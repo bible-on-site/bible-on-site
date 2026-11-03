@@ -33,6 +33,28 @@ words to zero React elements and preserves 198 separate word/space text nodes,
 including the adjacent words separated by a canonical maqaf. These allocation
 counts do not substitute for the independent response and cadence gates.
 
+Actual normal production builds before and after the primitive-word change
+preserve every pixel across 24 poses and every character rectangle in eight
+resting chapters. These include all bookmark modes in Numbers and Kings, plus
+real qri captions in light and dark themes. The caption marker is a span rather
+than an unassociated form label, with unchanged selector specificity.
+
+| Before the allocation reduction | After the allocation reduction |
+| --- | --- |
+| ![Original word rendering](images/sefer-turn-lag/reader-parts-before.png) | ![Separate primitive word parts](images/sefer-turn-lag/reader-parts-after.png) |
+
+The [comparison provenance](images/sefer-turn-lag/reader-parts-comparison.json)
+records all 24 pairs, source trees, production build IDs and asset hashes.
+
+The opaque, viewport-sized reader overlay also contains its painting. This
+keeps fold invalidations within the reader's painted bounds; native modal
+dialogs retain the document's top layer. A same-source Linux experiment
+preserves every pixel in nine Kings poses across all bookmark modes. Separate
+control/candidate/control traces record 588/532/554ms of main-thread paint work
+over six turns. These diagnostic totals do not establish a cadence pass or a
+repeatable latency gain; the unchanged first/consecutive timing gates remain
+required after the normal production rebuild.
+
 A held-turn image guard restores inert inline
 boxes and the original transparent scripture scroller as an independent control
 in each bookmark mode. The whole
@@ -130,6 +152,19 @@ local matrix. Its [complete native samples](sefer-turn-performance.panel-baselin
 remain unqualified, including the 250.1ms maximum gap. Independent candidate
 comparisons do not replace that failed run. Reducer regression tests replay all
 12 native cases and preserve every reported timing and failure.
+
+After the primitive-word change, source tree
+`410c6696891fffa02221ebbe01907b6a95b53c6e` passes all 13 active Windows
+desktop reader checks. Worst response p95 is 101.1ms, maximum gap 83.3ms,
+overall gap p95 33.6ms, first-turn gap p95 33.4ms and consecutive-turn gap p95
+33.6ms. Its full Linux suite passes 34/35 checks: Kings with hidden bookmarks
+and dragging still fails with overall/consecutive gap p95 66.7ms. Response
+126.1ms and maximum gap 83.4ms stay within their limits. Keep that failed run
+and its separate diagnostic trace; passing desktop or candidate runs do not
+replace it. The same source passes 57 functional checks with one existing
+conditional skip, including MP3/Opus playback, all three zero-pixel held-page
+guards and visibility after every turn. Overlay containment requires a fresh
+production-build qualification.
 
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
