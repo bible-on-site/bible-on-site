@@ -91,14 +91,9 @@ export async function EntryView({ slug }: { slug: string }) {
 	// A load failure rejects the render rather than caching a page missing
 	// its breadcrumb/family/map/occurrence sections — the last good page
 	// keeps serving and the next request retries against a recovered DB.
-	const siblingEntries = (
-		primaryEntityType
-			? await getEntriesByEntityType(primaryEntityType as EntityType)
-			: await getEntries(500, 0)
-	).map((e) => ({
-		uniqueName: e.uniqueName,
-		title: e.title,
-	}));
+	const siblingEntries = primaryEntityType
+		? await getEntriesByEntityType(primaryEntityType as EntityType)
+		: await getEntries(500, 0);
 
 	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
 	const personFamily = personEntity
