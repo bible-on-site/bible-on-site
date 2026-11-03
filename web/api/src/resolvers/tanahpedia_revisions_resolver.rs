@@ -5,6 +5,8 @@ use crate::dtos::tanahpedia_entry_revision::{EntryRevision, SubmitEntryRevisionI
 use crate::providers::Database;
 use crate::services::tanahpedia_revisions_service;
 
+const MAX_REVISIONS_LIMIT: i32 = 200;
+
 #[derive(Default)]
 pub struct TanahpediaRevisionsQuery;
 
@@ -12,20 +14,31 @@ pub struct TanahpediaRevisionsQuery;
 impl TanahpediaRevisionsQuery {
     /// List Tanahpedia entry revisions (newest first) for human triage,
     /// optionally filtered by `status` (PENDING / APPLIED / REJECTED) and/or the
-    /// targeted `entryId`.
+    /// targeted `entryId`. `limit` defaults to 50 and clamps to 200, `offset`
+    /// paginates.
     async fn tanahpedia_entry_revisions(
         &self,
         ctx: &Context<'_>,
         status: Option<String>,
         entry_id: Option<String>,
+        limit: Option<i32>,
+        offset: Option<i32>,
     ) -> Result<Vec<EntryRevision>> {
+        let limit = limit.unwrap_or(50).clamp(1, MAX_REVISIONS_LIMIT) as u64;
+        let offset = offset.unwrap_or(0).max(0) as u64;
         Ok(
-            tanahpedia_revisions_service::find_revisions(ctx.data::<Database>()?, status, entry_id)
-                .await
-                .map_err(|e| e.extend())?
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            tanahpedia_revisions_service::find_revisions(
+                ctx.data::<Database>()?,
+                status,
+                entry_id,
+                limit,
+                offset,
+            )
+            .await
+            .map_err(|e| e.extend())?
+            .into_iter()
+            .map(Into::into)
+            .collect(),
         )
     }
 }
