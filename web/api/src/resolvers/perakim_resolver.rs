@@ -2,7 +2,7 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::dtos::perek::Perek;
 use crate::providers::Database;
-use crate::services::{perakim_service, reading_metrics_service};
+use crate::services::{articles_service, perakim_service, reading_metrics_service};
 
 #[derive(Default)]
 pub struct PerakimQuery;
@@ -23,6 +23,22 @@ async fn attach_perek_reading_metrics(db: &Database, perakim: &mut [Perek]) -> R
     Ok(())
 }
 
+/// Batch-attach article counts keyed by canonical perek id — one GROUP BY
+/// query regardless of list size, so selecting `articlesCount` on the
+/// 929-row `perakim` list never becomes N+1. Perakim without articles get
+/// an authoritative zero count.
+async fn attach_perek_articles_counts(db: &Database, perakim: &mut [Perek]) -> Result<()> {
+    let perek_key = |perek: &Perek| perek.perek_id.unwrap_or(perek.id);
+    let ids: Vec<i32> = perakim.iter().map(perek_key).collect();
+    let counts = articles_service::count_by_perek_ids(db, &ids)
+        .await
+        .map_err(|e| e.extend())?;
+    for perek in perakim.iter_mut() {
+        perek.precomputed_articles_count = Some(counts.get(&perek_key(perek)).copied().unwrap_or(0));
+    }
+    Ok(())
+}
+
 #[Object]
 impl PerakimQuery {
     /// Get a perek by its perek ID (1-929)
@@ -34,6 +50,9 @@ impl PerakimQuery {
                 .map_err(|e| e.extend())?,
         );
         attach_perek_reading_metrics(db, std::slice::from_mut(&mut perek)).await?;
+        if ctx.look_ahead().field("articlesCount").exists() {
+            attach_perek_articles_counts(db, std::slice::from_mut(&mut perek)).await?;
+        }
         Ok(perek)
     }
 
@@ -47,6 +66,9 @@ impl PerakimQuery {
             .map(Into::into)
             .collect();
         attach_perek_reading_metrics(db, &mut perakim).await?;
+        if ctx.look_ahead().field("articlesCount").exists() {
+            attach_perek_articles_counts(db, &mut perakim).await?;
+        }
         Ok(perakim)
     }
 
@@ -60,6 +82,9 @@ impl PerakimQuery {
             .map(Into::into)
             .collect();
         attach_perek_reading_metrics(db, &mut perakim).await?;
+        if ctx.look_ahead().field("articlesCount").exists() {
+            attach_perek_articles_counts(db, &mut perakim).await?;
+        }
         Ok(perakim)
     }
 }

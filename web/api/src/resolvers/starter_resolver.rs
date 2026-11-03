@@ -43,8 +43,18 @@ impl StarterQuery {
 
         // Convert articles to DTOs, then batch-attach reading metrics — one
         // IN query so `readingMetric` on the starter list stays O(1) (#2607).
+        // `coveringSources` gets the same treatment when selected so the
+        // full-table list never becomes N+1.
         let mut articles: Vec<Article> = all_articles.into_iter().map(Article::from).collect();
         super::articles_resolver::attach_article_reading_metrics(db, &mut articles).await?;
+        if ctx
+            .look_ahead()
+            .field("articles")
+            .field("coveringSources")
+            .exists()
+        {
+            super::articles_resolver::attach_article_covering_sources(db, &mut articles).await?;
+        }
 
         Ok(Starter {
             authors: authors_with_counts,

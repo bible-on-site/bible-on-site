@@ -41,6 +41,11 @@ pub struct Article {
     /// abstract (issue #2607). `null` = unknown/not computed; a populated
     /// metric with wordCount 0 = verified empty body.
     pub reading_metric: Option<ReadingMetric>,
+    /// Covering sources preloaded by list resolvers in one batched query —
+    /// `None` means they were not preloaded and resolve on demand
+    /// (single-article fields), `Some` is authoritative (possibly empty).
+    #[graphql(skip)]
+    pub covering_sources: Option<Vec<ArticleCoveringSource>>,
 }
 
 impl From<Model> for Article {
@@ -55,6 +60,7 @@ impl From<Model> for Article {
             priority: value.priority as i32,
             coverage_verified: value.coverage_verified,
             reading_metric: None,
+            covering_sources: None,
         }
     }
 }
@@ -66,6 +72,9 @@ impl Article {
     /// mapped — interpret it through coverage_verified (verified-empty is
     /// rejected on write, so empty + verified does not occur in practice).
     async fn covering_sources(&self, ctx: &Context<'_>) -> Result<Vec<ArticleCoveringSource>> {
+        if let Some(sources) = &self.covering_sources {
+            return Ok(sources.clone());
+        }
         let sources =
             articles_service::find_covering_sources_by_article_id(ctx.data::<Database>()?, self.id)
                 .await?;

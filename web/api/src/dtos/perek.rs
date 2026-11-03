@@ -132,6 +132,11 @@ pub struct Perek {
     /// Shared persisted reading metrics over the complete perek text
     /// (issue #2607). `null` = unknown/not computed.
     pub reading_metric: Option<ReadingMetric>,
+    /// Article count preloaded by list resolvers in one batched GROUP BY
+    /// query — `None` means it was not preloaded and resolves on demand
+    /// (single-perek fields), `Some` is authoritative (possibly zero).
+    #[graphql(skip)]
+    pub precomputed_articles_count: Option<i64>,
 }
 
 impl From<Model> for Perek {
@@ -169,6 +174,7 @@ impl From<Model> for Perek {
             compiled_source,
             pasuk_count: value.pasuk_count.map(|count| count as i32),
             reading_metric: None,
+            precomputed_articles_count: None,
         }
     }
 }
@@ -178,6 +184,9 @@ impl Perek {
     /// Returns the count of articles for this perek
     #[graphql(name = "articlesCount")]
     async fn articles_count(&self, ctx: &Context<'_>) -> Result<i64> {
+        if let Some(count) = self.precomputed_articles_count {
+            return Ok(count);
+        }
         // Use perek_id (1-929) for counting, not the DB id
         let perek_id = self.perek_id.unwrap_or(self.id);
         let db = ctx.data::<Database>()?;
@@ -399,6 +408,7 @@ mod tests {
                     compiled_source: None,
                     pasuk_count: None,
                     reading_metric: None,
+                    precomputed_articles_count: None,
                 }
             }
         }
@@ -414,5 +424,45 @@ mod tests {
         assert!(res.errors.is_empty(), "{:?}", res.errors);
         let units = res.data.into_json().unwrap()["perek"]["progressUnits"].clone();
         assert!(units.as_array().unwrap().is_empty());
+    }
+
+    /// A perek with a preloaded count answers `articlesCount` without touching
+    /// the database — the list path batch-loads counts in one GROUP BY query.
+    #[tokio::test]
+    async fn articles_count_returns_the_precomputed_count_without_a_db_query() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn perek(&self) -> Perek {
+                Perek {
+                    id: 7,
+                    perek_id: Some(42),
+                    sefer_id: None,
+                    additional: None,
+                    perek: None,
+                    date: None,
+                    hebdate: None,
+                    compiled_hebdate: None,
+                    tseit: None,
+                    header: None,
+                    compiled_source: None,
+                    pasuk_count: None,
+                    reading_metric: None,
+                    precomputed_articles_count: Some(3),
+                }
+            }
+        }
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+
+        let res = schema.execute("{ perek { articlesCount } }").await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let count = res.data.into_json().unwrap()["perek"]["articlesCount"].clone();
+        assert_eq!(count.as_i64(), Some(3));
     }
 }

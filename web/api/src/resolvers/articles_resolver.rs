@@ -1,6 +1,6 @@
 use async_graphql::{Context, ErrorExtensions, Object, Result};
 
-use crate::dtos::article::{Article, ArticleSearchResults};
+use crate::dtos::article::{Article, ArticleCoveringSource, ArticleSearchResults};
 use crate::providers::Database;
 use crate::services::article_search::ArticleSearchIndex;
 use crate::services::{articles_service, reading_metrics_service};
@@ -21,6 +21,33 @@ pub(crate) async fn attach_article_reading_metrics(
         .map_err(|e| e.extend())?;
     for article in articles.iter_mut() {
         article.reading_metric = metrics.get(&article.id).cloned().map(Into::into);
+    }
+    Ok(())
+}
+
+/// Batch-attach covering sources to emitted articles — one IN query
+/// regardless of list size, so selecting `coveringSources` on a list never
+/// becomes N+1. Articles without rows get an authoritative empty list.
+pub(crate) async fn attach_article_covering_sources(
+    db: &Database,
+    articles: &mut [Article],
+) -> Result<()> {
+    let ids: Vec<i32> = articles.iter().map(|article| article.id).collect();
+    let mut sources = articles_service::find_covering_sources_by_article_ids(db, &ids)
+        .await
+        .map_err(|e| e.extend())?;
+    for article in articles.iter_mut() {
+        article.covering_sources = Some(
+            sources
+                .remove(&article.id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|model| ArticleCoveringSource {
+                    perek_id: model.perek_id,
+                    pasuk: model.pasuk as i32,
+                })
+                .collect(),
+        );
     }
     Ok(())
 }
@@ -82,6 +109,9 @@ impl ArticlesQuery {
         if ctx.look_ahead().field("readingMetric").exists() {
             attach_article_reading_metrics(db, std::slice::from_mut(&mut article)).await?;
         }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, std::slice::from_mut(&mut article)).await?;
+        }
         Ok(article)
     }
 
@@ -96,6 +126,9 @@ impl ArticlesQuery {
             .collect();
         if ctx.look_ahead().field("readingMetric").exists() {
             attach_article_reading_metrics(db, &mut articles).await?;
+        }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, &mut articles).await?;
         }
         Ok(articles)
     }
@@ -115,6 +148,9 @@ impl ArticlesQuery {
             .collect();
         if ctx.look_ahead().field("readingMetric").exists() {
             attach_article_reading_metrics(db, &mut articles).await?;
+        }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, &mut articles).await?;
         }
         Ok(articles)
     }
