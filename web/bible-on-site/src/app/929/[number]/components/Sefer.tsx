@@ -1,7 +1,6 @@
 "use client";
 import type {
 	Bookmark,
-	BookmarkContext,
 	BookmarkProvider,
 	FlipBookHandle,
 	HistoryMapper,
@@ -58,8 +57,8 @@ import type {
 import {
 	getSeferBookmarkServerSnapshot,
 	getSeferBookmarkSnapshot,
+	SEFER_BOOKMARK_PRESENTATION,
 	saveSeferBookmarkSettings,
-	seferBookmarkProviderOrder,
 	subscribeSeferBookmarks,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
@@ -84,8 +83,6 @@ import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
 	buildSeferChapterBookmarks,
-	compareSeferBookmarkTitles,
-	filterUpcomingBookmarks,
 	type SeferBookmarkData,
 } from "./sefer-bookmarks";
 import {
@@ -270,8 +267,8 @@ const Sefer = (props: {
 	// Toolbar show/hide (issue #2543): the toggle shares the one persisted
 	// visibility state with תצוגה -> סימניות and the flipbook's
 	// enableBookmarks flag — the save broadcasts to both. Merge over the
-	// live snapshot so placement/orientation/attachment/order choices are
-	// preserved; only the page-turn layer flips, position is untouched.
+	// live snapshot so the attachment choice is preserved; only the
+	// page-turn layer flips, position is untouched.
 	const toggleBookmarks = useCallback(
 		(enabled: boolean) =>
 			saveSeferBookmarkSettings({
@@ -282,12 +279,9 @@ const Sefer = (props: {
 	);
 	const bookmarkProvider = useMemo<BookmarkProvider>(
 		() => ({
-			getBookmarks: (context: BookmarkContext) =>
-				filterUpcomingBookmarks(
-					chapterBookmarks,
-					context,
-					bookmarkSettings.upcomingOnly,
-				),
+			// All chapters stay reachable — issue #2974 retired the
+			// upcoming-only filter.
+			getBookmarks: () => chapterBookmarks,
 			renderBookmark: (bookmark: Bookmark) => (
 				<span className="sefer-bookmark-label">
 					{(bookmark.data as SeferBookmarkData).compact}
@@ -311,16 +305,11 @@ const Sefer = (props: {
 					</span>
 				);
 			},
-			orientation: bookmarkSettings.orientation,
+			...SEFER_BOOKMARK_PRESENTATION,
 			attachment: bookmarkSettings.attachment,
-			placement: bookmarkSettings.placement,
-			order: seferBookmarkProviderOrder(
-				bookmarkSettings,
-				compareSeferBookmarkTitles,
-			),
 			className: "sefer-bookmarks",
 		}),
-		[chapterBookmarks, bookmarkSettings, seferColor],
+		[chapterBookmarks, bookmarkSettings.attachment, seferColor],
 	);
 
 	// Document-title sync (issue #2176): the library's onPageFlipped marks when

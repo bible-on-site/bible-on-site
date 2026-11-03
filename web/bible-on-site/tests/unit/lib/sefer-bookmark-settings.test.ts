@@ -5,10 +5,10 @@ import {
 	getSeferBookmarkSettings,
 	getSeferBookmarkSnapshot,
 	normalizeSeferBookmarkSettings,
+	SEFER_BOOKMARK_PRESENTATION,
 	SEFER_BOOKMARKS_EVENT,
 	SEFER_BOOKMARKS_KEY,
 	saveSeferBookmarkSettings,
-	seferBookmarkProviderOrder,
 	subscribeSeferBookmarks,
 } from "@/lib/sefer-bookmark-settings";
 
@@ -35,58 +35,49 @@ describe("normalizeSeferBookmarkSettings", () => {
 				DEFAULT_SEFER_BOOKMARK_SETTINGS,
 			);
 	});
-	it("rejects option values outside each field's allowed set", () => {
+	it("keeps the two live choices and drops retired legacy keys (#2974)", () => {
 		const normalized = normalizeSeferBookmarkSettings({
-			enabled: true,
-			placement: "inside",
-			orientation: "diagonal",
-			attachment: "glue",
-			order: "alphabetical",
-			upcomingOnly: "yes",
-		});
-		expect(normalized).toEqual({
-			...DEFAULT_SEFER_BOOKMARK_SETTINGS,
-			enabled: true,
-		});
-	});
-	it("keeps valid choices", () =>
-		expect(
-			normalizeSeferBookmarkSettings({
-				enabled: false,
-				placement: "top",
-				orientation: "parallel",
-				attachment: "pinned",
-				order: "reverse-page",
-				upcomingOnly: true,
-			}),
-		).toEqual({
 			enabled: false,
+			attachment: "pinned",
 			placement: "top",
 			orientation: "parallel",
-			attachment: "pinned",
-			order: "reverse-page",
+			order: "title",
 			upcomingOnly: true,
-		}));
+		});
+		expect(normalized).toEqual({ enabled: false, attachment: "pinned" });
+	});
+	it("rejects values outside each live field's allowed set", () =>
+		expect(
+			normalizeSeferBookmarkSettings({
+				enabled: true,
+				attachment: "glue",
+			}),
+		).toEqual(DEFAULT_SEFER_BOOKMARK_SETTINGS));
 	it("falls back to the default for a non-boolean enabled flag", () =>
 		expect(normalizeSeferBookmarkSettings({ enabled: "yes" }).enabled).toBe(
 			true,
 		));
+	it("normalizes only the two live fields — the result has no retired keys", () => {
+		const normalized = normalizeSeferBookmarkSettings({
+			placement: "left",
+			order: "reverse-page",
+			upcomingOnly: true,
+		});
+		expect(Object.keys(normalized).sort()).toEqual([
+			"attachment",
+			"enabled",
+		]);
+	});
 });
 
-describe("defaults (#2543)", () => {
-	it("defaults to enabled tabs on both sides when nothing was stored", () => {
+describe("defaults (#2543, #2974)", () => {
+	it("defaults to enabled leaf tabs when nothing was stored", () => {
 		localStorage.clear();
 		expect(getSeferBookmarkSettings()).toEqual(DEFAULT_SEFER_BOOKMARK_SETTINGS);
-		expect(getSeferBookmarkSettings()).toEqual(
-			expect.objectContaining({
-				enabled: true,
-				placement: "sides",
-				orientation: "perpendicular",
-				attachment: "leaf",
-				order: "page",
-				upcomingOnly: false,
-			}),
-		);
+		expect(getSeferBookmarkSettings()).toEqual({
+			enabled: true,
+			attachment: "leaf",
+		});
 	});
 	it("keeps a stored disabled toggle", () => {
 		localStorage.setItem(
@@ -95,16 +86,31 @@ describe("defaults (#2543)", () => {
 		);
 		const s = getSeferBookmarkSettings();
 		expect(s.enabled).toBe(false);
-		expect(s.placement).toBe("sides");
+		expect(s.attachment).toBe("leaf");
 	});
+	it("keeps a stored pinned attachment", () => {
+		localStorage.setItem(
+			SEFER_BOOKMARKS_KEY,
+			JSON.stringify({ attachment: "pinned" }),
+		);
+		expect(getSeferBookmarkSettings().attachment).toBe("pinned");
+	});
+});
+
+describe("fixed presentation contract (#2974)", () => {
+	it("pins the retired provider fields to their fixed values", () =>
+		expect(SEFER_BOOKMARK_PRESENTATION).toEqual({
+			placement: "sides",
+			orientation: "perpendicular",
+			order: "page",
+		}));
 });
 
 describe("persistence and change notifications", () => {
 	it("round-trips settings through localStorage", () => {
 		const settings = normalizeSeferBookmarkSettings({
 			enabled: false,
-			placement: "bottom",
-			order: "title",
+			attachment: "pinned",
 		});
 		saveSeferBookmarkSettings(settings);
 		expect(
@@ -112,12 +118,29 @@ describe("persistence and change notifications", () => {
 		).toEqual(settings);
 		expect(getSeferBookmarkSettings()).toEqual(settings);
 	});
-	it("persists only serializable values — no functions in storage", () => {
-		saveSeferBookmarkSettings({ order: "title" });
-		expect(localStorage.getItem(SEFER_BOOKMARKS_KEY)).not.toContain("(");
+	it("writes only the live fields — legacy keys are not persisted", () => {
+		// A legacy-shaped caller object spreading retired fields must not
+		// leak them back into storage.
+		const legacy = {
+			enabled: false,
+			attachment: "pinned",
+			placement: "top",
+			orientation: "parallel",
+			order: "title",
+			upcomingOnly: true,
+		} as const;
+		saveSeferBookmarkSettings(legacy);
 		expect(
 			JSON.parse(localStorage.getItem(SEFER_BOOKMARKS_KEY) ?? "null"),
-		).toEqual(expect.objectContaining({ order: "title" }));
+		).toEqual({ enabled: false, attachment: "pinned" });
+	});
+	it("partial updates keep the other live preference", () => {
+		saveSeferBookmarkSettings({ enabled: false, attachment: "pinned" });
+		saveSeferBookmarkSettings({ ...getSeferBookmarkSnapshot(), enabled: true });
+		expect(getSeferBookmarkSettings()).toEqual({
+			enabled: true,
+			attachment: "pinned",
+		});
 	});
 	it("falls back to defaults when stored JSON is malformed", () => {
 		localStorage.setItem(SEFER_BOOKMARKS_KEY, "{oops");
@@ -131,51 +154,51 @@ describe("persistence and change notifications", () => {
 			.mockImplementation(() => {
 				throw new DOMException("QuotaExceededError");
 			});
-		saveSeferBookmarkSettings({ placement: "top" });
-		expect(getSeferBookmarkSnapshot().placement).toBe("top");
+		saveSeferBookmarkSettings({ attachment: "pinned" });
+		expect(getSeferBookmarkSnapshot().attachment).toBe("pinned");
 		spy.mockRestore();
 	});
 	it("dispatches a change event whose detail carries the settings", () => {
 		const seen: string[] = [];
 		const unsubscribe = subscribeSeferBookmarks(() =>
-			seen.push(getSeferBookmarkSnapshot().placement),
+			seen.push(getSeferBookmarkSnapshot().attachment),
 		);
-		saveSeferBookmarkSettings({ placement: "top" });
-		expect(seen).toEqual(["top"]);
+		saveSeferBookmarkSettings({ attachment: "pinned" });
+		expect(seen).toEqual(["pinned"]);
 		unsubscribe();
-		saveSeferBookmarkSettings({ placement: "left" });
-		expect(seen).toEqual(["top"]);
+		saveSeferBookmarkSettings({ attachment: "leaf" });
+		expect(seen).toEqual(["pinned"]);
 	});
 	it("re-reads localStorage on cross-tab storage events", () => {
 		const unsubscribe = subscribeSeferBookmarks(() => {});
-		expect(getSeferBookmarkSnapshot().placement).toBe("sides");
+		expect(getSeferBookmarkSnapshot().attachment).toBe("leaf");
 		localStorage.setItem(
 			SEFER_BOOKMARKS_KEY,
-			JSON.stringify({ placement: "right" }),
+			JSON.stringify({ attachment: "pinned" }),
 		);
 		// Events for other keys are ignored; only our key re-reads.
 		window.dispatchEvent(storageEvent("otherPref"));
-		expect(getSeferBookmarkSnapshot().placement).toBe("sides");
+		expect(getSeferBookmarkSnapshot().attachment).toBe("leaf");
 		window.dispatchEvent(storageEvent(SEFER_BOOKMARKS_KEY));
-		expect(getSeferBookmarkSnapshot().placement).toBe("right");
+		expect(getSeferBookmarkSnapshot().attachment).toBe("pinned");
 		unsubscribe();
 	});
 	it("refreshes the stale snapshot when the first subscriber returns", () => {
 		const first = subscribeSeferBookmarks(() => {});
-		expect(getSeferBookmarkSnapshot().placement).toBe("sides");
+		expect(getSeferBookmarkSnapshot().attachment).toBe("leaf");
 		first();
 		// Another tab writes while no storage listener is attached; the
 		// cached snapshot can no longer observe the change.
 		localStorage.setItem(
 			SEFER_BOOKMARKS_KEY,
-			JSON.stringify({ placement: "bottom" }),
+			JSON.stringify({ attachment: "pinned" }),
 		);
 		const seen: string[] = [];
 		const second = subscribeSeferBookmarks(() =>
-			seen.push(getSeferBookmarkSnapshot().placement),
+			seen.push(getSeferBookmarkSnapshot().attachment),
 		);
-		expect(getSeferBookmarkSnapshot().placement).toBe("bottom");
-		expect(seen).toEqual(["bottom"]);
+		expect(getSeferBookmarkSnapshot().attachment).toBe("pinned");
+		expect(seen).toEqual(["pinned"]);
 		second();
 	});
 	it("does not notify the first subscriber when nothing changed", () => {
@@ -195,14 +218,14 @@ describe("persistence and change notifications", () => {
 		const fresh = await import("@/lib/sefer-bookmark-settings");
 		localStorage.setItem(
 			fresh.SEFER_BOOKMARKS_KEY,
-			JSON.stringify({ placement: "top" }),
+			JSON.stringify({ attachment: "pinned" }),
 		);
 		const seen: string[] = [];
 		const unsubscribe = fresh.subscribeSeferBookmarks(() =>
-			seen.push(fresh.getSeferBookmarkSnapshot().placement),
+			seen.push(fresh.getSeferBookmarkSnapshot().attachment),
 		);
-		expect(fresh.getSeferBookmarkSnapshot().placement).toBe("top");
-		expect(seen).toEqual(["top"]);
+		expect(fresh.getSeferBookmarkSnapshot().attachment).toBe("pinned");
+		expect(seen).toEqual(["pinned"]);
 		unsubscribe();
 	});
 	it("keeps the snapshot object stable between changes", () => {
@@ -212,7 +235,7 @@ describe("persistence and change notifications", () => {
 		expect(getSeferBookmarkSnapshot()).not.toBe(first);
 	});
 	it("serves the defaults to SSR so hydration agrees with a fresh client", () => {
-		saveSeferBookmarkSettings({ enabled: false, placement: "left" });
+		saveSeferBookmarkSettings({ enabled: false, attachment: "pinned" });
 		expect(getSeferBookmarkServerSnapshot()).toEqual(
 			DEFAULT_SEFER_BOOKMARK_SETTINGS,
 		);
@@ -222,39 +245,11 @@ describe("persistence and change notifications", () => {
 			window.addEventListener(
 				SEFER_BOOKMARKS_EVENT,
 				(event) => {
-					expect((event as CustomEvent).detail.placement).toBe("bottom");
+					expect((event as CustomEvent).detail.attachment).toBe("pinned");
 					resolve();
 				},
 				{ once: true },
 			);
-			saveSeferBookmarkSettings({ placement: "bottom" });
+			saveSeferBookmarkSettings({ attachment: "pinned" });
 		}));
-});
-
-describe("seferBookmarkProviderOrder", () => {
-	const titleOrder = (a: { label: string }, b: { label: string }) =>
-		a.label.localeCompare(b.label);
-
-	it("passes through page and reverse-page orders", () => {
-		expect(
-			seferBookmarkProviderOrder(
-				normalizeSeferBookmarkSettings({ order: "page" }),
-				titleOrder,
-			),
-		).toBe("page");
-		expect(
-			seferBookmarkProviderOrder(
-				normalizeSeferBookmarkSettings({ order: "reverse-page" }),
-				titleOrder,
-			),
-		).toBe("reverse-page");
-	});
-	it("maps the serializable title enum to the comparator", () => {
-		expect(
-			seferBookmarkProviderOrder(
-				normalizeSeferBookmarkSettings({ order: "title" }),
-				titleOrder,
-			),
-		).toBe(titleOrder);
-	});
 });

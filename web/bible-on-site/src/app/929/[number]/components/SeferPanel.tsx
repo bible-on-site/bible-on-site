@@ -27,7 +27,6 @@ import {
 } from "../actions";
 import { ArticleFullView } from "./ArticleFullView";
 import { ShareButton } from "./ShareButton";
-import seferStyles from "./sefer.module.css";
 import {
 	articleDocumentTitle,
 	perushDocumentTitle,
@@ -588,7 +587,7 @@ export function SeferPanel({
 	return (
 		<section
 			ref={rootRef}
-			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
+			className={`${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
 			inert={articleFullscreen}
 		>
@@ -689,12 +688,6 @@ export function SeferPanel({
 											title={perush.parshanName}
 											onClick={() => togglePerush(perush.id)}
 										>
-											<span
-												className={styles.perushTagCheck}
-												aria-hidden="true"
-											>
-												✓
-											</span>
 											<span>{perush.name}</span>
 										</button>
 									</li>
@@ -935,7 +928,10 @@ export function SeferPanel({
 					</div>
 
 					{selectedArticle && (
-						<div className={styles.panelArticleOverlay}>
+						<div
+							className={styles.panelArticleOverlay}
+							data-flipbook-no-flip
+						>
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
