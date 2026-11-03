@@ -45,6 +45,13 @@ reclassification without redundant class writes. The
 [actual old/new reader captures](https://github.com/doradsoft/html-flip-book/blob/dd02ed799f405840d155594d7a471023fcdee720/docs/images/sefer-shadow-comparison.json)
 preserve every pixel across 18 page poses and every recorded character rectangle.
 
+Commentary panels also keep stable chapter navigation callbacks and reuse their
+rendered trees when their props have not changed. A turn should update the two
+panels whose active state changes, while covered panels keep their existing
+content. Regression tests check that an unchanged covered panel repeats no
+commentary eligibility work, activation still updates it, and navigation follows
+new chapter IDs when the corpus changes.
+
 Read input coordinates before starting the probe and use native input at those
 fixed positions. During measured handoffs, wait only for the committed chapter,
 completed motion and nonempty page text. Visibility and geometry queries can
@@ -78,6 +85,13 @@ cases in [hosted CI](https://github.com/bible-on-site/bible-on-site/actions/runs
 including independent first-turn failures with moving bookmarks. Its original
 samples remain failed; profiled diagnostic runs and passing local runs do not
 replace them or relax the limits.
+
+The subsequent alpha.104 [hosted run](https://github.com/bible-on-site/bible-on-site/actions/runs/41528676321)
+passed 30/37 performance checks but still failed seven reader cadence cases.
+Response stayed below 200ms and maximum gaps below 100ms; first-turn gap p95
+reached 83.3ms and consecutive-turn gap p95 reached 66.7ms. The paper opacity
+animations were absent in those diagnostics. Keep these failures alongside the
+local passes: the released shadow fix alone does not establish hosted delivery.
 
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.

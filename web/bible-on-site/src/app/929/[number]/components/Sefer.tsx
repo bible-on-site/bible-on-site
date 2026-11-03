@@ -222,6 +222,16 @@ const Sefer = (props: {
 				: sefer.additionals.flatMap((additional) => additional.perakim),
 		[sefer],
 	);
+	// A turn changes only the active panels. Keep each chapter's navigation
+	// stable so covered panels can reuse their rendered commentary trees.
+	const navigateFromPage = useMemo(
+		() =>
+			perekIds?.map(
+				(perekId) => (slug?: string) =>
+					contentNavigation.navigate(perekId, slug),
+			),
+		[perekIds, contentNavigation.navigate],
+	);
 
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
 	const closeBookshelf = useCallback(() => setIsBookshelfOpen(false), []);
@@ -628,11 +638,7 @@ const Sefer = (props: {
 									? contentNavigation.content.slug
 									: undefined
 							}
-							onNavigate={
-								pagePerekId == null
-									? undefined
-									: (slug) => contentNavigation.navigate(pagePerekId, slug)
-							}
+							onNavigate={navigateFromPage?.[perekIdx]}
 							perekTitleParts={seferPerekTitles[perekIdx]}
 							onContentTitle={
 								contentNavigation.content != null &&
@@ -657,7 +663,7 @@ const Sefer = (props: {
 			hebrewDateStr,
 			seferPerekTitles,
 			contentNavigation.content,
-			contentNavigation.navigate,
+			navigateFromPage,
 		],
 	);
 

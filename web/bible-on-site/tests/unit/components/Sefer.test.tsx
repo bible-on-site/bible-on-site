@@ -398,6 +398,52 @@ describe("Sefer component", () => {
 		expect(panel().initialSlug).toBeUndefined();
 		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
 	});
+	it("keeps chapter navigation stable across turns and refreshes it for a new corpus", async () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2, 3],
+			sefer: { ...original, perakim: [chapter, chapter, chapter] },
+		};
+		const previousUrl = location.pathname + location.search;
+		const previousState = history.state;
+		const view = render(<SeferContents {...props} />);
+		const navigate = (index: number) => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{
+				children: React.ReactElement<{ onNavigate: (slug?: string) => void }>;
+			}>[];
+			return pages[4 + index * 2].props.children.props.onNavigate;
+		};
+		try {
+			await act(async () => {});
+			const before = [navigate(0), navigate(1), navigate(2)];
+			mockGetCurrentPageIndex.mockReturnValue(5);
+			await act(async () =>
+				(
+					capturedFlipBookProps.handlers as { onPageFlipped: () => void }
+				).onPageFlipped(),
+			);
+			for (const [index, callback] of before.entries())
+				expect(navigate(index)).toBe(callback);
+			act(() => navigate(2)("222"));
+			expect(location.pathname).toBe("/929/3/222");
+			await act(async () =>
+				view.rerender(<SeferContents {...props} perekIds={[11, 12, 13]} />),
+			);
+			expect(navigate(1)).not.toBe(before[1]);
+			act(() => navigate(1)());
+			expect(location.pathname + location.search).toBe("/929/12?book");
+		} finally {
+			view.unmount();
+			history.replaceState(previousState, "", previousUrl);
+		}
+	});
 	it("refreshes scripture when the book corpus changes", () => {
 		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
 		const sefer = getSeferByName(minimalPerek.sefer);
