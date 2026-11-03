@@ -22,6 +22,8 @@ export const COLLECTION_TAGS = {
 	perushim: "perushim",
 	pediaEntityRefs: "tanahpedia-entity-refs",
 	pediaMentionRefs: "tanahpedia-mention-refs",
+	pediaLanding: "tanahpedia-landing",
+	pediaEntries: "tanahpedia-entries",
 	perekImages: "perek-images",
 	/**
 	 * Every cached dedication read — the operator escape hatch and the
@@ -115,23 +117,34 @@ export const mentionRefsTag = (perekId: number) =>
 	`perek:${perekId}:mention-refs`;
 
 /**
+ * Entries listed under one pedia category (entity type) — the entry-page
+ * sibling dropdown and category listings. Emitted per entity type so an
+ * entry change expires only the categories it belongs to.
+ */
+export const pediaCategoryTag = (entityType: string) =>
+	`pedia-category:${entityType}`;
+
+/**
  * `unstable_cache` tags are fixed per cache definition, so per-entity
  * invalidation needs one cached function per entity key. This factory
  * memoizes a `unstable_cache` instance per key: `keyOf` derives the
  * entity key (also part of the cache key so entries never collide — the
  * invocation args ride along in the key as well) and `tagsFor` returns
  * its collection + entity tags. A thrown loader error is never cached —
- * the next call re-runs the loader. Entries hold no time bound: every
- * consumer is a fully static route, so a positive `revalidate` here would
- * propagate to each route's `initialRevalidateSeconds` and turn the
- * reading surface into ISR; expiry is event-driven via `revalidateTag`
- * (see src/lib/dedications/loaders.ts).
+ * the next call re-runs the loader. By default entries hold no time
+ * bound: every consumer is a fully static route, so a positive
+ * `revalidate` here would propagate to each route's
+ * `initialRevalidateSeconds` and turn the reading surface into ISR;
+ * expiry is event-driven via `revalidateTag` (see
+ * src/lib/dedications/loaders.ts). Pass `revalidate` only for loaders
+ * consumed exclusively by dynamic routes.
  */
 export function cachedPerKey<A extends unknown[], R>(
 	baseKey: string,
 	keyOf: (...args: A) => string,
 	tagsFor: (key: string) => string[],
 	loader: (...args: A) => Promise<R>,
+	revalidate?: number | false,
 ): (...args: A) => Promise<R> {
 	const instances = new Map<string, (...args: A) => Promise<R>>();
 	return (...args: A) => {
@@ -140,7 +153,7 @@ export function cachedPerKey<A extends unknown[], R>(
 		if (!fn) {
 			fn = unstable_cache((...a: A) => loader(...a), [baseKey, key], {
 				tags: tagsFor(key),
-				revalidate: false,
+				revalidate: revalidate ?? false,
 			});
 			instances.set(key, fn);
 		}

@@ -20,6 +20,9 @@ import {
 	getEntriesBySynonym,
 	getEntryByUniqueName,
 	getEntryOccurrences,
+	getAllEntrySummaries,
+	getEntityTypeEntrySummaries,
+	getRecentEntrySummaries,
 	getPersonFamilySummary,
 	getPlaceIdentifications,
 	getPlaceMapMarkers,
@@ -536,6 +539,50 @@ describe("tanahpedia service", () => {
 		expect(mockQuery).toHaveBeenLastCalledWith(expect.any(String), ["10"]);
 
 		await expect(getAllEntryUniqueNames()).resolves.toEqual(["אברהם", "שרה"]);
+	});
+
+	it("queries recent entry summaries without the content body", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ id: "entry-recent", uniqueName: "entry-recent", title: "recent" },
+		]);
+
+		await expect(getRecentEntrySummaries(3)).resolves.toEqual([
+			{ id: "entry-recent", uniqueName: "entry-recent", title: "recent" },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+			),
+			["3"],
+		);
+		expect(mockQuery.mock.calls[0][0]).not.toContain("content");
+	});
+
+	it("queries entity-type entry summaries without the content body", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ id: "entry-place", uniqueName: "ירושלים", title: "ירושלים" },
+		]);
+
+		await expect(getEntityTypeEntrySummaries("PLACE")).resolves.toEqual([
+			{ id: "entry-place", uniqueName: "ירושלים", title: "ירושלים" },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("WHERE e.entity_type = ?"),
+			["PLACE"],
+		);
+		expect(mockQuery.mock.calls[0][0]).not.toContain(" content");
+	});
+
+	it("queries all entry summaries ordered by title", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ id: "entry-1", uniqueName: "אברהם", title: "אברהם" },
+		]);
+
+		await expect(getAllEntrySummaries(500, 0)).resolves.toEqual([
+			{ id: "entry-1", uniqueName: "אברהם", title: "אברהם" },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["500", "0"]);
+		expect(mockQuery.mock.calls[0][0]).not.toContain(" content");
 	});
 
 	it("queries distinct synonym names that are not canonical entry names", async () => {
