@@ -24,6 +24,23 @@ also failed cadence in nine scenarios, including first moving-bookmark turns.
 Every response stayed below 200ms; cadence p95 reached 66.7ms. Passing local
 results do not replace these hosted failures.
 
+The [run on `8cd29fbbd`](https://github.com/bible-on-site/bible-on-site/actions/runs/41643482118)
+failed four cadence scenarios; all response p95 values stayed within 129.1ms.
+Its normal local production build passed 34/35 checks, with an 83.3ms first-turn
+cadence p95 in Numbers with moving bookmarks. Both failures remain recorded.
+
+A moving-bookmark Chromium trace also found 97 `body` style invalidations
+from the navigation's descendant `:has()` selector. The nav and route marker
+are body siblings, so the nav now checks its following layout sibling directly.
+The root scrollbar check likewise considers only the direct route marker.
+The [diagnostic record](sefer-turn-performance.navigation-invalidation.json)
+retains the matched trace, unchanged selector matches, all 24 zero-pixel
+comparisons, and the complete 6x CPU timing comparison. The new trace has no
+`:has()` invalidations, but the unprofiled 6x comparison still fails cadence
+and includes a candidate response of 205.8ms with a 183.3ms maximum gap.
+Those diagnostic samples do not establish release qualification or replace
+the original 4x production and hosted gates. No limit or deadline changes.
+
 The fixed desktop profile uses full Chromium, visible scrollbars, a 1440x900
 viewport, 4x CPU slowdown, one worker and zero retries. The performance
 configuration serializes all projects so another browser test cannot contend

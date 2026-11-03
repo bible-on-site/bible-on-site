@@ -16,11 +16,12 @@
    scroll at the root (e.g. /dev/sefer). On perek pages the reader scrolls
    inside .perekContainer and the root shows no scrollbar, so a lock-time
    gutter would itself add/remove ~15px of width per toggle and become the
-   shift it was meant to prevent. */
+   shift it was meant to prevent. The route marker is a direct body child;
+   restrict that check so reader descendant changes do not invalidate it. */
 html[data-sefer-view] {
 	overflow: hidden;
 }
-html[data-sefer-view]:not(:has(.perek-layout)) {
+html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	scrollbar-gutter: stable;
 }
 
