@@ -217,11 +217,46 @@ test("selectFeatures announces entries absent or disabled at baseline", () => {
 		baselineTag: "app-v5.1.7",
 		tag: "app-v5.1.8",
 		dir: DIR,
+		platform: "android",
 		git,
 	});
 	assert.deepEqual(
 		features.map((f) => f.id).sort(),
 		["brand-new.json", "pending.json"],
+	);
+});
+
+test("selectFeatures announces a platform expansion to the new audience only", () => {
+	const git = fixtureGit({
+		// 5.1.7 shipped the reader on Android only; 5.1.8 adds iOS.
+		"app-v5.1.7": {
+			"reader.json": entry({ platforms: ["android"] }),
+		},
+		"app-v5.1.8": {
+			"reader.json": entry({ platforms: ["android", "ios"] }),
+		},
+	});
+	// iOS users were never told — the entry is new to their audience.
+	assert.deepEqual(
+		selectFeatures({
+			baselineTag: "app-v5.1.7",
+			tag: "app-v5.1.8",
+			dir: DIR,
+			platform: "ios",
+			git,
+		}).map((f) => f.id),
+		["reader.json"],
+	);
+	// Android already heard about it — no repeat announcement.
+	assert.deepEqual(
+		selectFeatures({
+			baselineTag: "app-v5.1.7",
+			tag: "app-v5.1.8",
+			dir: DIR,
+			platform: "android",
+			git,
+		}),
+		[],
 	);
 });
 
@@ -241,6 +276,7 @@ test("selectFeatures covers skipped intermediate versions and reverted work", ()
 		baselineTag: "app-v5.1.4",
 		tag: "app-v5.1.8",
 		dir: DIR,
+		platform: "android",
 		git,
 	});
 	assert.deepEqual(
@@ -249,7 +285,7 @@ test("selectFeatures covers skipped intermediate versions and reverted work", ()
 	);
 	// No baseline at all (first release): everything enabled is new.
 	assert.equal(
-		selectFeatures({ baselineTag: null, tag: "app-v5.1.8", dir: DIR, git }).length,
+		selectFeatures({ baselineTag: null, tag: "app-v5.1.8", dir: DIR, platform: "android", git }).length,
 		3,
 	);
 });
@@ -336,11 +372,11 @@ test("generate composes baseline, selection and rendering into a manifest", () =
 	assert.equal(manifest.baselineVersion, "5.1.7");
 	assert.equal(manifest.baselineTag, "app-v5.1.7");
 	assert.equal(manifest.entriesSupported, true);
+	// ios-only entry is not selected for the android audience at all.
 	assert.deepEqual(
 		manifest.features.map((f) => f.id).sort(),
-		["android-only.json", "ios-only.json"],
+		["android-only.json"],
 	);
-	// ios-only entry was selected but filtered out of android notes.
 	assert.deepEqual(manifest.rendered, ["android-only.json"]);
 	assert.ok(manifest.notes.includes("• "));
 	assert.ok(/^[0-9a-f]{64}$/.test(manifest.digest));

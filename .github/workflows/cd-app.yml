@@ -88,10 +88,11 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        # Evidence only — a failed attach must not flip binary delivery.
+        # Evidence only — a failed attach must not flip binary delivery. The
+        # per-attempt name keeps earlier manifests immutable across reruns.
         run: |
-          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-android-manifest.json" &&
-          gh release upload "app-v${{ env.MODULE_VERSION }}" "$RUNNER_TEMP/store-notes-app-android-manifest.json" --clobber ||
+          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-android-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" &&
+          gh release upload "app-v${{ env.MODULE_VERSION }}" "$RUNNER_TEMP/store-notes-app-android-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" ||
           echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
 
       - name: Restore Android AAB
@@ -261,11 +262,12 @@ jobs:
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        # Evidence only — a failed attach must not flip binary delivery.
+        # Evidence only — a failed attach must not flip binary delivery. The
+        # per-attempt name keeps earlier manifests immutable across reruns.
         run: |
           try {
-            cp "${{ runner.temp }}/store-notes/release-notes-manifest.json" "${{ runner.temp }}/store-notes-app-windows-manifest.json" -ErrorAction Stop
-            gh release upload "app-v${{ env.MODULE_VERSION }}" "${{ runner.temp }}/store-notes-app-windows-manifest.json" --clobber
+            cp "${{ runner.temp }}/store-notes/release-notes-manifest.json" "${{ runner.temp }}/store-notes-app-windows-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" -ErrorAction Stop
+            gh release upload "app-v${{ env.MODULE_VERSION }}" "${{ runner.temp }}/store-notes-app-windows-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json"
             if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
           } catch {
             Write-Host "::warning::Store-notes manifest attach failed — evidence stays in this job log"
@@ -383,6 +385,12 @@ jobs:
       deployments: write
     runs-on: macos-15
 
+    # The resolved release identity feeds the public-notes job — it stays
+    # available even when the guard skips a rerun as already delivered.
+    outputs:
+      ref: ${{ steps.guard.outputs.ref }}
+      module_version: ${{ steps.export_version.outputs.v }}
+
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version || '0.0.0' }}
       IOS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
@@ -403,11 +411,14 @@ jobs:
           DEPLOY_TARGET: app-ios
         run: node devops/github/release/check-deployment.mjs
 
+      - name: Export the resolved release identity
+        id: export_version
+        if: ${{ steps.guard.outputs.deploy == 'true' || steps.guard.outputs.ref != '' }}
+        run: echo "v=${{ env.MODULE_VERSION }}" >> "$GITHUB_OUTPUT"
+
       - name: Preserve TestFlight recovery automation
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
-          # store-release-notes.mjs and appstore-whatsnew.mjs arrive via the
-          # deployment guard's RUNNER_TEMP helper copies.
           cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
           cp devops/github/release/asset-pack-upload.mjs "$RUNNER_TEMP/asset-pack-upload.mjs"
 
@@ -416,9 +427,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.guard.outputs.ref }}
-          # Store notes diff the curated entry directory between the
-          # delivered baseline tag and this tag — full history is required.
-          fetch-depth: 0
 
       - name: Restore iOS IPA
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -520,27 +528,6 @@ jobs:
           UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
-      # Public App Store What's New: writes only onto an editable version
-      # record (prepare_for_submission and rejected states); when none exists
-      # the notes still attach to the release for the next submission. The
-      # step never fails the job — binary delivery to TestFlight is already
-      # proven and a metadata hiccup must not masquerade as an undelivered
-      # build. Its own outcome is recorded in the manifest + summary.
-      - name: Publish Hebrew What's New to the editable App Store version
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
-        run: |
-          node "$RUNNER_TEMP/appstore-whatsnew.mjs" publish \
-            --version "$MODULE_VERSION" \
-            --tag "app-v$MODULE_VERSION" \
-            --out-dir "$RUNNER_TEMP/store-notes-public"
-          # Evidence only — a failed attach must not flip binary delivery.
-          cp "$RUNNER_TEMP/store-notes-public/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-store-public-manifest.json" &&
-          gh release upload "app-v${{ env.MODULE_VERSION }}" "$RUNNER_TEMP/store-notes-app-store-public-manifest.json" --clobber ||
-          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
-
       - name: Publish managed asset packs to App Store Connect
         if: ${{ steps.guard.outputs.deploy == 'true' && steps.assetpacks.outputs.aar_count != '0' }}
         env:
@@ -585,6 +572,89 @@ jobs:
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** ${{ job.status == 'success' && 'Uploaded ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
+
+  # Public App Store What's New is its own phase with its own retry path: it
+  # runs whenever the binary phase succeeded — including dispatches the
+  # app-ios guard skipped as already delivered — so an editable version
+  # record created after the TestFlight upload can still receive the notes.
+  # No deployment record and no binary ever move in this job.
+  publish_app_store_notes:
+    name: Publish Hebrew What's New to the App Store
+    needs: deploy_app_store
+    if: ${{ always() && needs.deploy_app_store.result == 'success' && needs.deploy_app_store.outputs.ref != '' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    permissions:
+      # contents:write attaches the notes manifest to the GitHub release.
+      contents: write
+      actions: read
+    runs-on: macos-15
+
+    env:
+      MODULE_VERSION: ${{ needs.deploy_app_store.outputs.module_version }}
+      ARTIFACT_REF: ${{ needs.deploy_app_store.outputs.ref }}
+
+    steps:
+      - name: Checkout deployment automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Preserve notes publication automation
+        run: |
+          for helper in store-release-notes.mjs appstore-whatsnew.mjs testflight-build.mjs deployment-state.mjs gh-api.mjs; do
+            cp "devops/github/release/$helper" "$RUNNER_TEMP/$helper"
+          done
+
+      - name: Checkout the released source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.ARTIFACT_REF }}
+          # Notes diff the curated entry directory between the delivered
+          # baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Setup App Store Connect API Key
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          mkdir -p $HOME/private_keys
+          echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
+          cat > $HOME/private_keys/api_key.json << EOF
+          {
+            "key_id": "${API_KEY_ID}",
+            "issuer_id": "${API_ISSUER_ID}",
+            "key": "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8 | sed 's/$/\\n/' | tr -d '\n')",
+            "in_house": false
+          }
+          EOF
+          echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
+
+      # Writes only onto an editable version record (prepare_for_submission
+      # and rejected states); when none exists yet the notes still attach to
+      # the release for the next submission. An attempted publication that
+      # errored fails the step — the job rerun is the no-reupload retry.
+      - name: Publish Hebrew What's New on the editable version record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        run: |
+          node "$RUNNER_TEMP/appstore-whatsnew.mjs" publish \
+            --version "$MODULE_VERSION" \
+            --tag "app-v$MODULE_VERSION" \
+            --out-dir "$RUNNER_TEMP/store-notes-public"
+          # Evidence only — a failed attach must not flip the notes result.
+          cp "$RUNNER_TEMP/store-notes-public/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-store-public-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" &&
+          gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-store-public-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          if grep -q '"error"' "$RUNNER_TEMP/store-notes-public/release-notes-manifest.json"; then
+            echo "::error::Hebrew whatsNew publication failed — rerun this job to retry without touching the build"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: rm -rf $HOME/private_keys
 
   distribute_app_store:
     name: Distribute to TestFlight
