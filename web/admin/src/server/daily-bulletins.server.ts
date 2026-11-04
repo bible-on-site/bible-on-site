@@ -45,6 +45,16 @@ export async function readPreparedBulletin(
 	};
 }
 
+/** Per-recipient send path: the small columns only, never the PDF blob. */
+export async function readBulletinEmailContent(
+	date: string,
+): Promise<{ subject: string; emailHtml: string } | null> {
+	return queryOne<{ subject: string; emailHtml: string }>(
+		"SELECT subject, email_html AS emailHtml FROM tanah_daily_bulletin WHERE bulletin_date = ?",
+		[date],
+	);
+}
+
 /** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the dedication upgrade is not there yet. */
 function isMissingDedicationSchema(error: unknown): boolean {
 	const code = (error as { code?: string })?.code;
