@@ -14,7 +14,7 @@ declare global {
 			startedAt: number;
 			stoppedAt: number | undefined;
 			longAnimationFramesSupported: boolean;
-			longAnimationFrames: TurnLongAnimationFrame[];
+			longAnimationFrames: PerformanceEntry[];
 			observer: PerformanceObserver | undefined;
 			recordLongFrames: (entries: PerformanceEntry[]) => void;
 			raf: number;
@@ -40,7 +40,7 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 				PerformanceObserver.supportedEntryTypes.includes(
 					"long-animation-frame",
 				),
-			longAnimationFrames: [] as TurnLongAnimationFrame[],
+			longAnimationFrames: [] as PerformanceEntry[],
 			observer: undefined as PerformanceObserver | undefined,
 			recordLongFrames: (entries: PerformanceEntry[]): void => {
 				for (const entry of entries) {
@@ -48,7 +48,9 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 						entry.startTime + entry.duration > probe.startedAt &&
 						entry.startTime < (probe.stoppedAt ?? Infinity)
 					) {
-						probe.longAnimationFrames.push(entry.toJSON());
+						// Keep browser records intact while timing. Serializing script
+						// attribution here adds observer work after an already slow frame.
+						probe.longAnimationFrames.push(entry);
 					}
 				}
 			},
@@ -134,7 +136,9 @@ export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
 			frames: probe.frames,
 			repeatedFrameTimestamps: probe.repeatedFrameTimestamps,
 			longAnimationFramesSupported: probe.longAnimationFramesSupported,
-			longAnimationFrames: probe.longAnimationFrames,
+			longAnimationFrames: probe.longAnimationFrames.map(
+				(entry) => entry.toJSON() as TurnLongAnimationFrame,
+			),
 		};
 	});
 }

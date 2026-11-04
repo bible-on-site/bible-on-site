@@ -6882,5 +6882,867 @@
       ]
     },
     "status": "Timing still fails; not a completed reader delivery. Hosted consumer CI, deployment and public verification remain required."
+  },
+  "hostedQualificationAtF1": {
+    "source": "f1ceb908bb4df08cf0662a86df2ee24c811666ef",
+    "run": 41840423759,
+    "job": 126610452362,
+    "libraryVersion": "0.0.0-alpha.109",
+    "passed": 32,
+    "failed": 5,
+    "profile": "Original four-times CPU, native input, one worker, zero retries",
+    "cases": [
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            106.9,
+            54.1,
+            65.6,
+            49.1,
+            41,
+            100.8
+          ],
+          "responseP95Ms": 106.9,
+          "responseMaxMs": 106.9,
+          "frameGapMaxMs": 50.1,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 106.9,
+            "frameGapMaxMs": 49.9,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 100.8,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": []
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            58.4,
+            44.1,
+            39.5,
+            29,
+            34.6,
+            37.9
+          ],
+          "responseP95Ms": 58.4,
+          "responseMaxMs": 58.4,
+          "frameGapMaxMs": 50.1,
+          "frameGapP95Ms": 49.9,
+          "firstTurn": {
+            "responseP95Ms": 58.4,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 44.1,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4
+          }
+        },
+        "failures": []
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            94.2,
+            66.5,
+            66.4,
+            65.2,
+            54.7,
+            106.8
+          ],
+          "responseP95Ms": 106.8,
+          "responseMaxMs": 106.8,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 94.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 106.8,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": [
+          "first turn/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            54.7,
+            31.3,
+            52.2,
+            47.4,
+            46.7,
+            41.4
+          ],
+          "responseP95Ms": 54.7,
+          "responseMaxMs": 54.7,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 54.7,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 52.2,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            79.9,
+            61.1,
+            53.8,
+            67.4,
+            49.5,
+            106.8
+          ],
+          "responseP95Ms": 106.8,
+          "responseMaxMs": 106.8,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 79.9,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 106.8,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": [
+          "first turn/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            33.9,
+            56.1,
+            37.5,
+            24.3,
+            42.9,
+            58.4
+          ],
+          "responseP95Ms": 58.4,
+          "responseMaxMs": 58.4,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 49.9,
+          "firstTurn": {
+            "responseP95Ms": 33.9,
+            "frameGapMaxMs": 33.4,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 58.4,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": []
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            63.3,
+            53.8,
+            49,
+            40.1,
+            40.8,
+            76.3
+          ],
+          "responseP95Ms": 76.3,
+          "responseMaxMs": 76.3,
+          "frameGapMaxMs": 50,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 63.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 76.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": []
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            35.8,
+            29.8,
+            18.6,
+            21.5,
+            34.2,
+            31
+          ],
+          "responseP95Ms": 35.8,
+          "responseMaxMs": 35.8,
+          "frameGapMaxMs": 50.1,
+          "frameGapP95Ms": 49.9,
+          "firstTurn": {
+            "responseP95Ms": 35.8,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 34.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 49.9
+          }
+        },
+        "failures": []
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            69.2,
+            65.1,
+            47.6,
+            58.4,
+            50,
+            84.9
+          ],
+          "responseP95Ms": 84.9,
+          "responseMaxMs": 84.9,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 69.2,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 84.9,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            64.5,
+            49.2,
+            39.1,
+            25.8,
+            37.4,
+            30.6
+          ],
+          "responseP95Ms": 64.5,
+          "responseMaxMs": 64.5,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 64.5,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 49.9
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 49.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": []
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            102.6,
+            57.2,
+            40.2,
+            44.4,
+            47.8,
+            83.1
+          ],
+          "responseP95Ms": 102.6,
+          "responseMaxMs": 102.6,
+          "frameGapMaxMs": 66.8,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 102.6,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 83.1,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": [
+          "first turn/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            63.8,
+            46.2,
+            28.8,
+            20.8,
+            33.5,
+            24.8
+          ],
+          "responseP95Ms": 63.8,
+          "responseMaxMs": 63.8,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 49.9,
+          "firstTurn": {
+            "responseP95Ms": 63.8,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 46.2,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 49.9
+          }
+        },
+        "failures": []
+      }
+    ],
+    "qualification": "Hosted cadence failures retained. No rerun or limit change. Local passes do not replace these failures."
+  },
+  "publicBaseline620": {
+    "version": "0.2.620",
+    "source": "Not embedded; version read directly from public HTML before and after the run",
+    "passed": 1,
+    "failed": 12,
+    "includesDeliberate250msStallControl": true,
+    "profile": "Original visible desktop Chromium, 4x CPU, 1440x900, one worker, zero retries",
+    "cases": [
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            238.7,
+            352.6,
+            250,
+            334,
+            222.4,
+            280.5
+          ],
+          "responseP95Ms": 352.6,
+          "responseMaxMs": 352.6,
+          "frameGapMaxMs": 216.8,
+          "frameGapP95Ms": 150,
+          "firstTurn": {
+            "responseP95Ms": 238.7,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 100
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 352.6,
+            "frameGapMaxMs": 216.8,
+            "frameGapP95Ms": 150
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=352.6ms > 200ms",
+          "all turns/frameGapMaxMs=216.8ms > 100ms",
+          "all turns/frameGapP95Ms=150ms > 50ms",
+          "first turn/responseP95Ms=238.7ms > 200ms",
+          "first turn/frameGapP95Ms=100ms > 50ms",
+          "consecutive turns/responseP95Ms=352.6ms > 200ms",
+          "consecutive turns/frameGapMaxMs=216.8ms > 100ms",
+          "consecutive turns/frameGapP95Ms=150ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            74,
+            89.4,
+            144,
+            56.3,
+            114.4,
+            100.5
+          ],
+          "responseP95Ms": 144,
+          "responseMaxMs": 144,
+          "frameGapMaxMs": 166.7,
+          "frameGapP95Ms": 100,
+          "firstTurn": {
+            "responseP95Ms": 74,
+            "frameGapMaxMs": 83.5,
+            "frameGapP95Ms": 83.5
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 144,
+            "frameGapMaxMs": 166.7,
+            "frameGapP95Ms": 116.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapMaxMs=166.7ms > 100ms",
+          "all turns/frameGapP95Ms=100ms > 50ms",
+          "first turn/frameGapP95Ms=83.5ms > 50ms",
+          "consecutive turns/frameGapMaxMs=166.7ms > 100ms",
+          "consecutive turns/frameGapP95Ms=116.7ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            319.2,
+            397.6,
+            315.4,
+            367.5,
+            286.8,
+            458
+          ],
+          "responseP95Ms": 458,
+          "responseMaxMs": 458,
+          "frameGapMaxMs": 200,
+          "frameGapP95Ms": 183.3,
+          "firstTurn": {
+            "responseP95Ms": 319.2,
+            "frameGapMaxMs": 150.1,
+            "frameGapP95Ms": 150.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 458,
+            "frameGapMaxMs": 200,
+            "frameGapP95Ms": 183.4
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=458ms > 200ms",
+          "all turns/frameGapMaxMs=200ms > 100ms",
+          "all turns/frameGapP95Ms=183.3ms > 50ms",
+          "first turn/responseP95Ms=319.2ms > 200ms",
+          "first turn/frameGapMaxMs=150.1ms > 100ms",
+          "first turn/frameGapP95Ms=150.1ms > 50ms",
+          "consecutive turns/responseP95Ms=458ms > 200ms",
+          "consecutive turns/frameGapMaxMs=200ms > 100ms",
+          "consecutive turns/frameGapP95Ms=183.4ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            83.6,
+            63.4,
+            139.3,
+            131,
+            127,
+            122
+          ],
+          "responseP95Ms": 139.3,
+          "responseMaxMs": 139.3,
+          "frameGapMaxMs": 200.1,
+          "frameGapP95Ms": 100,
+          "firstTurn": {
+            "responseP95Ms": 83.6,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 100
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 139.3,
+            "frameGapMaxMs": 200.1,
+            "frameGapP95Ms": 100.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapMaxMs=200.1ms > 100ms",
+          "all turns/frameGapP95Ms=100ms > 50ms",
+          "first turn/frameGapP95Ms=100ms > 50ms",
+          "consecutive turns/frameGapMaxMs=200.1ms > 100ms",
+          "consecutive turns/frameGapP95Ms=100.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            366.8,
+            253.3,
+            247.7,
+            316.1,
+            206.3,
+            409.7
+          ],
+          "responseP95Ms": 409.7,
+          "responseMaxMs": 409.7,
+          "frameGapMaxMs": 216.6,
+          "frameGapP95Ms": 166.7,
+          "firstTurn": {
+            "responseP95Ms": 366.8,
+            "frameGapMaxMs": 216.6,
+            "frameGapP95Ms": 216.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 409.7,
+            "frameGapMaxMs": 200.1,
+            "frameGapP95Ms": 166.7
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=409.7ms > 200ms",
+          "all turns/frameGapMaxMs=216.6ms > 100ms",
+          "all turns/frameGapP95Ms=166.7ms > 50ms",
+          "first turn/responseP95Ms=366.8ms > 200ms",
+          "first turn/frameGapMaxMs=216.6ms > 100ms",
+          "first turn/frameGapP95Ms=216.6ms > 50ms",
+          "consecutive turns/responseP95Ms=409.7ms > 200ms",
+          "consecutive turns/frameGapMaxMs=200.1ms > 100ms",
+          "consecutive turns/frameGapP95Ms=166.7ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            78.5,
+            81.8,
+            124.8,
+            119.7,
+            117.5,
+            79.2
+          ],
+          "responseP95Ms": 124.8,
+          "responseMaxMs": 124.8,
+          "frameGapMaxMs": 200,
+          "frameGapP95Ms": 100,
+          "firstTurn": {
+            "responseP95Ms": 78.5,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 83.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 124.8,
+            "frameGapMaxMs": 200,
+            "frameGapP95Ms": 100
+          }
+        },
+        "failures": [
+          "all turns/frameGapMaxMs=200ms > 100ms",
+          "all turns/frameGapP95Ms=100ms > 50ms",
+          "first turn/frameGapP95Ms=83.4ms > 50ms",
+          "consecutive turns/frameGapMaxMs=200ms > 100ms",
+          "consecutive turns/frameGapP95Ms=100ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            293.6,
+            257.4,
+            279.1,
+            367.1,
+            299.1,
+            263.4
+          ],
+          "responseP95Ms": 367.1,
+          "responseMaxMs": 367.1,
+          "frameGapMaxMs": 216.7,
+          "frameGapP95Ms": 150,
+          "firstTurn": {
+            "responseP95Ms": 293.6,
+            "frameGapMaxMs": 216.7,
+            "frameGapP95Ms": 216.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 367.1,
+            "frameGapMaxMs": 199.9,
+            "frameGapP95Ms": 150
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=367.1ms > 200ms",
+          "all turns/frameGapMaxMs=216.7ms > 100ms",
+          "all turns/frameGapP95Ms=150ms > 50ms",
+          "first turn/responseP95Ms=293.6ms > 200ms",
+          "first turn/frameGapMaxMs=216.7ms > 100ms",
+          "first turn/frameGapP95Ms=216.7ms > 50ms",
+          "consecutive turns/responseP95Ms=367.1ms > 200ms",
+          "consecutive turns/frameGapMaxMs=199.9ms > 100ms",
+          "consecutive turns/frameGapP95Ms=150ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            157.1,
+            98.7,
+            150.9,
+            64.1,
+            148.5,
+            78.5
+          ],
+          "responseP95Ms": 157.1,
+          "responseMaxMs": 157.1,
+          "frameGapMaxMs": 233.4,
+          "frameGapP95Ms": 150,
+          "firstTurn": {
+            "responseP95Ms": 157.1,
+            "frameGapMaxMs": 216.5,
+            "frameGapP95Ms": 216.5
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 150.9,
+            "frameGapMaxMs": 233.4,
+            "frameGapP95Ms": 150
+          }
+        },
+        "failures": [
+          "all turns/frameGapMaxMs=233.4ms > 100ms",
+          "all turns/frameGapP95Ms=150ms > 50ms",
+          "first turn/frameGapMaxMs=216.5ms > 100ms",
+          "first turn/frameGapP95Ms=216.5ms > 50ms",
+          "consecutive turns/frameGapMaxMs=233.4ms > 100ms",
+          "consecutive turns/frameGapP95Ms=150ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            590.6,
+            470.4,
+            589.9,
+            468.8,
+            591.4,
+            436.6
+          ],
+          "responseP95Ms": 591.4,
+          "responseMaxMs": 591.4,
+          "frameGapMaxMs": 316.8,
+          "frameGapP95Ms": 266.6,
+          "firstTurn": {
+            "responseP95Ms": 590.6,
+            "frameGapMaxMs": 266.6,
+            "frameGapP95Ms": 266.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 591.4,
+            "frameGapMaxMs": 316.8,
+            "frameGapP95Ms": 250.1
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=591.4ms > 200ms",
+          "all turns/frameGapMaxMs=316.8ms > 100ms",
+          "all turns/frameGapP95Ms=266.6ms > 50ms",
+          "first turn/responseP95Ms=590.6ms > 200ms",
+          "first turn/frameGapMaxMs=266.6ms > 100ms",
+          "first turn/frameGapP95Ms=266.6ms > 50ms",
+          "consecutive turns/responseP95Ms=591.4ms > 200ms",
+          "consecutive turns/frameGapMaxMs=316.8ms > 100ms",
+          "consecutive turns/frameGapP95Ms=250.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            85.2,
+            72,
+            145.5,
+            143.9,
+            162.8,
+            75.2
+          ],
+          "responseP95Ms": 162.8,
+          "responseMaxMs": 162.8,
+          "frameGapMaxMs": 233.2,
+          "frameGapP95Ms": 133.2,
+          "firstTurn": {
+            "responseP95Ms": 85.2,
+            "frameGapMaxMs": 233.2,
+            "frameGapP95Ms": 233.2
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 162.8,
+            "frameGapMaxMs": 216.6,
+            "frameGapP95Ms": 133.2
+          }
+        },
+        "failures": [
+          "all turns/frameGapMaxMs=233.2ms > 100ms",
+          "all turns/frameGapP95Ms=133.2ms > 50ms",
+          "first turn/frameGapMaxMs=233.2ms > 100ms",
+          "first turn/frameGapP95Ms=233.2ms > 50ms",
+          "consecutive turns/frameGapMaxMs=216.6ms > 100ms",
+          "consecutive turns/frameGapP95Ms=133.2ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            297.2,
+            409.6,
+            286.8,
+            373.9,
+            253.6,
+            354.4
+          ],
+          "responseP95Ms": 409.6,
+          "responseMaxMs": 409.6,
+          "frameGapMaxMs": 233.2,
+          "frameGapP95Ms": 199.9,
+          "firstTurn": {
+            "responseP95Ms": 297.2,
+            "frameGapMaxMs": 233.2,
+            "frameGapP95Ms": 233.2
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 409.6,
+            "frameGapMaxMs": 216.7,
+            "frameGapP95Ms": 199.9
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=409.6ms > 200ms",
+          "all turns/frameGapMaxMs=233.2ms > 100ms",
+          "all turns/frameGapP95Ms=199.9ms > 50ms",
+          "first turn/responseP95Ms=297.2ms > 200ms",
+          "first turn/frameGapMaxMs=233.2ms > 100ms",
+          "first turn/frameGapP95Ms=233.2ms > 50ms",
+          "consecutive turns/responseP95Ms=409.6ms > 200ms",
+          "consecutive turns/frameGapMaxMs=216.7ms > 100ms",
+          "consecutive turns/frameGapP95Ms=199.9ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            77.3,
+            82,
+            146.6,
+            75.3,
+            140.7,
+            74.3
+          ],
+          "responseP95Ms": 146.6,
+          "responseMaxMs": 146.6,
+          "frameGapMaxMs": 233.3,
+          "frameGapP95Ms": 133.3,
+          "firstTurn": {
+            "responseP95Ms": 77.3,
+            "frameGapMaxMs": 233.3,
+            "frameGapP95Ms": 233.3
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 146.6,
+            "frameGapMaxMs": 216.7,
+            "frameGapP95Ms": 133.3
+          }
+        },
+        "failures": [
+          "all turns/frameGapMaxMs=233.3ms > 100ms",
+          "all turns/frameGapP95Ms=133.3ms > 50ms",
+          "first turn/frameGapMaxMs=233.3ms > 100ms",
+          "first turn/frameGapP95Ms=233.3ms > 50ms",
+          "consecutive turns/frameGapMaxMs=216.7ms > 100ms",
+          "consecutive turns/frameGapP95Ms=133.3ms > 50ms"
+        ]
+      }
+    ]
+  },
+  "observerSerializationCorrection": {
+    "beforeFailing": true,
+    "beforeConversionsWhileTiming": 1,
+    "afterConversionsWhileTiming": 0,
+    "allBrowserRecordsExportedAfterStop": true,
+    "deliberate250msStallStillDetected": true,
+    "metricUnitTestsPassed": 39,
+    "productionRuntimeChanged": false,
+    "limitsChanged": false,
+    "qualification": "Measurement correction only. It does not establish a production timing improvement. Full qualification after the correction remains required."
   }
 }

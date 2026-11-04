@@ -300,6 +300,34 @@ test("turn probe detects an injected second-turn stall", async ({
 				},
 			});
 		}
+		const serialization = { duringTiming: 0, total: 0 };
+		Object.defineProperty(window, "__seferDiagnosticSerialization", {
+			value: serialization,
+			configurable: true,
+		});
+		const frameTiming = (
+			window as unknown as {
+				PerformanceLongAnimationFrameTiming?: { prototype: PerformanceEntry };
+			}
+		).PerformanceLongAnimationFrameTiming;
+		if (frameTiming) {
+			const descriptor = Object.getOwnPropertyDescriptor(
+				frameTiming.prototype,
+				"toJSON",
+			);
+			if (!descriptor || typeof descriptor.value !== "function") {
+				throw new Error("Missing diagnostic serialization control");
+			}
+			const original = descriptor.value;
+			Object.defineProperty(frameTiming.prototype, "toJSON", {
+				...descriptor,
+				value: function (this: PerformanceEntry, ...args: unknown[]) {
+					serialization.total++;
+					if (window.__seferTurns) serialization.duringTiming++;
+					return Reflect.apply(original, this, args);
+				},
+			});
+		}
 	});
 	await startTurnProbe(page, "toolbar");
 	await page.evaluate(
@@ -314,6 +342,9 @@ test("turn probe detects an injected second-turn stall", async ({
 		await markTurnSettled(page);
 	}
 	const samples = await stopTurnProbe(page);
+	const serialization = (await page.evaluate(() =>
+		Reflect.get(window, "__seferDiagnosticSerialization"),
+	)) as { duringTiming: number; total: number };
 	await client.detach();
 	await waitForVisibleTurnContent(page);
 	const samplePath = testInfo.outputPath("control-samples.json");
@@ -328,4 +359,9 @@ test("turn probe detects an injected second-turn stall", async ({
 	expect(metrics.responseMs[0]).toBeLessThan(200);
 	expect(metrics.responseMs[1]).toBeGreaterThanOrEqual(250);
 	expect(turnBudgetFailures(metrics).length).toBeGreaterThan(0);
+	expect(serialization.duringTiming).toBe(0);
+	if (samples.longAnimationFramesSupported) {
+		expect(serialization.total).toBeGreaterThan(0);
+		expect(samples.longAnimationFrames).toHaveLength(serialization.total);
+	}
 });

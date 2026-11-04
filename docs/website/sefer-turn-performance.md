@@ -11,6 +11,15 @@ hidden-bookmark dragging in Kings each reached 50.1ms against the unchanged
 50ms limit. The release was blocked. Its passing PR checks and local results
 remain separate evidence and do not replace that failure.
 
+The [initial hosted run for #3070](https://github.com/bible-on-site/bible-on-site/actions/runs/41840423759/job/126610452362)
+fails five cadence cases: Numbers moving drag/toolbar and pinned drag, and
+Kings moving/pinned drag. Response p95 stays within 106.8ms, while first-turn
+cadence reaches 66.7ms and other failing scopes reach 50.1ms. All original
+samples and separate failure traces are retained. The public 0.2.620 reader
+fails all twelve reader cases in a fresh original desktop profile; the
+250ms deliberate-stall control passes. These results remain separate from
+local candidate passes.
+
 The [follow-up engine repair](https://github.com/doradsoft/html-flip-book/pull/381)
 stops reconciling every page holder when one mounted chapter changes. After
 initialization it visits the previous and next visibility windows, cover boards,
@@ -467,7 +476,13 @@ rendering work without enabling a profiler during qualification. These records
 are optional; their absence is not a timing pass. The native response and
 cadence samples remain authoritative, including
 the deliberate 250ms stall control. Diagnostic records do not filter or adjust
-any timing sample.
+any timing sample. Browser records are retained without converting their
+script attribution while the timing window is open; serialization runs only
+after observation stops. A before-failing browser guard counts one in-window
+conversion before the repair and zero afterward, and verifies every record is
+still exported. The original 250ms stall remains detected, and all 39 metric
+unit tests pass. This measurement correction changes no production runtime,
+threshold, retry or deadline; revised qualification remains required.
 After a cadence failure, a separate sequence also captures a Chromium trace and
 CPU profile under `diagnostics/sefer-turn-traces`. These profiled samples are
 labelled diagnostic-only and never replace the failed qualification samples.
