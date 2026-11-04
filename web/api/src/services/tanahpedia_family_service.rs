@@ -23,8 +23,8 @@ use entities::tanahpedia::{
 };
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseBackend, EntityTrait, FromQueryResult, IntoActiveModel,
-    QueryFilter, QuerySelect, Statement, TransactionTrait, Value,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult,
+    IntoActiveModel, QueryFilter, QuerySelect, Statement, TransactionTrait, Value,
 };
 
 #[derive(FromQueryResult)]
@@ -152,6 +152,7 @@ pub async fn put_entry_entity_link(
             ServiceError::bad_request("entryUniqueName does not reference an existing entry")
         })?;
     if entity::Entity::find_by_id(entity_id.clone())
+        .lock_exclusive()
         .one(&transaction)
         .await
         .map_err(db_error)?
@@ -261,11 +262,9 @@ pub async fn delete_entry_entity_link(
     })
 }
 
-async fn require_person(
-    conn: &sea_orm::DatabaseConnection,
-    person_id: &str,
-) -> Result<(), ServiceError> {
+async fn require_person(conn: &impl ConnectionTrait, person_id: &str) -> Result<(), ServiceError> {
     if person::Entity::find_by_id(person_id.to_string())
+        .lock_exclusive()
         .one(conn)
         .await
         .map_err(db_error)?
@@ -279,7 +278,7 @@ async fn require_person(
 }
 
 async fn parent_child_type_id(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &impl ConnectionTrait,
     name: String,
 ) -> Result<String, ServiceError> {
     let name = required(name, "relationshipType", 50)?.to_uppercase();
@@ -292,10 +291,7 @@ async fn parent_child_type_id(
         .ok_or_else(|| ServiceError::bad_request(&format!("unknown relationshipType {name}")))
 }
 
-async fn parent_role_id(
-    conn: &sea_orm::DatabaseConnection,
-    name: String,
-) -> Result<String, ServiceError> {
+async fn parent_role_id(conn: &impl ConnectionTrait, name: String) -> Result<String, ServiceError> {
     let name = required(name, "parentRole", 50)?.to_uppercase();
     lookup_parent_role::Entity::find()
         .filter(lookup_parent_role::Column::Name.eq(name.clone()))
@@ -306,10 +302,7 @@ async fn parent_role_id(
         .ok_or_else(|| ServiceError::bad_request(&format!("unknown parentRole {name}")))
 }
 
-async fn union_type_id(
-    conn: &sea_orm::DatabaseConnection,
-    name: String,
-) -> Result<String, ServiceError> {
+async fn union_type_id(conn: &impl ConnectionTrait, name: String) -> Result<String, ServiceError> {
     let name = required(name, "unionType", 50)?.to_uppercase();
     lookup_union_type::Entity::find()
         .filter(lookup_union_type::Column::Name.eq(name.clone()))
@@ -321,7 +314,7 @@ async fn union_type_id(
 }
 
 async fn union_end_reason_id(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &impl ConnectionTrait,
     name: Option<String>,
 ) -> Result<Option<String>, ServiceError> {
     let Some(name) = optional(name, "endReason", 50)?.map(|name| name.to_uppercase()) else {
@@ -349,6 +342,7 @@ pub async fn put_person_node(
 
     let transaction = db.get_connection().begin().await.map_err(db_error)?;
     let existing_entity = entity::Entity::find_by_id(entity_id.clone())
+        .lock_exclusive()
         .one(&transaction)
         .await
         .map_err(db_error)?;
@@ -584,7 +578,6 @@ pub async fn put_parent_child_link(
     db: &Database,
     input: PutTanahpediaParentChildInput,
 ) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
-    let conn = db.get_connection();
     let id = required(input.id, "id", 36)?;
     let parent_id = required(input.parent_person_id, "parentPersonId", 36)?;
     let child_id = required(input.child_person_id, "childPersonId", 36)?;
@@ -600,15 +593,22 @@ pub async fn put_parent_child_link(
             "a person cannot be their own parent",
         ));
     }
-    require_person(conn, &parent_id).await?;
-    require_person(conn, &child_id).await?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    // Lock both person rows in id order so concurrent sibling writers cannot
+    // attach a link to a person an orphan delete has already verified and is
+    // about to remove (the orphan delete holds this same row lock).
+    let mut person_ids = [parent_id.clone(), child_id.clone()];
+    person_ids.sort();
+    for person_id in person_ids {
+        require_person(&transaction, &person_id).await?;
+    }
 
     let model = person_parent_child::Model {
         id: id.clone(),
         parent_id,
         child_id,
-        relationship_type_id: parent_child_type_id(conn, relationship_type).await?,
-        parent_role_id: parent_role_id(conn, parent_role).await?,
+        relationship_type_id: parent_child_type_id(&transaction, relationship_type).await?,
+        parent_role_id: parent_role_id(&transaction, parent_role).await?,
         alt_group_id,
         source_citation,
         birth_order: input.birth_order,
@@ -628,9 +628,10 @@ pub async fn put_parent_child_link(
                 ])
                 .to_owned(),
         )
-        .exec(conn)
+        .exec(&transaction)
         .await
         .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
 
     Ok(TanahpediaFamilyLinkWriteResult { id })
 }
@@ -657,7 +658,6 @@ pub async fn put_person_union(
     db: &Database,
     input: PutTanahpediaPersonUnionInput,
 ) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
-    let conn = db.get_connection();
     let id = required(input.id, "id", 36)?;
     let person1_id = required(input.person1_id, "person1Id", 36)?;
     let person2_id = required(input.person2_id, "person2Id", 36)?;
@@ -672,18 +672,24 @@ pub async fn put_person_union(
             "a person cannot be united with themselves",
         ));
     }
-    require_person(conn, &person1_id).await?;
-    require_person(conn, &person2_id).await?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    // Same locking discipline as put_parent_child_link: lock both person rows
+    // in id order so the write serializes against delete_orphan_person_node.
+    let mut person_ids = [person1_id.clone(), person2_id.clone()];
+    person_ids.sort();
+    for person_id in person_ids {
+        require_person(&transaction, &person_id).await?;
+    }
 
     let model = person_union::Model {
         id: id.clone(),
         person1_id,
         person2_id,
-        union_type_id: union_type_id(conn, union_type).await?,
+        union_type_id: union_type_id(&transaction, union_type).await?,
         union_order: input.union_order,
         start_date: input.start_date,
         end_date: input.end_date,
-        end_reason_id: union_end_reason_id(conn, end_reason).await?,
+        end_reason_id: union_end_reason_id(&transaction, end_reason).await?,
         alt_group_id,
         source_citation,
         person_source_citation,
@@ -706,9 +712,10 @@ pub async fn put_person_union(
                 ])
                 .to_owned(),
         )
-        .exec(conn)
+        .exec(&transaction)
         .await
         .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
 
     Ok(TanahpediaFamilyLinkWriteResult { id })
 }

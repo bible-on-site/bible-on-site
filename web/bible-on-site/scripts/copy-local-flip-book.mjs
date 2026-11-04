@@ -35,6 +35,21 @@ function atLeastVersion(localVersion, publishedVersion) {
 	return true;
 }
 
+function activeLocalRepository(projectRoot, env) {
+	if (env.USE_LOCAL_FLIP_BOOK === "0") return null;
+	const marker = path.join(
+		projectRoot,
+		"node_modules",
+		"html-flip-book-react",
+		".local-flip-book",
+	);
+	if (!fs.existsSync(marker)) return null;
+	const { repoRoot } = JSON.parse(fs.readFileSync(marker, "utf8"));
+	if (typeof repoRoot !== "string" || !repoRoot.trim())
+		throw new Error(`Invalid active local flip-book marker: ${marker}`);
+	return path.resolve(repoRoot);
+}
+
 export function resolveLocalFlipBook(
 	projectRoot,
 	env = process.env,
@@ -42,9 +57,14 @@ export function resolveLocalFlipBook(
 ) {
 	const dep = readPackage(projectRoot).dependencies?.["html-flip-book-react"];
 	const fileDependency = dep?.startsWith("file:");
-	const explicit = fileDependency || env.USE_LOCAL_FLIP_BOOK === "1";
+	const activeRepo = fileDependency
+		? null
+		: activeLocalRepository(projectRoot, env);
+	const explicit =
+		fileDependency || env.USE_LOCAL_FLIP_BOOK === "1" || activeRepo !== null;
 	if (!explicit && (!automatic || env.USE_LOCAL_FLIP_BOOK === "0")) return null;
-	const repoDir = path.resolve(projectRoot, "..", "..", "..", "html-flip-book");
+	const repoDir =
+		activeRepo ?? path.resolve(projectRoot, "..", "..", "..", "html-flip-book");
 	const reactSrc = fileDependency
 		? path.resolve(projectRoot, dep.slice("file:".length))
 		: ["react", "html-flip-book-react"]
@@ -151,12 +171,26 @@ function validateBuild(local) {
 	}
 }
 
+/** Only retire snapshots created directly inside this checkout's node_modules. */
+export function getLocalSnapshotDirectory(target) {
+	const modules = path.dirname(path.resolve(target));
+	const build = fs.existsSync(target) ? fs.realpathSync(target) : null;
+	const snapshot = build ? path.dirname(build) : null;
+	return snapshot &&
+		path.dirname(snapshot) === modules &&
+		path.basename(snapshot).startsWith(".flip-book-local-") &&
+		path.basename(build) === "next"
+		? snapshot
+		: null;
+}
+
 export function copyLocalFlipBook(
 	projectRoot,
 	{
 		env = process.env,
 		local = resolveLocalFlipBook(projectRoot, env),
 		run = execSync,
+		platform = process.platform,
 	} = {},
 ) {
 	if (!local) return false;
@@ -228,6 +262,9 @@ export function copyLocalFlipBook(
 	const next = path.join(staging, "next");
 	const previous = path.join(staging, "previous");
 	const vanilla = path.join(next, "node_modules", "html-flip-book-vanilla");
+	const previousSnapshot = getLocalSnapshotDirectory(target);
+	let installed = false;
+	let retainBackup = false;
 	try {
 		fs.mkdirSync(vanilla, { recursive: true });
 		for (const [source, destination] of [
@@ -256,21 +293,42 @@ export function copyLocalFlipBook(
 			run("bun install --production", { cwd: vanilla, stdio: "inherit", env });
 		}
 		fs.writeFileSync(path.join(next, ".local-flip-book"), marker);
+		// Windows scanners/watchers can hold freshly copied files without delete
+		// sharing. Publish a junction to the complete snapshot: promotion then
+		// renames only the link, never the newly copied directory tree.
+		const replacement =
+			platform === "win32" ? path.join(staging, "link") : next;
+		if (platform === "win32") fs.symlinkSync(next, replacement, "junction");
 		if (
 			fs.existsSync(target) ||
 			fs.lstatSync(target, { throwIfNoEntry: false })
 		)
 			fs.renameSync(target, previous);
 		try {
-			fs.renameSync(next, target);
+			fs.renameSync(replacement, target);
+			installed = true;
 		} catch (error) {
-			if (fs.existsSync(previous)) fs.renameSync(previous, target);
+			try {
+				if (fs.existsSync(previous)) fs.renameSync(previous, target);
+			} catch (rollbackError) {
+				retainBackup = true;
+				throw new AggregateError(
+					[error, rollbackError],
+					`Local flip-book rollback failed; previous package retained at ${previous}`,
+				);
+			}
 			throw error;
 		}
 	} finally {
 		// mkdtemp created this absolute directory directly inside this checkout's
 		// node_modules; recursive cleanup cannot escape through a computed path.
-		fs.rmSync(staging, { recursive: true, force: true });
+		if (!retainBackup) {
+			if (installed && platform === "win32") {
+				fs.rmSync(previous, { recursive: true, force: true });
+				if (previousSnapshot && previousSnapshot !== staging)
+					fs.rmSync(previousSnapshot, { recursive: true, force: true });
+			} else fs.rmSync(staging, { recursive: true, force: true });
+		}
 	}
 	console.log(
 		`copy-local-flip-book: using local ${local.version} from ${local.repoRoot}`,

@@ -713,23 +713,27 @@ jobs:
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
       packages: write
     steps:
-      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
-      # Enable large-packages and docker-images to maximize available space
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v2.0.0
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
+      # Remove installed packages separately so one absent optional name cannot
+      # prevent the rest of the package sweep.
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -826,6 +830,7 @@ jobs:
           module: website
           directory: ${{ env.WEBSITE_DIRECTORY }}
           playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
+          playwright-distribution: full
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
@@ -837,10 +842,9 @@ jobs:
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # The browser install only needs node_modules; it runs in the background
-      # across MySQL/Rust/populate/build and is gated before the perf test. On
-      # a binary-cache hit only the system dependencies are installed.
-      # Every suite runs headless, so --only-shell skips the headed Chromium
-      # build and downloads only the headless shell.
+      # across MySQL/Rust/populate/build and is gated before the perf test.
+      # The consecutive-turn profile uses the full Chromium headless mode;
+      # existing shell-only cache entries do not contain that executable.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -848,7 +852,7 @@ jobs:
           if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
-            bun x playwright install --with-deps --only-shell chromium
+            bun x playwright install --with-deps chromium
           fi
 
       - name: Restore Next.js build cache
@@ -934,7 +938,14 @@ jobs:
         id: bun-build
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: bun run build
+        run: |
+          df -h .
+          for path in .next/cache node_modules ../../data/target; do
+            if [ -d "$path" ]; then du -sh "$path"; fi
+          done
+          bun run build
+          df -h .
+          du -sh .next
 
       - name: Save Next.js build cache
         if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
@@ -1175,6 +1186,11 @@ jobs:
       - name: Unit Test
         id: bun-unit-test
         run: bun run coverage:unit
+
+      - name: Local flip-book workflow guards
+        run: >-
+          node --test scripts/copy-local-flip-book.test.mjs
+          scripts/copy-local-flip-book-windows.test.mjs
 
       - name: Store Website Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -2687,9 +2703,12 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          large-packages: false
           docker-images: true
           swap-storage: false
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -2922,9 +2941,12 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          large-packages: false
           docker-images: true
           swap-storage: false
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       # Same overlap as data_ci: the image pull (or artifact download + load)
       # only depends on the needs/ outputs, so it runs in the background while
@@ -3577,7 +3599,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/free-large-packages.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps

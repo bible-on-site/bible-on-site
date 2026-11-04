@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
     tanahpedia_entry_revision_history_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-synonym name index upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_synonym.sql")]
+    tanahpedia_entry_synonym_upgrade_script: String,
+
     /// Path to Tanahpedia today-anniversary month_day upgrade SQL file
     #[arg(
         long,
@@ -369,6 +373,7 @@ struct TanahpediaScripts {
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
     entry_revision_history_upgrade: std::path::PathBuf,
+    entry_synonym_upgrade: std::path::PathBuf,
     today_anniversary_month_day_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
@@ -392,6 +397,7 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             entry_revision_history_upgrade: base_path
                 .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
+            entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
             today_anniversary_month_day_upgrade: base_path
                 .join(&cli.tanahpedia_today_anniversary_month_day_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
@@ -461,6 +467,7 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
     apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
+    apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await?;
     apply_today_anniversary_month_day_upgrade(conn, &scripts.today_anniversary_month_day_upgrade)
         .await
 }
@@ -793,6 +800,10 @@ async fn apply_today_anniversary_month_day_upgrade(
         }
     }
     Ok(())
+}
+
+async fn apply_entry_synonym_upgrade(conn: &mut MySqlConnection, script_path: &Path) -> Result<()> {
+    execute_script(conn, script_path, "entry-synonym-upgrade").await
 }
 
 async fn apply_column_add_if_missing(
