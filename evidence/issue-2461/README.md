@@ -46,6 +46,8 @@ Same APK, `adb uninstall` + reinstall (shared_prefs contained only
 
 | Build | Source | Result |
 | ----- | ------ | ------ |
+| Reported Android `5.0.210` (owner device, 2026-11-01) | store build | perushim larger than pesukim — predates both #2692's rendering fix and this fix |
+| Latest released Android `app-v5.1.7` (tagged 2026-11-04) | `origin/master` | still carries the defect — `ParashaViewModel.cs:343` reads bare `FontFactor`; no released build ships this fix yet |
 | Debug APK `5.1.6` (versionCode 50100006), branch `fix/2461-font-size-relative` | this worktree | pasuk%150 → parasha 27sp, perush%100 → 18sp |
 | Emulator `sdk_gphone64_x86_64`, Android 15 (API 36), 1080×2400, 420dpi, font scale 1.0 | — | measurements from uiautomator bounds + PNG ink analysis |
 
