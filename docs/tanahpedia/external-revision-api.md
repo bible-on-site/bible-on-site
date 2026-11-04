@@ -102,7 +102,7 @@ query Pending {
 ```
 
 Both `status` (`PENDING` / `APPLIED` / `APPROVED` / `REJECTED`) and `entryId` are optional filters;
-results are returned newest-first.
+results are returned newest-first, paginated by `limit` (default 50, max 200) and `offset`.
 
 ## Query — family graph lookups (find persons / list unions / list parent-child links / person details)
 
