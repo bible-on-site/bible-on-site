@@ -32,11 +32,10 @@ export function getStagedChanges() {
 /** Run argv command inside dir, inheriting stdio. @returns {number} exit code */
 export function runIn(dir, argv) {
 	return (
-		// shell stays enabled on Windows in case an entry ever resolves to a
-		// .cmd shim; argv is fully static — no user input is shelled.
-		spawnSync(argv[0], argv.slice(1), { // nosemgrep
+		// Hook commands use native executables (bun, cargo, dotnet and node).
+		// Keep paths and arguments literal on every platform.
+		spawnSync(argv[0], argv.slice(1), {
 			cwd: dir,
-			shell: process.platform === "win32",
 			stdio: "inherit",
 		}).status ?? 1
 	);
@@ -49,10 +48,8 @@ export function runIn(dir, argv) {
  */
 export function runInCapturing(dir, argv) {
 	return new Promise((resolvePromise) => {
-		// same shell rationale as runIn — argv stays repo-controlled.
-		const child = spawn(argv[0], argv.slice(1), { // nosemgrep
+		const child = spawn(argv[0], argv.slice(1), {
 			cwd: dir,
-			shell: process.platform === "win32",
 			stdio: ["inherit", "pipe", "pipe"],
 		});
 		let output = "";
