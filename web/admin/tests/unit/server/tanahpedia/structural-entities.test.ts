@@ -243,6 +243,17 @@ describe("linkExistingEntityToEntry", () => {
 				expect.any(Array),
 			);
 		});
+
+		it("returns its generated link id when no row is found", async () => {
+			queryOneMock.mockResolvedValue(null);
+			executeMock.mockResolvedValue({ affectedRows: 0 });
+
+			const result = await linkExistingEntityToEntry({
+				data: { entryId: "entry-1", entityId: "entity-1" },
+			});
+
+			expect(result.linkId).toEqual(expect.any(String));
+		});
 	});
 });
 

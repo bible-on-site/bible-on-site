@@ -1169,6 +1169,12 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.entry_entity_unique_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_entry_entity_unique.sql"
+            ),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1442,6 +1448,52 @@ SELECT 1";
                 table_count(&mut conn, "tanahpedia_lookup_union_type").await?,
                 5
             );
+
+            // Simulate a pre-unique-key link table: drop the index and stage a
+            // duplicated (entry_id, entity_id) pair.
+            raw_sql(
+                "ALTER TABLE tanahpedia_entry_entity DROP INDEX uk_entry_entity_pair; \
+                 INSERT INTO tanahpedia_entry (id, unique_name, title) \
+                     VALUES ('ee-dedupe-entry-00000000000000000001', 'ee-dedupe', 'ee-dedupe'); \
+                 INSERT INTO tanahpedia_entity (id, entity_type, name) \
+                     VALUES ('ee-dedupe-entity-0000000000000000001', 'PERSON', 'ee-dedupe'); \
+                 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES \
+                     ('ee-dedupe-link-000000000000000000001', \
+                      'ee-dedupe-entry-00000000000000000001', \
+                      'ee-dedupe-entity-0000000000000000001'), \
+                     ('ee-dedupe-link-000000000000000000002', \
+                      'ee-dedupe-entry-00000000000000000001', \
+                      'ee-dedupe-entity-0000000000000000001')",
+            )
+            .execute(&mut conn)
+            .await
+            .context("Failed to stage duplicate entry-entity links")?;
+
+            // A missing script path skips the upgrade entirely.
+            apply_entry_entity_unique_upgrade(&mut conn, Path::new("missing.sql")).await?;
+            assert!(
+                !index_exists(&mut conn, "tanahpedia_entry_entity", "uk_entry_entity_pair")
+                    .await?
+            );
+
+            apply_entry_entity_unique_upgrade(&mut conn, &scripts.entry_entity_unique_upgrade)
+                .await?;
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT COUNT(*) FROM tanahpedia_entry_entity \
+                     WHERE entry_id = 'ee-dedupe-entry-00000000000000000001'",
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                1
+            );
+            assert!(
+                index_exists(&mut conn, "tanahpedia_entry_entity", "uk_entry_entity_pair")
+                    .await?
+            );
+            // Re-applying takes the index-exists early return.
+            apply_entry_entity_unique_upgrade(&mut conn, &scripts.entry_entity_unique_upgrade)
+                .await?;
 
             raw_sql("CREATE TABLE column_add_test (id INT NOT NULL)")
                 .execute(&mut conn)
