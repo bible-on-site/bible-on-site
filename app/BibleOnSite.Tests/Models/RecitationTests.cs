@@ -97,7 +97,8 @@ public class RecitationTests
         track.Matches(canonical).Should().BeTrue();
         (track with { Words = [track.Words[0]] }).Matches(canonical).Should().BeFalse();
         canonical[0].Segments.Insert(1, new() { Type = SegmentType.Stuma, Value = "" });
-        track.Matches(canonical).Should().BeFalse("word ordinals cannot be shifted past a nonspoken segment");
+        // Matches memoizes per pasukim list instance: mutated content needs a new list.
+        track.Matches(new List<Pasuk>(canonical)).Should().BeFalse("word ordinals cannot be shifted past a nonspoken segment");
     }
 
     [Fact]
