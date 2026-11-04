@@ -1453,6 +1453,45 @@ SELECT 1";
                 )
                 .await?
             );
+
+            // Exercise the add path: dropping the index and re-running the
+            // upgrade must recreate it, then no-op on a second run.
+            raw_sql("ALTER TABLE tanahpedia_entry_synonym DROP INDEX idx_entry_synonym_name")
+                .execute(&mut conn)
+                .await?;
+            apply_entry_synonym_name_index_upgrade(
+                &mut conn,
+                &scripts.entry_synonym_name_index_upgrade,
+            )
+            .await?;
+            assert!(
+                index_exists(
+                    &mut conn,
+                    "tanahpedia_entry_synonym",
+                    "idx_entry_synonym_name"
+                )
+                .await?
+            );
+            apply_entry_synonym_name_index_upgrade(
+                &mut conn,
+                &scripts.entry_synonym_name_index_upgrade,
+            )
+            .await?;
+
+            // A missing upgrade script path skips without applying or failing.
+            raw_sql("ALTER TABLE tanahpedia_entry_synonym DROP INDEX idx_entry_synonym_name")
+                .execute(&mut conn)
+                .await?;
+            apply_entry_synonym_name_index_upgrade(&mut conn, Path::new("missing.sql")).await?;
+            assert!(
+                !index_exists(&mut conn, "tanahpedia_entry_synonym", "idx_entry_synonym_name")
+                    .await?
+            );
+            apply_entry_synonym_name_index_upgrade(
+                &mut conn,
+                &scripts.entry_synonym_name_index_upgrade,
+            )
+            .await?;
             assert_eq!(table_count(&mut conn, "tanahpedia_god").await?, 1);
             assert_eq!(
                 table_count(&mut conn, "tanahpedia_lookup_union_type").await?,
