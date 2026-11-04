@@ -84,8 +84,8 @@ export interface EventLoopDiagnosticsDeps {
 	setTimeout: (callback: () => void, delay: number) => DiagnosticsTimer;
 	clearTimeout: (timer: DiagnosticsTimer) => void;
 	now: () => number;
-	/** Registers a one-shot teardown hook run at process exit. */
-	onExit: (callback: () => void) => void;
+	/** Registers a teardown hook run at process exit; returns its remover. */
+	onExit: (callback: () => void) => () => void;
 	log: (line: string) => void;
 	version: string;
 }
@@ -118,7 +118,14 @@ const defaultDeps: EventLoopDiagnosticsDeps = {
 	setTimeout: (callback, delay) => setTimeout(callback, delay),
 	clearTimeout: (timer) => clearTimeout(timer as NodeJS.Timeout),
 	now: () => Date.now(),
-	onExit: (callback) => process.once("exit", callback),
+	// `on` plus an explicit remover keeps start/stop cycles listener-balanced;
+	// stop() is idempotent so a `once` wrapper would add nothing.
+	onExit: (callback) => {
+		process.on("exit", callback);
+		return () => {
+			process.removeListener("exit", callback);
+		};
+	},
 	log: (line) => console.log(line),
 	version: packageJson.version,
 };
@@ -158,6 +165,8 @@ interface DiagnosticsSession {
 	sampler: EventLoopDelaySampler;
 	gcObserver: { disconnect(): void };
 	timer: DiagnosticsTimer;
+	/** Releases the exit hook so stopped sessions retain no listeners. */
+	removeExitHook: () => void;
 	intervalStartMs: number;
 	prevUtilization: EventLoopUtilization;
 	prevCpu: NodeJS.CpuUsage;
@@ -286,6 +295,9 @@ export function createEventLoopDiagnostics(
 			sampler: deps.createDelaySampler(),
 			gcObserver: deps.observeGc(onGcEntries),
 			timer: scheduleEmit(),
+			// The exit hook lives with the session: stop() removes it, so
+			// repeated start/stop cycles cannot accumulate listeners.
+			removeExitHook: deps.onExit(stop),
 			intervalStartMs: deps.now(),
 			prevUtilization: deps.eventLoopUtilization(),
 			prevCpu: deps.cpuUsage(),
@@ -304,6 +316,7 @@ export function createEventLoopDiagnostics(
 		deps.clearTimeout(s.timer);
 		s.gcObserver.disconnect();
 		s.sampler.disable();
+		s.removeExitHook();
 	}
 
 	const handle: EventLoopDiagnostics = {
@@ -313,8 +326,6 @@ export function createEventLoopDiagnostics(
 		start,
 		stop,
 	};
-	// One teardown hook per created instance; stop() is a no-op if it never ran.
-	deps.onExit(stop);
 	return handle;
 }
 
@@ -347,7 +358,14 @@ export function startEventLoopDiagnostics(
 		get running() {
 			return inner.running;
 		},
-		start: () => inner.start(),
+		start: () => {
+			inner.start();
+			// Reclaim the guard slot after a restart: stop() cleared it, and a
+			// later register() must still find this handle instead of spawning a
+			// second monitor. A different live registrant is never displaced.
+			if (inner.running && g[GLOBAL_HANDLE_KEY] === undefined)
+				g[GLOBAL_HANDLE_KEY] = handle;
+		},
 		stop: () => {
 			inner.stop();
 			if (g[GLOBAL_HANDLE_KEY] === handle) delete g[GLOBAL_HANDLE_KEY];

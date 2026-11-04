@@ -44,7 +44,7 @@ function makeDeps() {
 	const timers: FakeTimer[] = [];
 	const observers: FakeObserver[] = [];
 	const samplers: FakeSampler[] = [];
-	const exitCallbacks: (() => void)[] = [];
+	const exitRegistrations: { cb: () => void; removed: boolean }[] = [];
 	const percentileValues = new Map<number, number>();
 
 	const deps = {
@@ -98,8 +98,12 @@ function makeDeps() {
 			(timer as FakeTimer).cleared = true;
 		}),
 		now: jest.fn((): number => nowValue),
-		onExit: jest.fn((cb: () => void): void => {
-			exitCallbacks.push(cb);
+		onExit: jest.fn((cb: () => void): (() => void) => {
+			const registration = { cb, removed: false };
+			exitRegistrations.push(registration);
+			return () => {
+				registration.removed = true;
+			};
 		}),
 		log: jest.fn(),
 		version: "0.0.0-test",
@@ -110,7 +114,7 @@ function makeDeps() {
 		timers,
 		observers,
 		samplers,
-		exitCallbacks,
+		exitRegistrations,
 		percentileValues,
 		setNow: (ms: number) => {
 			nowValue = ms;
@@ -460,8 +464,8 @@ describe("createEventLoopDiagnostics", () => {
 		expect(deps.createDelaySampler).toHaveBeenCalledTimes(2);
 	});
 
-	it("registers an exit teardown per instance and releases it", () => {
-		const { deps, exitCallbacks } = makeDeps();
+	it("registers an exit teardown per session and releases it on stop", () => {
+		const { deps, exitRegistrations } = makeDeps();
 		const a = createEventLoopDiagnostics({
 			intervalMs: 5000,
 			...deps,
@@ -474,10 +478,27 @@ describe("createEventLoopDiagnostics", () => {
 		b.start();
 		expect(deps.onExit).toHaveBeenCalledTimes(2);
 		b.stop();
-		exitCallbacks[1]();
+		expect(exitRegistrations[1].removed).toBe(true);
+		// A hook already released before it fires stays an inert no-op.
+		exitRegistrations[1].cb();
 		expect(b.running).toBe(false);
-		exitCallbacks[0]();
+		exitRegistrations[0].cb();
 		expect(a.running).toBe(false);
+		expect(exitRegistrations[0].removed).toBe(true);
+	});
+
+	it("does not retain exit hooks across start/stop cycles", () => {
+		const { deps, exitRegistrations } = makeDeps();
+		for (let i = 0; i < 3; i++) {
+			const handle = createEventLoopDiagnostics({
+				intervalMs: 5000,
+				...deps,
+			});
+			handle.start();
+			handle.stop();
+		}
+		expect(exitRegistrations).toHaveLength(3);
+		expect(exitRegistrations.every((r) => r.removed)).toBe(true);
 	});
 
 	it("clamps a non-positive interval to 1ms", () => {
@@ -573,5 +594,30 @@ describe("startEventLoopDiagnostics", () => {
 		first?.stop();
 		expect(second?.running).toBe(true);
 		second?.stop();
+	});
+
+	it("keeps the process-wide guard after a stop/start restart", () => {
+		const { deps } = makeDeps();
+		const env = { ENABLE_EVENT_LOOP_DIAGNOSTICS: "1" };
+		const handle = startEventLoopDiagnostics(env, deps);
+		handle?.stop();
+		handle?.start();
+		const again = startEventLoopDiagnostics(env, deps);
+		expect(again).toBe(handle);
+		// One sampler and observer per session — restart made a second pair,
+		// never a leaked third.
+		expect(deps.createDelaySampler).toHaveBeenCalledTimes(2);
+		expect(deps.observeGc).toHaveBeenCalledTimes(2);
+		handle?.stop();
+	});
+
+	it("releases the exit hook on every guarded stop", () => {
+		const { deps, exitRegistrations } = makeDeps();
+		const env = { ENABLE_EVENT_LOOP_DIAGNOSTICS: "1" };
+		for (let i = 0; i < 3; i++) {
+			startEventLoopDiagnostics(env, deps)?.stop();
+		}
+		expect(exitRegistrations).toHaveLength(3);
+		expect(exitRegistrations.every((r) => r.removed)).toBe(true);
 	});
 });
