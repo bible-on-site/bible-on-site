@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
 	telegramProcess: vi.fn(),
 	telegramSweep: vi.fn(),
 	whatsappSweep: vi.fn(),
+	signupSweep: vi.fn(),
+	signupApply: vi.fn(),
 	scheduledProcess: vi.fn(),
 }));
 vi.mock("~/server/db", () => mocks);
@@ -76,6 +78,10 @@ vi.mock("~/server/telegram-delivery.server", () => ({
 }));
 vi.mock("~/server/scheduled-bulletin.server", () => ({
 	processScheduledBulletin: mocks.scheduledProcess,
+}));
+vi.mock("~/server/signup-delivery.server", () => ({
+	reconcileSignupOutbox: mocks.signupSweep,
+	applySignupSesEvent: mocks.signupApply,
 }));
 vi.mock("node:timers/promises", () => ({ setTimeout: mocks.delay }));
 vi.mock("@aws-sdk/client-sqs", () => ({
@@ -528,6 +534,8 @@ beforeEach(() => {
 		vi.stubEnv(name, "");
 	mocks.whatsappProcess.mockReset().mockResolvedValue(true);
 	mocks.whatsappSweep.mockReset().mockResolvedValue(undefined);
+	mocks.signupSweep.mockReset().mockResolvedValue(undefined);
+	mocks.signupApply.mockReset().mockResolvedValue(undefined);
 	state = {
 		jobs: [],
 		subscribers: [subscriber(), subscriber(2)],
@@ -1159,6 +1167,7 @@ function delivery(
 		type,
 		messageId: "message-1",
 		attemptId: "1_token-1",
+		signupIntentId: null,
 		email: "reader1@example.com",
 		timestamp,
 	};

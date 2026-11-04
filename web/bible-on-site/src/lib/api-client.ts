@@ -67,6 +67,72 @@ export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 }
 
 /**
+ * Execute a parameterized write, returning the driver result header
+ * (affectedRows/insertId) instead of a row list.
+ */
+export async function execute(
+	sql: string,
+	params?: unknown[],
+): Promise<mysql.ResultSetHeader> {
+	const connection = getPool();
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
+	const [result] = await connection.execute(sql, (params ?? []) as any);
+	return result as mysql.ResultSetHeader;
+}
+
+/** Runs `fn` inside a MySQL transaction on a dedicated pooled connection. */
+export async function transaction<T>(
+	fn: (conn: mysql.PoolConnection) => Promise<T>,
+): Promise<T> {
+	const conn = await getPool().getConnection();
+	try {
+		await conn.beginTransaction();
+		const result = await fn(conn);
+		await conn.commit();
+		return result;
+	} catch (error) {
+		await conn.rollback();
+		throw error;
+	} finally {
+		conn.release();
+	}
+}
+
+/** `query` variant bound to a transaction connection. */
+export async function txQuery<T>(
+	conn: mysql.PoolConnection,
+	sql: string,
+	params?: unknown[],
+): Promise<T[]> {
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
+	const [rows] = await conn.execute(sql, (params ?? []) as any);
+	return rows as T[];
+}
+
+/** `query` variant returning the first row or null. */
+export async function txQueryOne<T>(
+	conn: mysql.PoolConnection,
+	sql: string,
+	params?: unknown[],
+): Promise<T | null> {
+	return (await txQuery<T>(conn, sql, params))[0] ?? null;
+}
+
+/** `execute` variant bound to a transaction connection. */
+export async function txExecute(
+	conn: mysql.PoolConnection,
+	sql: string,
+	params?: unknown[],
+): Promise<mysql.ResultSetHeader> {
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
+	const [result] = await conn.execute(sql, (params ?? []) as any);
+	return result as mysql.ResultSetHeader;
+}
+
+/**
  * Execute a parameterized SQL query over the text protocol, with the
  * driver interpolating `?` params into the statement as escaped
  * literals (same escaping `execute` relies on).

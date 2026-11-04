@@ -27,6 +27,7 @@ export const SITEMAP_SECTIONS = [
 	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
+	"join/email",
 	"tos",
 	"app",
 	"contact",

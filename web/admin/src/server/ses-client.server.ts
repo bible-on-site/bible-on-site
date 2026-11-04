@@ -443,6 +443,48 @@ export class SesClient {
 		return "subscribed";
 	}
 
+	/**
+	 * Re-consent after a fresh mailbox proof (#2940): creates the contact when
+	 * absent, and for an existing opted-out contact restores OPT_IN on the
+	 * topic and clears UnsubscribeAll. Other topics and account-level
+	 * suppression are untouched — the topic preference is merged rather than
+	 * replaced. The update is verified with a re-read so the caller persists
+	 * the truthful outcome.
+	 */
+	async resubscribeContact(
+		email: string,
+		audience: SesAudience,
+	): Promise<"subscribed" | "opted_out"> {
+		const normalized = emailAddress(email);
+		const topic = audienceName(audience);
+		const contact = await this.getContact(normalized);
+		if (!contact) return this.ensureSubscribedContact(normalized, topic);
+		if (isSesSubscribed(contact, topic)) return "subscribed";
+		try {
+			await this.client.send(
+				new UpdateContactCommand({
+					ContactListName: this.config.contactListName,
+					EmailAddress: normalized,
+					UnsubscribeAll: false,
+					TopicPreferences: Object.entries({
+						...contact.topics,
+						[topic]: "OPT_IN" as const,
+					}).map(([TopicName, SubscriptionStatus]) => ({
+						TopicName,
+						SubscriptionStatus,
+					})),
+				}),
+				{ abortSignal: AbortSignal.timeout(15_000) },
+			);
+		} catch (error) {
+			throw requestError(error, true, "update-contact");
+		}
+		const verified = await this.getContact(normalized);
+		return verified && isSesSubscribed(verified, topic)
+			? "subscribed"
+			: "opted_out";
+	}
+
 	/** Global suppression is monotonic and never replaces topic preferences. */
 	async unsubscribeContact(
 		email: string,
@@ -530,6 +572,62 @@ export class SesClient {
 						},
 					},
 					EmailTags: tags,
+				}),
+				{ abortSignal: AbortSignal.timeout(15_000) },
+			);
+		} catch (error) {
+			throw requestError(error, true, "send-email");
+		}
+		if (
+			!result ||
+			typeof result.MessageId !== "string" ||
+			!result.MessageId.trim()
+		) {
+			throw new SesError("לא ניתן לוודא אם הדיוור התקבל לשליחה", "uncertain");
+		}
+		return result.MessageId;
+	}
+
+	/**
+	 * Transactional mail that is not a bulletin send (#2940): no contact-list
+	 * subscription check (the recipient is by definition not yet confirmed),
+	 * no List-Unsubscribe options, no consent footer injection — the caller
+	 * supplies the complete HTML. The attempt is tagged so its SES events are
+	 * attributed back to the signup outbox rather than a bulletin recipient.
+	 */
+	async sendTransactional(input: {
+		to: string;
+		subject: string;
+		html: string;
+		externalId: string;
+	}): Promise<string> {
+		const to = emailAddress(input.to);
+		if (
+			!input.subject?.trim() ||
+			/[\r\n]/.test(input.subject) ||
+			!input.html?.trim() ||
+			!/^[a-zA-Z0-9_-]{1,256}$/.test(input.externalId)
+		)
+			invalid();
+		const replyTo = this.config.replyToAddress ?? this.config.fromAddress;
+		let result: { MessageId?: string };
+		try {
+			result = await this.client.send(
+				new SendEmailCommand({
+					FromEmailAddress: `${encodedSenderName(this.config.senderName)} <${this.config.fromAddress}>`,
+					ReplyToAddresses: [replyTo],
+					ConfigurationSetName: this.config.configurationSetName,
+					Destination: { ToAddresses: [to] },
+					Content: {
+						Simple: {
+							Subject: { Data: input.subject, Charset: "UTF-8" },
+							Body: { Html: { Data: input.html, Charset: "UTF-8" } },
+						},
+					},
+					EmailTags: [
+						{ Name: "bulletin_flow", Value: "signup" },
+						{ Name: "bulletin_signup_attempt", Value: input.externalId },
+					],
 				}),
 				{ abortSignal: AbortSignal.timeout(15_000) },
 			);

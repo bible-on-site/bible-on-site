@@ -662,6 +662,9 @@ export async function applySesEvent(event: SesEvent): Promise<void> {
 		}
 		return;
 	}
+	// Signup-confirmation sends are a separate outbox (#2940); they never map
+	// onto bulletin recipients even if routed here by mistake.
+	if (event.signupIntentId !== null) return;
 	const separator = event.attemptId.indexOf("_");
 	const id = Number(event.attemptId.slice(0, separator));
 	const token = event.attemptId.slice(separator + 1);
@@ -767,6 +770,17 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 				if (Date.now() >= nextSweep) {
 					nextSweep = Date.now() + 30_000;
 					await reconcileEmailOutbox(client, runtime.queueUrl, signal);
+					if (signal.aborted) break;
+					try {
+						const { reconcileSignupOutbox } = await import(
+							"./signup-delivery.server"
+						);
+						await reconcileSignupOutbox(signal);
+					} catch {
+						// A missing migration must not block the existing email consumer.
+						if (!signal.aborted)
+							console.error("Signup outbox reconciliation failed");
+					}
 					if (signal.aborted) break;
 					try {
 						const telegram = await optionalTelegramDelivery();
@@ -897,7 +911,17 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 					} else {
 						const event = parseSesEvent(payload, runtime);
 						if (event) {
-							await applySesEvent(event);
+							if (
+								event.type !== "subscription" &&
+								event.signupIntentId !== null
+							) {
+								const { applySignupSesEvent } = await import(
+									"./signup-delivery.server"
+								);
+								await applySignupSesEvent(event);
+							} else {
+								await applySesEvent(event);
+							}
 							handled = true;
 						}
 					}

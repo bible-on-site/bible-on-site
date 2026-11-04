@@ -37,6 +37,7 @@ describe("sitemap", () => {
 				"לוח",
 				"dailyBulletin",
 				"whatsappGroup",
+				"join/email",
 				"tos",
 				"app",
 				"contact",
