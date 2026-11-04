@@ -26,6 +26,7 @@ import {
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React, {
+	memo,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -76,6 +77,7 @@ import RecitationPlayer, {
 	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
+	useRecitationEnabled,
 } from "./RecitationPlayer";
 import { SeferPanel } from "./SeferPanel";
 import { SeferPasukNumber } from "./SeferPasukNumber";
@@ -120,7 +122,8 @@ const MemoSeferPanel = React.memo(SeferPanel);
 
 // A page element is cheap to create. Its verse tree is built only when the
 // FlipBook mounts that page inside its buffer, including pages revealed later.
-function SeferScriptureText({
+const EMPTY_ENTITY_REF_LOOKUP = buildEntityRefLookup([]);
+const SeferScriptureText = memo(function SeferScriptureText({
 	perek,
 	pagePerekId,
 	perekLookup,
@@ -129,6 +132,7 @@ function SeferScriptureText({
 	pagePerekId: number;
 	perekLookup: ReturnType<typeof buildEntityRefLookup>;
 }) {
+	const recitationEnabled = useRecitationEnabled();
 	return (
 		<article className={styles.perekText}>
 			{perek.pesukim.map((pasuk, pasukIdx) => {
@@ -160,24 +164,27 @@ function SeferScriptureText({
 							{children}
 						</RecitationLink>
 					),
-					(pasuk, segment, text) => (
-						<RecitationWordControl pasuk={pasuk} segment={segment}>
-							{text}
-						</RecitationWordControl>
-					),
+					recitationEnabled
+						? (pasuk, segment, text) => (
+								<RecitationWordControl
+									pasuk={pasuk}
+									segment={segment}
+									plainWhenInactive
+								>
+									{text}
+								</RecitationWordControl>
+							)
+						: undefined,
 				);
 				return (
 					<RecitationVerse key={pasukKey} pasuk={pasukKey}>
-						{pasukNumElement}
-						<span> </span>
-						{pasukElement}
-						<span> </span>
+						{pasukNumElement} {pasukElement}{" "}
 					</RecitationVerse>
 				);
 			})}
 		</article>
 	);
-}
+});
 
 const Sefer = (props: {
 	perekObj: PerekObj;
@@ -232,6 +239,16 @@ const Sefer = (props: {
 				? sefer.perakim
 				: sefer.additionals.flatMap((additional) => additional.perakim),
 		[sefer],
+	);
+	// A turn changes only the active panels. Keep each chapter's navigation
+	// stable so covered panels can reuse their rendered commentary trees.
+	const navigateFromPage = useMemo(
+		() =>
+			perekIds?.map(
+				(perekId) => (slug?: string) =>
+					contentNavigation.navigate(perekId, slug),
+			),
+		[perekIds, contentNavigation.navigate],
 	);
 
 	const openBookshelf = useCallback(() => setIsBookshelfOpen(true), []);
@@ -512,7 +529,7 @@ const Sefer = (props: {
 
 	// Keep scripture independent of async summaries and commentary selection.
 	// Those updates must not rebuild or reconcile every word in the book.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the stale-read exclusion is intentional - scripture must not rebuild when background summaries or the current perek's metrics resolve
+	// Page chrome follows reading metrics while the memoized verse tree stays put.
 	const scripturePages = useMemo(
 		() =>
 			perakim.map((perek, perekIdx) => {
@@ -608,7 +625,7 @@ const Sefer = (props: {
 										pagePerekId={pagePerekId ?? 0}
 										perekLookup={
 											entityRefLookupsByPerekIdx[perekIdx] ??
-											buildEntityRefLookup([])
+											EMPTY_ENTITY_REF_LOOKUP
 										}
 									/>
 								</div>
@@ -625,18 +642,12 @@ const Sefer = (props: {
 			entityRefLookupsByPerekIdx,
 			perekObj.sefer,
 			props.perekDedications,
+			batchSummaries,
+			currentPerekIdx,
+			perekMetric,
+			perekPasukUnits,
 		],
 	);
-
-	// One stable navigate closure per perek: a fresh inline closure per page
-	// would defeat MemoSeferPanel and re-render every panel on each change.
-	const panelNavigateByPerek = useMemo(() => {
-		const map = new Map<number, (slug?: string) => void>();
-		for (const id of perekIds ?? []) {
-			map.set(id, (slug) => contentNavigation.navigate(id, slug));
-		}
-		return map;
-	}, [perekIds, contentNavigation.navigate]);
 
 	const panelPages = useMemo(
 		() =>
@@ -671,13 +682,14 @@ const Sefer = (props: {
 									? contentNavigation.content.slug
 									: undefined
 							}
-							onNavigate={
-								pagePerekId == null
-									? undefined
-									: panelNavigateByPerek.get(pagePerekId)
-							}
+							onNavigate={navigateFromPage?.[perekIdx]}
 							perekTitleParts={seferPerekTitles[perekIdx]}
-							onContentTitle={setInBookContentTitle}
+							onContentTitle={
+								contentNavigation.content != null &&
+								contentNavigation.content.perekId === pagePerekId
+									? setInBookContentTitle
+									: undefined
+							}
 						/>
 					</React.Fragment>
 				);
@@ -695,7 +707,7 @@ const Sefer = (props: {
 			hebrewDateStr,
 			seferPerekTitles,
 			contentNavigation.content,
-			panelNavigateByPerek,
+			navigateFromPage,
 		],
 	);
 
@@ -762,7 +774,8 @@ const Sefer = (props: {
 						pages={pages}
 						pageSemantics={hePageSemantics}
 						direction="rtl"
-						leavesBuffer={7}
+						leavesBuffer={0}
+						keepPageContentLayout
 						of={toHebrewChapterNumber(perakim.length)}
 						tocPageIndex={2}
 						coverConfig={{

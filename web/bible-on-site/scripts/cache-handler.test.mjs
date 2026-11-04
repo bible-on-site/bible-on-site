@@ -179,7 +179,7 @@ test("filename-safe Unicode and spaces preserve existing seed paths", () => {
 	);
 });
 
-test("raw Hebrew seeds retain logical identity and promote every artifact", async () => {
+test("raw Hebrew seeds retain logical identity and promote every artifact", async (t) => {
 	const dist = mkdtempSync(join(tmpdir(), "route-cache-seed-"));
 	try {
 		const owner = { kind: "APP_PAGE", sourceRoute: "/parasha/[unit]/page" };
@@ -240,6 +240,12 @@ test("raw Hebrew seeds retain logical identity and promote every artifact", asyn
 		assert.equal(
 			(await handler.get(key, ctx)).value.html,
 			"<html>unchanged seed</html>",
+		);
+		// Next writes expiration with Date.now but checks it against the
+		// performance epoch. Align the clocks so wall-clock skew cannot make
+		// immediate expiration appear to be scheduled in the future.
+		t.mock.method(Date, "now", () =>
+			Math.floor(performance.timeOrigin + performance.now()),
 		);
 		await handler.revalidateTag("private-cache-seed-test");
 		assert.equal(await handler.get(key, ctx), null);

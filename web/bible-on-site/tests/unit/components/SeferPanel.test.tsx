@@ -131,6 +131,32 @@ const renderPanel = async (ui: React.ReactElement) => {
 	return view;
 };
 
+test("does not repeat commentary eligibility work for an unchanged covered panel", async () => {
+	const readNoteCount = jest.fn(() => RASHI.noteCount);
+	const perushim = [
+		{
+			...RASHI,
+			get noteCount() {
+				return readNoteCount();
+			},
+		},
+	];
+	const view = await renderPanel(
+		<SeferPanel {...PROPS} perushim={perushim} isActive={false} />,
+	);
+	readNoteCount.mockClear();
+	await act(async () =>
+		view.rerender(
+			<SeferPanel {...PROPS} perushim={perushim} isActive={false} />,
+		),
+	);
+	expect(readNoteCount).not.toHaveBeenCalled();
+	await act(async () =>
+		view.rerender(<SeferPanel {...PROPS} perushim={perushim} isActive />),
+	);
+	expect(readNoteCount).toHaveBeenCalled();
+});
+
 test("loads commentary for the visible chapter and keeps completed notes when paging", async () => {
 	setSeferPerushSelection("בראשית", [RASHI.id]);
 	const panels = (chapter: number) => (
@@ -527,9 +553,7 @@ describe("article fullscreen", () => {
 		expect(document.activeElement).toBe(
 			screen.getByRole("button", { name: "מסך מלא" }),
 		);
-		expect(
-			screen.getByRole("heading", { name: "מאמר ראשון" }),
-		).toBeTruthy();
+		expect(screen.getByRole("heading", { name: "מאמר ראשון" })).toBeTruthy();
 	});
 
 	it("keeps no duplicate reachable controls while the dialog is open", async () => {
@@ -667,9 +691,7 @@ describe("article fullscreen", () => {
 		);
 		const card = await screen.findByRole("link", { name: /מאמר ראשון/ });
 		await waitFor(() => expect(document.activeElement).toBe(card));
-		expect(
-			screen.queryByRole("button", { name: "חזרה למאמרים" }),
-		).toBeNull();
+		expect(screen.queryByRole("button", { name: "חזרה למאמרים" })).toBeNull();
 	});
 });
 
@@ -779,9 +801,7 @@ describe("modifier clicks", () => {
 			] as const) {
 				fireEvent.click(card as HTMLElement, { [modifier]: true });
 			}
-			expect(
-				screen.queryByRole("button", { name: "חזרה למאמרים" }),
-			).toBeNull();
+			expect(screen.queryByRole("button", { name: "חזרה למאמרים" })).toBeNull();
 			expect(push).not.toHaveBeenCalled();
 		} finally {
 			push.mockRestore();
