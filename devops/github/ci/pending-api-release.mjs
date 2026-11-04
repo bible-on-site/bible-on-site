@@ -311,9 +311,11 @@ export function pendingApiRelease({
 			return true;
 		},
 	);
-	if (changed.length && compareVersions(after.version, before.version) <= 0) {
+	// An equal version belongs to the published tag. Select fresh checks and
+	// packaging so shared-release can request its normal collision retry bump.
+	if (changed.length && compareVersions(after.version, before.version) < 0) {
 		throw new Error(
-			"Unreleased API source requires a version newer than the published release",
+			"Unreleased API source version is older than the published release",
 		);
 	}
 	return {

@@ -15,7 +15,17 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class BackChrome
 {
-	public static BackChromePlatform CurrentPlatform =>
+	/// <summary>
+	/// Test seam for the chrome policy (#2927): unit tests pin the persisted
+	/// first-frame Back visibility under Android's own rule — the path whose
+	/// late correction used to reflow the article header — without a device.
+	/// Null outside tests.
+	/// </summary>
+	internal static BackChromePlatform? TestPlatform { get; set; }
+
+	/// <summary>The platform this binary was compiled for — the fixed
+	/// platform default before the persisted override applies.</summary>
+	internal static BackChromePlatform CompileTimePlatform =>
 #if ANDROID
 		BackChromePlatform.Android;
 #elif WINDOWS
@@ -25,6 +35,9 @@ public static class BackChrome
 #else
 		BackChromePlatform.Other;
 #endif
+
+	public static BackChromePlatform CurrentPlatform =>
+		TestPlatform ?? CompileTimePlatform;
 
 	public static void Apply(ContentPage page)
 	{

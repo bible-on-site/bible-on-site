@@ -193,12 +193,29 @@ fn insert_sefarim(tx: &rusqlite::Transaction, sefarim: &[Sefer]) -> Result<()> {
 }
 
 fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) -> Result<()> {
+    let mut perek_stmt =
+        tx.prepare("INSERT INTO tanah_perek (id, perek, header) VALUES (?1, ?2, ?3)")?;
+    let mut perek_date_stmt = tx.prepare(
+        "INSERT OR IGNORE INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+    let mut segment_stmt = tx.prepare(
+        "INSERT INTO tanah_pasuk_segment (sefer_id, perek_id, pasuk_id, segment_type)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    let mut segment_value_stmt =
+        tx.prepare("INSERT INTO tanah_pasuk_segment_value (id, value) VALUES (?1, ?2)")?;
+    let mut offset_stmt = tx.prepare(
+        "INSERT INTO tanah_pasuk_segment_qri_ktiv_offset (id, qri_ktiv_offset) VALUES (?1, ?2)",
+    )?;
+    let mut time_frame_stmt = tx.prepare(
+        "INSERT INTO tanah_pasuk_segment_recording_time_frame (id, recording_time_frame_from, recording_time_frame_to)
+             VALUES (?1, ?2, ?3)",
+    )?;
+
     for perek in perakim {
         // Insert perek
-        tx.execute(
-            "INSERT INTO tanah_perek (id, perek, header) VALUES (?1, ?2, ?3)",
-            (perek.perek_id, perek.perek_id, &perek.header),
-        )?;
+        perek_stmt.execute((perek.perek_id, perek.perek_id, &perek.header))?;
 
         // Insert perek dates (one per cycle)
         for (cycle_idx, date_val) in perek.date.iter().enumerate() {
@@ -210,17 +227,13 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
                 .get(cycle_idx)
                 .map(|s| s.as_str())
                 .unwrap_or("");
-            tx.execute(
-                "INSERT OR IGNORE INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                (
-                    perek.perek_id,
-                    cycle,
-                    date_val.to_string(),
-                    date_val.to_string(),
-                    star_rise,
-                ),
-            )?;
+            perek_date_stmt.execute((
+                perek.perek_id,
+                cycle,
+                date_val.to_string(),
+                date_val.to_string(),
+                star_rise,
+            ))?;
         }
 
         for (pasuk_idx, pasuk) in perek.pesukim.iter().enumerate() {
@@ -230,11 +243,7 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
                 let seg_type = &segment.segment_type;
 
                 // Insert into base segment table (no offset here - it goes to subtable)
-                tx.execute(
-                    "INSERT INTO tanah_pasuk_segment (sefer_id, perek_id, pasuk_id, segment_type)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    (sefer_id, perek.perek_id, pasuk_id, seg_type),
-                )?;
+                segment_stmt.execute((sefer_id, perek.perek_id, pasuk_id, seg_type))?;
 
                 let segment_id = tx.last_insert_rowid();
 
@@ -242,29 +251,19 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
                 if (seg_type == "ktiv" || seg_type == "qri")
                     && let Some(value) = &segment.value
                 {
-                    tx.execute(
-                        "INSERT INTO tanah_pasuk_segment_value (id, value) VALUES (?1, ?2)",
-                        (segment_id, value),
-                    )?;
+                    segment_value_stmt.execute((segment_id, value))?;
                 }
 
                 // ktiv and qri segments may have offset to paired segment
                 if let Some(offset) = segment.qri_ktiv_offset() {
-                    tx.execute(
-                        "INSERT INTO tanah_pasuk_segment_qri_ktiv_offset (id, qri_ktiv_offset) VALUES (?1, ?2)",
-                        (segment_id, offset),
-                    )?;
+                    offset_stmt.execute((segment_id, offset))?;
                 }
 
                 // qri segments have recording time frame
                 if seg_type == "qri"
                     && let Some(tf) = &segment.recording_time_frame
                 {
-                    tx.execute(
-                        "INSERT INTO tanah_pasuk_segment_recording_time_frame (id, recording_time_frame_from, recording_time_frame_to)
-                             VALUES (?1, ?2, ?3)",
-                        (segment_id, &tf.from, &tf.to),
-                    )?;
+                    time_frame_stmt.execute((segment_id, &tf.from, &tf.to))?;
                 }
 
                 // ptuha and stuma have no subtables - only the base segment
