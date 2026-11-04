@@ -1084,32 +1084,28 @@ mod tests {
 
     #[tokio::test]
     async fn schema_executes_authorized_dedication_create() {
-        use entities::{
-            dedication, dedication_dedication_type, dedication_type, sefer, sefer_dedication,
-        };
+        use entities::{dedication, dedication_type, sefer};
 
-        let now = chrono::Utc::now().naive_utc();
+        use crate::services::dedications_service::{
+            KIND_PURPOSE_LINK, KIND_PURPOSE_TYPE, KIND_SEFER_DED, urow,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 // purpose validation
-                .append_query_results::<
-                    dedication_type::Model,
-                    Vec<dedication_type::Model>,
-                    _,
-                >([vec![dedication_type::Model {
-                    id: 1,
-                    description: "לע\"נ".to_string(),
-                }]])
+                .append_query_results::<dedication_type::Model, Vec<dedication_type::Model>, _>([
+                    vec![dedication_type::Model {
+                        id: 1,
+                        description: "לע\"נ".to_string(),
+                    }],
+                ])
                 // sefer target validation (מלאכי, perakim 565-567)
-                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
-                    sefer::Model {
-                        id: 24,
-                        name: "מלאכי".to_string(),
-                        tanach_us_name: None,
-                        perek_id_from: 565,
-                        perek_id_to: 567,
-                    },
-                ]])
+                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![sefer::Model {
+                    id: 24,
+                    name: "מלאכי".to_string(),
+                    tanach_us_name: None,
+                    perek_id_from: 565,
+                    perek_id_to: 567,
+                }]])
                 // insert dedication + purpose link + sefer link
                 .append_exec_results([
                     MockExecResult {
@@ -1125,47 +1121,15 @@ mod tests {
                         rows_affected: 1,
                     },
                 ])
-                // find_aggregate → list_all: 6 empty link tables + the sefer row
-                .append_query_results::<
-                    entities::perek_dedication::Model,
-                    Vec<entities::perek_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    sefer_dedication::Model,
-                    Vec<sefer_dedication::Model>,
-                    _,
-                >([vec![sefer_dedication::Model {
-                    sefer_id: 24,
-                    dedication_id: 42,
-                    expires_at: None,
-                    created_at: now.and_utc(),
-                }]])
-                .append_query_results::<
-                    entities::helek_dedication::Model,
-                    Vec<entities::helek_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::parasha_dedication::Model,
-                    Vec<entities::parasha_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::article_dedication::Model,
-                    Vec<entities::article_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::tanahpedia_entry_dedication::Model,
-                    Vec<entities::tanahpedia_entry_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::masora_dedication::Model,
-                    Vec<entities::masora_dedication::Model>,
-                    _,
-                >([vec![]])
+                // find_aggregate → list_all: one UNION ALL read (sefer
+                // scope row + purpose link + type), then the dedication row
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>(
+                    vec![vec![
+                        urow(KIND_SEFER_DED, Some(42), Some(24), None, None, None),
+                        urow(KIND_PURPOSE_LINK, Some(42), Some(1), None, None, None),
+                        urow(KIND_PURPOSE_TYPE, Some(1), None, None, Some("לע\"נ"), None),
+                    ]],
+                )
                 .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                     dedication::Model {
                         id: 42,
@@ -1173,22 +1137,6 @@ mod tests {
                         expires_at: None,
                     },
                 ]])
-                .append_query_results::<
-                    dedication_dedication_type::Model,
-                    Vec<dedication_dedication_type::Model>,
-                    _,
-                >([vec![dedication_dedication_type::Model {
-                    dedication_id: 42,
-                    dedication_type_id: 1,
-                }]])
-                .append_query_results::<
-                    dedication_type::Model,
-                    Vec<dedication_type::Model>,
-                    _,
-                >([vec![dedication_type::Model {
-                    id: 1,
-                    description: "לע\"נ".to_string(),
-                }]])
                 .into_connection(),
         );
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
@@ -1218,50 +1166,26 @@ mod tests {
 
     #[tokio::test]
     async fn schema_resolves_public_dedications_for_sefer_context() {
-        use entities::{
-            dedication, dedication_dedication_type, dedication_type, helek, sefer, sefer_dedication,
-        };
+        use entities::dedication;
 
-        let now = chrono::Utc::now().naive_utc();
+        use crate::services::dedications_service::{
+            KIND_HELEK, KIND_PURPOSE_LINK, KIND_PURPOSE_TYPE, KIND_SEFER, KIND_SEFER_DED, urow,
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                // ancestor expansion: canonical sefer + helek tables
-                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
-                    sefer::Model {
-                        id: 24,
-                        name: "מלאכי".to_string(),
-                        tanach_us_name: None,
-                        perek_id_from: 565,
-                        perek_id_to: 567,
-                    },
-                ]])
-                .append_query_results::<helek::Model, Vec<helek::Model>, _>([vec![
-                    helek::Model {
-                        id: 1,
-                        name: "תורה".to_string(),
-                        sefer_id_from: 1,
-                        sefer_id_to: 5,
-                    },
-                ]])
-                // sefer-scope link rows — one matches sefer 24
-                .append_query_results::<
-                    sefer_dedication::Model,
-                    Vec<sefer_dedication::Model>,
-                    _,
-                >([vec![
-                    sefer_dedication::Model {
-                        sefer_id: 24,
-                        dedication_id: 42,
-                        expires_at: None,
-                        created_at: now.and_utc(),
-                    },
-                    sefer_dedication::Model {
-                        sefer_id: 7,
-                        dedication_id: 43,
-                        expires_at: None,
-                        created_at: now.and_utc(),
-                    },
-                ]])
+                // one UNION ALL read: canonical sefer/helek ranges + sefer
+                // scope links (42 matches sefer 24; 43's sefer 7 is out of
+                // context) + purpose link/type for dedication 42
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>(
+                    vec![vec![
+                        urow(KIND_SEFER, Some(24), Some(565), Some(567), None, None),
+                        urow(KIND_HELEK, Some(1), Some(1), Some(5), None, None),
+                        urow(KIND_SEFER_DED, Some(42), Some(24), None, None, None),
+                        urow(KIND_SEFER_DED, Some(43), Some(7), None, None, None),
+                        urow(KIND_PURPOSE_LINK, Some(42), Some(1), None, None, None),
+                        urow(KIND_PURPOSE_TYPE, Some(1), None, None, Some("לע\"נ"), None),
+                    ]],
+                )
                 // hydrate: dedication 42 (+43 filtered out upstream)
                 .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                     dedication::Model {
@@ -1270,22 +1194,6 @@ mod tests {
                         expires_at: None,
                     },
                 ]])
-                .append_query_results::<
-                    dedication_dedication_type::Model,
-                    Vec<dedication_dedication_type::Model>,
-                    _,
-                >([vec![dedication_dedication_type::Model {
-                    dedication_id: 42,
-                    dedication_type_id: 1,
-                }]])
-                .append_query_results::<
-                    dedication_type::Model,
-                    Vec<dedication_type::Model>,
-                    _,
-                >([vec![dedication_type::Model {
-                    id: 1,
-                    description: "לע\"נ".to_string(),
-                }]])
                 .into_connection(),
         );
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
