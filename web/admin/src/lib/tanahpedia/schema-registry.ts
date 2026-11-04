@@ -81,6 +81,7 @@ export const TANAH_MEDIA_CORE_TABLES: SchemaTableDoc[] = [
 			{ column: "entry_id", sqlType: "char(36) FK → entry", nullable: false },
 			{ column: "entity_id", sqlType: "char(36) FK → entity", nullable: false },
 		],
+		fks: ["UNIQUE(entry_id, entity_id) — קישור אחד לכל צמד ערך-יישות"],
 	},
 ];
 
