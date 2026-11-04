@@ -177,4 +177,106 @@ public class FlyoutMenuStateTests : IDisposable
         _service.MasoraMenuEnabled = false;
         viewModel.MasoraMenuEnabled.Should().BeFalse();
     }
+
+    [Fact]
+    public void CurrentDestination_UpdatesTheMatchingIsCurrentFlag()
+    {
+        var state = new FlyoutMenuState(_service);
+
+        state.CurrentDestination.Should().Be(FlyoutDestination.None);
+        state.IsAlHaperekCurrent.Should().BeFalse();
+
+        state.CurrentDestination = FlyoutDestination.AlHaperek;
+
+        state.IsAlHaperekCurrent.Should().BeTrue();
+        state.IsParashaCurrent.Should().BeFalse("exactly one row claims the page");
+
+        state.CurrentDestination = FlyoutDestination.Parasha;
+
+        state.IsAlHaperekCurrent.Should().BeFalse();
+        state.IsParashaCurrent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CurrentDestination_NotifiesEveryIsCurrentFlag()
+    {
+        // Rows bind to their own Is*Current flag — a destination change must
+        // refresh all of them, not only the two whose truth value flipped.
+        var state = new FlyoutMenuState(_service);
+        var changes = new List<string?>();
+        state.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        state.CurrentDestination = FlyoutDestination.Preferences;
+
+        changes.Should().Contain(nameof(FlyoutMenuState.CurrentDestination));
+        changes.Should().Contain(nameof(FlyoutMenuState.IsPreferencesCurrent));
+        changes.Should().Contain(nameof(FlyoutMenuState.IsAlHaperekCurrent),
+            "the previously-selected row must repaint as unselected");
+        changes.Should().Contain(nameof(FlyoutMenuState.IsDonationsCurrent));
+    }
+
+    // Literal route names — the test pins the values registered in AppShell,
+    // so a route rename breaks here instead of silently unselecting a row.
+    [Theory]
+    [InlineData("PerekPage", FlyoutDestination.AlHaperek)]
+    [InlineData("searchReader", FlyoutDestination.AlHaperek)]
+    [InlineData("calendarReader", FlyoutDestination.AlHaperek)]
+    [InlineData("TanahpediaPage", FlyoutDestination.Tanahpedia)]
+    [InlineData("tanahpediaCategory", FlyoutDestination.Tanahpedia)]
+    [InlineData("tanahpediaEntry", FlyoutDestination.Tanahpedia)]
+    [InlineData("LearningCalendarPage", FlyoutDestination.LearningCalendar)]
+    [InlineData("MasoraPage", FlyoutDestination.Masora)]
+    [InlineData("ParashaListPage", FlyoutDestination.Parasha)]
+    [InlineData("ParashaPage", FlyoutDestination.Parasha)]
+    [InlineData("AuthorsPage", FlyoutDestination.Authors)]
+    [InlineData("DailyBulletinPage", FlyoutDestination.DailyBulletin)]
+    [InlineData("TosPage", FlyoutDestination.Terms)]
+    [InlineData("PreferencesPage", FlyoutDestination.Preferences)]
+    [InlineData("DisplayPreferencesPage", FlyoutDestination.Preferences)]
+    [InlineData("RecitationPreferencesPage", FlyoutDestination.Preferences)]
+    [InlineData("PerekPreferencesPage", FlyoutDestination.Preferences)]
+    [InlineData("ExtensionPacksPage", FlyoutDestination.Preferences)]
+    [InlineData("SoundPreferencesPage", FlyoutDestination.Preferences)]
+    [InlineData("SupportPreferencesPage", FlyoutDestination.Preferences)]
+    [InlineData("ContactPage", FlyoutDestination.Contact)]
+    [InlineData("DonationsPage", FlyoutDestination.Donations)]
+    public void DestinationFor_MapsRegisteredRoutesToTheirFlyoutRow(string route, FlyoutDestination expected)
+    {
+        FlyoutMenuState.DestinationFor(route).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("ArticlesPage")]
+    [InlineData("articleDetail")]
+    [InlineData("unregisteredRoute")]
+    [InlineData("")]
+    public void DestinationFor_RoutesWithoutARow_ClearTheSelection(string route)
+    {
+        FlyoutMenuState.DestinationFor(route).Should().Be(FlyoutDestination.None);
+    }
+
+    [Fact]
+    public void DestinationFor_Null_ClearsTheSelection()
+    {
+        FlyoutMenuState.DestinationFor(null).Should().Be(FlyoutDestination.None);
+    }
+
+    [Theory]
+    [InlineData("//PerekPage", FlyoutDestination.AlHaperek)]
+    [InlineData("//PerekPage/TanahpediaPage", FlyoutDestination.Tanahpedia)]
+    [InlineData("//PerekPage/TanahpediaPage/tanahpediaEntry?id=7", FlyoutDestination.Tanahpedia)]
+    [InlineData("//PerekPage/ParashaListPage/ParashaPage", FlyoutDestination.Parasha)]
+    [InlineData("//PerekPage/searchReader?query=1", FlyoutDestination.AlHaperek)]
+    public void DestinationForLocation_UsesTheDeepestRouteSegment(string location, FlyoutDestination expected)
+    {
+        // Pushed detail routes keep their destination highlighted via the
+        // deepest segment; query strings never leak into the route key.
+        FlyoutMenuState.DestinationForLocation(location).Should().Be(expected);
+    }
+
+    [Fact]
+    public void DestinationForLocation_Null_ClearsTheSelection()
+    {
+        FlyoutMenuState.DestinationForLocation(null).Should().Be(FlyoutDestination.None);
+    }
 }

@@ -16,6 +16,12 @@ public class ReaderExitFullscreenButton : Border
     public event EventHandler? ExitRequested;
 #pragma warning restore S3264
 
+    /// <summary>
+    /// Raises <see cref="ExitRequested"/>. Called by the Windows platform
+    /// Button (#2766); invoked directly by tests on every platform.
+    /// </summary>
+    internal void SendExitRequested() => ExitRequested?.Invoke(this, EventArgs.Empty);
+
     public ReaderExitFullscreenButton()
     {
         AutomationId = "ExitFullScreenButton";
@@ -70,7 +76,7 @@ public class ReaderExitFullscreenButton : Border
                 nativeView.Touch += OnNativeTouch;
             }
         };
-#else
+#elif !WINDOWS
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
         GestureRecognizers.Add(tap);
@@ -78,6 +84,11 @@ public class ReaderExitFullscreenButton : Border
         var pan = new PanGestureRecognizer();
         pan.PanUpdated += OnPan;
         GestureRecognizers.Add(pan);
+#else
+        // Windows: the platform view IS an activatable Button — recognizers
+        // would double-fire ExitRequested alongside Click, and the native
+        // Button swallows the pointer events a pan recognizer needs (#2766).
+        // The handler owns click + drag.
 #endif
     }
 
@@ -157,7 +168,7 @@ public class ReaderExitFullscreenButton : Border
                 break;
         }
     }
-#else
+#elif !WINDOWS
     private double _panStartX;
     private double _panStartY;
 
