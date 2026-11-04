@@ -261,21 +261,60 @@ const strField = (fields, name) =>
 		? tomlStringContent(fields.get(name).raw)
 		: null;
 
+/**
+ * A cargo-make script body: a string literal or an array of string lines
+ * (`script = ["cmd1", "cmd2"]` runs as one duckscript). Returns null for
+ * anything else.
+ */
+function scriptContent(kind, raw) {
+	if (kind === "string") return tomlStringContent(raw);
+	if (kind !== "array") return null;
+	const parts = [];
+	for (const el of inlineArrayElements(raw)) {
+		if (el.kind !== "string") return null;
+		parts.push(tomlStringContent(el.raw));
+	}
+	return parts.join("\n");
+}
+
+/** scriptContent for a named field inside an inline table. */
+const scriptField = (fields, name) =>
+	fields.has(name) ? scriptContent(fields.get(name).kind, fields.get(name).raw) : null;
+
 // ---------------------------------------------------------------------------
 // Duckscript archive-command detection.
 // ---------------------------------------------------------------------------
 
-// SDK archive tokens: the lowercase aliases plus any namespaced name ending
-// in a zip-family word (0.11.1 registers fs::zip::{Unzip,Zip}; other releases
-// may prefix differently, so namespaced forms are matched deliberately wide).
-const ARCHIVE_TOKEN_RE = /^(?:unzip|zip|(?:::)?(?:[A-Za-z_][\w]*::)+(?:[uU]nzip|[zZ]ip))$/;
-const ALIAS_RE = /\b(?:alias|(?:[A-Za-z_][\w]*::)+[Aa]lias)\s+(\S+)\s+(\S+)/;
+// SDK archive tokens: the lowercase `unzip`/`zip` aliases plus namespaced
+// command names whose leaf is a zip-family word (0.11.1 registers
+// fs::zip::{Unzip,Zip}; other releases may prefix differently, so any
+// `*::*zip` leaf counts). Membership is checked with string ops — no
+// nested-quantifier patterns on file content.
+const isNamespacedZip = (token) => {
+	const leaf = token.slice(token.lastIndexOf("::") + 2);
+	return (
+		token.includes("::") &&
+		(leaf === "unzip" || leaf === "zip" || leaf === "Unzip" || leaf === "Zip")
+	);
+};
+const isArchiveToken = (token) => token === "unzip" || token === "zip" || isNamespacedZip(token);
+// `alias`/`unalias` are the aliases of the SDK's lib::alias::{Set,Unset}
+// commands; the leaf names cover the namespaced spellings too.
+const isAliasCommand = (token) =>
+	token === "alias" || token.endsWith("::alias") || token.endsWith("::Alias") || token.endsWith("::Set");
+const isUnaliasCommand = (token) =>
+	token === "unalias" ||
+	token.endsWith("::unalias") ||
+	token.endsWith("::Unalias") ||
+	token.endsWith("::Unset");
 // Command-position candidates: a token at line start, after '=', ';', or a
 // flow keyword whose argument is itself a command invocation — captured for
 // a membership check rather than baked into a dynamic pattern. The keyword
 // itself is excluded from the capture (`if unzip a b` flags `unzip`).
+// Global: every candidate on the line is checked, so `a; unzip x y` and a
+// second invocation after the first command cannot slip through.
 const CALL_CANDIDATE_RE =
-	/(?:^|[;=]|\b(?:if|elseif|elif|while|until|not|and|or|for|for_each|for_each_in|do|then|fn)\s+)\s*(?!(?:if|elseif|elif|while|until|not|and|or|for|for_each|for_each_in|do|then|fn)\b)([A-Za-z_][\w:]*)\b(?!\s*=)/;
+	/(?:^|[;=]|\b(?:if|elseif|elif|while|until|not|and|or|for|for_each|for_each_in|do|then|fn)\s+)\s*(?!(?:if|elseif|elif|while|until|not|and|or|for|for_each|for_each_in|do|then|fn)\b)([A-Za-z_][\w:]*)\b(?!\s*=)/g;
 
 /** Blank out comments and "..." string contents, line by line. */
 function maskDuckscript(script) {
@@ -308,19 +347,24 @@ function maskDuckscript(script) {
 export function findArchiveInvocations(script) {
 	const masked = maskDuckscript(script);
 	const aliases = new Set();
-	for (const line of masked) {
-		const m = line.match(ALIAS_RE);
-		if (m) {
-			const target = m[2].replace(/^["']|["']$/g, "");
-			if (ARCHIVE_TOKEN_RE.test(target)) aliases.add(m[1].replace(/^["']|["']$/g, ""));
+	// First collect `alias <name> <archive-command>` bindings so rebound
+	// names cannot launder an SDK archive call past the gate; `unalias`
+	// drops a binding.
+	for (const code of masked) {
+		for (const m of code.matchAll(CALL_CANDIDATE_RE)) {
+			const [name, target] = code
+				.slice(m.index + m[0].length)
+				.trimStart()
+				.split(/\s+/);
+			if (isAliasCommand(m[1]) && name && target && isArchiveToken(target)) aliases.add(name);
+			else if (isUnaliasCommand(m[1]) && name) aliases.delete(name);
 		}
 	}
-	const isArchiveCommand = (token) =>
-		token === "unzip" || token === "zip" || aliases.has(token) || ARCHIVE_TOKEN_RE.test(token);
+	const isArchiveCommand = (token) => isArchiveToken(token) || aliases.has(token);
 	const hits = [];
 	masked.forEach((code, idx) => {
-		const m = code.match(CALL_CANDIDATE_RE);
-		if (m && isArchiveCommand(m[1])) hits.push({ command: m[1], line: idx + 1 });
+		for (const m of code.matchAll(CALL_CANDIDATE_RE))
+			if (isArchiveCommand(m[1])) hits.push({ command: m[1], line: idx + 1 });
 	});
 	return hits;
 }
@@ -371,7 +415,7 @@ export function analyzeMakefile(text) {
 				if (strField(fields, "path"))
 					extendsDecl.push({
 						path: strField(fields, "path"),
-						optional: /\boptional\s*=\s*true\b/.test(raw),
+						optional: fields.get("optional")?.raw.trim() === "true",
 						line,
 					});
 			} else if (kind === "array") {
@@ -383,7 +427,7 @@ export function analyzeMakefile(text) {
 						if (strField(fields, "path"))
 							extendsDecl.push({
 								path: strField(fields, "path"),
-								optional: /\boptional\s*=\s*true\b/.test(el.raw),
+								optional: fields.get("optional")?.raw.trim() === "true",
 								line,
 							});
 					}
@@ -398,8 +442,8 @@ export function analyzeMakefile(text) {
 		// always duckscript.
 		if ((section === "env" || (task && sub === "env")) && kind === "table" && keyPath.length === 1) {
 			const fields = inlineTableFields(raw);
-			if (strField(fields, "script"))
-				sources.push({ task: task ?? ENV_TASK, script: strField(fields, "script"), line });
+			if (scriptField(fields, "script") !== null)
+				sources.push({ task: task ?? ENV_TASK, script: scriptField(fields, "script"), line });
 			continue;
 		}
 		// [tasks.X.script] table form and [tasks.X.condition] script.
@@ -409,17 +453,18 @@ export function analyzeMakefile(text) {
 			holder[key === "absolute_path" ? "absolutePath" : key] = tomlStringContent(raw);
 			continue;
 		}
-		if (task && sub === "condition" && key === "script" && kind === "string") {
-			sources.push({ task, script: tomlStringContent(raw), line });
+		if (task && sub === "condition" && key === "script" && scriptContent(kind, raw) !== null) {
+			sources.push({ task, script: scriptContent(kind, raw), line });
 			continue;
 		}
 		if (!task || sub !== "") continue;
 
 		if (key === "script") {
 			if (keyPath.length === 1) {
-				if (kind === "string") {
+				const body = scriptContent(kind, raw);
+				if (body !== null) {
 					const list = inlineScripts.get(task) ?? [];
-					list.push({ script: tomlStringContent(raw), line });
+					list.push({ script: body, line });
 					inlineScripts.set(task, list);
 				} else if (kind === "table") {
 					const fields = inlineTableFields(raw);
@@ -447,27 +492,30 @@ export function analyzeMakefile(text) {
 		if (key === "condition") {
 			if (keyPath.length === 1 && kind === "table") {
 				const fields = inlineTableFields(raw);
-				if (strField(fields, "script"))
-					sources.push({ task, script: strField(fields, "script"), line });
-			} else if (keyPath[1] === "script" && kind === "string") {
-				sources.push({ task, script: tomlStringContent(raw), line });
+				if (scriptField(fields, "script") !== null)
+					sources.push({ task, script: scriptField(fields, "script"), line });
+			} else if (keyPath[1] === "script" && scriptContent(kind, raw) !== null) {
+				sources.push({ task, script: scriptContent(kind, raw), line });
 			}
 			continue;
 		}
-		if (key === "condition_script" && keyPath.length === 1 && kind === "string") {
-			sources.push({ task, script: tomlStringContent(raw), line });
+		if (key === "condition_script" && keyPath.length === 1 && scriptContent(kind, raw) !== null) {
+			sources.push({ task, script: scriptContent(kind, raw), line });
 			continue;
 		}
 	}
 
 	// An inline `script` runs as duckscript unless the task pinned a
-	// non-duckscript script_runner.
+	// non-duckscript script_runner. The same task-level runner applies to
+	// file scripts: `script_runner = "@shell"` makes a `.ds` file execute
+	// through the shell, not the SDK.
 	for (const [task, list] of inlineScripts) {
 		const runner = taskRunners.get(task);
 		if (runner && runner !== DUCKSCRIPT_RUNNER) continue;
 		for (const s of list) sources.push({ task, ...s });
 	}
 	fileScripts.push(...scriptTables.values(), ...dottedScripts.values());
+	for (const fs of fileScripts) fs.runner ??= taskRunners.get(fs.task) ?? null;
 	return { sources, fileScripts, extends: extendsDecl, tasks: [...tasks] };
 }
 
@@ -512,7 +560,11 @@ export function checkWorkflowPins(root) {
 			readFileSync(p, "utf8")
 				.split("\n")
 				.forEach((text, idx) => {
-					for (const m of text.matchAll(pinRe)) {
+					// `#` preceded by whitespace starts a YAML comment — a
+					// historical pin version in a comment is documentation,
+					// not an install site.
+					const code = text.replace(/(^|\s)#.*$/, "");
+					for (const m of code.matchAll(pinRe)) {
 						const key = `${rel(root, p)}:${idx + 1}`;
 						if (!byVersion.has(m[1])) byVersion.set(m[1], []);
 						byVersion.get(m[1]).push(key);
@@ -579,8 +631,15 @@ export function checkCargoGraphs(root) {
 		readFileSync(p, "utf8")
 			.split("\n")
 			.forEach((text, idx) => {
-				if (/^\s*["']?cargo-make["']?\s*=/.test(text))
-					findings.push({
+				// `cargo-make` / `"cargo-make"` as a dependency key — string ops
+				// only, so the check adds no regex-over-input surface.
+				let t = text.trimStart();
+				if (t[0] === '"' || t[0] === "'") t = t.slice(1);
+				if (!t.startsWith("cargo-make")) return;
+				let rest = t.slice("cargo-make".length).trimStart();
+				if (rest[0] === '"' || rest[0] === "'") rest = rest.slice(1).trimStart();
+				if (!rest.startsWith("=")) return;
+				findings.push({
 						check: "cargo-graphs",
 						message: `${rel(root, p)}:${idx + 1} declares cargo-make — the CLI is installed via CI pins, not the Rust dependency graph (${ISSUE_URL})`,
 					});
@@ -630,9 +689,14 @@ export function checkArchiveTasks(root, allowlist) {
 		for (const fs of analysis.fileScripts) {
 			const rawPath = fs.file ?? fs.absolutePath;
 			if (!rawPath) continue;
-			const ext = rawPath.includes(".") ? rawPath.split(".").pop().toLowerCase() : null;
-			// External runner or a non-.ds extension => not duckscript.
-			if ((fs.runner && fs.runner !== DUCKSCRIPT_RUNNER) || (ext && ext !== "ds")) continue;
+			// Task-level script_runner already resolved into fs.runner.
+			// An explicit `extension` overrides the filename for engine
+			// selection; a non-.ds script without a duckscript runner is an
+			// external process, not the SDK path.
+			const ext = (fs.extension ?? (rawPath.includes(".") ? rawPath.split(".").pop() : null))
+				?.toLowerCase();
+			if (fs.runner && fs.runner !== DUCKSCRIPT_RUNNER) continue;
+			if (!fs.runner && ext && ext !== "ds") continue;
 			const target = isAbsolute(rawPath) ? rawPath : resolve(dirname(file), rawPath);
 			if (!existsSync(target)) {
 				findings.push({
