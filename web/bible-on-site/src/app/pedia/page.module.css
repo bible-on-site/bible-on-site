@@ -12,7 +12,7 @@
 .pageTitle {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
   text-align: center;
 }
@@ -28,7 +28,7 @@
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0 0 32px 0;
   text-align: center;
 }
@@ -37,7 +37,7 @@
   max-width: 40rem;
   margin: 0 auto 24px auto;
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #fef3c7;
   border: 1px solid #f59e0b;
   text-align: right;
@@ -60,7 +60,7 @@
   font-size: 0.85em;
   padding: 2px 6px;
   background: rgba(255, 255, 255, 0.7);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .dbLoadWarningPre {
@@ -69,31 +69,33 @@
   font-size: 0.8rem;
   overflow: auto;
   background: rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .breadcrumb {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin-bottom: 12px;
   text-align: center;
 }
 
 .breadcrumbLink {
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   text-decoration: none;
 }
 
-.breadcrumbLink:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .breadcrumbLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .sectionTitle {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 16px 0;
 }
 
@@ -117,7 +119,7 @@
   display: block;
   padding: 24px 16px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   text-align: center;
   text-decoration: none;
   color: inherit;
@@ -127,9 +129,11 @@
     box-shadow 0.2s ease;
 }
 
-.categoryCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .categoryCard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .categoryCardEmpty {
@@ -138,15 +142,17 @@
   border: 1px dashed #d1d5db;
 }
 
-.categoryCardEmpty:hover {
-  transform: none;
-  box-shadow: none;
+@media (hover: hover) {
+  .categoryCardEmpty:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .comingSoonBadge {
   display: inline-block;
   padding: 1px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #e5e7eb;
   color: #4b5563;
   font-size: 0.75rem;
@@ -167,15 +173,17 @@
   align-items: center;
   padding: 6px 12px;
   background: #f0f4ff;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   text-decoration: none;
   color: inherit;
-  border-right: 3px solid #1a73e8;
+  border-right: 3px solid var(--link-accent, #1a73e8);
   transition: background 0.15s ease;
 }
 
-.subcategoryCard:hover {
-  background: #dce6fa;
+@media (hover: hover) {
+  .subcategoryCard:hover {
+    background: #dce6fa;
+  }
 }
 
 .subcategoryCardEmpty {
@@ -183,37 +191,39 @@
   border-right-color: #d1d5db;
 }
 
-.subcategoryCardEmpty:hover {
-  background: #f3f4f6;
+@media (hover: hover) {
+  .subcategoryCardEmpty:hover {
+    background: #f3f4f6;
+  }
 }
 
 .subcategoryName {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #1c2c5d;
+  color: var(--accent-900);
 }
 
 .subcategoryCount {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
 }
 
 .categoryName {
   font-size: 1.15rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 6px 0;
 }
 
 .categoryCount {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0;
 }
 
 .categoryCardEmpty .categoryName,
 .subcategoryCardEmpty .subcategoryName {
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
 }
 
 .recentList {
@@ -230,14 +240,16 @@
   display: inline-block;
   padding: 8px 16px;
   text-decoration: none;
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   font-size: 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: background 0.15s ease;
 }
 
-.recentLink:hover {
-  background: #e8f0fe;
+@media (hover: hover) {
+  .recentLink:hover {
+    background: #e8f0fe;
+  }
 }
 
 .backLinkWrapper {
@@ -248,17 +260,19 @@
 .backLink {
   display: inline-block;
   padding: 12px 32px;
-  background: #1c2c5d;
+  background: var(--accent-900);
   color: #fff;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: all 0.2s ease;
 }
 
-.backLink:hover {
-  background: #2a3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .backLink:hover {
+    background: #2a3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 /* Entity type page */
@@ -279,17 +293,19 @@
 
 .entityName {
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
 }
 
 .entityEntryLink {
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   text-decoration: none;
   font-weight: 600;
 }
 
-.entityEntryLink:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .entityEntryLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .entityEntryList {
@@ -301,7 +317,7 @@
 .noEntryBadge {
   display: inline-block;
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   margin-right: 8px;
 }
 
@@ -309,9 +325,9 @@
   background: #f0f0f0;
   padding: 48px;
   text-align: center;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   margin-bottom: 32px;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   font-size: 1rem;
 }
 
@@ -329,8 +345,8 @@
   padding: 0;
   background: #f8fafc;
   border: 1px dashed #c7d2fe;
-  border-radius: 12px;
-  color: #64748b;
+  border-radius: var(--radius-lg);
+  color: var(--muted-text, #64748b);
   font-size: 0.95rem;
   font-family: inherit;
 }
@@ -338,7 +354,7 @@
 .mapFootnote {
   font-size: 0.82rem;
   line-height: 1.5;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 12px 0 0;
   text-align: center;
 }
@@ -347,6 +363,27 @@
 .entryContent {
   line-height: 1.8;
   font-size: 1.1rem;
+}
+
+/* Inline links inside DB-authored entry/homepage prose need a persistent
+   non-color cue (WCAG 1.4.1) — the global `a { text-decoration: none }`
+   reset would otherwise hide them (#2767). The footnote sup markers and
+   the .footnote-backref arrow keep their own affordances through higher
+   specificity. */
+.entryContent a,
+.homepageContent a {
+  color: var(--link-accent, #1a73e8);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
+/* Footnote marker tokens shared by the inline reference sup and the
+   note-list generated letter, so both resolve to the same style and cannot
+   drift apart (#2723). */
+.entryContent,
+.homepageContent {
+  --footnote-marker-color: var(--link-accent, #1a73e8);
+  --footnote-marker-size: 11px;
 }
 
 /* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
@@ -361,10 +398,10 @@
 
 .entryContent sup,
 .homepageContent sup {
-  font-size: 11px;
+  font-size: var(--footnote-marker-size);
   vertical-align: super;
   line-height: 0;
-  color: #1a73e8;
+  color: var(--footnote-marker-color);
   font-weight: normal;
 }
 
@@ -375,9 +412,11 @@
   padding: 0 1px;
 }
 
-.entryContent sup a:hover,
-.homepageContent sup a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .entryContent sup a:hover,
+  .homepageContent sup a:hover {
+    text-decoration: underline;
+  }
 }
 
 /* הערות שוליים — כל הסימונים הדקורטיביים (אות האזכור, תווית ההערה, חץ החזרה)
@@ -398,21 +437,40 @@
   border-top: 1px solid #dadce0;
   font-size: 0.95rem;
   color: #3c4043;
+  /* Gutter shared by the hanging indent and the generated marker box. A rem
+     value keeps both aligned no matter the marker's own font-size (#2723). */
+  --footnote-marker-indent: 1.7rem;
 }
 
 .entryContent ol:global(.footnotes) li,
 .homepageContent ol:global(.footnotes) li {
-  position: relative;
   margin: 0.35em 0;
-  padding-inline-start: 1.8em;
+  padding-inline-start: var(--footnote-marker-indent);
+  /* Hanging indent: the first line (marker + note text) reaches the item
+     edge while wrapped lines stay indented beside the marker. */
+  text-indent: calc(-1 * var(--footnote-marker-indent));
+}
+
+/* Note bodies may wrap their text in <p> — the first paragraph flows inline
+   so the generated marker shares the item's first line. */
+.entryContent ol:global(.footnotes) li > p:first-child,
+.homepageContent ol:global(.footnotes) li > p:first-child {
+  display: inline;
 }
 
 .entryContent ol:global(.footnotes) li::before,
 .homepageContent ol:global(.footnotes) li::before {
   content: attr(data-marker);
-  position: absolute;
-  inset-inline-start: 0;
-  color: #5f6368;
+  /* The marker is a real in-flow inline box — vertical-align: super is
+     ignored on absolutely positioned pseudo-elements. */
+  display: inline-block;
+  inline-size: var(--footnote-marker-indent);
+  text-indent: 0;
+  font-size: var(--footnote-marker-size);
+  line-height: 0;
+  vertical-align: super;
+  color: var(--footnote-marker-color);
+  font-weight: normal;
 }
 
 /* כותרת המקטע נוצרת גם היא — אחידה לכל דורות הסימון */
@@ -434,7 +492,7 @@
 .homepageContent a:global(.footnote-backref) {
   margin-inline-start: 0.4em;
   text-decoration: none;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
 }
 
 .entryContent a:global(.footnote-backref)::before,
@@ -449,7 +507,7 @@
 .entryContent sup:target,
 .homepageContent sup:target {
   background-color: #fff3bf;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .entityBadges {
@@ -463,22 +521,24 @@
   display: inline-block;
   padding: 4px 12px;
   background: #e8f0fe;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   font-size: 0.85rem;
   text-decoration: none;
-  color: #1a73e8;
+  color: var(--link-accent, #1a73e8);
   transition: background 0.15s ease;
 }
 
-.entityBadge:hover {
-  background: #d2e3fc;
+@media (hover: hover) {
+  .entityBadge:hover {
+    background: #d2e3fc;
+  }
 }
 
 .emptyState {
   max-width: 40rem;
   margin: 8px auto 0;
   padding: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #f8f9ff;
   border: 1px solid #c7d2fe;
   text-align: center;
@@ -487,7 +547,7 @@
 .emptyStateTitle {
   font-size: 1.15rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
 }
 
@@ -508,7 +568,7 @@
 }
 
 .emptyContent {
-  color: #9ca3af;
+  color: var(--muted-text, #9ca3af);
   font-size: 1rem;
 }
 
@@ -540,7 +600,7 @@
 .todaySection {
   background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
   border: 1px solid #c7d2fe;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 24px 28px;
   margin-bottom: 40px;
   position: relative;
@@ -555,7 +615,7 @@
   width: 4px;
   height: 100%;
   background: linear-gradient(180deg, #4f46e5, #818cf8);
-  border-radius: 0 14px 14px 0;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
 
 .todayHeader {
@@ -575,11 +635,12 @@
 
 .todayDate {
   font-size: 0.9rem;
-  color: #6366f1;
+  /* #6366f1 measured ~4.35:1 — below AA at 0.9rem; indigo-600 passes. */
+  color: var(--hc-accent, #4f46e5);
   font-weight: 500;
   background: rgba(99, 102, 241, 0.1);
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .todayList {
@@ -603,7 +664,7 @@
 }
 
 .todayBullet {
-  color: #6366f1;
+  color: var(--hc-accent, #4f46e5);
   font-size: 0.5rem;
   margin-top: 8px;
   flex-shrink: 0;
@@ -624,10 +685,12 @@
     color 0.15s ease;
 }
 
-.todayLink:hover {
-  color: #3730a3;
-  border-bottom-style: solid;
-  border-bottom-color: #3730a3;
+@media (hover: hover) {
+  .todayLink:hover {
+    color: #3730a3;
+    border-bottom-style: solid;
+    border-bottom-color: #3730a3;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -637,7 +700,7 @@
   .categoryName,
   .entityName,
   .emptyStateTitle {
-    color: #a8b9ff;
+    color: var(--accent-200);
   }
 
   .pageSubtitle,
@@ -646,7 +709,7 @@
   .categoryCount,
   .mapFootnote,
   .mapPlaceholder {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .dbLoadWarning {
@@ -673,7 +736,7 @@
   .breadcrumbLink,
   .entityEntryLink,
   .recentLink {
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
   .categoryCard {
@@ -687,16 +750,18 @@
 
   .comingSoonBadge {
     background: #2d3548;
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .subcategoryCard {
     background: #1a2030;
-    border-right-color: #7eb0ff;
+    border-right-color: var(--accent-300);
   }
 
-  .subcategoryCard:hover {
-    background: #232a45;
+  @media (hover: hover) {
+    .subcategoryCard:hover {
+      background: #232a45;
+    }
   }
 
   .subcategoryCardEmpty {
@@ -704,21 +769,25 @@
     border-right-color: #3b4256;
   }
 
-  .subcategoryCardEmpty:hover {
-    background: #1a1f2e;
-  }
+  @media (hover: hover) {
+    .subcategoryCardEmpty:hover {
+      background: #1a1f2e;
+    }
 
-  .recentLink:hover {
-    background: #232a45;
+    .recentLink:hover {
+      background: #232a45;
+    }
   }
 
   .backLink {
-    background: #a8b9ff;
+    background: var(--accent-200);
     color: #16213d;
   }
 
-  .backLink:hover {
-    background: #c7d2fe;
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #c7d2fe;
+    }
   }
 
   .entityItem {
@@ -732,7 +801,7 @@
   .mapLoading {
     background: #12151c;
     border-color: #3b4370;
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .entryContent ol:global(.footnotes),
@@ -740,14 +809,9 @@
     color: #d7dae0;
   }
 
-  .entryContent ol:global(.footnotes) li::before,
-  .homepageContent ol:global(.footnotes) li::before {
-    color: #9aa0a6;
-  }
-
   .entryContent a:global(.footnote-backref),
   .homepageContent a:global(.footnote-backref) {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .entryContent ol:global(.footnotes) li:target,
@@ -762,8 +826,10 @@
     color: #a5b4fc;
   }
 
-  .entityBadge:hover {
-    background: #2d3a5c;
+  @media (hover: hover) {
+    .entityBadge:hover {
+      background: #2d3a5c;
+    }
   }
 
   .emptyState {
@@ -776,7 +842,7 @@
   }
 
   .emptyContent {
-    color: #9aa0a6;
+    color: var(--muted-text, #9aa0a6);
   }
 
   .todaySection {
@@ -805,8 +871,15 @@
     color: #a5b4fc;
   }
 
-  .todayLink:hover {
-    color: #c7d2fe;
-    border-bottom-color: #c7d2fe;
+  @media (hover: hover) {
+    .todayLink:hover {
+      color: #c7d2fe;
+      border-bottom-color: #c7d2fe;
+    }
   }
+}
+
+.categoryCard:active,
+.subcategoryCard:active {
+  scale: var(--press-scale);
 }

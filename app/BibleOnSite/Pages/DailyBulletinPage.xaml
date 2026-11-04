@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             x:Class="BibleOnSite.Pages.DailyBulletinPage"
+             x:DataType="viewmodels:DailyBulletinViewModel"
+             Title="עלון יומי"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
+
+    <!-- The shared navigation capsule (#2467): hamburger far right, Back
+         beside it (disabled at this root destination), title pill. -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="DailyBulletinMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="עלון יומי"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+        <!-- Join cards (#2806): three channel-branded cards mirroring the
+             website's עלון יומי surface — Telegram, WhatsApp and email, in
+             that order. The wrapping row stacks the cards one above the
+             other on small screens and lays them side by side on tablet
+             and desktop widths, like the website's join surface. -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*" Padding="0,12,0,16">
+            <Label Grid.Row="0"
+                   Text="לימוד הפרק היומי במייל, בטלגרם ובווטסאפ"
+                   FontSize="16"
+                   HorizontalTextAlignment="Center"
+                   Padding="24,4"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+
+            <ScrollView Grid.Row="1" x:Name="CardsScroll">
+                <FlexLayout x:Name="JoinCards"
+                            Wrap="Wrap"
+                            Direction="Row"
+                            JustifyContent="Center"
+                            AlignItems="Start"
+                            BindableLayout.ItemsSource="{Binding Cards}"
+                            MaximumWidthRequest="1400"
+                            HorizontalOptions="Center"
+                            Margin="0,4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="models:BulletinJoinCard">
+                            <Border StrokeShape="RoundRectangle 12"
+                                    Stroke="{StaticResource Gray200}"
+                                    StrokeThickness="1"
+                                    BackgroundColor="White"
+                                    Margin="8"
+                                    Padding="0"
+                                    FlexLayout.Basis="240"
+                                    FlexLayout.Grow="1"
+                                    MaximumWidthRequest="420">
+                                <Border.Shadow>
+                                    <Shadow Brush="Black" Offset="0,2" Radius="8" Opacity="0.12"/>
+                                </Border.Shadow>
+                                <Grid RowDefinitions="Auto,*,Auto">
+                                    <!-- Channel-branded band -->
+                                    <Border Grid.Row="0"
+                                            StrokeShape="RoundRectangle 12,12,0,0"
+                                            BackgroundColor="{Binding BrandColor}"
+                                            Padding="20"
+                                            HeightRequest="120">
+                                        <Image Source="{Binding Icon}"
+                                               HeightRequest="64"
+                                               WidthRequest="64"
+                                               Aspect="AspectFit"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"/>
+                                    </Border>
+                                    <VerticalStackLayout Grid.Row="1"
+                                                         Padding="20"
+                                                         Spacing="8"
+                                                         VerticalOptions="Start">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="20"
+                                               FontAttributes="Bold"
+                                               HorizontalTextAlignment="Center"
+                                               TextColor="#303030"/>
+                                        <Label Text="{Binding Description}"
+                                               FontSize="15"
+                                               HorizontalTextAlignment="Center"
+                                               LineBreakMode="WordWrap"
+                                               TextColor="{StaticResource Gray600}"/>
+                                    </VerticalStackLayout>
+                                    <Button Grid.Row="2"
+                                            Text="{Binding JoinLabel}"
+                                            Command="{Binding BindingContext.JoinCommand, Source={x:Reference JoinCards}}"
+                                            CommandParameter="{Binding .}"
+                                            AutomationId="{Binding AutomationId}"
+                                            SemanticProperties.Description="{Binding SemanticDescription}"
+                                            BackgroundColor="{Binding BrandColor}"
+                                            TextColor="White"
+                                            FontSize="16"
+                                            FontAttributes="Bold"
+                                            CornerRadius="8"
+                                            HeightRequest="48"
+                                            Margin="20,0,20,20"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+            </ScrollView>
+        </Grid>
+    </Grid>
+</ContentPage>

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { execute, query, queryOne } from "../db";
+import { execute, query, queryOne, transaction, txExecute } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
-import { pediaInvalidationForEntities } from "./paths";
+import { pediaChangesForEntities } from "./paths";
 
 export interface TanahpediaPlace {
 	id: string;
@@ -75,16 +75,20 @@ export const createPlace = createServerFn({ method: "POST" })
 		if (!name) throw new Error("שם מקום ריק");
 		const entityId = randomUUID();
 		const placeId = randomUUID();
-		await execute(
-			`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PLACE', ?)`,
-			[entityId, name],
-		);
-		await execute(
-			`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
-			[placeId, entityId],
-		);
+		await transaction(async (conn) => {
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PLACE', ?)`,
+				[entityId, name],
+			);
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
+				[placeId, entityId],
+			);
+		});
 		await revalidateWebsite(
-			await pediaInvalidationForEntities([entityId]),
+			await pediaChangesForEntities([entityId]),
 		);
 		return { id: placeId, entity_id: entityId };
 	});
@@ -99,7 +103,7 @@ export const deletePlace = createServerFn({ method: "POST" })
 		if (!row) throw new Error("Place not found");
 		// Resolve affected entry pages before the delete — the entity and its
 		// entry links are gone after.
-		const invalidation = await pediaInvalidationForEntities([row.entity_id]);
+		const invalidation = await pediaChangesForEntities([row.entity_id]);
 		await execute("DELETE FROM tanahpedia_entity WHERE id = ?", [
 			row.entity_id,
 		]);

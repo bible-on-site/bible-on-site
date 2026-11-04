@@ -210,6 +210,57 @@ describe("persistence and change notifications", () => {
 		);
 		expect(getDivineNameMaskingSnapshot()).not.toBe(first);
 	});
+	it("multiplexes many subscribers over one pair of window listeners (#2805)", () => {
+		// A reader page mounts hundreds of DivineNameText segments and the
+		// flip book's leaf buffer remounts pages on every turn — shared
+		// window listeners keep per-flip add/removeEventListener churn at O(1).
+		const addSpy = jest.spyOn(window, "addEventListener");
+		const removeSpy = jest.spyOn(window, "removeEventListener");
+		try {
+			const seen: number[] = [];
+			const unsubscribers = Array.from({ length: 400 }, (_, i) =>
+				subscribeDivineNameMasking(() => seen.push(i)),
+			);
+			const added = addSpy.mock.calls.filter(
+				([type]) => type === DIVINE_NAME_MASKING_EVENT || type === "storage",
+			);
+			expect(added).toHaveLength(2);
+			expect(added.map(([type]) => type)).toEqual([
+				DIVINE_NAME_MASKING_EVENT,
+				"storage",
+			]);
+			saveDivineNameMaskingSettings(
+				normalizeDivineNameMasking({ enabled: true, yhwh: "dalet" }),
+			);
+			expect(seen).toHaveLength(400);
+			for (const unsubscribe of unsubscribers) unsubscribe();
+			expect(
+				removeSpy.mock.calls.filter(
+					([type]) => type === DIVINE_NAME_MASKING_EVENT || type === "storage",
+				),
+			).toHaveLength(2);
+		} finally {
+			addSpy.mockRestore();
+			removeSpy.mockRestore();
+		}
+	});
+	it("keeps notifying remaining subscribers after some unsubscribe", () => {
+		let first = 0;
+		let second = 0;
+		const unsubFirst = subscribeDivineNameMasking(() => {
+			first += 1;
+		});
+		const unsubSecond = subscribeDivineNameMasking(() => {
+			second += 1;
+		});
+		unsubFirst();
+		saveDivineNameMaskingSettings(
+			normalizeDivineNameMasking({ enabled: true, yhwh: "dalet" }),
+		);
+		expect(first).toBe(0);
+		expect(second).toBe(1);
+		unsubSecond();
+	});
 	it("feeds masked rendering end-to-end", () => {
 		saveDivineNameMaskingSettings(
 			normalizeDivineNameMasking({ enabled: true, elohim: "elokim" }),

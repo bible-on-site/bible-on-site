@@ -7,7 +7,6 @@ import {
 import type { CoverageReportOptions } from "monocart-reporter";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { monocartAllFilter } from "./.covignore.mjs";
-import { getDebugPort } from "./get-debug-port";
 import type { TestType } from "./tests/util/playwright/types";
 
 export function getBaseConfig(testType: TestType) {
@@ -58,9 +57,6 @@ export function getBaseConfig(testType: TestType) {
 		],
 
 		webServer: {
-			...(shouldMeasureCov && {
-				env: { NODE_OPTIONS: `--inspect=${getDebugPort()}` },
-			}),
 			// 180 seconds to accommodate Rust compilation when cache is cold
 			// The launcher runs `cargo make mysql-populate` which compiles the data crate
 			timeout: 180000,

@@ -1,9 +1,10 @@
 /* Sefer blank-page panel (#2544): פרשנים/מאמרים tabs flanking the date,
-   a diagonal overlap transition between the two panels, the wrapping
+   diagonal inner tab edges, the wrapping
    perush tag list, pasuk-grouped commentary, and the articles masonry. */
 
 /* The component replaces BlankPageContent's .pageBlank section: a flex
    column filling the book page. */
+
 .panelRoot {
 	display: flex;
 	flex-direction: column;
@@ -13,72 +14,117 @@
 
 /* Header: tab - date - tab; the date stays centered and visible. */
 .panelHeader {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
 	align-items: stretch;
-	justify-content: space-between;
-	gap: 8px;
+	gap: 4px;
 	flex-shrink: 0;
 	padding-top: 6px;
 }
 
 .panelTab {
+	--tab-fill: #f0ead8;
+	--tab-border: #d4c9a8;
+	--tab-active-fill: #fffdf5;
 	appearance: none;
 	font: inherit;
-	flex: 1 1 0;
 	min-width: 0;
-	border: 1px solid #d4c9a8;
-	border-bottom: none;
-	border-radius: 8px 8px 0 0;
-	background: #f0ead8;
+	position: relative;
+	isolation: isolate;
+	border: none;
+	background: var(--tab-border);
 	color: #5a4a2e;
 	font-size: 0.9rem;
 	font-weight: 600;
-	padding: 6px 8px;
+	padding: 8px 6px;
 	cursor: pointer;
-	transition:
-		background 0.15s,
-		color 0.15s,
-		border-color 0.15s;
 }
 
-.panelTab:hover {
-	background: #e8e0cc;
+/* Only the edge facing the date is diagonal. The date has its own column,
+   so neither tab's shape can cover it, including on a narrow book page. */
+.panelTab:first-child {
+	--tab-closed-clip: polygon(18px 0, 18px 0, 0 100%, 0 100%);
+	clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
+	padding-inline-end: 22px;
+}
+
+.panelTab:last-child {
+	--tab-closed-clip: polygon(
+		calc(100% - 18px) 0,
+		calc(100% - 18px) 0,
+		100% 100%,
+		100% 100%
+	);
+	clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 100%, 0 100%);
+	padding-inline-start: 22px;
+}
+
+.panelTab::before {
+	content: "";
+	position: absolute;
+	inset: 1px 1px 0;
+	z-index: -1;
+	clip-path: inherit;
+	background: var(--tab-fill);
+}
+
+/* Each clipped fill travels toward the other tab. The date column remains
+   outside both clips, and no reading panel participates in this motion. */
+.panelTab::after {
+	content: "";
+	position: absolute;
+	inset: 1px 1px 0;
+	z-index: -1;
+	clip-path: var(--tab-closed-clip);
+	background: var(--tab-active-fill);
+	transition: clip-path 0.24s ease;
+}
+.panelTab[aria-selected="true"]::after {
+	clip-path: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+	.panelTab::after {
+		transition: none;
+	}
+}
+
+@media (hover: hover) {
+	.panelTab:hover {
+		--tab-fill: #e8e0cc;
+	}
 }
 
 .panelTab:focus-visible {
-	outline: 2px solid #1a73e8;
-	outline-offset: 2px;
+	--tab-border: #1a73e8;
+	text-decoration: underline;
+	text-underline-offset: 4px;
 }
 
 .panelTab[aria-selected="true"] {
-	background: #fffdf5;
-	border-color: #8b7355;
+	--tab-border: #8b7355;
 	color: #3d3220;
-	box-shadow: inset 0 3px 0 #8b7355;
+	font-weight: 700;
 }
 
 .panelDate {
-	flex: 0 1 auto;
 	align-self: center;
-	font-size: 0.95rem;
-	color: #637598;
+	font-size: clamp(0.75rem, 1.1vw, 0.95rem);
+	color: var(--muted-text, #637598);
 	text-align: center;
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	direction: rtl;
 	padding: 0 4px;
 }
 
-/* Panels share one grid cell: both stay mounted (state and scroll positions
-   survive the switch) and the inactive one slides out diagonally. */
+/* Panels stay mounted in one cell to preserve their scroll positions.
+   The diagonal belongs to the tabs; switching content is immediate. */
 .panelStage {
 	flex: 1;
 	min-height: 0;
 	margin-top: 0;
 	display: grid;
 	border: 1px solid #d4c9a8;
-	border-radius: 0 0 8px 8px;
+	border-radius: 0 0 var(--radius-md) var(--radius-md);
 	background: #fffdf5;
 	overflow: hidden;
 }
@@ -91,10 +137,6 @@
 	overflow: hidden;
 	background: #fffdf5;
 	position: relative;
-	transition:
-		transform 0.35s ease,
-		opacity 0.35s ease,
-		visibility 0.35s;
 }
 
 /* An opened article covers the masonry (same cell) so the grid keeps its
@@ -110,40 +152,23 @@
 }
 
 .panel[data-active="true"] {
-	transform: none;
-	opacity: 1;
 	visibility: visible;
 	z-index: 1;
 }
 
-/* פרשנים sits on the right (RTL start): it exits down-right and re-enters
-   from there; מאמרים exits up-left — the two slide through each other on
-   the diagonal in both directions. */
-.panel[data-tab="perushim"][data-active="false"] {
-	transform: translate(45%, 45%);
-	opacity: 0;
+.panel[data-active="false"] {
 	visibility: hidden;
-}
-
-.panel[data-tab="articles"][data-active="false"] {
-	transform: translate(-45%, -45%);
-	opacity: 0;
-	visibility: hidden;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.panel {
-		transition: none;
-	}
-	.panel[data-active="false"] {
-		transform: none;
-	}
+	pointer-events: none;
 }
 
 /* ─── פרשנים panel ─────────────────────────────────── */
 
 .tagArea {
+	display: flex;
+	flex-direction: column;
 	flex-shrink: 0;
+	min-height: 0;
+	max-height: 45%;
 	padding: 10px 12px 6px;
 	border-bottom: 1px dashed #e0d8c0;
 }
@@ -155,6 +180,10 @@
 	gap: 6px;
 	margin: 0;
 	padding: 0;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
 }
 
 .perushTagItem {
@@ -163,14 +192,17 @@
 }
 
 .perushTag {
+	appearance: none;
+	font: inherit;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	border: 1px solid #d4c9a8;
-	border-radius: 999px;
-	border-start-start-radius: 0;
-	border-end-start-radius: 0;
+	border-radius: var(--radius-pill);
 	background: #fffdf5;
 	color: #5a4a2e;
 	font-size: 0.85rem;
-	padding: 3px 12px 3px 8px;
+	padding: 3px 8px 3px 12px;
 	cursor: pointer;
 	text-decoration: none;
 	transition:
@@ -180,24 +212,10 @@
 }
 
 .perushTagCheck {
-	appearance: none;
-	font: inherit;
-	width: 1.35rem;
-	height: 1.35rem;
-	margin-inline-end: -1px;
-	border: 1px solid #d4c9a8;
-	border-radius: 999px 0 0 999px;
-	background: #fffdf5;
+	width: 0.85rem;
 	color: transparent;
 	font-size: 0.7rem;
 	line-height: 1;
-	padding: 0;
-	cursor: pointer;
-	transition:
-		background 0.15s,
-		border-color 0.15s,
-		color 0.15s;
-	z-index: 1;
 }
 
 .perushTagItem[data-selected] .perushTagCheck,
@@ -207,17 +225,14 @@
 	color: #fffdf5;
 }
 
-.perushTag:hover {
-	border-color: #8b7355;
+@media (hover: hover) {
+	.perushTag:hover {
+		border-color: var(--hc-muted, #8b7355);
+	}
 }
 
-.perushTagCheck:hover {
-	border-color: #8b7355;
-}
-
-.perushTag:focus-visible,
-.perushTagCheck:focus-visible {
-	outline: 2px solid #1a73e8;
+.perushTag:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -225,11 +240,18 @@
    sefer carries its own list. */
 .scopeRow {
 	display: flex;
+	flex-shrink: 0;
 	align-items: center;
 	gap: 8px;
 	margin-top: 8px;
 	font-size: 0.78rem;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
+}
+
+/* Reading-time estimate for a single displayed perush (#2607). */
+.scopeMetric {
+	font-size: 0.72rem;
+	color: #8b7355;
 }
 
 .scopeToggle {
@@ -237,19 +259,21 @@
 	font: inherit;
 	font-size: 0.78rem;
 	border: 1px solid #d4c9a8;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: #f0ead8;
 	color: #5a4a2e;
 	padding: 1px 10px;
 	cursor: pointer;
 }
 
-.scopeToggle:hover {
-	background: #e8e0cc;
+@media (hover: hover) {
+	.scopeToggle:hover {
+		background: #e8e0cc;
+	}
 }
 
 .scopeToggle:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -279,7 +303,15 @@
 
 .deepParshan {
 	font-size: 0.75rem;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
+}
+
+/* Reading-time estimate on the deep-linked perush header (#2607). */
+.deepMetric {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: #8b7355;
 }
 
 .deepBack {
@@ -287,7 +319,7 @@
 	font: inherit;
 	font-size: 0.8rem;
 	border: 1px solid #d4c9a8;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: none;
 	color: #5a4a2e;
 	padding: 3px 10px;
@@ -295,8 +327,10 @@
 	white-space: nowrap;
 }
 
-.deepBack:hover {
-	background: #f0ead8;
+@media (hover: hover) {
+	.deepBack:hover {
+		background: #f0ead8;
+	}
 }
 
 /* Grouped commentary: pasuk groups in canonical order; inside each, the
@@ -312,6 +346,7 @@
 }
 
 .commentaryGroup {
+	--highlight-rest-border: #d4c9a8;
 	border-right: 3px solid #d4c9a8;
 	padding-right: 12px;
 	margin-bottom: 14px;
@@ -322,7 +357,7 @@
 	background: rgba(254, 243, 199, 0.95);
 	border-right-color: #f59e0b;
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 }
 
 .commentaryPasuk {
@@ -335,22 +370,33 @@
 	display: inline-block;
 	font-size: 0.85rem;
 	font-weight: 700;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 	margin-bottom: 6px;
 }
 
-.commentaryPasuk:hover {
-	color: #5a4a2e;
-	text-decoration: underline;
+@media (hover: hover) {
+	.commentaryPasuk:hover {
+		color: #5a4a2e;
+		text-decoration: underline;
+	}
 }
 
 .commentaryPasuk:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
 .commentaryPerush {
 	margin-bottom: 10px;
+}
+
+.skeletonPasuk {
+	margin-bottom: 6px;
+}
+
+/* One skeleton bar per .noteContent line box (line-height 1.7). */
+.skeletonLine {
+	margin-block: calc((1lh - 0.8em) / 2);
 }
 
 .commentaryPerush + .commentaryPerush {
@@ -361,8 +407,16 @@
 .commentaryPerushName {
 	font-size: 0.8rem;
 	font-weight: 700;
-	color: #8b7355;
+	color: var(--hc-muted, #8b7355);
 	margin-bottom: 4px;
+}
+
+/* Per-perush reading-time estimate in the multi-perush commentary view
+   (#2607). */
+.commentaryPerushMetric {
+	margin-inline-start: 8px;
+	font-size: 0.72rem;
+	font-weight: 400;
 }
 
 .noteContent {
@@ -395,6 +449,14 @@
 	margin-block: 1.67em;
 }
 
+/* Same baseline cue as the flat commentary view: links inside DB-authored
+   notes need a persistent non-color marker (WCAG 1.4.1, #2767). */
+.noteContent a {
+	color: var(--link-accent, #1552ac);
+	text-decoration: underline;
+	text-underline-offset: 0.1em;
+}
+
 .noteContent + .noteContent {
 	margin-top: 8px;
 	padding-top: 8px;
@@ -411,7 +473,7 @@
 	font: inherit;
 	font-size: 0.8rem;
 	border: 1px solid #d4c9a8;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: none;
 	color: #5a4a2e;
 	padding: 2px 10px;
@@ -422,7 +484,7 @@
 .emptyState {
 	margin: 0;
 	padding: 16px;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 	font-size: 0.9rem;
 	text-align: center;
 }
@@ -451,7 +513,7 @@
 	margin: 0 0 10px;
 	background: #fffdf5;
 	border: 1px solid #d4c9a8;
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	padding: 10px;
 	text-decoration: none;
 	color: inherit;
@@ -460,13 +522,15 @@
 		box-shadow 0.15s;
 }
 
-.articleCard:hover {
-	border-color: #8b7355;
-	box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+@media (hover: hover) {
+	.articleCard:hover {
+		border-color: var(--hc-muted, #8b7355);
+		box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+	}
 }
 
 .articleCard:focus-visible {
-	outline: 2px solid #1a73e8;
+	outline: 2px solid var(--link-accent, #1a73e8);
 	outline-offset: 2px;
 }
 
@@ -484,7 +548,7 @@
 
 .articleCardAuthorName {
 	font-size: 0.75rem;
-	color: #6b5835;
+	color: var(--hc-muted, #6b5835);
 }
 
 .articleCardTitle {
@@ -508,6 +572,14 @@
 
 .articleCardAbstract p {
 	margin: 0;
+}
+
+/* Full-article reading-time estimate under the card abstract (#2607). */
+.articleCardMetric {
+	display: block;
+	margin-top: 4px;
+	font-size: 0.72rem;
+	color: #8b7355;
 }
 
 /* ─── Article fullscreen (item 7) ───────────────────── */
@@ -536,48 +608,27 @@
 	scrollbar-color: #c4b896 transparent;
 }
 
-.fullscreenToggle {
-	appearance: none;
-	font: inherit;
-	font-size: 0.8rem;
-	border: 1px solid #d4c9a8;
-	border-radius: 6px;
-	background: #f0ead8;
-	color: #5a4a2e;
-	padding: 3px 10px;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.fullscreenToggle:hover {
-	background: #e8e0cc;
-}
-
-.fullscreenToggle:focus-visible {
-	outline: 2px solid #1a73e8;
-	outline-offset: 2px;
-}
-
 @media (prefers-color-scheme: dark) {
 	.panelTab {
-		background: #2a241a;
-		border-color: #4a4030;
-		color: #cbb98c;
+		--tab-fill: #2a241a;
+		--tab-active-fill: #1f1a12;
+		--tab-border: #4a4030;
+		color: var(--hc-muted, #cbb98c);
 	}
 
-	.panelTab:hover {
-		background: #342c1e;
+	@media (hover: hover) {
+		.panelTab:hover {
+			--tab-fill: #342c1e;
+		}
 	}
 
 	.panelTab[aria-selected="true"] {
-		background: #1f1a12;
-		border-color: #8b7355;
+		--tab-border: #8b7355;
 		color: #e0d0a8;
-		box-shadow: inset 0 3px 0 #8b7355;
 	}
 
 	.panelDate {
-		color: #9aa0a6;
+		color: var(--muted-text, #9aa0a6);
 	}
 
 	.panelStage {
@@ -603,26 +654,26 @@
 		border-color: #3a3226;
 	}
 
-	.perushTagCheck,
 	.perushTag {
 		background: #1f1a12;
 		border-color: #4a4030;
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.perushTagCheck {
 		color: transparent;
 	}
 
-	.perushTag:hover,
-	.perushTagCheck:hover {
-		border-color: #8b7355;
+	@media (hover: hover) {
+		.perushTag:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.perushTagItem[data-selected] .perushTagCheck,
 	.perushTagItem[data-selected] .perushTag {
 		background: #cbb98c;
-		border-color: #cbb98c;
+		border-color: var(--hc-muted, #cbb98c);
 		color: #1f1a12;
 	}
 
@@ -632,31 +683,32 @@
 	.articleCardAuthorName,
 	.articleCardAbstract,
 	.emptyState {
-		color: #b8a578;
+		color: var(--hc-muted, #b8a578);
 	}
 
 	.scopeToggle,
 	.deepBack,
-	.noteRetry,
-	.fullscreenToggle {
+	.noteRetry {
 		border-color: #4a4030;
 		background: #2a241a;
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
-	.scopeToggle:hover,
-	.deepBack:hover,
-	.noteRetry:hover,
-	.fullscreenToggle:hover {
-		background: #342c1e;
+	@media (hover: hover) {
+		.scopeToggle:hover,
+		.deepBack:hover,
+		.noteRetry:hover {
+			background: #342c1e;
+		}
 	}
 
 	.deepName,
 	.articleCardTitle {
-		color: #cbb98c;
+		color: var(--hc-muted, #cbb98c);
 	}
 
 	.commentaryGroup {
+		--highlight-rest-border: #4a4030;
 		border-right-color: #4a4030;
 	}
 
@@ -667,11 +719,13 @@
 	}
 
 	.commentaryPasuk {
-		color: #b8a578;
+		color: var(--hc-muted, #b8a578);
 	}
 
-	.commentaryPasuk:hover {
-		color: #cbb98c;
+	@media (hover: hover) {
+		.commentaryPasuk:hover {
+			color: var(--hc-muted, #cbb98c);
+		}
 	}
 
 	.articleCard {
@@ -679,8 +733,10 @@
 		border-color: #4a4030;
 	}
 
-	.articleCard:hover {
-		border-color: #8b7355;
+	@media (hover: hover) {
+		.articleCard:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.panelArticleOverlay {
@@ -690,4 +746,29 @@
 	.articleFullscreen {
 		background: #1f1a12;
 	}
+}
+
+.commentaryGroup[data-pasuk-highlight="fading"] {
+	background: transparent;
+	box-shadow: 0 0 0 2px transparent;
+	border-right-color: var(--highlight-rest-border);
+	transition:
+		background-color 0.6s ease-out,
+		box-shadow 0.6s ease-out,
+		border-color 0.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.commentaryGroup[data-pasuk-highlight="fading"] {
+		transition: none;
+	}
+}
+
+.panelTab:active,
+.perushTag:active,
+.scopeToggle:active,
+.deepBack:active,
+.noteRetry:active,
+.articleCard:active {
+	scale: var(--press-scale);
 }

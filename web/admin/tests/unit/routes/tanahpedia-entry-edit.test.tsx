@@ -72,9 +72,16 @@ vi.mock("~/server/session", () => ({
 }));
 
 vi.mock("~/components/WysiwygEditor", () => ({
-	WysiwygEditor: ({ onChange }: { onChange: (html: string) => void }) => (
+	WysiwygEditor: ({
+		content,
+		onChange,
+	}: {
+		content: string;
+		onChange: (html: string) => void;
+	}) => (
 		<button
 			data-testid="wysiwyg-editor"
+			data-value={content}
 			type="button"
 			onClick={() => onChange("<p>תוכן חדש</p>")}
 		>
@@ -534,14 +541,14 @@ describe("EntryEditPage", () => {
 			expect(updateEntryMock).not.toHaveBeenCalled();
 		});
 
-		it("renders an empty title and falls back to the draft content when the entry query has no entry", async () => {
+		it("renders a blocking load error when the entry query fails", async () => {
 			getEntryMock.mockRejectedValue(new Error("entry query failed"));
 			renderPage();
 
-			expect(await screen.findByText("עריכת ערך:")).toBeInTheDocument();
-
-			fireEvent.click(screen.getByRole("tab", { name: "היסטוריה" }));
-			expect(await screen.findByTestId("history-panel")).toBeInTheDocument();
+			expect(
+				await screen.findByText("טעינת הערך נכשלה"),
+			).toBeInTheDocument();
+			expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
 		});
 
 		it("shows the pending label while a save is in flight", async () => {
@@ -688,15 +695,12 @@ describe("EntryEditPage", () => {
 			).not.toBeInTheDocument();
 		});
 
-		it("renders the aliases section when the entry itself is missing", async () => {
+		it("blocks with a not-found state when the entry itself is missing", async () => {
 			getEntryMock.mockResolvedValue(null);
 			renderPage();
 
-			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
-
-			expect(
-				await screen.findByText("אין כתובות נוספות לערך זה עדיין."),
-			).toBeInTheDocument();
+			expect(await screen.findByText("הערך לא נמצא")).toBeInTheDocument();
+			expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
 		});
 	});
 
@@ -1561,5 +1565,79 @@ describe("EntryEditPage", () => {
 		fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
 		await waitFor(() => expect(createEntryMock).toHaveBeenCalledTimes(2));
 		expect(updateEntryMock).not.toHaveBeenCalled();
+	});
+
+	describe("when the entry query fails", () => {
+		it("renders a blocking error instead of an empty editor", async () => {
+			getEntryMock.mockReset().mockRejectedValue(new Error("boom"));
+
+			renderPage();
+
+			await waitFor(() =>
+				expect(screen.getByText("טעינת הערך נכשלה")).toBeInTheDocument(),
+			);
+			expect(screen.queryByPlaceholderText("כותרת הערך")).toBeNull();
+		});
+
+		it("retries the load from the failure state's retry action", async () => {
+			getEntryMock.mockRejectedValueOnce(new Error("boom"));
+
+			renderPage();
+
+			fireEvent.click(
+				await screen.findByRole("button", { name: "נסה שוב" }),
+			);
+
+			expect(
+				await screen.findByText(/עריכת ערך: משה רבנו/),
+			).toBeInTheDocument();
+		});
+
+		it("reports a rejected load with a missing entry as not found", async () => {
+			getEntryMock
+				.mockReset()
+				.mockRejectedValue(new Error("Entry not found"));
+
+			renderPage();
+
+			await waitFor(() =>
+				expect(screen.getByText("הערך לא נמצא")).toBeInTheDocument(),
+			);
+			expect(screen.queryByPlaceholderText("כותרת הערך")).toBeNull();
+		});
+	});
+
+	it("keeps title, name and content populated across a reload", async () => {
+		const client = renderPage();
+
+		fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+		await waitFor(() =>
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("משה רבנו"),
+		);
+		expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("משה-רבנו");
+		fireEvent.click(screen.getByRole("tab", { name: "תוכן" }));
+		expect(screen.getByTestId("wysiwyg-editor")).toHaveAttribute(
+			"data-value",
+			"<p>גוף</p>",
+		);
+
+		getEntryMock.mockClear();
+		await act(() =>
+			client.invalidateQueries({
+				queryKey: ["tanahpedia-entry", "entry-1"],
+			}),
+		);
+		await waitFor(() => expect(getEntryMock).toHaveBeenCalled());
+
+		fireEvent.click(screen.getByRole("tab", { name: "מטא-דאטה" }));
+		await waitFor(() =>
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("משה רבנו"),
+		);
+		expect(screen.getByLabelText(/שם ייחודי/)).toHaveValue("משה-רבנו");
+		fireEvent.click(screen.getByRole("tab", { name: "תוכן" }));
+		expect(screen.getByTestId("wysiwyg-editor")).toHaveAttribute(
+			"data-value",
+			"<p>גוף</p>",
+		);
 	});
 });

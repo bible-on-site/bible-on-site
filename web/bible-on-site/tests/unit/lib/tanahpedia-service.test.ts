@@ -100,10 +100,21 @@ describe("tanahpedia service", () => {
 			.mockRejectedValueOnce(new Error("metric timeout"))
 			.mockResolvedValueOnce([]);
 
-		const entry = await getEntryByUniqueName("אברהם");
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const entry = await getEntryByUniqueName("אברהם");
 
-		expect(entry).not.toBeNull();
-		expect(entry).not.toHaveProperty("metric");
+			expect(entry).not.toBeNull();
+			expect(entry).not.toHaveProperty("metric");
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(
+				"Reading metric read failed; continuing without estimates:",
+				"entry entry-abraham",
+				"metric timeout",
+			);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it("returns null when a unique entry name is not found", async () => {
@@ -659,16 +670,33 @@ describe("tanahpedia service", () => {
 		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["12"]);
 	});
 
-	it("logs and returns no entity references when the perek query fails", async () => {
+	it("logs and rethrows when the perek query fails so a false empty is never cached", async () => {
 		const consoleErrorSpy = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => undefined);
 		mockQuery.mockRejectedValueOnce(new Error("database unavailable"));
 
-		await expect(getEntityReferencesForPerek(99)).resolves.toEqual([]);
+		await expect(getEntityReferencesForPerek(99)).rejects.toThrow(
+			"database unavailable",
+		);
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
 			"Failed to fetch entity references for perek 99:",
 			"database unavailable",
+		);
+
+		consoleErrorSpy.mockRestore();
+	});
+
+	it("logs a non-Error rejection verbatim and still rethrows", async () => {
+		const consoleErrorSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
+		mockQuery.mockRejectedValueOnce("raw failure");
+
+		await expect(getEntityReferencesForPerek(99)).rejects.toBe("raw failure");
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			"Failed to fetch entity references for perek 99:",
+			"raw failure",
 		);
 
 		consoleErrorSpy.mockRestore();

@@ -24,9 +24,17 @@ public partial class MasoraUnitPickerPopup : ContentView //NOSONAR
     public event EventHandler<int>? UnitSelected; //NOSONAR
 #pragma warning restore S3264
 
+    // Per-column boundary arrows — shared with the perek and parasha pickers
+    // through PickerScrollColumns (#2573).
+    private readonly PickerScrollColumns _scrollColumns;
+
     public MasoraUnitPickerPopup()
     {
         InitializeComponent();
+        _scrollColumns = new PickerScrollColumns(Dispatcher,
+            new PickerScrollColumn(SeferGroupList, SeferGroupUpArrow, SeferGroupDownArrow, SeferGroupItemSizer),
+            new PickerScrollColumn(SeferList, SeferUpArrow, SeferDownArrow, SeferItemSizer),
+            new PickerScrollColumn(UnitList, UnitUpArrow, UnitDownArrow, UnitItemSizer));
         LoadSeferGroups();
     }
 
@@ -34,6 +42,7 @@ public partial class MasoraUnitPickerPopup : ContentView //NOSONAR
     public void Show()
     {
         IsVisible = true;
+        _scrollColumns.RefreshAllDeferred();
     }
 
     /// <summary>Shows the picker popup, pre-selecting the given unit.</summary>
@@ -41,6 +50,7 @@ public partial class MasoraUnitPickerPopup : ContentView //NOSONAR
     {
         IsVisible = true;
         PreSelectUnit(currentUnitId);
+        _scrollColumns.RefreshAllDeferred();
     }
 
     /// <summary>
@@ -50,6 +60,12 @@ public partial class MasoraUnitPickerPopup : ContentView //NOSONAR
     {
         IsVisible = false;
     }
+
+    private void OnColumnScrolled(object? sender, ItemsViewScrolledEventArgs e) =>
+        _scrollColumns.HandleScrolled(sender, e.FirstVisibleItemIndex, e.LastVisibleItemIndex);
+
+    private void OnColumnSizeChanged(object? sender, EventArgs e) =>
+        _scrollColumns.HandleSizeChanged(sender);
 
     private void OnBackgroundTapped(object? sender, TappedEventArgs e)
     {

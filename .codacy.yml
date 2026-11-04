@@ -7,6 +7,11 @@
 engines:
   metric:
     enabled: false
+  # Executed on a verifier-owned MySQL 8.4 server. T-SQL SET directives,
+  # schema qualification and SQL Server compression do not apply to this fixture.
+  tsqllint:
+    exclude_paths:
+      - "devops/github/ci/native-api-fixture-rows.sql"
   # Prospector enforces D213 (summary on line two) while the repo's ruff
   # config enforces the contradictory D212 (summary on line one). The repo
   # gate wins; prospector is excluded on these files only — Bandit and the
@@ -17,6 +22,14 @@ engines:
       - "data/annotations/baseline.py"
       - "data/annotations/baseline_articles.py"
       - "data/annotations/test_baseline_articles.py"
+      - "data/annotations/golden_eval.py"
+      - "data/annotations/test_golden_eval.py"
+      - "data/annotations/test_golden_set.py"
+      - "data/annotations/encoders.py"
+      - "data/annotations/test_encoders.py"
+      - "data/annotations/publish.py"
+      - "data/annotations/test_publish.py"
+      - "app/devops/verify_android_dex_metadata.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
@@ -25,8 +38,13 @@ exclude_paths:
   - "data/mysql/tanah_dynamic_structure.sql"
   - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
+  - "data/mysql/tanah_article_content_hash_upgrade.sql"
+  - "data/mysql/tanah_article_index_upgrade.sql"
   - "data/mysql/tanah_reading_metrics_upgrade.sql"
+  - "data/mysql/tanah_web_push_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
@@ -34,17 +52,23 @@ exclude_paths:
   - "data/mysql/tanahpedia_alter_person_source_citation.sql"
   - "data/mysql/tanahpedia_alter_source_citation.sql"
   - "data/mysql/tanahpedia_alter_child_birth_order.sql"
+  - "data/mysql/tanahpedia_alter_entry_entity_unique.sql"
+  - "data/mysql/tanahpedia_alter_entry_synonym.sql"
   - "data/mysql/tanahpedia_place_jerusalem_data.sql"
   - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
   - "data/mysql/tanah_perek_images_structure.sql"
+  - "data/mysql/external_reference_structure.sql"
   - "data/mysql/tanah_truncate.sql"
   # Same class of T-SQL-dialect false positive: "Use of unicode characters in
   # a non unicode string" demands N'...', but MySQL literals already take the
   # column charset and N'...' is a syntax error (1064) in COMMENT clauses.
   - "data/mysql/tanah_sefarim_and_perakim_data.sql"
   - "data/mysql/tanah_test_data.sql"
+  - "data/mysql/tanah_dedication_upgrade.sql"
+  - "data/mysql/tanah_dedication_data.sql"
+  - "data/mysql/external_reference_data.sql"
   - "data/mysql/tanahpedia_entry_synonym_data.sql"
   - "data/mysql/tanahpedia_family_edge_lab_data.sql"
   - "data/mysql/tanahpedia_family_jacob_data.sql"
@@ -74,3 +98,17 @@ exclude_paths:
   # JUnit/uiautomator XML stubs that markup rules flag as interpolated HTML.
   - "app/mobile-e2e/release-smoke.test.mjs"
   - "app/mobile-e2e/merge-runner-shards.test.mjs"
+  # Differential-check CLI whose entire job is fetching operator-supplied
+  # --base/--candidate origins (scheme/host-validated by parseOrigin, parsed
+  # again via new URL() before fetch). The user-controlled-URL-to-HTTP-client
+  # taint pattern is a systemic false positive for a URL-diffing tool — the
+  # repo's own codacy-gate/precommit still lint this file.
+  - "devops/edge-compat-check.mjs"
+  # Coverage-universe builder: its whole job is walking the website's src/
+  # tree and reading each file to build the canonical instrument map, so
+  # non-literal-fs-filename is the same systemic false positive as the
+  # local-dev helpers above — and PMD's ECMA parser predates the file's
+  # object-spread/??/default-param syntax, so its "Unnecessary block"
+  # findings are parse artifacts, not lone blocks. Still linted by the
+  # repo's own biome/precommit.
+  - "web/bible-on-site/tests/util/coverage/coverage-universe.mjs"

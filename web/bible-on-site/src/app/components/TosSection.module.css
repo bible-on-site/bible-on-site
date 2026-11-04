@@ -94,12 +94,14 @@
 
 .tosList a,
 .tosList a:visited {
-  color: #1552ac;
+  color: var(--accent-600);
   text-decoration: none;
 }
 
-.tosList a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .tosList a:hover {
+    text-decoration: underline;
+  }
 }
 
 /* Responsive header margin */
@@ -142,7 +144,7 @@
 
   .tosList a,
   .tosList a:visited {
-    color: #7eb0ff;
+    color: var(--accent-300);
   }
 
 }

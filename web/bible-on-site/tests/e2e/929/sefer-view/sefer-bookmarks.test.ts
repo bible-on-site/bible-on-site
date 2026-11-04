@@ -22,6 +22,80 @@ test.beforeEach(({ skipOnNotWideEnough }) => {
 });
 
 test.describe("Sefer chapter tabs", () => {
+	test("keeps the book colors on moving bookmark surfaces", async ({
+		page,
+	}) => {
+		await page.addInitScript(() => {
+			localStorage.setItem(
+				"seferBookmarks",
+				JSON.stringify({ enabled: true, attachment: "leaf" }),
+			);
+		});
+		await new SeferPage(page).openSeferViewForPerek(300);
+		const tabs = page.locator(
+			".he-book .flipbook-bookmarks .flipbook-bookmark",
+		);
+		await expect(tabs).toHaveCount(47, { timeout: bookMountTimeoutMs });
+		const restingColors = await tabs.evaluateAll((buttons) =>
+			Object.fromEntries(
+				buttons.map((button) => {
+					const style = getComputedStyle(button);
+					return [
+						button.getAttribute("data-bookmark-id"),
+						{
+							background: style.backgroundColor,
+							color: style.color,
+							border: style.borderTopColor,
+						},
+					];
+				}),
+			),
+		);
+		const edge = await page.evaluate(() => {
+			const box = [...document.querySelectorAll(".he-book .page.current-page")]
+				.map((page) => page.getBoundingClientRect())
+				.filter((box) => box.width > 40 && box.height > 40)
+				.sort((a, b) => a.x - b.x)[0];
+			return { x: box.x + 10, y: box.y + box.height * 0.85, width: box.width };
+		});
+		await page.mouse.move(edge.x, edge.y);
+		await page.mouse.down();
+		try {
+			for (const progress of [0.3, 0.7]) {
+				await page.mouse.move(
+					edge.x + edge.width * progress,
+					edge.y - edge.width * 0.05,
+					{ steps: 8 },
+				);
+				const original = page.locator(
+					'.flipbook-bookmark-surface [data-bookmark-motion="true"]:not(.flipbook-bookmark--mirror)',
+				);
+				await expect(original).toHaveCount(1);
+				const id = await original.getAttribute("data-bookmark-id");
+				const expected = restingColors[id ?? ""];
+				expect(expected).toBeDefined();
+				await test.info().attach(`moving-bookmark-theme-${progress}`, {
+					body: await page.screenshot(),
+					contentType: "image/png",
+				});
+				const surfaces = page.locator(
+					".flipbook-bookmark-surface:not([hidden]) .flipbook-bookmark",
+				);
+				expect(await surfaces.count()).toBeGreaterThan(0);
+				for (const surface of await surfaces.all()) {
+					await expect(surface).toHaveCSS(
+						"background-color",
+						expected.background,
+					);
+					await expect(surface).toHaveCSS("color", expected.color);
+					await expect(surface).toHaveCSS("border-top-color", expected.border);
+				}
+			}
+		} finally {
+			await page.mouse.up();
+		}
+	});
+
 	test("renders one accent-colored tab per perek with canonical labels", async ({
 		page,
 	}) => {
@@ -153,5 +227,89 @@ test.describe("Sefer chapter tabs", () => {
 			timeout: bookMountTimeoutMs,
 		});
 		await expect(page.locator(".flipbook-bookmark")).toHaveCount(0);
+	});
+
+	test("toolbar toggle hides and shows the tabs and persists across reload", async ({
+		page,
+	}) => {
+		test.setTimeout(120_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+
+		const tabs = page.locator(".flipbook-bookmark");
+		await expect(tabs).toHaveCount(50, { timeout: bookMountTimeoutMs });
+
+		// The built-in library toggle shares the persisted סימניות state.
+		const hideToggle = page.getByRole("button", { name: "הסתרת סימניות" });
+		await expect(hideToggle).toHaveAttribute("aria-pressed", "true");
+		await hideToggle.click();
+		await expect(tabs).toHaveCount(0);
+
+		// The control stays reachable while tabs are hidden so they can return.
+		const showToggle = page.getByRole("button", { name: "הצגת סימניות" });
+		await expect(showToggle).toHaveAttribute("aria-pressed", "false");
+
+		await page.reload();
+		await expect(page.locator(".he-book.flipbook")).toBeVisible({
+			timeout: bookMountTimeoutMs,
+		});
+		await expect(tabs).toHaveCount(0);
+		await expect(showToggle).toBeVisible();
+
+		await showToggle.click();
+		await expect(tabs).toHaveCount(50);
+		// Visibility toggles never move the reader: same chapter route.
+		await expect(page).toHaveURL(/\/929\/1\?book$/);
+
+		// Book fullscreen keeps the toolbar — and the toggle — reachable.
+		// alpha.51+ localizes the fullscreen button via the toolbar's he-IL locale.
+		await page.getByRole("button", { name: "כניסה למסך מלא" }).click();
+		const hideToggleFs = page.getByRole("button", {
+			name: "הסתרת סימניות",
+		});
+		await expect(hideToggleFs).toBeVisible();
+		await hideToggleFs.click();
+		await expect(tabs).toHaveCount(0);
+		await page.getByRole("button", { name: "הצגת סימניות" }).click();
+		await expect(tabs.first()).toBeVisible();
+		await page.getByRole("button", { name: "יציאה ממסך מלא" }).click();
+
+		await test.info().attach("sefer-bookmarks-toolbar-toggle", {
+			body: await page.screenshot(),
+			contentType: "image/png",
+		});
+	});
+
+	test("toolbar toggle and the סימניות preference share one persisted state", async ({
+		page,
+	}) => {
+		test.setTimeout(120_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const tabs = page.locator(".flipbook-bookmark");
+		await expect(tabs).toHaveCount(50, { timeout: bookMountTimeoutMs });
+
+		// Toolbar -> preference: hiding from the toolbar is reflected in the
+		// הגדרות קריאה dialog on the flat page.
+		await page.getByRole("button", { name: "הסתרת סימניות" }).click();
+		await expect(tabs).toHaveCount(0);
+		await seferPage.closeSeferView();
+		await page
+			.getByRole("button", { name: "הגדרות קריאה", exact: true })
+			.click();
+		const bookmarkToggle = page.getByRole("checkbox", {
+			name: "סימניות פרקים",
+		});
+		await expect(bookmarkToggle).not.toBeChecked();
+
+		// Preference -> toolbar: re-enabling in the dialog restores the tabs
+		// and flips the toolbar control back to the hide action.
+		await bookmarkToggle.check();
+		await page.getByRole("button", { name: "סגירת הגדרות" }).click();
+		await seferPage.openSeferView();
+		await expect(tabs).toHaveCount(50, { timeout: bookMountTimeoutMs });
+		await expect(
+			page.getByRole("button", { name: "הסתרת סימניות" }),
+		).toHaveAttribute("aria-pressed", "true");
 	});
 });

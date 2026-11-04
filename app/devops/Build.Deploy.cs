@@ -1,3 +1,4 @@
+using Google;
 using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
 using Google.Apis.Auth.OAuth2;
@@ -19,6 +20,9 @@ partial class Build
 
     [Parameter("Path to AAB file for Google Play upload")]
     readonly string? AabPath;
+
+    [Parameter("Path to native debug symbols zip for Google Play upload")]
+    readonly string? AndroidSymbolsPath;
 
     [Parameter("Path to Google Play service account JSON file")]
     readonly string? GooglePlayKeyFile;
@@ -57,45 +61,122 @@ partial class Build
                 Serilog.Log.Warning("Deploying to PRODUCTION - will require Google review for new apps");
             }
 
+            // #2970: Play rejects a malformed symbols archive only after the
+            // bundle is already uploaded, stranding it in an uncommitted edit.
+            // Validate the archive against this exact AAB before any store write.
+            if (!string.IsNullOrEmpty(AndroidSymbolsPath))
+            {
+                var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+                Assert.FileExists(symbolsFile, $"Native symbols file not found: {symbolsFile}");
+                LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsFile, aabFile));
+                Serilog.Log.Information($"Validated native symbols archive {symbolsFile.Name} against {aabFile.Name}");
+            }
+
             using var service = CreatePlayService(keyFile);
 
             // Create edit
             var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
             Serilog.Log.Information($"Created edit: {edit.Id}");
 
-            // Upload AAB
-            using var aabStream = File.OpenRead(aabFile);
-            var uploadRequest = service.Edits.Bundles.Upload(GooglePlayPackageName, edit.Id, aabStream, "application/octet-stream");
-            var uploadProgress = uploadRequest.Upload();
-
-            if (uploadProgress.Status != UploadStatus.Completed)
+            long? uploadedVersionCode = null;
+            var committed = false;
+            try
             {
-                Assert.Fail($"Upload failed: {uploadProgress.Exception?.Message}");
-            }
+                // Upload AAB
+                using var aabStream = File.OpenRead(aabFile);
+                var uploadRequest = service.Edits.Bundles.Upload(GooglePlayPackageName, edit.Id, aabStream, "application/octet-stream");
+                var uploadProgress = UploadWithResume(uploadRequest);
 
-            var bundle = uploadRequest.ResponseBody;
-            Serilog.Log.Information($"Uploaded bundle with version code: {bundle.VersionCode}");
-
-            // Assign to track
-            var trackUpdate = new Track
-            {
-                Releases = new List<TrackRelease>
+                if (uploadProgress.Status != UploadStatus.Completed)
                 {
-                    new()
-                    {
-                        Status = "completed",
-                        VersionCodes = new List<long?> { bundle.VersionCode }
-                    }
+                    Assert.Fail($"Upload failed: {uploadProgress.Exception?.Message}");
                 }
-            };
-            service.Edits.Tracks.Update(trackUpdate, GooglePlayPackageName, edit.Id, track).Execute();
-            Serilog.Log.Information($"Assigned to {track} track");
 
-            // Commit edit
-            var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
-            commitRequest.Execute();
-            Serilog.Log.Information("Google Play upload complete");
+                var bundle = uploadRequest.ResponseBody;
+                var versionCode = bundle?.VersionCode
+                    ?? throw new InvalidOperationException("Bundle upload returned no version code");
+                uploadedVersionCode = versionCode;
+                Serilog.Log.Information($"Uploaded bundle with version code: {versionCode}");
+
+                // Upload native debug symbols for the version code just uploaded
+                if (!string.IsNullOrEmpty(AndroidSymbolsPath))
+                {
+                    using var symbolsStream = File.OpenRead((AbsolutePath)AndroidSymbolsPath!);
+                    var symbolsUpload = service.Edits.Deobfuscationfiles.Upload(
+                        GooglePlayPackageName,
+                        edit.Id,
+                        (int)versionCode,
+                        EditsResource.DeobfuscationfilesResource.UploadMediaUpload.DeobfuscationFileTypeEnum.NativeCode,
+                        symbolsStream,
+                        "application/octet-stream");
+                    var symbolsProgress = symbolsUpload.Upload();
+                    if (symbolsProgress.Status != UploadStatus.Completed)
+                    {
+                        Assert.Fail($"Native symbols upload failed for version code {versionCode} after the AAB was accepted; " +
+                            $"no track assignment or commit was performed: {symbolsProgress.Exception?.Message}");
+                    }
+                    Serilog.Log.Information($"Uploaded native debug symbols for version code {versionCode}");
+                }
+                else
+                {
+                    Serilog.Log.Warning("No native debug symbols provided; Play Console will report them missing");
+                }
+
+                // Assign to track
+                var trackUpdate = new Track
+                {
+                    Releases = new List<TrackRelease>
+                    {
+                        new()
+                        {
+                            Status = "completed",
+                            VersionCodes = new List<long?> { versionCode }
+                        }
+                    }
+                };
+                service.Edits.Tracks.Update(trackUpdate, GooglePlayPackageName, edit.Id, track).Execute();
+                Serilog.Log.Information($"Assigned to {track} track");
+
+                // Commit edit
+                var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
+                commitRequest.Execute();
+                committed = true;
+                Serilog.Log.Information("Google Play upload complete");
+            }
+            finally
+            {
+                if (!committed)
+                {
+                    // Any failure after Edits.Insert leaves an uncommitted edit
+                    // holding the uploaded bundle; discard it so the next
+                    // deploy starts a clean edit instead of racing an
+                    // abandoned one.
+                    DiscardEdit(service, edit.Id, uploadedVersionCode);
+                }
+            }
         });
+
+    /// <summary>
+    /// Discards an uncommitted Play edit after a mid-deploy failure. The
+    /// uploaded bundle lives only inside the edit, so deleting it leaves
+    /// nothing published and lets the next run start a fresh edit. Best-effort:
+    /// the original failure stays the actionable error, never the cleanup.
+    /// </summary>
+    static void DiscardEdit(AndroidPublisherService service, string editId, long? versionCode)
+    {
+        try
+        {
+            service.Edits.Delete(GooglePlayPackageName, editId).Execute();
+            Serilog.Log.Warning(versionCode is null
+                ? $"Discarded uncommitted Play edit {editId} after the deploy failed"
+                : $"Discarded uncommitted Play edit {editId} holding uploaded bundle version code {versionCode}; no track release was published");
+        }
+        catch (Exception cleanup) when (cleanup is GoogleApiException or HttpRequestException
+            or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
+        {
+            Serilog.Log.Warning($"Failed to discard uncommitted Play edit {editId} — it expires server-side without a commit: {cleanup.Message}");
+        }
+    }
 
     Target SyncGooglePlayListing => _ => _
         .Description("Sync app/store-listing text and screenshots to Google Play without shipping a build")
@@ -112,6 +193,36 @@ partial class Build
             service.Edits.Commit(GooglePlayPackageName, edit.Id).Execute();
             Serilog.Log.Information("Google Play listing sync complete");
         });
+
+    // A resumable session stays open server-side, so a request that stalls past
+    // the client deadline (run 40699641279 was canceled mid-upload) resumes
+    // from the confirmed byte offset instead of re-sending the whole bundle.
+    static IUploadProgress UploadWithResume(ResumableUpload uploadRequest, int maxAttempts = 3)
+    {
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            IUploadProgress? progress = null;
+            try
+            {
+                progress = attempt == 0 ? uploadRequest.Upload() : uploadRequest.Resume();
+            }
+            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException canceled)
+            {
+                // The library already records the cancel in GetProgress(); the
+                // loop below resumes the session.
+                Serilog.Log.Debug($"AAB upload request canceled: {canceled.Message}");
+            }
+            if (progress?.Status == UploadStatus.Completed)
+            {
+                return progress;
+            }
+            if (attempt + 1 < maxAttempts)
+            {
+                Serilog.Log.Warning($"AAB upload attempt {attempt + 1} interrupted ({progress?.Exception?.Message ?? "request canceled"}); resuming session");
+            }
+        }
+        return uploadRequest.GetProgress();
+    }
 
     static AndroidPublisherService CreatePlayService(AbsolutePath keyFile)
     {

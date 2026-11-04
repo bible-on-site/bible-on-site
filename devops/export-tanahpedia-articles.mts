@@ -2,7 +2,7 @@
  * Exports article HTML for the annotation pipeline's article-domain
  * baseline (data/annotations/baseline_articles.py, issue #2516):
  *
- *   node --import tsx devops/export-tanahpedia-articles.mts \
+ *   node devops/export-tanahpedia-articles.mts \
  *     --out <file.json> [--env-file <module/.dev.env>]
  *
  * Emits JSON [{"id": 1, "content": "<p>...</p>"}] — the pipeline hashes
@@ -11,9 +11,8 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { websiteMysql } from "./website-mysql.mts";
 
 function parseFlags(argv: string[]) {
 	const flags = new Map<string, string>();
@@ -35,7 +34,8 @@ function loadDbUrl(envFile: string): string {
 			process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
 		}
 	}
-	if (!process.env.DB_URL) throw new Error("DB_URL not set and no env file provided");
+	if (!process.env.DB_URL)
+		throw new Error("DB_URL not set and no env file provided");
 	return process.env.DB_URL;
 }
 
@@ -60,9 +60,7 @@ async function main() {
 	const outFile = flags.get("out");
 	if (!outFile) throw new Error("--out <file> is required");
 	const envFile = flags.get("env-file") ?? ".dev.env";
-	const requireFromModule = createRequire(resolve(process.cwd(), "package.json"));
-	const mysql =
-		requireFromModule("mysql2/promise") as typeof import("mysql2/promise");
+	const mysql = websiteMysql();
 	const conn = await mysql.createConnection(parseDbUrl(loadDbUrl(envFile)));
 	let rows: ArticleRow[];
 	try {

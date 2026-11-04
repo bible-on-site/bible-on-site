@@ -1,6 +1,7 @@
 import Image from "next/image";
 import styles from "./AppSection.module.css";
 import { appPlatforms } from "./appPlatforms";
+import { PushNotificationsToggle } from "./PushNotificationsToggle";
 
 export function AppSection() {
 	return (
@@ -52,6 +53,7 @@ export function AppSection() {
 					);
 				})}
 			</section>
+			<PushNotificationsToggle />
 		</section>
 	);
 }

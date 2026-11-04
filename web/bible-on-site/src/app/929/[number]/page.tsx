@@ -6,7 +6,28 @@ import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
-import { getPerekMetric, metricOrFallback } from "../../../lib/reading-metrics";
+import {
+	cachedPerKey,
+	COLLECTION_TAGS,
+	perekArticlesTag,
+	perekPerushimTag,
+} from "../../../lib/revalidate/tags";
+import {
+	getPerekDedications,
+	getSeferDedications,
+	getSeferPerekDedicationLines,
+} from "../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../lib/dedications/service";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../components/dedications/DedicationLines";
+import {
+	getPerekMetric,
+	getPerekProgressUnits,
+	metricOrFallback,
+} from "../../../lib/reading-metrics";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../lib/seo/opengraph";
@@ -37,26 +58,24 @@ export const dynamicParams = false;
  * - On-demand revalidation provides precise control over when content updates
  *
  * To invalidate:
- * - Single page: revalidatePath('/929/{perekId}')
+ * - One perek's articles: revalidateTag('perek:{perekId}:articles') — the
+ *   entity-scoped tag `/api/revalidate` resolves from an article change.
  * - All articles: revalidateTag('articles')
+ * - Single page: revalidatePath('/929/{perekId}')
  */
-const getCachedArticleSummaries = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticleSummaries = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
 /** Cache perushim summaries per perek (same caching strategy as articles). */
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
 /**
@@ -68,6 +87,16 @@ const getCachedPerushim = unstable_cache(
 const getCachedPerekMetric = unstable_cache(
 	async (perekId: number) => getPerekMetric(perekId),
 	["perek-metric"],
+	{
+		tags: ["reading-metrics"],
+		revalidate: false,
+	},
+);
+
+/** Per-pasuk progress units — the same cache contract as the metric row. */
+const getCachedPerekProgressUnits = unstable_cache(
+	async (perekId: number) => getPerekProgressUnits(perekId),
+	["perek-progress-units"],
 	{
 		tags: ["reading-metrics"],
 		revalidate: false,
@@ -128,10 +157,30 @@ export default async function Perek({
 	const perekMetric = await metricOrFallback(`perek ${perekId}`, null, () =>
 		getCachedPerekMetric(perekId),
 	);
+	const perekProgressUnits = await metricOrFallback(
+		`perek ${perekId} progress`,
+		[],
+		() => getCachedPerekProgressUnits(perekId),
+	);
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
 	const { prev: prevPerek, next: nextPerek } = getAdjacentPereks(perekId);
+
+	// Dedications (#2731): the flat page renders the perek's whole
+	// applicable set — direct perek scopes plus sefer/helek ancestors —
+	// while the book keeps the sefer+helek set on its cover and only
+	// perek-scoped lines on each spread header. The spread map resolves
+	// the sefer's whole perek range in one cached loader call rather than
+	// a per-perek fan-out; `perek:{id}:dedications`/`sefer:{id}:dedications`
+	// tags still map the page to exactly the scopes it renders.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const flatPageLines = dedicationLines(await getPerekDedications(perekId));
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
 
 	return (
 		<>
@@ -151,11 +200,22 @@ export default async function Perek({
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
 					imagesByPerek={seferImages}
+					perekPasukUnits={perekProgressUnits}
+					perekMetric={perekMetric}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
+				<ReadingProgress
+					units={perekProgressUnits}
+					scroller={`.${styles.perekContainer}`}
+					content={`.${styles.perekText}`}
+					unitSelector="#pasuk-{key}"
+				/>
 				<Breadcrumb perekObj={perekObj} />
 				<PerekHeading perekObj={perekObj} />
+				<DedicationLines lines={flatPageLines} />
 				<ReadingTime
 					estimatedSeconds={perekMetric?.estimatedSeconds}
 					className={styles.readingTime}

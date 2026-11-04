@@ -50,7 +50,7 @@ public sealed class RecitationService
     public int AvailableCount => _tracks.Count;
 
     /// <summary>Recordings whose catalogued audio file exists locally.</summary>
-    public int InstalledCount => _tracks.Values.Count(track => File.Exists(AudioPath(track)));
+    public int InstalledCount => _tracks.Values.Count(track => InstalledFiles.Contains(track.PlaybackFileName));
 
     /// <summary>Three-state summary of locally usable audio (none / partial / complete).</summary>
     public RecitationInstallState InstallState
@@ -68,6 +68,33 @@ public sealed class RecitationService
     }
     private string DirectoryPath => Path.Join(_files.AppDataDirectory, "extensions", "recitation");
     private string AudioPath(RecitationTrack track) => Path.Join(DirectoryPath, track.PlaybackFileName);
+
+    // UI-bound getters evaluate install state several times per refresh; one directory
+    // listing serves them all. Files only change through this service's own gated
+    // operations, so the snapshot is rebuilt after every mutation (see OnChanged).
+    private readonly Lock _installedSync = new();
+    private HashSet<string>? _installedFiles;
+    private HashSet<string> InstalledFiles
+    {
+        get
+        {
+            lock (_installedSync)
+            {
+                return _installedFiles ??= Directory.Exists(DirectoryPath)
+                    ? Directory.EnumerateFiles(DirectoryPath).Select(Path.GetFileName).OfType<string>().ToHashSet()
+                    : [];
+            }
+        }
+    }
+
+    private void OnChanged()
+    {
+        lock (_installedSync)
+        {
+            _installedFiles = null;
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
     public RecitationService(IFileSystem files, IPadDeliveryService delivery)
         : this(files, delivery, null)
@@ -91,7 +118,7 @@ public sealed class RecitationService
     }
 
     public RecitationTrack? GetTrack(int perekId) => _tracks.GetValueOrDefault(perekId);
-    public bool HasAudio(int perekId) => GetTrack(perekId) is { } track && File.Exists(AudioPath(track));
+    public bool HasAudio(int perekId) => GetTrack(perekId) is { } track && InstalledFiles.Contains(track.PlaybackFileName);
 
     // Timings are coupled to the installed app release, just like the Perushim catalog.
     public Task RefreshIfStaleAsync() => InitializeAsync();
@@ -115,7 +142,7 @@ public sealed class RecitationService
         }
         finally { _gate.Release(); }
         SweepOrphanedAudioFiles();
-        Changed?.Invoke(this, EventArgs.Empty);
+        OnChanged();
     }
 
     /// <summary>
@@ -142,7 +169,7 @@ public sealed class RecitationService
         finally
         {
             _downloadGate.Release();
-            Changed?.Invoke(this, EventArgs.Empty);
+            OnChanged();
         }
     }
 
@@ -170,7 +197,7 @@ public sealed class RecitationService
         finally
         {
             _downloadGate.Release();
-            Changed?.Invoke(this, EventArgs.Empty);
+            OnChanged();
         }
     }
 
@@ -245,7 +272,8 @@ public sealed class RecitationService
                 var missing = new List<RecitationTrack>();
                 foreach (var track in tracks)
                 {
-                    if (!await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken))
+                    var matches = await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken);
+                    if (!matches)
                     {
                         missing.Add(track);
                     }
@@ -275,7 +303,7 @@ public sealed class RecitationService
         finally
         {
             _downloadGate.Release();
-            Changed?.Invoke(this, EventArgs.Empty);
+            OnChanged();
         }
     }
 

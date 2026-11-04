@@ -188,7 +188,7 @@ public partial class ParashaPage
             _focusedWordSpans.TryGetValue(_recitingWord.Segment, out var previous))
         {
             previous.BackgroundColor = null;
-            previous.TextColor = Color.FromArgb("#637598");
+            previous.TextColor = Pasuk.QriTextColor;
         }
 
         _recitingWord = word;
@@ -200,8 +200,8 @@ public partial class ParashaPage
         if (word != null && _focusedPasuk?.PasukNum == word.Pasuk && _focusedPerekId == _recitationTimelinePerekId &&
             _focusedWordSpans.TryGetValue(word.Segment, out var current))
         {
-            current.BackgroundColor = Color.FromArgb("#e9eff8");
-            current.TextColor = Color.FromArgb("#1c427b");
+            current.BackgroundColor = Pasuk.RecitingBackgroundDefault;
+            current.TextColor = Pasuk.RecitingText;
         }
     }
 
@@ -365,7 +365,7 @@ public partial class ParashaPage
             return;
         }
 
-        var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
+        var words = track.GetWords(pasuk.PasukNum);
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
             // A "ready" track missing this pasuk's timings is corrupt pack
@@ -480,7 +480,7 @@ public partial class ParashaPage
             var segment = pasuk.Segments[i];
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Pasuk.QriTextColor });
             }
 
             var span = new Span
@@ -495,12 +495,13 @@ public partial class ParashaPage
                     _ => DivineNameMasking.MaskText(segment.Value)
                 }
             };
-            var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);
+            var word = track!.GetWord(pasuk.PasukNum, i + 1);
             if (word != null)
             {
                 _focusedWordSpans[word.Segment] = span;
-                span.TextColor = Color.FromArgb(_recitingWord == word ? "#1c427b" : "#637598");
-                span.BackgroundColor = _recitingWord == word ? Color.FromArgb("#e9eff8") : null;
+                var reciting = _recitingWord == word;
+                span.TextColor = reciting ? Pasuk.RecitingText : Pasuk.QriTextColor;
+                span.BackgroundColor = reciting ? Pasuk.RecitingBackgroundDefault : null;
                 var tap = new TapGestureRecognizer();
                 var perekId = _focusedPerekId;
                 tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perekId}:{word.Pasuk}:{word.Segment}",
@@ -511,7 +512,7 @@ public partial class ParashaPage
             formatted.Spans.Add(span);
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = ")", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = ")", TextColor = Pasuk.QriTextColor });
             }
 
             if (i < pasuk.Segments.Count - 1 && segment.Type is not (SegmentType.Ptuha or SegmentType.Stuma) && !segment.EndsWithMaqaf)
@@ -531,7 +532,7 @@ public partial class ParashaPage
         RecitationService.Instance.GetTrack(_focusedPerekId) is { AlignmentStatus: "ready" } focusedTrack &&
         PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim is { } focusedPasukim &&
         focusedTrack.Matches(focusedPasukim) &&
-        focusedTrack.Words.Any(w => w.Pasuk == _focusedPasuk.PasukNum && w.StartMs != null && w.EndMs != null);
+        focusedTrack.GetWords(_focusedPasuk.PasukNum).Any(w => w.StartMs != null && w.EndMs != null);
 
     private async void OnFocusedPlayClicked(object? sender, EventArgs e)
     {
@@ -610,7 +611,7 @@ public partial class ParashaPage
             }
 
             var ranges = group.OrderBy(s => s.PasukNum)
-                .Select(s => track.Words.Where(w => w.Pasuk == s.PasukNum).ToList()).ToList();
+                .Select(s => track.GetWords(s.PasukNum)).ToList();
             if (ranges.Any(r => r.Count == 0))
             {
                 continue;
@@ -660,7 +661,7 @@ public partial class ParashaPage
             var wholePerek = startPasuk <= 1 && endPasuk >= pasukim.Count;
             if (track.AlignmentStatus == "ready" && track.Matches(pasukim))
             {
-                var sliceWords = track.Words.Where(w => w.Pasuk >= startPasuk && w.Pasuk <= endPasuk).ToList();
+                var sliceWords = track.GetWordsBetweenPasukim(startPasuk, endPasuk);
                 if (sliceWords.Count == 0)
                 {
                     continue;
@@ -758,8 +759,7 @@ public partial class ParashaPage
             var ranges = segment.Ranges;
             if (ranges == null && segment.Start == null && preferences.RecitationVersePauseMs >= 0 && track?.AlignmentStatus == "ready")
             {
-                ranges = track.Words.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
-                    .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList();
+                ranges = track.GetPasukRanges();
             }
             // MediaElement's position is in source time; scale generated silence so
             // the user's pause retains its wall-clock length at every speed.
@@ -905,10 +905,19 @@ public partial class ParashaPage
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the unit picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
+        { _chrome.ExitFullScreen(); return true; }
+        if (ParashaUnitPickerPopup.IsVisible)
+        { ParashaUnitPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
         if (ReaderMenuOverlay.IsOpen)
         { ReaderMenuOverlay.Close(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

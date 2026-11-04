@@ -1,8 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Skeleton, SkeletonLabel } from "@/app/components/Skeleton";
 import type { PerushSummary } from "@/lib/perushim";
 import { Carousel } from "./Carousel";
 import styles from "./perushim-section.module.css";
+
+const SKELETON_KEYS = ["a", "b", "c", "d"];
 
 interface PerushimSectionProps {
 	perekId: number;
@@ -67,7 +70,18 @@ export function PerushimSection({
 				{safePerushim.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : loading ? (
-					<p className={styles.emptyMessage}>מתחבר לפירוש...</p>
+					SKELETON_KEYS.map((key, index) => (
+						<div
+							key={key}
+							className={`${styles.carouselItem} ${styles.skeletonItem}`}
+						>
+							{index === 0 && <SkeletonLabel>מתחבר לפירוש...</SkeletonLabel>}
+							<Skeleton variant="rect" width="28px" height="28px" />
+							<Skeleton width="70%" height="1.2rem" />
+							<Skeleton width="50%" height="0.8rem" />
+							<Skeleton variant="round" width="64px" height="1.2rem" />
+						</div>
+					))
 				) : (
 					safePerushim.map((perush) => (
 						<Link

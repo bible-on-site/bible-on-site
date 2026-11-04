@@ -63,19 +63,9 @@ test.describe("Sefer commentary navigation", () => {
 						touchPoints: [{ x: x - Math.round((step * distance) / 12), y }],
 					});
 					if (step === 6) {
-						await expect
-							.poll(() =>
-								page
-									.locator(".he-book .page")
-									.evaluateAll((pages) =>
-										pages.some(
-											(element) =>
-												(element as HTMLElement).style.willChange ===
-												"transform",
-										),
-									),
-							)
-							.toBe(true);
+						await expect(
+							page.locator(".he-book .page.page--folded.page--flipping"),
+						).toHaveCount(2);
 					}
 				}
 				// Complete the held turn by distance, independent of CI's input speed.
@@ -95,21 +85,21 @@ test.describe("Sefer commentary navigation", () => {
 				const item =
 					kind === "article"
 						? blank.locator("a#article-1")
-						: blank.getByRole("link", { name: /רש"י/ });
+						: blank.getByRole("button", { name: /בחירת רש"י/ });
 				await item.tap();
 				await expect(
 					blank.getByText(kind === "article" ? "פתיחה" : /אמר רבי יצחק/),
 				).toBeVisible({ timeout: 30_000 });
 				await expect
 					.poll(() => decodeURIComponent(new URL(page.url()).pathname))
-					.toBe(kind === "article" ? "/929/1/1" : '/929/1/רש"י');
+					.toBe(kind === "article" ? "/929/1/1" : "/929/1");
 			});
 		}
 	});
 
 	for (const mouseMode of ["turn", "select"] as const) {
 		for (const kind of ["perush", "article"] as const) {
-			test(`opens ${kind} after paging in mouse ${mouseMode} mode and restores it with history`, async ({
+			test(`handles ${kind} after paging in mouse ${mouseMode} mode`, async ({
 				page,
 			}) => {
 				test.setTimeout(90_000);
@@ -134,11 +124,21 @@ test.describe("Sefer commentary navigation", () => {
 				const item =
 					kind === "article"
 						? blank.locator("a#article-1")
-						: blank.getByRole("link", { name: /רש"י/ });
+						: blank.getByRole("button", { name: /בחירת רש"י/ });
 				const back = blank.getByRole("button", {
-					name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+					name: kind === "article" ? "חזרה למאמרים" : "→ חזרה לפרשנים",
 				});
 				await item.click();
+				if (kind === "perush") {
+					await expect(blank.getByText(/אמר רבי יצחק/)).toBeVisible();
+					await expect(item).toHaveAttribute("aria-pressed", "true");
+					await expect(page).toHaveURL(/\/929\/1\?book/);
+					await expect(blank.locator('[class*="deepHeader"]')).toHaveCount(0);
+					await item.click();
+					await expect(item).toHaveAttribute("aria-pressed", "false");
+					await expect(blank.locator("[data-perush-pasuk]")).toHaveCount(0);
+					return;
+				}
 				await expect(back).toBeVisible({ timeout: 30_000 });
 				await expect(
 					blank.getByText(kind === "article" ? "פתיחה" : /אמר רבי יצחק/),
@@ -172,7 +172,7 @@ test.describe("Sefer commentary navigation", () => {
 		const blank = page.locator('.he-book .page[data-page-index="4"]');
 		await blank.getByRole("tab", { name: "מאמרים" }).click();
 		const scroller = blank.locator('[class*="articlesScroll"]');
-		const back = blank.getByRole("button", { name: "חזרה למאמרים →" });
+		const back = blank.getByRole("button", { name: "חזרה למאמרים" });
 
 		// Scroll the masonry off its top edge.
 		const position = await scroller.evaluate((el) => {
@@ -212,11 +212,12 @@ test.describe("Sefer commentary navigation", () => {
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
 		const blank = page.locator('.he-book .page[data-page-index="4"]');
-		await blank.getByRole("link", { name: /רש"י/ }).click();
-		await expect(
-			blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
-		).toBeVisible({ timeout: 30_000 });
+		await blank.getByRole("button", { name: /בחירת רש"י/ }).click();
+		await expect(blank.getByRole("button", { name: 'בחירת רש"י' })).toBeVisible(
+			{ timeout: 30_000 },
+		);
 
+		await expect(blank.getByText(/אמר רבי יצחק/)).toBeVisible();
 		const alignmentOf = (locator: import("@playwright/test").Locator) =>
 			locator.evaluate((el) => {
 				const style = getComputedStyle(el);
@@ -252,9 +253,9 @@ test.describe("Sefer commentary navigation", () => {
 			await seferPage.openSeferViewForPerek(1);
 			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
-			await blank.getByRole("link", { name: /רש"י/ }).click();
+			await blank.getByRole("button", { name: /בחירת רש"י/ }).click();
 			await expect(
-				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+				blank.getByRole("button", { name: 'בחירת רש"י' }),
 			).toBeVisible({ timeout: 30_000 });
 			const perushUrl = page.url();
 
@@ -276,7 +277,7 @@ test.describe("Sefer commentary navigation", () => {
 			await expect(group).toBeInViewport();
 			// The perush stays open and the book route is untouched.
 			await expect(
-				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+				blank.getByRole("button", { name: 'בחירת רש"י' }),
 			).toBeVisible();
 			expect(page.url()).toBe(perushUrl);
 			await test.info().attach("scripture-pasuk-click-jumps-to-perush-group", {
@@ -291,7 +292,7 @@ test.describe("Sefer commentary navigation", () => {
 			await expect(verse).toHaveAttribute("aria-current", "location");
 			await expect(verse).toBeInViewport();
 			await expect(
-				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+				blank.getByRole("button", { name: 'בחירת רש"י' }),
 			).toBeVisible();
 			expect(page.url()).toBe(perushUrl);
 			await test.info().attach("perush-pasuk-click-jumps-to-scripture-verse", {
@@ -307,9 +308,9 @@ test.describe("Sefer commentary navigation", () => {
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(1);
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
-			await blank.getByRole("link", { name: /רש"י/ }).click();
+			await blank.getByRole("button", { name: /בחירת רש"י/ }).click();
 			await expect(
-				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+				blank.getByRole("button", { name: 'בחירת רש"י' }),
 			).toBeVisible({ timeout: 30_000 });
 			const pasuk = await blank
 				.locator("[data-perush-pasuk]")
@@ -317,18 +318,35 @@ test.describe("Sefer commentary navigation", () => {
 				.getAttribute("data-perush-pasuk");
 			expect(pasuk).toBeTruthy();
 
-			// Flip to perek 2's spread: its text reuses the same pasuk numbers
-			// but has no open perush, so none of them offer navigation into
-			// perek 1's perush.
+			// Saved commentary selection follows the chapter. Full data has
+			// Rashi on chapter 2; the small fixture may have no chapter-2 notes.
+			const nextChapterHtml = await (await page.request.get("/929/2")).text();
+			const hasNextCommentary = nextChapterHtml.includes(
+				`/929/2/${encodeURIComponent('רש"י')}`,
+			);
 			await page.locator(".flipbook-toolbar-next").click();
 			await expect(page).toHaveURL(/\/929\/2\?book/);
 			const perek2Text = page.locator('.he-book .page[data-page-index="5"]');
-			await expect(
-				perek2Text.locator(`[data-sefer-pasuk="${pasuk}"]`),
-			).toBeAttached();
-			await expect(
-				perek2Text.getByRole("button", { name: /מעבר לפירוש/ }),
-			).toHaveCount(0);
+			if (hasNextCommentary) {
+				const nextPanel = page.locator('.he-book .page[data-page-index="6"]');
+				await expect(
+					nextPanel.getByRole("button", { name: 'בחירת רש"י' }),
+				).toHaveAttribute("aria-pressed", "true");
+				const nextGroup = nextPanel.locator("[data-perush-pasuk]").first();
+				await expect(nextGroup).toBeAttached();
+				const nextPasuk = await nextGroup.getAttribute("data-perush-pasuk");
+				await perek2Text
+					.locator(`[data-sefer-pasuk="${nextPasuk}"]`)
+					.getByRole("button", { name: /מעבר לפירוש/ })
+					.click();
+				await expect(nextGroup).toHaveAttribute("data-pasuk-highlight", "");
+				await expect(blank.locator("[data-pasuk-highlight]")).toHaveCount(0);
+				await expect(page).toHaveURL(/\/929\/2\?book/);
+			} else {
+				await expect(
+					perek2Text.getByRole("button", { name: /מעבר לפירוש/ }),
+				).toHaveCount(0);
+			}
 		});
 
 		test("updates the target mapping when switching perushim", async ({
@@ -339,8 +357,8 @@ test.describe("Sefer commentary navigation", () => {
 			await seferPage.openSeferViewForPerek(1);
 			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
-			const back = blank.getByRole("button", { name: "→ חזרה לפרשנים" });
-			await blank.getByRole("link", { name: /רש"י/ }).click();
+			const back = blank.getByRole("button", { name: 'בחירת רש"י' });
+			await blank.getByRole("button", { name: /בחירת רש"י/ }).click();
 			await expect(back).toBeVisible({ timeout: 30_000 });
 			// The panel is located by its perek marker: the perush name itself can
 			// contain quotes (רש"י), which would break a CSS attribute selector.
@@ -351,7 +369,7 @@ test.describe("Sefer commentary navigation", () => {
 			// Switch to אבן עזרא: the old panel unmounts and the registry follows
 			// the newly selected perush — exactly one panel stays mounted.
 			await back.click();
-			await blank.getByRole("link", { name: /אבן עזרא/ }).click();
+			await blank.getByRole("button", { name: /בחירת אבן עזרא/ }).click();
 			await expect(back).toBeVisible({ timeout: 30_000 });
 			await expect(panel).toHaveCount(1);
 			await expect(panel).toHaveAttribute("data-sefer-perush", "אבן עזרא");
@@ -379,10 +397,27 @@ test.describe("Sefer commentary navigation", () => {
 			await seferPage.openSeferViewForPerek(1);
 			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
-			await blank.getByRole("link", { name: /רש"י/ }).click();
+			// Full data can annotate every verse with Rashi. Prefer the sparse
+			// Sforno commentary there; the small fixture only supplies Rashi.
+			const perushName = (await blank
+				.getByRole("button", { name: "בחירת ספורנו", exact: true })
+				.count())
+				? "ספורנו"
+				: 'רש"י';
+			const selection = blank.getByRole("button", {
+				name: `בחירת ${perushName}`,
+				exact: true,
+			});
+			await selection.click();
+			await expect(selection).toBeVisible({ timeout: 30_000 });
+			const panel = blank.locator('[data-sefer-perush-perek="1"]');
+			await expect(panel).toHaveAttribute("data-sefer-perush", perushName);
+			// The selection button is visible while note data is still loading.
+			// Wait for the selected commentary before treating a verse as missing.
+			await expect(panel.locator("[data-perush-pasuk]").first()).toBeAttached();
 			await expect(
-				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
-			).toBeVisible({ timeout: 30_000 });
+				perekPage.getByRole("button", { name: /מעבר לפירוש/ }).first(),
+			).toBeAttached();
 			const perushUrl = page.url();
 
 			// Find a scripture pasuk that the open perush does not annotate. The
@@ -417,9 +452,7 @@ test.describe("Sefer commentary navigation", () => {
 					.getByRole("button", { name: /מעבר לפירוש/ }),
 			).toHaveCount(0);
 			await expect(blank.locator("[data-pasuk-highlight]")).toHaveCount(0);
-			await expect(
-				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
-			).toBeVisible();
+			await expect(selection).toBeVisible();
 			expect(page.url()).toBe(perushUrl);
 		});
 	});
@@ -441,7 +474,7 @@ test.describe("Sefer commentary navigation", () => {
 			}
 			await (kind === "article"
 				? blank.locator("a#article-1")
-				: blank.getByRole("link", { name: /רש"י/ })
+				: blank.getByRole("button", { name: /בחירת רש"י/ })
 			).click();
 			await expect(
 				blank.getByText(kind === "article" ? "פתיחה" : /אמר רבי יצחק/),
@@ -462,7 +495,7 @@ test.describe("Sefer commentary navigation", () => {
 			await page.goto(route);
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
 			const back = blank.getByRole("button", {
-				name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+				name: kind === "article" ? "חזרה למאמרים" : "→ חזרה לפרשנים",
 			});
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await expect(page).toHaveURL(
@@ -476,17 +509,19 @@ test.describe("Sefer commentary navigation", () => {
 			// The article deep view keeps the מאמרים tab active on back; the
 			// perush tags live on the פרשנים side.
 			await blank.getByRole("tab", { name: "פרשנים" }).click();
-			await expect(blank.getByRole("link", { name: /אבן עזרא/ })).toBeVisible();
-			await blank.getByRole("link", { name: /אבן עזרא/ }).click();
 			await expect(
-				blank.getByRole("heading", { name: "אבן עזרא", exact: true }),
+				blank.getByRole("button", { name: /בחירת אבן עזרא/ }),
+			).toBeVisible();
+			await blank.getByRole("button", { name: /בחירת אבן עזרא/ }).click();
+			await expect(
+				blank.getByRole("button", { name: "בחירת אבן עזרא", exact: true }),
 			).toBeVisible({ timeout: 30_000 });
 			await expect(
 				blank.locator('[class*="noteContent"]').first(),
 			).toContainText("בראשית");
 			await expect
 				.poll(() => decodeURIComponent(new URL(page.url()).pathname))
-				.toBe("/929/1/אבן עזרא");
+				.toBe("/929/1");
 		});
 	}
 });

@@ -64,6 +64,14 @@ Applicability markers: חוקת-בלק joins in חוץ לארץ *and* under מנ
 sources on the Baladi cycle); מטות-מסעי is conversely never joined by
 בלדים.
 
+The reader derives **selectable variant layers** from these
+alternatives (`?variant=` in `AliyahControls`): each (custom |
+alt-source) group substitutes its recorded ranges for the covered
+ordinals, re-validated for contiguous coverage. Two recorded variants
+— נשא and דברים weekday — move only their last aliyah's *end* and are
+deliberately not offered: the flat reader displays boundary start
+markers, so those layers would render identically to the base.
+
 ## Coverage matrix
 
 | Scope               | Coverage                       | Notes                                                                                                                                                                  |

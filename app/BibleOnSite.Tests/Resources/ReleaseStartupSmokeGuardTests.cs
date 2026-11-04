@@ -82,6 +82,23 @@ public class ReleaseStartupSmokeGuardTests
     }
 
     [Fact]
+    public void ReleaseSmokeScript_WaitsForInstallKillTeardownBeforeClearingLogcat()
+    {
+        // install -r force-stops a running app; WMS posts the killed window's
+        // WIN DEATH on the system_server thread, so it can land after the
+        // per-phase logcat clear and read as a crash of the new launch — the
+        // upgrade-retained phase failed exactly that way (#2700). The teardown
+        // wait must sit between the install and the clear.
+        var script = SmokeScript;
+        var install = script.IndexOf("device(\"install\", \"-r\"", StringComparison.Ordinal);
+        var wait = script.IndexOf("await waitForProcessTeardown", StringComparison.Ordinal);
+        var clear = script.IndexOf("\"logcat\", \"-c\"", StringComparison.Ordinal);
+        Assert.True(install >= 0, "the smoke must install the packaged APK per phase");
+        Assert.True(wait > install && clear > wait,
+            "the smoke must wait for install-kill window teardown before clearing logcat");
+    }
+
+    [Fact]
     public void CiWiresTheReleaseSmokeLeg()
     {
         var parent = ParentWorkflow;

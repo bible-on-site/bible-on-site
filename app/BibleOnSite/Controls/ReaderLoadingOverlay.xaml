@@ -3,13 +3,12 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
       x:Class="BibleOnSite.Controls.ReaderLoadingOverlay"
       IsVisible="True"
-      BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+      BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
     <!-- Uses a native ActivityIndicator which animates on the GPU even when the
          main thread is blocked by the CarouselView layout pass. -->
     <VerticalStackLayout x:Name="LoadingIndicator"
                          VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
         <ActivityIndicator IsRunning="True"
-                           Color="{StaticResource Primary}"
                            HeightRequest="48"
                            WidthRequest="48"/>
         <Label x:Name="LoadingLabel"

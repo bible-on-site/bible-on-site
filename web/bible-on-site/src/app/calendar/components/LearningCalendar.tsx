@@ -2,29 +2,42 @@
 
 import { toLetters } from "gematry";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	buildMonth,
+	buildVisibleCalendarMonth,
+	CALENDAR_PDF_UNAVAILABLE,
+	canExportCalendarPeriod,
+	clampCalendarMonth,
+	getCalendarCycleWindow,
+	visibleCalendarMonths,
+} from "@/data/learning-calendar-policy";
+import {
 	type CalendarDay,
 	compareMonths,
-	getConfirmedCycleCount,
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getCycleName,
 	getCycleStartMonth,
 	getDateLabel,
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
+	getPerekRangeLabel,
 	getPerekSource,
 	getYearLabel,
+	isMergedReviewPair,
 	type MonthCell,
 	type MonthRef,
 	nextMonth,
 	prevMonth,
 } from "@/data/learning-schedule";
+import { resolveCalendarArtifactRequest } from "@/lib/download/calendar-artifacts";
 import { parseNumericalDateToHebcalDate } from "@/util/hebdates-util";
-import { CalendarPdfDownload } from "./CalendarPdfDownload";
+import {
+	CalendarPdfDownload,
+	type CalendarPdfRequest,
+} from "./CalendarPdfDownload";
 import styles from "./learning-calendar.module.css";
 
 const WEEKDAY_NAMES = [
@@ -48,6 +61,8 @@ const VIEW_MODES = [
 ] as const;
 
 type ViewMode = (typeof VIEW_MODES)[number]["key"];
+
+type CalendarMonth = { ref: MonthRef; cells: MonthCell[] };
 
 function parseViewParam(raw: string | null): ViewMode {
 	return VIEW_MODES.some((mode) => mode.key === raw)
@@ -88,35 +103,91 @@ interface LearningCalendarProps {
 	initialMonth: number;
 	/** Today marker as YYYYMMDD (uniform month), Jerusalem/nightfall aware. */
 	todayDateNumber: number;
+	/**
+	 * Static calendar-PDF manifest URL in the assets bucket (#2622); absent in
+	 * tests/stories, where the action falls back to the legacy API path.
+	 */
+	pdfManifestUrl?: string;
 }
 
 export function LearningCalendar({
 	initialYear,
 	initialMonth,
 	todayDateNumber,
+	pdfManifestUrl = "",
 }: LearningCalendarProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const monthParam = parseMonthParam(searchParams.get(MONTH_QUERY_PARAM));
-	const viewParam = parseViewParam(searchParams.get(VIEW_QUERY_PARAM));
-	const cycleParam = parseCycleParam(searchParams.get(CYCLE_QUERY_PARAM));
-
-	const [viewed, setViewed] = useState<MonthRef>(
-		() => monthParam ?? { year: initialYear, month: initialMonth },
+	const query = searchParams.toString();
+	const today = useMemo(
+		() => parseNumericalDateToHebcalDate(todayDateNumber),
+		[todayDateNumber],
 	);
-	const [viewMode, setViewMode] = useState<ViewMode>(viewParam);
-	const [viewedCycle, setViewedCycle] = useState<number | null>(cycleParam);
+	const window = useMemo(() => getCalendarCycleWindow(today), [today]);
+	const urlParams = useMemo(() => {
+		const params = new URLSearchParams(query);
+		return {
+			month: parseMonthParam(params.get(MONTH_QUERY_PARAM)),
+			view: parseViewParam(params.get(VIEW_QUERY_PARAM)),
+			cycle: parseCycleParam(params.get(CYCLE_QUERY_PARAM)),
+		};
+	}, [query]);
+	const urlMonth = clampCalendarMonth(
+		urlParams.month ?? { year: initialYear, month: initialMonth },
+		window,
+	);
+	const urlCycle =
+		urlParams.cycle === null
+			? null
+			: Math.min(urlParams.cycle, window.next.number);
+	const windowBounds = `${window.minMonth.year}:${window.minMonth.month}:${window.maxMonth.year}:${window.maxMonth.month}:${window.next.number}`;
+	// A clock tick with unchanged limits is the same committed selection.
+	const urlSelection = useMemo(
+		() => ({
+			query,
+			windowBounds,
+			month: { year: urlMonth.year, month: urlMonth.month },
+			view: urlParams.view,
+			cycle: urlCycle,
+		}),
+		[
+			query,
+			windowBounds,
+			urlMonth.year,
+			urlMonth.month,
+			urlParams.view,
+			urlCycle,
+		],
+	);
+	const pendingQuery = useRef<{
+		base: typeof urlSelection;
+		value: string;
+	} | null>(null);
+	const [viewed, setViewed] = useState<MonthRef>(urlSelection.month);
+	const [viewMode, setViewMode] = useState<ViewMode>(urlSelection.view);
+	const [viewedCycle, setViewedCycle] = useState<number | null>(
+		urlSelection.cycle,
+	);
 
-	// Keep the viewed month in sync with the URL (back/forward, shared links).
+	// Apply actual URL changes (back/forward, shared links), without replacing
+	// an optimistic selection with the old URL while navigation is pending.
 	useEffect(() => {
-		if (monthParam && compareMonths(monthParam, viewed) !== 0) {
-			setViewed(monthParam);
-		}
-	}, [monthParam, viewed]);
+		setViewed((current) =>
+			compareMonths(urlSelection.month, current) === 0
+				? current
+				: urlSelection.month,
+		);
+		setViewMode(urlSelection.view);
+		setViewedCycle(urlSelection.cycle);
+	}, [urlSelection]);
 
 	const pushParams = useCallback(
 		(updates: { month?: MonthRef; view?: ViewMode; cycle?: number }) => {
-			const params = new URLSearchParams(searchParams.toString());
+			// Compose rapid actions until Next commits a new URL snapshot.
+			const pending = pendingQuery.current;
+			const params = new URLSearchParams(
+				pending?.base === urlSelection ? pending.value : urlSelection.query,
+			);
 			if (updates.month) {
 				params.set(MONTH_QUERY_PARAM, formatMonthParam(updates.month));
 			}
@@ -126,17 +197,20 @@ export function LearningCalendar({
 			if (updates.cycle !== undefined) {
 				params.set(CYCLE_QUERY_PARAM, String(updates.cycle));
 			}
-			router.replace(`?${params.toString()}`, { scroll: false });
+			const value = params.toString();
+			pendingQuery.current = { base: urlSelection, value };
+			router.replace(`?${value}`, { scroll: false });
 		},
-		[router, searchParams],
+		[router, urlSelection],
 	);
 
 	const navigateMonth = useCallback(
 		(target: MonthRef) => {
-			setViewed(target);
-			pushParams({ month: target });
+			const bounded = clampCalendarMonth(target, window);
+			setViewed(bounded);
+			pushParams({ month: bounded });
 		},
-		[pushParams],
+		[pushParams, window],
 	);
 
 	const selectView = useCallback(
@@ -149,47 +223,41 @@ export function LearningCalendar({
 
 	const selectCycle = useCallback(
 		(cycleNumber: number) => {
-			setViewedCycle(cycleNumber);
-			pushParams({ cycle: cycleNumber });
+			const bounded = Math.max(1, Math.min(cycleNumber, window.next.number));
+			setViewedCycle(bounded);
+			pushParams({ cycle: bounded });
 		},
-		[pushParams],
+		[pushParams, window.next.number],
 	);
 
-	const cells = useMemo(() => buildMonth(viewed.year, viewed.month), [viewed]);
+	const cells = useMemo(
+		() => buildVisibleCalendarMonth(viewed.year, viewed.month, window),
+		[viewed, window],
+	);
 
-	// The cycle owning most of the visible month: the cycle of the first
-	// scheduled day, else of the last scheduled day (inter-cycle gap months).
+	// The first scheduled day identifies the visible month's cycle.
 	const displayedCycle = useMemo(() => {
 		const days = cells.flatMap((cell) => (cell.day ? [cell.day] : []));
-		const anchor =
-			days.find((day) => day.cycle !== undefined) ??
-			[...days].reverse().find((day) => day.cycle !== undefined);
+		const anchor = days.find((day) => day.cycle !== undefined);
 		return anchor?.cycle !== undefined ? getCycle(anchor.cycle) : null;
 	}, [cells]);
 
-	const cycleOptions = useMemo(() => {
-		const confirmedCount = getConfirmedCycleCount();
-		const max =
-			displayedCycle && displayedCycle.number > confirmedCount
-				? displayedCycle.number
-				: confirmedCount;
-		return Array.from({ length: max }, (_, i) => getCycle(i + 1));
-	}, [displayedCycle]);
+	const cycleOptions = useMemo(
+		() => Array.from({ length: window.next.number }, (_, i) => getCycle(i + 1)),
+		[window.next.number],
+	);
 
 	const yearOptions = useMemo(() => {
-		const confirmedCount = getConfirmedCycleCount();
 		const years = new Set<number>();
-		const lastConfirmed = getCycle(confirmedCount);
 		for (
-			let year = getCycle(1).start.year;
-			year <= lastConfirmed.end.year;
+			let year = window.minMonth.year;
+			year <= window.maxMonth.year;
 			year += 1
 		) {
 			years.add(year);
 		}
-		years.add(viewed.year);
 		return [...years].sort((a, b) => a - b);
-	}, [viewed.year]);
+	}, [window]);
 
 	const onCycleSelected = useCallback(
 		(cycleNumber: number) => {
@@ -215,9 +283,15 @@ export function LearningCalendar({
 	);
 
 	const backToToday = useCallback(() => {
-		const today = parseNumericalDateToHebcalDate(todayDateNumber);
-		navigateMonth({ year: today.year, month: today.getUniformMonth() });
-	}, [navigateMonth, todayDateNumber]);
+		const cycle = window.current?.number ?? window.next.number;
+		setViewedCycle(cycle);
+		const month = clampCalendarMonth(
+			{ year: today.year, month: today.getUniformMonth() },
+			window,
+		);
+		setViewed(month);
+		pushParams({ month, cycle });
+	}, [pushParams, today, window]);
 
 	const openPerek = useCallback(
 		(perekId: number) => {
@@ -251,34 +325,62 @@ export function LearningCalendar({
 		);
 	}, [cells, todayDateNumber]);
 
-	const resolvedCycle = viewedCycle ?? contextualCycle;
+	const resolvedCycle = Math.min(
+		viewedCycle ?? contextualCycle,
+		window.next.number,
+	);
+	const canExport = canExportCalendarPeriod(
+		viewMode === "cycle"
+			? { view: "cycle", cycle: resolvedCycle }
+			: { view: viewMode, ...viewed },
+		today,
+	);
 
 	// The PDF request captures this label+URL at click time (#2621) — a
 	// pending download always keeps the period it was started for.
 	const pdfScopeLabel =
 		viewMode === "cycle"
-			? `מחזור ${resolvedCycle}`
+			? getCycleName(getCycle(resolvedCycle))
 			: viewMode === "year"
 				? `שנת ${getYearLabel(viewed.year)}`
 				: getMonthLabel(viewed);
-	const pdfUrl = `/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`;
+	const pdfRequest = useMemo<CalendarPdfRequest>(() => {
+		const params = new URLSearchParams({
+			month: formatMonthParam(viewed),
+			view: viewMode,
+			cycle: String(resolvedCycle),
+		});
+		// The shared resolver keeps the canonical artifact key and filename
+		// identical to how the legacy route reads these params (#2622).
+		const resolved = resolveCalendarArtifactRequest(params);
+		return {
+			apiUrl: `/api/calendar-pdf?${params.toString()}`,
+			manifestUrl: pdfManifestUrl,
+			artifactKey: resolved.ok
+				? resolved.key
+				: /* istanbul ignore next -- defensive: our own params always parse */ "",
+			filename: resolved.ok
+				? resolved.filename
+				: /* istanbul ignore next -- defensive: our own params always parse */ "learning-calendar.pdf",
+		};
+	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 
 	const yearMonths = useMemo(
 		() =>
 			viewMode === "year"
-				? getMonthOrder(viewed.year).map((month) =>
-						buildMonth(viewed.year, month),
+				? visibleCalendarMonths(viewed.year, window).map((month) =>
+						buildVisibleCalendarMonth(viewed.year, month, window),
 					)
 				: [],
-		[viewMode, viewed.year],
+		[viewMode, viewed.year, window],
 	);
 
 	const cycleMonths = useMemo(() => {
 		if (viewMode !== "cycle") {
-			return [] as MonthCell[][];
+			return [] as CalendarMonth[];
 		}
 		const cycle = getCycle(resolvedCycle);
-		const months: MonthCell[][] = [];
+		const months: CalendarMonth[] = [];
 		let ref: MonthRef = getCycleStartMonth(cycle);
 		const endRef: MonthRef = {
 			year: cycle.end.year,
@@ -289,27 +391,50 @@ export function LearningCalendar({
 			guard < 50 && compareMonths(ref, endRef) <= 0;
 			guard += 1
 		) {
-			months.push(buildMonth(ref.year, ref.month));
+			months.push({
+				ref,
+				cells: buildVisibleCalendarMonth(ref.year, ref.month, window),
+			});
 			ref = nextMonth(ref);
 		}
 		return months;
-	}, [viewMode, resolvedCycle]);
+	}, [viewMode, resolvedCycle, window]);
 
 	const dayAriaLabel = (day: CalendarDay): string => {
 		const dateLabel = getDateLabel(day.date);
 		if (day.perekId === undefined) {
 			return `${dateLabel} - לא משובץ`;
 		}
-		const perekLabel = getPerekSource(day.perekId);
-		const first = day.reviewPerekIds?.[0];
-		const reviewLabel =
-			day.status === "review" && first !== undefined && first !== day.perekId
-				? `${getPerekSource(first)} - ${perekLabel}`
-				: perekLabel;
+		const perekLabel =
+			day.status === "review" && day.reviewPerekIds?.length
+				? getPerekRangeLabel(day.reviewPerekIds)
+				: getPerekSource(day.perekId);
 		return day.status === "review"
-			? `${dateLabel} - חזרה: ${reviewLabel}`
+			? `${dateLabel} - חזרה: ${perekLabel}`
 			: `${dateLabel} - ${perekLabel}`;
 	};
+
+	/** One accessible name covering both dates of a merged review block. */
+	const mergedAriaLabel = (
+		friday: CalendarDay,
+		shabbat: CalendarDay,
+	): string => {
+		/* istanbul ignore next -- the merge gate requires defined ids */
+		const ids = friday.reviewPerekIds ?? [];
+		return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
+	};
+
+	/** Saturday dates swallowed by Friday's merged block in `cells`. */
+	const mergedSaturdays = useMemo(() => {
+		const merged = new Set<number>();
+		for (let i = 0; i + 1 < cells.length; i++) {
+			const shabbat = cells[i + 1].day;
+			if (isMergedReviewPair(cells[i].day, shabbat)) {
+				merged.add(shabbat.dateNumber);
+			}
+		}
+		return merged;
+	}, [cells]);
 
 	return (
 		<main className={styles.page}>
@@ -349,7 +474,13 @@ export function LearningCalendar({
 								? "שנה קודמת"
 								: "חודש קודם"
 					}
-					disabled={viewMode === "cycle" && resolvedCycle <= 1}
+					disabled={
+						viewMode === "cycle"
+							? resolvedCycle <= 1
+							: viewMode === "year"
+								? viewed.year <= window.minMonth.year
+								: compareMonths(viewed, window.minMonth) <= 0
+					}
 				>
 					‹
 				</button>
@@ -377,6 +508,13 @@ export function LearningCalendar({
 								? "שנה הבאה"
 								: "חודש הבא"
 					}
+					disabled={
+						viewMode === "cycle"
+							? resolvedCycle >= window.next.number
+							: viewMode === "year"
+								? viewed.year >= window.maxMonth.year
+								: compareMonths(viewed, window.maxMonth) >= 0
+					}
 				>
 					›
 				</button>
@@ -393,7 +531,7 @@ export function LearningCalendar({
 								})
 							}
 						>
-							{getMonthOrder(viewed.year).map((month) => (
+							{visibleCalendarMonths(viewed.year, window).map((month) => (
 								<option key={month} value={month}>
 									{getMonthName(viewed.year, month)}
 								</option>
@@ -419,7 +557,11 @@ export function LearningCalendar({
 						</select>
 					</label>
 				)}
-				<CalendarPdfDownload url={pdfUrl} scopeLabel={pdfScopeLabel} />
+				<CalendarPdfDownload
+					request={pdfRequest}
+					scopeLabel={pdfScopeLabel}
+					unavailableReason={canExport ? undefined : CALENDAR_PDF_UNAVAILABLE}
+				/>
 			</div>
 
 			<h2 className={styles.monthTitle}>
@@ -446,13 +588,17 @@ export function LearningCalendar({
 						{displayedCycle === null && <option value="">-</option>}
 						{cycleOptions.map((cycle) => (
 							<option key={cycle.number} value={cycle.number}>
-								מחזור {cycle.number}
-								{cycle.projected ? " (משוער)" : ""}
+								{getCycleName(cycle)}
 							</option>
 						))}
 					</select>
 				</label>
-				{displayedCycle && (
+				{/* Month/year views keep the contextual cycle's range beside the
+				    picker; in מחזור מלא the h2 already carries the selected
+				    cycle's full label, so repeating it here would duplicate —
+				    and displayedCycle describes the viewed month, not the
+				    chosen cycle (#2725). */}
+				{displayedCycle && viewMode !== "cycle" && (
 					<span className={styles.cycleRange}>
 						{getCycleLabel(displayedCycle)}
 					</span>
@@ -461,7 +607,7 @@ export function LearningCalendar({
 
 			{viewMode === "year" && (
 				<div className={styles.yearGrid}>
-					{getMonthOrder(viewed.year).map((month, index) => (
+					{visibleCalendarMonths(viewed.year, window).map((month, index) => (
 						<MiniMonth
 							key={month}
 							title={getMonthName(viewed.year, month)}
@@ -469,6 +615,7 @@ export function LearningCalendar({
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 						/>
 					))}
 				</div>
@@ -476,17 +623,15 @@ export function LearningCalendar({
 
 			{viewMode === "cycle" && (
 				<div className={styles.yearGrid}>
-					{cycleMonths.map((cellsForMonth) => (
+					{cycleMonths.map(({ ref, cells: cellsForMonth }) => (
 						<MiniMonth
-							key={
-								cellsForMonth.find((cell) => cell.day !== undefined)?.day
-									?.dateNumber
-							}
-							title={getMonthLabelForCells(cellsForMonth)}
+							key={ref.year * 10000 + ref.month * 100 + 1}
+							title={getMonthLabel(ref)}
 							cells={cellsForMonth}
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 							dimmed={(day) => day.cycle !== resolvedCycle}
 						/>
 					))}
@@ -505,23 +650,40 @@ export function LearningCalendar({
 					</div>
 
 					<div className={styles.grid}>
-						{cells.map((cell) =>
-							cell.day === undefined ? (
-								<div
-									key={`blank-${cell.blankColumn}`}
-									className={styles.blankCell}
-									aria-hidden="true"
-								/>
-							) : (
+						{cells.map((cell, index) => {
+							if (cell.day === undefined) {
+								return (
+									<div
+										key={`blank-${cell.blankColumn}`}
+										className={styles.blankCell}
+										aria-hidden="true"
+									/>
+								);
+							}
+							const day = cell.day;
+							if (mergedSaturdays.has(day.dateNumber)) {
+								return null;
+							}
+							const shabbat = cells[index + 1]?.day;
+							const merged = isMergedReviewPair(day, shabbat)
+								? shabbat
+								: undefined;
+							return (
 								<CalendarCell
-									key={cell.day.dateNumber}
-									day={cell.day}
-									isToday={cell.day.dateNumber === todayDateNumber}
+									key={day.dateNumber}
+									day={day}
+									mergedWith={merged}
+									isToday={
+										day.dateNumber === todayDateNumber ||
+										merged?.dateNumber === todayDateNumber
+									}
 									onOpen={openPerek}
-									ariaLabel={dayAriaLabel(cell.day)}
+									ariaLabel={
+										merged ? mergedAriaLabel(day, merged) : dayAriaLabel(day)
+									}
 								/>
-							),
-						)}
+							);
+						})}
 					</div>
 				</>
 			)}
@@ -555,11 +717,14 @@ export function LearningCalendar({
 
 function CalendarCell({
 	day,
+	mergedWith,
 	isToday,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	/** Called only for tappable cells, so the perek id is always present. */
 	onOpen: (perekId: number) => void;
@@ -568,13 +733,26 @@ function CalendarCell({
 	const classNames = [
 		styles.cell,
 		day.status === "review" ? styles.reviewCell : "",
+		mergedWith ? styles.mergedReviewCell : "",
 		day.status === "none" ? styles.noneCell : "",
 		isToday ? styles.todayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
 
-	const dayNumber = (
+	// Merged block: each date sits centered over its own weekday column —
+	// the column headers already mark ו/ש, so no day letters inside (#2365).
+	const dayNumber = mergedWith ? (
+		<span className={styles.dayNumber}>
+			<span className={styles.mergedDate}>
+				{toLetters(day.day, { addQuotes: true })}
+			</span>
+			<span className={styles.mergedDate}>
+				{toLetters(mergedWith.day, { addQuotes: true })}
+			</span>
+			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
+		</span>
+	) : (
 		<span className={styles.dayNumber}>
 			{toLetters(day.day, { addQuotes: true })}
 			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
@@ -591,6 +769,10 @@ function CalendarCell({
 	}
 
 	const perekId = day.perekId;
+	const perekLabel =
+		day.status === "review" && day.reviewPerekIds?.length
+			? getPerekRangeLabel(day.reviewPerekIds)
+			: getPerekSource(perekId);
 	return (
 		<button
 			type="button"
@@ -599,19 +781,12 @@ function CalendarCell({
 			onClick={() => onOpen(perekId)}
 		>
 			{dayNumber}
-			<span className={styles.perekRef}>{getPerekSource(perekId)}</span>
+			<span className={styles.perekRef}>{perekLabel}</span>
 			{day.status === "review" && (
 				<span className={styles.reviewBadge}>חזרה</span>
 			)}
 		</button>
 	);
-}
-
-function getMonthLabelForCells(cells: MonthCell[]): string {
-	const day = cells.find((cell) => cell.day !== undefined)?.day;
-	return day === undefined
-		? ""
-		: getMonthLabel({ year: day.date.year, month: day.date.getUniformMonth() });
 }
 
 function MiniMonth({
@@ -620,6 +795,7 @@ function MiniMonth({
 	todayDateNumber,
 	onOpen,
 	dayAriaLabel,
+	mergedDayAriaLabel,
 	dimmed,
 }: {
 	title: string;
@@ -627,6 +803,8 @@ function MiniMonth({
 	todayDateNumber: number;
 	onOpen: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
+	/** Both dates in one name for a merged review block (#2365). */
+	mergedDayAriaLabel: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	dimmed?: (day: CalendarDay) => boolean;
 }) {
 	return (
@@ -640,24 +818,39 @@ function MiniMonth({
 				))}
 			</div>
 			<div className={styles.miniGrid}>
-				{cells.map((cell) =>
-					cell.day === undefined ? (
-						<span
-							key={`blank-${cell.blankColumn}`}
-							className={styles.miniCell}
-							aria-hidden="true"
-						/>
-					) : (
+				{cells.map((cell, index) => {
+					if (cell.day === undefined) {
+						return (
+							<span
+								key={`blank-${cell.blankColumn}`}
+								className={styles.miniCell}
+								aria-hidden="true"
+							/>
+						);
+					}
+					const day = cell.day;
+					if (index > 0 && isMergedReviewPair(cells[index - 1].day, day)) {
+						return null;
+					}
+					const shabbat = cells[index + 1]?.day;
+					const merged = isMergedReviewPair(day, shabbat) ? shabbat : undefined;
+					return (
 						<MiniCell
-							key={cell.day.dateNumber}
-							day={cell.day}
-							isToday={cell.day.dateNumber === todayDateNumber}
-							dimmed={dimmed?.(cell.day) === true}
+							key={day.dateNumber}
+							day={day}
+							mergedWith={merged}
+							isToday={
+								day.dateNumber === todayDateNumber ||
+								merged?.dateNumber === todayDateNumber
+							}
+							dimmed={dimmed?.(day) === true && (!merged || dimmed(merged))}
 							onOpen={onOpen}
-							ariaLabel={dayAriaLabel(cell.day)}
+							ariaLabel={
+								merged ? mergedDayAriaLabel(day, merged) : dayAriaLabel(day)
+							}
 						/>
-					),
-				)}
+					);
+				})}
 			</div>
 		</section>
 	);
@@ -665,12 +858,15 @@ function MiniMonth({
 
 function MiniCell({
 	day,
+	mergedWith,
 	isToday,
 	dimmed,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	dimmed: boolean;
 	onOpen: (perekId: number) => void;
@@ -679,13 +875,16 @@ function MiniCell({
 	const classNames = [
 		styles.miniCell,
 		day.status === "review" ? styles.miniReviewCell : "",
+		mergedWith ? styles.miniMergedCell : "",
 		day.status === "none" ? styles.miniNoneCell : "",
 		dimmed ? styles.miniDimmed : "",
 		isToday ? styles.miniTodayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
-	const content = toLetters(day.day, { addQuotes: true });
+	const content = mergedWith
+		? `${toLetters(day.day, { addQuotes: true })} - ${toLetters(mergedWith.day, { addQuotes: true })}`
+		: toLetters(day.day, { addQuotes: true });
 
 	if (day.perekId === undefined || dimmed) {
 		return (

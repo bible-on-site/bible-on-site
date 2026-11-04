@@ -15,7 +15,7 @@ Top-level `describe` = subject; nested `describe` = context ("when user is authe
 
 ## Coverage (Website)
 
-Use `/* istanbul ignore next */` with a short reason for defensive/unreachable code; `tests/util/coverage/sanitize-coverage.js` makes SWC instrumentation honor it.
+Use `/* istanbul ignore next */` with a short reason for defensive/unreachable code; `tests/util/coverage/sanitize-coverage.mjs` makes SWC instrumentation honor it.
 
 To find gaps — never hand-parse lcov or write ad-hoc scripts:
 

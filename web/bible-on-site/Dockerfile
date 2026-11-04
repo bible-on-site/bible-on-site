@@ -1,4 +1,4 @@
-FROM node:26.12.1-alpine AS base
+FROM node:26.13.0-alpine AS base
 # Bun ships as a standalone binary — copy the pinned release matching
 # packageManager (bun@1.4.4) rather than installing a package manager.
 COPY --from=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a /usr/local/bin/bun /usr/local/bin/bun
@@ -66,6 +66,9 @@ RUN bun run build
 FROM base AS runner
 WORKDIR /app
 
+# Bind delivery metadata to the published archive before immutable tags exist.
+LABEL io.bible-on-site.image-delivery="soci-v2"
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -82,6 +85,22 @@ COPY --from=builder /app/bible-on-site/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
 COPY --chown=nextjs:nodejs bible-on-site/scripts/start-server.mjs ./start-server.mjs
+
+# Validate the traced runtime, rather than only the build-stage dependencies.
+# A missing or wrong-architecture libvips must fail before an image is published.
+ARG TARGETARCH
+RUN node --input-type=module -e '\
+    import assert from "node:assert/strict"; \
+    import sharp from "sharp"; \
+    assert.ok(["amd64", "arm64"].includes(process.argv[1])); \
+    assert.equal(process.platform, "linux"); \
+    assert.equal(process.arch, process.argv[1] === "amd64" ? "x64" : "arm64"); \
+    const source = await sharp({create:{width:12,height:8,channels:3,background:{r:220,g:30,b:10}}}).jpeg().toBuffer(); \
+    const resized = await sharp(source).resize({width:6}).jpeg().toBuffer(); \
+    const image = await sharp(resized).metadata(); \
+    assert.equal(image.format, "jpeg"); assert.equal(image.width, 6); assert.equal(image.height, 4); \
+    const {data} = await sharp(resized).raw().toBuffer({resolveWithObject:true}); \
+    assert.ok(data[0] > 200 && data[1] < 50 && data[2] < 30);' "$TARGETARCH"
 
 USER 1001
 

@@ -14,4 +14,14 @@ public class Perush
 
     /// <summary>Display order (lower = first). Targum first, Rashi second, then chronological.</summary>
     public int Priority { get; set; }
+
+    /// <summary>
+    /// Persisted reading metric for this perush's notes on the current perek
+    /// (issue #2607); null when the notes pack predates the metric tables.
+    /// </summary>
+    public ReadingMetric? ReadingMetric { get; set; }
+
+    /// <summary>"זמן קריאה משוער: X" badge text or null when nothing to show.</summary>
+    public string? ReadingTimeBadge =>
+        Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);
 }

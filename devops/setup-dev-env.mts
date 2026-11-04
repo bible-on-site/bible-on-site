@@ -14,6 +14,7 @@ import {
 	parseTableTimes,
 } from "./dev-db-checkpoint.mts";
 import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
+import { assertLocalAssetTarget, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -666,11 +667,11 @@ async function runSyncFromProd(): Promise<void> {
 			}
 			console.info("  Tanahpedia safe structure + baseline seed complete");
 
-			writeDevCheckpoint(devDb, prodWatermark);
 		}
 
 		// S3 sync (optional if buckets are set)
 		if (prodS3Bucket && devS3Bucket) {
+			if (s3Endpoint) assertLocalAssetTarget(s3Endpoint, prodS3Bucket, devS3Bucket);
 			if (!dryRun && s3Endpoint) {
 				ensureRustfsRunning();
 			}
@@ -680,7 +681,7 @@ async function runSyncFromProd(): Promise<void> {
 				);
 				if (s3Endpoint) {
 					console.info(
-						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → RustFS s3://${devS3Bucket}`,
+						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → shared incremental mirror → RustFS s3://${devS3Bucket}`,
 					);
 				} else {
 					console.info(
@@ -702,6 +703,7 @@ async function runSyncFromProd(): Promise<void> {
 					stdio: ["ignore", "pipe", "pipe"],
 					shell: isWin,
 					encoding: "utf-8",
+					env: s3Endpoint ? localAssetEnvironment() : process.env,
 				});
 				if (mbResult.status === 0) {
 					console.info(`  Created bucket '${devS3Bucket}'`);
@@ -718,72 +720,14 @@ async function runSyncFromProd(): Promise<void> {
 				}
 
 				if (s3Endpoint) {
-					// Two-step sync: AWS prod → local temp dir → RustFS dev
-					// Required because --endpoint-url applies to both source and dest
-					const tempS3Dir = path.join(projectDir, "data", ".s3-sync-temp");
-					fs.mkdirSync(tempS3Dir, { recursive: true });
-
-					console.info(
-						`Downloading S3 from prod (s3://${prodS3Bucket}) to temp dir...`,
-					);
-					const downloadResult = spawnSync(
-						"aws",
-						[
-							"s3",
-							"sync",
-							`s3://${prodS3Bucket}`,
-							tempS3Dir,
-							"--delete",
-							"--region",
-							awsRegion,
-						],
-						{
-							stdio: ["ignore", "pipe", "pipe"],
-							shell: isWin,
-							encoding: "utf-8",
-						},
-					);
-					if (downloadResult.status !== 0) {
-						const stderr = downloadResult.stderr || "";
-						console.warn(`  Warning: S3 download failed: ${stderr}`);
-					} else {
-						console.info("  S3 download complete");
-						console.info(
-							`Uploading to RustFS (s3://${devS3Bucket}) at ${s3Endpoint}...`,
-						);
-						const uploadResult = spawnSync(
-							"aws",
-							[
-								"s3",
-								"sync",
-								tempS3Dir,
-								`s3://${devS3Bucket}`,
-								"--delete",
-								"--endpoint-url",
-								s3Endpoint,
-							],
-							{
-								stdio: ["ignore", "pipe", "pipe"],
-								shell: isWin,
-								encoding: "utf-8",
-								env: {
-									...process.env,
-									AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
-									AWS_SECRET_ACCESS_KEY:
-										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
-								},
-							},
-						);
-						if (uploadResult.status !== 0) {
-							const stderr = uploadResult.stderr || "";
-							console.warn(`  Warning: RustFS upload failed: ${stderr}`);
-						} else {
-							console.info("  RustFS upload complete");
-						}
-					}
-
-					// Clean up temp dir
-					fs.rmSync(tempS3Dir, { recursive: true, force: true });
+					console.info("Syncing assets incrementally through the shared local mirror...");
+					const directory = syncLocalAssetMirror({
+						sourceBucket: prodS3Bucket,
+						region: awsRegion,
+						targetBucket: devS3Bucket,
+						endpoint: s3Endpoint,
+					});
+					console.info(`  Asset mirror retained for all worktrees: ${directory}`);
 				} else {
 					// Direct S3-to-S3 sync (both on AWS)
 					console.info("Syncing S3 from prod to dev...");
@@ -815,6 +759,8 @@ async function runSyncFromProd(): Promise<void> {
 				"Skipping S3 sync (set PROD_S3_BUCKET and S3_BUCKET to enable).",
 			);
 		}
+		// A failed asset refresh must not mark the complete local sync fresh.
+		if (!dryRun) writeDevCheckpoint(devDb, prodWatermark);
 	} finally {
 		if (!dryRun) {
 			await revokeIngress(ec2, sgId, publicIp);

@@ -10,6 +10,8 @@ use std::path::Path;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use typst_as_lib::TypstEngine;
 
+mod daily;
+
 /// Lightweight request types for PDF generation — decoupled from HTTP models.
 /// The binary's `models` module converts into these.
 #[derive(Debug, Clone)]
@@ -150,7 +152,7 @@ fn h1_open_at(lower: &str, i: usize) -> bool {
 /// header rather than sit between its lines (#2336, #2409).
 /// Returns the joined plain text (if any) and the remaining HTML with those
 /// headings removed, so each is printed once.
-fn split_article_header(html: &str) -> (Option<String>, String) {
+pub(crate) fn split_article_header(html: &str) -> (Option<String>, String) {
     let lower = html.to_ascii_lowercase();
     let Some(open) = lower
         .match_indices("<h1")
@@ -293,11 +295,20 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
 ///   li       → bullet item
 ///   Other tags are silently consumed (content preserved).
 fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
+    html_to_typst_with_headings(html, files, false)
+}
+
+fn daily_html_to_typst(html: &str, files: &mut TypstFiles) -> String {
+    html_to_typst_with_headings(html, files, true)
+}
+
+fn html_to_typst_with_headings(html: &str, files: &mut TypstFiles, daily_headings: bool) -> String {
     let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
     let mut bold_open = false;
     let mut italic_open = false;
     let mut underline_open = false;
+    let mut span_closures = Vec::new();
 
     while let Some(c) = chars.next() {
         if c == '<' {
@@ -316,7 +327,68 @@ fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
                 .next()
                 .unwrap_or("");
 
+            if daily_headings {
+                let level = match tag_name {
+                    "h1" => Some(1),
+                    "h2" => Some(2),
+                    "h3" => Some(3),
+                    "h4" => Some(4),
+                    "h5" => Some(5),
+                    "h6" => Some(6),
+                    _ => None,
+                };
+                if let Some(level) = level {
+                    if is_closing {
+                        out.push_str("];\n");
+                    } else {
+                        out.push_str(&format!("\n#heading(level: {level}, numbering: none)["));
+                    }
+                    continue;
+                }
+            }
             match tag_name {
+                "span" => {
+                    if is_closing {
+                        if let Some(count) = span_closures.pop() {
+                            for _ in 0..count {
+                                out.push_str("];");
+                            }
+                        }
+                    } else {
+                        let style = crate::article_style::InlineStyle::parse(
+                            &html_attr(&tag_content, "style").unwrap_or_default(),
+                        );
+                        let mut options = Vec::new();
+                        if let Some(weight) = style.weight {
+                            options.push(format!("weight: {weight}"));
+                        }
+                        if let Some(italic) = style.italic {
+                            // Frank Ruhl Libre has no italic face. Use the bundled
+                            // Hebrew family with real italic/bold-italic outlines.
+                            if italic {
+                                options.push("font: \"Taamey Frank CLM\"".into());
+                            }
+                            options.push(format!(
+                                "style: \"{}\"",
+                                if italic { "italic" } else { "normal" }
+                            ));
+                        }
+                        let mut count = 0;
+                        if !options.is_empty() {
+                            out.push_str(&format!("#text({})[", options.join(", ")));
+                            count += 1;
+                        }
+                        if style.underline {
+                            out.push_str("#underline[");
+                            count += 1;
+                        }
+                        if style.strike {
+                            out.push_str("#strike[");
+                            count += 1;
+                        }
+                        span_closures.push(count);
+                    }
+                }
                 "br" | "br/" | "br /" => {
                     out.push_str(" \\\n");
                 }
@@ -430,6 +502,11 @@ fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
         }
     }
 
+    for count in span_closures.into_iter().rev() {
+        for _ in 0..count {
+            out.push_str("];");
+        }
+    }
     if bold_open {
         out.push_str("];");
     }
@@ -640,13 +717,6 @@ fn pasuk_markup(segments: &[PdfSegment]) -> String {
 
 /// Generate Typst markup string from the request data.
 fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
-    generate_typst_markup_with_intro(req, None)
-}
-
-fn generate_typst_markup_with_intro(
-    req: &PdfRequest,
-    intro: Option<(&str, &[String])>,
-) -> (String, TypstFiles) {
     let mut markup = String::with_capacity(16 * 1024);
     let mut files: TypstFiles = Vec::new();
 
@@ -672,16 +742,6 @@ fn generate_typst_markup_with_intro(
     if req.include_toc {
         append_toc_page(&mut markup, req);
         markup.push_str("#pagebreak()\n");
-    }
-
-    if let Some((date, dedications)) = intro {
-        markup.push_str(&format!(
-            "#align(center, text(size: 16pt, weight: \"bold\")[תנ\\\"ך על הפרק])\n#align(center)[{}]\n#v(0.6em)\n",
-            typst_escape(date)
-        ));
-        for dedication in dedications {
-            markup.push_str(&format!("{}\n\n", typst_escape(dedication)));
-        }
     }
 
     for (idx, perek) in req.perakim.iter().enumerate() {
@@ -780,8 +840,7 @@ pub fn build_daily_pdf(
     date: &str,
     dedications: &[String],
 ) -> anyhow::Result<Vec<u8>> {
-    let (markup, files) = generate_typst_markup_with_intro(req, Some((date, dedications)));
-    compile_pdf(markup, files, fonts_dir)
+    daily::build(req, fonts_dir, date, dedications)
 }
 
 fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
@@ -793,6 +852,11 @@ fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::R
     let fonts = [
         read_font("TaameyD-Regular.ttf")?,
         read_font("FrankRuhlLibre-Regular.ttf")?,
+        read_font("FrankRuhlLibre-Bold.ttf")?,
+        read_font("TaameyFrankCLM-Regular.ttf")?,
+        read_font("TaameyFrankCLM-Bold.ttf")?,
+        read_font("TaameyFrankCLM-Italic.ttf")?,
+        read_font("TaameyFrankCLM-BoldItalic.ttf")?,
     ];
 
     let font_refs: Vec<&[u8]> = fonts.iter().map(Vec::as_slice).collect();
@@ -924,6 +988,37 @@ mod tests {
         let html = "<p>regular <strong>bold text</strong> regular</p>";
         let typst = to_typst(html);
         assert!(typst.contains("#strong[bold text]"));
+    }
+
+    #[test]
+    fn legacy_inline_styles_preserve_nested_typography() {
+        let source = to_typst(
+            "<p><span style='font-weight: bold'>כאשר <span>פנימי</span></span> רגיל <span style='font-style: italic; text-decoration: underline line-through'>דגש</span></p>",
+        );
+        assert!(source.contains("#text(weight: 700)[כאשר פנימי]; רגיל"));
+        assert!(source.contains(
+            "#text(font: \"Taamey Frank CLM\", style: \"italic\")[#underline[#strike[דגש];];];"
+        ));
+        assert!(
+            !to_typst("<span style='background:url(x); font-weight:expression(x)'>בטוח</span>")
+                .contains("#text(")
+        );
+        assert_eq!(
+            to_typst("</span>סוף<span style='font-weight:400; font-style:normal'>רגיל"),
+            "סוף#text(weight: 400, style: \"normal\")[רגיל];"
+        );
+    }
+
+    #[test]
+    fn daily_articles_keep_all_six_semantic_heading_levels() {
+        for level in 1..=6 {
+            let html = format!("<h{level}>כותרת</h{level}><p>תוכן</p>");
+            let daily = daily_html_to_typst(&html, &mut Vec::new());
+            assert!(daily.contains(&format!(
+                "#heading(level: {level}, numbering: none)[כותרת];"
+            )));
+        }
+        assert!(to_typst("<h4>כותרת</h4>").contains("#text(weight: \"bold\")[כותרת]"));
     }
 
     #[test]
