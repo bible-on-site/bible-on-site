@@ -1,20 +1,37 @@
 /** @jest-environment node */
 const mockSend = jest.fn();
 const mockConfigured = jest.fn();
-jest.mock("@/lib/web-push", () => ({
-	isWebPushConfigured: () => mockConfigured(),
-	sendDailyPerek: (...args: unknown[]) => mockSend(...args),
-}));
+jest.mock("@/lib/web-push", () => {
+	const actual = jest.requireActual("@/lib/web-push/service");
+	return {
+		...actual,
+		isWebPushConfigured: () => mockConfigured(),
+		sendDailyPerek: (...args: unknown[]) => mockSend(...args),
+	};
+});
+jest.mock("server-only", () => ({}));
 
 import { POST } from "@/app/api/push/daily/route";
 
-const call = (authorization?: string) =>
+const call = (authorization?: string, body?: unknown) =>
 	POST(
 		new Request("http://localhost/api/push/daily", {
 			method: "POST",
 			headers: authorization ? { authorization } : {},
+			body: body === undefined ? undefined : JSON.stringify(body),
 		}),
 	);
+
+const callRaw = (authorization: string, body: string) =>
+	POST(
+		new Request("http://localhost/api/push/daily", {
+			method: "POST",
+			headers: { authorization },
+			body,
+		}),
+	);
+
+const FCM = "https://fcm.googleapis.com/fcm/send/abc";
 
 describe("POST /api/push/daily", () => {
 	beforeEach(() => {
@@ -51,13 +68,51 @@ describe("POST /api/push/daily", () => {
 			const response = await call("Bearer s3cret");
 			const body = await response.json();
 			expect(response.status).toBe(200);
-			expect(mockSend).toHaveBeenCalledWith(body.perekId);
+			expect(mockSend).toHaveBeenCalledWith(body.perekId, undefined);
 			expect(body).toEqual({
 				perekId: expect.any(Number),
 				sent: 3,
 				removed: 1,
 				failed: 0,
 			});
+		});
+
+		it("targets one subscription when the body names an endpoint", async () => {
+			const response = await call("Bearer s3cret", { endpoint: FCM });
+			const body = await response.json();
+			expect(response.status).toBe(200);
+			expect(mockSend).toHaveBeenCalledWith(body.perekId, FCM);
+		});
+
+		it.each([
+			{ endpoint: "https://evil.example/fcm" },
+			{ endpoint: "http://fcm.googleapis.com/fcm/send/x" },
+			{ endpoint: 42 },
+		])("rejects an invalid targeting body %#", async (body) => {
+			expect((await call("Bearer s3cret", body)).status).toBe(400);
+			expect(mockSend).not.toHaveBeenCalled();
+		});
+
+		it.each(["not json", "42", '["https://fcm.googleapis.com/x"]'])(
+			"rejects a malformed or non-object body %s",
+			async (body) => {
+				expect((await callRaw("Bearer s3cret", body)).status).toBe(400);
+				expect(mockSend).not.toHaveBeenCalled();
+			},
+		);
+
+		it("rejects an oversized body instead of silently broadcasting", async () => {
+			const response = await call("Bearer s3cret", {
+				pad: "x".repeat(5000),
+			});
+			expect(response.status).toBe(400);
+			expect(mockSend).not.toHaveBeenCalled();
+		});
+
+		it("broadcasts for a well-formed body without an endpoint", async () => {
+			const response = await call("Bearer s3cret", { note: "all" });
+			expect(response.status).toBe(200);
+			expect(mockSend).toHaveBeenCalledWith(expect.any(Number), undefined);
 		});
 
 		it("returns 500 when sending fails", async () => {
