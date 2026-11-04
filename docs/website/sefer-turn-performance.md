@@ -5,6 +5,17 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
+The current candidate keeps the original pane content ready as a rendering layer
+before a turn, covering both paper faces. A matched nine-case diagnostic reduces
+page painting by about 11-15% at 6x CPU slowdown. That stress run is not release
+qualification: the original 4x profile and its 200/100/50ms limits remain required.
+All eight resting-page captures and character-position comparisons are exact;
+font settings and colors are unchanged. Chrome can change glyph-edge smoothing
+during motion. The actual source build and complete timing/behavior matrix still
+need qualification before delivery.
+
+The following records retain the earlier oblique-only candidate and its results.
+
 The follow-up [engine marker](https://github.com/doradsoft/html-flip-book/pull/390)
 identifies an oblique reflected paper face directly from its geometry. Sefer
 uses a separate content layer only for that face, so the crease can move while
@@ -430,10 +441,10 @@ evidence, and every earlier failed run remains failed.
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
 
-The reader now prepares the covered paper back faces before another turn
-starts, using `will-change: transform, clip-path` within its bounded page buffer.
-The current spread and hover folds retain their original rasterization;
-the library continues to own inline hints during a drag or animation.
+The earlier reader candidate prepared the covered paper back faces before
+another turn started, using `will-change: transform, clip-path` within its bounded page buffer.
+Its current spread and hover folds retained their original rasterization;
+the library continued to own inline hints during a drag or animation.
 A matched control/candidate/candidate/control diagnostic at 6x CPU slowdown
 reduced the first hidden-bookmark toolbar cadence p95 from 66.7/50ms in the
 controls to 33.4/33.4ms in the candidates. Other stress cases still failed;
