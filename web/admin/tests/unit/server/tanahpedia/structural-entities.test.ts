@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
-	executeMock: vi.fn(),
-	queryMock: vi.fn(),
-	queryOneMock: vi.fn(),
-}));
+const { executeMock, queryMock, queryOneMock, transactionMock } = vi.hoisted(
+	() => ({
+		executeMock: vi.fn(),
+		queryMock: vi.fn(),
+		queryOneMock: vi.fn(),
+		transactionMock: vi.fn(),
+	}),
+);
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -22,6 +25,16 @@ vi.mock("~/server/db", () => ({
 	execute: executeMock,
 	query: queryMock,
 	queryOne: queryOneMock,
+	transaction: (fn: (conn: unknown) => unknown) => {
+		transactionMock();
+		return fn({});
+	},
+	txExecute: (_conn: unknown, sql: string, params?: unknown[]) =>
+		executeMock(sql, params),
+	txQuery: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryMock(sql, params),
+	txQueryOne: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryOneMock(sql, params),
 }));
 
 import {
@@ -47,6 +60,7 @@ describe("createEntityAndLinkToEntry", () => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 		queryOneMock.mockReset().mockResolvedValue({ id: "name-type-id" });
 		queryMock.mockReset().mockResolvedValue([]);
+		transactionMock.mockReset();
 	});
 
 	describe("when the type has a plain subtype table", () => {
@@ -131,6 +145,14 @@ describe("createEntityAndLinkToEntry", () => {
 
 			const parentId = executeMock.mock.calls[1]?.[1]?.[0];
 			expect(executeMock.mock.calls[2]?.[1]?.[1]).toBe(parentId);
+		});
+
+		it("runs the entity, subtype and link inserts in one transaction", async () => {
+			await createEntityAndLinkToEntry({
+				data: { entryId: "entry-1", entityType: "ANIMAL", displayName: "אריה" },
+			});
+
+			expect(transactionMock).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -299,15 +321,21 @@ describe("saying dates", () => {
 	it.each(["SAYING", "PROPHECY"])(
 		"loads the persisted date for %s",
 		async (type) => {
-			queryMock.mockResolvedValue([
-				{
-					linkId: "link",
-					entityId: "entity",
-					entityType: type,
-					displayName: "אמרה",
-				},
-			]);
-			queryOneMock.mockResolvedValue({ id: "saying-1", saying_date: 24480906 });
+			queryMock.mockImplementation((sql: unknown) => {
+				if (String(sql).includes("tanahpedia_saying")) {
+					return Promise.resolve([
+						{ entity_id: "entity", id: "saying-1", saying_date: 24480906 },
+					]);
+				}
+				return Promise.resolve([
+					{
+						linkId: "link",
+						entityId: "entity",
+						entityType: type,
+						displayName: "אמרה",
+					},
+				]);
+			});
 			const result = await getEntryStructuralContext({ data: "entry-1" });
 			expect(result.linkedEntities[0].saying).toEqual({
 				sayingId: "saying-1",
@@ -318,15 +346,19 @@ describe("saying dates", () => {
 	it.each(["SAYING", "PROPHECY"])(
 		"omits date editing when %s has no subtype row",
 		async (type) => {
-			queryMock.mockResolvedValue([
-				{
-					linkId: "link",
-					entityId: "entity",
-					entityType: type,
-					displayName: "אמרה",
-				},
-			]);
-			queryOneMock.mockResolvedValue(null);
+			queryMock.mockImplementation((sql: unknown) => {
+				if (String(sql).includes("tanahpedia_saying")) {
+					return Promise.resolve([]);
+				}
+				return Promise.resolve([
+					{
+						linkId: "link",
+						entityId: "entity",
+						entityType: type,
+						displayName: "אמרה",
+					},
+				]);
+			});
 			const result = await getEntryStructuralContext({ data: "entry-1" });
 			expect(result.linkedEntities).toEqual([
 				{

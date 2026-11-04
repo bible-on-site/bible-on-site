@@ -19,6 +19,8 @@ export default defineConfig({
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: "bun run start",
+		// Enables /api/dev/memory on the production server for the perf benchmark
+		env: { ENABLE_DEV_MEMORY_API: "1" },
 	},
 	fullyParallel: false,
 	// Timing profiles require an idle browser host, including across projects.

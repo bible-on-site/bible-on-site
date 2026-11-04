@@ -6,7 +6,7 @@
 	"dir": "rtl",
 	"start_url": "/",
 	"scope": "/",
-	"display": "standalone",
+	"display": "browser",
 	"background_color": "#ffffff",
 	"theme_color": "#0d3a8c",
 	"icons": [
