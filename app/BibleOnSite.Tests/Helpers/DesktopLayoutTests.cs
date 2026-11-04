@@ -26,4 +26,15 @@ public class DesktopLayoutTests
         DesktopLayout.ReaderBarMaxWidth.Should().BeLessThanOrEqualTo(DesktopLayout.ReaderColumnMaxWidth);
         DesktopLayout.ReaderSheetMaxWidth.Should().BeLessThanOrEqualTo(DesktopLayout.ReaderColumnMaxWidth);
     }
+
+    [Fact]
+    public void NavPaneBreakpoint_LeavesUsableContentBesideThePane()
+    {
+        // The flyout is 300 dips wide; locking it must still leave a
+        // comfortable content column — below the reader cap and far above
+        // the window minimum.
+        (DesktopLayout.NavPaneBreakpoint - 300).Should().BeGreaterThanOrEqualTo(600);
+        DesktopLayout.NavPaneBreakpoint.Should().BeLessThanOrEqualTo(DesktopLayout.ReaderColumnMaxWidth + 300,
+            "the pane must appear before content can reach its maximum width");
+    }
 }

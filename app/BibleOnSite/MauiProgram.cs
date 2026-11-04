@@ -64,6 +64,9 @@ public static class MauiProgram
                 // Native Button host gives flyout rows keyboard focus,
                 // Enter/Space activation and hover/focus visuals (#2766).
                 handlers.AddHandler<FlyoutMenuRow, FlyoutMenuRowHandler>();
+                // The draggable exit-fullscreen circle gets the same
+                // treatment: tab stop + Enter/Space + UIA button role (#2766).
+                handlers.AddHandler<ReaderExitFullscreenButton, ReaderExitFullscreenButtonHandler>();
 #endif
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();

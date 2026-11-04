@@ -165,6 +165,12 @@ public class SharedTopBar : ContentView
         };
         NavigationButton.SetAppThemeColor(Button.TextColorProperty, Colors.Black, Colors.White);
         SemanticProperties.SetDescription(NavigationButton, "פתיחת תפריט הניווט");
+        if (OperatingSystem.IsWindows())
+        {
+            // Desktop pointer label (#2766): the button toggles the nav pane
+            // there, not just opens a flyout.
+            ToolTipProperties.SetText(NavigationButton, "תפריט ניווט");
+        }
         NavigationButton.Clicked += OnBarNavigationClicked;
 
         BackButton = new Button
@@ -374,9 +380,16 @@ public class SharedTopBar : ContentView
             opener();
             return;
         }
-        if (Shell.Current is not null)
+        if (Shell.Current is IAdaptiveNavPane adaptiveNav)
         {
-            Shell.Current.FlyoutIsPresented = true;
+            // Toggle, not open-only: on Windows the hamburger also collapses
+            // the locked nav pane; on touch the button is unreachable while
+            // the overlay covers it, so a press still always opens (#2766).
+            adaptiveNav.ToggleNavPane();
+        }
+        else if (Shell.Current is { } shell)
+        {
+            shell.FlyoutIsPresented = true;
         }
     }
 }
