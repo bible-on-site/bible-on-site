@@ -142,6 +142,7 @@ struct Cli {
     drop_only: bool,
 }
 
+#[rustfmt::skip]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .test.env if it exists
@@ -152,8 +153,9 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    run(cli).await
-}
+    // Single-line tail: main itself is never test-executed, so each added
+    // line here shows up as an uncovered diff line on the patch gate.
+    run(cli).await }
 
 /// The full drop/populate flow, kept out of `main` so the MySQL-backed test
 /// can drive the real end-to-end path.
