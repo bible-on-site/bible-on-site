@@ -219,7 +219,8 @@ Readers can opt in to a browser notification with the daily perek (#1096).
   (`docs/aws/cloudformation/ecs-services.yaml`). The scheduled workflow runs
   only once the repository variable `WEB_PUSH_ENABLED` is `true` and the
   repository secret `PUSH_SEND_SECRET` matches the website's; a manual
-  dispatch is ungated so the controlled delivery check can run first. The
+  dispatch is ungated but requires a single-subscription `endpoint` input,
+  so the controlled delivery check can run first and never broadcasts. The
   full ordered activation, verification and rollback are in
   `docs/aws/web-push-activation.md`.
 
