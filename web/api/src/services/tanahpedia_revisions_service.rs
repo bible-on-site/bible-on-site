@@ -13,6 +13,10 @@ use sea_orm::{
 const REVISION_STATUS_PENDING: &str = "PENDING";
 const REVISION_STATUS_APPLIED: &str = "APPLIED";
 
+fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
+    ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+}
+
 /// Normalizes an optional, possibly-blank string into `Some(trimmed)` or `None`.
 fn normalize(value: Option<String>) -> Option<String> {
     value
@@ -198,16 +202,14 @@ pub async fn apply_revision(
     // update commit together, the locked revision row makes the status check
     // atomic, and the locked entry row serializes the head check against
     // concurrent applies on the same entry.
-    let transaction = db.get_connection().begin().await.map_err(|db_err| {
-        ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-    })?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
     let conn = &transaction;
 
     let revision = entry_revision::Entity::find_by_id(revision_id.clone())
         .lock_exclusive()
         .one(conn)
         .await
-        .map_err(|db_err| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err)))?
+        .map_err(db_error)?
         .ok_or_else(|| ServiceError::not_found("revision not found", Option::<String>::None))?;
 
     if revision.status == REVISION_STATUS_APPLIED {
@@ -316,9 +318,7 @@ pub async fn apply_revision(
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
 
-    transaction.commit().await.map_err(|db_err| {
-        ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-    })?;
+    transaction.commit().await.map_err(db_error)?;
 
     let mut applied = revision;
     applied.status = REVISION_STATUS_APPLIED.to_string();
