@@ -22,6 +22,7 @@ vi.mock("~/server/render-daily.server", () => ({
 
 import {
 	prepareBulletin,
+	readBulletinEmailContent,
 	readPreparedBulletin,
 } from "~/server/daily-bulletins.server";
 
@@ -140,6 +141,17 @@ describe("prepared bulletins", () => {
 		});
 		mocks.query.mockResolvedValue(deliveries);
 		expect((await readPreparedBulletin(input.date))?.input).toEqual(input);
+	});
+	it("reads email content without the PDF blob", async () => {
+		mocks.queryOne.mockResolvedValue({
+			subject: row.subject,
+			emailHtml: row.email_html,
+		});
+		expect(await readBulletinEmailContent(input.date)).toEqual({
+			subject: row.subject,
+			emailHtml: row.email_html,
+		});
+		expect(String(mocks.queryOne.mock.calls[0][0])).not.toContain("pdf_data");
 	});
 	it("includes chapter dedications in the saved input and reports a missing post-commit snapshot", async () => {
 		mocks.queryOne

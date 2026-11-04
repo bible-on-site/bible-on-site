@@ -24,6 +24,7 @@ public class SharedTopBarTests : IDisposable
 
     public void Dispose()
     {
+        BackChrome.TestPlatform = null;
         PreferencesService.ResetForTesting();
     }
 
@@ -184,6 +185,46 @@ public class SharedTopBarTests : IDisposable
 
         bar.BackButton.IsVisible.Should().BeFalse();
         bar.NavCapsule.Children[0].Should().BeSameAs(bar.NavigationButton);
+    }
+
+    /// <summary>
+    /// The #2927 regression guard. At 5.0.210 the article header's Auto
+    /// column laid the title out beside a default-visible in-content Back
+    /// button, then the navigation-time <see cref="BackChrome"/> apply
+    /// corrected it to hidden a frame later — collapsing the column and
+    /// reflowing the title. The invariant the migration must keep: the
+    /// visibility the capsule settles on at attach (the first laid-out
+    /// frame) equals the one the post-navigation apply computes, so no
+    /// late chrome correction can shift the band.
+    /// </summary>
+    [Theory]
+    [InlineData(BackChromePlatform.Android, InAppBackButtonPreference.PlatformDefault, false)]
+    [InlineData(BackChromePlatform.Android, InAppBackButtonPreference.Hide, false)]
+    [InlineData(BackChromePlatform.Android, InAppBackButtonPreference.Show, true)]
+    [InlineData(BackChromePlatform.Apple, InAppBackButtonPreference.PlatformDefault, true)]
+    [InlineData(BackChromePlatform.Apple, InAppBackButtonPreference.Hide, true)]
+    [InlineData(BackChromePlatform.Windows, InAppBackButtonPreference.Show, false)]
+    [InlineData(BackChromePlatform.Other, InAppBackButtonPreference.PlatformDefault, true)]
+    public void SharedTopBar_BackSlot_IsSettledAtAttach_BeforeAnyNavigationApply(
+        BackChromePlatform platform, InAppBackButtonPreference preference, bool expected)
+    {
+        BackChrome.TestPlatform = platform;
+        PreferencesService.Instance.InAppBackButton = preference;
+
+        var bar = new SharedTopBar();
+        // Parenting the bar is what the XAML loader does inside the page's
+        // InitializeComponent — the last moment before first layout.
+        var page = new ContentPage { Content = bar };
+        var atAttach = bar.BackButton.IsVisible;
+
+        // The navigation-time apply runs after the first frame can paint.
+        BackChrome.Apply(page);
+
+        atAttach.Should().Be(expected,
+            "the persisted policy must own the Back slot before the first frame");
+        bar.BackButton.IsVisible.Should().Be(atAttach,
+            "the navigation-time apply must never flip capsule visibility — that flip is the reflow");
+        bar.ShowBack.Should().Be(expected);
     }
 
     [Fact]

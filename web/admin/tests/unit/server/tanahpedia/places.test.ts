@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
-	executeMock: vi.fn(),
-	queryMock: vi.fn(),
-	queryOneMock: vi.fn(),
-}));
+const { executeMock, queryMock, queryOneMock, transactionMock } = vi.hoisted(
+	() => ({
+		executeMock: vi.fn(),
+		queryMock: vi.fn(),
+		queryOneMock: vi.fn(),
+		transactionMock: vi.fn(),
+	}),
+);
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -22,6 +25,16 @@ vi.mock("~/server/db", () => ({
 	execute: executeMock,
 	query: queryMock,
 	queryOne: queryOneMock,
+	transaction: (fn: (conn: unknown) => unknown) => {
+		transactionMock();
+		return fn({});
+	},
+	txExecute: (_conn: unknown, sql: string, params?: unknown[]) =>
+		executeMock(sql, params),
+	txQuery: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryMock(sql, params),
+	txQueryOne: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryOneMock(sql, params),
 }));
 
 import { createPlace, deletePlace } from "~/server/tanahpedia/places";
@@ -32,6 +45,7 @@ describe("tanahpedia places api", () => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
+		transactionMock.mockReset();
 	});
 
 	it("creates the entity and place rows", async () => {
@@ -41,6 +55,12 @@ describe("tanahpedia places api", () => {
 		expect(result.entity_id).toBeTruthy();
 		expect(executeMock).toHaveBeenCalledTimes(2);
 		expect(executeMock.mock.calls[0]?.[1]?.[1]).toBe("ירושלים");
+	});
+
+	it("creates the entity and place rows in one transaction", async () => {
+		await createPlace({ data: { name: "ירושלים" } });
+
+		expect(transactionMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("deletes the entity row behind the place", async () => {

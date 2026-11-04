@@ -365,7 +365,7 @@ public partial class ParashaPage
             return;
         }
 
-        var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
+        var words = track.GetWords(pasuk.PasukNum);
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
             // A "ready" track missing this pasuk's timings is corrupt pack
@@ -495,7 +495,7 @@ public partial class ParashaPage
                     _ => DivineNameMasking.MaskText(segment.Value)
                 }
             };
-            var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);
+            var word = track!.GetWord(pasuk.PasukNum, i + 1);
             if (word != null)
             {
                 _focusedWordSpans[word.Segment] = span;
@@ -532,7 +532,7 @@ public partial class ParashaPage
         RecitationService.Instance.GetTrack(_focusedPerekId) is { AlignmentStatus: "ready" } focusedTrack &&
         PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim is { } focusedPasukim &&
         focusedTrack.Matches(focusedPasukim) &&
-        focusedTrack.Words.Any(w => w.Pasuk == _focusedPasuk.PasukNum && w.StartMs != null && w.EndMs != null);
+        focusedTrack.GetWords(_focusedPasuk.PasukNum).Any(w => w.StartMs != null && w.EndMs != null);
 
     private async void OnFocusedPlayClicked(object? sender, EventArgs e)
     {
@@ -611,7 +611,7 @@ public partial class ParashaPage
             }
 
             var ranges = group.OrderBy(s => s.PasukNum)
-                .Select(s => track.Words.Where(w => w.Pasuk == s.PasukNum).ToList()).ToList();
+                .Select(s => track.GetWords(s.PasukNum)).ToList();
             if (ranges.Any(r => r.Count == 0))
             {
                 continue;
@@ -661,7 +661,7 @@ public partial class ParashaPage
             var wholePerek = startPasuk <= 1 && endPasuk >= pasukim.Count;
             if (track.AlignmentStatus == "ready" && track.Matches(pasukim))
             {
-                var sliceWords = track.Words.Where(w => w.Pasuk >= startPasuk && w.Pasuk <= endPasuk).ToList();
+                var sliceWords = track.GetWordsBetweenPasukim(startPasuk, endPasuk);
                 if (sliceWords.Count == 0)
                 {
                     continue;
@@ -759,8 +759,7 @@ public partial class ParashaPage
             var ranges = segment.Ranges;
             if (ranges == null && segment.Start == null && preferences.RecitationVersePauseMs >= 0 && track?.AlignmentStatus == "ready")
             {
-                ranges = track.Words.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
-                    .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList();
+                ranges = track.GetPasukRanges();
             }
             // MediaElement's position is in source time; scale generated silence so
             // the user's pause retains its wall-clock length at every speed.

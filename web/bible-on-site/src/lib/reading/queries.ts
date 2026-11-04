@@ -78,6 +78,31 @@ function sliceOrdinalSelects(slices: PerekSlice[]): {
 }
 
 /**
+ * Derived-table SELECT list like sliceOrdinalSelects but for several
+ * slice groups at once — each row carries the group's `unit_order` (its
+ * index in the supplied list) alongside a per-group `slice_order`, so
+ * one JOINed query can attribute matched rows back to their unit.
+ * Ordinals are loop indices, safe to inline; slice bounds stay
+ * parameterized (three params per slice).
+ */
+export function groupedSliceSelects(sliceGroups: PerekSlice[][]): {
+	sql: string;
+	params: number[];
+} {
+	const params: number[] = [];
+	const selects: string[] = [];
+	for (const [unitOrder, slices] of sliceGroups.entries()) {
+		for (const [sliceOrder, slice] of slices.entries()) {
+			params.push(slice.perekId, slice.startPasuk, slice.endPasuk);
+			selects.push(
+				`SELECT ${unitOrder} AS unit_order, ${sliceOrder} AS slice_order, ? AS perek_id, ? AS start_pasuk, ? AS end_pasuk`,
+			);
+		}
+	}
+	return { sql: selects.join(" UNION ALL "), params };
+}
+
+/**
  * Scalar rank expression giving each article row the ordinal of its
  * FIRST matching slice in supplied range order — reading order for
  * multi-range units (a Haftarah may reach a later perek before an

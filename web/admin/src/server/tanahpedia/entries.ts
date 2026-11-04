@@ -411,7 +411,7 @@ export const assignEntity = createServerFn({ method: "POST" })
 	)
 	.handler(async ({ data }) => {
 		await execute(
-			"INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
+			"INSERT IGNORE INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
 			[data.id, data.entry_id, data.entity_id],
 		);
 		await revalidateWebsite(await pediaChangesForEntryIds([data.entry_id]));

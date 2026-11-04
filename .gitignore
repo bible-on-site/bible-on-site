@@ -17,6 +17,10 @@ web/api/docs/migration.md
 actionlint
 test-results/
 
+# Session/PR evidence artifacts — attach to issues and PRs instead of committing
+/evidence/
+/pr-*/
+
 # Rust build artifacts
 **/target/
 

@@ -10,9 +10,13 @@ namespace BibleOnSite.Handlers;
 /// through NSParagraphStyle.Alignment, so every attributed-text rebuild is
 /// post-processed: the text's paragraph style is cloned with
 /// UITextAlignment.Justified (keeping its other traits) — the same rendering
-/// the inline commentary's UITextView produces (#2402). Pasuk text is a single
-/// uniform paragraph, so one merged style covers the whole string; Justified
-/// keeps the last/short line at its natural edge.
+/// the inline commentary's UITextView produces (#2402). The clone also pins
+/// BaseWritingDirection from the label's FlowDirection (#2964): a paragraph
+/// style left at the "natural" base direction resolves from the device's
+/// language preference, not the string's strong characters, so on an
+/// English-locale device the last/short lines of a justified RTL pasuk flush
+/// left. Pasuk text is a single uniform paragraph, so one merged style
+/// covers the whole string.
 /// </summary>
 public sealed class PasukTextLabelHandler : LabelHandler
 {
@@ -24,10 +28,13 @@ public sealed class PasukTextLabelHandler : LabelHandler
         var mapper = new PropertyMapper<ILabel, PasukTextLabelHandler>(Mapper);
         // Every rebuild of the platform attributed string must re-apply the
         // justified paragraph style: Font and TextColor funnel into a
-        // FormattedText update, so these keys cover span, text and size changes.
-        mapper.AppendToMapping(nameof(Label.FormattedText), static (handler, _) => handler.ApplyJustification());
-        mapper.AppendToMapping(nameof(ILabel.Text), static (handler, _) => handler.ApplyJustification());
-        mapper.AppendToMapping(nameof(PasukTextLabel.Justify), static (handler, _) => handler.ApplyJustification());
+        // FormattedText update, so these keys cover span, text and size
+        // changes; FlowDirection keeps the paragraph base direction in sync
+        // with the label's effective direction after propagation.
+        mapper.AppendToMapping(nameof(Label.FormattedText), static (handler, _) => handler.ApplyParagraphStyle());
+        mapper.AppendToMapping(nameof(ILabel.Text), static (handler, _) => handler.ApplyParagraphStyle());
+        mapper.AppendToMapping(nameof(IView.FlowDirection), static (handler, _) => handler.ApplyParagraphStyle());
+        mapper.AppendToMapping(nameof(PasukTextLabel.Justify), static (handler, _) => handler.ApplyParagraphStyle());
         return mapper;
     }
 
@@ -35,7 +42,7 @@ public sealed class PasukTextLabelHandler : LabelHandler
     {
     }
 
-    private void ApplyJustification()
+    private void ApplyParagraphStyle()
     {
         if (PlatformView is not { } label || VirtualView is not PasukTextLabel pasukLabel)
         {
@@ -49,7 +56,7 @@ public sealed class PasukTextLabelHandler : LabelHandler
         }
 
         // Merge like MAUI's own WithLineHeight: clone the existing paragraph
-        // style and change only the alignment, keeping line-height traits.
+        // style and change only alignment/direction, keeping line-height traits.
         var paragraphStyle = new NSMutableParagraphStyle();
         if (attributed.GetAttribute(UIStringAttributeKey.ParagraphStyle, 0, out _)
             is NSParagraphStyle existing)
@@ -60,6 +67,9 @@ public sealed class PasukTextLabelHandler : LabelHandler
         paragraphStyle.Alignment = pasukLabel.Justify
             ? UITextAlignment.Justified
             : UITextAlignment.Natural;
+        paragraphStyle.BaseWritingDirection = pasukLabel.FlowDirection == Microsoft.Maui.FlowDirection.RightToLeft
+            ? NSWritingDirection.RightToLeft
+            : NSWritingDirection.LeftToRight;
 
         var mutable = new NSMutableAttributedString(attributed);
         mutable.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle,

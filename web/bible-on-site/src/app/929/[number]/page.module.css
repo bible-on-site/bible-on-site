@@ -94,7 +94,7 @@
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
 	border-radius: var(--radius-sm);
 }
-.qri label::before {
+.qri span:where([data-qri-label])::before {
 	color: var(--muted-text, #637598);
 	content: "קְרִי:";
 	cursor: text;
