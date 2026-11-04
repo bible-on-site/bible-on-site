@@ -618,7 +618,8 @@ def lazy_entities_fn(spec):
 
     def entities_fn(text):
         nonlocal loaded
-        if loaded is None:
+        # `not loaded`: the built pipeline callable is always truthy.
+        if not loaded:
             loaded = load_entities_fn(spec)
         return loaded(text)
 
