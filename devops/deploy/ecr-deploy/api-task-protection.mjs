@@ -292,12 +292,44 @@ export class APITaskProtection {
 			false,
 			"Protection still enabled after release",
 		);
-		await this.ownMarker();
-		await this.call("UntagResource", {
-			resourceArn: this.task,
-			tagKeys: [this.key],
-		});
-		assert.ok(!(this.key in (await this.tags())), "Owned task marker remains");
+		try {
+			await this.ownMarker();
+			await this.call("UntagResource", {
+				resourceArn: this.task,
+				tagKeys: [this.key],
+			});
+			assert.ok(
+				!(this.key in (await this.tags())),
+				"Owned task marker remains",
+			);
+		} catch (error) {
+			if (error.name !== "InvalidParameterException") throw error;
+			// Clearing protection lets ECS retire the source immediately. Its tag
+			// APIs then reject the task; verify terminal state instead of trying
+			// another tag write or rolling back a healthy replacement.
+			assert.ok(this.clearConfirmed, "Task protection clear is unconfirmed");
+			const result = await this.call("DescribeTasks", {
+				cluster: API_CLUSTER,
+				tasks: [this.task],
+			});
+			assert.equal(result.failures?.length ?? 0, 0);
+			assert.equal(result.tasks?.length, 1, "Missing exact retired task");
+			const task = result.tasks[0];
+			assert.equal(task.taskArn, this.task, "Retired task identifier mismatch");
+			assert.equal(
+				task.clusterArn,
+				`arn:aws:ecs:${API_REGION}:${API_ACCOUNT}:cluster/${API_CLUSTER}`,
+			);
+			assert.equal(task.group, `service:${API_SERVICE}`);
+			assert.equal(task.lastStatus, "STOPPED", "Source task has not retired");
+			assert.equal(task.desiredStatus, "STOPPED");
+			this.record("protection-marker-retired", {
+				task: this.task,
+				key: this.key,
+				clearConfirmed: true,
+				lastStatus: task.lastStatus,
+			});
+		}
 		this.released = true;
 		this.record("protection-released", { task: this.task, key: this.key });
 	}

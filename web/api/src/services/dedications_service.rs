@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use chrono::{NaiveDateTime, Utc};
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult, QueryFilter, Set,
+    Statement, TransactionTrait, Value,
+};
 
 use crate::common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError};
 use crate::dtos::dedication::{DedicationTargetInput, UpdateDedicationInput};
@@ -100,35 +103,176 @@ fn parse_expiry(value: &str) -> Result<NaiveDateTime, ServiceError> {
     )))
 }
 
+/// Union branch kinds for the single-query scans below.
+pub(crate) const KIND_SEFER: i32 = 0;
+pub(crate) const KIND_HELEK: i32 = 1;
+pub(crate) const KIND_PEREK: i32 = 2;
+pub(crate) const KIND_SEFER_DED: i32 = 3;
+pub(crate) const KIND_HELEK_DED: i32 = 4;
+pub(crate) const KIND_PARASHA: i32 = 5;
+pub(crate) const KIND_ARTICLE: i32 = 6;
+pub(crate) const KIND_ENTRY: i32 = 7;
+pub(crate) const KIND_MASORA: i32 = 8;
+
+/// One row of the UNION ALL read, shaped like `UnionRow` — shared by the
+/// service, resolver, and schema test fixtures.
+#[cfg(test)]
+pub(crate) fn urow(
+    kind: i32,
+    c1: Option<i32>,
+    c2: Option<i32>,
+    c3: Option<i32>,
+    c4: Option<&str>,
+    expires_at: Option<NaiveDateTime>,
+) -> std::collections::BTreeMap<String, Value> {
+    [
+        ("kind".to_string(), kind.into()),
+        ("c1".to_string(), c1.into()),
+        ("c2".to_string(), c2.into()),
+        ("c3".to_string(), c3.into()),
+        ("c4".to_string(), c4.map(str::to_string).into()),
+        ("expires_at".to_string(), expires_at.into()),
+    ]
+    .into_iter()
+    .collect()
+}
+
+/// One normalized row of the dedications UNION read. Resolving a context
+/// needs rows from up to a dozen small tables (canonical sefer/helek ranges
+/// plus one assignment table per scope kind); fetching them as `UNION ALL`
+/// branches keeps each lookup to one round trip on one connection instead of
+/// ~10 sequential scans (which was also ~10 connection acquisitions).
+#[derive(Debug, Clone, PartialEq, FromQueryResult)]
+struct UnionRow {
+    /// Which branch of the union produced the row.
+    kind: i32,
+    /// sefer/helek/scope id fields — meaning depends on `kind`.
+    c1: Option<i32>,
+    c2: Option<i32>,
+    c3: Option<i32>,
+    /// entry_id.
+    c4: Option<String>,
+    /// Assignment-level expiry (UTC wall-clock); `None` = ongoing.
+    expires_at: Option<NaiveDateTime>,
+}
+
+/// The SELECT of one assignment-table branch (no WHERE — callers append the
+/// predicate their query needs). Branch order matches `kind` ascending, the
+/// same order the sequential queries used to run in.
+fn scope_branch(kind: i32) -> &'static str {
+    match kind {
+        KIND_PEREK => {
+            "SELECT 2 AS kind, dedication_id AS c1, perek_id_low AS c2, perek_id_high AS c3, NULL AS c4, expires_at FROM tanah_perek_dedication"
+        }
+        KIND_SEFER_DED => {
+            "SELECT 3 AS kind, dedication_id AS c1, sefer_id AS c2, NULL AS c3, NULL AS c4, expires_at FROM tanah_sefer_dedication"
+        }
+        KIND_HELEK_DED => {
+            "SELECT 4 AS kind, dedication_id AS c1, helek_id AS c2, NULL AS c3, NULL AS c4, expires_at FROM tanah_helek_dedication"
+        }
+        KIND_PARASHA => {
+            "SELECT 5 AS kind, dedication_id AS c1, parasha_id AS c2, NULL AS c3, NULL AS c4, expires_at FROM tanah_parasha_dedication"
+        }
+        KIND_ARTICLE => {
+            "SELECT 6 AS kind, dedication_id AS c1, article_id AS c2, NULL AS c3, NULL AS c4, expires_at FROM tanah_article_dedication"
+        }
+        KIND_ENTRY => {
+            "SELECT 7 AS kind, dedication_id AS c1, NULL AS c2, NULL AS c3, entry_id AS c4, expires_at FROM tanahpedia_entry_dedication"
+        }
+        KIND_MASORA => {
+            "SELECT 8 AS kind, dedication_id AS c1, NULL AS c2, NULL AS c3, NULL AS c4, expires_at FROM tanah_masora_dedication"
+        }
+        other => unreachable!("unknown union kind {other}"),
+    }
+}
+
+const CANONICAL_UNION: &str = "SELECT 0 AS kind, id AS c1, perek_id_from AS c2, perek_id_to AS c3, NULL AS c4, NULL AS expires_at FROM tanah_sefer\nUNION ALL\nSELECT 1 AS kind, id AS c1, sefer_id_from AS c2, sefer_id_to AS c3, NULL AS c4, NULL AS expires_at FROM tanah_helek";
+
+/// The SQL form of `is_active`: NULL or strictly-in-future expiry.
+const ACTIVE_SQL: &str = "(expires_at IS NULL OR expires_at > ?)";
+
+/// Runs `sql` (a UNION ALL over `scope_branch`/canonical selects) and returns
+/// normalized rows. `ORDER BY kind` keeps bucket order deterministic —
+/// UNION ALL branch order is not guaranteed by the engine.
+async fn union_scan(
+    conn: &impl ConnectionTrait,
+    sql: String,
+    values: Vec<Value>,
+) -> Result<Vec<UnionRow>, ServiceError> {
+    UnionRow::find_by_statement(Statement::from_sql_and_values(
+        DatabaseBackend::MySql,
+        format!("{sql}\nORDER BY kind"),
+        values,
+    ))
+    .all(conn)
+    .await
+    .map_err(internal)
+}
+
 /// Expands perek/sefer context ids into their ancestor sefer/helek ids using
 /// the canonical range tables (docs/data/dedications.md). `sefers`/`heleks`
-/// are the whole (tiny) canonical tables, loaded once by the caller.
+/// are `(id, range_low, range_high)` tuples from the canonical union scan.
 fn expand_ancestors(
     ctx: &DedicationContext,
-    sefers: &[sefer::Model],
-    heleks: &[helek::Model],
+    sefers: &[(i32, i32, i32)],
+    heleks: &[(i32, i32, i32)],
 ) -> (Vec<i32>, Vec<i32>) {
     let mut sefer_ids: Vec<i32> = ctx.sefer_ids.clone();
     for perek_id in &ctx.perek_ids {
-        if let Some(s) = sefers
+        if let Some((id, _, _)) = sefers
             .iter()
-            .find(|s| s.perek_id_from <= *perek_id && *perek_id <= s.perek_id_to)
-            && !sefer_ids.contains(&s.id)
+            .find(|(_, lo, hi)| lo <= perek_id && perek_id <= hi)
+            && !sefer_ids.contains(id)
         {
-            sefer_ids.push(s.id);
+            sefer_ids.push(*id);
         }
     }
     let mut helek_ids: Vec<i32> = ctx.helek_ids.clone();
     for sefer_id in &sefer_ids {
-        if let Some(h) = heleks
+        if let Some((id, _, _)) = heleks
             .iter()
-            .find(|h| h.sefer_id_from <= *sefer_id && *sefer_id <= h.sefer_id_to)
-            && !helek_ids.contains(&h.id)
+            .find(|(_, lo, hi)| lo <= sefer_id && sefer_id <= hi)
+            && !helek_ids.contains(id)
         {
-            helek_ids.push(h.id);
+            helek_ids.push(*id);
         }
     }
     (sefer_ids, helek_ids)
+}
+
+/// Decodes one assignment row of the union into a `ScopeMatch`.
+fn scope_of(row: &UnionRow) -> Option<(i32, ScopeMatch)> {
+    let dedication_id = row.c1?;
+    let target = match row.kind {
+        KIND_PEREK => ScopeTarget::Perek {
+            low: row.c2?,
+            high: row.c3?,
+        },
+        KIND_SEFER_DED => ScopeTarget::Sefer { sefer_id: row.c2? },
+        KIND_HELEK_DED => ScopeTarget::Helek { helek_id: row.c2? },
+        KIND_PARASHA => ScopeTarget::Parasha {
+            parasha_id: row.c2?,
+        },
+        KIND_ARTICLE => ScopeTarget::Article {
+            article_id: row.c2?,
+        },
+        KIND_ENTRY => ScopeTarget::TanahpediaEntry {
+            entry_id: row.c4.clone()?,
+        },
+        KIND_MASORA => ScopeTarget::Masora,
+        _ => return None,
+    };
+    Some((
+        dedication_id,
+        ScopeMatch {
+            target,
+            expires_at: row.expires_at,
+        },
+    ))
+}
+
+fn placeholders(n: usize) -> String {
+    vec!["?"; n].join(",")
 }
 
 /// Shared applicability resolver (#2731): returns every active dedication
@@ -140,164 +284,133 @@ pub async fn resolve(
     ctx: DedicationContext,
     now: NaiveDateTime,
 ) -> Result<Vec<DedicationAggregate>, ServiceError> {
+    let conn = db.get_connection();
     let needs_ancestors = !ctx.perek_ids.is_empty() || !ctx.sefer_ids.is_empty();
+    // The canonical tables are tiny; one UNION read fetches both.
     let (sefers, heleks) = if needs_ancestors {
-        (
-            sefer::Entity::find()
-                .all(db.get_connection())
-                .await
-                .map_err(internal)?,
-            helek::Entity::find()
-                .all(db.get_connection())
-                .await
-                .map_err(internal)?,
-        )
+        let rows = union_scan(conn, CANONICAL_UNION.to_string(), Vec::new()).await?;
+        let mut sefers = Vec::new();
+        let mut heleks = Vec::new();
+        for row in rows {
+            match (row.kind, row.c1, row.c2, row.c3) {
+                (KIND_SEFER, Some(id), Some(lo), Some(hi)) => sefers.push((id, lo, hi)),
+                (KIND_HELEK, Some(id), Some(lo), Some(hi)) => heleks.push((id, lo, hi)),
+                _ => {}
+            }
+        }
+        (sefers, heleks)
     } else {
         (Vec::new(), Vec::new())
     };
     let (sefer_ids, helek_ids) = expand_ancestors(&ctx, &sefers, &heleks);
 
-    // Link tables are small by design; matching in code keeps the shared
-    // resolver legible and lets MockDatabase tests exercise the real filter.
-    let mut matched: Vec<(i32, ScopeMatch)> = Vec::new();
-
+    // Link tables grow with every dedication purchased: one UNION ALL read
+    // over the needed scope tables, each branch carrying the same target +
+    // activity filter the sequential queries used to apply.
+    let mut branches: Vec<String> = Vec::new();
+    let mut values: Vec<Value> = Vec::new();
+    fn filtered(
+        branches: &mut Vec<String>,
+        values: &mut Vec<Value>,
+        kind: i32,
+        cond: String,
+        now: NaiveDateTime,
+    ) {
+        values.push(now.into());
+        branches.push(format!(
+            "{} WHERE {cond} AND {ACTIVE_SQL}",
+            scope_branch(kind)
+        ));
+    }
     if !ctx.perek_ids.is_empty() {
-        for row in perek_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now)
-                && ctx
-                    .perek_ids
-                    .iter()
-                    .any(|p| row.perek_id_low <= *p && *p <= row.perek_id_high)
-            {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::Perek {
-                            low: row.perek_id_low,
-                            high: row.perek_id_high,
-                        },
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
+        let cond =
+            vec!["(perek_id_low <= ? AND perek_id_high >= ?)"; ctx.perek_ids.len()].join(" OR ");
+        for p in &ctx.perek_ids {
+            values.push((*p).into());
+            values.push((*p).into());
         }
+        filtered(
+            &mut branches,
+            &mut values,
+            KIND_PEREK,
+            format!("({cond})"),
+            now,
+        );
     }
     if !sefer_ids.is_empty() {
-        for row in sefer_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now) && sefer_ids.contains(&row.sefer_id) {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::Sefer {
-                            sefer_id: row.sefer_id,
-                        },
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
+        for id in &sefer_ids {
+            values.push((*id).into());
         }
+        filtered(
+            &mut branches,
+            &mut values,
+            KIND_SEFER_DED,
+            format!("sefer_id IN ({})", placeholders(sefer_ids.len())),
+            now,
+        );
     }
     if !helek_ids.is_empty() {
-        for row in helek_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now) && helek_ids.contains(&row.helek_id) {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::Helek {
-                            helek_id: row.helek_id,
-                        },
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
+        for id in &helek_ids {
+            values.push((*id).into());
         }
+        filtered(
+            &mut branches,
+            &mut values,
+            KIND_HELEK_DED,
+            format!("helek_id IN ({})", placeholders(helek_ids.len())),
+            now,
+        );
     }
     if !ctx.parasha_ids.is_empty() {
-        for row in parasha_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now) && ctx.parasha_ids.contains(&row.parasha_id) {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::Parasha {
-                            parasha_id: row.parasha_id,
-                        },
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
+        for id in &ctx.parasha_ids {
+            values.push((*id).into());
         }
+        filtered(
+            &mut branches,
+            &mut values,
+            KIND_PARASHA,
+            format!("parasha_id IN ({})", placeholders(ctx.parasha_ids.len())),
+            now,
+        );
     }
     if !ctx.article_ids.is_empty() {
-        for row in article_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now) && ctx.article_ids.contains(&row.article_id) {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::Article {
-                            article_id: row.article_id,
-                        },
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
+        for id in &ctx.article_ids {
+            values.push((*id).into());
         }
+        filtered(
+            &mut branches,
+            &mut values,
+            KIND_ARTICLE,
+            format!("article_id IN ({})", placeholders(ctx.article_ids.len())),
+            now,
+        );
     }
     if !ctx.entry_ids.is_empty() {
-        for row in tanahpedia_entry_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now) && ctx.entry_ids.contains(&row.entry_id) {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::TanahpediaEntry {
-                            entry_id: row.entry_id.clone(),
-                        },
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
+        for id in &ctx.entry_ids {
+            values.push(id.clone().into());
         }
+        filtered(
+            &mut branches,
+            &mut values,
+            KIND_ENTRY,
+            format!("entry_id IN ({})", placeholders(ctx.entry_ids.len())),
+            now,
+        );
     }
     if ctx.masora {
-        for row in masora_dedication::Entity::find()
-            .all(db.get_connection())
-            .await
-            .map_err(internal)?
-        {
-            if is_active(row.expires_at, now) {
-                matched.push((
-                    row.dedication_id,
-                    ScopeMatch {
-                        target: ScopeTarget::Masora,
-                        expires_at: row.expires_at,
-                    },
-                ));
-            }
-        }
+        branches.push(format!("{} WHERE {ACTIVE_SQL}", scope_branch(KIND_MASORA)));
+        values.push(now.into());
     }
+
+    let matched: Vec<(i32, ScopeMatch)> = if branches.is_empty() {
+        Vec::new()
+    } else {
+        union_scan(conn, branches.join("\nUNION ALL\n"), values)
+            .await?
+            .iter()
+            .filter_map(scope_of)
+            .collect()
+    };
 
     if matched.is_empty() {
         return Ok(Vec::new());
@@ -307,120 +420,49 @@ pub async fn resolve(
     ids.dedup();
     let dedications = dedication::Entity::find()
         .filter(dedication::Column::Id.is_in(ids))
-        .all(db.get_connection())
+        .all(conn)
         .await
         .map_err(internal)?;
     hydrate(db, dedications, matched, true, now).await
 }
 
+/// Loads every assignment row across the seven link tables — one UNION ALL
+/// read instead of seven sequential scans — or only one dedication's rows
+/// when `dedication_id` is given.
+async fn link_scopes(
+    db: &Database,
+    dedication_id: Option<i32>,
+) -> Result<Vec<(i32, ScopeMatch)>, ServiceError> {
+    let kinds = [
+        KIND_PEREK,
+        KIND_SEFER_DED,
+        KIND_HELEK_DED,
+        KIND_PARASHA,
+        KIND_ARTICLE,
+        KIND_ENTRY,
+        KIND_MASORA,
+    ];
+    let mut values: Vec<Value> = Vec::new();
+    let sql = kinds
+        .iter()
+        .map(|kind| {
+            if let Some(id) = dedication_id {
+                values.push(id.into());
+                format!("{} WHERE dedication_id = ?", scope_branch(*kind))
+            } else {
+                scope_branch(*kind).to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\nUNION ALL\n");
+    let rows = union_scan(db.get_connection(), sql, values).await?;
+    Ok(rows.iter().filter_map(scope_of).collect())
+}
+
 /// Admin listing: every dedication with every assignment, including expired —
 /// management must still inspect and edit lapsed rows.
 pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, ServiceError> {
-    let mut matched: Vec<(i32, ScopeMatch)> = Vec::new();
-    for row in perek_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::Perek {
-                    low: row.perek_id_low,
-                    high: row.perek_id_high,
-                },
-                expires_at: row.expires_at,
-            },
-        ));
-    }
-    for row in sefer_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::Sefer {
-                    sefer_id: row.sefer_id,
-                },
-                expires_at: row.expires_at,
-            },
-        ));
-    }
-    for row in helek_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::Helek {
-                    helek_id: row.helek_id,
-                },
-                expires_at: row.expires_at,
-            },
-        ));
-    }
-    for row in parasha_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::Parasha {
-                    parasha_id: row.parasha_id,
-                },
-                expires_at: row.expires_at,
-            },
-        ));
-    }
-    for row in article_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::Article {
-                    article_id: row.article_id,
-                },
-                expires_at: row.expires_at,
-            },
-        ));
-    }
-    for row in tanahpedia_entry_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::TanahpediaEntry {
-                    entry_id: row.entry_id.clone(),
-                },
-                expires_at: row.expires_at,
-            },
-        ));
-    }
-    for row in masora_dedication::Entity::find()
-        .all(db.get_connection())
-        .await
-        .map_err(internal)?
-    {
-        matched.push((
-            row.dedication_id,
-            ScopeMatch {
-                target: ScopeTarget::Masora,
-                expires_at: row.expires_at,
-            },
-        ));
-    }
+    let matched = link_scopes(db, None).await?;
     // The dedication table drives the listing — a row with no assignments
     // still appears (empty scope list) so an unassigned creation neither
     // errors the mutation's post-commit read nor hides from the admin list.
@@ -893,10 +935,14 @@ pub async fn create(
 /// Reloads one dedication with all its assignments and purposes — the
 /// post-write read mutations return.
 async fn find_aggregate(db: &Database, id: i32) -> Result<DedicationAggregate, ServiceError> {
-    let all = list_all(db).await?;
-    all.into_iter()
-        .find(|a| a.dedication.id == id)
-        .ok_or_else(|| ServiceError::not_found("Dedication Not Found", None::<ServiceError>))
+    let model = dedication::Entity::find_by_id(id)
+        .one(db.get_connection())
+        .await
+        .map_err(internal)?
+        .ok_or_else(|| ServiceError::not_found("Dedication Not Found", None::<ServiceError>))?;
+    let matched = link_scopes(db, Some(id)).await?;
+    let mut aggregates = hydrate(db, vec![model], matched, false, Utc::now().naive_utc()).await?;
+    Ok(aggregates.remove(0))
 }
 
 /// Applies field/subject/expiry changes plus optional full purpose/target
@@ -1063,8 +1109,8 @@ mod tests {
 
     #[test]
     fn expand_ancestors_maps_perek_to_sefer_to_helek() {
-        let sefers = vec![sefer_model(1, 1, 50), sefer_model(7, 212, 232)];
-        let heleks = vec![helek_model(1, 1, 5), helek_model(2, 6, 24)];
+        let sefers = vec![(1, 1, 50), (7, 212, 232)];
+        let heleks = vec![(1, 1, 5), (2, 6, 24)];
         let ctx = DedicationContext {
             perek_ids: vec![220],
             ..Default::default()
@@ -1076,8 +1122,8 @@ mod tests {
 
     #[test]
     fn expand_ancestors_preserves_supplied_ids_and_dedupes() {
-        let sefers = vec![sefer_model(1, 1, 50)];
-        let heleks = vec![helek_model(1, 1, 5)];
+        let sefers = vec![(1, 1, 50)];
+        let heleks = vec![(1, 1, 5)];
         let ctx = DedicationContext {
             perek_ids: vec![10, 20],
             sefer_ids: vec![1],
@@ -1118,61 +1164,19 @@ mod tests {
         // Context: perek 220 — inside sefer 7 (212-232) and helek 2 (6-24).
         let now = ts(NOW);
         let mock = MockDatabase::new(DatabaseBackend::MySql)
-            // sefer::all
-            .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
-                sefer_model(7, 212, 232),
+            // canonical union: sefer 7 (212-232), helek 2 (6-24)
+            .append_query_results([vec![
+                urow(KIND_SEFER, Some(7), Some(212), Some(232), None, None),
+                urow(KIND_HELEK, Some(2), Some(6), Some(24), None, None),
             ]])
-            // helek::all
-            .append_query_results::<helek::Model, Vec<helek::Model>, _>([vec![
-                helek_model(2, 6, 24),
+            // link union — one in range, one out of range, one expired
+            .append_query_results([vec![
+                urow(KIND_PEREK, Some(9), Some(218), Some(221), None, None),
+                urow(KIND_PEREK, Some(99), Some(1), Some(5), None, None),
+                urow(KIND_PEREK, Some(88), Some(219), Some(220), None, Some(ts(NOW))),
+                urow(KIND_SEFER_DED, Some(9), Some(7), None, None, None),
+                urow(KIND_HELEK_DED, Some(10), Some(2), None, None, None),
             ]])
-            // perek_dedication::all — one in range, one out of range, one expired
-            .append_query_results::<
-                perek_dedication::Model,
-                Vec<perek_dedication::Model>,
-                _,
-            >([vec![
-                perek_dedication::Model {
-                    perek_id_low: 218,
-                    perek_id_high: 221,
-                    dedication_id: 9,
-                    expires_at: None,
-                },
-                perek_dedication::Model {
-                    perek_id_low: 1,
-                    perek_id_high: 5,
-                    dedication_id: 99,
-                    expires_at: None,
-                },
-                perek_dedication::Model {
-                    perek_id_low: 219,
-                    perek_id_high: 220,
-                    dedication_id: 88,
-                    expires_at: Some(ts(NOW)),
-                },
-            ]])
-            // sefer_dedication::all — sefer 7 match (same dedication → dedup)
-            .append_query_results::<
-                sefer_dedication::Model,
-                Vec<sefer_dedication::Model>,
-                _,
-            >([vec![sefer_dedication::Model {
-                sefer_id: 7,
-                dedication_id: 9,
-                expires_at: None,
-                created_at: ts("2020-01-01 00:00:00").and_utc(),
-            }]])
-            // helek_dedication::all — helek 2 match, dedication 10
-            .append_query_results::<
-                helek_dedication::Model,
-                Vec<helek_dedication::Model>,
-                _,
-            >([vec![helek_dedication::Model {
-                helek_id: 2,
-                dedication_id: 10,
-                expires_at: None,
-                created_at: ts("2020-01-01 00:00:00").and_utc(),
-            }]])
             // dedication::find in {9,10}
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(9, "יעל בת רחל", None),
@@ -1224,15 +1228,14 @@ mod tests {
     #[tokio::test]
     async fn resolve_drops_fully_expired_dedication() {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<
-                article_dedication::Model,
-                Vec<article_dedication::Model>,
-                _,
-            >([vec![article_dedication::Model {
-                article_id: 5,
-                dedication_id: 9,
-                expires_at: None,
-            }]])
+            .append_query_results([vec![urow(
+                KIND_ARTICLE,
+                Some(9),
+                Some(5),
+                None,
+                None,
+                None,
+            )]])
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(9, "expired", Some(ts(NOW))),
             ]])
@@ -1265,15 +1268,14 @@ mod tests {
     #[tokio::test]
     async fn resolve_masora_context_returns_feature_scope_once() {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<
-                masora_dedication::Model,
-                Vec<masora_dedication::Model>,
-                _,
-            >([vec![masora_dedication::Model {
-                dedication_id: 7,
-                expires_at: None,
-                created_at: ts("2020-01-01 00:00:00").and_utc(),
-            }]])
+            .append_query_results([vec![urow(
+                KIND_MASORA,
+                Some(7),
+                None,
+                None,
+                None,
+                None,
+            )]])
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(7, "masora dedication", None),
             ]])
@@ -1313,26 +1315,10 @@ mod tests {
     #[tokio::test]
     async fn resolve_entry_and_parasha_contexts() {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<
-                parasha_dedication::Model,
-                Vec<parasha_dedication::Model>,
-                _,
-            >([vec![parasha_dedication::Model {
-                parasha_id: 12,
-                dedication_id: 3,
-                expires_at: None,
-                created_at: ts("2020-01-01 00:00:00").and_utc(),
-            }]])
-            .append_query_results::<
-                tanahpedia_entry_dedication::Model,
-                Vec<tanahpedia_entry_dedication::Model>,
-                _,
-            >([vec![tanahpedia_entry_dedication::Model {
-                entry_id: "entry-1".into(),
-                dedication_id: 4,
-                expires_at: None,
-                created_at: ts("2020-01-01 00:00:00").and_utc(),
-            }]])
+            .append_query_results([vec![
+                urow(KIND_PARASHA, Some(3), Some(12), None, None, None),
+                urow(KIND_ENTRY, Some(4), None, None, Some("entry-1"), None),
+            ]])
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(3, "parasha ded", None),
                 dedication_model(4, "entry ded", None),
@@ -1396,46 +1382,14 @@ mod tests {
     #[tokio::test]
     async fn list_all_includes_expired_assignments() {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<
-                perek_dedication::Model,
-                Vec<perek_dedication::Model>,
-                _,
-            >([vec![perek_dedication::Model {
-                perek_id_low: 1,
-                perek_id_high: 2,
-                dedication_id: 9,
-                expires_at: Some(ts("2000-01-01 00:00:00")),
-            }]])
-            .append_query_results::<
-                sefer_dedication::Model,
-                Vec<sefer_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                helek_dedication::Model,
-                Vec<helek_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                parasha_dedication::Model,
-                Vec<parasha_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                article_dedication::Model,
-                Vec<article_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                tanahpedia_entry_dedication::Model,
-                Vec<tanahpedia_entry_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                masora_dedication::Model,
-                Vec<masora_dedication::Model>,
-                _,
-            >([vec![]])
+            .append_query_results([vec![urow(
+                KIND_PEREK,
+                Some(9),
+                Some(1),
+                Some(2),
+                None,
+                Some(ts("2000-01-01 00:00:00")),
+            )]])
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(9, "expired dedication", Some(ts("2000-01-01 00:00:00"))),
             ]])
@@ -1458,32 +1412,11 @@ mod tests {
         assert_eq!(out[0].scopes[0].expires_at, Some(ts("2000-01-01 00:00:00")));
     }
 
+    /// One empty UNION ALL result — the link scans run as a single union read.
     fn empty_link_tables(mock: MockDatabase) -> MockDatabase {
         mock.append_query_results::<
-            perek_dedication::Model,
-            Vec<perek_dedication::Model>,
-            _,
-        >([vec![]])
-        .append_query_results::<sefer_dedication::Model, Vec<sefer_dedication::Model>, _>([vec![]])
-        .append_query_results::<helek_dedication::Model, Vec<helek_dedication::Model>, _>([vec![]])
-        .append_query_results::<
-            parasha_dedication::Model,
-            Vec<parasha_dedication::Model>,
-            _,
-        >([vec![]])
-        .append_query_results::<
-            article_dedication::Model,
-            Vec<article_dedication::Model>,
-            _,
-        >([vec![]])
-        .append_query_results::<
-            tanahpedia_entry_dedication::Model,
-            Vec<tanahpedia_entry_dedication::Model>,
-            _,
-        >([vec![]])
-        .append_query_results::<
-            masora_dedication::Model,
-            Vec<masora_dedication::Model>,
+            std::collections::BTreeMap<String, Value>,
+            Vec<std::collections::BTreeMap<String, Value>>,
             _,
         >([vec![]])
     }
@@ -1523,11 +1456,11 @@ mod tests {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
             // insert dedication
             .append_exec_results(exec_results(1, 42, 1));
-        // find_aggregate → list_all: empty link tables + the new row.
+        // find_aggregate: the new row, then its (empty) link tables.
+        let mock = mock.append_query_results::<dedication::Model, Vec<dedication::Model>, _>([
+            vec![dedication_model(42, "x", None)],
+        ]);
         let mock = empty_link_tables(mock)
-            .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([
-                vec![dedication_model(42, "x", None)],
-            ])
             .append_query_results::<
                 dedication_dedication_type::Model,
                 Vec<dedication_dedication_type::Model>,
@@ -1749,50 +1682,18 @@ mod tests {
             ]])
             // insert dedication + purpose link + sefer link
             .append_exec_results(exec_results(3, 42, 1))
-            // find_aggregate → list_all: sefer link row + 6 empty tables
-            .append_query_results::<
-                perek_dedication::Model,
-                Vec<perek_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                sefer_dedication::Model,
-                Vec<sefer_dedication::Model>,
-                _,
-            >([vec![sefer_dedication::Model {
-                sefer_id: 24,
-                dedication_id: 42,
-                expires_at: None,
-                created_at: ts("2030-01-01 00:00:00").and_utc(),
-            }]])
-            .append_query_results::<
-                helek_dedication::Model,
-                Vec<helek_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                parasha_dedication::Model,
-                Vec<parasha_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                article_dedication::Model,
-                Vec<article_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                tanahpedia_entry_dedication::Model,
-                Vec<tanahpedia_entry_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                masora_dedication::Model,
-                Vec<masora_dedication::Model>,
-                _,
-            >([vec![]])
+            // find_aggregate: the new row, then its union of link rows.
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(42, "מרדכי בן זאב", None),
             ]])
+            .append_query_results([vec![urow(
+                KIND_SEFER_DED,
+                Some(42),
+                Some(24),
+                None,
+                None,
+                None,
+            )]])
             .append_query_results::<
                 dedication_dedication_type::Model,
                 Vec<dedication_dedication_type::Model>,
@@ -1867,50 +1768,18 @@ mod tests {
                 last_insert_id: 0,
                 rows_affected: 1,
             }])
-            // find_aggregate → list_all: perek link row + 6 empty tables
-            .append_query_results::<
-                perek_dedication::Model,
-                Vec<perek_dedication::Model>,
-                _,
-            >([vec![perek_dedication::Model {
-                perek_id_low: 565,
-                perek_id_high: 565,
-                dedication_id: 9,
-                expires_at: None,
-            }]])
-            .append_query_results::<
-                sefer_dedication::Model,
-                Vec<sefer_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                helek_dedication::Model,
-                Vec<helek_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                parasha_dedication::Model,
-                Vec<parasha_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                article_dedication::Model,
-                Vec<article_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                tanahpedia_entry_dedication::Model,
-                Vec<tanahpedia_entry_dedication::Model>,
-                _,
-            >([vec![]])
-            .append_query_results::<
-                masora_dedication::Model,
-                Vec<masora_dedication::Model>,
-                _,
-            >([vec![]])
+            // find_aggregate: the row, then its union of link rows.
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(9, "new", None),
             ]])
+            .append_query_results([vec![urow(
+                KIND_PEREK,
+                Some(9),
+                Some(565),
+                Some(565),
+                None,
+                None,
+            )]])
             .append_query_results::<
                 dedication_dedication_type::Model,
                 Vec<dedication_dedication_type::Model>,
@@ -1976,8 +1845,8 @@ mod tests {
                     description: "purpose".into(),
                 }]]);
             }
+            let mock = mock.append_query_results([vec![dedication_model(9, "subject", None)]]);
             let mock = empty_link_tables(mock)
-                .append_query_results([vec![dedication_model(9, "subject", None)]])
                 .append_query_results([vec![dedication_dedication_type::Model {
                     dedication_id: 9,
                     dedication_type_id: 1,
@@ -2232,21 +2101,9 @@ mod tests {
         let now = ts(NOW);
         let conn = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results([vec![
-                article_dedication::Model {
-                    article_id: 19,
-                    dedication_id: 1,
-                    expires_at: Some(now),
-                },
-                article_dedication::Model {
-                    article_id: 20,
-                    dedication_id: 2,
-                    expires_at: None,
-                },
-                article_dedication::Model {
-                    article_id: 19,
-                    dedication_id: 3,
-                    expires_at: None,
-                },
+                urow(KIND_ARTICLE, Some(1), Some(19), None, None, Some(now)),
+                urow(KIND_ARTICLE, Some(2), Some(20), None, None, None),
+                urow(KIND_ARTICLE, Some(3), Some(19), None, None, None),
             ]])
             .append_query_results([vec![dedication_model(3, "active", None)]])
             .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
@@ -2280,8 +2137,8 @@ mod tests {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results([vec![dedication_model(9, "subject", None)]])
             .append_exec_results(exec_results(1, 0, 1));
+        let mock = mock.append_query_results([vec![dedication_model(9, "subject", Some(expiry))]]);
         let mock = empty_link_tables(mock)
-            .append_query_results([vec![dedication_model(9, "subject", Some(expiry))]])
             .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
             .append_query_results::<dedication_type::Model, Vec<_>, _>([vec![]]);
         let db = Database::from_connection(mock.into_connection());
