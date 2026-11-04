@@ -82,6 +82,13 @@ SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_e
     idempotency_key VARCHAR(80) NOT NULL,
     settings_revision BIGINT UNSIGNED NOT NULL,
     status ENUM(''queued'', ''sending'', ''accepted'', ''delivered'', ''failed'', ''uncertain'', ''suppressed'') NOT NULL DEFAULT ''queued'',
+    cnt_queued INT NOT NULL DEFAULT 0,
+    cnt_sending INT NOT NULL DEFAULT 0,
+    cnt_accepted INT NOT NULL DEFAULT 0,
+    cnt_delivered INT NOT NULL DEFAULT 0,
+    cnt_uncertain INT NOT NULL DEFAULT 0,
+    cnt_failed INT NOT NULL DEFAULT 0,
+    cnt_suppressed INT NOT NULL DEFAULT 0,
     last_error VARCHAR(255) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -109,6 +116,57 @@ SET @bulletinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_e
     CONSTRAINT fk_bulletin_recipient_job FOREIGN KEY (job_id) REFERENCES tanah_daily_bulletin_email_job(id),
     CONSTRAINT fk_bulletin_recipient_subscription FOREIGN KEY (subscriber_id) REFERENCES tanah_daily_bulletin_subscriber(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+PREPARE bulletinUpgrade FROM @bulletinSql;
+EXECUTE bulletinUpgrade;
+DEALLOCATE PREPARE bulletinUpgrade;
+
+-- Per status recipient counters on the job row so each send and event updates
+-- the aggregate in place instead of rescanning every recipient row
+SET @bulletinCountersAdded = (
+    SELECT IF(COUNT(*) > 0, 0, 1)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_email_job'
+        AND COLUMN_NAME = 'cnt_queued'
+);
+SET @bulletinSql = (
+    SELECT IF(@bulletinCountersAdded = 1,
+        'ALTER TABLE tanah_daily_bulletin_email_job
+            ADD COLUMN cnt_queued INT NOT NULL DEFAULT 0,
+            ADD COLUMN cnt_sending INT NOT NULL DEFAULT 0,
+            ADD COLUMN cnt_accepted INT NOT NULL DEFAULT 0,
+            ADD COLUMN cnt_delivered INT NOT NULL DEFAULT 0,
+            ADD COLUMN cnt_uncertain INT NOT NULL DEFAULT 0,
+            ADD COLUMN cnt_failed INT NOT NULL DEFAULT 0,
+            ADD COLUMN cnt_suppressed INT NOT NULL DEFAULT 0',
+        'SELECT 1')
+);
+PREPARE bulletinUpgrade FROM @bulletinSql;
+EXECUTE bulletinUpgrade;
+DEALLOCATE PREPARE bulletinUpgrade;
+
+-- Backfill the counters once from the recipient table when the columns are added
+SET @bulletinSql = (
+    SELECT IF(@bulletinCountersAdded = 1,
+        'UPDATE tanah_daily_bulletin_email_job j LEFT JOIN (
+            SELECT job_id,
+                SUM(status = ''queued'') AS q,
+                SUM(status = ''sending'') AS s,
+                SUM(status = ''accepted'') AS a,
+                SUM(status = ''delivered'') AS d,
+                SUM(status = ''uncertain'') AS u,
+                SUM(status IN (''failed'', ''bounced'', ''complained'')) AS f,
+                SUM(status = ''suppressed'') AS x
+            FROM tanah_daily_bulletin_email_recipient GROUP BY job_id
+        ) c ON c.job_id = j.id
+        SET j.cnt_queued = COALESCE(c.q, 0),
+            j.cnt_sending = COALESCE(c.s, 0),
+            j.cnt_accepted = COALESCE(c.a, 0),
+            j.cnt_delivered = COALESCE(c.d, 0),
+            j.cnt_uncertain = COALESCE(c.u, 0),
+            j.cnt_failed = COALESCE(c.f, 0),
+            j.cnt_suppressed = COALESCE(c.x, 0)',
+        'SELECT 1')
+);
 PREPARE bulletinUpgrade FROM @bulletinSql;
 EXECUTE bulletinUpgrade;
 DEALLOCATE PREPARE bulletinUpgrade;
