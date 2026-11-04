@@ -3,7 +3,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
 	type ArticleSort,
 	type ArticleSortKey,
@@ -26,6 +26,27 @@ const SORTABLE_COLUMNS: { key: ArticleSortKey; label: string }[] = [
 function articleHref(row: AuthorArticleRow): string {
 	return `/929/${row.perekId}/${row.id}`;
 }
+
+/**
+ * Sanitized abstract markup. Memoized so unchanged rows skip the
+ * DOMPurify pass on every parent re-render (search keystrokes, sorting).
+ */
+const AbstractHtml = memo(function AbstractHtml({
+	abstract,
+}: {
+	abstract: string;
+}) {
+	// nosemgrep -- DOMPurify-sanitized abstract
+	return (
+		<div
+			// nosemgrep -- DOMPurify-sanitized abstract
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+			dangerouslySetInnerHTML={{
+				__html: DOMPurify.sanitize(normalizeAbstractHtml(abstract)),
+			}}
+		/>
+	);
+});
 
 function sortAria(
 	column: ArticleSortKey,
@@ -135,17 +156,7 @@ export function AuthorArticlesTable({ rows }: { rows: AuthorArticleRow[] }) {
 								<td>{row.sefer}</td>
 								<td>{row.source}</td>
 								<td className={styles.abstractCell}>
-									{row.abstract && (
-										<div
-											// nosemgrep -- DOMPurify-sanitized abstract
-											// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-											dangerouslySetInnerHTML={{
-												__html: DOMPurify.sanitize(
-													normalizeAbstractHtml(row.abstract),
-												),
-											}}
-										/>
-									)}
+									{row.abstract && <AbstractHtml abstract={row.abstract} />}
 									<ReadingTime
 										estimatedSeconds={row.metric?.estimatedSeconds}
 										className={styles.abstractReadingTime}

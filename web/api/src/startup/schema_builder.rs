@@ -683,9 +683,15 @@ mod tests {
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
-            .execute(Request::new(
-                r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
-            ))
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_revision_api_key(
+                    Some("revision-test-key".to_string()),
+                    Some("revision-test-key".to_string()),
+                )),
+            )
             .await;
 
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -757,6 +763,15 @@ mod tests {
             )
             .await;
         assert!(!apply.errors.is_empty());
+
+        let list = schema
+            .execute(
+                Request::new(r#"{ tanahpediaEntryRevisions { id } }"#)
+                    .data(crate::common::auth::ApiAuth::new(None)),
+            )
+            .await;
+        assert_eq!(list.errors.len(), 1, "{:?}", list.errors);
+        assert_eq!(list.errors[0].message, "Revision API is not configured");
     }
 
     #[tokio::test]
@@ -1125,7 +1140,14 @@ mod tests {
                         rows_affected: 1,
                     },
                 ])
-                // find_aggregate → list_all: 6 empty link tables + the sefer row
+                // find_aggregate: the new row, then its link rows.
+                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                    dedication::Model {
+                        id: 42,
+                        subject: "מוקדש".to_string(),
+                        expires_at: None,
+                    },
+                ]])
                 .append_query_results::<
                     entities::perek_dedication::Model,
                     Vec<entities::perek_dedication::Model>,
@@ -1166,13 +1188,6 @@ mod tests {
                     Vec<entities::masora_dedication::Model>,
                     _,
                 >([vec![]])
-                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
-                    dedication::Model {
-                        id: 42,
-                        subject: "מוקדש".to_string(),
-                        expires_at: None,
-                    },
-                ]])
                 .append_query_results::<
                     dedication_dedication_type::Model,
                     Vec<dedication_dedication_type::Model>,
