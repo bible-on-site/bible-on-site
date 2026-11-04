@@ -149,7 +149,35 @@ describe("getUnitScopeSummariesBatch", () => {
 		const result = await getUnitScopeSummariesBatch("masora", [8], "torah");
 
 		expect(result["8"]).toEqual({ articles: [], perushim: [] });
-		expect(console.warn).toHaveBeenCalled();
+		expect(console.warn).toHaveBeenCalledWith(
+			"Failed to resolve %s %s summaries batch:",
+			"masora",
+			"torah",
+			"DB down",
+		);
+
+		mockGetArticleSummariesForRangeGroups.mockRejectedValue("raw failure");
+		const second = await getUnitScopeSummariesBatch("masora", [8], "torah");
+
+		expect(second["8"]).toEqual({ articles: [], perushim: [] });
+		expect(console.warn).toHaveBeenCalledWith(
+			"Failed to resolve %s %s summaries batch:",
+			"masora",
+			"torah",
+			"raw failure",
+		);
+	});
+
+	it("falls back to empty summaries for units missing from the group results", async () => {
+		// The grouped services align results with the requested groups by
+		// index — a short answer still yields one entry per unit.
+		mockGetArticleSummariesForRangeGroups.mockResolvedValue([]);
+		mockGetPerushimForRangeGroups.mockResolvedValue([]);
+
+		const result = await getUnitScopeSummariesBatch("masora", [3, 8], "torah");
+
+		expect(result["3"]).toEqual({ articles: [], perushim: [] });
+		expect(result["8"]).toEqual({ articles: [], perushim: [] });
 	});
 });
 

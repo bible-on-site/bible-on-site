@@ -352,6 +352,22 @@ describe("getPerekSummariesBatch", () => {
 		expect(mockGetPerekProgressUnitsBatch).toHaveBeenCalledWith([5, 6]);
 		expect(mockGetPerekMetrics).toHaveBeenCalledWith([5, 6]);
 	});
+
+	it("defaults to empty summaries for perakim absent from the grouped maps", async () => {
+		mockGetArticleSummariesByPerekIds.mockResolvedValue(new Map());
+		mockGetPerushimByPerekIds.mockResolvedValue(new Map());
+		mockGetPerekProgressUnitsBatch.mockResolvedValue(new Map());
+		mockGetPerekMetrics.mockResolvedValue(new Map());
+
+		const result = await getPerekSummariesBatch([5]);
+
+		expect(result["5"]).toEqual({
+			articles: [],
+			perushim: [],
+			pasukUnits: [],
+			perekMetric: null,
+		});
+	});
 });
 
 describe("getArticleProgressUnitsForBook", () => {

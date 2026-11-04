@@ -702,6 +702,14 @@ describe("batched perushim variants", () => {
 				1,
 				"connection lost",
 			);
+
+			mockQuery.mockRejectedValue("string error");
+			await expect(getPerushimByPerekIds([5])).rejects.toBe("string error");
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for %d perakim:",
+				1,
+				"string error",
+			);
 		});
 	});
 
@@ -778,6 +786,78 @@ describe("batched perushim variants", () => {
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 		});
 
+		it("moves the canonical perek link when a later row wins an earlier slice", async () => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					unit_order: 0,
+					first_slice_order: 2,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 2,
+					note_count: 3,
+					priority: 100,
+				},
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 1,
+					note_count: 4,
+					priority: 100,
+				},
+				{
+					unit_order: 9,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 1,
+					note_count: 9,
+					priority: 100,
+				},
+			]);
+
+			const result = await getPerushimForRangeGroups([groupA]);
+
+			// Rows attributed to a unit outside the requested groups are
+			// dropped; the canonical link follows the earliest slice.
+			expect(result).toEqual([
+				[expect.objectContaining({ id: 1, perekId: 1, noteCount: 7 })],
+			]);
+		});
+
+		it("orders perushim by priority then note count", async () => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Low notes",
+					parshan_name: "א",
+					perek_id: 1,
+					note_count: 1,
+					priority: 50,
+				},
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 2,
+					perush_name: "High notes",
+					parshan_name: "ב",
+					perek_id: 1,
+					note_count: 9,
+					priority: 50,
+				},
+			]);
+
+			const result = await getPerushimForRangeGroups([groupA]);
+
+			expect(result[0].map((perush) => perush.id)).toEqual([2, 1]);
+		});
+
 		it("rethrows on failure so a false empty is never cached", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 			await expect(getPerushimForRangeGroups([groupA])).rejects.toThrow(
@@ -786,6 +866,15 @@ describe("batched perushim variants", () => {
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perushim for range groups:",
 				"DB error",
+			);
+
+			mockQuery.mockRejectedValue("string error");
+			await expect(getPerushimForRangeGroups([groupA])).rejects.toBe(
+				"string error",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for range groups:",
+				"string error",
 			);
 		});
 	});

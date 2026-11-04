@@ -753,6 +753,16 @@ describe("batched article summary variants", () => {
 				1,
 				"DB error",
 			);
+
+			mockQuery.mockRejectedValue("string error");
+			await expect(getArticleSummariesByPerekIds([5])).rejects.toBe(
+				"string error",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch article summaries for %d perakim:",
+				1,
+				"string error",
+			);
 		});
 	});
 
@@ -866,6 +876,28 @@ describe("batched article summary variants", () => {
 			expect(result).toEqual([[]]);
 		});
 
+		it("ignores rows attributed to a unit outside the requested groups", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						unit_order: 9,
+						first_slice_order: 0,
+						id: 7,
+						perek_id: 2,
+						author_id: 10,
+						abstract: null,
+						name: "stray",
+						priority: 1,
+						author_name: "הרב",
+					},
+				])
+				.mockResolvedValueOnce([]);
+
+			const result = await getArticleSummariesForRangeGroups([groupA]);
+
+			expect(result).toEqual([[]]);
+		});
+
 		it("rejects real database failures instead of caching empties", async () => {
 			const mockError = new Error("DB error");
 			mockQuery.mockRejectedValue(mockError);
@@ -875,6 +907,15 @@ describe("batched article summary variants", () => {
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article summaries for range groups:",
 				"DB error",
+			);
+
+			mockQuery.mockRejectedValue("string error");
+			await expect(
+				getArticleSummariesForRangeGroups([groupA]),
+			).rejects.toBe("string error");
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch article summaries for range groups:",
+				"string error",
 			);
 		});
 	});

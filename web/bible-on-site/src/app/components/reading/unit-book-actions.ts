@@ -63,7 +63,7 @@ export async function getUnitScopeSummariesBatch(
 				division,
 				unitId,
 				scope,
-				error instanceof Error ? error.message : error,
+				error,
 			);
 			return [];
 		}
