@@ -39,6 +39,10 @@ gh run view <run-id> --json workflowName,event,conclusion
 gh api repos/<owner>/<repo>/commits/<sha>
 ```
 
+### ripgrep (`rg`)
+
+Use `rg` for all local content search and `rg --files` for file enumeration — never `grep -r`, `find`, or `Select-String`. `.gitignore` + root `.ignore` keep searches off build output, nested `artifacts-*/` evidence worktrees, and the 42 MB single-line corpus dump; `-u`/`--no-ignore` includes ignored paths. Filters: `-t` file types (`rg --type-list`), `-g` globs, `-F` literal text.
+
 # Performance Failures
 
 Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.
