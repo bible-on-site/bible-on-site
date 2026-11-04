@@ -48,7 +48,10 @@ import {
 /** Tables touched by the inserts, in order. */
 function insertedTables(): string[] {
 	return executeMock.mock.calls
-		.map(([sql]) => /INSERT INTO\s+(\w+)/i.exec(String(sql))?.[1] ?? "")
+		.map(
+			([sql]) =>
+				/INSERT(?: IGNORE)? INTO\s+(\w+)/i.exec(String(sql))?.[1] ?? "",
+		)
 		.filter(Boolean);
 }
 
@@ -239,6 +242,39 @@ describe("linkExistingEntityToEntry", () => {
 				}),
 			).resolves.toEqual({ linkId: "existing-link" });
 			expect(executeMock).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("when a concurrent insert wins the race", () => {
+		it("returns the winning row's link id", async () => {
+			queryOneMock
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce({ id: "winner-link" });
+			executeMock.mockResolvedValue({ affectedRows: 0 });
+
+			await expect(
+				linkExistingEntityToEntry({
+					data: { entryId: "entry-1", entityId: "entity-1" },
+				}),
+			).resolves.toEqual({ linkId: "winner-link" });
+
+			expect(executeMock).toHaveBeenCalledWith(
+				expect.stringContaining(
+					"INSERT IGNORE INTO tanahpedia_entry_entity",
+				),
+				expect.any(Array),
+			);
+		});
+
+		it("returns its generated link id when no row is found", async () => {
+			queryOneMock.mockResolvedValue(null);
+			executeMock.mockResolvedValue({ affectedRows: 0 });
+
+			const result = await linkExistingEntityToEntry({
+				data: { entryId: "entry-1", entityId: "entity-1" },
+			});
+
+			expect(result.linkId).toEqual(expect.any(String));
 		});
 	});
 });

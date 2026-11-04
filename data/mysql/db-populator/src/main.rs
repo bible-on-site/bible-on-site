@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
     tanahpedia_entry_revision_history_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-entity unique-pair upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_entity_unique.sql")]
+    tanahpedia_entry_entity_unique_upgrade_script: String,
+
     /// Path to Tanahpedia entry-synonym name index upgrade SQL file
     #[arg(long, default_value = "../tanahpedia_alter_entry_synonym.sql")]
     tanahpedia_entry_synonym_upgrade_script: String,
@@ -373,6 +377,7 @@ struct TanahpediaScripts {
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
     entry_revision_history_upgrade: std::path::PathBuf,
+    entry_entity_unique_upgrade: std::path::PathBuf,
     entry_synonym_upgrade: std::path::PathBuf,
     today_anniversary_month_day_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
@@ -397,6 +402,8 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             entry_revision_history_upgrade: base_path
                 .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
+            entry_entity_unique_upgrade: base_path
+                .join(&cli.tanahpedia_entry_entity_unique_upgrade_script),
             entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
             today_anniversary_month_day_upgrade: base_path
                 .join(&cli.tanahpedia_today_anniversary_month_day_upgrade_script),
@@ -467,6 +474,7 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
     apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
+    apply_entry_entity_unique_upgrade(conn, &scripts.entry_entity_unique_upgrade).await?;
     apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await?;
     apply_today_anniversary_month_day_upgrade(conn, &scripts.today_anniversary_month_day_upgrade)
         .await
@@ -809,6 +817,56 @@ async fn apply_today_anniversary_month_day_upgrade(
             println!("Index '{}.{}' added successfully", table, index_name);
         }
     }
+    Ok(())
+}
+
+/// Collapse duplicate entry-entity link rows and add UNIQUE(entry_id, entity_id).
+async fn apply_entry_entity_unique_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    const TABLE: &str = "tanahpedia_entry_entity";
+    const INDEX: &str = "uk_entry_entity_pair";
+
+    if index_exists(conn, TABLE, INDEX).await? {
+        println!("Index '{}.{}' already exists", TABLE, INDEX);
+        return Ok(());
+    }
+
+    if !script_path.exists() {
+        println!(
+            "Skipping missing Tanahpedia upgrade script at {:?}",
+            script_path
+        );
+        return Ok(());
+    }
+
+    // One link row per (entry_id, entity_id) before the unique key goes on.
+    raw_sql(AssertSqlSafe(
+        "DELETE ee FROM tanahpedia_entry_entity ee \
+         JOIN ( \
+             SELECT entry_id, entity_id, MIN(id) AS keep_id \
+             FROM tanahpedia_entry_entity \
+             GROUP BY entry_id, entity_id \
+             HAVING COUNT(*) > 1 \
+         ) dup ON dup.entry_id = ee.entry_id \
+              AND dup.entity_id = ee.entity_id \
+              AND ee.id <> dup.keep_id",
+    ))
+    .execute(&mut *conn)
+    .await
+    .context("Failed to deduplicate 'tanahpedia_entry_entity'")?;
+
+    raw_sql(AssertSqlSafe(format!(
+        "ALTER TABLE `{}` ADD UNIQUE KEY `{}` (entry_id, entity_id)",
+        quote_mysql_identifier_part(TABLE),
+        quote_mysql_identifier_part(INDEX),
+    )))
+    .execute(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to add index '{}.{}'", TABLE, INDEX))?;
+
+    println!("Index '{}.{}' added successfully", TABLE, INDEX);
     Ok(())
 }
 
@@ -1245,6 +1303,12 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.entry_entity_unique_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_entry_entity_unique.sql"
+            ),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1605,6 +1669,52 @@ SELECT 1";
                 table_count(&mut conn, "tanahpedia_lookup_union_type").await?,
                 5
             );
+
+            // Simulate a pre-unique-key link table: drop the index and stage a
+            // duplicated (entry_id, entity_id) pair.
+            raw_sql(
+                "ALTER TABLE tanahpedia_entry_entity DROP INDEX uk_entry_entity_pair; \
+                 INSERT INTO tanahpedia_entry (id, unique_name, title) \
+                     VALUES ('ee-dedupe-entry-00000000000000000001', 'ee-dedupe', 'ee-dedupe'); \
+                 INSERT INTO tanahpedia_entity (id, entity_type, name) \
+                     VALUES ('ee-dedupe-entity-0000000000000000001', 'PERSON', 'ee-dedupe'); \
+                 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES \
+                     ('ee-dedupe-link-000000000000000000001', \
+                      'ee-dedupe-entry-00000000000000000001', \
+                      'ee-dedupe-entity-0000000000000000001'), \
+                     ('ee-dedupe-link-000000000000000000002', \
+                      'ee-dedupe-entry-00000000000000000001', \
+                      'ee-dedupe-entity-0000000000000000001')",
+            )
+            .execute(&mut conn)
+            .await
+            .context("Failed to stage duplicate entry-entity links")?;
+
+            // A missing script path skips the upgrade entirely.
+            apply_entry_entity_unique_upgrade(&mut conn, Path::new("missing.sql")).await?;
+            assert!(
+                !index_exists(&mut conn, "tanahpedia_entry_entity", "uk_entry_entity_pair")
+                    .await?
+            );
+
+            apply_entry_entity_unique_upgrade(&mut conn, &scripts.entry_entity_unique_upgrade)
+                .await?;
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT COUNT(*) FROM tanahpedia_entry_entity \
+                     WHERE entry_id = 'ee-dedupe-entry-00000000000000000001'",
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                1
+            );
+            assert!(
+                index_exists(&mut conn, "tanahpedia_entry_entity", "uk_entry_entity_pair")
+                    .await?
+            );
+            // Re-applying takes the index-exists early return.
+            apply_entry_entity_unique_upgrade(&mut conn, &scripts.entry_entity_unique_upgrade)
+                .await?;
 
             raw_sql("CREATE TABLE column_add_test (id INT NOT NULL)")
                 .execute(&mut conn)
