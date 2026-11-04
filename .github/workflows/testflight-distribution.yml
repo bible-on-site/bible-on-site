@@ -13,6 +13,10 @@ on:
         description: "The calling app deployment already holds the shared lock"
         default: false
         type: boolean
+      release_notes_override:
+        description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       ios_artifact_name:
@@ -23,9 +27,14 @@ on:
         description: "Master CI run that published this release"
         required: true
         type: string
+      release_notes_override:
+        description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
+        required: false
+        type: string
 
 permissions:
-  contents: read
+  # contents:write attaches the notes manifest to the GitHub release.
+  contents: write
   actions: read
   deployments: write
 
@@ -66,6 +75,8 @@ jobs:
       - name: Preserve TestFlight verification automation
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
+          # store-release-notes.mjs arrives via the deployment guard's
+          # RUNNER_TEMP helper copies.
           cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
           cp devops/github/release/release-notes.mjs "$RUNNER_TEMP/release-notes.mjs"
 
@@ -74,6 +85,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
 
       - name: Restore the published IPA for build identity only
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -109,13 +123,29 @@ jobs:
           UPLOAD_EXIT_CODE: "0"
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
-      - name: Build the TestFlight changelog from the release notes
+      - name: Build the Hebrew TestFlight notes for this exact build
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: changelog
         env:
           GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override }}
         run: |
-          node "$RUNNER_TEMP/release-notes.mjs" --testflight "app-v$MODULE_VERSION" > "$RUNNER_TEMP/testflight-changelog.txt"
+          node "$RUNNER_TEMP/store-release-notes.mjs" --generate \
+            --target app-ios-beta \
+            --version "$MODULE_VERSION" \
+            --tag "app-v$MODULE_VERSION" \
+            --out-dir "$RUNNER_TEMP/store-notes"
+          # Evidence only — a failed attach must not flip binary delivery.
+          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest.json" &&
+          gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest.json" --clobber ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          if [ -s "$RUNNER_TEMP/store-notes/release-notes.txt" ]; then
+            cp "$RUNNER_TEMP/store-notes/release-notes.txt" "$RUNNER_TEMP/testflight-changelog.txt"
+          else
+            # Releases that predate curated entries have no Hebrew manifest —
+            # only those rollbacks keep the legacy English changelog path.
+            node "$RUNNER_TEMP/release-notes.mjs" --testflight "app-v$MODULE_VERSION" > "$RUNNER_TEMP/testflight-changelog.txt"
+          fi
           {
             echo "CHANGELOG<<EOF"
             cat "$RUNNER_TEMP/testflight-changelog.txt"
