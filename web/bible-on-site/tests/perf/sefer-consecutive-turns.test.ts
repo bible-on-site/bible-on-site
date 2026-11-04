@@ -51,6 +51,10 @@ for (const [chapter, bookmarks] of [
 				browser,
 			}, testInfo) => {
 				test.skip(isMobile, "Desktop Chrome/Edge regression profile");
+				test.skip(
+					Boolean(process.env.CI),
+					"Unstable CI frame timing: https://github.com/bible-on-site/bible-on-site/issues/3090",
+				);
 				await page.addInitScript((attachment) => {
 					localStorage.setItem(
 						"seferBookmarks",
