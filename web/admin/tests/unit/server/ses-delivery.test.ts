@@ -1078,6 +1078,38 @@ describe("recipient processing", () => {
 		await processEmailRecipient(1);
 		expect(state.channel).toBe("sending");
 	});
+	it("mirrors an uncertain real outcome into the channel and job status", async () => {
+		seed("real");
+		mocks.sendOne.mockRejectedValue(new SesError("provider", "uncertain"));
+		await processEmailRecipient(1);
+		expect(state.jobs[0].status).toBe("uncertain");
+		expect(state.jobs[0].last_error).toBeTruthy();
+		expect(state.channel).toBe("uncertain");
+	});
+	it("leaves the claim intact when the persisted token no longer matches", async () => {
+		const row = seed();
+		mocks.sendOne.mockImplementationOnce(async () => {
+			await mocks.sesConfig.mock.lastCall?.[0].beforeSend();
+			row.attempt_token = "other-token";
+			return "message-1";
+		});
+		await processEmailRecipient(1);
+		expect(row.status).toBe("sending");
+		expect(row.message_id).toBeNull();
+	});
+	it("fails when confirmed recipients disappear before enrollment", async () => {
+		mocks.txQueryOne.mockImplementation(async (_c, sql, p) =>
+			compact(String(sql)).includes("COUNT(*)")
+				? { n: 1 }
+				: (read(sql, p)[0] ?? null),
+		);
+		state.subscribers = [];
+		await expect(enqueueBulletinEmail(date, key, expected)).rejects.toThrow(
+			"אין נמענים",
+		);
+		expect(state.jobs).toHaveLength(0);
+		expect(state.recipients).toHaveLength(0);
+	});
 	it("requires a valid row ID and ignores missing rows", async () => {
 		await expect(processEmailRecipient(0)).rejects.toThrow();
 		await processEmailRecipient(123);
