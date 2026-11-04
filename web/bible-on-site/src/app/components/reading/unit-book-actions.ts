@@ -5,7 +5,9 @@ import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
+import { getArticleSummariesForRangeGroups } from "@/lib/articles/service";
 import {
+	getPerushimForRangeGroups,
 	getPerushNotesForRanges,
 	type RangePerushSummary,
 	type RangedPerushNote,
@@ -15,7 +17,6 @@ import type { Pasuk } from "@/data/db/tanah-view-types";
 import { getPerekByPerekId, LAST_PEREK_ID } from "@/data/perek-dto";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
-import { unitRangeArticles, unitRangePerushim } from "./unit-range-summaries";
 
 function unitScopeRanges(
 	division: DivisionId,
@@ -52,32 +53,54 @@ export async function getUnitScopeSummariesBatch(
 	scope: UnitBookScope,
 ): Promise<Record<string, UnitBookSummaries>> {
 	if (scope !== "torah" && scope !== "haftara") return {};
-	const entries = await Promise.all(
-		unitIds.map(async (unitId) => {
-			if (!Number.isInteger(unitId) || unitId < 1) return null;
-			try {
-				const ranges = unitScopeRanges(division, unitId, scope);
-				if (ranges.length === 0) {
-					return [String(unitId), { articles: [], perushim: [] }] as const;
-				}
-				const [articles, perushim] = await Promise.all([
-					unitRangeArticles(division, unitId, scope),
-					unitRangePerushim(division, unitId, scope),
-				]);
-				return [String(unitId), { articles, perushim }] as const;
-			} catch (error) {
-				console.warn(
-					"Failed to resolve %s unit %d %s summaries:",
-					division,
-					unitId,
-					scope,
-					error instanceof Error ? error.message : error,
-				);
-				return [String(unitId), { articles: [], perushim: [] }] as const;
-			}
-		}),
+	const validIds = unitIds.filter(
+		(unitId) => Number.isInteger(unitId) && unitId >= 1,
 	);
-	return Object.fromEntries(entries.filter((entry) => entry !== null));
+	const rangeGroups = validIds.map((unitId) => {
+		try {
+			return unitScopeRanges(division, unitId, scope);
+		} catch (error) {
+			console.warn(
+				"Failed to resolve %s unit %d %s ranges:",
+				division,
+				unitId,
+				scope,
+				error,
+			);
+			return [];
+		}
+	});
+	// One grouped query per service for the whole sefer — a per-unit
+	// fan-out over a 5-connection pool turned a large sefer's book open
+	// into hundreds of serialized round-trips.
+	try {
+		const [articleGroups, perushGroups] = await Promise.all([
+			getArticleSummariesForRangeGroups(rangeGroups),
+			getPerushimForRangeGroups(rangeGroups),
+		]);
+		return Object.fromEntries(
+			validIds.map((unitId, index) => [
+				String(unitId),
+				{
+					articles: articleGroups[index] ?? [],
+					perushim: perushGroups[index] ?? [],
+				},
+			]),
+		);
+	} catch (error) {
+		console.warn(
+			"Failed to resolve %s %s summaries batch:",
+			division,
+			scope,
+			error instanceof Error ? error.message : error,
+		);
+		return Object.fromEntries(
+			validIds.map((unitId) => [
+				String(unitId),
+				{ articles: [], perushim: [] },
+			]),
+		);
+	}
 }
 
 /**

@@ -5,7 +5,6 @@ import {
 } from "@/data/parasha/parasha-units";
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getPerushimForRanges } from "@/lib/perushim";
-import type { DivisionId } from "@/lib/reading/contract";
 import {
 	cachedPerKey,
 	COLLECTION_TAGS,
@@ -75,27 +74,3 @@ export const getMasoraRangeArticles = cachedPerKey(
 		getArticleSummariesForRanges(getMasoraUnitById(unitId).ranges),
 );
 
-/**
- * Division dispatch for the book batch fetch. Callers pre-validate the
- * scope resolves to non-empty ranges, so a masora "haftara" request
- * (always empty) never reaches the single-scope masora loaders.
- */
-export function unitRangePerushim(
-	division: DivisionId,
-	unitId: number,
-	scope: UnitSummaryScope,
-) {
-	return division === "parasha"
-		? getParashaRangePerushim(unitId, scope)
-		: getMasoraRangePerushim(unitId);
-}
-
-export function unitRangeArticles(
-	division: DivisionId,
-	unitId: number,
-	scope: UnitSummaryScope,
-) {
-	return division === "parasha"
-		? getParashaRangeArticles(unitId, scope)
-		: getMasoraRangeArticles(unitId);
-}
