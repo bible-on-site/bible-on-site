@@ -530,7 +530,7 @@ describe("tanahpedia entry server functions", () => {
 				}),
 			).resolves.toEqual({ success: true });
 			expect(mocks.execute).toHaveBeenCalledWith(
-				expect.stringContaining("INSERT INTO tanahpedia_entry_entity"),
+				expect.stringContaining("INSERT IGNORE INTO tanahpedia_entry_entity"),
 				["link-1", "entry-1", "e-1"],
 			);
 		});
