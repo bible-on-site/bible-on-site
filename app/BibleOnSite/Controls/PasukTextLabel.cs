@@ -28,6 +28,14 @@ public class PasukTextLabel : Label
     public PasukTextLabel()
     {
         FontFamily = ScriptureFonts.Family;
+        // Shared scripture-direction contract (#2964): pasuk text is Hebrew
+        // RTL, so the direction is pinned on the control itself instead of
+        // relying on ancestor propagation or the device locale. iOS resolves
+        // an NSParagraphStyle "natural" base writing direction from the
+        // user's language preference — not the string's strong characters —
+        // so on an English-locale device a justified pasuk's last/short
+        // lines flush left unless the handlers can read a declared RTL here.
+        FlowDirection = Microsoft.Maui.FlowDirection.RightToLeft;
     }
 
     /// <summary>
