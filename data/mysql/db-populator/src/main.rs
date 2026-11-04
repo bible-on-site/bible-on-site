@@ -69,7 +69,10 @@ struct Cli {
     tanahpedia_entry_revision_history_upgrade_script: String,
 
     /// Path to Tanahpedia entry-synonym name index upgrade SQL file
-    #[arg(long, default_value = "../tanahpedia_alter_entry_synonym_name_index.sql")]
+    #[arg(
+        long,
+        default_value = "../tanahpedia_alter_entry_synonym_name_index.sql"
+    )]
     tanahpedia_entry_synonym_name_index_upgrade_script: String,
 
     /// Path to Tanahpedia lookup seed SQL file
