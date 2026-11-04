@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	copyLocalFlipBook,
+	getLocalSnapshotDirectory,
 	resolveLocalFlipBook,
 } from "./copy-local-flip-book.mjs";
 
@@ -66,18 +67,19 @@ export function prepareDevDependencies(
 		);
 		// Extract the registry package into an empty destination, since an
 		// overwrite-only install can retain copied files and the local marker.
-		const target = path.dirname(installedPackage);
-		const backup = restoreRegistry
-			? mkdtempSync(
-					path.join(projectRoot, "node_modules", ".flip-book-registry-"),
-				)
+		const target = path.resolve(path.dirname(installedPackage));
+		const modules = path.resolve(projectRoot, "node_modules");
+		const previousSnapshot = restoreRegistry
+			? getLocalSnapshotDirectory(target)
 			: null;
-		if (
-			backup &&
-			path.dirname(backup) !== path.join(projectRoot, "node_modules")
-		)
+		const backup = restoreRegistry
+			? mkdtempSync(path.join(modules, ".flip-book-registry-"))
+			: null;
+		if (backup && path.dirname(backup) !== modules)
 			throw new Error("Unexpected registry backup path");
 		if (backup) renameSync(target, path.join(backup, "previous"));
+		let installedRegistry = false;
+		let retainBackup = false;
 		try {
 			// Refresh local code once below, after the website dependency install.
 			run("bun install --prefer-offline", {
@@ -85,15 +87,26 @@ export function prepareDevDependencies(
 				stdio: "inherit",
 				env: { ...env, USE_LOCAL_FLIP_BOOK: "0" },
 			});
+			installedRegistry = true;
 		} catch (error) {
 			if (backup) {
-				rmSync(target, { recursive: true, force: true });
-				renameSync(path.join(backup, "previous"), target);
+				try {
+					rmSync(target, { recursive: true, force: true });
+					renameSync(path.join(backup, "previous"), target);
+				} catch (rollbackError) {
+					retainBackup = true;
+					throw new AggregateError(
+						[error, rollbackError],
+						`Registry flip-book rollback failed; previous package retained at ${path.join(backup, "previous")}`,
+					);
+				}
 			}
 			throw error;
 		} finally {
-			if (backup) {
+			if (backup && !retainBackup) {
 				rmSync(backup, { recursive: true, force: true });
+				if (installedRegistry && previousSnapshot)
+					rmSync(previousSnapshot, { recursive: true, force: true });
 			}
 		}
 	}

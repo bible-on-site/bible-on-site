@@ -37,10 +37,11 @@ public class SharedTopBar : ContentView
     /// The capsule's own platform default before <see cref="BackChrome"/>
     /// applies the preference: Android starts hidden (system Back covers it),
     /// Windows stays hidden forever (the title bar owns Back), everything
-    /// else shows the reserved slot.
+    /// else shows the reserved slot. Compile-time only — never the test
+    /// override — so the static default stays deterministic.
     /// </summary>
     private static readonly bool CapsuleBackDefault =
-        BackChromePolicy.ShowCapsuleBack(BackChrome.CurrentPlatform,
+        BackChromePolicy.ShowCapsuleBack(BackChrome.CompileTimePlatform,
             InAppBackButtonPreference.PlatformDefault);
 
     private readonly Grid _band;
