@@ -78,6 +78,7 @@ impl From<articles_service::ArticleSummary> for Article {
             priority: value.priority as i32,
             coverage_verified: value.coverage_verified,
             reading_metric: None,
+            covering_sources: None,
         }
     }
 }
