@@ -1097,6 +1097,29 @@ describe("recipient processing", () => {
 		expect(row.status).toBe("sending");
 		expect(row.message_id).toBeNull();
 	});
+	it("defers to a different message id persisted by a competing send", async () => {
+		const row = seed();
+		mocks.sendOne.mockImplementationOnce(async () => {
+			row.message_id = "winner";
+			return "message-1";
+		});
+		await processEmailRecipient(1);
+		expect(row.message_id).toBe("winner");
+		expect(row.status).toBe("uncertain");
+	});
+	it("keeps a delivered row delivered when the send then reports failure", async () => {
+		const row = seed();
+		mocks.sendOne.mockImplementationOnce(async () => {
+			await applySesEvent({
+				...delivery(),
+				attemptId: `1_${row.attempt_token}`,
+			});
+			throw new SesError("provider", "failed");
+		});
+		await processEmailRecipient(1);
+		expect(row.status).toBe("delivered");
+		expect(row.last_error).toBeNull();
+	});
 	it("fails when confirmed recipients disappear before enrollment", async () => {
 		mocks.txQueryOne.mockImplementation(async (_c, sql, p) =>
 			compact(String(sql)).includes("COUNT(*)")

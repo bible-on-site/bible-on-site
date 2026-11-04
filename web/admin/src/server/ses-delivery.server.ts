@@ -625,6 +625,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 					token,
 				],
 			);
+			/* v8 ignore else -- same-transaction FOR UPDATE read already proved the row matches */
 			if (changed.affectedRows === 1)
 				await applyRecipientTransition(
 					connection,
