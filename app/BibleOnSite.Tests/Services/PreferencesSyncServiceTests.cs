@@ -12,33 +12,41 @@ public class PreferencesSyncServiceTests : IDisposable
 {
     private sealed class FakeIdentity : IUserIdentity
     {
+        private EventHandler? _userChanged;
+
         public string? UserId { get; private set; }
         public int EnsureCalls { get; private set; }
 
-        public event EventHandler? UserChanged;
+        public event EventHandler? UserChanged
+        {
+            add => _userChanged += value;
+            remove => _userChanged -= value;
+        }
 
         public Task EnsureSignedInAsync(CancellationToken cancellationToken = default)
         {
             EnsureCalls++;
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         }
 
         public void SignIn(string userId)
         {
             UserId = userId;
-            UserChanged?.Invoke(this, EventArgs.Empty);
+            _userChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public void SignOut()
         {
             UserId = null;
-            UserChanged?.Invoke(this, EventArgs.Empty);
+            _userChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
     private sealed class FakeCloudStore : IPreferencesCloudStore
     {
         public PreferencesCloudDocument? Document { get; private set; }
+        public string? LastUserId { get; private set; }
         public int FetchCount { get; private set; }
         public int SaveCount { get; private set; }
         public Exception? FetchError { get; set; }
@@ -46,6 +54,8 @@ public class PreferencesSyncServiceTests : IDisposable
         public Task<PreferencesCloudDocument?> FetchAsync(string userId, CancellationToken cancellationToken = default)
         {
             FetchCount++;
+            LastUserId = userId;
+            cancellationToken.ThrowIfCancellationRequested();
             if (FetchError != null)
             {
                 throw FetchError;
@@ -56,6 +66,8 @@ public class PreferencesSyncServiceTests : IDisposable
         public Task SaveAsync(string userId, PreferencesCloudDocument document, CancellationToken cancellationToken = default)
         {
             SaveCount++;
+            LastUserId = userId;
+            cancellationToken.ThrowIfCancellationRequested();
             Document = document;
             return Task.CompletedTask;
         }
