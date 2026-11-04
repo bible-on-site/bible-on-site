@@ -141,12 +141,8 @@ public sealed class PreferencesSyncService : IDisposable
         {
             await _identity.EnsureSignedInAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
 #pragma warning disable S2221 // Deliberate failure boundary: identity failure leaves the app local-only.
-        catch (Exception ex) //NOSONAR — identity failure leaves the app local-only.
+        catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — identity failure leaves the app local-only.
         {
 #pragma warning restore S2221
             Console.Error.WriteLine($"[PreferencesSync] sign-in failed — staying local ({ex.Message})");
@@ -308,34 +304,15 @@ public sealed class PreferencesSyncService : IDisposable
             var synced = _synced.TryGetValue(key, out var syncedPreference) ? syncedPreference : null;
 
             var localEntry = BuildLocalEntry(stamp, synced);
-            CloudPreferenceEntry winner;
-            bool remoteWon;
             if (localEntry == null && remoteEntry == null)
             {
                 continue;
             }
-            if (localEntry == null)
-            {
-                winner = remoteEntry!;
-                remoteWon = true;
-            }
-            else if (remoteEntry == null)
-            {
-                winner = localEntry;
-                remoteWon = false;
-            }
-            else if (localEntry.UpdatedAtMs > remoteEntry.UpdatedAtMs)
-            {
-                winner = localEntry;
-                remoteWon = false;
-            }
-            else
-            {
-                // Remote is newer, or timestamps tie — the remote document is
-                // already converged for this key, so no rewrite is needed.
-                winner = remoteEntry;
-                remoteWon = true;
-            }
+            // Remote wins when it exists and the local write is missing or
+            // older; timestamp ties favor the already-converged remote doc.
+            var remoteWon = remoteEntry != null
+                && (localEntry == null || localEntry.UpdatedAtMs <= remoteEntry.UpdatedAtMs);
+            var winner = (remoteWon ? remoteEntry : localEntry)!;
 
             merged.Entries[key] = winner;
             if (remoteWon)
