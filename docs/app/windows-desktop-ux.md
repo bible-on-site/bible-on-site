@@ -155,8 +155,10 @@ window) with UIA tree dumps of the running Debug build:
 
 ## Audited defects addressed in increment 3
 
-Verified on the Debug build at 125% display scale with UIA bounds and
-screenshots:
+Nav-pane, overlay, highlight and fullscreen behaviors verified on the
+Debug build at 125% display scale with UIA bounds and screenshots; the
+dialog-dismissal ordering is unit-level reviewed code (live dialog
+triggering needs a real pointer on tap-gesture rows):
 
 - A wide window kept navigation behind a transient flyout — the pane now
   locks open beside the content (≈375 px rows) and collapses to a 60 px
