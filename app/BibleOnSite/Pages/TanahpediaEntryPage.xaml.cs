@@ -96,6 +96,7 @@ public partial class TanahpediaEntryPage : ContentPage
     /// <summary>
     /// Links inside the entry body: <c>/pedia/{slug}</c> routes in-app through
     /// the entry route (synonyms and ambiguous names resolve on that page);
+    /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>
     private async void OnEntryLinkTapped(object? sender, LinkTappedEventArgs e)
@@ -109,10 +110,7 @@ public partial class TanahpediaEntryPage : ContentPage
                 return;
             }
 
-            if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
-            {
-                await Launcher.OpenAsync(uri);
-            }
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
         catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
