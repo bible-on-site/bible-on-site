@@ -511,6 +511,19 @@ describe("createEventLoopDiagnostics", () => {
 		expect(deps.setTimeout).toHaveBeenCalledWith(expect.any(Function), 1);
 	});
 
+	it("falls back to the default interval for a non-finite intervalMs", () => {
+		const { deps } = makeDeps();
+		const handle = createEventLoopDiagnostics({
+			intervalMs: Number.NaN,
+			...deps,
+		});
+		handle.start();
+		expect(deps.setTimeout).toHaveBeenCalledWith(
+			expect.any(Function),
+			60_000,
+		);
+	});
+
 	it("emits through the real GC observer, uptime, console sink and version", async () => {
 		const { deps, timers, setNow } = makeDeps();
 		const {
