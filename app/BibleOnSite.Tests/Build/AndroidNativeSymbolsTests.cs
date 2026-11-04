@@ -29,6 +29,18 @@ public class AndroidNativeSymbolsTests : IDisposable
         }
     }
 
+    private void Symbols(params (string Name, byte[] Bytes)[] entries)
+    {
+        // ZipArchiveMode.Create maps to FileMode.CreateNew — drop a prior case.
+        File.Delete(Output);
+        using var zip = ZipFile.Open(Output, ZipArchiveMode.Create);
+        foreach (var (name, bytes) in entries)
+        {
+            using var stream = zip.CreateEntry(name).Open();
+            stream.Write(bytes);
+        }
+    }
+
     private static void U16(byte[] bytes, int at, ushort value) => BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(at), value);
     private static void U32(byte[] bytes, int at, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(at), value);
     private static void U64(byte[] bytes, int at, ulong value) => BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(at), value);
@@ -193,5 +205,138 @@ public class AndroidNativeSymbolsTests : IDisposable
         Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.ReadBuildId(bytes, true));
         U32(bytes, 264, 1);
         Assert.Equal("01", AndroidNativeSymbols.ReadBuildId(bytes, true));
+    }
+
+    [Fact]
+    public void Validate_accepts_the_archive_Create_produces()
+    {
+        Library("arm64-v8a/libxamarin-app.dbg.so", Elf());
+        Library("arm64-v8a/libxamarin-app.so", Elf(symbols: false));
+        Library("arm64-v8a/assembly-store.so", "not an ELF"u8.ToArray());
+        Library("arm64-v8a/assembly-store.so.manifest", "manifest"u8.ToArray());
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)),
+            ("arm64-v8a/libstripped-dep.so", Elf(symbols: false, id: 9)));
+        AndroidNativeSymbols.Create(Libraries, Bundle, Output);
+
+        var uncovered = AndroidNativeSymbols.Validate(Output, Bundle);
+
+        // The runtime dependency ships stripped-only: partial coverage is
+        // reported, not silently treated as complete.
+        Assert.Equal(["arm64-v8a/libstripped-dep.so"], uncovered);
+    }
+
+    [Fact]
+    public void Validate_rejects_the_legacy_whole_folder_archive()
+    {
+        // The 5.0.228 release asset Play rejected with HTTP 400 (#2970): the
+        // intermediate directory zipped verbatim — the non-ELF assembly-store
+        // blob, its manifest, the stripped library and the debug ELF still
+        // under its .dbg.so filename.
+        Aab(("arm64-v8a/libxamarin-app.so", Elf(symbols: false)));
+        Symbols(
+            ("arm64-v8a/assembly-store.so", "not an ELF"u8.ToArray()),
+            ("arm64-v8a/assembly-store.so.manifest", "manifest"u8.ToArray()),
+            ("arm64-v8a/libxamarin-app.dbg.so", Elf()),
+            ("arm64-v8a/libxamarin-app.so", Elf(symbols: false)));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_an_empty_archive()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        Symbols();
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Theory]
+    [InlineData("libx.so")]
+    [InlineData("x86_64/libx.so")]
+    [InlineData("arm64-v8a/nested/libx.so")]
+    [InlineData("arm64-v8a/libx.txt")]
+    [InlineData("arm64-v8a/store.so")]
+    [InlineData("arm64-v8a/")]
+    public void Validate_rejects_entries_outside_the_abi_library_layout(string entryName)
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        Symbols((entryName, Elf()));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_a_symbols_entry_named_by_debug_filename_not_shipped_library()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        Symbols(("arm64-v8a/libx.dbg.so", Elf()));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_a_symbols_entry_with_no_bundled_library()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        Symbols(("arm64-v8a/libghost.so", Elf()));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_stripped_and_non_elf_entries()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        Symbols(("arm64-v8a/libx.so", "not an ELF"u8.ToArray()));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+        Symbols(("arm64-v8a/libx.so", Elf(symbols: false)));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_symbols_from_another_build()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false, id: 2)));
+        Symbols(("arm64-v8a/libx.so", Elf(id: 1)));
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_an_empty_entry()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        using (var zip = ZipFile.Open(Output, ZipArchiveMode.Create))
+        {
+            zip.CreateEntry("arm64-v8a/libx.so");
+        }
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_duplicate_entry_names()
+    {
+        Aab(("arm64-v8a/libx.so", Elf(symbols: false)));
+        using (var zip = ZipFile.Open(Output, ZipArchiveMode.Create))
+        {
+            foreach (var _ in Enumerable.Range(0, 2))
+            {
+                using var stream = zip.CreateEntry("arm64-v8a/libx.so").Open();
+                stream.Write(Elf());
+            }
+        }
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_rejects_a_non_zip_archive()
+    {
+        File.WriteAllText(Output, "not a zip");
+        Assert.Throws<InvalidDataException>(() => AndroidNativeSymbols.Validate(Output, Bundle));
+    }
+
+    [Fact]
+    public void Validate_reports_every_bundled_library_without_symbol_coverage()
+    {
+        Aab(("arm64-v8a/liba.so", Elf(symbols: false, id: 1)),
+            ("arm64-v8a/libb.so", Elf(symbols: false, id: 2)),
+            ("arm64-v8a/libc.so", Elf(symbols: false, id: 3)));
+        Symbols(("arm64-v8a/liba.so", Elf(id: 1)));
+        Assert.Equal(["arm64-v8a/libb.so", "arm64-v8a/libc.so"], AndroidNativeSymbols.Validate(Output, Bundle));
     }
 }
