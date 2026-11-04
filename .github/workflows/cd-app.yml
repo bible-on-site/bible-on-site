@@ -18,6 +18,10 @@ on:
         required: false
         default: false
         type: boolean
+      release_notes_override:
+        description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
+        required: false
+        type: string
 
 # Keep every dispatch; never interrupt a production write.
 concurrency:
@@ -30,7 +34,8 @@ jobs:
     name: Deploy to Google Play (Internal Track)
     if: ${{ (github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name) != '' }}
     permissions:
-      contents: read
+      # contents:write attaches the notes manifest to the GitHub release.
+      contents: write
       actions: read
       deployments: write
     runs-on: ubuntu-latest
@@ -60,6 +65,34 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Generate Hebrew store release notes
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: store_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        # RUNNER_TEMP copy comes from the deployment guard so a redeployed
+        # tag that predates these helpers still generates notes.
+        run: |
+          node "$RUNNER_TEMP/store-release-notes.mjs" --generate \
+            --target app-android \
+            --version "${{ env.MODULE_VERSION }}" \
+            --tag "app-v${{ env.MODULE_VERSION }}" \
+            --out-dir "$RUNNER_TEMP/store-notes"
+
+      - name: Attach the notes manifest to the release
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Evidence only — a failed attach must not flip binary delivery.
+        run: |
+          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-android-manifest.json" &&
+          gh release upload "app-v${{ env.MODULE_VERSION }}" "$RUNNER_TEMP/store-notes-app-android-manifest.json" --clobber ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
 
       - name: Restore Android AAB
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -135,7 +168,8 @@ jobs:
           dotnet run --project devops -- DeployGooglePlay \
             --aab-path "${{ steps.find_aab.outputs.AAB_FILE }}" \
             --android-symbols-path "${{ steps.find_symbols.outputs.SYMBOLS_FILE }}" \
-            --google-play-key-file "${{ runner.temp }}/service-account.json"
+            --google-play-key-file "${{ runner.temp }}/service-account.json" \
+            --release-notes-file "$RUNNER_TEMP/store-notes/release-notes.txt"
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
@@ -162,7 +196,8 @@ jobs:
     name: Deploy to Microsoft Store
     if: ${{ (github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name) != '' }}
     permissions:
-      contents: read
+      # contents:write attaches the notes manifest to the GitHub release.
+      contents: write
       actions: read
       deployments: write
     runs-on: windows-latest
@@ -192,6 +227,38 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Generate Hebrew store release notes
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: store_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        # RUNNER_TEMP copy comes from the deployment guard so a redeployed
+        # tag that predates these helpers still generates notes.
+        run: |
+          node "${{ runner.temp }}/store-release-notes.mjs" --generate `
+            --target app-windows `
+            --version "${{ env.MODULE_VERSION }}" `
+            --tag "app-v${{ env.MODULE_VERSION }}" `
+            --out-dir "${{ runner.temp }}/store-notes"
+
+      - name: Attach the notes manifest to the release
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Evidence only — a failed attach must not flip binary delivery.
+        run: |
+          try {
+            cp "${{ runner.temp }}/store-notes/release-notes-manifest.json" "${{ runner.temp }}/store-notes-app-windows-manifest.json" -ErrorAction Stop
+            gh release upload "app-v${{ env.MODULE_VERSION }}" "${{ runner.temp }}/store-notes-app-windows-manifest.json" --clobber
+            if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
+          } catch {
+            Write-Host "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          }
 
       - name: Restore Windows MSIX
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -262,7 +329,8 @@ jobs:
           dotnet run --project devops -- DeployMsStore `
             --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" `
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
-            --max-flights-to-keep 15
+            --max-flights-to-keep 15 `
+            --release-notes-file "${{ runner.temp }}/store-notes/release-notes.txt"
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
@@ -316,6 +384,8 @@ jobs:
       - name: Preserve TestFlight recovery automation
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
+          # store-release-notes.mjs and appstore-whatsnew.mjs arrive via the
+          # deployment guard's RUNNER_TEMP helper copies.
           cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
           cp devops/github/release/asset-pack-upload.mjs "$RUNNER_TEMP/asset-pack-upload.mjs"
 
@@ -324,6 +394,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
 
       - name: Restore iOS IPA
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -425,6 +498,27 @@ jobs:
           UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
+      # Public App Store What's New: writes only onto an editable version
+      # record (prepare_for_submission and rejected states); when none exists
+      # the notes still attach to the release for the next submission. The
+      # step never fails the job — binary delivery to TestFlight is already
+      # proven and a metadata hiccup must not masquerade as an undelivered
+      # build. Its own outcome is recorded in the manifest + summary.
+      - name: Publish Hebrew What's New to the editable App Store version
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        run: |
+          node "$RUNNER_TEMP/appstore-whatsnew.mjs" publish \
+            --version "$MODULE_VERSION" \
+            --tag "app-v$MODULE_VERSION" \
+            --out-dir "$RUNNER_TEMP/store-notes-public"
+          # Evidence only — a failed attach must not flip binary delivery.
+          cp "$RUNNER_TEMP/store-notes-public/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-store-public-manifest.json" &&
+          gh release upload "app-v${{ env.MODULE_VERSION }}" "$RUNNER_TEMP/store-notes-app-store-public-manifest.json" --clobber ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+
       - name: Publish managed asset packs to App Store Connect
         if: ${{ steps.guard.outputs.deploy == 'true' && steps.assetpacks.outputs.aar_count != '0' }}
         env:
@@ -483,6 +577,7 @@ jobs:
       ios_artifact_name: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
       ci_run_id: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       parent_lock_held: true
+      release_notes_override: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
     secrets: inherit
 
   inspect_app_store:

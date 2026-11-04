@@ -294,6 +294,10 @@ if (
 				"deployment-state.mjs",
 				"gh-api.mjs",
 				"ms-store-flights.mjs",
+				// Store-notes helpers run from RUNNER_TEMP so a redeploy of a
+				// tag that predates them still generates notes (#2972).
+				"store-release-notes.mjs",
+				"appstore-whatsnew.mjs",
 			])
 				copyFileSync(
 					new URL(`./${helper}`, import.meta.url),
