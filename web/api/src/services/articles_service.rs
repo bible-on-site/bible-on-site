@@ -121,6 +121,76 @@ pub async fn find_covering_sources_by_article_id(
     Ok(sources)
 }
 
+/// Batch variant of `find_covering_sources_by_article_id`: one IN query for
+/// many articles, grouped by article_id with the same per-article ordering
+/// (perek_id, pasuk). Articles without rows are absent from the map.
+pub async fn find_covering_sources_by_article_ids(
+    db: &Database,
+    article_ids: &[i32],
+) -> Result<std::collections::HashMap<i32, Vec<CoveringSourceModel>>, ServiceError> {
+    use std::collections::HashMap;
+
+    if article_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = CoveringSourceEntity::find()
+        .filter(CoveringSourceColumn::ArticleId.is_in(article_ids.iter().copied()))
+        .order_by_asc(CoveringSourceColumn::ArticleId)
+        .order_by_asc(CoveringSourceColumn::PerekId)
+        .order_by_asc(CoveringSourceColumn::Pasuk)
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+
+    let mut grouped: HashMap<i32, Vec<CoveringSourceModel>> = HashMap::new();
+    for row in rows {
+        grouped.entry(row.article_id).or_default().push(row);
+    }
+    Ok(grouped)
+}
+
+/// Returns article counts grouped by perek for a set of perek ids — one
+/// GROUP BY query instead of one COUNT per perek (list-field N+1 fix).
+/// Perakim without articles are absent from the map.
+pub async fn count_by_perek_ids(
+    db: &Database,
+    perek_ids: &[i32],
+) -> Result<std::collections::HashMap<i32, i64>, ServiceError> {
+    use sea_orm::{FromQueryResult, QuerySelect};
+    use std::collections::HashMap;
+
+    if perek_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    #[derive(FromQueryResult)]
+    struct PerekCount {
+        perek_id: i16,
+        count: i64,
+    }
+
+    let counts: Vec<PerekCount> = Entity::find()
+        .select_only()
+        .column_as(Column::PerekId, "perek_id")
+        .column_as(Column::Id.count(), "count")
+        .filter(Column::PerekId.is_in(perek_ids.iter().map(|id| *id as i16)))
+        .group_by(Column::PerekId)
+        .into_model::<PerekCount>()
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+
+    Ok(counts
+        .into_iter()
+        .map(|pc| (pc.perek_id as i32, pc.count))
+        .collect())
+}
+
 /// Returns a 929-element vector where each index i contains the count of articles for perek (i + 1).
 /// Derived from rows the caller already fetched, so the starter payload pays no extra aggregate scan.
 pub fn count_by_perek(articles: &[ArticleSummary]) -> Vec<i64> {
@@ -671,6 +741,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn count_by_perek_ids_returns_count_map() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![
+                    mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
+                    mock_row([("perek_id", 42_i16.into()), ("count", 7_i64.into())]),
+                ],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = count_by_perek_ids(&db, &[1, 42, 43])
+            .await
+            .expect("counts should load");
+
+        assert_eq!(result.get(&1), Some(&2));
+        assert_eq!(result.get(&42), Some(&7));
+        assert_eq!(result.get(&43), None);
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_ids_empty_input_skips_the_query() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        let result = count_by_perek_ids(&db, &[])
+            .await
+            .expect("empty input should return an empty map");
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_ids_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Timeout");
+
+        let result = count_by_perek_ids(&db, &[1]).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
+    }
+
+    #[tokio::test]
     async fn search_articles_validates_input_bounds() {
         let index = article_search::ArticleSearchIndex::new(Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql).into_connection(),
@@ -951,6 +1066,61 @@ mod tests {
             .expect("unmapped article should return an empty set");
 
         assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_groups_and_orders_rows() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<CoveringSourceModel, Vec<CoveringSourceModel>, _>([vec![
+                    covering_source_model(7, 1, 5),
+                    covering_source_model(8, 3, 1),
+                    covering_source_model(7, 1, 9),
+                ]])
+                .into_connection(),
+        );
+
+        let grouped = find_covering_sources_by_article_ids(&db, &[7, 8, 9])
+            .await
+            .expect("covering sources should load");
+
+        assert_eq!(grouped.len(), 2);
+        let article_7 = grouped.get(&7).expect("article 7 has rows");
+        assert_eq!(
+            article_7
+                .iter()
+                .map(|source| (source.perek_id, source.pasuk))
+                .collect::<Vec<_>>(),
+            vec![(1, 5), (1, 9)]
+        );
+        let article_8 = grouped.get(&8).expect("article 8 has rows");
+        assert_eq!(article_8.len(), 1);
+        assert!(!grouped.contains_key(&9));
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_empty_input_skips_the_query() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        let grouped = find_covering_sources_by_article_ids(&db, &[])
+            .await
+            .expect("empty input should return an empty map");
+
+        assert!(grouped.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("covering table missing");
+
+        let result = find_covering_sources_by_article_ids(&db, &[7]).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
     }
 
     #[tokio::test]
