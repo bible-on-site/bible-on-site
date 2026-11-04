@@ -5,9 +5,11 @@ import hashlib
 from io import BytesIO
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess  # nosec B404: only ever invokes the fixed argv 'aa extract' below.
 import tempfile
+import xml.etree.ElementTree as ElementTree
 import zipfile
 
 PACK_MANIFEST = "asset-packs.json"
@@ -32,7 +34,7 @@ def verify(package, catalog_path, platform, asset_pack_dir=None, archive_dir=Non
         elif platform == "iOS":
             verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_dir, extract)
         elif platform == "Windows":
-            verify_windows(archive, catalog, names)
+            verify_windows(archive, catalog, names, asset_pack_dir, archive_dir, payload_dir)
     print(f'Verified {len(catalog["books"])} {platform} recitation packs in {package.name}')
 
 
@@ -204,13 +206,110 @@ def write_pack_manifest(asset_pack_dir, archive_dir):
         json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def verify_windows(archive, catalog, names):
+# The base MSIX must never carry extension payloads again (#2923): audio
+# archives and the perushim databases ship as MSIX optional packages or
+# release-payload downloads.
+WINDOWS_BUNDLED_PATTERNS = ("recitation_", ".perushim_notes.sqlite", ".hebrew_search.sqlite")
+PACKAGE_NAME_PATTERN = re.compile(r"^[-.A-Za-z0-9]{3,50}$")
+
+
+def strip_json_comments(text):
+    """The checked-in store map carries // documentation lines; JSON does not."""
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
+
+
+def base_manifest_identity(archive):
+    entries = [name for name in archive.namelist() if Path(name).name == "AppxManifest.xml"]
+    if len(entries) != 1:
+        raise ValueError("Base MSIX lacks a unique AppxManifest.xml")
+    root = ElementTree.fromstring(archive.read(entries[0]))
+    identity = next((e for e in root if e.tag.endswith("Identity")), None)
+    if identity is None or not identity.get("Name") or not identity.get("Publisher"):
+        raise ValueError("Base MSIX manifest lacks Identity Name/Publisher")
+    return identity.get("Name"), identity.get("Publisher")
+
+
+def store_map_package_names(extension_pack_dir):
+    """packageName overrides from the bundled store map beside ExtensionPacks."""
+    map_path = extension_pack_dir.parent / "extension-packs.json5"
+    if not map_path.is_file():
+        return {}
+    document = json.loads(strip_json_comments(map_path.read_text(encoding="utf-8")))
+    return {pack: entry["packageName"] for pack, entry in document.get("addOns", {}).items()
+            if isinstance(entry, dict) and entry.get("packageName")}
+
+
+def verify_windows_optional_package(archive_dir, pack, expected_name, main_name, payloads):
+    """One extension .msix: related-set manifest plus byte-identical payloads."""
+    msix = archive_dir / f"{pack}.msix"
+    if not msix.is_file() or msix.stat().st_size == 0:
+        raise ValueError(f"Missing Windows optional package: {msix}")
+    with zipfile.ZipFile(msix) as package:
+        names = package.namelist()
+        manifest_entries = [n for n in names if Path(n).name == "AppxManifest.xml"]
+        if len(manifest_entries) != 1:
+            raise ValueError(f"{msix.name} lacks a unique AppxManifest.xml")
+        root = ElementTree.fromstring(package.read(manifest_entries[0]))
+        identity = next((e for e in root if e.tag.endswith("Identity")), None)
+        name, publisher = (identity.get("Name"), identity.get("Publisher")) if identity is not None else (None, None)
+        if name != expected_name or not PACKAGE_NAME_PATTERN.match(name or ""):
+            raise ValueError(f"{msix.name} Identity Name '{name}' != expected '{expected_name}'")
+        dependencies = next((e for e in root if e.tag.endswith("Dependencies")), None)
+        bound = dependencies is not None and any(
+            e.tag.endswith("MainPackageDependency") and e.get("Name") == main_name
+            for e in dependencies)
+        if not bound:
+            raise ValueError(f"{msix.name} lacks uap3:MainPackageDependency on {main_name}")
+        contents = {}
+        for payload_name in payloads:
+            entries = [n for n in names if Path(n).name == payload_name and "/" not in n and "\\" not in n]
+            if len(entries) != 1:
+                raise ValueError(f"{msix.name} lacks root payload {payload_name}")
+            contents[payload_name] = package.read(entries[0])
+    return contents, publisher
+
+
+def verify_windows(archive, catalog, names, extension_pack_dir, archive_dir, payload_dir):
+    """Base MSIX stays payload-free; every pack verifies inside its .msix."""
+    for name in names:
+        base = Path(name).name
+        if any(base.startswith(prefix) if prefix.endswith("_") else base.endswith(prefix)
+               for prefix in WINDOWS_BUNDLED_PATTERNS):
+            raise ValueError(f"Extension payload bundled in the base MSIX: {name}")
+    if extension_pack_dir is None or archive_dir is None or payload_dir is None:
+        raise ValueError("Windows verification requires --asset-pack-dir, --archive-dir and --payload-dir")
+    main_name, main_publisher = base_manifest_identity(archive)
+    overrides = store_map_package_names(extension_pack_dir)
     for book in catalog["books"]:
-        filename = f'recitation_{book["seferId"]}.zip'
-        entries = [name for name in names if Path(name).name == filename]
-        if len(entries) != 1 or hashlib.sha256(archive.read(entries[0])).hexdigest() != book["sha256"]:
-            raise ValueError(f"Missing or mismatched Windows book archive: {filename}")
-        verify_book_audio(archive.read(entries[0]), catalog, book)
+        pack = f'recitation_{book["seferId"]}'
+        filename = f"{pack}.zip"
+        expected_name = overrides.get(pack) or f'{main_name}.{pack.replace("_", "-")}'
+        contents, publisher = verify_windows_optional_package(
+            archive_dir, pack, expected_name, main_name, [filename])
+        if publisher != main_publisher:
+            raise ValueError(f"{pack}.msix publisher differs from the main package")
+        if hashlib.sha256(contents[filename]).hexdigest() != book["sha256"]:
+            raise ValueError(f"Missing or mismatched Windows book archive: {pack}.msix")
+        verify_book_audio(contents[filename], catalog, book)
+        # The same bytes ship as release-payload HTTPS fallback for
+        # sideloaded / Store-unconfigured installs (PadDeliveryService).
+        staged = payload_dir / filename
+        if not staged.is_file() or digest(staged) != book["sha256"]:
+            raise ValueError(f"Missing or mismatched Windows release payload: {staged}")
+    if (extension_pack_dir / "perushim_notes").is_dir():
+        expected_name = overrides.get("perushim_notes") or f"{main_name}.perushim-notes"
+        payloads = ["sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+                    "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"]
+        contents, publisher = verify_windows_optional_package(
+            archive_dir, "perushim_notes", expected_name, main_name, payloads)
+        if publisher != main_publisher:
+            raise ValueError("perushim_notes.msix publisher differs from the main package")
+        for payload_name in payloads:
+            source = extension_pack_dir / "perushim_notes" / payload_name
+            if not source.is_file() or hashlib.sha256(contents[payload_name]).hexdigest() != digest(source):
+                raise ValueError(f"Missing or mismatched perushim payload: {payload_name}")
+            # The .sqlite release payloads ride the iOS staging — the app-v*
+            # asset names and bytes are identical, so Windows reuses them.
 
 
 def verify_book_audio(payload, catalog, book):
@@ -245,11 +344,14 @@ if __name__ == "__main__":
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--platform", choices=["Android", "iOS", "Windows"], required=True)
     parser.add_argument("--asset-pack-dir", type=Path,
-                        help="iOS: Platforms/iOS/AssetPacks source directory (manifests + payloads)")
+                        help="iOS: Platforms/iOS/AssetPacks source directory (manifests + payloads); "
+                             "Windows: Platforms/Windows/ExtensionPacks source directory")
     parser.add_argument("--archive-dir", type=Path,
-                        help="iOS: directory holding the .aar archives produced by xcrun ba-package")
+                        help="iOS: directory holding the .aar archives produced by xcrun ba-package; "
+                             "Windows: directory holding the extension-pack .msix files")
     parser.add_argument("--payload-dir", type=Path,
-                        help="iOS: directory of raw payloads staged for release-asset delivery below iOS 26")
+                        help="iOS: directory of raw payloads staged for release-asset delivery below iOS 26; "
+                             "Windows: directory of raw payloads staged for the sideload/Store fallback")
     args = parser.parse_args()
     verify(args.package, args.catalog, args.platform, args.asset_pack_dir,
            args.archive_dir, args.payload_dir)

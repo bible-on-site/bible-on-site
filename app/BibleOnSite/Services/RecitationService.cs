@@ -322,7 +322,9 @@ public sealed class RecitationService
         {
             if (path == null)
             {
-                // Windows and sideloaded Debug builds use the same payload as a package asset.
+                // Debug builds bundle the same payload as a package asset for
+                // offline/dev installs; Release builds never bundle it — packs
+                // arrive through the store or release-payload delivery.
                 // Store mobile builds never bundle this fallback and never contact S3.
                 await using var bundled = await _files.OpenAppPackageFileAsync(book.FileName);
                 await using (var file = File.Create(bundledCopy))

@@ -160,6 +160,34 @@ jobs:
         with:
           python-version: "3.15"
 
+      - name: Restore perushim notes SQLite for the Windows optional package
+        if: ${{ !inputs.compile_only && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      # The master baseline lives outside this run's artifact namespace; fetch
+      # it by name through the REST API. A missing baseline is an error here —
+      # the pair is required for the perushim_notes optional package.
+      - name: Restore perushim notes SQLite for the Windows optional package (master baseline)
+        if: ${{ !inputs.compile_only && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER) }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ runner.temp }}/perushim-sqlite"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ runner.temp }}/perushim-sqlite"
+
+      - name: Prepare matching Perushim catalog and Windows notes optional package
+        if: ${{ !inputs.compile_only }}
+        run: python app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform Windows
+
       - name: Resolve immutable recitation audio cache key
         if: ${{ !inputs.compile_only }}
         id: recitation_audio_identity
@@ -214,7 +242,9 @@ jobs:
         if: ${{ !inputs.compile_only }}
         id: find_msix
         run: |
-          $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse | Select-Object -First 1
+          # extension-packs/*.msix are optional packages, never the base image.
+          $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse |
+            Where-Object { $_.FullName -notmatch 'extension-packs' } | Select-Object -First 1
           if ($msix) {
             echo "Found .msix file"
             echo "MSIX_PATH=$($msix.FullName)" >> $env:GITHUB_OUTPUT
@@ -236,9 +266,9 @@ jobs:
         run: echo "artifact_name=app-windows-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Verify all recitation Windows archives and hashes
+      - name: Verify Windows extension packs and clean base MSIX
         if: ${{ !inputs.compile_only }}
-        run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}"
+        run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}" --asset-pack-dir app/BibleOnSite/Platforms/Windows/ExtensionPacks --archive-dir app/.artifacts/extension-packs --payload-dir app/.artifacts/payloads
 
       - name: Upload MSIX artifact
         if: ${{ !inputs.compile_only }}

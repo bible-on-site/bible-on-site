@@ -329,8 +329,30 @@
 		<AndroidAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" Link="%(Filename)%(Extension)" AssetPack="%(Filename)" DeliveryType="OnDemand" />
 		<MauiAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" LogicalName="%(Filename)%(Extension)" Condition="'$(Configuration)' == 'Debug'" />
 	</ItemGroup>
+	<!-- Windows: extension packs are MSIX optional packages on Release —
+	     generated under .artifacts/extension-packs/ by the packaging target
+	     (Store-delivered DLC add-ons), never bundled into the base MSIX.
+	     Debug keeps them bundled so unpackaged dev installs keep the fallback. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' AND '$(Configuration)' == 'Debug'">
+		<MauiAsset Include="Platforms\Windows\ExtensionPacks\*\*.zip" LogicalName="%(Filename)%(Extension)" />
+		<!-- Evaluated before DecompressPerushimNotesWindows runs: include when the
+		     checked-in .gz source or a prepared payload is present. -->
+		<MauiAsset Include="Platforms\Windows\ExtensionPacks\perushim_notes\*.sqlite" LogicalName="%(Filename)%(Extension)" Condition="Exists('Platforms\Windows\ExtensionPacks\perushim_notes') OR Exists('Platforms\Android\AssetPacks\perushim_notes')" />
+	</ItemGroup>
+	<!-- Debug perushim bundle: expand the checked-in .gz payloads into the
+	     Windows pack dir, same as the iOS Debug leg above. PowerShell's
+	     GzipStream needs no external tool on a Windows build host. -->
+	<Target Name="DecompressPerushimNotesWindows" BeforeTargets="PrepareForBuild;Build" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' AND '$(Configuration)' == 'Debug' AND&#xD;&#xA;			((!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
+		<MakeDir Directories="Platforms\Windows\ExtensionPacks\perushim_notes" />
+		<Exec Condition="!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="powershell -NoProfile -Command &quot;$i=[IO.File]::OpenRead('$(MSBuildProjectDirectory)\Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'); $o=[IO.File]::Create('$(MSBuildProjectDirectory)\Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite'); (New-Object IO.Compression.GzipStream($i,[IO.Compression.CompressionMode]::Decompress)).CopyTo($o); $o.Close(); $i.Close()&quot;" />
+		<Exec Condition="!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="powershell -NoProfile -Command &quot;$i=[IO.File]::OpenRead('$(MSBuildProjectDirectory)\Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz'); $o=[IO.File]::Create('$(MSBuildProjectDirectory)\Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite'); (New-Object IO.Compression.GzipStream($i,[IO.Compression.CompressionMode]::Decompress)).CopyTo($o); $o.Close(); $i.Close()&quot;" />
+	</Target>
+	<!-- Pack → Store add-on StoreId map for the Windows DLC install leg.
+	     Populated after the Partner Center add-ons are created; an empty
+	     addOns object means every pack ships through the release-payload
+	     fallback. See docs/app/extension-packs.md. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<MauiAsset Include="Platforms\Windows\Recitation\*.zip" LogicalName="%(Filename)%(Extension)" />
+		<MauiAsset Include="Platforms\Windows\extension-packs.json5" LogicalName="windows-extension-packs.json" />
 	</ItemGroup>
 	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug'">
 		<MauiAsset Include="Platforms\iOS\AssetPacks\recitation-*\*.zip" LogicalName="%(Filename)%(Extension)" />
