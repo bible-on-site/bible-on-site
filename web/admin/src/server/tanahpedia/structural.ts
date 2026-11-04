@@ -362,7 +362,7 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 
 			await txExecute(
 				conn,
-				`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
+				`INSERT IGNORE INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
 				[linkId, data.entryId, entityId],
 			);
 		});
@@ -416,10 +416,18 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 		if (existing) return { linkId: existing.id };
 
 		const linkId = randomUUID();
-		await execute(
-			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
+		const insert = await execute(
+			`INSERT IGNORE INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
 			[linkId, data.entryId, data.entityId],
 		);
+		if (insert?.affectedRows === 0) {
+			// Lost a concurrent insert race — reuse the row that won; no public change.
+			const winner = await queryOne<{ id: string }>(
+				`SELECT id FROM tanahpedia_entry_entity WHERE entry_id = ? AND entity_id = ?`,
+				[data.entryId, data.entityId],
+			);
+			return { linkId: winner?.id ?? linkId };
+		}
 		await revalidateWebsite(
 			await pediaChangesForEntryIds([data.entryId]),
 		);
