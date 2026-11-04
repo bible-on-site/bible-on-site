@@ -111,6 +111,22 @@ mod tests {
         }
     }
 
+    /// Raw row shape of `articles_service::ArticleSummary` (starter query never selects `content`).
+    fn article_summary_row(id: i32, perek_id: i16, author_id: i16) -> BTreeMap<String, Value> {
+        mock_row([
+            ("id", id.into()),
+            ("perek_id", perek_id.into()),
+            ("author_id", author_id.into()),
+            (
+                "article_abstract",
+                Value::String(Some(format!("abstract-{id}"))),
+            ),
+            ("name", format!("Article {id}").into()),
+            ("priority", Value::TinyInt(Some(1))),
+            ("coverage_verified", Value::Bool(Some(false))),
+        ])
+    }
+
     fn perek_model(id: i32, perek_id: i32, sefer_id: i32) -> entities::perek::Model {
         entities::perek::Model {
             id,
@@ -616,19 +632,13 @@ mod tests {
                 .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
                     vec![author_model(3), author_model(4)],
                 ])
-                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
-                    [vec![article_model(1, 1, 3), article_model(2, 2, 4)]],
-                )
+                // Starter fetches article summaries only (no content column); author
+                // and perek counts are derived from these rows in memory.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![
-                        mock_row([("author_id", 3_i16.into()), ("count", 5_i64.into())]),
-                        mock_row([("author_id", 4_i16.into()), ("count", 0_i64.into())]),
-                    ],
-                ])
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![
-                        mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
-                        mock_row([("perek_id", 929_i16.into()), ("count", 7_i64.into())]),
+                        article_summary_row(1, 1, 3),
+                        article_summary_row(2, 2, 4),
+                        article_summary_row(3, 929, 3),
                     ],
                 ])
                 // Starter article metric attach — one batched IN query.
@@ -649,8 +659,9 @@ mod tests {
 
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let json = response.data.into_json().unwrap();
-        assert_eq!(json["starter"]["authors"][0]["articlesCount"], 5);
-        assert_eq!(json["starter"]["authors"][1]["articlesCount"], 0);
+        // Author counts come from the fetched articles, not a separate scan.
+        assert_eq!(json["starter"]["authors"][0]["articlesCount"], 2);
+        assert_eq!(json["starter"]["authors"][1]["articlesCount"], 1);
         assert_eq!(json["starter"]["articles"][1]["id"], 2);
         // Only article 2 has a metric row in the mock; article 1 → null.
         assert!(json["starter"]["articles"][0]["readingMetric"].is_null());
@@ -665,8 +676,9 @@ mod tests {
                 .len(),
             929
         );
-        assert_eq!(json["starter"]["perekArticlesCounters"][0], 2);
-        assert_eq!(json["starter"]["perekArticlesCounters"][928], 7);
+        assert_eq!(json["starter"]["perekArticlesCounters"][0], 1);
+        assert_eq!(json["starter"]["perekArticlesCounters"][1], 1);
+        assert_eq!(json["starter"]["perekArticlesCounters"][928], 1);
     }
 
     #[tokio::test]
@@ -683,9 +695,15 @@ mod tests {
         let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
-            .execute(Request::new(
-                r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
-            ))
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_revision_api_key(
+                    Some("revision-test-key".to_string()),
+                    Some("revision-test-key".to_string()),
+                )),
+            )
             .await;
 
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -757,6 +775,15 @@ mod tests {
             )
             .await;
         assert!(!apply.errors.is_empty());
+
+        let list = schema
+            .execute(
+                Request::new(r#"{ tanahpediaEntryRevisions { id } }"#)
+                    .data(crate::common::auth::ApiAuth::new(None)),
+            )
+            .await;
+        assert_eq!(list.errors.len(), 1, "{:?}", list.errors);
+        assert_eq!(list.errors[0].message, "Revision API is not configured");
     }
 
     #[tokio::test]
@@ -1084,11 +1111,9 @@ mod tests {
 
     #[tokio::test]
     async fn schema_executes_authorized_dedication_create() {
-        use entities::{
-            dedication, dedication_dedication_type, dedication_type, sefer, sefer_dedication,
-        };
+        use crate::services::dedications_service::{KIND_SEFER_DED, urow};
+        use entities::{dedication, dedication_dedication_type, dedication_type, sefer};
 
-        let now = chrono::Utc::now().naive_utc();
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 // purpose validation
@@ -1125,47 +1150,7 @@ mod tests {
                         rows_affected: 1,
                     },
                 ])
-                // find_aggregate → list_all: 6 empty link tables + the sefer row
-                .append_query_results::<
-                    entities::perek_dedication::Model,
-                    Vec<entities::perek_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    sefer_dedication::Model,
-                    Vec<sefer_dedication::Model>,
-                    _,
-                >([vec![sefer_dedication::Model {
-                    sefer_id: 24,
-                    dedication_id: 42,
-                    expires_at: None,
-                    created_at: now.and_utc(),
-                }]])
-                .append_query_results::<
-                    entities::helek_dedication::Model,
-                    Vec<entities::helek_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::parasha_dedication::Model,
-                    Vec<entities::parasha_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::article_dedication::Model,
-                    Vec<entities::article_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::tanahpedia_entry_dedication::Model,
-                    Vec<entities::tanahpedia_entry_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::masora_dedication::Model,
-                    Vec<entities::masora_dedication::Model>,
-                    _,
-                >([vec![]])
+                // find_aggregate: the new row, then its union of link rows.
                 .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                     dedication::Model {
                         id: 42,
@@ -1173,6 +1158,14 @@ mod tests {
                         expires_at: None,
                     },
                 ]])
+                .append_query_results([vec![urow(
+                    KIND_SEFER_DED,
+                    Some(42),
+                    Some(24),
+                    None,
+                    None,
+                    None,
+                )]])
                 .append_query_results::<
                     dedication_dedication_type::Model,
                     Vec<dedication_dedication_type::Model>,
@@ -1218,49 +1211,20 @@ mod tests {
 
     #[tokio::test]
     async fn schema_resolves_public_dedications_for_sefer_context() {
-        use entities::{
-            dedication, dedication_dedication_type, dedication_type, helek, sefer, sefer_dedication,
-        };
+        use crate::services::dedications_service::{KIND_HELEK, KIND_SEFER, KIND_SEFER_DED, urow};
+        use entities::{dedication, dedication_dedication_type, dedication_type};
 
-        let now = chrono::Utc::now().naive_utc();
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                // ancestor expansion: canonical sefer + helek tables
-                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
-                    sefer::Model {
-                        id: 24,
-                        name: "מלאכי".to_string(),
-                        tanach_us_name: None,
-                        perek_id_from: 565,
-                        perek_id_to: 567,
-                    },
+                // ancestor expansion: canonical sefer + helek union
+                .append_query_results([vec![
+                    urow(KIND_SEFER, Some(24), Some(565), Some(567), None, None),
+                    urow(KIND_HELEK, Some(1), Some(1), Some(5), None, None),
                 ]])
-                .append_query_results::<helek::Model, Vec<helek::Model>, _>([vec![
-                    helek::Model {
-                        id: 1,
-                        name: "תורה".to_string(),
-                        sefer_id_from: 1,
-                        sefer_id_to: 5,
-                    },
-                ]])
-                // sefer-scope link rows — one matches sefer 24
-                .append_query_results::<
-                    sefer_dedication::Model,
-                    Vec<sefer_dedication::Model>,
-                    _,
-                >([vec![
-                    sefer_dedication::Model {
-                        sefer_id: 24,
-                        dedication_id: 42,
-                        expires_at: None,
-                        created_at: now.and_utc(),
-                    },
-                    sefer_dedication::Model {
-                        sefer_id: 7,
-                        dedication_id: 43,
-                        expires_at: None,
-                        created_at: now.and_utc(),
-                    },
+                // sefer-scope link union — one matches sefer 24
+                .append_query_results([vec![
+                    urow(KIND_SEFER_DED, Some(42), Some(24), None, None, None),
+                    urow(KIND_SEFER_DED, Some(43), Some(7), None, None, None),
                 ]])
                 // hydrate: dedication 42 (+43 filtered out upstream)
                 .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![

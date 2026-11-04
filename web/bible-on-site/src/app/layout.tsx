@@ -25,7 +25,8 @@ export const metadata: Metadata = {
 	description: SITE_DESCRIPTION,
 	// Probed by crawlers and Lighthouse; real files under public/ so the
 	// requests resolve instead of 404ing through the app router (#1022).
-	manifest: "/manifest.json",
+	// No manifest link: the website is not promoted as an installable app
+	// (#2936); /manifest.json stays served only for legacy clients.
 	icons: { apple: "/apple-touch-icon.png" },
 	openGraph: siteOpenGraph({
 		title: SITE_NAME,

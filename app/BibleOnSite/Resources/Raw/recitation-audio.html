@@ -7,6 +7,10 @@ globalThis.recitation = (() => {
     // Return objects: MAUI trims string-result quotes without unescaping them.
     // Each native handler serializes this object once for the C# JSON parser.
     const result = value => value;
+    // Push terminal decode states to the host: the WebView's Navigating event
+    // cancels the pseudo-navigation and completes the native wait. Guarded so
+    // the headless unit-test context (no location) still runs.
+    function notify(state) { if (typeof location !== "undefined") location.href = "recitation-status:" + state; }
     function reset() {
         generation++;
         buffer = null;
@@ -30,7 +34,8 @@ globalThis.recitation = (() => {
             if (decoded.errors.length || !decoded.samplesDecoded) throw new Error("Invalid decoded recording");
             buffer = decoded;
             status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.samplesDecoded };
-        }).finally(() => decoder.free()).catch(error => { if (current === generation) status = { state: "error", error: String(error) }; });
+            notify("ready");
+        }).finally(() => decoder.free()).catch(error => { if (current === generation) { status = { state: "error", error: String(error) }; notify("error"); } });
         return result(status);
     }
     function clip(ranges, pauseMs = 0) {
@@ -78,7 +83,7 @@ globalThis.recitation = (() => {
         return result({ length: bytes.length });
     }
     function chunk(offset, size) {
-        if (!wave || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(size) || size <= 0 || size > 262144)
+        if (!wave || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(size) || size <= 0 || size > 8388608)
             throw new Error("Invalid audio chunk");
         const part = wave.subarray(offset, offset + size);
         let binary = "";

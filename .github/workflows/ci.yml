@@ -713,23 +713,27 @@ jobs:
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
       packages: write
     steps:
-      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
-      # Enable large-packages and docker-images to maximize available space
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v2.0.0
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
+      # Remove installed packages separately so one absent optional name cannot
+      # prevent the rest of the package sweep.
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -2256,6 +2260,16 @@ jobs:
           # enforces each Play score ≥25% over the 10 MB DEX threshold.
           python3 devops/verify_android_dex_metadata.py --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
 
+      # #2970: the release packaging job is master-only. Exercise the real
+      # symbols path here — produce the archive from this build's
+      # app_shared_libraries and validate it against the AAB just built, so a
+      # symbols regression fails on the pull request, not after merge.
+      - name: Verify native symbols archive
+        run: |
+          dotnet run --project devops -- PackageAndroidSymbols --configuration Release \
+            --aab-path "$(realpath "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)")" \
+            --android-symbols-path "$RUNNER_TEMP/native-symbols.zip"
+
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
 
@@ -2699,9 +2713,12 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          large-packages: false
           docker-images: true
           swap-storage: false
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -2934,9 +2951,12 @@ jobs:
           android: true
           dotnet: true
           haskell: true
-          large-packages: true
+          large-packages: false
           docker-images: true
           swap-storage: false
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       # Same overlap as data_ci: the image pull (or artifact download + load)
       # only depends on the needs/ outputs, so it runs in the background while
@@ -3589,7 +3609,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/free-large-packages.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
