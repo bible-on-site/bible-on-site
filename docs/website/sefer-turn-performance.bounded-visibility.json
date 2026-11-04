@@ -7736,13 +7736,400 @@
   },
   "observerSerializationCorrection": {
     "beforeFailing": true,
-    "beforeConversionsWhileTiming": 1,
+    "beforeConversionsWhileTiming": 2,
     "afterConversionsWhileTiming": 0,
     "allBrowserRecordsExportedAfterStop": true,
     "deliberate250msStallStillDetected": true,
     "metricUnitTestsPassed": 39,
     "productionRuntimeChanged": false,
     "limitsChanged": false,
-    "qualification": "Measurement correction only. It does not establish a production timing improvement. Full qualification after the correction remains required."
+    "qualification": "All twelve Windows reader cases pass; the corrected deterministic control passes separately. All original failed cases and the overstrict-control failure are retained. Revised Linux and hosted qualification remain required. No production timing speedup is claimed from the measurement correction.",
+    "priorNativeDeliveryControlBeforeCount": 1,
+    "nativeRecordsOptional": true,
+    "controlRecords": {
+      "kind": "Two labelled diagnostic stubs only in the existing deliberate-stall control",
+      "beforeInWindowConversions": 2,
+      "afterInWindowConversions": 0,
+      "exported": 2,
+      "real250msStallStillDetected": true,
+      "headlessRed": true,
+      "headedGreen": true,
+      "sourceSha256": "6747c97a7e7c9618f4ce0a82f338cadb2f09bb4a78e72e0acb4ccbc02ee94803"
+    },
+    "windowsAfterCorrection": {
+      "measurementHarness": "318330ae54a729566de93c213ee0304ff0eda9e0",
+      "productionBuildSource": "2c4be8ee5554bc3fbd2def2834f333a55892f92f",
+      "productionSourceTree": "a50db5843d84860eebfba0d23da871d08bcf43d0",
+      "readerCasesPassed": 12,
+      "readerCasesFailed": 0,
+      "initialFullRun": {
+        "passed": 12,
+        "failed": 1,
+        "failure": "The new control incorrectly assumed native long-frame delivery; no reader timing case failed"
+      },
+      "guardCorrection": "Two deterministic labelled stubs retain the zero-serialization check without assuming optional native records. The corrected control passes separately.",
+      "cases": [
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              110.6,
+              56.7,
+              43.7,
+              50,
+              61.4,
+              92
+            ],
+            "responseP95Ms": 110.6,
+            "responseMaxMs": 110.6,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 110.6,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 92,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              41.3,
+              51.3,
+              32,
+              43.8,
+              33.2,
+              31.5
+            ],
+            "responseP95Ms": 51.3,
+            "responseMaxMs": 51.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 41.3,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 51.3,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              99.8,
+              58.7,
+              57,
+              69,
+              90.7,
+              56.6
+            ],
+            "responseP95Ms": 99.8,
+            "responseMaxMs": 99.8,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 99.8,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 50
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 90.7,
+              "frameGapMaxMs": 50.2,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              40.7,
+              30.9,
+              52.4,
+              35.8,
+              37.9,
+              29.2
+            ],
+            "responseP95Ms": 52.4,
+            "responseMaxMs": 52.4,
+            "frameGapMaxMs": 50.2,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 40.7,
+              "frameGapMaxMs": 50.2,
+              "frameGapP95Ms": 33.5
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 52.4,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              82.4,
+              64.1,
+              47.3,
+              60.4,
+              48.1,
+              89.6
+            ],
+            "responseP95Ms": 89.6,
+            "responseMaxMs": 89.6,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 82.4,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 89.6,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              41.8,
+              53.4,
+              41.9,
+              33,
+              55.9,
+              46.5
+            ],
+            "responseP95Ms": 55.9,
+            "responseMaxMs": 55.9,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 41.8,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 55.9,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              79.7,
+              54.9,
+              51.5,
+              54.2,
+              63.7,
+              50.9
+            ],
+            "responseP95Ms": 79.7,
+            "responseMaxMs": 79.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 79.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 63.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              34,
+              60.2,
+              39.2,
+              45.2,
+              29.4,
+              24.6
+            ],
+            "responseP95Ms": 60.2,
+            "responseMaxMs": 60.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.3,
+            "firstTurn": {
+              "responseP95Ms": 34,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 60.2,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.3
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              127.7,
+              53.4,
+              58.9,
+              52.8,
+              43.8,
+              79.9
+            ],
+            "responseP95Ms": 127.7,
+            "responseMaxMs": 127.7,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 127.7,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 79.9,
+              "frameGapMaxMs": 66.8,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              44.2,
+              30.7,
+              43.3,
+              32.2,
+              42.5,
+              29.9
+            ],
+            "responseP95Ms": 44.2,
+            "responseMaxMs": 44.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 44.2,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 43.3,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              109.2,
+              47.2,
+              51.4,
+              57.8,
+              45.7,
+              75
+            ],
+            "responseP95Ms": 109.2,
+            "responseMaxMs": 109.2,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 33.5,
+            "firstTurn": {
+              "responseP95Ms": 109.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 75,
+              "frameGapMaxMs": 66.8,
+              "frameGapP95Ms": 33.5
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              42.2,
+              54,
+              48.6,
+              33.6,
+              44.1,
+              30.3
+            ],
+            "responseP95Ms": 54,
+            "responseMaxMs": 54,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 42.2,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 54,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        }
+      ]
+    }
   }
 }

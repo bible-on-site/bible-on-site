@@ -305,31 +305,39 @@ test("turn probe detects an injected second-turn stall", async ({
 			value: serialization,
 			configurable: true,
 		});
-		const frameTiming = (
-			window as unknown as {
-				PerformanceLongAnimationFrameTiming?: { prototype: PerformanceEntry };
-			}
-		).PerformanceLongAnimationFrameTiming;
-		if (frameTiming) {
-			const descriptor = Object.getOwnPropertyDescriptor(
-				frameTiming.prototype,
-				"toJSON",
-			);
-			if (!descriptor || typeof descriptor.value !== "function") {
-				throw new Error("Missing diagnostic serialization control");
-			}
-			const original = descriptor.value;
-			Object.defineProperty(frameTiming.prototype, "toJSON", {
-				...descriptor,
-				value: function (this: PerformanceEntry, ...args: unknown[]) {
-					serialization.total++;
-					if (window.__seferTurns) serialization.duringTiming++;
-					return Reflect.apply(original, this, args);
-				},
-			});
-		}
 	});
 	await startTurnProbe(page, "toolbar");
+	await page.evaluate(() => {
+		// Native long-frame delivery is optional. These labelled diagnostic
+		// stubs exercise export ordering without requiring a browser entry.
+		const serialization = Reflect.get(window, "__seferDiagnosticSerialization");
+		for (const name of ["serialization-control:a", "serialization-control:b"]) {
+			const startTime = performance.now();
+			window.__seferTurns?.recordLongFrames([
+				{
+					name,
+					entryType: "serialization-control",
+					startTime,
+					duration: 1,
+					toJSON() {
+						serialization.total++;
+						if (window.__seferTurns) serialization.duringTiming++;
+						return {
+							name,
+							entryType: "serialization-control",
+							startTime,
+							duration: 1,
+							blockingDuration: 0,
+							firstUIEventTimestamp: 0,
+							renderStart: 0,
+							styleAndLayoutStart: 0,
+							scripts: [],
+						};
+					},
+				} as PerformanceEntry,
+			]);
+		}
+	});
 	await page.evaluate(
 		() =>
 			new Promise<void>((resolve) =>
@@ -360,8 +368,8 @@ test("turn probe detects an injected second-turn stall", async ({
 	expect(metrics.responseMs[1]).toBeGreaterThanOrEqual(250);
 	expect(turnBudgetFailures(metrics).length).toBeGreaterThan(0);
 	expect(serialization.duringTiming).toBe(0);
-	if (samples.longAnimationFramesSupported) {
-		expect(serialization.total).toBeGreaterThan(0);
-		expect(samples.longAnimationFrames).toHaveLength(serialization.total);
-	}
+	expect(serialization.total).toBe(2);
+	expect(
+		samples.longAnimationFrames?.filter((frame) => frame.duration === 1),
+	).toHaveLength(2);
 });

@@ -90,6 +90,16 @@ and eight character-position comparisons remain exact. These measurements
 retain the original 4x slowdown, one worker, zero retries and fixed limits.
 The Windows miss remains open; hosted and public verification are still required.
 
+With diagnostic serialization deferred, all twelve Windows reader cases pass
+at the original limits. The first full run failed only the new diagnostic
+control's assumption that a supported browser always delivers an optional long
+frame. That assumption is removed: two labelled diagnostic stubs make export
+ordering deterministic, and the corrected control passes with real native input
+and the unchanged 250ms stall. The earlier control failure and all reader samples
+are retained. The application's source tree and production build are unchanged;
+this result does not establish a runtime speedup. Revised Linux and hosted
+qualification remain required.
+
 | Before bounded visibility work | Local prototype after |
 | --- | --- |
 | ![Previous held Kings page](images/sefer-turn-lag/reader-bounded-visibility-before.png) | ![Unchanged held Kings page](images/sefer-turn-lag/reader-bounded-visibility-after.png) |
@@ -478,9 +488,9 @@ cadence samples remain authoritative, including
 the deliberate 250ms stall control. Diagnostic records do not filter or adjust
 any timing sample. Browser records are retained without converting their
 script attribution while the timing window is open; serialization runs only
-after observation stops. A before-failing browser guard counts one in-window
-conversion before the repair and zero afterward, and verifies every record is
-still exported. The original 250ms stall remains detected, and all 39 metric
+after observation stops. A before-failing browser guard counts two in-window
+conversions before the repair and zero afterward; both labelled records are
+still exported. Native diagnostic delivery remains optional. The original 250ms stall remains detected, and all 39 metric
 unit tests pass. This measurement correction changes no production runtime,
 threshold, retry or deadline; revised qualification remains required.
 After a cadence failure, a separate sequence also captures a Chromium trace and
