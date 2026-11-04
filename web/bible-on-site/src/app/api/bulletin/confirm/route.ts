@@ -10,7 +10,9 @@ const CONFIRM_PAGE = "/join/email/confirm";
 /** Narrowest scope that still reaches the confirm POST. */
 const COOKIE_OPTIONS = {
 	httpOnly: true,
-	sameSite: "strict",
+	// Lax: the cookie is staged by a cross-site mail-link navigation, then
+	// only ever sent same-site; a foreign form POST still cannot carry it.
+	sameSite: "lax",
 	secure: process.env.NODE_ENV === "production",
 	path: "/api/bulletin",
 } as const;

@@ -49,7 +49,7 @@ describe("/api/bulletin/confirm", () => {
 			const setCookie = response.headers.get("set-cookie") ?? "";
 			expect(setCookie).toContain(`bulletin_confirm=${TOKEN}`);
 			expect(setCookie).toMatch(/httponly/i);
-			expect(setCookie).toMatch(/samesite=strict/i);
+			expect(setCookie).toMatch(/samesite=lax/i);
 			expect(setCookie).toContain("Path=/api/bulletin");
 		});
 
