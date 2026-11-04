@@ -254,7 +254,7 @@ repos:
         entry: node devops/github/ci/cargo-make-zip-guard.mjs
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
-        files: (^|/)Makefile\.toml$|^\.github/workflows/[^/]+\.ya?ml$|^renovate\.json$|^devops/github/ci/cargo-make-(zip-guard\.test\.mjs|zip-guard\.mjs|archive-allowlist\.json)$
+        files: (^|/)Makefile\.toml$|(^|/)Cargo\.toml$|\.ds$|^\.github/workflows/[^/]+\.ya?ml$|^renovate\.json$|^devops/github/ci/cargo-make-(zip-guard\.test\.mjs|zip-guard\.mjs|archive-allowlist\.json)$
         pass_filenames: false
         priority: 10
       - id: flip-book-local-restore

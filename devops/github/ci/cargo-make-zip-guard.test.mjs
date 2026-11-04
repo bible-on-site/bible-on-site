@@ -74,6 +74,24 @@ describe("findArchiveInvocations", () => {
 		assert.equal(hits[0].line, 2);
 	});
 
+	it("checks every command-position token on a line, not just the first", () => {
+		const hits = findArchiveInvocations("echo ok; unzip input.zip output");
+		assert.equal(hits.length, 1);
+		assert.equal(hits[0].command, "unzip");
+		assert.equal(findArchiveInvocations("x = set a; y = zip out.zip d").length, 1);
+	});
+
+	it("tracks namespaced alias commands and unalias removals", () => {
+		assert.equal(
+			findArchiveInvocations("lib::alias::Set extract unzip\nextract a b").length,
+			1,
+		);
+		assert.equal(
+			findArchiveInvocations("alias extract unzip\nunalias extract\nextract a b").length,
+			0,
+		);
+	});
+
 	it("ignores comments, string contents, arguments and assignment targets", () => {
 		for (const script of [
 			"# unzip a b",
@@ -136,6 +154,19 @@ script.runner = "duckscript"
 		assert.ok(tasks.includes("g"));
 	});
 
+	it("treats script arrays as duckscript bodies", () => {
+		const { sources } = analyzeMakefile('[tasks.a]\nscript = ["unzip a b", "echo x"]\n');
+		assert.equal(sources.length, 1);
+		assert.equal(sources[0].script, "unzip a b\necho x");
+	});
+
+	it("applies the task script_runner to file scripts", () => {
+		const { fileScripts } = analyzeMakefile(
+			'[tasks.a]\nscript_runner = "@shell"\nscript = { file = "x.ds" }\n',
+		);
+		assert.equal(fileScripts[0].runner, "@shell");
+	});
+
 	it("resolves root-level extend but not task-level extend", () => {
 		const { extends: ext } = analyzeMakefile(`
 extend = [{ path = "shared.toml", optional = true }, "base.toml"]
@@ -156,6 +187,12 @@ extend = "tasks.b"
 describe("checkWorkflowPins", () => {
 	it("passes when all pins agree on one version", () => {
 		const root = fixture(WORKFLOW("0.37.24"));
+		assert.equal(checkWorkflowPins(root).findings.length, 0);
+	});
+	it("ignores pins mentioned in YAML comments", () => {
+		const root = fixture({
+			".github/workflows/a.yml": "tool: cargo-make@0.37.24 # pinned; was cargo-make@0.37.23\n",
+		});
 		assert.equal(checkWorkflowPins(root).findings.length, 0);
 	});
 	it("fails on disagreeing pins and on missing pins", () => {
@@ -248,10 +285,18 @@ describe("checkArchiveTasks", () => {
 	it("skips external runners and non-.ds script files", () => {
 		const root = fixture({
 			"data/Makefile.toml":
-				'[tasks.a]\nscript_runner = "@shell"\nscript = "unzip a b"\n[tasks.b]\nscript = { file = "x.sh" }\n[tasks.c]\ncommand = "unzip"\nargs = ["a"]\n',
+				'[tasks.a]\nscript_runner = "@shell"\nscript = "unzip a b"\n[tasks.b]\nscript = { file = "x.sh" }\n[tasks.c]\ncommand = "unzip"\nargs = ["a"]\n[tasks.d]\nscript_runner = "@shell"\nscript = { file = "y.ds" }\n',
 			"data/x.sh": "unzip a b\n",
+			"data/y.ds": "unzip a b\n",
 		});
 		assert.equal(checkArchiveTasks(root, { assessed: [] }).findings.length, 0);
+	});
+	it("audits a non-.ds file when the runner is explicitly duckscript", () => {
+		const root = fixture({
+			"data/Makefile.toml": '[tasks.a]\nscript = { file = "x.sh", runner = "duckscript" }\n',
+			"data/x.sh": "unzip a b\n",
+		});
+		assert.equal(checkArchiveTasks(root, { assessed: [] }).findings.length, 1);
 	});
 	it("fails on missing non-optional extends and missing .ds files", () => {
 		const root = fixture({
