@@ -30,6 +30,26 @@ function cssChunking(turbopack: string) {
 }
 
 describe("next.config.mjs", () => {
+	it.each([
+		["", false],
+		["http://localhost:4566", true],
+		["http://127.0.0.1:4566", true],
+		["https://bible-on-site-assets.s3.il-central-1.amazonaws.com", false],
+		["http://localhost.example.com:4566", false],
+	] as const)(
+		"allows local image IPs only for the local asset endpoint %s",
+		(endpoint, allowed) => {
+			const result = nativeJson(
+				`const { default: configure } = await import(${JSON.stringify(configUrl)});
+			 const { PHASE_PRODUCTION_SERVER } = await import("next/constants.js");
+			 const config = configure(PHASE_PRODUCTION_SERVER, { defaultConfig: {} });
+			 console.log(JSON.stringify(Boolean(config.images.dangerouslyAllowLocalIP)));`,
+				{ NODE_ENV: "production", S3_ENDPOINT: endpoint },
+			);
+			expect(result).toBe(allowed);
+		},
+	);
+
 	it("keeps dependency-graph CSS chunking enabled", () => {
 		// #2735: the default merge-everything strategy shipped one ~85 KiB
 		// shared chunk (with pedia-only styles) to perek pages. "graph" splits

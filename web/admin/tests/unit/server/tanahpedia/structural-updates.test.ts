@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
-	executeMock: vi.fn(),
-	queryMock: vi.fn(),
-	queryOneMock: vi.fn(),
-}));
+const { executeMock, queryMock, queryOneMock, transactionMock } = vi.hoisted(
+	() => ({
+		executeMock: vi.fn(),
+		queryMock: vi.fn(),
+		queryOneMock: vi.fn(),
+		transactionMock: vi.fn(),
+	}),
+);
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -22,6 +25,16 @@ vi.mock("~/server/db", () => ({
 	execute: executeMock,
 	query: queryMock,
 	queryOne: queryOneMock,
+	transaction: (fn: (conn: unknown) => unknown) => {
+		transactionMock();
+		return fn({});
+	},
+	txExecute: (_conn: unknown, sql: string, params?: unknown[]) =>
+		executeMock(sql, params),
+	txQuery: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryMock(sql, params),
+	txQueryOne: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryOneMock(sql, params),
 }));
 
 import {
@@ -72,6 +85,7 @@ describe("updatePersonMainName", () => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
+		transactionMock.mockReset();
 	});
 
 	it("rejects a blank name", async () => {
@@ -149,6 +163,18 @@ describe("updatePersonMainName", () => {
 			"UPDATE tanahpedia_entity SET name = ? WHERE id = ?",
 		);
 	});
+
+	it("runs the name row and entity rename in one transaction", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "name-type-main" })
+			.mockResolvedValueOnce({ entity_id: "entity-1" });
+
+		await updatePersonMainName({
+			data: { personId: "person-1", name: "משה" },
+		});
+
+		expect(transactionMock).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("updatePersonSex", () => {
@@ -156,6 +182,7 @@ describe("updatePersonSex", () => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
+		transactionMock.mockReset();
 	});
 
 	it("updates the existing sex row", async () => {
@@ -185,6 +212,14 @@ describe("updatePersonSex", () => {
 		expect(executeMock.mock.calls[1]?.[1]?.[1]).toBe("person-1");
 		expect(executeMock.mock.calls[1]?.[1]?.[2]).toBe("MALE");
 	});
+
+	it("runs the sex row replace in one transaction", async () => {
+		await updatePersonSex({
+			data: { personId: "person-1", sex: "MALE" },
+		});
+
+		expect(transactionMock).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("replacePlaceIdentifications", () => {
@@ -192,6 +227,7 @@ describe("replacePlaceIdentifications", () => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
+		transactionMock.mockReset();
 	});
 
 	it("deletes rows that were dropped, updates kept rows and inserts new ones", async () => {
@@ -279,6 +315,14 @@ describe("replacePlaceIdentifications", () => {
 		expect(executedStatements()).toEqual([
 			expect.stringContaining("UPDATE tanahpedia_place_identification"),
 		]);
+	});
+
+	it("runs the delete/update/insert sequence in one transaction", async () => {
+		await replacePlaceIdentifications({
+			data: { placeId: "place-1", rows: [] },
+		});
+
+		expect(transactionMock).toHaveBeenCalledTimes(1);
 	});
 });
 

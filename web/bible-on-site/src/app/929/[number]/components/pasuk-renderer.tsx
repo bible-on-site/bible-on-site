@@ -30,7 +30,6 @@ export function renderSegmentRange(
 	const content: React.ReactNode[] = [];
 	for (let i = startIdx; i <= endIdx; i++) {
 		const segment = segments[i];
-		const segmentKey = `${pasukIdx + 1}-${i + 1}`;
 		const isQriWithDifferentKtiv =
 			segment.type === "qri" && isQriDifferentThanKtiv(segment);
 		// הסתר שם השם is display-only: the wrapped element reads the stored
@@ -46,30 +45,40 @@ export function renderSegmentRange(
 				segment.value
 			);
 		}
-		content.push(
-			<span
-				key={segmentKey}
-				className={isQriWithDifferentKtiv ? qriClassName : ""}
-			>
-				{segment.type === "ktiv" ? (
-					value
-				) : segment.type === "qri" ? (
-					isQriWithDifferentKtiv ? (
-						<>
-							{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-							(<label />
-							{wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value})
-						</>
-					) : (
-						(wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value)
-					)
-				) : segment.type === "ptuha" ? (
-					ptuha()
+		const segmentContent =
+			segment.type === "ktiv" ? (
+				value
+			) : segment.type === "qri" ? (
+				isQriWithDifferentKtiv ? (
+					<>
+						(<span data-qri-label="" />
+						{wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value})
+					</>
 				) : (
-					stuma()
-				)}
-			</span>,
-		);
+					(wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value)
+				)
+			) : segment.type === "ptuha" ? (
+				ptuha()
+			) : (
+				stuma()
+			);
+		// The recitation control already owns each word's element. Ordinary
+		// words and spaces need no extra layout objects when a chapter mounts.
+		// Separate primitive array entries also preserve their text-node shaping
+		// boundaries. Do not join them or allocate a fragment/key for each word.
+		if (typeof segmentContent === "string") content.push(segmentContent);
+		else {
+			const segmentKey = `${pasukIdx + 1}-${i + 1}`;
+			content.push(
+				isQriWithDifferentKtiv ? (
+					<span key={segmentKey} className={qriClassName}>
+						{segmentContent}
+					</span>
+				) : (
+					<React.Fragment key={segmentKey}>{segmentContent}</React.Fragment>
+				),
+			);
+		}
 		const needsSpace =
 			i < segments.length - 1 &&
 			!(
@@ -77,7 +86,7 @@ export function renderSegmentRange(
 				segment.value.at(segment.value.length - 1) === "־"
 			);
 		if (needsSpace && i < endIdx) {
-			content.push(<span key={`sp-${segmentKey}`}> </span>);
+			content.push(" ");
 		}
 	}
 	const lastSeg = segments[endIdx];
@@ -180,22 +189,20 @@ export function renderPasukSegmentsWithEntityRefs(
 			qriClassName,
 			wordWrapper,
 		);
-		const trailSpan = trailingSpace ? (
-			<span key={`sp-trail-${pasukIdx + 1}-${run.endIdx + 1}`}> </span>
-		) : null;
+		const trailSpace = trailingSpace ? " " : null;
 		const runKey = `run-${pasukIdx + 1}-${run.startIdx}`;
 		if (run.ref?.entryUniqueName) {
 			return (
 				<React.Fragment key={runKey}>
 					{linkWrapper(run.ref.entryUniqueName, content, runKey)}
-					{trailSpan}
+					{trailSpace}
 				</React.Fragment>
 			);
 		}
 		return (
 			<React.Fragment key={runKey}>
 				{content}
-				{trailSpan}
+				{trailSpace}
 			</React.Fragment>
 		);
 	});

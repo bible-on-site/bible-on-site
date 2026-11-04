@@ -134,6 +134,43 @@ export function supersedeStatement(
 	};
 }
 
+const READ_CHUNK = 1000;
+const WRITE_CHUNK = 500;
+
+function* chunks<T>(items: T[], size: number): Generator<T[]> {
+	for (let i = 0; i < items.length; i += size) yield items.slice(i, i + size);
+}
+
+const UPSERT_COLUMNS = `id, dedupe_key, ${SOURCE_FIELDS.map((f) => `\`${f}\``).join(", ")}, surface, intended_name, entity_type, disambiguation, confidence, acceptance, model_revision, source_hash`;
+const UPSERT_ROW = `(${new Array(19).fill("?").join(", ")})`;
+// Same column set as the old per-row UPDATE: identity (id, dedupe_key,
+// acceptance, model_revision) is keyed and never rewritten.
+const UPSERT_UPDATE = [
+	"surface = VALUES(surface)",
+	"intended_name = VALUES(intended_name)",
+	"entity_type = VALUES(entity_type)",
+	"disambiguation = VALUES(disambiguation)",
+	"confidence = VALUES(confidence)",
+	"source_hash = VALUES(source_hash)",
+	...SOURCE_FIELDS.map((f) => `\`${f}\` = VALUES(\`${f}\`)`),
+].join(", ");
+
+function upsertParams(row: DecorationRow, key: string): unknown[] {
+	return [
+		rowId(key),
+		key,
+		...SOURCE_FIELDS.map((f) => row[f] ?? null),
+		row.surface,
+		row.intended_name,
+		row.entity_type,
+		row.disambiguation ?? null,
+		row.confidence ?? null,
+		row.acceptance ?? "auto",
+		row.model_revision,
+		row.source_hash,
+	];
+}
+
 async function main() {
 	const flags = parseFlags(process.argv.slice(2));
 	const decorationsFile = flags.get("decorations");
@@ -157,61 +194,52 @@ async function main() {
 	let preserved = 0;
 	let superseded = 0;
 	try {
-		for (const row of rows) {
-			const key = dedupeKey(row);
-			const [existing] = await conn.execute(
-				"SELECT id, acceptance FROM tanahpedia_mention_decoration WHERE dedupe_key = ?",
-				[key],
+		const keyed = rows.map((row) => ({ row, key: dedupeKey(row) }));
+		const existing = new Map<string, string>();
+		for (const chunk of chunks(keyed, READ_CHUNK)) {
+			const [found] = await conn.execute(
+				`SELECT dedupe_key, acceptance FROM tanahpedia_mention_decoration WHERE dedupe_key IN (${chunk.map(() => "?").join(", ")})`,
+				chunk.map(({ key }) => key),
 			);
-			const found = (existing as { id: string; acceptance: string }[])[0];
-			if (found && found.acceptance !== "auto") {
-				preserved++;
-				continue;
+			for (const row of found as { dedupe_key: string; acceptance: string }[]) {
+				existing.set(row.dedupe_key, row.acceptance);
 			}
-			if (dryRun) {
-				found ? updated++ : inserted++;
-				continue;
-			}
-			if (found) {
-				await conn.execute(
-					`UPDATE tanahpedia_mention_decoration SET
-						surface = ?, intended_name = ?, entity_type = ?, disambiguation = ?,
-						confidence = ?, source_hash = ?, ${SOURCE_FIELDS.map((f) => `\`${f}\` = ?`).join(", ")}
-					WHERE dedupe_key = ?`,
-					[
-						row.surface,
-						row.intended_name,
-						row.entity_type,
-						row.disambiguation ?? null,
-						row.confidence ?? null,
-						row.source_hash,
-						...SOURCE_FIELDS.map((f) => row[f] ?? null),
-						key,
-					],
-				);
-				updated++;
-			} else {
-				await conn.execute(
-					`INSERT INTO tanahpedia_mention_decoration
-						(id, dedupe_key, ${SOURCE_FIELDS.map((f) => `\`${f}\``).join(", ")},
-						 surface, intended_name, entity_type, disambiguation, confidence,
-						 acceptance, model_revision, source_hash)
-					VALUES (?, ?, ${SOURCE_FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?, ?, ?)`,
-					[
-						rowId(key),
-						key,
-						...SOURCE_FIELDS.map((f) => row[f] ?? null),
-						row.surface,
-						row.intended_name,
-						row.entity_type,
-						row.disambiguation ?? null,
-						row.confidence ?? null,
-						row.acceptance ?? "auto",
-						row.model_revision,
-						row.source_hash,
-					],
-				);
-				inserted++;
+		}
+		// Human-triaged rows (manual / held / rejected) are never overwritten;
+		// last row wins on repeated dedupe keys within the file, as before.
+		const writable = [
+			...new Map(
+				keyed
+					.filter(({ key }) => {
+						const acceptance = existing.get(key);
+						if (acceptance !== undefined && acceptance !== "auto") {
+							preserved++;
+							return false;
+						}
+						return true;
+					})
+					.map((entry) => [entry.key, entry]),
+			).values(),
+		];
+		for (const { key } of writable) {
+			if (existing.has(key)) updated++;
+			else inserted++;
+		}
+		if (!dryRun && writable.length > 0) {
+			await conn.beginTransaction();
+			try {
+				for (const chunk of chunks(writable, WRITE_CHUNK)) {
+					await conn.execute(
+						`INSERT INTO tanahpedia_mention_decoration (${UPSERT_COLUMNS})
+						VALUES ${chunk.map(() => UPSERT_ROW).join(", ")}
+						ON DUPLICATE KEY UPDATE ${UPSERT_UPDATE}`,
+						chunk.flatMap(({ row, key }) => upsertParams(row, key)),
+					);
+				}
+				await conn.commit();
+			} catch (error) {
+				await conn.rollback();
+				throw error;
 			}
 		}
 		// Supersede runs after the upserts so a failed import leaves the old

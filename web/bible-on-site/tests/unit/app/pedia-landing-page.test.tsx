@@ -96,9 +96,6 @@ test("uses today's Hebrew date and renders events, sayings, people, and recent e
 			id: "recent",
 			title: "ערך חדש",
 			uniqueName: "ערך-חדש",
-			content: "",
-			createdAt: "2026-10-01",
-			updatedAt: "2026-10-02",
 		},
 	]);
 	render(await TanahpediaLandingPage());

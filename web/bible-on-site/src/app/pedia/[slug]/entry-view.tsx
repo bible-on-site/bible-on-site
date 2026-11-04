@@ -2,6 +2,7 @@ import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
+import { cache } from "react";
 import { JsonLd } from "@/app/components/JsonLd";
 import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
@@ -44,9 +45,17 @@ import {
 	disambiguationMetadata,
 } from "./disambiguation-view";
 
+/* React cache() memoizes per request, so generateMetadata and EntryView share
+   one entry fetch (3 queries) and one JSDOM/DOMPurify normalization pass over
+   the full content instead of paying both twice per render. */
+const getEntry = cache(getEntryByUniqueName);
+const prepareEntryContentHtml = cache((content: string) =>
+	DOMPurify.sanitize(normalizeFootnoteHtml(demoteHeadings(content))),
+);
+
 export async function entryMetadata(slug: string): Promise<Metadata> {
 	const name = normalizedUniqueNameFromParam(slug);
-	const entry = await getEntryByUniqueName(name);
+	const entry = await getEntry(name);
 	if (!entry) {
 		const resolution = await resolveSynonymSlug(name);
 		if (resolution.kind === "disambiguation") {
@@ -61,7 +70,7 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 	/* Stored footnote markers are decorative — normalized HTML keeps them
 	   out of the extracted description (#2615). */
 	const fromContent = entry.content
-		? plainText(normalizeFootnoteHtml(entry.content), 200)
+		? plainText(prepareEntryContentHtml(entry.content), 200)
 		: "";
 	return pageMetadata({
 		title: `${entry.title} | תנכפדיה`,
@@ -72,7 +81,7 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 
 export async function EntryView({ slug }: { slug: string }) {
 	const name = normalizedUniqueNameFromParam(slug);
-	const entry = await getEntryByUniqueName(name);
+	const entry = await getEntry(name);
 	if (!entry) {
 		const resolution = await resolveSynonymSlug(name);
 		if (resolution.kind === "alias") {
@@ -93,14 +102,9 @@ export async function EntryView({ slug }: { slug: string }) {
 	// A load failure rejects the render rather than caching a page missing
 	// its breadcrumb/family/map/occurrence sections — the last good page
 	// keeps serving and the next request retries against a recovered DB.
-	const siblingEntries = (
-		primaryEntityType
-			? await getEntriesByEntityType(primaryEntityType as EntityType)
-			: await getEntries(500, 0)
-	).map((e) => ({
-		uniqueName: e.uniqueName,
-		title: e.title,
-	}));
+	const siblingEntries = primaryEntityType
+		? await getEntriesByEntityType(primaryEntityType as EntityType)
+		: await getEntries(500, 0);
 
 	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
 	const personFamily = personEntity
@@ -203,9 +207,7 @@ export async function EntryView({ slug }: { slug: string }) {
 				<article
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
-						__html: DOMPurify.sanitize(
-							normalizeFootnoteHtml(demoteHeadings(entry.content)),
-						),
+						__html: prepareEntryContentHtml(entry.content), // nosemgrep -- DOMPurify-sanitized via prepareEntryContentHtml
 					}}
 					className={styles.entryContent}
 				/>
