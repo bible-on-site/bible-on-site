@@ -697,6 +697,10 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 	// Helek captions under their headings (#2731): one strip aligned to the
 	// helek spans, ordered to match the shelf (תורה rightmost in RTL flow).
 	const shelfHelekSpans = [...allBooksData.helekSpans].reverse();
+	// Strip lookup shared by the render gate and the per-group captions; an
+	// undedicated helek — or no shelf dedications at all — yields no lines.
+	const helekDedicationLines = (helek: HelekSpan["helek"]) =>
+		shelfDedications?.byHelek[helek] ?? [];
 
 	return (
 		<div className={styles.root}>
@@ -712,7 +716,7 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 				seferDedications={shelfDedications?.bySefer}
 			/>
 			{shelfHelekSpans.some(
-				(span) => (shelfDedications?.byHelek[span.helek] ?? []).length > 0,
+				(span) => helekDedicationLines(span.helek).length > 0,
 			) && (
 				<div
 					className={styles.helekDedicationStrip}
@@ -724,7 +728,7 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 							className={styles.helekDedicationGroup}
 							style={{ flexBasis: `${sqSize * (span.endX - span.startX)}px` }}
 						>
-							{(shelfDedications?.byHelek[span.helek] ?? []).map((line, index) => (
+							{helekDedicationLines(span.helek).map((line, index) => (
 								// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
 								<p key={index}>{line}</p>
 							))}
