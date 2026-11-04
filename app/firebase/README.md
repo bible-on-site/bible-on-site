@@ -20,7 +20,12 @@ merged preferences document at `users/{uid}`.
 
 Merge is per-key last-writer-wins on `updatedAt` (ties keep the remote
 entry). Keys unknown to the running app pass through untouched.
-`inAppBackButton` is deliberately device-local and never synced.
+`inAppBackButton` is deliberately device-local and never synced. Local
+write stamps are floored at `max remote updatedAt + 1`, so an entry dated
+in the future by a skewed device clock cannot defeat edits made after it
+was observed. Saves use `SetOptions.merge()` — only the merged fields are
+written, so a concurrent device's keys are never overwritten by a stale
+snapshot.
 
 ## Console setup (deferred — Codex per issue triage)
 

@@ -79,7 +79,7 @@ public sealed class PreferencesSyncService : IDisposable
         /// <summary>Synced keys whose remote entry won — applied to local preferences.</summary>
         public required List<string> RemoteWinnerKeys { get; init; }
         /// <summary>True when the merged document differs from the fetched one and must be pushed.</summary>
-        public required bool ShouldWrite { get; init; }
+        public required bool ShouldWrite { get; set; }
     }
 
     private readonly SyncStampingPreferencesStorage _stampedStorage;
@@ -255,6 +255,13 @@ public sealed class PreferencesSyncService : IDisposable
         }
         MigrateLocalStampsOnce();
         var remote = await _cloudStore.FetchAsync(userId, cancellationToken);
+        if (remote != null && remote.Entries.Count > 0)
+        {
+            // Future-dated remote entries (a device with a fast clock) must not
+            // win against edits made after they were observed — raise the
+            // local stamp floor above every timestamp this fetch saw.
+            _stampedStorage.RaiseStampFloor(remote.Entries.Values.Max(entry => entry.UpdatedAtMs) + 1);
+        }
         var merge = ComputeMerge(remote);
         ApplyRemoteWinners(merge);
         if (merge.ShouldWrite)
@@ -370,6 +377,7 @@ public sealed class PreferencesSyncService : IDisposable
 
     private void ApplyRemoteWinners(MergeResult merge)
     {
+        var rejectedKeys = new List<string>();
         try
         {
             _applyDepth++;
@@ -384,6 +392,7 @@ public sealed class PreferencesSyncService : IDisposable
                 catch (Exception ex) //NOSONAR — one bad remote value must not block the rest of the merge.
                 {
 #pragma warning restore S2221
+                    rejectedKeys.Add(key);
                     Console.Error.WriteLine($"[PreferencesSync] remote value for '{key}' ignored ({ex.Message})");
                 }
             }
@@ -395,10 +404,12 @@ public sealed class PreferencesSyncService : IDisposable
 
         // The merge decided each key's stamp — record winners verbatim so the
         // next round compares against the remote truth, not the apply moment.
+        // Rejected keys are skipped: claiming their stamp would make the
+        // unapplied remote entry look converged and re-fail on every sync.
         var stamps = _stampedStorage.GetStampsSnapshot();
         foreach (var (key, entry) in merge.Document.Entries)
         {
-            if (!_synced.ContainsKey(key))
+            if (!_synced.ContainsKey(key) || rejectedKeys.Contains(key))
             {
                 continue;
             }
@@ -408,6 +419,24 @@ public sealed class PreferencesSyncService : IDisposable
             {
                 _stampedStorage.OverrideStamp(key, entry.UpdatedAtMs, entry.Tombstone);
             }
+        }
+
+        // Heal rejected entries: overwrite the remote value with the current
+        // local one at the remote's own timestamp, so the saved document
+        // holds parseable data instead of re-failing on every device.
+        foreach (var key in rejectedKeys)
+        {
+            if (!merge.Document.Entries.TryGetValue(key, out var rejected) || rejected.Tombstone)
+            {
+                continue;
+            }
+            merge.Document.Entries[key] = new CloudPreferenceEntry
+            {
+                Value = PreferencesCloudCodec.Canonicalize(_synced[key].Get()),
+                UpdatedAtMs = rejected.UpdatedAtMs,
+                DeviceId = DeviceId,
+            };
+            merge.ShouldWrite = true;
         }
     }
 

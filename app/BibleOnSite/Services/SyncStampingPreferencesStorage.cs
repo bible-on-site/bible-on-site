@@ -29,10 +29,16 @@ public sealed class SyncStampingPreferencesStorage : IPreferencesStorage
     /// through the inner storage directly, so it never stamps itself.</summary>
     internal const string StampsStorageKey = "cloudSyncStamps.v1";
 
+    /// <summary>Storage key holding the stamp floor — the largest remote
+    /// timestamp observed, plus one. A device with a fast clock cannot block
+    /// honest local writes: they stamp at least floor, not raw wall time.</summary>
+    internal const string FloorStorageKey = "cloudSyncFloor.v1";
+
     private readonly IPreferencesStorage _inner;
     private readonly Func<long> _nowUnixMs;
     private readonly object _gate = new();
     private readonly Dictionary<string, PreferenceStamp> _stamps;
+    private long _floorMs;
 
     public SyncStampingPreferencesStorage(IPreferencesStorage inner) : this(inner, null) { }
 
@@ -41,6 +47,7 @@ public sealed class SyncStampingPreferencesStorage : IPreferencesStorage
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _nowUnixMs = nowUnixMs ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         _stamps = LoadStamps(inner);
+        _floorMs = inner.Get(FloorStorageKey, 0L);
     }
 
     public T Get<T>(string key, T defaultValue) => _inner.Get(key, defaultValue);
@@ -73,23 +80,55 @@ public sealed class SyncStampingPreferencesStorage : IPreferencesStorage
     /// <summary>
     /// Forces the stamp for <paramref name="key"/> — used by cloud sync after
     /// applying a remote winner so the recorded stamp matches the winning
-    /// side's update time instead of the local apply moment.
+    /// side's update time instead of the local apply moment. Not floored:
+    /// the winner's exact stamp must be recorded verbatim.
     /// </summary>
     public void OverrideStamp(string key, long updatedAtMs, bool tombstone)
     {
-        WriteStamp(key, updatedAtMs, tombstone);
+        lock (_gate)
+        {
+            _stamps[key] = new PreferenceStamp { UpdatedAtMs = updatedAtMs, Tombstone = tombstone };
+            PersistStamps();
+        }
     }
 
     /// <summary>Stamps a pre-existing local key during first-sync migration
     /// (user-customized values keep winning against the remote document).</summary>
     public void StampAsNow(string key)
     {
-        WriteStamp(key, _nowUnixMs(), tombstone: false);
+        WriteStamp(key, NextLocalStamp(), tombstone: false);
+    }
+
+    /// <summary>
+    /// Raises the floor for future local stamps to <paramref name="updatedAtMs"/>
+    /// (persisted). Cloud sync feeds it the largest remote timestamp + 1 so a
+    /// remote entry dated in the future by a skewed device clock cannot win
+    /// against edits made after it was observed.
+    /// </summary>
+    public void RaiseStampFloor(long updatedAtMs)
+    {
+        lock (_gate)
+        {
+            if (updatedAtMs <= _floorMs)
+            {
+                return;
+            }
+            _floorMs = updatedAtMs;
+            _inner.Set(FloorStorageKey, _floorMs);
+        }
+    }
+
+    private long NextLocalStamp()
+    {
+        lock (_gate)
+        {
+            return Math.Max(_nowUnixMs(), _floorMs);
+        }
     }
 
     private void RecordStamp(string key, bool tombstone)
     {
-        WriteStamp(key, _nowUnixMs(), tombstone);
+        WriteStamp(key, NextLocalStamp(), tombstone);
     }
 
     private void WriteStamp(string key, long updatedAtMs, bool tombstone)
