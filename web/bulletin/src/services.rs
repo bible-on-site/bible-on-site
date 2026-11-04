@@ -41,12 +41,16 @@ pub type ArticleRows = std::collections::HashMap<i16, Vec<(String, String, Strin
 /// Fetch every article (with its author) for all `perakim_ids` in two queries:
 /// one for the articles, one for all referenced authors. `article_ids`/`author_ids`
 /// filters match `get_articles_by_perek` + caller-side filtering in handlers.rs.
+/// Returns an empty map when no database is configured (`db` is `None`).
 pub async fn get_articles_and_authors(
-    db: &Database,
+    db: Option<&Database>,
     perakim_ids: &[i32],
     article_ids: &[i32],
     author_ids: &[i32],
 ) -> anyhow::Result<ArticleRows> {
+    let Some(db) = db else {
+        return Ok(Default::default());
+    };
     let perek_ids: Vec<i16> = perakim_ids.iter().map(|&id| id as i16).collect();
     let author_ids_i16: Vec<i16> = author_ids.iter().map(|&id| id as i16).collect();
 
@@ -195,7 +199,7 @@ mod tests {
                 .into_connection(),
         );
 
-        let rows = get_articles_and_authors(&db, &[5, 7], &[], &[])
+        let rows = get_articles_and_authors(Some(&db), &[5, 7], &[], &[])
             .await
             .unwrap();
 
@@ -217,10 +221,37 @@ mod tests {
                 .into_connection(),
         );
 
-        let err = get_articles_and_authors(&db, &[5], &[], &[])
+        let err = get_articles_and_authors(Some(&db), &[5], &[], &[])
             .await
             .unwrap_err();
         assert!(err.to_string().contains("Author 10 not found"));
+    }
+
+    #[tokio::test]
+    async fn get_articles_and_authors_returns_empty_without_database() {
+        let rows = get_articles_and_authors(None, &[5, 7], &[], &[])
+            .await
+            .unwrap();
+
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_articles_and_authors_applies_article_and_author_filters() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<Article, Vec<Article>, _>([vec![article_model(1, 5, 10)]])
+                .append_query_results::<Author, Vec<Author>, _>([vec![author_model(10)]])
+                .into_connection(),
+        );
+
+        let rows = get_articles_and_authors(Some(&db), &[5], &[1, 2], &[10])
+            .await
+            .unwrap();
+
+        assert_eq!(rows.get(&5).unwrap().len(), 1);
+        assert_eq!(rows.get(&5).unwrap()[0].1, "Author 10");
+        assert_eq!(db.get_connection().clone().into_transaction_log().len(), 2);
     }
 
     #[tokio::test]

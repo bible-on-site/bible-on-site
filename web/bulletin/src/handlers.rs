@@ -36,13 +36,14 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
     };
 
     // Fetch all articles for every perek up front in one batch (not one query per perek).
-    let articles_by_perek = if let Some(ref db) = db {
-        services::get_articles_and_authors(db, &req.perakim_ids, &req.article_ids, &req.author_ids)
-            .await
-            .map_err(|e| format!("Failed to fetch articles: {}", e))?
-    } else {
-        Default::default()
-    };
+    let articles_by_perek = services::get_articles_and_authors(
+        db.as_ref(),
+        &req.perakim_ids,
+        &req.article_ids,
+        &req.author_ids,
+    )
+    .await
+    .map_err(|e| format!("Failed to fetch articles: {}", e))?;
 
     // Resolve perek data from embedded Tanach text and attach articles per-perek
     let mut perakim: Vec<pdf::PdfPerekInput> = Vec::with_capacity(req.perakim_ids.len());
