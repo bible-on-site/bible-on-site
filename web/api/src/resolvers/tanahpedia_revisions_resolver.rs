@@ -13,12 +13,18 @@ impl TanahpediaRevisionsQuery {
     /// List Tanahpedia entry revisions (newest first) for human triage,
     /// optionally filtered by `status` (PENDING / APPLIED / REJECTED) and/or the
     /// targeted `entryId`.
+    ///
+    /// Requires an `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>` header.
     async fn tanahpedia_entry_revisions(
         &self,
         ctx: &Context<'_>,
         status: Option<String>,
         entry_id: Option<String>,
     ) -> Result<Vec<EntryRevision>> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+
         Ok(
             tanahpedia_revisions_service::find_revisions(ctx.data::<Database>()?, status, entry_id)
                 .await
