@@ -340,7 +340,7 @@ public partial class PerekPage
             return;
         }
 
-        var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
+        var words = track.GetWords(pasuk.PasukNum);
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
             // A "ready" track missing this pasuk's timings is corrupt pack
@@ -429,7 +429,7 @@ public partial class PerekPage
         _viewModel.Perek is { } perek &&
         RecitationService.Instance.GetTrack(perek.PerekId) is { AlignmentStatus: "ready" } track &&
         track.Matches(perek.Pasukim) &&
-        track.Words.Any(w => w.Pasuk == pasuk.PasukNum && w.StartMs != null && w.EndMs != null);
+        track.GetWords(pasuk.PasukNum).Any(w => w.StartMs != null && w.EndMs != null);
 
     private async void OnFocusedPlayClicked(object? sender, EventArgs e)
     {
@@ -476,7 +476,7 @@ public partial class PerekPage
                     _ => DivineNameMasking.MaskText(segment.Value)
                 }
             };
-            var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);
+            var word = track!.GetWord(pasuk.PasukNum, i + 1);
             if (word != null)
             {
                 _focusedWordSpans[word.Segment] = span;
@@ -540,7 +540,7 @@ public partial class PerekPage
             return;
         }
 
-        var ranges = numbers.Select(n => track.Words.Where(w => w.Pasuk == n).ToList()).ToList();
+        var ranges = numbers.Select(n => track.GetWords(n)).ToList();
         if (ranges.Any(r => r.Count == 0))
         {
             return;
@@ -594,8 +594,7 @@ public partial class PerekPage
             var track = RecitationService.Instance.GetTrack(perek.PerekId);
             if (ranges == null && start == null && preferences.RecitationVersePauseMs >= 0 && track?.AlignmentStatus == "ready")
             {
-                ranges = track.Words.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
-                    .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList();
+                ranges = track.GetPasukRanges();
             }
             // MediaElement's position is in source time; scale generated silence so
             // the user's pause retains its wall-clock length at every speed.
