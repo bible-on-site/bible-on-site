@@ -5,8 +5,8 @@ first turn and immediate consecutive turns independently. It covers במדבר a
 מלכים, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
-The reader consumes the normally published alpha.111 packages and reuses stable
-paper-pane rendering while the crease moves. Unchanged bookmark-label children
+The candidate reader consumes the normally published alpha.111 packages and
+reuses stable paper-pane rendering while the crease moves. Unchanged bookmark-label children
 are reused as well. A matched diagnostic reduces painting work by 11-15% at 6x
 CPU slowdown; that experiment is not release qualification. All eight resting
 images and eight character-position comparisons are exact. Text styles, colors
@@ -65,16 +65,25 @@ The original stress failures remain evidence: the earlier cache build failed
 4x Windows reader cases, with visibility and focus intact. A matched comparison
 also fails the previous build that had passed earlier on this PC. The narrower
 cache is worse in the matched desktop comparison, so it is rejected. These
-results are not relabelled as stress passes. The fresh Linux software-work suite
-passes all 37 checks (105.6ms worst response and 12.4ms blocking), while its
-original cadence reducer still rejects one 50.1ms case.
+results are not relabelled as stress passes. Software cadence misses remain
+diagnostics, including a 50.1ms miss in one of the final fixed repeats.
 
 The complete production build retains 20,504 routes / 20,497 prerenders, and
 actual HTTP assets and all 153 package distribution files match the producer.
 All 57 reader behavior checks pass with one existing conditional skip, including
 all held-page/color guards. All 109 metric unit tests and TypeScript pass.
-Current-source desktop qualification, hosted CI/review, deployment and public
-verification are still required before delivery.
+At guard commit `ec0a8e247`, all 15 desktop checks pass: twelve reader cases and
+three probe controls. Its worst response p95 is 33ms, with zero recorded blocking.
+Three predeclared full software-work runs at that same commit each pass all
+37 checks; across them the worst response p95 is 109.9ms and blocking is 7.2ms.
+No samples are selected to make those results pass.
+
+The [registry validation record](sefer-turn-performance.registry-validation.json)
+retains every case's metrics and links the package, compiled assets, visual
+proof and three stability runs by hash. The runtime was compiled at `f2b8120a3`;
+the production source tree is identical at the validated guard commit. Only
+tests, documentation and evidence changed afterward. Hosted CI/review, normal
+deployment and live verification remain pending before delivery.
 
 | Before: oblique-only cache | After: stable pane cache |
 | --- | --- |
