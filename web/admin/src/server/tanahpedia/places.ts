@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { execute, query, queryOne } from "../db";
+import { execute, query, queryOne, transaction, txExecute } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
 import { pediaChangesForEntities } from "./paths";
 
@@ -75,14 +75,18 @@ export const createPlace = createServerFn({ method: "POST" })
 		if (!name) throw new Error("שם מקום ריק");
 		const entityId = randomUUID();
 		const placeId = randomUUID();
-		await execute(
-			`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PLACE', ?)`,
-			[entityId, name],
-		);
-		await execute(
-			`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
-			[placeId, entityId],
-		);
+		await transaction(async (conn) => {
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PLACE', ?)`,
+				[entityId, name],
+			);
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
+				[placeId, entityId],
+			);
+		});
 		await revalidateWebsite(
 			await pediaChangesForEntities([entityId]),
 		);

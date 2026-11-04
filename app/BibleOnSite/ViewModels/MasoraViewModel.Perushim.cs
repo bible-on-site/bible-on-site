@@ -61,14 +61,26 @@ public partial class MasoraViewModel //NOSONAR
         }
 
         var slices = MasoraUnitText.PerekSlicesForUnit(unit);
+
+        // Load each distinct perek once, overlapped — slices can repeat a
+        // perek across Torah/Haftarah ranges, and serial awaits made the
+        // navigation cost the sum of every chapter load.
+        var chapterTasks = slices
+            .Select(slice => slice.PerekId)
+            .Distinct()
+            .ToDictionary(perekId => perekId, _notesService.LoadChapterAsync);
+        await Task.WhenAll(chapterTasks.Values);
+        var chapters = new Dictionary<int, PerushNoteChapter>();
+        foreach (var (perekId, task) in chapterTasks)
+        {
+            if (task.Result is { } chapter) { chapters[perekId] = chapter; }
+        }
+
         var allPerushIds = new List<int>();
         var seenIds = new HashSet<int>();
-        var chapters = new Dictionary<int, PerushNoteChapter>();
         foreach (var slice in slices)
         {
-            var chapter = await _notesService.LoadChapterAsync(slice.PerekId);
-            if (chapter == null) { continue; }
-            chapters[slice.PerekId] = chapter;
+            if (!chapters.TryGetValue(slice.PerekId, out var chapter)) { continue; }
             foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk).Where(seenIds.Add))
             {
                 allPerushIds.Add(id);
