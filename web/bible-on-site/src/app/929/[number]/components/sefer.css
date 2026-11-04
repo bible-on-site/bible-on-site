@@ -42,6 +42,13 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	will-change: transform, clip-path;
 }
 
+/* Reuse the already angled back content while the paper's crease moves.
+   The engine supplies the geometry marker without inspecting animated styles.
+   Straight faces retain their original text rasterization and glyph edges. */
+.he-book .page--paper.even.page--angled-back > .flipbook-page-scrollport {
+	will-change: opacity;
+}
+
 /* Skip covered pane painting while retaining its layout and existing masks.
    Keep page boxes available for back-face preparation; the library clears
    the pane mask before exposing its content. */
