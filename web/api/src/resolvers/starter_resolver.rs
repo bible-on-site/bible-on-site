@@ -20,7 +20,7 @@ impl StarterQuery {
             .await
             .map_err(|e| e.extend())?;
 
-        let all_articles = articles_service::find_all(db)
+        let all_articles = articles_service::find_all_summaries(db)
             .await
             .map_err(|e| e.extend())?;
 
