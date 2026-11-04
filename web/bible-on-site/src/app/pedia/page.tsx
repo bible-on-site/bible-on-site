@@ -9,11 +9,11 @@ import {
 } from "@/lib/tanahpedia/category-hierarchy";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import {
-	CATEGORY_LABELS,
-	getCategoryCounts,
-	getRecentEntries,
-	getTodayInTanahEntities,
-} from "@/lib/tanahpedia/service";
+	getCachedCategoryCounts,
+	getCachedRecentEntries,
+	getCachedTodayInTanahEntities,
+} from "@/lib/tanahpedia/landing";
+import { CATEGORY_LABELS } from "@/lib/tanahpedia/service";
 import type { CategoryKey } from "@/lib/tanahpedia/types";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import styles from "./page.module.css";
@@ -24,7 +24,8 @@ export const metadata: Metadata = pageMetadata({
 	canonical: "/pedia",
 });
 
-// Today's anniversaries and recent entries must be loaded on each request.
+// The Hebrew date is computed per request; the underlying reads are
+// day-keyed/tag-expired caches (see lib/tanahpedia/landing.ts).
 export const dynamic = "force-dynamic";
 
 export default async function TanahpediaLandingPage() {
@@ -34,14 +35,14 @@ export default async function TanahpediaLandingPage() {
 	const hebrewDateStr = today.toTraditionalHebrewString();
 
 	let counts: Record<CategoryKey, number>;
-	let recentEntries: Awaited<ReturnType<typeof getRecentEntries>>;
-	let todayEntities: Awaited<ReturnType<typeof getTodayInTanahEntities>>;
+	let recentEntries: Awaited<ReturnType<typeof getCachedRecentEntries>>;
+	let todayEntities: Awaited<ReturnType<typeof getCachedTodayInTanahEntities>>;
 	let loadError: string | null = null;
 	try {
 		[counts, recentEntries, todayEntities] = await Promise.all([
-			getCategoryCounts(),
-			getRecentEntries(8),
-			getTodayInTanahEntities(hebrewMonth, hebrewDay),
+			getCachedCategoryCounts(),
+			getCachedRecentEntries(8),
+			getCachedTodayInTanahEntities(hebrewMonth, hebrewDay),
 		]);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);

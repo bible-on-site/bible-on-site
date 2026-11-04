@@ -7,8 +7,9 @@
 //! - a durable queue table — write paths enqueue the changed article id after a
 //!   successful write, and a worker drains it (idempotent upserts; deleted
 //!   articles are purged from the index);
-//! - a reconcile sweep — periodically diffs server-side content hashes so any
-//!   missed enqueue, failed write, or external data change is detected and
+//! - a reconcile sweep — periodically diffs the persisted `content_hash`
+//!   generated column so any missed enqueue, failed write, or external data
+//!   change is detected and
 //!   re-indexed, and stale model epochs are folded back in;
 //! - full retrains — when drift crosses a threshold the whole basis is rebuilt
 //!   under a `GET_LOCK` advisory lock so concurrent API instances never train
@@ -51,7 +52,7 @@ use text::{distance, max_edits, strip_html, tokenize};
 const DRAIN_BATCH: u32 = 256;
 /// How often the worker drains the queue.
 const TICK_SECS: u64 = 15;
-/// How often the full reconcile sweep runs (cheap: hashes only).
+/// How often the full reconcile sweep runs (cheap: reads stored hashes only).
 const SWEEP_EVERY_TICKS: u32 = 40; // 40 * 15s = 10 minutes
 /// Retrain the whole model when this many articles drifted.
 const RETRAIN_MIN_DIRTY: usize = 32;
@@ -512,9 +513,9 @@ async fn drain_queue(
     Ok(drifted)
 }
 
-/// Diffs `tanah_article` against `article_search_doc` via server-side content
-/// hashes and enqueues anything missing, changed, or carrying a stale model
-/// epoch; deletes index rows whose articles vanished.
+/// Diffs `tanah_article` against `article_search_doc` on the persisted
+/// `content_hash` generated column and enqueues anything missing, changed, or
+/// carrying a stale model epoch; deletes index rows whose articles vanished.
 async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
     let indexed: HashMap<i32, [u8; 16]> = store::indexed_hashes(conn).await?.into_iter().collect();
     let mut dirty = 0usize;
@@ -1839,9 +1840,9 @@ mod tests {
         let conn = SqlxMySqlConnector::from_sqlx_mysql_pool(pool.clone());
         pool.execute("DROP TABLE IF EXISTS tanah_article, article_search_doc, article_search_state, article_search_queue")
             .await.expect("reset owned disposable database");
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL)")
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)")
             .await.expect("tiny public-shaped source table");
-        pool.execute("INSERT INTO tanah_article VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1)")
+        pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1)")
             .await.expect("tiny test-only corpus");
         store::ensure_schema(&conn)
             .await
@@ -2239,9 +2240,9 @@ mod tests {
 
         // Exercise the complete production retrain path, including the same
         // typed integer/blob parameters used by SeaORM's normal binder.
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL)")
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)")
             .await.expect("isolated article source");
-        pool.execute("INSERT INTO tanah_article VALUES (1, 'alpha beta', 'alpha', '<p>alpha gamma</p>', 1, 1), (2, 'beta gamma', NULL, 'gamma delta', 1, 1)")
+        pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (1, 'alpha beta', 'alpha', '<p>alpha gamma</p>', 1, 1), (2, 'beta gamma', NULL, 'gamma delta', 1, 1)")
             .await.expect("isolated source rows");
         store::ensure_schema(&conn)
             .await
@@ -2911,8 +2912,8 @@ mod tests {
                 .await
                 .unwrap();
         }
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL)").await.unwrap();
-        pool.execute("INSERT INTO tanah_article VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1),(3,'delta epsilon',NULL,'delta alpha',1,1)").await.unwrap();
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY, name TEXT NOT NULL, abstract TEXT NULL, content TEXT NULL, perek_id INT NOT NULL, author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)").await.unwrap();
+        pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (1,'alpha beta','alpha','alpha gamma',1,1),(2,'beta gamma',NULL,'gamma delta',1,1),(3,'delta epsilon',NULL,'delta alpha',1,1)").await.unwrap();
         store::ensure_schema(&conn).await.unwrap();
         let mut observed = Vec::new();
         for action in [
@@ -3029,11 +3030,11 @@ mod tests {
                 .await
                 .unwrap();
         }
-        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY,name TEXT NOT NULL,abstract TEXT NULL,content TEXT NULL,perek_id INT NOT NULL,author_id INT NOT NULL)").await.unwrap();
+        pool.execute("CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY,name TEXT NOT NULL,abstract TEXT NULL,content TEXT NULL,perek_id INT NOT NULL,author_id INT NOT NULL, content_hash BINARY(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))) STORED)").await.unwrap();
         for id in 1..=130 {
-            sqlx::query("INSERT INTO tanah_article VALUES (?,CONCAT('article ',?),NULL,'server source hash',?,1)").bind(id).bind(id).bind(if id==130 {930} else {1}).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (?,CONCAT('article ',?),NULL,'server source hash',?,1)").bind(id).bind(id).bind(if id==130 {930} else {1}).execute(&pool).await.unwrap();
         }
-        pool.execute("INSERT INTO tanah_article VALUES (133,'oversized binary terms',NULL,'server source hash',1,1)").await.unwrap();
+        pool.execute("INSERT INTO tanah_article (id,name,abstract,content,perek_id,author_id) VALUES (133,'oversized binary terms',NULL,'server source hash',1,1)").await.unwrap();
         store::ensure_schema(&conn).await.unwrap();
         pool.execute("CREATE TABLE publication_order (seq INT AUTO_INCREMENT PRIMARY KEY,article_id INT NOT NULL)").await.unwrap();
         pool.execute("CREATE TRIGGER publication_record AFTER INSERT ON article_search_doc FOR EACH ROW INSERT INTO publication_order(article_id) VALUES(NEW.article_id)").await.unwrap();
