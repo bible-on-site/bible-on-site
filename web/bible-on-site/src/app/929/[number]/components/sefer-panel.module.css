@@ -16,6 +16,18 @@
 	min-height: 0;
 }
 
+/* The leaf's free outer edge stays a page-turn surface (#2994): the same
+   grab margin .pageContentPage and .pageBlank keep opposite the spine,
+   while the panel hugs the leaf's other borders. The inner scrollers
+   carry data-flipbook-no-flip, so without this strip a swipe can only
+   start on the header row. */
+:global(.page[data-scrollbar-side="left"]) .panelRoot {
+	padding-right: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .panelRoot {
+	padding-left: 15px;
+}
+
 /* Header: tab - date - tab; the date stays centered and visible. */
 .panelHeader {
 	display: grid;
