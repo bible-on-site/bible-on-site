@@ -2905,4 +2905,118 @@ mod tests {
         assert_eq!(detail.tanah_sources.len(), 1);
         assert_eq!(detail.tanah_sources[0].citation, "בראשית ל' ד'");
     }
+
+    #[tokio::test]
+    async fn find_persons_by_name_returns_empty_when_no_entities_match() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let results = find_persons_by_name(&db, "יעקב".to_string())
+            .await
+            .expect("should query");
+
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_returns_empty_for_no_links() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert!(unions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_entity_tanah_sources_returns_empty_for_no_rows() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let sources = get_entity_tanah_sources(&db, "entity-bilhah".to_string())
+            .await
+            .expect("should query");
+
+        assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_parent_child_returns_empty_for_no_links() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_parent_child::Model, Vec<person_parent_child::Model>, _>(
+                [vec![]],
+            )
+            .append_query_results::<
+                lookup_parent_child_type::Model,
+                Vec<lookup_parent_child_type::Model>,
+                _,
+            >([vec![]])
+            .append_query_results::<lookup_parent_role::Model, Vec<lookup_parent_role::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let links = get_person_parent_child(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert!(links.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_details_returns_empty_names_and_sources() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "bilhah",
+                "entity-bilhah",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-bilhah",
+                "בלהה",
+            )]])
+            .append_query_results::<person_name::Model, Vec<person_name::Model>, _>([vec![]])
+            .append_query_results::<lookup_name_type::Model, Vec<lookup_name_type::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+            .append_query_results::<person_birth_date::Model, Vec<person_birth_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_date::Model, Vec<person_death_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_cause::Model, Vec<person_death_cause::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_birth_place::Model, Vec<person_birth_place::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let detail = get_person_details(&db, "bilhah".to_string())
+            .await
+            .expect("should query");
+
+        assert!(detail.names.is_empty());
+        assert!(detail.sexes.is_empty());
+        assert!(detail.tanah_sources.is_empty());
+    }
 }
