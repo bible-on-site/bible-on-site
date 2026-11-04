@@ -35,6 +35,15 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         None
     };
 
+    generate_pdf_with_db(req, db).await
+}
+
+/// PDF generation with an already-resolved DB handle — kept separate so tests can
+/// inject a mock connection.
+async fn generate_pdf_with_db(
+    req: GeneratePdfRequest,
+    db: Option<Database>,
+) -> Result<(Vec<u8>, String), String> {
     // Batch-fetch articles for all requested perakim (2 queries total) to avoid
     // a per-perek article query plus a per-article author query.
     let articles_by_perek = if let Some(ref db) = db {
@@ -442,6 +451,51 @@ mod tests {
         let by_perek = fetch_articles_batched(&db, &req).await.unwrap();
         assert_eq!(by_perek[&5].len(), 1);
         assert_eq!(by_perek[&5][0].0, "Article 1");
+    }
+
+    #[tokio::test]
+    async fn generate_pdf_with_db_attaches_mocked_articles() {
+        use sea_orm::{DatabaseBackend, MockDatabase};
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![article_model(1, 1, 10)]],
+                )
+                .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
+                    vec![author_model(10)],
+                ])
+                .into_connection(),
+        );
+
+        let req: GeneratePdfRequest =
+            serde_json::from_str(r#"{"perakimIds":[1],"includeArticles":true}"#).unwrap();
+        let (buf, filename) = generate_pdf_with_db(req, Some(db)).await.unwrap();
+
+        assert!(buf.starts_with(b"%PDF"));
+        assert!(filename.ends_with(".pdf"));
+    }
+
+    #[tokio::test]
+    async fn generate_pdf_with_db_reports_article_fetch_failures() {
+        use sea_orm::{DatabaseBackend, MockDatabase};
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![article_model(1, 1, 99)]],
+                )
+                .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+
+        let req: GeneratePdfRequest =
+            serde_json::from_str(r#"{"perakimIds":[1],"includeArticles":true}"#).unwrap();
+        let err = generate_pdf_with_db(req, Some(db)).await.unwrap_err();
+
+        assert!(err.starts_with("Failed to fetch articles:"), "{err}");
     }
 
     #[tokio::test]
