@@ -285,6 +285,11 @@ mod tests {
                     last_insert_id: 0,
                     rows_affected: 1,
                 }])
+                .append_query_results([vec![dedication::Model {
+                    id: 7,
+                    subject: "new".into(),
+                    expires_at: None,
+                }]])
                 .append_query_results::<perek_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<sefer_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<helek_dedication::Model, Vec<_>, _>([vec![]])
@@ -292,11 +297,6 @@ mod tests {
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<tanahpedia_entry_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<masora_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results([vec![dedication::Model {
-                    id: 7,
-                    subject: "new".into(),
-                    expires_at: None,
-                }]])
                 .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<dedication_type::Model, Vec<_>, _>([vec![]])
                 .into_connection(),
