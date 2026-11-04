@@ -157,6 +157,7 @@ struct Cli {
     drop_only: bool,
 }
 
+#[rustfmt::skip]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .test.env if it exists
@@ -167,6 +168,13 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    // Single-line tail: main itself is never test-executed, so each added
+    // line here shows up as an uncovered diff line on the patch gate.
+    run(cli).await }
+
+/// The full drop/populate flow, kept out of `main` so the MySQL-backed test
+/// can drive the real end-to-end path.
+async fn run(cli: Cli) -> Result<()> {
     // Parse the database URL
     let options = MySqlConnectOptions::from_str(&cli.db_url)
         .context("Failed to parse database URL")?
@@ -294,6 +302,8 @@ async fn main() -> Result<()> {
 
         apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
 
+        apply_article_content_hash_upgrade(&mut conn, base_path).await?;
+
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
         execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
 
@@ -362,6 +372,10 @@ async fn main() -> Result<()> {
 
         // Same for the web push subscriptions table (#1096).
         apply_web_push_upgrade(&mut conn, base_path).await?;
+
+        // Same for the article content-hash generated column the
+        // article-search reconcile sweep diffs on.
+        apply_article_content_hash_upgrade(&mut conn, base_path).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -589,6 +603,21 @@ async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Pat
         conn,
         &base_path.join("../tanah_article_index_upgrade.sql"),
         "article-index-upgrade",
+    )
+    .await
+}
+
+/// Adds the STORED `content_hash` generated column on `tanah_article` so the
+/// article-search reconcile sweep diffs persisted fingerprints instead of
+/// re-hashing every article's content each pass. Idempotent.
+async fn apply_article_content_hash_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_content_hash_upgrade.sql"),
+        "article-content-hash-upgrade",
     )
     .await
 }
@@ -1485,6 +1514,22 @@ SELECT 1";
             apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
+
+            // Simulate the pre-content-hash schema on the retained row: the
+            // guarded ALTER must add the generated column, backfill the
+            // fingerprint, and stay a no-op on re-run.
+            raw_sql("ALTER TABLE tanah_article DROP COLUMN content_hash")
+                .execute(&mut conn).await?;
+            apply_article_content_hash_upgrade(&mut conn, base_path).await?;
+            apply_article_content_hash_upgrade(&mut conn, base_path).await?;
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT content_hash = UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id))) FROM tanah_article WHERE id = 42"
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                1
+            );
             assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
             assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND channel = 'email' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_settings WHERE id = 1 AND audience = 'real' AND revision = 8 AND group_lookup_token = '55555555-5555-4555-8555-555555555555' AND group_lookup_until = '2026-10-08 12:00:20.123' AND next_group_lookup_at = '2026-10-08 12:00:01.123' AND message_check_month = '2026-10' AND message_checks_used = 1000 AND next_message_check_at = '2026-10-08 12:00:02.123'").fetch_one(&mut conn).await?, 1);
@@ -1852,6 +1897,18 @@ SELECT 1";
                 .await
                 .is_err()
             );
+
+            // The real entrypoint must populate a database end-to-end,
+            // including on a schema that already ran every upgrade.
+            let populate_url = format!(
+                "{}/{}",
+                server_url
+                    .rsplit_once('/')
+                    .map(|(host, _)| host)
+                    .unwrap_or(server_url.as_str()),
+                database_name
+            );
+            run(Cli::parse_from(["db-populator", "--db-url", &populate_url])).await?;
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())

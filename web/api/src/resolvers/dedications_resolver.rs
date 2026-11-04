@@ -123,12 +123,12 @@ impl DedicationsMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_graphql::{EmptySubscription, Request, Schema, Value};
-    use entities::{
-        article_dedication, dedication, dedication_dedication_type, dedication_type,
-        helek_dedication, masora_dedication, parasha_dedication, perek_dedication,
-        sefer_dedication, tanahpedia_entry_dedication,
+    use crate::services::dedications_service::{
+        KIND_ARTICLE, KIND_ENTRY, KIND_HELEK_DED, KIND_MASORA, KIND_PARASHA, KIND_PEREK,
+        KIND_SEFER_DED, urow,
     };
+    use async_graphql::{EmptySubscription, Request, Schema, Value};
+    use entities::{dedication, dedication_dedication_type, dedication_type};
     use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult};
 
     fn auth(token: Option<&str>) -> ApiAuth {
@@ -146,46 +146,16 @@ mod tests {
             chrono::NaiveDateTime::parse_from_str("2020-01-02 03:04:05", "%Y-%m-%d %H:%M:%S")
                 .unwrap();
         MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results([vec![perek_dedication::Model {
-                perek_id_low: 1,
-                perek_id_high: 3,
-                dedication_id: 7,
-                expires_at: Some(expiry),
-            }]])
-            .append_query_results([vec![sefer_dedication::Model {
-                sefer_id: 1,
-                dedication_id: 7,
-                expires_at: None,
-                created_at: expiry.and_utc(),
-            }]])
-            .append_query_results([vec![helek_dedication::Model {
-                helek_id: 1,
-                dedication_id: 7,
-                expires_at: None,
-                created_at: expiry.and_utc(),
-            }]])
-            .append_query_results([vec![parasha_dedication::Model {
-                parasha_id: 2,
-                dedication_id: 7,
-                expires_at: None,
-                created_at: expiry.and_utc(),
-            }]])
-            .append_query_results([vec![article_dedication::Model {
-                article_id: 19,
-                dedication_id: 7,
-                expires_at: None,
-            }]])
-            .append_query_results([vec![tanahpedia_entry_dedication::Model {
-                entry_id: "entry-1".into(),
-                dedication_id: 7,
-                expires_at: None,
-                created_at: expiry.and_utc(),
-            }]])
-            .append_query_results([vec![masora_dedication::Model {
-                dedication_id: 7,
-                expires_at: None,
-                created_at: expiry.and_utc(),
-            }]])
+            // one UNION ALL read over the seven link tables
+            .append_query_results([vec![
+                urow(KIND_PEREK, Some(7), Some(1), Some(3), None, Some(expiry)),
+                urow(KIND_SEFER_DED, Some(7), Some(1), None, None, None),
+                urow(KIND_HELEK_DED, Some(7), Some(1), None, None, None),
+                urow(KIND_PARASHA, Some(7), Some(2), None, None, None),
+                urow(KIND_ARTICLE, Some(7), Some(19), None, None, None),
+                urow(KIND_ENTRY, Some(7), None, None, Some("entry-1"), None),
+                urow(KIND_MASORA, Some(7), None, None, None, None),
+            ]])
             .append_query_results([vec![dedication::Model {
                 id: 7,
                 subject: "subject".into(),
@@ -290,13 +260,11 @@ mod tests {
                     subject: "new".into(),
                     expires_at: None,
                 }]])
-                .append_query_results::<perek_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results::<sefer_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results::<helek_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results::<parasha_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results::<tanahpedia_entry_dedication::Model, Vec<_>, _>([vec![]])
-                .append_query_results::<masora_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<
+                    std::collections::BTreeMap<String, sea_orm::Value>,
+                    Vec<_>,
+                    _,
+                >([vec![]])
                 .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<dedication_type::Model, Vec<_>, _>([vec![]])
                 .into_connection(),
