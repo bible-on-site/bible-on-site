@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 	sesConfig: vi.fn(),
 	sendTransactional: vi.fn(),
 	resubscribe: vi.fn(),
+	sesDestroy: vi.fn(),
 }));
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 vi.mock("~/server/db", () => mocks);
@@ -40,6 +41,7 @@ vi.mock("~/server/ses-client.server", () => {
 			}
 			sendTransactional = mocks.sendTransactional;
 			resubscribeContact = mocks.resubscribe;
+			destroy = mocks.sesDestroy;
 		},
 	};
 });
@@ -140,7 +142,7 @@ describe("reconcileSignupOutbox", () => {
 			"reader@example.com",
 			"real",
 		);
-		const syncUpdate = mocks.execute.mock.calls.find(([sql]: [string]) =>
+		const syncUpdate = mocks.execute.mock.calls.find(([sql]) =>
 			sql.includes("ses_status = ?"),
 		);
 		expect(syncUpdate?.[1]).toEqual(["subscribed", 7]);
@@ -155,7 +157,7 @@ describe("reconcileSignupOutbox", () => {
 				: [],
 		);
 		await reconcileSignupOutbox();
-		const retry = mocks.execute.mock.calls.find(([sql]: [string]) =>
+		const retry = mocks.execute.mock.calls.find(([sql]) =>
 			sql.includes("ses_next_attempt_at"),
 		);
 		expect(retry?.[0]).toContain("ses_attempts + 1 >=");
@@ -180,7 +182,7 @@ describe("reconcileSignupOutbox", () => {
 			return { affectedRows: 1 };
 		});
 		await reconcileSignupOutbox();
-		const claim = mocks.execute.mock.calls.find(([sql]: [string]) =>
+		const claim = mocks.execute.mock.calls.find(([sql]) =>
 			sql.includes("send_token = ?"),
 		);
 		expect(claim?.[0]).toContain("challenge_hash = ?");
@@ -193,7 +195,7 @@ describe("reconcileSignupOutbox", () => {
 		// Only the sha256 of the mailed token may persist.
 		expect(claim?.[1][1]).toBe(sha256(token ?? ""));
 		expect(input.html).not.toContain(claim?.[1][1]);
-		const sent = mocks.execute.mock.calls.find(([sql]: [string]) =>
+		const sent = mocks.execute.mock.calls.find(([sql]) =>
 			sql.includes("status = 'sent'"),
 		);
 		expect(sent?.[1]).toEqual(["ses-message-1", 7, claim?.[1][0]]);
@@ -229,7 +231,7 @@ describe("reconcileSignupOutbox", () => {
 		});
 		await reconcileSignupOutbox();
 		const failure = mocks.execute.mock.calls.find(
-			([sql, params]: [string, unknown[]]) =>
+			([sql, params]) =>
 				sql.includes("status = ?") && params[0] === "failed",
 		);
 		expect(failure?.[1][0]).toBe("failed");
@@ -253,10 +255,22 @@ describe("reconcileSignupOutbox", () => {
 		});
 		await reconcileSignupOutbox();
 		const failure = mocks.execute.mock.calls.find(
-			([sql, params]: [string, unknown[]]) =>
+			([sql, params]) =>
 				sql.includes("status = ?") && params[0] === "uncertain",
 		);
 		expect(failure?.[1][1]).toContain("אינה ודאית");
+	});
+
+	it("releases the SES client after a successful sweep", async () => {
+		await reconcileSignupOutbox();
+		expect(mocks.sesConfig).toHaveBeenCalledOnce();
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
+	});
+
+	it("releases the SES client even when the sweep fails", async () => {
+		mocks.query.mockRejectedValue(new Error("db down"));
+		await expect(reconcileSignupOutbox()).rejects.toThrow("db down");
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 });
 
@@ -282,6 +296,11 @@ describe("applySignupSesEvent", () => {
 		expect(failParams[1]).toBe(7);
 		const [, suppressionSql, suppressionParams] = mocks.txExecute.mock.calls[1];
 		expect(suppressionSql).toContain("tanah_daily_bulletin_subscriber");
+		// An event stamped before the subscriber's last recorded event is a
+		// late delivery about an older mail and must not downgrade newer state.
+		expect(suppressionSql).toContain(
+			"last_event_at > VALUES(last_event_at)",
+		);
 		expect(suppressionParams).toEqual([
 			"reader@example.com",
 			"real",
@@ -298,7 +317,7 @@ describe("applySignupSesEvent", () => {
 		expect(mocks.txExecute.mock.calls[1][2][2]).toBe("complained");
 	});
 
-	it.each([
+	it.each<[unknown, string]>([
 		[intent({ send_token: "another-token" }), "a different send owns the row"],
 		[intent({ email: "other@example.com", send_token: "send-token-1" }), "a different recipient"],
 		[null, "no intent row"],

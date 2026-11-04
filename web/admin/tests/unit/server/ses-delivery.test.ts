@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 	prepared: vi.fn(),
 	sendOne: vi.fn(),
 	sesConfig: vi.fn(),
+	sesDestroy: vi.fn(),
 	sqs: vi.fn(),
 	sqsConfig: vi.fn(),
 	destroy: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock("~/server/ses-client.server", () => {
 				mocks.sesConfig(config);
 			}
 			sendOne = mocks.sendOne;
+			destroy = mocks.sesDestroy;
 		},
 	};
 });

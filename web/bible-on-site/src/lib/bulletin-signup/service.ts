@@ -82,20 +82,15 @@ export function parseSignupBody(body: unknown): SignupRequest | null {
  * identically for fresh, existing, throttled or opted-out addresses — the
  * response must not enumerate subscriptions.
  *
- * Superseding live intents keeps only the newest mailed challenge usable;
- * rows are never deleted (audit + persistent throttling).
+ * Superseding live intents keeps only the newest mailed challenge usable,
+ * and happens only when a replacement will actually be mailed — suppressed
+ * requests leave earlier links untouched. Rows are never deleted (audit +
+ * persistent throttling).
  */
 export async function requestSignup(input: SignupRequest): Promise<void> {
 	const emailHash = sha256(input.email);
 	const consentSource = `website-signup:${input.source}`;
 	await transaction(async (connection) => {
-		// A new signup replaces any earlier live intent for the address.
-		await txExecute(
-			connection,
-			`UPDATE tanah_daily_bulletin_signup_intent SET status = 'superseded'
-			 WHERE email_hash = ? AND status IN ('pending','sending','sent','uncertain')`,
-			[emailHash],
-		);
 		const subscriber = await txQueryOne<{ consent_status: string }>(
 			connection,
 			"SELECT consent_status FROM tanah_daily_bulletin_subscriber WHERE email = ? AND audience = ?",
@@ -113,11 +108,22 @@ export async function requestSignup(input: SignupRequest): Promise<void> {
 			 WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 HOUR`,
 		);
 		// Already-confirmed or throttled addresses are acknowledged without a
-		// new challenge; the row keeps an auditable, unsendable record.
+		// new challenge; the row keeps an auditable, unsendable record. Live
+		// intents are only superseded once a replacement is actually queued —
+		// a suppressed request must not invalidate a link already mailed.
 		const suppress =
 			subscriber?.consent_status === "confirmed" ||
 			Number(recent?.n ?? 0) >= MAX_INTENTS_PER_ADDRESS_24H ||
 			Number(global?.n ?? 0) >= MAX_INTENTS_GLOBAL_HOURLY;
+		if (!suppress) {
+			// A new signup replaces any earlier live intent for the address.
+			await txExecute(
+				connection,
+				`UPDATE tanah_daily_bulletin_signup_intent SET status = 'superseded'
+				 WHERE email_hash = ? AND status IN ('pending','sending','sent','uncertain')`,
+				[emailHash],
+			);
+		}
 		await txExecute(
 			connection,
 			`INSERT INTO tanah_daily_bulletin_signup_intent

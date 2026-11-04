@@ -97,6 +97,28 @@ describe("BulletinJoinCarousel", () => {
 		expect(dots[0]).not.toHaveAttribute("aria-current");
 	});
 
+	it("leaves arrow keys alone inside editable fields", () => {
+		render(
+			<div dir="rtl">
+				<BulletinJoinCarousel>
+					<article data-channel="telegram" />
+					<article data-channel="whatsapp">
+						<input />
+					</article>
+					<article data-channel="email" />
+				</BulletinJoinCarousel>
+			</div>,
+		);
+		const track = document.querySelector("ul") as HTMLElement;
+		const second = track.children[1] as HTMLElement;
+		second.scrollIntoView = jest.fn();
+		const notPrevented = fireEvent.keyDown(screen.getByRole("textbox"), {
+			key: "ArrowLeft",
+		});
+		expect(notPrevented).toBe(true);
+		expect(second.scrollIntoView).not.toHaveBeenCalled();
+	});
+
 	it("scrolls on arrow keys in the RTL direction", () => {
 		const track = renderCarousel();
 		const second = track.children[1] as HTMLElement;

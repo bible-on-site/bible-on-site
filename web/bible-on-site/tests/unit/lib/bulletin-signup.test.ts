@@ -155,6 +155,29 @@ describe("bulletin-signup", () => {
 			await requestSignup(signup);
 			expect(insertParams()[3]).toBe("suppressed");
 		});
+
+		// A suppressed request mails nothing, so the previously mailed
+		// challenge must stay consumable.
+		it.each([
+			[{ consent_status: "confirmed" }, { n: 0 }, { n: 0 }],
+			[null, { n: 3 }, { n: 0 }],
+			[null, { n: 0 }, { n: 500 }],
+		] as const)(
+			"keeps earlier mailed links usable when suppressed (subscriber %j, recent %j, global %j)",
+			async (subscriber, recent, global) => {
+				mockTxQueryOne
+					.mockResolvedValueOnce(subscriber)
+					.mockResolvedValueOnce(recent)
+					.mockResolvedValueOnce(global);
+				await requestSignup(signup);
+				expect(
+					mockTxExecute.mock.calls.some(([_, sql]) =>
+						(sql as string).includes("status = 'superseded'"),
+					),
+				).toBe(false);
+				expect(insertParams()[3]).toBe("suppressed");
+			},
+		);
 	});
 
 	describe("confirmSignup", () => {

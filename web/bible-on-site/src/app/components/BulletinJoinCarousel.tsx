@@ -63,6 +63,15 @@ export function BulletinJoinCarousel({ children }: BulletinJoinCarouselProps) {
 	}
 
 	function onKeyDown(event: React.KeyboardEvent) {
+		// Editable descendants (the email signup field) keep their arrow keys
+		// for caret movement; the carousel only handles non-editable targets.
+		const target = event.target;
+		if (
+			target instanceof HTMLElement &&
+			(target.isContentEditable ||
+				target.closest("input, textarea, select") !== null)
+		)
+			return;
 		// RTL: the "next" card sits to the left.
 		if (event.key === "ArrowLeft") {
 			event.preventDefault();

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 	ensureSubscribed: vi.fn(),
 	unsubscribe: vi.fn(),
 	sesConfig: vi.fn(),
+	sesDestroy: vi.fn(),
 	sdkConfig: vi.fn(),
 	sdkSend: vi.fn(),
 	destroy: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("~/server/ses-client.server", () => ({
 		}
 		ensureSubscribedContact = mocks.ensureSubscribed;
 		unsubscribeContact = mocks.unsubscribe;
+		destroy = mocks.sesDestroy;
 	},
 }));
 vi.mock("@aws-sdk/client-sesv2", () => ({
@@ -568,6 +570,7 @@ describe("consent management", () => {
 		expect(params).toEqual([consent.email, "test", consent.source]);
 		expect(sql).toContain("'unsubscribed','bounced','complained'");
 		expect(sql).toContain("last_event_at");
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 
 	it("leaves local consent untouched if provider setup fails", async () => {
@@ -575,6 +578,7 @@ describe("consent management", () => {
 		mocks.ensureSubscribed.mockRejectedValue(new Error("Provider unavailable"));
 		await expect(settings.changeSubscriber(consent)).rejects.toThrow();
 		expect(mocks.execute).not.toHaveBeenCalled();
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 
 	it("persists global unsubscribe before calling SES and preserves bounced/complained guards", async () => {
@@ -588,6 +592,7 @@ describe("consent management", () => {
 			mocks.unsubscribe.mock.invocationCallOrder[0],
 		);
 		expect(mocks.unsubscribe).toHaveBeenCalledWith(consent.email, "test");
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 
 	it("keeps the durable unsubscribe even if the native provider update fails", async () => {

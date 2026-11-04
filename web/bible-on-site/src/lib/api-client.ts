@@ -60,9 +60,8 @@ function getPool(): mysql.Pool {
  */
 export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 	const connection = getPool();
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
-	const [rows] = await connection.execute(sql, (params ?? []) as any);
+	const [rows] = await connection.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	return rows as T[];
 }
 
@@ -75,9 +74,8 @@ export async function execute(
 	params?: unknown[],
 ): Promise<mysql.ResultSetHeader> {
 	const connection = getPool();
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
-	const [result] = await connection.execute(sql, (params ?? []) as any);
+	const [result] = await connection.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	return result as mysql.ResultSetHeader;
 }
 
@@ -105,9 +103,8 @@ export async function txQuery<T>(
 	sql: string,
 	params?: unknown[],
 ): Promise<T[]> {
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
-	const [rows] = await conn.execute(sql, (params ?? []) as any);
+	const [rows] = await conn.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	return rows as T[];
 }
 
@@ -126,9 +123,8 @@ export async function txExecute(
 	sql: string,
 	params?: unknown[],
 ): Promise<mysql.ResultSetHeader> {
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
-	const [result] = await conn.execute(sql, (params ?? []) as any);
+	const [result] = await conn.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	return result as mysql.ResultSetHeader;
 }
 
@@ -153,7 +149,6 @@ export async function queryText<T>(
 	params?: unknown[],
 ): Promise<T[]> {
 	const connection = getPool();
-	// nosemgrep: node-mysql-sqli -- sql is generated literals plus ? placeholders only; params are driver-escaped
-	const [rows] = await connection.query(sql, params ?? []);
+	const [rows] = await connection.query(sql, params ?? []); // nosemgrep: node-mysql-sqli -- sql is generated literals plus ? placeholders only; params are driver-escaped
 	return rows as T[];
 }

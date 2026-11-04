@@ -288,3 +288,79 @@ describe("signup intent constraints", () => {
 		});
 	});
 });
+
+describe("signup SES event ordering", () => {
+	const email = "event-order@example.invalid";
+
+	async function sentIntent(sendToken: string): Promise<number> {
+		const result = await db.execute(
+			`INSERT INTO tanah_daily_bulletin_signup_intent
+			 (email, email_hash, challenge_hash, status, consent_text, consent_version, consent_source, send_token, expires_at)
+			 VALUES (?, ?, ?, 'sent', 'consent fixture', 'v1', 'native-fixture', ?, UTC_TIMESTAMP(3))`,
+			[
+				email,
+				randomBytes(32).toString("hex"),
+				randomBytes(32).toString("hex"),
+				sendToken,
+			],
+		);
+		return Number(result.insertId);
+	}
+
+	function bounce(intentId: number, sendToken: string, timestamp: string) {
+		return {
+			messageId: `ses-${sendToken}`,
+			attemptId: `${intentId}_${sendToken}`,
+			signupIntentId: intentId,
+			email,
+			type: "bounce" as const,
+			timestamp,
+			permanent: true,
+		};
+	}
+
+	function subscriber(email_: string) {
+		return db.queryOne<RowDataPacket>(
+			"SELECT consent_status, last_event_at FROM tanah_daily_bulletin_subscriber WHERE email = ? AND audience = 'real'",
+			[email_],
+		);
+	}
+
+	it("keeps fresh consent when an older mail's bounce arrives late", async () => {
+		const { applySignupSesEvent } = await import(
+			"~/server/signup-delivery.server"
+		);
+		// Fresh consent recorded at 12:00; the bounce is stamped 11:00 — a
+		// late event about an older send, not about the new confirmation.
+		await db.execute(
+			`INSERT INTO tanah_daily_bulletin_subscriber
+			 (email, audience, consent_status, consent_source, consented_at, last_event_at)
+			 VALUES (?, 'real', 'confirmed', 'native-fixture', '2026-10-28 12:00:00', '2026-10-28 12:00:00')`,
+			[email],
+		);
+		const intentId = await sentIntent("stale-token");
+		await applySignupSesEvent(
+			bounce(intentId, "stale-token", "2026-10-28T11:00:00.000Z"),
+		);
+		expect(await subscriber(email)).toMatchObject({
+			consent_status: "confirmed",
+		});
+		// The intent itself still records the provider's truthful outcome.
+		const intent = await db.queryOne<RowDataPacket>(
+			"SELECT status FROM tanah_daily_bulletin_signup_intent WHERE id = ?",
+			[intentId],
+		);
+		expect(intent?.status).toBe("failed");
+	});
+
+	it("applies a newer event on the current consent attempt", async () => {
+		const { applySignupSesEvent } = await import(
+			"~/server/signup-delivery.server"
+		);
+		const intentId = await sentIntent("fresh-token");
+		await applySignupSesEvent(
+			bounce(intentId, "fresh-token", "2026-10-28T13:00:00.000Z"),
+		);
+		expect((await subscriber(email))?.consent_status).toBe("bounced");
+	});
+});

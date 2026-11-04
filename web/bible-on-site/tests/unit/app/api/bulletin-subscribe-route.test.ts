@@ -54,6 +54,25 @@ describe("/api/bulletin/subscribe", () => {
 		expect(mockRequest).not.toHaveBeenCalled();
 	});
 
+	it("rejects an oversized streamed body without a truthful Content-Length", async () => {
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode("x".repeat(5000)));
+				controller.close();
+			},
+		});
+		const response = await POST(
+			new Request("http://localhost/api/bulletin/subscribe", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: stream,
+				duplex: "half",
+			} as RequestInit),
+		);
+		expect(response.status).toBe(400);
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
 	it("returns 503 when the intent store fails", async () => {
 		mockRequest.mockRejectedValue(new Error("db down"));
 		const response = await POST(

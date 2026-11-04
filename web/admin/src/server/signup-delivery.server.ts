@@ -193,23 +193,27 @@ export async function reconcileSignupOutbox(signal?: AbortSignal): Promise<void>
 		const runtime = await loadEmailRuntime();
 		if (!runtime) return;
 		const client = new SesClient(runtime);
-		const syncRows = await query<IntentRow>(
-			`SELECT id, email, send_token, status, ses_status, ses_attempts, subscriber_id
-			 FROM tanah_daily_bulletin_signup_intent
-			 WHERE status = 'confirmed' AND ses_status = 'pending' AND ses_attempts < ${MAX_SES_SYNC_ATTEMPTS}
-			 AND (ses_next_attempt_at IS NULL OR ses_next_attempt_at <= UTC_TIMESTAMP(3))
-			 ORDER BY id LIMIT 50`,
-		);
-		for (const row of syncRows) {
-			abort.throwIfAborted();
-			await syncSignupSubscriber(client, row);
-		}
-		const pending = await query<{ id: number }>(
-			"SELECT id FROM tanah_daily_bulletin_signup_intent WHERE status = 'pending' ORDER BY id LIMIT 50",
-		);
-		for (const row of pending) {
-			abort.throwIfAborted();
-			await processSignupSend(client, row.id, abort);
+		try {
+			const syncRows = await query<IntentRow>(
+				`SELECT id, email, send_token, status, ses_status, ses_attempts, subscriber_id
+				 FROM tanah_daily_bulletin_signup_intent
+				 WHERE status = 'confirmed' AND ses_status = 'pending' AND ses_attempts < ${MAX_SES_SYNC_ATTEMPTS}
+				 AND (ses_next_attempt_at IS NULL OR ses_next_attempt_at <= UTC_TIMESTAMP(3))
+				 ORDER BY id LIMIT 50`,
+			);
+			for (const row of syncRows) {
+				abort.throwIfAborted();
+				await syncSignupSubscriber(client, row);
+			}
+			const pending = await query<{ id: number }>(
+				"SELECT id FROM tanah_daily_bulletin_signup_intent WHERE status = 'pending' ORDER BY id LIMIT 50",
+			);
+			for (const row of pending) {
+				abort.throwIfAborted();
+				await processSignupSend(client, row.id, abort);
+			}
+		} finally {
+			client.destroy();
 		}
 	});
 }
@@ -259,13 +263,20 @@ export async function applySignupSesEvent(
 		// subscriber row exists yet (a bounce before confirm), so the address
 		// can never be treated as healthy later. A confirmed intent's
 		// deliberate re-consent can still upgrade it only via a new challenge.
+		// Ordering: an event stamped before the subscriber's last recorded
+		// event is a late delivery about an older mail and must not downgrade
+		// the newer state; an event on the current consent attempt is newer
+		// than last_event_at and still applies as permanent suppression.
 		await txExecute(
 			connection,
 			`INSERT INTO tanah_daily_bulletin_subscriber
 			 (email, audience, consent_status, consent_source, last_event_at)
 			 VALUES (?, ?, ?, 'ses-event:signup', ?)
 			 ON DUPLICATE KEY UPDATE
-			 consent_status = CASE WHEN consent_status = 'complained' THEN 'complained' ELSE VALUES(consent_status) END,
+			 consent_status = CASE
+			     WHEN consent_status = 'complained' THEN 'complained'
+			     WHEN last_event_at IS NOT NULL AND last_event_at > VALUES(last_event_at) THEN consent_status
+			     ELSE VALUES(consent_status) END,
 			 last_event_at = GREATEST(COALESCE(last_event_at, VALUES(last_event_at)), VALUES(last_event_at))`,
 			[
 				intent.email,

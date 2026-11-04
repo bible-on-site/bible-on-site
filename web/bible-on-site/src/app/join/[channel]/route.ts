@@ -21,7 +21,7 @@ const UNAVAILABLE_HTML = `<!DOCTYPE html>
 <meta name="robots" content="noindex">
 <title>הצטרפות לעלון היומי | תנ&quot;ך על הפרק</title>
 <style>
-body { margin: 0; font-family: Tahoma, Arial, sans-serif; background: #f5f9fa; color: #1d3a44; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #f5f9fa; color: #1d3a44; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
 main { max-width: 32em; padding: 2em; text-align: center; }
 h1 { font-size: 1.6em; }
 a { color: #28758a; }
