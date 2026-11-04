@@ -495,15 +495,23 @@ partial class Build
 
             if (releaseNotes is not null)
             {
-                var applied = TrySetSubmissionReleaseNotes(flightId, releaseNotes);
+                var applied = TrySetSubmissionReleaseNotes(flightId, releaseNotes, out var attempted);
                 // The binary must not stay stranded in a draft: commit the
-                // submission even when only the notes update failed, and keep
-                // the phase result accurate instead of silently claiming them.
+                // submission even when only the notes update failed.
                 var commitArguments = flightId is not null
                     ? $"flights submission publish \"{MsStoreAppId}\" \"{flightId}\""
                     : $"submission publish \"{MsStoreAppId}\"";
                 ProcessTasks.StartProcess("msstore", commitArguments)
                     .AssertZeroExitCode();
+                // An attempted write the store did not persist must be a
+                // visible phase failure — a silent warning would record the
+                // deployment successful, advance the notes baseline and let
+                // the guard block a retry, so this audience would never see
+                // the announcements. A submission carrying no Hebrew
+                // releaseNotes field at all is a store limitation the notes
+                // manifest already records, not a delivery failure.
+                Assert.True(applied || !attempted,
+                    "Hebrew releaseNotes write was attempted but not persisted; the binary submission was still committed");
                 if (applied)
                 {
                     Serilog.Log.Information("Microsoft Store Hebrew release notes published");
@@ -576,11 +584,14 @@ partial class Build
     /// Writes the Hebrew releaseNotes into the draft submission the publish
     /// just created — strictly inside that submission object, so a flight
     /// without its own Hebrew listing can never edit the live production
-    /// listing by accident. Returns false after logging the real cause when
-    /// the field cannot be set; the caller still commits the binary.
+    /// listing by accident. A submission that structurally carries no
+    /// Hebrew releaseNotes field is skipped, not failed (no authorized
+    /// write path exists there); only an attempted write the store did not
+    /// persist is reported as failed, so the caller can fail the phase.
     /// </summary>
-    bool TrySetSubmissionReleaseNotes(string? flightId, string notes)
+    bool TrySetSubmissionReleaseNotes(string? flightId, string notes, out bool attempted)
     {
+        attempted = false;
         var scope = flightId is not null ? "flights submission" : "submission";
         var target = flightId is not null
             ? $"\"{MsStoreAppId}\" \"{flightId}\""
@@ -612,10 +623,14 @@ partial class Build
             // System.Text.Json escapes Hebrew as \uXXXX, keeping the update
             // payload pure ASCII inside the command-line argument.
             var metadata = submission.ToJsonString();
+            // The write is attempted from here on — failures past this point
+            // (oversized payload, rejected update, readback mismatch) fail
+            // the notes phase rather than skip it.
+            attempted = true;
             const int argLimit = 30000;
             if (metadata.Length > argLimit)
             {
-                Serilog.Log.Warning($"Submission metadata is {metadata.Length} chars, over the safe CLI argument size — skipping releaseNotes");
+                Serilog.Log.Warning($"Submission metadata is {metadata.Length} chars, over the safe CLI argument size — releaseNotes update cannot be formed");
                 return false;
             }
             var escaped = metadata.Replace("\\", "\\\\").Replace("\"", "\\\"");

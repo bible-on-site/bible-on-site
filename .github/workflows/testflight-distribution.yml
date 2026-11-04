@@ -139,6 +139,14 @@ jobs:
           cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest.json" &&
           gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest.json" --clobber ||
           echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          # A generation failure must fail the phase: falling back to the
+          # legacy English changelog here would still advance the delivered
+          # baseline, so this audience would never see the announcements and
+          # the technical text would leak into tester-facing notes.
+          if grep -q '"error"' "$RUNNER_TEMP/store-notes/release-notes-manifest.json"; then
+            echo "::error::Hebrew TestFlight notes generation failed — see the manifest error"
+            exit 1
+          fi
           if [ -s "$RUNNER_TEMP/store-notes/release-notes.txt" ]; then
             cp "$RUNNER_TEMP/store-notes/release-notes.txt" "$RUNNER_TEMP/testflight-changelog.txt"
           else

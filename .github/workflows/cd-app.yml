@@ -171,6 +171,17 @@ jobs:
             --google-play-key-file "${{ runner.temp }}/service-account.json" \
             --release-notes-file "$RUNNER_TEMP/store-notes/release-notes.txt"
 
+      # The binary already shipped; recording the notes-phase failure is what
+      # keeps the announcements baseline honest — a green deploy here would
+      # permanently skip these features for this audience.
+      - name: Record notes-phase failure after binary delivery
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          if grep -q '"error"' "$RUNNER_TEMP/store-notes/release-notes-manifest.json"; then
+            echo "::error::Hebrew store-notes generation failed — the binary shipped without notes; the failed deployment record keeps the features announceable on the next release"
+            exit 1
+          fi
+
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
         env:
@@ -331,6 +342,17 @@ jobs:
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
             --max-flights-to-keep 15 `
             --release-notes-file "${{ runner.temp }}/store-notes/release-notes.txt"
+
+      # The binary already shipped; recording the notes-phase failure is what
+      # keeps the announcements baseline honest — a green deploy here would
+      # permanently skip these features for this audience.
+      - name: Record notes-phase failure after binary delivery
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          if (Select-String -Path "${{ runner.temp }}/store-notes/release-notes-manifest.json" -Pattern '"error"' -Quiet) {
+            Write-Host "::error::Hebrew store-notes generation failed — the binary shipped without notes; the failed deployment record keeps the features announceable on the next release"
+            exit 1
+          }
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
