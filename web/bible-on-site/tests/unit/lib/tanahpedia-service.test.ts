@@ -556,6 +556,10 @@ describe("tanahpedia service", () => {
 			["3"],
 		);
 		expect(mockQuery.mock.calls[0][0]).not.toContain("content");
+
+		mockQuery.mockResolvedValueOnce([]);
+		await expect(getRecentEntrySummaries()).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenLastCalledWith(expect.any(String), ["10"]);
 	});
 
 	it("queries entity-type entry summaries without the content body", async () => {
@@ -583,6 +587,10 @@ describe("tanahpedia service", () => {
 		]);
 		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["500", "0"]);
 		expect(mockQuery.mock.calls[0][0]).not.toContain(" content");
+
+		mockQuery.mockResolvedValueOnce([]);
+		await expect(getAllEntrySummaries()).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenLastCalledWith(expect.any(String), ["50", "0"]);
 	});
 
 	it("queries distinct synonym names that are not canonical entry names", async () => {

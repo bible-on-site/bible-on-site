@@ -1480,6 +1480,86 @@ SELECT 1";
             apply_tanahpedia_safe_baseline(&mut conn, &scripts, true).await?;
             apply_tanahpedia_safe_baseline(&mut conn, &scripts, true).await?;
 
+            // Simulate a database created before the month_day anniversary
+            // upgrade: drop the generated columns and their indexes, then
+            // verify the upgrade recreates them and stays idempotent.
+            const MONTH_DAY_UPGRADE_COLUMNS: &[(&str, &str, &str)] = &[
+                (
+                    "tanahpedia_event_date_range",
+                    "start_month_day",
+                    "idx_event_date_range_start_month_day",
+                ),
+                (
+                    "tanahpedia_event_date_range",
+                    "end_month_day",
+                    "idx_event_date_range_end_month_day",
+                ),
+                ("tanahpedia_saying", "month_day", "idx_saying_month_day"),
+                (
+                    "tanahpedia_person_birth_date",
+                    "month_day",
+                    "idx_person_birth_date_month_day",
+                ),
+                (
+                    "tanahpedia_person_death_date",
+                    "month_day",
+                    "idx_person_death_date_month_day",
+                ),
+                (
+                    "tanahpedia_person_union",
+                    "start_month_day",
+                    "idx_person_union_start_month_day",
+                ),
+                (
+                    "tanahpedia_person_union",
+                    "end_month_day",
+                    "idx_person_union_end_month_day",
+                ),
+            ];
+            for (table, column, index) in MONTH_DAY_UPGRADE_COLUMNS {
+                raw_sql(AssertSqlSafe(format!(
+                    "ALTER TABLE `{}` DROP INDEX `{}`",
+                    quote_mysql_identifier_part(table),
+                    quote_mysql_identifier_part(index)
+                )))
+                .execute(&mut conn)
+                .await?;
+                raw_sql(AssertSqlSafe(format!(
+                    "ALTER TABLE `{}` DROP COLUMN `{}`",
+                    quote_mysql_identifier_part(table),
+                    quote_mysql_identifier_part(column)
+                )))
+                .execute(&mut conn)
+                .await?;
+            }
+            apply_today_anniversary_month_day_upgrade(
+                &mut conn,
+                &scripts.today_anniversary_month_day_upgrade,
+            )
+            .await?;
+            apply_today_anniversary_month_day_upgrade(
+                &mut conn,
+                &scripts.today_anniversary_month_day_upgrade,
+            )
+            .await?;
+            for (table, column, index) in MONTH_DAY_UPGRADE_COLUMNS {
+                assert!(
+                    column_exists(&mut conn, table, column).await?,
+                    "{table}.{column}"
+                );
+                assert!(index_exists(&mut conn, table, index).await?, "{table}.{index}");
+            }
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS \
+                     WHERE TABLE_SCHEMA = DATABASE() AND EXTRA LIKE '%GENERATED%' \
+                       AND COLUMN_NAME IN ('start_month_day', 'end_month_day', 'month_day')",
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                7
+            );
+
             assert!(column_exists(&mut conn, "tanahpedia_person_union", "source_citation").await?);
             assert!(
                 column_exists(
@@ -1608,6 +1688,32 @@ SELECT 1";
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             assert_eq!(table_count(&mut conn, "external_reference").await?, 0);
+
+            // A missing upgrade script is skipped without touching the DB.
+            apply_today_anniversary_month_day_upgrade(
+                &mut conn,
+                Path::new("nonexistent/month-day-upgrade.sql"),
+            )
+            .await?;
+
+            // A database missing one of the target tables must fail loudly.
+            raw_sql("SET FOREIGN_KEY_CHECKS = 0")
+                .execute(&mut conn)
+                .await?;
+            raw_sql("DROP TABLE tanahpedia_saying")
+                .execute(&mut conn)
+                .await?;
+            raw_sql("SET FOREIGN_KEY_CHECKS = 1")
+                .execute(&mut conn)
+                .await?;
+            assert!(
+                apply_today_anniversary_month_day_upgrade(
+                    &mut conn,
+                    &scripts.today_anniversary_month_day_upgrade,
+                )
+                .await
+                .is_err()
+            );
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())
