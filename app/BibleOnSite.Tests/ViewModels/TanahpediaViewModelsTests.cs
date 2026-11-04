@@ -1328,4 +1328,103 @@ public class TanahpediaEntryViewModelTests
         vm.HasFamily.Should().BeFalse();
         vm.HasEntities.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Load_StoredProgressUnits_EnableWordWeightedProgress()
+    {
+        // The stored block units arrive with the detail; the single HtmlView
+        // child owns them all — progress maps the scroll anchor onto the
+        // measured body extent (issue #2607).
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "משה",
+                Title = "משה רבנו",
+                Content = "<p>תוכן</p>",
+                ReadingMetric = new ReadingMetric { WordCount = 100, EstimatedSeconds = 30 },
+                ProgressUnits =
+                [
+                    new ReadingProgressUnit { Key = "0", WordCount = 40, CumulativeWords = 40 },
+                    new ReadingProgressUnit { Key = "1", WordCount = 60, CumulativeWords = 100 },
+                ],
+            });
+
+        var vm = Create();
+        vm.UniqueName = "משה";
+        await vm.LoadAsync();
+
+        vm.HasReadingProgress.Should().BeTrue();
+        vm.ReadingProgress.Should().Be(0, "a freshly opened entry reads from the top");
+
+        // scrollY 0 anchors at the body top; max scroll completes it.
+        vm.UpdateReadingProgress(scrollY: 0, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().Be(0);
+
+        vm.UpdateReadingProgress(scrollY: 1800, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().Be(1);
+
+        // Mid-scroll: ratio .5 → anchor at 1000 — halfway through the body.
+        vm.UpdateReadingProgress(scrollY: 900, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().BeApproximately(0.5, 1e-9);
+    }
+
+    [Fact]
+    public async Task Load_WithoutProgressUnits_HidesTheBar()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "משה",
+                Title = "משה רבנו",
+                Content = "<p>תוכן</p>",
+            });
+
+        var vm = Create();
+        vm.UniqueName = "משה";
+        await vm.LoadAsync();
+
+        vm.HasReadingProgress.Should().BeFalse();
+        vm.UpdateReadingProgress(scrollY: 900, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().Be(0, "no stored units never invent progress");
+    }
+
+    [Fact]
+    public async Task ResetEntryBody_ClearsProgress()
+    {
+        // A hop onto a non-entry terminal state (disambiguation) drops the
+        // previous entry's progress state with the rest of its body (#2640).
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "משה",
+                Title = "משה רבנו",
+                Content = "<p>תוכן</p>",
+                ReadingMetric = new ReadingMetric { WordCount = 100, EstimatedSeconds = 30 },
+                ProgressUnits =
+                [
+                    new ReadingProgressUnit { Key = "0", WordCount = 100, CumulativeWords = 100 },
+                ],
+            });
+        _service.Setup(s => s.GetEntryDetailAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new TanahpediaSynonymTarget { UniqueName = "דתן", Title = "דתן" },
+                new TanahpediaSynonymTarget { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" },
+            ]);
+
+        var vm = Create();
+        vm.UniqueName = "משה";
+        await vm.LoadAsync();
+        vm.HasReadingProgress.Should().BeTrue();
+
+        await vm.OpenPersonEntryAsync("דתן");
+
+        vm.HasReadingProgress.Should().BeFalse();
+        vm.ReadingProgress.Should().Be(0);
+    }
 }
