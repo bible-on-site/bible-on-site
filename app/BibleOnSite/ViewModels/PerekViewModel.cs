@@ -1492,6 +1492,8 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         OnPropertyChanged(nameof(InlineCommentaryLimit));
         OnPropertyChanged(nameof(PerushimSelectionStatus));
         OnPropertyChanged(nameof(PerushimLimitReached));
+        // A remote sync can replace the bookmark set — refresh the reader icon.
+        OnPropertyChanged(nameof(IsBookmarked));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
