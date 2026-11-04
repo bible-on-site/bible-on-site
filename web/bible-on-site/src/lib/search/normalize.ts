@@ -69,9 +69,10 @@ export function searchTokens(text: string): string[] {
 // corpus chars never re-enter it. Astral units take the slow path always.
 const decomposes = new Map<number, boolean>();
 
-function needsDecompose(unit: string, code: number): boolean {
+function needsDecompose(code: number): boolean {
 	let flag = decomposes.get(code);
 	if (flag === undefined) {
+		const unit = String.fromCharCode(code);
 		flag = unit.normalize("NFD") !== unit;
 		decomposes.set(code, flag);
 	}
@@ -82,13 +83,19 @@ export function normalizeWithMap(text: string): {
 	normalized: string;
 	map: number[];
 } {
-	let normalized = "";
+	// Output accumulates in an array joined once: appending to a growing
+	// string and probing it with `endsWith(" ")` re-flattened the whole V8
+	// rope at every punctuation boundary — quadratic on long content (#2956).
+	const parts: string[] = [];
 	const map: number[] = [];
+	// True while output is empty or ends in the emitted separator space —
+	// the state `endsWith(" ")` used to answer.
+	let endsInSpace = true;
 	for (let i = 0; i < text.length; i++) {
 		const code = text.charCodeAt(i);
 		const unitLength = code >= 0xd800 && code <= 0xdbff ? 2 : 1;
 		const decomposed =
-			unitLength === 1 && !needsDecompose(text.slice(i, i + 1), code)
+			unitLength === 1 && !needsDecompose(code)
 				? text[i]
 				: text.slice(i, i + unitLength).normalize("NFD");
 		for (const char of decomposed) {
@@ -97,25 +104,28 @@ export function normalizeWithMap(text: string): {
 			}
 			if (LETTER_OR_DIGIT.test(char)) {
 				const lowered = char.toLowerCase();
-				normalized += lowered;
+				parts.push(lowered);
+				endsInSpace = false;
 				// One map entry per emitted UTF-16 unit, like the C# twin —
 				// astral letters occupy two units and both map to the pair start.
 				for (let u = 0; u < lowered.length; u++) {
 					map.push(i);
 				}
-			} else if (normalized.length > 0 && !normalized.endsWith(" ")) {
-				normalized += " ";
+			} else if (map.length > 0 && !endsInSpace) {
+				parts.push(" ");
 				map.push(i);
+				endsInSpace = true;
 			}
 		}
 		i += unitLength - 1;
 	}
-	// normalizeSearchText trims: a trailing emitted space never reaches output.
-	while (normalized.endsWith(" ")) {
-		normalized = normalized.slice(0, -1);
+	// A separator space emits only after a non-space char, so at most one
+	// trails — drop it like normalizeSearchText's trim.
+	if (endsInSpace && map.length > 0) {
+		parts.pop();
 		map.pop();
 	}
-	return { normalized, map };
+	return { normalized: parts.join(""), map };
 }
 
 const HTML_ENTITIES: Record<string, string> = {

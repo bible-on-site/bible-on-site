@@ -424,10 +424,10 @@ function addPediaEntryDeps(
 	for (const name of names) {
 		addPath(sink, `/pedia/${name}`);
 	}
+	// The landing page's cached counts/recents/anniversaries, and the
+	// entry-page sibling/category summaries. Category tags are per entity
+	// type so an entry change expires only the categories it belongs to.
 	addPath(sink, "/pedia");
-	// Cached pedia loaders: the landing sections (/pedia) and the entry-page
-	// sibling/category summaries. Category tags are per entity type so an
-	// entry change expires only the categories it belongs to.
 	addTag(sink, COLLECTION_TAGS.pediaLanding);
 	addTag(sink, COLLECTION_TAGS.pediaEntries);
 	for (const entityType of entityTypes) {
