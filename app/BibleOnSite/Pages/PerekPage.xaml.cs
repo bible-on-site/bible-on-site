@@ -39,20 +39,17 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     // chrome coordinator (#2573).
     private ReaderPlatformChrome _platformChrome = null!;
 
-    // Guard: ignore CurrentItemChanged events fired by the CarouselView during
-    // initial collection assignment.  Without this, the handler resets the
-    // position to bereshit-1 right after we placed it at today's perek.
-    private bool _carouselInitializing;
+    // Font/theme/notes availability sync is owned by the shared display-sync
+    // coordinator (#2573).
+    private ReaderDisplaySync _displaySync = null!;
+
+    // The programmatic-scroll guard, rotation resnap and Android swipe settle
+    // are owned by the shared carousel coordinator (#2573).
+    private ReaderCarousel _carousel = null!;
 
     // Scroll state tracking - used to prevent long-press during scroll
     private DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
-
-    // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
-    private double _carouselWidth = -1;
-
-    // A resize observed while the initial load was running; consumed when it ends.
-    private bool _pendingCarouselResnap;
 
     /// <summary>
     /// Returns true if the user is currently scrolling or just finished scrolling.
@@ -70,11 +67,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupReaderChrome();
         DebugLog.Write("[Startup] PerekPage resources and navigation");
         SubscribeViewModelChanges();
-        SetupFontSizeResources();
+        SetupDisplaySync();
+        SetupCarousel();
         SetupCarouselNavigation();
         SubscribeAppLinks();
-        SubscribeNotesMaterialization();
-        SubscribeThemeChange();
         SetupPlatformChrome();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
@@ -86,11 +82,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         BindingContext = _viewModel;
         SetupReaderChrome();
         SubscribeViewModelChanges();
-        SetupFontSizeResources();
+        SetupDisplaySync();
+        SetupCarousel();
         SetupCarouselNavigation();
         SubscribeAppLinks();
-        SubscribeNotesMaterialization();
-        SubscribeThemeChange();
         SetupPlatformChrome();
     }
 
@@ -116,6 +111,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 SearchSurface = ChapterSearch,
                 SelectionSurface = SelectionBar,
                 PerushimSheet = PerushimPanel,
+                StatusBarColorSource = ReaderToolbar,
             },
             new ReaderPlatformChromeActions
             {
@@ -177,99 +173,79 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// A reader opened while the first-launch notes pack still materializes
-    /// skips awaiting it (#2430) — when the copy completes the service raises
-    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// Wires the shared display-sync coordinator (#2573) — font resources,
+    /// theme refresh of the realized pesukim and notes-materialization
+    /// re-check — through the one implementation every reader page uses. Only
+    /// the division plugs differ: which pasuk list is loaded, the focused-pasuk
+    /// extras, and the perek notes reload.
     /// </summary>
-    private void SubscribeNotesMaterialization()
+    private void SetupDisplaySync()
     {
-        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
-        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+        _displaySync = new ReaderDisplaySync(
+            new ReaderDisplaySyncSurfaces
+            {
+                Page = this,
+                Notes = PerushimNotesService.Instance,
+                Preferences = PreferencesService.Instance,
+            },
+            new ReaderDisplaySyncActions
+            {
+                LoadedPasukim = () => _viewModel.CarouselPerakim
+                    .SelectMany(perek => perek.Pasukim ?? Enumerable.Empty<Pasuk>()),
+                AfterThemeRefresh = () =>
+                {
+                    if (_focusedPasuk != null)
+                    {
+                        _focusedPasuk.RefreshForThemeChange();
+                        RefreshFocusedRecitation();
+                    }
+                },
+                NotesAvailable = () => _viewModel.PerushimNotesAvailable,
+                NotesPending = () => _viewModel.PerushimNotesPending,
+                ReloadNotesAsync = () => _viewModel.LoadPerushimAsync(_viewModel.PerekId),
+            });
     }
 
     /// <summary>
-    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
-    /// each pasuk's cached FormattedString at build time, and the shell band is
-    /// applied imperatively — neither follows the requested theme on its own, so
-    /// a flip while the page is alive re-applies both (#2601).
+    /// Wires the shared carousel coordinator (#2573) — programmatic-scroll
+    /// guard, rotation resnap and the Android swipe settle — through the one
+    /// implementation every reader page uses. Only the division plugs differ:
+    /// the suppression extras (articles/focused pasuk/search) and the
+    /// perek-typed long-press arming.
     /// </summary>
-    private void SubscribeThemeChange()
+    private void SetupCarousel()
     {
-        if (Microsoft.Maui.Controls.Application.Current is not { } app)
-        {
-            return;
-        }
-        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
-        // when navigation returns, and must re-check the theme then.
-        Loaded += (_, _) =>
-        {
-            app.RequestedThemeChanged += OnRequestedThemeChanged;
-            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
-        };
-        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
-    }
-
-    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
-    {
-        Dispatcher.Dispatch(() =>
-        {
-            foreach (var pasuk in _viewModel.CarouselPerakim
-                .SelectMany(perek => perek.Pasukim ?? Enumerable.Empty<Pasuk>()))
+        _carousel = new ReaderCarousel(
+            new ReaderCarouselSurfaces
             {
-                pasuk.RefreshForThemeChange();
-            }
-            if (_focusedPasuk != null)
+                Carousel = PerekCarousel,
+                LoadingOverlay = CarouselLoadingOverlay,
+                FanMenu = FanMenu,
+                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton],
+                PressExcluded = [FanMenu.ToggleButton, SelectionBar],
+            },
+            new ReaderCarouselActions
             {
-                _focusedPasuk.RefreshForThemeChange();
-                RefreshFocusedRecitation();
-            }
-        });
-    }
-
-    private bool _notesRefreshQueued;
-
-    private void OnNotesOperationCompleted()
-    {
-        // InitializeAsync releases the operation lock, which re-fires this
-        // event — and the refresh calls InitializeAsync itself. Without this
-        // guard every refresh queues another dispatcher turn forever, the UI
-        // thread never idles, and accessibility queries starve (#2430).
-        if (_notesRefreshQueued ||
-            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
-                && !_viewModel.PerushimNotesPending))
-        {
-            return;
-        }
-        _notesRefreshQueued = true;
-        _ = Dispatcher.DispatchAsync(async () =>
-        {
-            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
-            finally { _notesRefreshQueued = false; }
-        });
+                CurrentPosition = () => _viewModel.CarouselPosition,
+                ItemCount = () => _viewModel.CarouselPerakim.Count,
+                IsLoading = () => _isLoading,
+                IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen,
+#if ANDROID
+                ArmUnreceivedPress = (x, y) => LongPressBehavior.BeginUnreceivedPress(x, y, _viewModel.Perek),
+#endif
+            });
     }
 
     /// <summary>
     /// Subscribes to ViewModel.NavigationRequested so that programmatic
     /// navigation (prev/next/today/picker) jumps the CarouselView instantly
-    /// via ScrollTo(animate:false) instead of animating through every
-    /// intermediate position (which would cascade OnCarouselItemChanged).
+    /// instead of animating through every intermediate position (which would
+    /// cascade OnCarouselItemChanged). The guarded scroll itself is the shared
+    /// carousel coordinator's (#2573); the perek id to index mapping is the
+    /// division adapter.
     /// </summary>
     private void SetupCarouselNavigation()
     {
-#if ANDROID || IOS
-        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
-        {
-            var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
-            {
-                ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
-            };
-            statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
-                new Binding(nameof(BackgroundColor), source: ReaderToolbar));
-            statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
-                CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
-            Behaviors.Add(statusBar);
-        }
-#endif
         InitializeSearchHeader();
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
         ChapterSearch.SetSource(_viewModel.Source);
@@ -280,15 +256,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 ChapterSearch.SetSource(_viewModel.Source);
             }
         };
-        PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
             ResetRecitationSession();
-            var targetIndex = perekId - 1;
-            // Guard: suppress OnCarouselItemChanged while we reposition
-            _carouselInitializing = true;
-            PerekCarousel.ScrollTo(targetIndex, animate: false);
-            _carouselInitializing = false;
+            _carousel.ScrollToUnit(perekId - 1);
 
             // Post-navigation housekeeping (ViewModel state is already set by
             // NavigateToPerekAsync before this event fires, including perushim)
@@ -299,114 +270,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             UpdateArticlesCount();
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
         };
-    }
-
-    /// <summary>
-    /// Re-snaps the CarouselView when its width changes (device rotation, window
-    /// resize). The native carousel keeps the pre-rotation item size, so several
-    /// items stay visible side by side until the user swipes. Invalidating the
-    /// native layout and re-snapping to the current position restores a single
-    /// full-width item immediately.
-    /// </summary>
-    private void OnCarouselSizeChanged(object? sender, EventArgs e)
-    {
-        var width = PerekCarousel.Width;
-        if (width <= 0)
-        {
-            return;
-        }
-        if (Math.Abs(width - _carouselWidth) < 0.5)
-        {
-            return;
-        }
-        var isFirstMeasure = _carouselWidth <= 0;
-        _carouselWidth = width;
-        if (isFirstMeasure || _carouselInitializing)
-        {
-            return;
-        }
-        if (_isLoading)
-        {
-            // Rotation during the initial load: retry the re-snap once the
-            // load completes instead of leaving stale item widths behind.
-            _pendingCarouselResnap = true;
-            return;
-        }
-
-        Dispatcher.Dispatch(ResnapCarousel);
-    }
-
-    /// <summary>
-    /// Re-snaps the carousel to the current position after its width changed,
-    /// restoring a single full-width item.
-    /// </summary>
-    private void ResnapCarousel()
-    {
-#if IOS
-        var collectionView = PerekCarousel.Handler?.PlatformView switch
-        {
-            UIKit.UICollectionView cv => cv,
-            UIKit.UIView view => FindDescendantCollectionView(view),
-            _ => null,
-        };
-        collectionView?.CollectionViewLayout.InvalidateLayout();
-#elif ANDROID
-        if (PerekCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
-        {
-            recyclerView.Post(recyclerView.RequestLayout);
-        }
-#endif
-        PerekCarousel.InvalidateMeasure();
-        _carouselInitializing = true;
-        PerekCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
-        _carouselInitializing = false;
-    }
-
-#if IOS || MACCATALYST
-    private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
-    {
-        foreach (var subview in view.Subviews)
-        {
-            if (subview is UIKit.UICollectionView collectionView)
-            {
-                return collectionView;
-            }
-            var found = FindDescendantCollectionView(subview);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-#endif
-
-    /// <summary>
-    /// Populates page-level DynamicResource entries for font sizes and keeps them
-    /// in sync when the user changes the font-factor preference.
-    /// DynamicResource is used because x:Reference bindings inside CarouselView
-    /// DataTemplates are unreliable on Android.
-    /// </summary>
-    private void SetupFontSizeResources()
-    {
-        var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs);
-        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
-            MainThread.BeginInvokeOnMainThread(() => page.UpdateFontSizeResources(prefs)));
-    }
-
-    // Reading-text category inventory (#2461): פסוקים covers the pasuk body
-    // (base 18) and pasuk-number markers (base 16); פירושים covers perush
-    // content (base 18 so 100% matches the pasuk body) and perush names
-    // (base 14 heading hierarchy).
-    private void UpdateFontSizeResources(PreferencesService prefs)
-    {
-        var pasukFactor = prefs.PasukFontFactor;
-        var perushFactor = prefs.PerushFontFactor;
-        Resources["PasukFontSize"] = pasukFactor * 18;
-        Resources["PasukNumFontSize"] = pasukFactor * 16;
-        Resources["PerushNameFontSize"] = perushFactor * 14;
-        Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
     private void SubscribeViewModelChanges()
@@ -429,90 +292,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         };
     }
 
-#if ANDROID
-    private readonly SwipeNavigationTracker _swipe = new();
-
-    private void OnTouchStarted(object? sender, TouchPosition position)
-    {
-        _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
-            ContainsTouch(ExitFullScreenButton, position))
-        {
-            return;
-        }
-        _swipe.Begin(position, PerekCarousel.Position);
-    }
-
-    private void OnTouchDispatched(object? sender, TouchPosition position)
-    {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
-            ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
-            ContainsTouch(SelectionBar, position))
-        {
-            return;
-        }
-
-        LongPressBehavior.BeginUnreceivedPress(position.X, position.Y, _viewModel.Perek);
-    }
-
-    private static bool ContainsTouch(VisualElement element, TouchPosition position)
-    {
-        if (!element.IsVisible || element.Handler?.PlatformView is not Android.Views.View view)
-        {
-            return false;
-        }
-
-        if (!view.IsShown)
-        {
-            return false;
-        }
-
-        var location = new int[2];
-        view.GetLocationOnScreen(location);
-        return position.X >= location[0] && position.X < location[0] + view.Width &&
-            position.Y >= location[1] && position.Y < location[1] + view.Height;
-    }
-
-    private void OnTouchMoved(object? sender, TouchPosition position)
-    {
-        var slop = PerekCarousel.Handler?.PlatformView is Android.Views.View view
-            ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
-            : 12;
-        _swipe.Move(position, slop);
-    }
-
-    // Releases and native cancels/interruptions both arrive here: a cancel
-    // mid-swipe can strand the carousel mid-offset just like a release, so
-    // it settles the same way (#2469).
-    private void OnTouchReleased(object? sender, TouchPosition position) =>
-        SettleSwipe(_swipe.Last ?? position);
-
-    private void SettleSwipe(TouchPosition position)
-    {
-        if (PerekCarousel.Handler?.PlatformView is not Android.Views.View view)
-        {
-            return;
-        }
-
-        var configuration = Android.Views.ViewConfiguration.Get(view.Context!);
-        var target = _swipe.End(position, view.Width, configuration?.ScaledTouchSlop ?? 12,
-            configuration?.ScaledMinimumFlingVelocity ?? 50,
-            view.LayoutDirection == Android.Views.LayoutDirection.Rtl, _viewModel.CarouselPerakim.Count);
-        if (target is int index)
-        {
-            // Run after native dispatch, so an intercepted Up/Cancel cannot stop
-            // the final snap. ScrollTo also resets MAUI's current snap target.
-            PerekCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
-        }
-    }
-#endif
-
     protected override void OnDisappearing()
     {
         FinishSearchIntroduction();
         _platformChrome.Disappearing();
+        _carousel.Disappearing();
         if (!_preserveSearchOnDisappear)
         {
             ChapterSearch.Close();
@@ -521,14 +305,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
         RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
-#if ANDROID
-        MainActivity.TouchStarted -= OnTouchStarted;
-        MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
-        MainActivity.TouchMoved -= OnTouchMoved;
-        MainActivity.TouchReleased -= OnTouchReleased;
-        _swipe.Cancel();
-        LongPressBehavior.CancelAllPending();
-#endif
         base.OnDisappearing();
     }
 
@@ -573,15 +349,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         DebugLog.Write("[Startup] PerekPage appearing");
         base.OnAppearing();
         _platformChrome.Appearing();
+        _carousel.Appearing();
         SubscribeRecitation();
         await InitializeRecitationAsync();
         DebugLog.Write("[Startup] PerekPage recitation initialized");
-#if ANDROID
-        MainActivity.TouchStarted += OnTouchStarted;
-        MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
-        MainActivity.TouchMoved += OnTouchMoved;
-        MainActivity.TouchReleased += OnTouchReleased;
-#endif
         // If no perek is loaded, load perek based on preference (today's or last learnt)
         if (_viewModel.Perek == null && !_isLoading)
         {
@@ -609,11 +380,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             finally
             {
                 _isLoading = false;
-                if (_pendingCarouselResnap)
-                {
-                    _pendingCarouselResnap = false;
-                    Dispatcher.Dispatch(ResnapCarousel);
-                }
+                _carousel.ConsumePendingResnap();
             }
         }
         else if (_viewModel.PerekId > 0 && !_isLoading)
@@ -632,7 +399,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             }
             // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
             // since this page last appeared. Re-check and reload so they show without an app restart.
-            await RefreshPerushimIfAvailabilityChangedAsync();
+            await _displaySync.RefreshNotesIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
         // Cold-start main-thread work is done — release the deferred e2e
@@ -660,7 +427,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Guard: ignore OnCarouselItemChanged during initial load.
         // The CarouselView fires spurious CurrentItemChanged events when it
         // first receives its ItemsSource, which would reset state.
-        _carouselInitializing = true;
+        _carousel.IsInitializing = true;
         long? loadStamp;
         try
         {
@@ -692,7 +459,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         finally
         {
-            _carouselInitializing = false;
+            _carousel.IsInitializing = false;
         }
 
         // Hide loading overlay — carousel is ready
@@ -764,34 +531,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         finally
         {
             _isLoading = false;
-            if (_pendingCarouselResnap)
-            {
-                _pendingCarouselResnap = false;
-                Dispatcher.Dispatch(ResnapCarousel);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Reloads perushim for the current perek when notes-availability changed since the last load
-    /// (e.g. the user downloaded the package in Preferences and returned to this page).
-    /// </summary>
-    private async Task RefreshPerushimIfAvailabilityChangedAsync()
-    {
-        try
-        {
-            await PerushimNotesService.Instance.InitializeAsync();
-            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
-                || _viewModel.PerushimNotesPending)
-            {
-                await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
-            }
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: on-appearing refresh is best-effort
-        catch (Exception ex) //NOSONAR — on-appearing refresh is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex}");
+            _carousel.ConsumePendingResnap();
         }
     }
 
@@ -1464,7 +1204,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // During initial collection assignment the CarouselView fires spurious
         // CurrentItemChanged events (e.g. for position-0 / bereshit-1).
         // Ignore them — the ViewModel already holds the correct perek.
-        if (_carouselInitializing)
+        if (_carousel.IsInitializing)
         {
             DebugLog.Write($"[Carousel] OnChanged IGNORED (initializing)");
             return;
