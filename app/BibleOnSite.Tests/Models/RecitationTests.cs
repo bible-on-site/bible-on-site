@@ -154,10 +154,17 @@ public class RecitationTests
         track.GetWord(1, 2).Should().BeSameAs(track.Words[1]);
         track.GetWord(3, 1).Should().BeNull();
         track.GetWords(2).Should().Equal(track.Words.Skip(2));
+        track.GetWords(3).Should().BeEmpty();
         track.GetWordsBetweenPasukim(1, 2).Should().Equal(track.Words);
+        track.GetWordsBetweenPasukim(2, 2).Should().Equal(track.Words.Skip(2).Take(2));
+        track.GetWordsBetweenPasukim(1, 1).Should().Equal(track.Words.Take(2));
         track.GetWordsBetweenPasukim(2, 1).Should().BeEmpty();
         (double Start, double End)[] ranges = [(100, 1800), (2000, 2900)];
         track.GetPasukRanges().Should().Equal(ranges);
+
+        var duplicate = new RecitationTrack(1, "", "", "", 10000, "ready",
+            [.. track.Words, new(1, 1, "כפול", 5000, 6000)]);
+        duplicate.GetWord(1, 1).Should().BeSameAs(duplicate.Words[0]);
 
         var changed = track with { Words = [new(1, 1, "ה", 100, 800)] };
         changed.GetWords(1).Should().Equal(changed.Words);
