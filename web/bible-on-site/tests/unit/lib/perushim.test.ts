@@ -123,6 +123,11 @@ describe("perushim service", () => {
 			mockQuery.mockRejectedValueOnce(new Error("DB error"));
 			await expect(getPerushimByPerekIds([1])).rejects.toThrow("DB error");
 		});
+
+		it("rethrows non-Error rejections unchanged", async () => {
+			mockQuery.mockRejectedValueOnce("DB exploded");
+			await expect(getPerushimByPerekIds([1])).rejects.toBe("DB exploded");
+		});
 	});
 
 	describe("getPerushimByPerekId", () => {

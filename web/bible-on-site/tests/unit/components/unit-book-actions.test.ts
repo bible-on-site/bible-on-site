@@ -175,6 +175,16 @@ describe("getUnitScopeSummariesBatch", () => {
 		expect(result["8"]).toEqual({ articles: [], perushim: [] });
 		expect(console.warn).toHaveBeenCalled();
 	});
+
+	it("logs non-Error rejections and still returns empty summaries", async () => {
+		mockGetArticleSummariesForRanges.mockRejectedValue("DB down");
+
+		const result = await getUnitScopeSummariesBatch("masora", [8], "torah");
+
+		expect(result["8"]).toEqual({ articles: [], perushim: [] });
+		expect(console.warn).toHaveBeenCalled();
+	});
+
 });
 
 describe("getUnitBookPerushNotes", () => {

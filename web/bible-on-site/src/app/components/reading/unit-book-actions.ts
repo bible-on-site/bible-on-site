@@ -5,9 +5,7 @@ import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import {
-	getPerushimForRanges,
 	getPerushNotesForRanges,
 	type RangePerushSummary,
 	type RangedPerushNote,
@@ -71,22 +69,19 @@ export async function getUnitScopeSummariesBatch(
 				return [String(unitId), { articles: [], perushim: [] }];
 			}
 			// The cached fetchers share entries with the flat unit pages, so a
-			// book open only queries for units nobody has visited yet.
+			// book open only queries for units nobody has visited yet. Reaching
+			// this point with non-parasha division means masora+torah — the only
+			// other division/scope pair that resolves to ranges.
 			const [articles, perushim] =
 				division === "parasha"
 					? await Promise.all([
 							getCachedParashaRangeArticles(unitId, scope),
 							getCachedParashaRangePerushim(unitId, scope),
 						])
-					: division === "masora" && scope === "torah"
-						? await Promise.all([
-								getCachedMasoraRangeArticles(unitId),
-								getCachedMasoraRangePerushim(unitId),
-							])
-						: await Promise.all([
-								getArticleSummariesForRanges(ranges),
-								getPerushimForRanges(ranges),
-							]);
+					: await Promise.all([
+							getCachedMasoraRangeArticles(unitId),
+							getCachedMasoraRangePerushim(unitId),
+						]);
 			return [String(unitId), { articles, perushim }];
 		} catch (error) {
 			console.warn(
