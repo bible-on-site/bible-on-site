@@ -386,9 +386,9 @@ button.backLink {
   }
 
   @media (hover: hover) {
-  	.authorLink:hover .authorName {
-	    color: var(--link-accent, #7eb0ff);
-	  }
+    .authorLink:hover .authorName {
+      color: var(--link-accent, #7eb0ff);
+    }
   }
 
   .articleBody a:global(.tanahpedia-mention) {
@@ -406,10 +406,10 @@ button.backLink {
   }
 
   @media (hover: hover) {
-  	.backLink:hover {
-	    background: #232a45;
-	    border-color: var(--accent-200);
-	  }
+    .backLink:hover {
+      background: #232a45;
+      border-color: var(--accent-200);
+    }
   }
 
   .parshanName {

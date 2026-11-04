@@ -110,6 +110,15 @@ describe("SeferComposite (wide screen)", () => {
 		expect(screen.queryByTestId("sefer")).toBeNull();
 	});
 
+	it("applies a saved book preference without a server navigation", () => {
+		localStorage.setItem("perekViewMode", "book");
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(new URLSearchParams(window.location.search).has("book")).toBe(true);
+	});
+
 	it("renders ReadModeToggler when wide enough", () => {
 		render(
 			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
@@ -127,7 +136,9 @@ describe("SeferComposite (wide screen)", () => {
 			fireEvent.click(checkbox);
 		});
 
-		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe("/929/5");
+		expect(new URLSearchParams(window.location.search).has("book")).toBe(true);
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
 	});
 
@@ -140,7 +151,9 @@ describe("SeferComposite (wide screen)", () => {
 			);
 		});
 
-		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe("/929/5");
+		expect(new URLSearchParams(window.location.search).has("book")).toBe(true);
 		expect(await screen.findByTestId("sefer")).toBeVisible();
 	});
 
