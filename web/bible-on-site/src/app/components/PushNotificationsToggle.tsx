@@ -10,7 +10,6 @@ type Status =
 	| "loading"
 	| "hidden"
 	| "unsupported"
-	| "ios-install"
 	| "denied"
 	| "off"
 	| "on"
@@ -18,8 +17,6 @@ type Status =
 
 const MESSAGES: Partial<Record<Status, string>> = {
 	unsupported: "הדפדפן הזה אינו תומך בהתראות.",
-	"ios-install":
-		"באייפון ובאייפד אפשר לקבל התראות אחרי הוספת האתר למסך הבית (שיתוף - הוספה למסך הבית) ופתיחתו משם.",
 	denied:
 		"ההתראות חסומות בדפדפן. כדי לקבל אותן יש לאפשר התראות לאתר בהגדרות הדפדפן.",
 	on: "ההתראה היומית פעילה. אפשר לבטל אותה כאן בכל עת.",
@@ -39,14 +36,6 @@ function isPushSupported(): boolean {
 		"PushManager" in window &&
 		"Notification" in window
 	);
-}
-
-// iOS/iPadOS only expose Web Push to sites added to the home screen (16.4+).
-function needsHomeScreenInstall(): boolean {
-	const ios =
-		/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-		(navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-	return ios && !window.matchMedia("(display-mode: standalone)").matches;
 }
 
 async function currentSubscription(): Promise<PushSubscription | null> {
@@ -75,8 +64,10 @@ export function PushNotificationsToggle() {
 				publicKey: string | null;
 			};
 			if (!key) return "hidden";
-			if (!isPushSupported())
-				return needsHomeScreenInstall() ? "ios-install" : "unsupported";
+			// iPhone/iPad ordinary tabs land here too: Apple limits iOS Web Push
+			// to Home Screen apps, and the product decision is to report
+			// "unsupported" rather than funnel readers into installing (#2936).
+			if (!isPushSupported()) return "unsupported";
 			setPublicKey(key);
 			if (Notification.permission === "denied") return "denied";
 			return (await currentSubscription()) ? "on" : "off";

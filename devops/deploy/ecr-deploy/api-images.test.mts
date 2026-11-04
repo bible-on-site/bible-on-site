@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { ChildProcess, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -22,8 +24,11 @@ import {
 	type PreparedAPIArchives,
 	prepareAPIArchives,
 	publishAPIImages,
+	pushArchiveWithCrane,
 	validateAPIImageOptions,
 } from "./api-images.mts";
+import { PublicAPIMonitor } from "./api-public-monitor.mjs";
+import { HTTP_BUDGET_MS } from "./api-public-transport.mjs";
 import { ECRDeployerBase } from "./ecr-deployer-base.mts";
 import {
 	publishWebsiteImages,
@@ -1086,6 +1091,94 @@ test("default credential setup refuses a mismatched registry before invoking cra
 		assert.deepEqual(registry.puts, []);
 		await assert.rejects(access(join(prepared.directory, "config.json")));
 	}));
+
+test("archive uploads keep live public probes within the unchanged request deadline", async () => {
+	const server = createServer((_request, response) => {
+		response.setHeader("content-type", "application/json");
+		response.end(JSON.stringify({ status: "ok", version }));
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	try {
+		const address = server.address();
+		assert.ok(address && typeof address === "object");
+		const url = `http://127.0.0.1:${address.port}/health`;
+		const monitor = new PublicAPIMonitor({
+			versions: [version],
+			request: (_url: string, options: RequestInit) => fetch(url, options),
+		});
+		const directory = join(tmpdir(), "private crane config");
+		const archive = join(directory, "image with spaces.tar");
+		const reference = `${repositoryUri}:v${version}-amd64`;
+		const sample = monitor.sample(0);
+		let closed = false;
+		await pushArchiveWithCrane(
+			archive,
+			reference,
+			directory,
+			(command, args, options) => {
+				assert.equal(command, "crane");
+				assert.deepEqual(args, ["push", archive, reference]);
+				assert.equal(options.env?.DOCKER_CONFIG, directory);
+				assert.equal(options.stdio, "inherit");
+				assert.equal(options.shell, undefined);
+				const child = spawn(
+					process.execPath,
+					["-e", `setTimeout(() => {}, ${HTTP_BUDGET_MS + 100})`],
+					options,
+				);
+				child.once("close", () => {
+					closed = true;
+				});
+				return child;
+			},
+		);
+		assert.equal(closed, true, "Publication must await upload completion");
+		const row = await sample;
+		assert.equal(HTTP_BUDGET_MS, 2000);
+		assert.equal(row.passed, true);
+		assert.ok(row.elapsedMs <= HTTP_BUDGET_MS);
+		monitor.assertHealthy();
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
+test("archive subprocess launch failures, unsuccessful exits and signals remain fatal", async () => {
+	await assert.rejects(
+		pushArchiveWithCrane(
+			"image.tar",
+			repositoryUri,
+			tmpdir(),
+			(_command, _args, options) =>
+				spawn(`${process.execPath}.missing`, [], options),
+		),
+		(error: Error & { cause?: { code?: string } }) => {
+			assert.match(error.message, /crane archive push failed/);
+			assert.equal(error.cause?.code, "ENOENT");
+			return true;
+		},
+	);
+	await assert.rejects(
+		pushArchiveWithCrane(
+			"image.tar",
+			repositoryUri,
+			tmpdir(),
+			(_command, _args, options) =>
+				spawn(process.execPath, ["-e", "process.exit(7)"], options),
+		),
+		/crane archive push failed \(7\)/,
+	);
+	await assert.rejects(
+		pushArchiveWithCrane("image.tar", repositoryUri, tmpdir(), () => {
+			const child = new ChildProcess();
+			queueMicrotask(() => child.emit("close", null, "SIGTERM"));
+			return child;
+		}),
+		/crane archive push failed \(SIGTERM\)/,
+	);
+});
 
 function completeIndex(prepared: PreparedAPIArchives): Image {
 	const manifest = JSON.stringify({

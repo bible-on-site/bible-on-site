@@ -152,6 +152,22 @@ describe("DedicationsPage", () => {
 		);
 	});
 
+	it("debounces consecutive keystrokes into a single list query", async () => {
+		renderPage();
+		await screen.findByText("לעילוי נשמת שרה");
+		server.listDedications.mockClear();
+		const input = screen.getByPlaceholderText("חיפוש לפי שם המוקדש...");
+		fireEvent.change(input, { target: { value: "ש" } });
+		fireEvent.change(input, { target: { value: "שר" } });
+		fireEvent.change(input, { target: { value: "שרה" } });
+		await waitFor(() =>
+			expect(server.listDedications).toHaveBeenCalledTimes(1),
+		);
+		expect(server.listDedications).toHaveBeenCalledWith({
+			data: { search: "שרה", show: "active" },
+		});
+	});
+
 	it("renders ongoing and expired dedications including assignment expiry", async () => {
 		server.listDedications.mockResolvedValue([
 			dedication(),

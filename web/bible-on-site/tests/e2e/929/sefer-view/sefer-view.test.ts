@@ -1,7 +1,9 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
+import { prepareTurnInput } from "../../../util/turn-input";
+import { waitForVisibleTurnContent } from "../../../util/turn-probe";
 
 /**
  * Test suite for sefer view functionality
@@ -20,8 +22,10 @@ import { test } from "../../../util/playwright/test-fixture";
 function activePageFoldWidth(page: Page) {
 	return page.evaluate(() => {
 		const surfaces = Array.from(
-			document.querySelectorAll<HTMLElement>(".he-book .page.page--folded"),
-		).filter((surface) => surface.style.willChange === "transform");
+			document.querySelectorAll<HTMLElement>(
+				".he-book .page.page--folded.page--flipping",
+			),
+		);
 		if (surfaces.length === 0) return 0;
 		const visibleWidths = surfaces.map((surface) => {
 			const points = Array.from(
@@ -95,6 +99,201 @@ test.describe("Sefer view", () => {
 	// Skip all tests in this suite on mobile viewports - sefer view requires tablet+
 	test.beforeEach(({ skipOnNotWideEnough }) => {
 		void skipOnNotWideEnough;
+	});
+	for (const mode of ["leaf", "pinned", "hidden"] as const) {
+		test(`inactive listening controls preserve held page pixels with ${mode} bookmarks`, async ({
+			page,
+		}, testInfo) => {
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await page.addInitScript((attachment) => {
+				localStorage.setItem(
+					"seferBookmarks",
+					JSON.stringify({
+						enabled: attachment !== "hidden",
+						placement: "sides",
+						orientation: "perpendicular",
+						attachment: attachment === "pinned" ? "pinned" : "leaf",
+						order: "page",
+						upcomingOnly: false,
+					}),
+				);
+			}, mode);
+			await page.goto("/929/300?book");
+			await waitForVisibleTurnContent(page);
+			await expect(
+				page.locator(
+					'.he-book .page.current-page article span[class$="_word"]',
+				),
+			).toHaveCount(0);
+			const point = await prepareTurnInput(page, "drag");
+			await page.mouse.move(point.x, point.y);
+			await page.mouse.down();
+			try {
+				await page.mouse.move(point.x + point.width * 0.7, point.y, {
+					steps: 6,
+				});
+				await expect(
+					page.locator(".he-book .page.page--folded.page--flipping"),
+				).toHaveCount(2);
+				// Commit the last queued native pointer pose before comparing pixels.
+				await page.evaluate(
+					() =>
+						new Promise<void>((resolve) =>
+							requestAnimationFrame(() =>
+								requestAnimationFrame(() => resolve()),
+							),
+						),
+				);
+				const pose = () =>
+					page.locator(".he-book .page--flipping").evaluateAll((pages) =>
+						pages.map((page) => ({
+							transform: (page as HTMLElement).style.transform,
+							clip: (page as HTMLElement).style.clipPath,
+						})),
+					);
+				const heldPose = await pose();
+				const book = page.locator('[class*="bookArea"]');
+				const prepared = await book.screenshot({ animations: "disabled" });
+				const restored = await page.evaluate(() => {
+					const nodes: Text[] = [];
+					for (const article of document.querySelectorAll(".he-book article")) {
+						const walker = document.createTreeWalker(
+							article,
+							NodeFilter.SHOW_TEXT,
+						);
+						for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+							if (node.textContent?.trim()) nodes.push(node as Text);
+						}
+					}
+					// Restore the original inert inline-box styling as an independent
+					// appearance control. Keep every original text node and boundary.
+					for (const node of nodes) {
+						const span = document.createElement("span");
+						span.dataset.readerOriginalWord = "";
+						span.style.cssText =
+							"display:inline;border:0;padding:0;margin:0;border-radius:var(--radius-sm);background:transparent;color:inherit;font:inherit;line-height:inherit;letter-spacing:inherit;word-spacing:inherit;text-align:inherit";
+						node.replaceWith(span);
+						span.appendChild(node);
+					}
+					return nodes.length;
+				});
+				const controlStyle = await page.addStyleTag({
+					content:
+						".he-book [class*=perekTextScrollWrapper] { will-change: auto !important; background-color: transparent !important; }",
+				});
+				try {
+					// A missing control must never pass as two identical setups.
+					expect(restored).toBeGreaterThan(100);
+					const original = await book.screenshot({ animations: "disabled" });
+					expect(await pose()).toEqual(heldPose);
+					await testInfo.attach("prepared-page", {
+						body: prepared,
+						contentType: "image/png",
+					});
+					await testInfo.attach("original-page", {
+						body: original,
+						contentType: "image/png",
+					});
+					const preparedPixels = await sharp(prepared)
+						.ensureAlpha()
+						.raw()
+						.toBuffer();
+					const originalPixels = await sharp(original)
+						.ensureAlpha()
+						.raw()
+						.toBuffer();
+					expect(preparedPixels.length).toBe(originalPixels.length);
+					expect(preparedPixels.equals(originalPixels)).toBe(true);
+				} finally {
+					await controlStyle.evaluate((element) =>
+						element.parentNode?.removeChild(element),
+					);
+					await page.evaluate(() => {
+						for (const span of document.querySelectorAll(
+							"[data-reader-original-word]",
+						)) {
+							span.replaceWith(...span.childNodes);
+						}
+					});
+				}
+			} finally {
+				await page.mouse.up();
+			}
+		});
+
+		test(`both current pages retain visible text after every turn with ${mode} bookmarks`, async ({
+			page,
+		}) => {
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await page.addInitScript((attachment) => {
+				localStorage.setItem(
+					"seferBookmarks",
+					JSON.stringify({
+						enabled: attachment !== "hidden",
+						placement: "sides",
+						orientation: "perpendicular",
+						attachment: attachment === "pinned" ? "pinned" : "leaf",
+						order: "page",
+						upcomingOnly: false,
+					}),
+				);
+			}, mode);
+			await page.goto("/929/300?book", { waitUntil: "load" });
+			await waitForVisibleTurnContent(page);
+			for (let chapter = 301; chapter <= 306; chapter++) {
+				await page.locator(".flipbook-toolbar-next").click();
+				await expect(page).toHaveURL(
+					(url) =>
+						url.pathname === `/929/${chapter}` && url.searchParams.has("book"),
+				);
+				await page.waitForFunction(
+					() => !document.querySelector(".he-book .page--flipping"),
+					null,
+					{ timeout: 5_000 },
+				);
+				await waitForVisibleTurnContent(page);
+			}
+		});
+	}
+
+	test("opening book view does not wait for a server navigation for its display preference", async ({
+		page,
+		baseURL,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const reader = new SeferPage(page);
+		await reader.navigateToPerek(1);
+		expect(new URL(page.url()).origin).toBe(new URL("/", baseURL).origin);
+		const blocked: Route[] = [];
+		await page.route(
+			(url) =>
+				url.pathname === "/929/1" &&
+				url.searchParams.has("book") &&
+				url.searchParams.has("_rsc"),
+			(route) => {
+				if (route.request().method() === "GET") {
+					// A display preference must not suspend the lazy book behind
+					// a server-component request. Keep an accidental request pending.
+					blocked.push(route);
+					return;
+				}
+				return route.continue();
+			},
+		);
+		try {
+			await reader.openSeferView();
+			await waitForVisibleTurnContent(page);
+			expect(blocked).toHaveLength(0);
+		} finally {
+			// A deadline can close the page before its held request is aborted.
+			await Promise.all(
+				blocked.map((route) =>
+					route.abort().catch((error) => {
+						if (!page.isClosed()) throw error;
+					}),
+				),
+			);
+		}
 	});
 
 	test("TOC links open chapter routes with modifiers and turn pages on regular click", async ({
@@ -295,7 +494,7 @@ test.describe("Sefer view", () => {
 		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "true");
-		const text = page.locator(".he-book article:visible").first();
+		const text = page.locator(".he-book .page.current-page article").first();
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
 		const initialPage = await indicator.inputValue();
@@ -342,7 +541,7 @@ test.describe("Sefer view", () => {
 		await seferPage.verifyPesukimAreVisible();
 		await page.getByRole("button", { name: "בחירת טקסט עם העכבר" }).click();
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -354,15 +553,7 @@ test.describe("Sefer view", () => {
 		await page.mouse.down();
 		await page.waitForTimeout(500);
 		await page.mouse.move(x + 200, y, { steps: 5 });
-		expect(
-			await page
-				.locator(".he-book .page")
-				.evaluateAll((pages) =>
-					pages.some(
-						(page) => (page as HTMLElement).style.willChange === "transform",
-					),
-				),
-		).toBe(false);
+		expect(await page.locator(".he-book .page--flipping").count()).toBe(0);
 		await page.mouse.up();
 		await expect
 			.poll(() =>
@@ -378,7 +569,7 @@ test.describe("Sefer view", () => {
 		await seferPage.openSeferViewForPerek(1);
 		await seferPage.verifyPesukimAreVisible();
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -409,7 +600,7 @@ test.describe("Sefer view", () => {
 		await seferPage.openSeferViewForPerek(1);
 		await seferPage.verifyPesukimAreVisible();
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -511,7 +702,7 @@ test.describe("Sefer view", () => {
 		await selectButton.click();
 		await expect(selectButton).toHaveAttribute("aria-pressed", "false");
 		const rect = await page
-			.locator(".he-book article:visible")
+			.locator(".he-book .page.current-page article")
 			.first()
 			.boundingBox();
 		if (!rect) throw new Error("Verse text is not visible");
@@ -652,13 +843,13 @@ test.describe("Sefer view", () => {
 		await expect(page).toHaveURL(/\/929\/2\?book/);
 		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
 
-		// Leaving Sefer view hands the title back to the flat perek page.
+		// Leaving Sefer view opens the current chapter's flat page.
 		const toggler = page.getByTestId("read-mode-toggler");
 		await toggler.click();
 		await expect(page.locator('[class*="seferOverlay"]')).not.toBeVisible();
-		await expect(page).toHaveURL(/\/929\/2(?:\?|$)/);
-		await expect(page.getByRole("heading", { level: 1 })).toContainText(
-			"בראשית ב",
+		await expect(page).toHaveURL(/\/929\/2$/);
+		await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+			/^בראשית ב -/,
 		);
 		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
 	});

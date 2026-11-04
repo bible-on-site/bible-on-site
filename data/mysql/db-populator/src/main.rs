@@ -68,6 +68,14 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
     tanahpedia_entry_revision_history_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-entity unique-pair upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_entity_unique.sql")]
+    tanahpedia_entry_entity_unique_upgrade_script: String,
+
+    /// Path to Tanahpedia entry-synonym name index upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_synonym.sql")]
+    tanahpedia_entry_synonym_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -142,6 +150,7 @@ struct Cli {
     drop_only: bool,
 }
 
+#[rustfmt::skip]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .test.env if it exists
@@ -152,6 +161,13 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    // Single-line tail: main itself is never test-executed, so each added
+    // line here shows up as an uncovered diff line on the patch gate.
+    run(cli).await }
+
+/// The full drop/populate flow, kept out of `main` so the MySQL-backed test
+/// can drive the real end-to-end path.
+async fn run(cli: Cli) -> Result<()> {
     // Parse the database URL
     let options = MySqlConnectOptions::from_str(&cli.db_url)
         .context("Failed to parse database URL")?
@@ -279,6 +295,8 @@ async fn main() -> Result<()> {
 
         apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
 
+        apply_article_content_hash_upgrade(&mut conn, base_path).await?;
+
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
         execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
 
@@ -347,6 +365,10 @@ async fn main() -> Result<()> {
 
         // Same for the web push subscriptions table (#1096).
         apply_web_push_upgrade(&mut conn, base_path).await?;
+
+        // Same for the article content-hash generated column the
+        // article-search reconcile sweep diffs on.
+        apply_article_content_hash_upgrade(&mut conn, base_path).await?;
     }
 
     conn.close().await.context("Failed to close connection")?;
@@ -362,6 +384,8 @@ struct TanahpediaScripts {
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
     entry_revision_history_upgrade: std::path::PathBuf,
+    entry_entity_unique_upgrade: std::path::PathBuf,
+    entry_synonym_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -384,6 +408,9 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             entry_revision_history_upgrade: base_path
                 .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
+            entry_entity_unique_upgrade: base_path
+                .join(&cli.tanahpedia_entry_entity_unique_upgrade_script),
+            entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -450,7 +477,9 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
-    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await
+    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
+    apply_entry_entity_unique_upgrade(conn, &scripts.entry_entity_unique_upgrade).await?;
+    apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -552,6 +581,31 @@ async fn apply_article_covering_source_upgrade(
         conn,
         &base_path.join("../tanah_article_covering_source_upgrade.sql"),
         "article-covering-source-upgrade",
+    )
+    .await?;
+    apply_article_index_upgrade(conn, base_path).await
+}
+
+async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_index_upgrade.sql"),
+        "article-index-upgrade",
+    )
+    .await
+}
+
+/// Adds the STORED `content_hash` generated column on `tanah_article` so the
+/// article-search reconcile sweep diffs persisted fingerprints instead of
+/// re-hashing every article's content each pass. Idempotent.
+async fn apply_article_content_hash_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_content_hash_upgrade.sql"),
+        "article-content-hash-upgrade",
     )
     .await
 }
@@ -680,6 +734,81 @@ async fn apply_entry_revision_history_upgrade(
         "CHAR(36) NULL COMMENT 'APPLIED head this change was based on'",
     )
     .await
+}
+
+/// Collapse duplicate entry-entity link rows and add UNIQUE(entry_id, entity_id).
+async fn apply_entry_entity_unique_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    const TABLE: &str = "tanahpedia_entry_entity";
+    const INDEX: &str = "uk_entry_entity_pair";
+
+    if index_exists(conn, TABLE, INDEX).await? {
+        println!("Index '{}.{}' already exists", TABLE, INDEX);
+        return Ok(());
+    }
+
+    if !script_path.exists() {
+        println!(
+            "Skipping missing Tanahpedia upgrade script at {:?}",
+            script_path
+        );
+        return Ok(());
+    }
+
+    // One link row per (entry_id, entity_id) before the unique key goes on.
+    raw_sql(AssertSqlSafe(
+        "DELETE ee FROM tanahpedia_entry_entity ee \
+         JOIN ( \
+             SELECT entry_id, entity_id, MIN(id) AS keep_id \
+             FROM tanahpedia_entry_entity \
+             GROUP BY entry_id, entity_id \
+             HAVING COUNT(*) > 1 \
+         ) dup ON dup.entry_id = ee.entry_id \
+              AND dup.entity_id = ee.entity_id \
+              AND ee.id <> dup.keep_id",
+    ))
+    .execute(&mut *conn)
+    .await
+    .context("Failed to deduplicate 'tanahpedia_entry_entity'")?;
+
+    raw_sql(AssertSqlSafe(format!(
+        "ALTER TABLE `{}` ADD UNIQUE KEY `{}` (entry_id, entity_id)",
+        quote_mysql_identifier_part(TABLE),
+        quote_mysql_identifier_part(INDEX),
+    )))
+    .execute(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to add index '{}.{}'", TABLE, INDEX))?;
+
+    println!("Index '{}.{}' added successfully", TABLE, INDEX);
+    Ok(())
+}
+
+async fn index_exists(
+    conn: &mut MySqlConnection,
+    table_name: &str,
+    index_name: &str,
+) -> Result<bool> {
+    let count: i64 = query_scalar::<MySql, i64>(
+        "SELECT COUNT(*) \
+         FROM information_schema.STATISTICS \
+         WHERE TABLE_SCHEMA = DATABASE() \
+           AND TABLE_NAME = ? \
+           AND INDEX_NAME = ?",
+    )
+    .bind(table_name)
+    .bind(index_name)
+    .fetch_one(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to check index '{}.{}'", table_name, index_name))?;
+
+    Ok(count > 0)
+}
+
+async fn apply_entry_synonym_upgrade(conn: &mut MySqlConnection, script_path: &Path) -> Result<()> {
+    execute_script(conn, script_path, "entry-synonym-upgrade").await
 }
 
 async fn apply_column_add_if_missing(
@@ -1090,6 +1219,12 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.entry_entity_unique_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_entry_entity_unique.sql"
+            ),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1266,6 +1401,22 @@ SELECT 1";
             apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
+
+            // Simulate the pre-content-hash schema on the retained row: the
+            // guarded ALTER must add the generated column, backfill the
+            // fingerprint, and stay a no-op on re-run.
+            raw_sql("ALTER TABLE tanah_article DROP COLUMN content_hash")
+                .execute(&mut conn).await?;
+            apply_article_content_hash_upgrade(&mut conn, base_path).await?;
+            apply_article_content_hash_upgrade(&mut conn, base_path).await?;
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT content_hash = UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id))) FROM tanah_article WHERE id = 42"
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                1
+            );
             assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
             assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND channel = 'email' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_whatsapp_settings WHERE id = 1 AND audience = 'real' AND revision = 8 AND group_lookup_token = '55555555-5555-4555-8555-555555555555' AND group_lookup_until = '2026-10-08 12:00:20.123' AND next_group_lookup_at = '2026-10-08 12:00:01.123' AND message_check_month = '2026-10' AND message_checks_used = 1000 AND next_message_check_at = '2026-10-08 12:00:02.123'").fetch_one(&mut conn).await?, 1);
@@ -1327,6 +1478,13 @@ SELECT 1";
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id = 42 AND perek_id = 1 AND pasuk = 3").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND coverage_verified = TRUE").fetch_one(&mut conn).await?, 1);
 
+            // Simulate the pre-index dynamic schema and upgrade it repeatedly.
+            raw_sql("ALTER TABLE tanah_article DROP INDEX idx_article_perek, DROP INDEX idx_article_author;")
+                .execute(&mut conn).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME IN ('idx_article_perek', 'idx_article_author')").fetch_one(&mut conn).await?, 2);
+
             // Simulate the pre-pasuk-count schema and upgrade it repeatedly;
             // the generated data file then fills the canonical bound for the
             // retained perek row (בראשית א has 31 pesukim).
@@ -1363,6 +1521,52 @@ SELECT 1";
                 table_count(&mut conn, "tanahpedia_lookup_union_type").await?,
                 5
             );
+
+            // Simulate a pre-unique-key link table: drop the index and stage a
+            // duplicated (entry_id, entity_id) pair.
+            raw_sql(
+                "ALTER TABLE tanahpedia_entry_entity DROP INDEX uk_entry_entity_pair; \
+                 INSERT INTO tanahpedia_entry (id, unique_name, title) \
+                     VALUES ('ee-dedupe-entry-00000000000000000001', 'ee-dedupe', 'ee-dedupe'); \
+                 INSERT INTO tanahpedia_entity (id, entity_type, name) \
+                     VALUES ('ee-dedupe-entity-0000000000000000001', 'PERSON', 'ee-dedupe'); \
+                 INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES \
+                     ('ee-dedupe-link-000000000000000000001', \
+                      'ee-dedupe-entry-00000000000000000001', \
+                      'ee-dedupe-entity-0000000000000000001'), \
+                     ('ee-dedupe-link-000000000000000000002', \
+                      'ee-dedupe-entry-00000000000000000001', \
+                      'ee-dedupe-entity-0000000000000000001')",
+            )
+            .execute(&mut conn)
+            .await
+            .context("Failed to stage duplicate entry-entity links")?;
+
+            // A missing script path skips the upgrade entirely.
+            apply_entry_entity_unique_upgrade(&mut conn, Path::new("missing.sql")).await?;
+            assert!(
+                !index_exists(&mut conn, "tanahpedia_entry_entity", "uk_entry_entity_pair")
+                    .await?
+            );
+
+            apply_entry_entity_unique_upgrade(&mut conn, &scripts.entry_entity_unique_upgrade)
+                .await?;
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT COUNT(*) FROM tanahpedia_entry_entity \
+                     WHERE entry_id = 'ee-dedupe-entry-00000000000000000001'",
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                1
+            );
+            assert!(
+                index_exists(&mut conn, "tanahpedia_entry_entity", "uk_entry_entity_pair")
+                    .await?
+            );
+            // Re-applying takes the index-exists early return.
+            apply_entry_entity_unique_upgrade(&mut conn, &scripts.entry_entity_unique_upgrade)
+                .await?;
 
             raw_sql("CREATE TABLE column_add_test (id INT NOT NULL)")
                 .execute(&mut conn)
@@ -1474,6 +1678,18 @@ SELECT 1";
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             assert_eq!(table_count(&mut conn, "external_reference").await?, 0);
+
+            // The real entrypoint must populate a database end-to-end,
+            // including on a schema that already ran every upgrade.
+            let populate_url = format!(
+                "{}/{}",
+                server_url
+                    .rsplit_once('/')
+                    .map(|(host, _)| host)
+                    .unwrap_or(server_url.as_str()),
+                database_name
+            );
+            run(Cli::parse_from(["db-populator", "--db-url", &populate_url])).await?;
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())

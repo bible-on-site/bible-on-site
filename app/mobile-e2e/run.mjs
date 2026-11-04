@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
-import { iosInteractionDiagnostics, sampleIosFallback } from "./ios-interaction-diagnostics.mjs";
+import { iosInteractionDiagnostics, readLoggedIosAppPid, sampleIosFallback, samplePinnedIosApp } from "./ios-interaction-diagnostics.mjs";
 import { listenScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
@@ -14,7 +14,7 @@ import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-lo
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
-import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
+import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
@@ -81,7 +81,7 @@ let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
 const interactions = platform === "ios" ? iosInteractionDiagnostics({
   artifacts, udid: process.env.MOBILE_UDID,
-  nativeLog: resolve(artifacts, "device-live.log"), execute,
+  nativeLog: resolve(artifacts, "device-live.log"), execute, inspectorPath,
 }) : undefined;
 const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
   interactions.capture(command, request)) : undefined;
@@ -133,36 +133,18 @@ if (platform === "ios") {
 }
 
 async function sampleIosApp(phase) {
-  const captureSignal = AbortSignal.timeout(15000);
+  const deadlineUtc = new Date(Date.now() + 15000).toISOString();
   try {
-    // Another simulator may share this host, so a name-wide pgrep could
-    // sample a different device's healthy app — writing its stacks into this
-    // run's failure artifacts and pausing it mid-test. The device's own
-    // launchd table resolves only this run's app; a failed session that
-    // already terminated the app simply leaves no PID row to find.
-    const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-      "launchctl", "list"], { timeout: 5000, signal: captureSignal });
-    writeFileSync(resolve(artifacts, `native-${phase}-processes.txt`), listing.stdout);
-    try {
-      await execute("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot",
-        resolve(artifacts, `native-${phase}.png`)], { timeout: 5000, signal: captureSignal });
-    } catch (error) {
+    // The no-handoff fallback uses the same bounded passive identity and host
+    // ownership check. A stalled simulator cannot block PID rediscovery here.
+    const pid = readLoggedIosAppPid(resolve(artifacts, "device-live.log"));
+    const prefix = resolve(artifacts, `native-${phase}`);
+    const result = await samplePinnedIosApp({ udid: process.env.MOBILE_UDID, pid,
+      prefix, deadlineUtc, execute, inspectorPath });
+    writeFileSync(`${prefix}.json`, JSON.stringify(result, null, 2));
+    if (result.status === "error") {
       diagnosticsFailed = true;
-      writeFileSync(resolve(artifacts, `native-${phase}-screenshot-error.txt`), String(error));
-      console.error("Could not capture the iOS frame:", error.message);
-    }
-    for (const pid of iosAppPids(listing.stdout)) {
-      const stats = await execute("ps", ["-p", pid, "-o", "pid,ppid,%cpu,rss,state"], { timeout: 5000, signal: captureSignal });
-      writeFileSync(resolve(artifacts, `native-${phase}-process-${pid}.txt`), stats.stdout);
-      // Sampling a busy process stalled for its entire 120-second budget.
-      // Attach without eager symbol loading, capture a bounded backtrace and
-      // detach. Loss of debugger connection must also leave the app detached.
-      const captured = await execute("sudo", ["-n", "xcrun", "lldb", "--no-lldbinit", "--batch",
-        "--one-line-before-file", "settings set target.preload-symbols false",
-        "--one-line-before-file", "settings set target.detach-on-error true",
-        "--attach-pid", pid, "--one-line", "thread backtrace -c 40 all",
-        "--one-line", "process detach"], { timeout: 10000, signal: captureSignal });
-      writeFileSync(resolve(artifacts, `native-${phase}-stack-${pid}.txt`), captured.stdout + captured.stderr);
+      console.error("Could not sample the iOS app:", result.error ?? result.frameError);
     }
   } catch (error) {
     diagnosticsFailed = true;

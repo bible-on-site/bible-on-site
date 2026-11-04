@@ -1,7 +1,9 @@
 /* Set the nav background color for perek pages. The z-index lifts the bar
    (and the accessibility popover it contains) above .perekContainer
-   (z-index: 6), which otherwise paints over the open popover. */
-body:has(.perek-layout) .top-nav {
+   (z-index: 6), which otherwise paints over the open popover. The nav and
+   route layout are body siblings. Anchor the check on the nav so moving
+   bookmarks and mounting covered chapters do not invalidate body styles. */
+body > .top-nav:has(~ .perek-layout) {
   background-color: var(--accent-600);
   z-index: 7;
 }

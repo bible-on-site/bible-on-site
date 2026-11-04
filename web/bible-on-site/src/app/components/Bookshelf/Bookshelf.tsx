@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import catalog from "@/data/db/client-catalog.generated.json";
 import { getTodaysPerekId } from "@/data/perek-calendar";
 import { isTreiAsar } from "@/data/sefer-colors";
+import { TABLET_MIN_WIDTH } from "@/hooks/useIsWideEnough";
 import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
 import styles from "./bookshelf.module.scss";
 
@@ -33,6 +34,10 @@ export type BookshelfProps = {
 	 * Dedication lines by sefer/helek name (#2731): sefer dedications share
 	 * the spine's title line, pinned to its end, helek dedications sit
 	 * beside their helek heading. Empty/missing maps render a plain shelf.
+	 * Below the tablet boundary nothing renders them at all (#2849 §1a):
+	 * the module stylesheet hides the captions so the desktop-default
+	 * first render never flashes dedication copy on small screens, and
+	 * once mounted the component stops passing them down entirely.
 	 */
 	dedications?: BookshelfDedicationLines;
 };
@@ -595,6 +600,12 @@ function calculateSqSize(
 export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 	const windowWidth = useWindowWidth();
 	const useMultiShelf = windowWidth < MULTI_SHELF_BREAKPOINT;
+	// #2849 §1a — small screens drop shelf dedications entirely. The module
+	// stylesheet already hides the captions below the same boundary so the
+	// desktop-default first render never flashes them; once mounted this
+	// gate removes them from the DOM (and their spine-line padding) too.
+	const showDedications = windowWidth >= TABLET_MIN_WIDTH;
+	const shelfDedications = showDedications ? dedications : undefined;
 
 	// Today's perek depends on the client's date, so resolve it after mount
 	const [todaysPerekId, setTodaysPerekId] = useState<number>();
@@ -636,8 +647,8 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 						label="תורה"
 						todaySeferName={todaySeferName}
 						todaysPerekId={todaysPerekId}
-						seferDedications={dedications?.bySefer}
-						helekDedications={dedications?.byHelek.תורה}
+						seferDedications={shelfDedications?.bySefer}
+						helekDedications={shelfDedications?.byHelek.תורה}
 					/>
 					<SingleShelf
 						positions={neviimRishonimData.positions}
@@ -648,8 +659,8 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 						label="נביאים: ראשונים + גדולים"
 						todaySeferName={todaySeferName}
 						todaysPerekId={todaysPerekId}
-						seferDedications={dedications?.bySefer}
-						helekDedications={dedications?.byHelek.נביאים}
+						seferDedications={shelfDedications?.bySefer}
+						helekDedications={shelfDedications?.byHelek.נביאים}
 					/>
 					<SingleShelf
 						positions={treiAsarData.positions}
@@ -660,8 +671,8 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 						label="נביאים (המשך): תרי עשר"
 						todaySeferName={todaySeferName}
 						todaysPerekId={todaysPerekId}
-						seferDedications={dedications?.bySefer}
-						helekDedications={dedications?.byHelek.נביאים}
+						seferDedications={shelfDedications?.bySefer}
+						helekDedications={shelfDedications?.byHelek.נביאים}
 					/>
 					<SingleShelf
 						positions={ketuvimData.positions}
@@ -672,8 +683,8 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 						label="כתובים"
 						todaySeferName={todaySeferName}
 						todaysPerekId={todaysPerekId}
-						seferDedications={dedications?.bySefer}
-						helekDedications={dedications?.byHelek.כתובים}
+						seferDedications={shelfDedications?.bySefer}
+						helekDedications={shelfDedications?.byHelek.כתובים}
 					/>
 				</div>
 			</div>
@@ -686,6 +697,10 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 	// Helek captions under their headings (#2731): one strip aligned to the
 	// helek spans, ordered to match the shelf (תורה rightmost in RTL flow).
 	const shelfHelekSpans = [...allBooksData.helekSpans].reverse();
+	// Strip lookup shared by the render gate and the per-group captions; an
+	// undedicated helek — or no shelf dedications at all — yields no lines.
+	const helekDedicationLines = (helek: HelekSpan["helek"]) =>
+		shelfDedications?.byHelek[helek] ?? [];
 
 	return (
 		<div className={styles.root}>
@@ -698,10 +713,10 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 				helekLabels={allBooksData.helekLabels}
 				todaySeferName={todaySeferName}
 				todaysPerekId={todaysPerekId}
-				seferDedications={dedications?.bySefer}
+				seferDedications={shelfDedications?.bySefer}
 			/>
 			{shelfHelekSpans.some(
-				(span) => (dedications?.byHelek[span.helek] ?? []).length > 0,
+				(span) => helekDedicationLines(span.helek).length > 0,
 			) && (
 				<div
 					className={styles.helekDedicationStrip}
@@ -713,7 +728,7 @@ export function Bookshelf({ onSeferClick, dedications }: BookshelfProps) {
 							className={styles.helekDedicationGroup}
 							style={{ flexBasis: `${sqSize * (span.endX - span.startX)}px` }}
 						>
-							{(dedications?.byHelek[span.helek] ?? []).map((line, index) => (
+							{helekDedicationLines(span.helek).map((line, index) => (
 								// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
 								<p key={index}>{line}</p>
 							))}

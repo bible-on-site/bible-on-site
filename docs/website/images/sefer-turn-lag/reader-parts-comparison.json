@@ -1,0 +1,568 @@
+{
+  "kind": "Actual normal production builds; no injected styles, JavaScript or local library overrides",
+  "profile": {
+    "browser": "Chromium 156.0.8078.4",
+    "platform": "Linux",
+    "rendering": "SwiftShader",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "locale": "he-IL"
+  },
+  "before": {
+    "time": "2026-11-03T06:13:17.010Z",
+    "siteHead": "76fd7f9ba929173f3eed2223f0662673b9ef474d",
+    "libraryVersion": "0.0.0-alpha.104",
+    "registryByteBinding": "reader249-byte-binding.json",
+    "registry": true,
+    "prerenderedRoutes": 20497,
+    "buildId": "EbokxAp5XgTVrpt4NlLF4",
+    "chunks": [
+      {
+        "name": "04tr-e2nss5yq.js",
+        "bytes": 49489,
+        "sha256": "790d32419c91e0b5663071ab174d5cece823b89f969a5a10c2f983da469e9183",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      },
+      {
+        "name": "0am89lrt4amp9.js",
+        "bytes": 8958,
+        "sha256": "4b829b4a68a651506d6e66a5825c2a8cb6ac962a2c3544045d31d8661f926b1d",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      },
+      {
+        "name": "0mtijly53e9nm.css",
+        "bytes": 38639,
+        "sha256": "194f5febde0b3b0e0029384fd7bf7ea04d751fd58bf812f3a1f5fb5f52f11a88",
+        "paper": true,
+        "reader": false,
+        "paperShading": false
+      },
+      {
+        "name": "23ofzraoczo-5.js",
+        "bytes": 120276,
+        "sha256": "e932993446ba93ec485535f2f958bd1dfedad538e21417e25a9470079dfb34a1",
+        "paper": true,
+        "reader": false,
+        "paperShading": true
+      },
+      {
+        "name": "3_-41fr6fxof0.js",
+        "bytes": 5580,
+        "sha256": "789146527bfaf86330eced104066a353026607f95c05651e9f8394b6c539d78f",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      }
+    ],
+    "sourceTree": "5a0ead51b4b582709f94890c441c740d3e101121"
+  },
+  "after": {
+    "time": "2026-11-03T07:15:24.722Z",
+    "siteHead": "dba50912ad5b14ca77a38283b40ac5f8551952f3",
+    "libraryVersion": "0.0.0-alpha.104",
+    "registryByteBinding": "reader274-byte-binding.json",
+    "registry": true,
+    "prerenderedRoutes": 20497,
+    "buildId": "qxA2ZzP6BeY0fKmteSWr1",
+    "chunks": [
+      {
+        "name": "07ppejq1xg5zq.js",
+        "bytes": 8958,
+        "sha256": "168f9379fc2035a8ba9a12bbae7a5a2abb118d23f468e5bef723f30b9cc58685",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      },
+      {
+        "name": "0mtijly53e9nm.css",
+        "bytes": 38639,
+        "sha256": "194f5febde0b3b0e0029384fd7bf7ea04d751fd58bf812f3a1f5fb5f52f11a88",
+        "paper": true,
+        "reader": false,
+        "paperShading": false
+      },
+      {
+        "name": "1okldwid_-ot4.js",
+        "bytes": 49489,
+        "sha256": "a286db3fbbdd346f1b8e034587810a3df45d7fc741d86fe2646be5ae9971c612",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      },
+      {
+        "name": "23ofzraoczo-5.js",
+        "bytes": 120276,
+        "sha256": "e932993446ba93ec485535f2f958bd1dfedad538e21417e25a9470079dfb34a1",
+        "paper": true,
+        "reader": false,
+        "paperShading": true
+      },
+      {
+        "name": "2m_yc-_u8-856.js",
+        "bytes": 5580,
+        "sha256": "cd50efe36d905d4b8f71c54931dc2ec9c7395a09815e2f8ed868a70248885c61",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      }
+    ],
+    "sourceTree": "410c6696891fffa02221ebbe01907b6a95b53c6e",
+    "rendererBinding": {
+      "head": "dba50912ad5b14ca77a38283b40ac5f8551952f3",
+      "sourceTree": "410c6696891fffa02221ebbe01907b6a95b53c6e",
+      "buildId": "qxA2ZzP6BeY0fKmteSWr1",
+      "files": [
+        {
+          "name": "0fmtsso52c_0x.js",
+          "bytes": 38002,
+          "sha256": "f23e077711c63f221074e99c4d89d31abde03e0aafcdabfbd3adb8bae0b33463",
+          "renderer": true
+        },
+        {
+          "name": "1dalg41_lcz6i.css",
+          "bytes": 10025,
+          "sha256": "6f02b938e77317cc22682cc6bcf19f91eb78114b574d74144c32b7b7bde5c2aa",
+          "renderer": false
+        },
+        {
+          "name": "202s6ahz86522.css",
+          "bytes": 17714,
+          "sha256": "348f70256c2c64ef4bb5e5b39ffeb6d8b920974b4e312e0acfc5d78a324b6af4",
+          "renderer": false
+        }
+      ]
+    }
+  },
+  "comparisons": [
+    {
+      "chapter": 125,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 3243,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "a5f33cccccc4d5e455b3a537191941488d60c6fdb676492856d58c531f95f20b",
+      "afterSha256": "a5f33cccccc4d5e455b3a537191941488d60c6fdb676492856d58c531f95f20b"
+    },
+    {
+      "chapter": 125,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "86e1e8701460101b3b37189cf64ab356d3d5cfcdc9ce701628e82e856439cccc",
+      "afterSha256": "86e1e8701460101b3b37189cf64ab356d3d5cfcdc9ce701628e82e856439cccc"
+    },
+    {
+      "chapter": 125,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "462e0f6c965ef22049b8c80ff547cfbc8c8b9f032135aede85c0398a3d0a2029",
+      "afterSha256": "462e0f6c965ef22049b8c80ff547cfbc8c8b9f032135aede85c0398a3d0a2029"
+    },
+    {
+      "chapter": 125,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 3243,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "0065f3bd49d8436a0e145716d880d76bd552cd77a7f534caa4625f7abaaa9dee",
+      "afterSha256": "0065f3bd49d8436a0e145716d880d76bd552cd77a7f534caa4625f7abaaa9dee"
+    },
+    {
+      "chapter": 125,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "1df0c63fbac0a68dbcb596036b02982ce0fe51721aceb6bf6e6e572c94a0a0e0",
+      "afterSha256": "1df0c63fbac0a68dbcb596036b02982ce0fe51721aceb6bf6e6e572c94a0a0e0"
+    },
+    {
+      "chapter": 125,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "9e50371affbcecef17e5b8d13884358b4519663dae4946924462f421a5788af9",
+      "afterSha256": "9e50371affbcecef17e5b8d13884358b4519663dae4946924462f421a5788af9"
+    },
+    {
+      "chapter": 125,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 3243,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "8d1f88a9613944a910f2bf4c2de22ebea28683e6954ecaec29cea92d585d01e8",
+      "afterSha256": "8d1f88a9613944a910f2bf4c2de22ebea28683e6954ecaec29cea92d585d01e8"
+    },
+    {
+      "chapter": 125,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "a71c04d3ad16c3b96a6d1d0db2485f20b0cdb21ddd08938ecf11522d6c97df9d",
+      "afterSha256": "a71c04d3ad16c3b96a6d1d0db2485f20b0cdb21ddd08938ecf11522d6c97df9d"
+    },
+    {
+      "chapter": 125,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "2a331dc61c7a26aea7335f1eb63af70581a77134c3ea0514d5bb7acc8c0e7999",
+      "afterSha256": "2a331dc61c7a26aea7335f1eb63af70581a77134c3ea0514d5bb7acc8c0e7999"
+    },
+    {
+      "chapter": 300,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 5319,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "03309e8621e9a505602defc0778a302527ced4ac7bfbf164730e0b3e65606e9d",
+      "afterSha256": "03309e8621e9a505602defc0778a302527ced4ac7bfbf164730e0b3e65606e9d"
+    },
+    {
+      "chapter": 300,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "e86bf378dd6b66a393a5234c53e4ac33ec60cdcc273df092312790bd25730c60",
+      "afterSha256": "e86bf378dd6b66a393a5234c53e4ac33ec60cdcc273df092312790bd25730c60"
+    },
+    {
+      "chapter": 300,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "146e26b4f201f3cb64a38cd52d58e65e01c26a51aeedf7da2acbb14853af5582",
+      "afterSha256": "146e26b4f201f3cb64a38cd52d58e65e01c26a51aeedf7da2acbb14853af5582"
+    },
+    {
+      "chapter": 300,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 5319,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "b15190db150f37d97845b6848d6fcf29fc90628356a639de9b341e7c200af124",
+      "afterSha256": "b15190db150f37d97845b6848d6fcf29fc90628356a639de9b341e7c200af124"
+    },
+    {
+      "chapter": 300,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "ba125d4ea99f39a49ad6f33af230535386cace369cb133adce7c5aed0c593348",
+      "afterSha256": "ba125d4ea99f39a49ad6f33af230535386cace369cb133adce7c5aed0c593348"
+    },
+    {
+      "chapter": 300,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "7d9c1cd2e3065e751e71a26cbbd6f9dae333edce0b4625b3fd9984db21214814",
+      "afterSha256": "7d9c1cd2e3065e751e71a26cbbd6f9dae333edce0b4625b3fd9984db21214814"
+    },
+    {
+      "chapter": 300,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 5319,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "e6880984d518de6785919340829a3c2de5c3d91de1eb9bfc21b3f60b690e0561",
+      "afterSha256": "e6880984d518de6785919340829a3c2de5c3d91de1eb9bfc21b3f60b690e0561"
+    },
+    {
+      "chapter": 300,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "17319b92d326a7e7429af115c91813fa1648ef8fa89243831144545bcbf55939",
+      "afterSha256": "17319b92d326a7e7429af115c91813fa1648ef8fa89243831144545bcbf55939"
+    },
+    {
+      "chapter": 300,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "76590c17165552d0e042e2dc50db41ae9391c4f36524caad53dae1b03e940a39",
+      "afterSha256": "76590c17165552d0e042e2dc50db41ae9391c4f36524caad53dae1b03e940a39"
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "rest",
+      "characters": 7729,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "88990bd58f505b580b2577d2ecfc9687084dced0956a86ebb8d68ce0209a0607",
+      "afterSha256": "88990bd58f505b580b2577d2ecfc9687084dced0956a86ebb8d68ce0209a0607"
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "cba83b29018f0ebd7233f179152be4d30de3693034bb05c92dff177639185dfe",
+      "afterSha256": "cba83b29018f0ebd7233f179152be4d30de3693034bb05c92dff177639185dfe"
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "5becae92279b8ee60a0fe3c068dd1b6f41453afc06213fbc15b4af8bc3087e70",
+      "afterSha256": "5becae92279b8ee60a0fe3c068dd1b6f41453afc06213fbc15b4af8bc3087e70"
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "dark",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "rest",
+      "characters": 7729,
+      "maxDelta": 0,
+      "changedPixels": 0,
+      "beforeSha256": "0fc388cdb5e837da6ac1f5fb374691f40ded2fb4992500a4e6df891858238b9e",
+      "afterSha256": "0fc388cdb5e837da6ac1f5fb374691f40ded2fb4992500a4e6df891858238b9e"
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "dark",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "straight",
+      "changedPixels": 0,
+      "beforeSha256": "083a33bc17d6cbaf176ab3ac85c6f405db8a63b28b19a8f8f799177281828669",
+      "afterSha256": "083a33bc17d6cbaf176ab3ac85c6f405db8a63b28b19a8f8f799177281828669"
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "dark",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "angled",
+      "changedPixels": 0,
+      "beforeSha256": "79d1d8ba4c36c9084ef7ab624b1b71b5fa482cb3f2b524b4439052985a8b19bd",
+      "afterSha256": "79d1d8ba4c36c9084ef7ab624b1b71b5fa482cb3f2b524b4439052985a8b19bd"
+    }
+  ]
+}

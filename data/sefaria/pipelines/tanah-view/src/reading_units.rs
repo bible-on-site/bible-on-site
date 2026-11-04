@@ -336,25 +336,33 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
 /// keyed by (auxiliary_ordinal, auxiliary_id). The unit shape is shared
 /// across divisions; only the derive step differs between them.
 fn insert_units(tx: &Transaction, division_id: &str, units: &[ReadingUnit]) -> Result<()> {
+    let mut unit_stmt = tx.prepare(
+        "INSERT INTO tanah_reading_unit
+         (division_id, unit_id, slug, sefer_id, unit_order, heading, closing_break)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )?;
+    let mut range_stmt = tx.prepare(
+        "INSERT INTO tanah_reading_unit_range
+         (division_id, unit_id, range_index, auxiliary_ordinal, auxiliary_id, auxiliary_label,
+          start_perek_id, start_pasuk, start_segment_index,
+          end_perek_id, end_pasuk, end_segment_index)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+    )?;
+
     for unit in units {
-        tx.execute(
-            "INSERT INTO tanah_reading_unit
-             (division_id, unit_id, slug, sefer_id, unit_order, heading, closing_break)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                division_id,
-                unit.unit_id,
-                &unit.slug,
-                unit.sefer_id,
-                unit.order,
-                &unit.heading,
-                unit.closing_break,
-            ),
-        )?;
+        unit_stmt.execute((
+            division_id,
+            unit.unit_id,
+            &unit.slug,
+            unit.sefer_id,
+            unit.order,
+            &unit.heading,
+            unit.closing_break,
+        ))?;
 
         for (range_index, range) in unit.ranges.iter().enumerate() {
             insert_range(
-                tx,
+                &mut range_stmt,
                 division_id,
                 unit.unit_id,
                 range_index as i32,
@@ -367,7 +375,7 @@ fn insert_units(tx: &Transaction, division_id: &str, units: &[ReadingUnit]) -> R
         for (aux_ordinal, aux) in unit.auxiliary_readings.iter().enumerate() {
             for (range_index, range) in aux.ranges.iter().enumerate() {
                 insert_range(
-                    tx,
+                    &mut range_stmt,
                     division_id,
                     unit.unit_id,
                     range_index as i32,
@@ -385,7 +393,7 @@ fn insert_units(tx: &Transaction, division_id: &str, units: &[ReadingUnit]) -> R
 
 #[allow(clippy::too_many_arguments)]
 fn insert_range(
-    tx: &Transaction,
+    stmt: &mut rusqlite::Statement,
     division_id: &str,
     unit_id: i32,
     range_index: i32,
@@ -394,27 +402,20 @@ fn insert_range(
     auxiliary_label: Option<&str>,
     range: &ScriptureRange,
 ) -> Result<()> {
-    tx.execute(
-        "INSERT INTO tanah_reading_unit_range
-         (division_id, unit_id, range_index, auxiliary_ordinal, auxiliary_id, auxiliary_label,
-          start_perek_id, start_pasuk, start_segment_index,
-          end_perek_id, end_pasuk, end_segment_index)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-        (
-            division_id,
-            unit_id,
-            range_index,
-            auxiliary_ordinal,
-            auxiliary_id,
-            auxiliary_label,
-            range.start.perek_id,
-            range.start.pasuk,
-            range.start.segment_index,
-            range.end.perek_id,
-            range.end.pasuk,
-            range.end.segment_index,
-        ),
-    )?;
+    stmt.execute((
+        division_id,
+        unit_id,
+        range_index,
+        auxiliary_ordinal,
+        auxiliary_id,
+        auxiliary_label,
+        range.start.perek_id,
+        range.start.pasuk,
+        range.start.segment_index,
+        range.end.perek_id,
+        range.end.pasuk,
+        range.end.segment_index,
+    ))?;
     Ok(())
 }
 
@@ -851,17 +852,40 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
         ),
     )?;
 
+    let mut scheme_stmt = tx.prepare(
+        "INSERT INTO tanah_parasha_aliyah_scheme (id, label, description, scheme_order)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    let mut reading_stmt = tx.prepare(
+        "INSERT INTO tanah_parasha_reading (id, kind, sefer_id, applicability)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    let mut reading_unit_stmt = tx.prepare(
+        "INSERT INTO tanah_parasha_reading_unit
+           (reading_id, unit_position, division_id, unit_id)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    let mut aliyah_stmt = tx.prepare(
+        "INSERT INTO tanah_parasha_aliyah
+           (reading_id, scheme_id, ordinal, role, label,
+            start_perek_id, start_pasuk, end_perek_id, end_pasuk)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+    )?;
+    let mut alternative_stmt = tx.prepare(
+        "INSERT INTO tanah_parasha_aliyah_alternative
+           (reading_id, scheme_id, ordinal, alternative,
+            start_perek_id, start_pasuk, end_perek_id, end_pasuk,
+            custom, source)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+    )?;
+
     for (index, scheme) in source.schemes.iter().enumerate() {
-        tx.execute(
-            "INSERT INTO tanah_parasha_aliyah_scheme (id, label, description, scheme_order)
-             VALUES (?1, ?2, ?3, ?4)",
-            (
-                &scheme.id,
-                &scheme.label,
-                &scheme.description,
-                index as i32 + 1,
-            ),
-        )?;
+        scheme_stmt.execute((
+            &scheme.id,
+            &scheme.label,
+            &scheme.description,
+            index as i32 + 1,
+        ))?;
     }
 
     // unit_id (positional, 1-based) by parasha name — the join key into
@@ -885,11 +909,7 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
         } else {
             "standalone"
         };
-        tx.execute(
-            "INSERT INTO tanah_parasha_reading (id, kind, sefer_id, applicability)
-             VALUES (?1, ?2, ?3, ?4)",
-            (&reading.id, kind, sefer_id, &reading.applicability),
-        )?;
+        reading_stmt.execute((&reading.id, kind, sefer_id, &reading.applicability))?;
         for (position, name) in reading.units.iter().enumerate() {
             let unit_id = unit_id_by_name.get(name.as_str()).ok_or_else(|| {
                 anyhow::anyhow!(
@@ -897,17 +917,12 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
                     reading.id
                 )
             })?;
-            tx.execute(
-                "INSERT INTO tanah_parasha_reading_unit
-                   (reading_id, unit_position, division_id, unit_id)
-                 VALUES (?1, ?2, ?3, ?4)",
-                (
-                    &reading.id,
-                    position as i32 + 1,
-                    PARASHA_DIVISION_ID,
-                    unit_id,
-                ),
-            )?;
+            reading_unit_stmt.execute((
+                &reading.id,
+                position as i32 + 1,
+                PARASHA_DIVISION_ID,
+                unit_id,
+            ))?;
         }
         for (scheme_id, boundaries) in &reading.schemes {
             for boundary in boundaries {
@@ -932,23 +947,17 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
                         reading.id, scheme_id, boundary.ordinal
                     )
                 })?;
-                tx.execute(
-                    "INSERT INTO tanah_parasha_aliyah
-                       (reading_id, scheme_id, ordinal, role, label,
-                        start_perek_id, start_pasuk, end_perek_id, end_pasuk)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                    (
-                        &reading.id,
-                        scheme_id,
-                        boundary.ordinal,
-                        &boundary.role,
-                        &boundary.label,
-                        range.start.perek_id,
-                        range.start.pasuk,
-                        range.end.perek_id,
-                        range.end.pasuk,
-                    ),
-                )?;
+                aliyah_stmt.execute((
+                    &reading.id,
+                    scheme_id,
+                    boundary.ordinal,
+                    &boundary.role,
+                    &boundary.label,
+                    range.start.perek_id,
+                    range.start.pasuk,
+                    range.end.perek_id,
+                    range.end.pasuk,
+                ))?;
                 for (alternative_index, alternative) in boundary
                     .alternatives
                     .as_deref()
@@ -974,25 +983,18 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
                             alternative_index + 1
                         )
                     })?;
-                    tx.execute(
-                        "INSERT INTO tanah_parasha_aliyah_alternative
-                           (reading_id, scheme_id, ordinal, alternative,
-                            start_perek_id, start_pasuk, end_perek_id, end_pasuk,
-                            custom, source)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                        (
-                            &reading.id,
-                            scheme_id,
-                            boundary.ordinal,
-                            alternative_index as i32 + 1,
-                            alternative_range.start.perek_id,
-                            alternative_range.start.pasuk,
-                            alternative_range.end.perek_id,
-                            alternative_range.end.pasuk,
-                            &alternative.custom,
-                            &alternative.source,
-                        ),
-                    )?;
+                    alternative_stmt.execute((
+                        &reading.id,
+                        scheme_id,
+                        boundary.ordinal,
+                        alternative_index as i32 + 1,
+                        alternative_range.start.perek_id,
+                        alternative_range.start.pasuk,
+                        alternative_range.end.perek_id,
+                        alternative_range.end.pasuk,
+                        &alternative.custom,
+                        &alternative.source,
+                    ))?;
                 }
             }
         }

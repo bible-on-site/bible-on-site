@@ -289,7 +289,8 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     internal static string[] ExpandTerm(IEnumerable<string> vocabulary, string term, int edits, CancellationToken token)
     {
-        var matches = new List<(string Term, int Distance)>();
+        const int kept = 24;
+        var best = new List<(string Term, int Distance)>(kept);
         var matcher = new SearchSpellingMatcher(term, edits);
         foreach (var candidate in vocabulary)
         {
@@ -297,11 +298,34 @@ public sealed class SearchIndexService : IAsyncDisposable
             // a whole vocabulary scan first. This method already runs on the
             // search worker, so another Task.Run only adds scheduling work.
             token.ThrowIfCancellationRequested();
+            // A term that cannot reach the worst kept rank on characters alone
+            // (distance ≥ 0 ties lose on the ordinal term) skips the distance pass.
+            if (best.Count == kept && best[^1].Distance == 0
+                && string.CompareOrdinal(candidate, best[^1].Term) >= 0)
+            {
+                continue;
+            }
             var distance = matcher.Distance(candidate);
-            if (distance <= edits) { matches.Add((candidate, distance)); }
+            if (distance > edits) { continue; }
+            // Bounded top-K: insert into the sorted list only when the candidate
+            // ranks inside it — no materialized list of every match or full sort.
+            var insertAt = best.BinarySearch((candidate, distance), RankComparer.Default);
+            if (insertAt < 0) { insertAt = ~insertAt; }
+            if (insertAt >= kept) { continue; }
+            best.Insert(insertAt, (candidate, distance));
+            if (best.Count > kept) { best.RemoveAt(kept); }
         }
-        return matches.OrderBy(row => row.Distance).ThenBy(row => row.Term, StringComparer.Ordinal)
-            .Take(24).Select(row => $"\"{row.Term}\"").ToArray();
+        return best.Select(row => $"\"{row.Term}\"").ToArray();
+    }
+
+    private sealed class RankComparer : IComparer<(string Term, int Distance)>
+    {
+        public static readonly RankComparer Default = new();
+        public int Compare((string Term, int Distance) x, (string Term, int Distance) y)
+        {
+            var byDistance = x.Distance.CompareTo(y.Distance);
+            return byDistance != 0 ? byDistance : string.CompareOrdinal(x.Term, y.Term);
+        }
     }
 
     private Task<List<IndexRow>> QueryAsync(string table, string match, IReadOnlySet<int> books, int limit, SearchOrdering ordering)

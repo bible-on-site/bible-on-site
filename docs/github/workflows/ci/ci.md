@@ -207,18 +207,22 @@ published baseline. Delivery metadata must agree with the tag when present.
 Only the API package's own manifest and source-less lockfile version are
 normalized. Dependencies, source, build inputs, file modes, additions and
 deletions remain meaningful; an automatic version-only bump cannot trigger a
-new release. Real unpublished changes with a newer API version select fresh API
-checks and packaging. Other module flags stay unchanged, and all existing
-Cross Module CI, release and CD provenance guards still apply. Nothing promotes
-an artifact from a failed source run.
+new release. Real unpublished changes with an equal or newer API version select
+fresh API checks and packaging. An equal version reaches the existing
+`shared-release` tag-collision guard, which skips publishing and deployment for
+that run and requests a retry version bump on master. The bumped run must pass
+fresh quality gates before releasing under its new tag. Other module flags stay
+unchanged, and all existing Cross Module CI, release and CD provenance guards
+still apply. Nothing promotes an artifact from a failed source run.
 
 Available pinned commits are reused. A missing commit is fetched without
 changing repository history depth; depth-limited fetches are restricted to
 checkouts that were already shallow.
 
 The lookup is read-only and fails the selection job on metadata, provenance,
-fetch or version ambiguity. It runs only as a fallback on master pushes;
-ordinary API-change pushes retain their existing version-collision path.
+fetch or a changed source whose version is older than the published release.
+It runs only as a fallback on master pushes; ordinary API-change pushes retain
+their existing version-collision path.
 Removing the reconciliation step and its API output ORs disables this recovery
 without changing the ordinary release path. Its regression suite runs in the
 selection job on every CI event.

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("~/server/db", () => mocks);
 vi.mock("~/server/daily-bulletins.server", () => ({
+	readBulletinEmailContent: mocks.prepared,
 	readPreparedBulletin: mocks.prepared,
 }));
 vi.mock("~/server/ses-client.server", () => {
@@ -225,12 +226,21 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 			: [];
 	if (sql.includes("FROM tanah_daily_bulletin_email_settings"))
 		return [{ ...state.settings }];
-	if (sql.includes("FROM tanah_daily_bulletin_subscriber"))
+	if (sql.includes("FROM tanah_daily_bulletin_subscriber")) {
+		if (sql.includes("COUNT(*)"))
+			return [
+				{
+					n: state.subscribers.filter(
+						(s) => s.audience === params[0] && s.consent_status === "confirmed",
+					).length,
+				},
+			];
 		return state.subscribers
 			.filter(
 				(s) => s.audience === params[0] && s.consent_status === "confirmed",
 			)
 			.map((s) => ({ ...s }));
+	}
 	if (sql.includes("FROM tanah_daily_bulletin_email_job")) {
 		if (sql.includes("idempotency_key = ?"))
 			return state.jobs
@@ -302,7 +312,11 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 			return state.recipients
 				.filter((r) => r.job_id === params[0] && r.status === "queued")
 				.map((r) => ({ id: r.id }));
-		const row = state.recipients.find((r) => r.id === params[0]);
+		const row = state.recipients.find(
+			(r) =>
+				r.id === params[0] &&
+				(params[1] === undefined || r.attempt_token === params[1]),
+		);
 		if (!row) return [];
 		if (sql.includes("JOIN tanah_daily_bulletin_email_job")) {
 			const j = state.jobs.find((j) => j.id === row.job_id);
@@ -345,25 +359,56 @@ function write(sqlRaw: string, p: unknown[] = []) {
 		return result();
 	}
 	if (sql.startsWith("INSERT INTO tanah_daily_bulletin_email_recipient")) {
-		state.recipients.push({
-			id: state.recipients.length + 1,
-			job_id: String(p[0]),
-			subscriber_id: Number(p[1]),
-			email: String(p[2]),
-			status: "queued",
-			attempt_token: null,
-			message_id: null,
-			started_at: null,
-			event_at: null,
-			last_error: null,
-		});
-		return result();
+		// INSERT ... SELECT: one row per confirmed subscriber of the audience
+		const enrolled = state.subscribers.filter(
+			(s) => s.audience === p[1] && s.consent_status === "confirmed",
+		);
+		for (const s of enrolled)
+			state.recipients.push({
+				id: state.recipients.length + 1,
+				job_id: String(p[0]),
+				subscriber_id: s.id,
+				email: s.email.toLowerCase(),
+				status: "queued",
+				attempt_token: null,
+				message_id: null,
+				started_at: null,
+				event_at: null,
+				last_error: null,
+			});
+		return result(enrolled.length);
 	}
 	if (sql.startsWith("UPDATE tanah_daily_bulletin_email_job")) {
+		if (sql.includes("SET cnt_queued = ?"))
+			return result(state.jobs.some((j) => j.id === p[1]) ? 1 : 0);
+		// Incremental counters: status and last_error derive from the
+		// recipient rows exactly like the CASE expression in production
 		const row = state.jobs.find((j) => j.id === p[2]);
 		if (!row) return result(0);
-		row.status = String(p[0]);
-		row.last_error = p[1] as string | null;
+		const statuses = state.recipients
+			.filter((r) => r.job_id === row.id)
+			.map((r) => r.status);
+		row.status = statuses.includes("uncertain")
+			? "uncertain"
+			: statuses.includes("sending")
+				? "sending"
+				: statuses.includes("queued")
+					? "queued"
+					: statuses.includes("accepted")
+						? "accepted"
+						: statuses.some((s) =>
+									["failed", "bounced", "complained"].includes(s),
+								)
+							? "failed"
+							: statuses.includes("delivered")
+								? "delivered"
+								: "suppressed";
+		row.last_error =
+			row.status === "uncertain"
+				? String(p[0])
+				: row.status === "failed"
+					? String(p[1])
+					: null;
 		return result();
 	}
 	if (sql.startsWith("UPDATE tanah_daily_bulletin_delivery")) {
@@ -514,8 +559,21 @@ beforeEach(() => {
 			release = resolve;
 		});
 		await previous;
+		// Emulate rollback: a throw inside the callback restores pre-tx values
+		// into the same row objects and drops rows the tx inserted
+		const snapshot = new Map<object, Record<string, unknown>>();
+		for (const collection of [state.jobs, state.subscribers, state.recipients])
+			for (const item of collection) snapshot.set(item, { ...item });
+		const channel = state.channel;
 		try {
 			return await callback({});
+		} catch (error) {
+			state.jobs = state.jobs.filter((j) => snapshot.has(j));
+			state.subscribers = state.subscribers.filter((s) => snapshot.has(s));
+			state.recipients = state.recipients.filter((r) => snapshot.has(r));
+			for (const [live, saved] of snapshot) Object.assign(live, saved);
+			state.channel = channel;
+			throw error;
 		} finally {
 			release();
 		}
@@ -961,7 +1019,7 @@ describe("recipient processing", () => {
 	it("does not resend when accepted-message persistence fails", async () => {
 		const row = seed();
 		let fail = true;
-		mocks.execute.mockImplementation(async (sql, p) => {
+		mocks.txExecute.mockImplementation(async (_c, sql, p) => {
 			if (compact(sql).includes("SET message_id") && fail) {
 				fail = false;
 				throw new Error("store unavailable");
@@ -975,14 +1033,15 @@ describe("recipient processing", () => {
 	});
 	it("leaves claimed sending durable if both acknowledgement and uncertainty persistence fail", async () => {
 		const row = seed();
-		mocks.execute.mockImplementation(async (sql, p) => {
+		mocks.txExecute.mockImplementation(async (_c, sql, p) => {
 			if (!compact(sql).includes("status = 'sending', attempt_token"))
 				throw new Error("store unavailable");
 			return write(sql, p);
 		});
 		await expect(processEmailRecipient(1)).rejects.toThrow("store unavailable");
-		expect(row.status).toBe("sending");
-		mocks.execute.mockImplementation(async (sql, p) => write(sql, p));
+		// The claim transaction rolled back: the row is queued again for retry
+		expect(row.status).toBe("queued");
+		mocks.txExecute.mockImplementation(async (_c, sql, p) => write(sql, p));
 		await processEmailRecipient(1);
 		expect(mocks.sendOne).toHaveBeenCalledTimes(1);
 	});
@@ -1018,6 +1077,61 @@ describe("recipient processing", () => {
 		seed("real");
 		await processEmailRecipient(1);
 		expect(state.channel).toBe("sending");
+	});
+	it("mirrors an uncertain real outcome into the channel and job status", async () => {
+		seed("real");
+		mocks.sendOne.mockRejectedValue(new SesError("provider", "uncertain"));
+		await processEmailRecipient(1);
+		expect(state.jobs[0].status).toBe("uncertain");
+		expect(state.jobs[0].last_error).toBeTruthy();
+		expect(state.channel).toBe("uncertain");
+	});
+	it("leaves the claim intact when the persisted token no longer matches", async () => {
+		const row = seed();
+		mocks.sendOne.mockImplementationOnce(async () => {
+			await mocks.sesConfig.mock.lastCall?.[0].beforeSend();
+			row.attempt_token = "other-token";
+			return "message-1";
+		});
+		await processEmailRecipient(1);
+		expect(row.status).toBe("sending");
+		expect(row.message_id).toBeNull();
+	});
+	it("defers to a different message id persisted by a competing send", async () => {
+		const row = seed();
+		mocks.sendOne.mockImplementationOnce(async () => {
+			row.message_id = "winner";
+			return "message-1";
+		});
+		await processEmailRecipient(1);
+		expect(row.message_id).toBe("winner");
+		expect(row.status).toBe("uncertain");
+	});
+	it("keeps a delivered row delivered when the send then reports failure", async () => {
+		const row = seed();
+		mocks.sendOne.mockImplementationOnce(async () => {
+			await applySesEvent({
+				...delivery(),
+				attemptId: `1_${row.attempt_token}`,
+			});
+			throw new SesError("provider", "failed");
+		});
+		await processEmailRecipient(1);
+		expect(row.status).toBe("delivered");
+		expect(row.last_error).toBeNull();
+	});
+	it("fails when confirmed recipients disappear before enrollment", async () => {
+		mocks.txQueryOne.mockImplementation(async (_c, sql, p) =>
+			compact(String(sql)).includes("COUNT(*)")
+				? { n: 1 }
+				: (read(sql, p)[0] ?? null),
+		);
+		state.subscribers = [];
+		await expect(enqueueBulletinEmail(date, key, expected)).rejects.toThrow(
+			"אין נמענים",
+		);
+		expect(state.jobs).toHaveLength(0);
+		expect(state.recipients).toHaveLength(0);
 	});
 	it("requires a valid row ID and ignores missing rows", async () => {
 		await expect(processEmailRecipient(0)).rejects.toThrow();
@@ -1249,7 +1363,7 @@ describe("summary and queue loop", () => {
 					return read(sql, params);
 				});
 			if (stage === "write")
-				mocks.execute.mockImplementationOnce(async (sql, params) => {
+				mocks.txExecute.mockImplementationOnce(async (_c, sql, params) => {
 					await gate.promise;
 					return write(sql, params);
 				});
@@ -1270,7 +1384,7 @@ describe("summary and queue loop", () => {
 				stage === "read"
 					? mocks.query
 					: stage === "write"
-						? mocks.execute
+						? mocks.txExecute
 						: mocks.txQueryOne,
 			).toHaveBeenCalledOnce();
 			(reason === "deadline" ? deadline : shutdown).abort();
@@ -1281,8 +1395,13 @@ describe("summary and queue loop", () => {
 			gate.resolve();
 			for (let turn = 0; turn < 16; turn++) await Promise.resolve();
 			expect(mocks.query).toHaveBeenCalledOnce();
-			expect(mocks.txExecute).not.toHaveBeenCalled();
-			expect(mocks.txQuery).not.toHaveBeenCalled();
+			// read aborts before the per-row transaction; write holds its first
+			// statement; sync holds the job re-read after the expire write and
+			// the job counter update
+			expect(mocks.txExecute).toHaveBeenCalledTimes(
+				stage === "read" ? 0 : stage === "write" ? 1 : 2,
+			);
+			expect(mocks.txQueryOne).toHaveBeenCalledTimes(stage === "sync" ? 1 : 0);
 			expect(mocks.sendOne).not.toHaveBeenCalled();
 			expect(mocks.whatsappProcess).not.toHaveBeenCalled();
 			expect(mocks.destroy).toHaveBeenCalledOnce();
@@ -1494,7 +1613,7 @@ describe("summary and queue loop", () => {
 	it("does not ACK work when persistence fails", async () => {
 		seed();
 		const c = new AbortController();
-		mocks.execute.mockRejectedValue(new Error("db unavailable"));
+		mocks.txExecute.mockRejectedValue(new Error("db unavailable"));
 		mocks.sqs.mockImplementation(async (command) =>
 			command.kind === "batch"
 				? {

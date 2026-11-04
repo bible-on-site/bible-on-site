@@ -29,6 +29,12 @@ export const COLLECTION_TAGS = {
 	 * carries `dedicationsBookshelf` since it aggregates every scope.
 	 */
 	dedications: "dedications",
+	/**
+	 * The `/pedia` landing reads (category counts, recent entries, the
+	 * day-keyed anniversary lookup). Emitted by the dependency resolver on
+	 * every pedia entry/entity change; doubles as the operator hatch.
+	 */
+	pedia: "tanahpedia",
 } as const;
 
 /** The bookshelf's aggregate helek/sefer dedication view (homepage). */
