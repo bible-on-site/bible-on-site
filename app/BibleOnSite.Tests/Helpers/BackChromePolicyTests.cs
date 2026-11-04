@@ -85,6 +85,18 @@ public class BackChromePolicyTests
     }
 
     [Fact]
+    public void NavBarBack_NeverShowsOnWindows()
+    {
+        // The title bar owns Windows Back — a nav-bar arrow on a pushed page
+        // is a second control for the same action (#2766).
+        foreach (var preference in Enum.GetValues<InAppBackButtonPreference>())
+        {
+            BackChromePolicy.ShowNavBarBack(true, BackChromePlatform.Windows, preference)
+                .Should().BeFalse($"the title bar owns Windows Back (pref={preference})");
+        }
+    }
+
+    [Fact]
     public void NavBarBackOnPushedPagesFollowsThePolicy()
     {
         BackChromePolicy.ShowNavBarBack(true, BackChromePlatform.Apple,

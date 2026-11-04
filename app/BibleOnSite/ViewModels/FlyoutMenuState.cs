@@ -11,6 +11,8 @@ namespace BibleOnSite.ViewModels;
 /// this type exists to make that binding reactive (INotifyPropertyChanged)
 /// and unit-testable without a live Shell.
 /// </summary>
+// ReSharper disable once PartialTypeWithSinglePart — the other declaration
+// is the CommunityToolkit [ObservableProperty] generator output.
 public partial class FlyoutMenuState : ObservableObject
 {
     private static readonly Lazy<FlyoutMenuState> _instance =

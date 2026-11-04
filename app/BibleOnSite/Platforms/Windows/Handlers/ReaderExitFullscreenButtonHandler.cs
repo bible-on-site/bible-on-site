@@ -34,6 +34,11 @@ public sealed class ReaderExitFullscreenButtonHandler
 	private double _dragStartY;
 	private bool _pressed;
 	private bool _dragged;
+	// Armed only by a dragged pointer release: suppresses that release's own
+	// trailing Click. Auto-clears on the next dispatcher pass so a release
+	// that produced no Click (pointer left the button, capture lost) cannot
+	// swallow a later keyboard Enter/Space activation.
+	private bool _suppressClick;
 	private readonly PointerEventHandler _onPointerPressed;
 	private readonly PointerEventHandler _onPointerMoved;
 	private readonly PointerEventHandler _onPointerReleased;
@@ -91,11 +96,11 @@ public sealed class ReaderExitFullscreenButtonHandler
 
 	private void OnButtonClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
 	{
-		if (_dragged)
+		if (_suppressClick)
 		{
-			// A dragged release still raises Click — the move already did its
+			// The dragged release's own Click — the move already did its
 			// work; it must not also exit fullscreen.
-			_dragged = false;
+			_suppressClick = false;
 			return;
 		}
 
@@ -144,9 +149,20 @@ public sealed class ReaderExitFullscreenButtonHandler
 	{
 		_pressed = false;
 		PlatformView?.ReleasePointerCapture(e.Pointer);
+		if (_dragged)
+		{
+			_dragged = false;
+			_suppressClick = true;
+			PlatformView?.DispatcherQueue.TryEnqueue(() => _suppressClick = false);
+		}
 	}
 
-	private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e) => _pressed = false;
+	private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+	{
+		// Capture loss ends the gesture without a Click — nothing to suppress.
+		_pressed = false;
+		_dragged = false;
+	}
 
 	private static void MapPresentation(ReaderExitFullscreenButtonHandler handler, ReaderExitFullscreenButton view)
 	{
