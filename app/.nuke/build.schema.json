@@ -45,6 +45,7 @@
         "Lint",
         "ListMobileE2E",
         "Package",
+        "PackageAndroidSymbols",
         "PackagePrepare",
         "PrepareAndroidRecitation",
         "PrepareApiConfig",
@@ -67,6 +68,7 @@
         "TestMobileE2E",
         "TestMobileE2EUnit",
         "TestUnit",
+        "VerifyAndroidSymbols",
         "Version"
       ]
     },
