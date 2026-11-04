@@ -65,7 +65,7 @@ public class PreferencesPageTests
     [Fact]
     public void ApplyQueryAttributes_PacksThenOverviewThenPacks_RoundTrips()
     {
-        var (page, overview, settings, packs) = CreatePage();
+        var (page, _, _, packs) = CreatePage();
 
         page.ApplyQueryAttributes(new Dictionary<string, object> { ["section"] = "packs" });
         page.ApplyQueryAttributes(new Dictionary<string, object>());
