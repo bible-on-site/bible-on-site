@@ -1137,7 +1137,14 @@ mod tests {
                         rows_affected: 1,
                     },
                 ])
-                // find_aggregate → list_all: 6 empty link tables + the sefer row
+                // find_aggregate: the new row, then its link rows.
+                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                    dedication::Model {
+                        id: 42,
+                        subject: "מוקדש".to_string(),
+                        expires_at: None,
+                    },
+                ]])
                 .append_query_results::<
                     entities::perek_dedication::Model,
                     Vec<entities::perek_dedication::Model>,
@@ -1178,13 +1185,6 @@ mod tests {
                     Vec<entities::masora_dedication::Model>,
                     _,
                 >([vec![]])
-                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
-                    dedication::Model {
-                        id: 42,
-                        subject: "מוקדש".to_string(),
-                        expires_at: None,
-                    },
-                ]])
                 .append_query_results::<
                     dedication_dedication_type::Model,
                     Vec<dedication_dedication_type::Model>,

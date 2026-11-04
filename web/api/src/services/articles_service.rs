@@ -9,13 +9,12 @@ use entities::article::{Column, Entity, Model};
 use entities::article_covering_source::{
     Column as CoveringSourceColumn, Entity as CoveringSourceEntity, Model as CoveringSourceModel,
 };
-use sea_orm::{ColumnTrait, DbErr, EntityTrait, FromQueryResult, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, DbErr, DerivePartialModel, EntityTrait, QueryFilter, QueryOrder};
 
-/// Starter-payload article row: every column the starter list renders except
-/// the full HTML `content`. Starter clients read article bodies per article
-/// through `articleById`, so loading `content` for the whole corpus dominates
-/// the query cost as the table grows.
-#[derive(Debug, Clone, FromQueryResult)]
+/// Starter-list projection of `tanah_article`: every column except `content`,
+/// whose full HTML body starter clients never read (bodies load via `article(id)`).
+#[derive(Debug, Clone, DerivePartialModel)]
+#[sea_orm(entity = "Entity")]
 pub struct ArticleSummary {
     pub id: i32,
     pub perek_id: i16,
@@ -26,27 +25,18 @@ pub struct ArticleSummary {
     pub coverage_verified: bool,
 }
 
-/// Returns all articles' starter fields from the database
-pub async fn find_all_without_content(db: &Database) -> Result<Vec<ArticleSummary>, ServiceError> {
-    use sea_orm::QuerySelect;
-
-    tracing::info_span!("articles_service::find_all_without_content");
+/// Returns every article's display metadata for the `starter` list, without
+/// transferring each row's full HTML `content` MySQL→API on each app launch.
+pub async fn find_all_summaries(db: &Database) -> Result<Vec<ArticleSummary>, ServiceError> {
+    tracing::info_span!("articles_service::find_all_summaries");
     let articles = Entity::find()
-        .select_only()
-        .column(Column::Id)
-        .column(Column::PerekId)
-        .column(Column::AuthorId)
-        .column_as(Column::ArticleAbstract, "article_abstract")
-        .column(Column::Name)
-        .column(Column::Priority)
-        .column(Column::CoverageVerified)
-        .into_model::<ArticleSummary>()
+        .into_partial_model::<ArticleSummary>()
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
-    tracing::info!("Found {} articles", articles.len());
+    tracing::info!("Found {} article summaries", articles.len());
     Ok(articles)
 }
 
@@ -459,21 +449,6 @@ mod tests {
         }
     }
 
-    fn summary_row(id: i32, perek_id: i16, author_id: i16) -> BTreeMap<String, Value> {
-        mock_row([
-            ("id", id.into()),
-            ("perek_id", perek_id.into()),
-            ("author_id", author_id.into()),
-            (
-                "article_abstract",
-                Value::String(Some(format!("abstract-{id}"))),
-            ),
-            ("name", format!("Article {id}").into()),
-            ("priority", Value::TinyInt(Some(1))),
-            ("coverage_verified", Value::Bool(Some(false))),
-        ])
-    }
-
     fn create_mock_db_with_articles(rows: Vec<Model>) -> Database {
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results::<Model, Vec<Model>, _>([rows])
@@ -568,34 +543,65 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn find_all_without_content_returns_articles_from_database() {
+    async fn find_all_summaries_returns_articles_without_content() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![summary_row(1, 10, 20), summary_row(2, 11, 20)],
+                    vec![
+                        mock_row([
+                            ("id", 1_i32.into()),
+                            ("perek_id", 10_i16.into()),
+                            ("author_id", 20_i16.into()),
+                            ("article_abstract", "abstract-1".into()),
+                            ("name", "Article 1".into()),
+                            ("priority", 1_i8.into()),
+                            ("coverage_verified", false.into()),
+                        ]),
+                        mock_row([
+                            ("id", 2_i32.into()),
+                            ("perek_id", 11_i16.into()),
+                            ("author_id", 20_i16.into()),
+                            ("article_abstract", Value::String(None)),
+                            ("name", "Article 2".into()),
+                            ("priority", 2_i8.into()),
+                            ("coverage_verified", true.into()),
+                        ]),
+                    ],
                 ])
                 .into_connection(),
         );
 
-        let result = find_all_without_content(&db)
+        let result = find_all_summaries(&db)
             .await
-            .expect("articles should load");
+            .expect("article summaries should load");
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "Article 1");
+        assert_eq!(result[0].article_abstract.as_deref(), Some("abstract-1"));
         assert_eq!(result[1].perek_id, 11);
+        assert_eq!(result[1].article_abstract, None);
+        assert!(result[1].coverage_verified);
+
+        // The projection must not select the heavy `content` column.
+        let statement = Entity::find()
+            .into_partial_model::<ArticleSummary>()
+            .into_statement(DatabaseBackend::MySql)
+            .to_string();
+        assert!(!statement.contains("content"));
+        assert!(statement.contains("abstract"));
     }
 
     #[tokio::test]
-    async fn find_all_without_content_returns_internal_server_error_on_db_failure() {
+    async fn find_all_summaries_returns_internal_server_error_on_db_failure() {
         let db = create_mock_db_with_query_error("Connection lost");
 
-        let result = find_all_without_content(&db).await;
+        let result = find_all_summaries(&db).await;
 
         assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ServiceError::InternalServerError(_)));
-        assert_eq!(err.to_string(), "Internal Server Error");
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
     }
 
     #[tokio::test]

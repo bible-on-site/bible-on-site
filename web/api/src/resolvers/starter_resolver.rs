@@ -15,18 +15,18 @@ impl StarterQuery {
     async fn starter(&self, ctx: &Context<'_>) -> Result<Starter> {
         let db = ctx.data::<Database>()?;
 
-        // Fetch authors and articles (starter fields only — no full HTML content)
+        // Fetch authors and article summaries; counts derive from the rows in memory
         let authors = authors_service::find_all(db)
             .await
             .map_err(|e| e.extend())?;
 
-        let article_summaries = articles_service::find_all_without_content(db)
+        let all_articles = articles_service::find_all_summaries(db)
             .await
             .map_err(|e| e.extend())?;
 
         // Counts derive from the rows already fetched — no extra aggregate scans
-        let author_article_counts = articles_service::count_by_author(&article_summaries);
-        let perek_articles_counters = articles_service::count_by_perek(&article_summaries);
+        let author_article_counts = articles_service::count_by_author(&all_articles);
+        let perek_articles_counters = articles_service::count_by_perek(&all_articles);
 
         // Map authors with their pre-computed article counts
         let authors_with_counts: Vec<Author> = authors
@@ -40,8 +40,8 @@ impl StarterQuery {
         // Convert articles to DTOs, then batch-attach reading metrics — one
         // IN query so `readingMetric` on the starter list stays O(1) (#2607).
         // `coveringSources` gets the same treatment when selected so the
-        // full-table list never becomes N+1 (#3012).
-        let mut articles: Vec<Article> = article_summaries.into_iter().map(Article::from).collect();
+        // full-table list never becomes N+1.
+        let mut articles: Vec<Article> = all_articles.into_iter().map(Article::from).collect();
         super::articles_resolver::attach_article_reading_metrics(db, &mut articles).await?;
         if ctx
             .look_ahead()
@@ -63,9 +63,21 @@ impl StarterQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entities::{article_covering_source, author, tanah_article_metric};
-    use sea_orm::{DatabaseBackend, MockDatabase, Value};
-    use std::collections::BTreeMap;
+    use entities::{article, article_covering_source, author, tanah_article_metric};
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    fn article_model(id: i32) -> article::Model {
+        article::Model {
+            id,
+            perek_id: 1,
+            author_id: 1,
+            article_abstract: None,
+            name: format!("Article {id}"),
+            priority: 1,
+            content: None,
+            coverage_verified: false,
+        }
+    }
 
     fn author_model(id: i32) -> author::Model {
         author::Model {
@@ -75,22 +87,6 @@ mod tests {
         }
     }
 
-    /// Row shape of `find_all_without_content`: every starter column except
-    /// the article's full HTML `content`.
-    fn summary_row(id: i32) -> BTreeMap<String, Value> {
-        [
-            ("id".to_string(), Value::from(id)),
-            ("perek_id".to_string(), Value::from(1i16)),
-            ("author_id".to_string(), Value::from(1i16)),
-            ("article_abstract".to_string(), Value::from(None::<String>)),
-            ("name".to_string(), Value::from(format!("Article {id}"))),
-            ("priority".to_string(), Value::TinyInt(Some(1))),
-            ("coverage_verified".to_string(), Value::Bool(Some(false))),
-        ]
-        .into_iter()
-        .collect()
-    }
-
     /// Selecting `articles { coveringSources }` on `starter` batch-loads the
     /// full article table's sources in one IN query — never one per article.
     #[tokio::test]
@@ -98,9 +94,10 @@ mod tests {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<author::Model, Vec<_>, _>([vec![author_model(1)]])
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![summary_row(1), summary_row(2)],
-                ])
+                .append_query_results::<article::Model, Vec<_>, _>([vec![
+                    article_model(1),
+                    article_model(2),
+                ]])
                 .append_query_results::<tanah_article_metric::Model, Vec<_>, _>([Vec::<
                     tanah_article_metric::Model,
                 >::new(
