@@ -7,7 +7,10 @@ import {
 	locateNormalized,
 	rawRangeFromSpan,
 } from "@/lib/search/dom-match";
-import { normalizeWithMap } from "@/lib/search/normalize";
+import {
+	normalizeSearchText,
+	normalizeWithMap,
+} from "@/lib/search/normalize";
 
 describe("normalizeWithMap", () => {
 	it("emits the same normalized text as normalizeSearchText", () => {
@@ -38,6 +41,39 @@ describe("normalizeWithMap", () => {
 		// filtered, leaving 'י' — same for precomposed é → 'e'.
 		expect(normalizeWithMap("יִ")).toEqual({ normalized: "י", map: [0] });
 		expect(normalizeWithMap("é")).toEqual({ normalized: "e", map: [0] });
+	});
+
+	it("collapses a separator run to one space mapped to the run's first char", () => {
+		// "אב  -  גד": raw 0-1 letters, 2-6 a space/dash run, 7-8 letters.
+		const { normalized, map } = normalizeWithMap("אב  -  גד");
+		expect(normalized).toBe("אב גד");
+		expect(map).toEqual([0, 1, 2, 7, 8]);
+	});
+
+	it("emits nothing for leading separators and trims a trailing run", () => {
+		// The separator following "אב" is emitted mid-scan, then trimmed like
+		// normalizeSearchText — its map entry is dropped with it.
+		const { normalized, map } = normalizeWithMap(" . אב .. ");
+		expect(normalized).toBe("אב");
+		expect(map).toEqual([3, 4]);
+	});
+
+	it("keeps the raw map exact on long vocalized content", () => {
+		// The #2956 fixture: 168,000 raw units normalize to 143,999 chars —
+		// 36 per 42-unit repeat, the last losing its trailing space.
+		const unit = "בְּרֵאשִׁית ברא אלוהים את השמים ואת הארץ. ";
+		const text = unit.repeat(4000);
+		const { normalized, map } = normalizeWithMap(text);
+		expect(normalized).toBe(normalizeSearchText(text));
+		expect(normalized).toHaveLength(36 * 4000 - 1);
+		expect(map).toHaveLength(normalized.length);
+		expect(
+			map.every((raw, index) => index === 0 || raw >= map[index - 1]),
+		).toBe(true);
+		// Repeat 1000: ב lands on raw unit 42,000; the separator space after its
+		// הארץ maps to the '.' that produced it.
+		expect(map[36 * 1000]).toBe(42 * 1000);
+		expect(map[36 * 1000 + 35]).toBe(42 * 1000 + 40);
 	});
 });
 

@@ -7,7 +7,7 @@ applyTo: "web/bible-on-site/**/929/**, **/Sefer*.tsx, **/FlipBook*, **/copy-loca
 
 ## Local dev
 
-Build in `html-flip-book` (`bun run build`), then from `web/bible-on-site` run `USE_LOCAL_FLIP_BOOK=1 bun run postinstall` to copy that build into `node_modules`. CI/production use the **published** `html-flip-book-react`; the copy script runs only with `USE_LOCAL_FLIP_BOOK=1` or a `file:` dependency.
+Build in `html-flip-book` (`bun run build`), then from `web/bible-on-site` run `USE_LOCAL_FLIP_BOOK=1 bun run postinstall` to copy that build into `node_modules`. CI/production use the **published** `html-flip-book-react`; initial copying requires `USE_LOCAL_FLIP_BOOK=1` or a `file:` dependency. An active copied override records its source checkout; subsequent `bun run build` calls refresh it automatically before compiling the reader, including when the source is a separate worktree. `USE_LOCAL_FLIP_BOOK=0` disables that override, and `bun run flip-book:npm` restores the registry files.
 
 ## Publishing
 
