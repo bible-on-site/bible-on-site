@@ -16,6 +16,8 @@ impl TanahpediaRevisionsQuery {
     /// optionally filtered by `status` (PENDING / APPLIED / REJECTED) and/or the
     /// targeted `entryId`. `limit` defaults to 50 and clamps to 200, `offset`
     /// paginates.
+    ///
+    /// Requires an `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>` header.
     async fn tanahpedia_entry_revisions(
         &self,
         ctx: &Context<'_>,
@@ -24,6 +26,10 @@ impl TanahpediaRevisionsQuery {
         limit: Option<i32>,
         offset: Option<i32>,
     ) -> Result<Vec<EntryRevision>> {
+        ctx.data::<ApiAuth>()?
+            .authorize_revision_manager()
+            .map_err(|e| e.extend())?;
+
         let limit = limit.unwrap_or(50).clamp(1, MAX_REVISIONS_LIMIT) as u64;
         let offset = offset.unwrap_or(0).max(0) as u64;
         Ok(

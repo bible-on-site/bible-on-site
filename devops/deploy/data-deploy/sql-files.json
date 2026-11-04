@@ -15,6 +15,7 @@
 	"tanahpedia_alter_entry_revision_history.sql",
 	"tanahpedia_alter_saying_date.sql",
 	"tanahpedia_alter_mention_decoration.sql",
+	"tanahpedia_alter_entry_synonym.sql",
 	"tanahpedia_remove_simchat_torah_placeholder.sql",
 	"tanahpedia_seed_data.sql",
 	"tanahpedia_incremental_lookups.sql",

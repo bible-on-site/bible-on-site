@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
     tanahpedia_entry_revision_history_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-synonym name index upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_synonym.sql")]
+    tanahpedia_entry_synonym_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -362,6 +366,7 @@ struct TanahpediaScripts {
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
     entry_revision_history_upgrade: std::path::PathBuf,
+    entry_synonym_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -384,6 +389,7 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
             entry_revision_history_upgrade: base_path
                 .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
+            entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -450,7 +456,8 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
-    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await
+    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
+    apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -680,6 +687,10 @@ async fn apply_entry_revision_history_upgrade(
         "CHAR(36) NULL COMMENT 'APPLIED head this change was based on'",
     )
     .await
+}
+
+async fn apply_entry_synonym_upgrade(conn: &mut MySqlConnection, script_path: &Path) -> Result<()> {
+    execute_script(conn, script_path, "entry-synonym-upgrade").await
 }
 
 async fn apply_column_add_if_missing(
