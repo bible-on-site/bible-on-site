@@ -51,10 +51,6 @@ const ENSURE_QUEUE: &str = "CREATE TABLE IF NOT EXISTS article_search_queue (
     last_error VARCHAR(240) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
-/// MySQL-side fingerprint of the indexable fields; identical expression used by
-/// the reconcile sweep and the per-article fetch so hashes always agree.
-const CONTENT_HASH_EXPR: &str = "UNHEX(MD5(CONCAT_WS(X'01', IFNULL(name,''), IFNULL(abstract,''), IFNULL(content,''), perek_id, author_id)))";
-
 fn mysql(sql: &str, values: Vec<Value>) -> Statement {
     Statement::from_sql_and_values(DbBackend::MySql, sql, values)
 }
@@ -163,12 +159,14 @@ pub async fn fetch_article<C: ConnectionTrait>(
 }
 
 /// `(article_id, content_hash)` for every stored article — the reconcile sweep
-/// diffs this against `article_search_doc`.
+/// diffs this against `article_search_doc`. `tanah_article.content_hash` is a
+/// STORED generated column, so the sweep reads small fingerprint pairs instead
+/// of re-hashing every article's `content` on each pass.
 pub async fn sweep_hashes<C: ConnectionTrait>(conn: &C) -> Result<Vec<(i32, [u8; 16])>, DbErr> {
     let rows = conn
         .query_all_raw(Statement::from_string(
             DbBackend::MySql,
-            format!("SELECT id, {CONTENT_HASH_EXPR} AS content_hash FROM tanah_article WHERE perek_id BETWEEN 1 AND 929"),
+            "SELECT id, content_hash FROM tanah_article WHERE perek_id BETWEEN 1 AND 929",
         ))
         .await?;
     rows.into_iter()
@@ -299,10 +297,11 @@ pub async fn load_docs<C: ConnectionTrait>(conn: &C) -> Result<Vec<StoredDoc>, D
         .collect()
 }
 
-/// Upserts one indexed document. The `content_hash` is always recomputed from
-/// `tanah_article` server-side with the shared hash expression, so the index
-/// and the reconcile sweep agree byte-for-byte. When the article was deleted
-/// between fetch and write the `SELECT` yields no row and nothing is stored.
+/// Upserts one indexed document. The `content_hash` is copied from
+/// `tanah_article`'s STORED generated column — the same value the reconcile
+/// sweep diffs — so the index and the sweep agree byte-for-byte. When the
+/// article was deleted between fetch and write the `SELECT` yields no row and
+/// nothing is stored.
 pub async fn upsert_doc<C: ConnectionTrait>(
     conn: &C,
     article_id: i32,
@@ -312,11 +311,9 @@ pub async fn upsert_doc<C: ConnectionTrait>(
     terms: Vec<u8>,
 ) -> Result<(), DbErr> {
     conn.execute_raw(mysql(
-        &format!(
-            "REPLACE INTO article_search_doc (article_id, model_epoch, content_hash, plain_len, vector, terms)
-             SELECT a.id, ?, {CONTENT_HASH_EXPR}, ?, ?, ? FROM tanah_article a
-             WHERE a.id = ? AND a.perek_id BETWEEN 1 AND 929"
-        ),
+        "REPLACE INTO article_search_doc (article_id, model_epoch, content_hash, plain_len, vector, terms)
+         SELECT a.id, ?, a.content_hash, ?, ?, ? FROM tanah_article a
+         WHERE a.id = ? AND a.perek_id BETWEEN 1 AND 929",
         vec![
             model_epoch.into(),
             plain_len.into(),
@@ -382,7 +379,7 @@ fn document_batch_statement(model_epoch: i32, batch: Vec<super::PreparedDoc>) ->
     }
     mysql(&format!(
         "REPLACE INTO article_search_doc (article_id, model_epoch, content_hash, plain_len, vector, terms)
-         SELECT a.id, prepared.model_epoch, {CONTENT_HASH_EXPR}, prepared.plain_len, prepared.vector, prepared.terms
+         SELECT a.id, prepared.model_epoch, a.content_hash, prepared.plain_len, prepared.vector, prepared.terms
          FROM ({}) AS prepared JOIN tanah_article a ON a.id = prepared.article_id
          WHERE a.perek_id BETWEEN 1 AND 929 ORDER BY prepared.ordinal",
         branches.join(" UNION ALL ")
@@ -778,7 +775,7 @@ mod tests {
             ],
         );
         assert!(statement.sql.ends_with("ORDER BY prepared.ordinal"));
-        assert!(statement.sql.contains(CONTENT_HASH_EXPR));
+        assert!(statement.sql.contains("a.content_hash"));
         assert!(statement.sql.contains("a.perek_id BETWEEN 1 AND 929"));
         assert_eq!(
             statement.values.unwrap().0,
