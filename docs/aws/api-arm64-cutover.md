@@ -112,6 +112,16 @@ task ARN and return fractional expiration seconds while subsequent reads use
 the long ARN and whole seconds; normalize only those verified observations.
 An uncertain grant is preserved for investigation rather than cleared blindly.
 
+After an owned protection-clear receipt is acknowledged and protection is read
+back as disabled, ECS can retire the old task before its temporary tag is
+removed. ECS tag APIs reject stopped tasks with `InvalidParameterException`.
+In that case, describe the exact task and require its original account, region,
+cluster, API service group and terminal `STOPPED` status (both current and desired).
+Record the retired marker and finish release without another tag write. A running
+or ambiguous task, an unconfirmed clear, or another API error still fails closed.
+This state transition avoids unnecessary rollback after a healthy replacement
+became visible; it does not extend any protection or deployment deadline.
+
 ## Switch architecture and retain release continuity
 
 Register the otherwise equivalent ARM64 definition against the qualified
