@@ -8,7 +8,6 @@ use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 use crate::common::auth::ApiAuth;
 use crate::providers::Database;
 use crate::resolvers::articles_resolver;
-use crate::resolvers::authors_resolver;
 use crate::resolvers::dedications_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
@@ -23,7 +22,6 @@ use crate::services::article_search::ArticleSearchIndex;
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(
     articles_resolver::ArticlesQuery,
-    authors_resolver::AuthorsQuery,
     dedications_resolver::DedicationsQuery,
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
