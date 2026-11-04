@@ -654,7 +654,7 @@ describe("resolveEntityChanges", () => {
 
 	it("resolves parasha, article, entry and masora dedication scopes", async () => {
 		mockQuery.mockImplementation(async (sql: string) => {
-			if (/FROM tanah_article/.test(sql)) return [{ perek_id: 5 }];
+			if (/FROM tanah_article/.test(sql)) return [{ id: 9, perek_id: 5 }];
 			if (/FROM tanahpedia_entry/.test(sql))
 				return [{ unique_name: "persons#abraham" }];
 			throw new Error(`unstubbed SQL: ${sql}`);

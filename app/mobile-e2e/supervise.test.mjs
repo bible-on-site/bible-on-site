@@ -18,11 +18,14 @@ for (const code of [0, 7]) {
 // this also catches the mistake of canceling escalation when only it has died.
 const stubbornTree = `
 const {spawn} = require('node:child_process');
-const {writeFileSync} = require('node:fs');
+const {writeFileSync, renameSync} = require('node:fs');
 const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); process.send('ready'); setInterval(() => {}, 1000)"], {stdio:['ignore','ignore','ignore','ipc']});
 process.on('SIGTERM', () => process.exit(0));
 child.once('message', () => {
-  writeFileSync(process.argv[1], JSON.stringify([process.pid, child.pid]));
+  // Existence signals readiness to the test reader; publish complete JSON.
+  const temporary = process.argv[1] + '.tmp';
+  writeFileSync(temporary, JSON.stringify([process.pid, child.pid]));
+  renameSync(temporary, process.argv[1]);
   if (process.argv[2] === "block") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
 });
 setInterval(() => {}, 1000);

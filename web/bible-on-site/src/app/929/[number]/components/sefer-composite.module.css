@@ -12,6 +12,10 @@
   height: calc(100vh - 72px);
   z-index: 9999;
   background-color: white;
+  /* This opaque, viewport-sized reader owns its painted bounds. Keep fold
+     invalidations inside it instead of propagating through the flat page.
+     Native modal dialogs still render in the document's top layer. */
+  contain: paint;
 }
 
 .visible {

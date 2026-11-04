@@ -5,6 +5,7 @@ import {
 	canonicalPasukCount,
 	coveringSourceSliceCondition,
 	coveringSourceSliceRank,
+	groupedSliceSelects,
 	noteSliceCondition,
 	primaryPerekSliceRank,
 	rangePerekSources,
@@ -166,5 +167,32 @@ describe("rangePerekSources", () => {
 		]);
 		expect(Object.keys(sources).sort()).toEqual(["1", "100"]);
 		expect(sources[1]).toBe("בראשית א");
+	});
+});
+
+describe("groupedSliceSelects", () => {
+	it("numbers slices by unit and per-unit order with bound params", () => {
+		const { sql, params } = groupedSliceSelects([
+			[
+				{ perekId: 1, startPasuk: 30, endPasuk: 31, rangeIndex: 0 },
+				{ perekId: 2, startPasuk: 1, endPasuk: 4, rangeIndex: 0 },
+			],
+			[{ perekId: 10, startPasuk: 1, endPasuk: 3, rangeIndex: 0 }],
+		]);
+		expect(sql).toContain("UNION ALL");
+		expect(sql).toContain("0 AS unit_order, 0 AS slice_order");
+		expect(sql).toContain("0 AS unit_order, 1 AS slice_order");
+		expect(sql).toContain("1 AS unit_order, 0 AS slice_order");
+		expect(params).toEqual([1, 30, 31, 2, 1, 4, 10, 1, 3]);
+	});
+
+	it("skips empty groups but keeps their ordinals", () => {
+		const { sql, params } = groupedSliceSelects([
+			[],
+			[{ perekId: 7, startPasuk: 1, endPasuk: 2, rangeIndex: 0 }],
+		]);
+		expect(sql).toContain("1 AS unit_order");
+		expect(sql).not.toContain("0 AS unit_order");
+		expect(params).toEqual([7, 1, 2]);
 	});
 });
