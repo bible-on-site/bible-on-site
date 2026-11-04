@@ -263,15 +263,21 @@ describe("saying dates", () => {
 	it.each(["SAYING", "PROPHECY"])(
 		"loads the persisted date for %s",
 		async (type) => {
-			queryMock.mockResolvedValue([
-				{
-					linkId: "link",
-					entityId: "entity",
-					entityType: type,
-					displayName: "אמרה",
-				},
-			]);
-			queryOneMock.mockResolvedValue({ id: "saying-1", saying_date: 24480906 });
+			queryMock.mockImplementation((sql: unknown) => {
+				if (String(sql).includes("tanahpedia_saying")) {
+					return Promise.resolve([
+						{ entity_id: "entity", id: "saying-1", saying_date: 24480906 },
+					]);
+				}
+				return Promise.resolve([
+					{
+						linkId: "link",
+						entityId: "entity",
+						entityType: type,
+						displayName: "אמרה",
+					},
+				]);
+			});
 			const result = await getEntryStructuralContext({ data: "entry-1" });
 			expect(result.linkedEntities[0].saying).toEqual({
 				sayingId: "saying-1",
@@ -282,15 +288,19 @@ describe("saying dates", () => {
 	it.each(["SAYING", "PROPHECY"])(
 		"omits date editing when %s has no subtype row",
 		async (type) => {
-			queryMock.mockResolvedValue([
-				{
-					linkId: "link",
-					entityId: "entity",
-					entityType: type,
-					displayName: "אמרה",
-				},
-			]);
-			queryOneMock.mockResolvedValue(null);
+			queryMock.mockImplementation((sql: unknown) => {
+				if (String(sql).includes("tanahpedia_saying")) {
+					return Promise.resolve([]);
+				}
+				return Promise.resolve([
+					{
+						linkId: "link",
+						entityId: "entity",
+						entityType: type,
+						displayName: "אמרה",
+					},
+				]);
+			});
 			const result = await getEntryStructuralContext({ data: "entry-1" });
 			expect(result.linkedEntities).toEqual([
 				{
