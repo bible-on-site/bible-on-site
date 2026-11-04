@@ -111,6 +111,22 @@ mod tests {
         }
     }
 
+    /// Raw row shape of `articles_service::ArticleSummary` (starter query never selects `content`).
+    fn article_summary_row(id: i32, perek_id: i16, author_id: i16) -> BTreeMap<String, Value> {
+        mock_row([
+            ("id", id.into()),
+            ("perek_id", perek_id.into()),
+            ("author_id", author_id.into()),
+            (
+                "article_abstract",
+                Value::String(Some(format!("abstract-{id}"))),
+            ),
+            ("name", format!("Article {id}").into()),
+            ("priority", Value::TinyInt(Some(1))),
+            ("coverage_verified", Value::Bool(Some(false))),
+        ])
+    }
+
     fn perek_model(id: i32, perek_id: i32, sefer_id: i32) -> entities::perek::Model {
         entities::perek::Model {
             id,
@@ -616,19 +632,13 @@ mod tests {
                 .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
                     vec![author_model(3), author_model(4)],
                 ])
-                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
-                    [vec![article_model(1, 1, 3), article_model(2, 2, 4)]],
-                )
+                // Starter fetches article summaries only (no content column); author
+                // and perek counts are derived from these rows in memory.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![
-                        mock_row([("author_id", 3_i16.into()), ("count", 5_i64.into())]),
-                        mock_row([("author_id", 4_i16.into()), ("count", 0_i64.into())]),
-                    ],
-                ])
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![
-                        mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
-                        mock_row([("perek_id", 929_i16.into()), ("count", 7_i64.into())]),
+                        article_summary_row(1, 1, 3),
+                        article_summary_row(2, 2, 4),
+                        article_summary_row(3, 929, 3),
                     ],
                 ])
                 // Starter article metric attach — one batched IN query.
@@ -649,8 +659,9 @@ mod tests {
 
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let json = response.data.into_json().unwrap();
-        assert_eq!(json["starter"]["authors"][0]["articlesCount"], 5);
-        assert_eq!(json["starter"]["authors"][1]["articlesCount"], 0);
+        // Author counts come from the fetched articles, not a separate scan.
+        assert_eq!(json["starter"]["authors"][0]["articlesCount"], 2);
+        assert_eq!(json["starter"]["authors"][1]["articlesCount"], 1);
         assert_eq!(json["starter"]["articles"][1]["id"], 2);
         // Only article 2 has a metric row in the mock; article 1 → null.
         assert!(json["starter"]["articles"][0]["readingMetric"].is_null());
@@ -665,8 +676,9 @@ mod tests {
                 .len(),
             929
         );
-        assert_eq!(json["starter"]["perekArticlesCounters"][0], 2);
-        assert_eq!(json["starter"]["perekArticlesCounters"][928], 7);
+        assert_eq!(json["starter"]["perekArticlesCounters"][0], 1);
+        assert_eq!(json["starter"]["perekArticlesCounters"][1], 1);
+        assert_eq!(json["starter"]["perekArticlesCounters"][928], 1);
     }
 
     #[tokio::test]
