@@ -160,6 +160,30 @@ export async function getPerushMetricsByPerekId(
 	return new Map(rows.map((r) => [r.perush_id, toMetric(r)]));
 }
 
+/** Stored perush metrics for a set of perakim, keyed perek → perush. */
+export async function getPerushMetricsByPerekIds(
+	perekIds: number[],
+): Promise<Map<number, Map<number, ReadingMetric>>> {
+	const byPerek = new Map<number, Map<number, ReadingMetric>>();
+	if (perekIds.length === 0) return byPerek;
+	const placeholders = perekIds.map(() => "?").join(", ");
+	const rows = await orMetricMissing(
+		() =>
+			query<MetricRow & { perek_id: number; perush_id: number }>(
+				`SELECT perek_id, perush_id, ${METRIC_SELECT}
+				 FROM tanah_perush_metric WHERE perek_id IN (${placeholders})`,
+				perekIds,
+			),
+		[],
+	);
+	for (const row of rows) {
+		const inner = byPerek.get(row.perek_id) ?? new Map<number, ReadingMetric>();
+		inner.set(row.perush_id, toMetric(row));
+		byPerek.set(row.perek_id, inner);
+	}
+	return byPerek;
+}
+
 /** Stored metric for one perush on one perek. */
 export async function getPerushMetric(
 	perushId: number,

@@ -1,4 +1,8 @@
-import { spawnSync } from "node:child_process";
+import {
+	type ChildProcess,
+	type SpawnOptions,
+	spawn,
+} from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, lstat, mkdtemp, open, rm, writeFile } from "node:fs/promises";
@@ -631,6 +635,33 @@ export type APIPublishOptions = {
 		staged: ReadonlyMap<Architecture, RegistryImage>,
 	) => Promise<ImageDescriptor[]>;
 };
+
+/** Keep the public handover monitor responsive throughout an archive upload. */
+export function pushArchiveWithCrane(
+	archive: string,
+	reference: string,
+	directory: string,
+	launch: (
+		command: string,
+		args: string[],
+		options: SpawnOptions,
+	) => ChildProcess = spawn,
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const child = launch("crane", ["push", archive, reference], {
+			stdio: "inherit",
+			env: { ...process.env, DOCKER_CONFIG: directory },
+		});
+		child.once("error", (error) =>
+			reject(new Error("crane archive push failed", { cause: error })),
+		);
+		child.once("close", (code, signal) => {
+			if (code === 0) resolve();
+			else reject(new Error(`crane archive push failed (${signal ?? code})`));
+		});
+	});
+}
+
 /** No canonical/latest write occurs until both immutable children have been verified. */
 export async function publishAPIImages(
 	prepared: PreparedAPIArchives,
@@ -697,16 +728,8 @@ export async function publishAPIImages(
 			}),
 			{ flag: "wx", mode: 0o600 },
 		);
-		push = async (archive, reference) => {
-			const result = spawnSync("crane", ["push", archive, reference], {
-				stdio: "inherit",
-				env: { ...process.env, DOCKER_CONFIG: prepared.directory },
-			});
-			if (result.error || result.status !== 0)
-				throw new Error(`crane archive push failed (${result.status})`, {
-					cause: result.error,
-				});
-		};
+		push = (archive, reference) =>
+			pushArchiveWithCrane(archive, reference, prepared.directory);
 	}
 	for (const archive of prepared.images) {
 		if (staged.has(archive.architecture)) continue;

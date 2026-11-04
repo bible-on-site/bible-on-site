@@ -23,10 +23,14 @@ inputs:
   playwright-version:
     description: >-
       Playwright version for the browser binaries cache key
-      (`<runner os>-playwright-shell-<version>`). Leave empty to skip the
+      (`<runner os>-playwright-<distribution>-<version>`). Leave empty to skip the
       playwright cache restore.
     required: false
     default: ""
+  playwright-distribution:
+    description: Browser distribution cached by the caller (shell or full).
+    required: false
+    default: shell
 
 outputs:
   cache-hit:
@@ -74,7 +78,7 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: ~/.cache/ms-playwright
-        key: ${{ runner.os }}-playwright-shell-${{ inputs.playwright-version }}
+        key: ${{ runner.os }}-playwright-${{ inputs.playwright-distribution }}-${{ inputs.playwright-version }}
 
     - name: Install dependencies
       working-directory: ${{ github.workspace }}/${{ inputs.directory }}

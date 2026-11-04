@@ -38,14 +38,29 @@ const NO_RECORDING_MESSAGE = "אין הקלטה לפרק זה";
 export function stopRecitation() {
 	window.dispatchEvent(new Event(STOP_EVENT));
 }
-const RecitationContext = createContext<{
-	controls: ReactNode;
-	playChapter: (() => void) | null;
+interface RecitationTextState {
 	enabled: boolean;
 	words: RecitationWord[];
 	activeWord: string | null;
 	play: (start: number, end: number) => void;
-} | null>(null);
+}
+
+const NO_RECITATION_WORDS: RecitationWord[] = [];
+const ignoreRecitation = () => {};
+const RecitationTextContext = createContext<RecitationTextState | null>(null);
+const RecitationEnabledContext = createContext(false);
+const RecitationContext = createContext<
+	| (RecitationTextState & {
+			controls: ReactNode;
+			playChapter: (() => void) | null;
+	  })
+	| null
+>(null);
+
+/** Mode changes rebuild a scripture body; playback frames update its words. */
+export function useRecitationEnabled() {
+	return useContext(RecitationEnabledContext);
+}
 
 export function RecitationHeader({ title }: { title: string }) {
 	const context = useContext(RecitationContext);
@@ -77,15 +92,21 @@ export function RecitationWordControl({
 	pasuk,
 	segment,
 	children,
+	plainWhenInactive = false,
 }: {
 	pasuk: number;
 	segment: number;
 	children: ReactNode;
+	/** The reader can keep the original text without an inert layout box. */
+	plainWhenInactive?: boolean;
 }) {
-	const context = useContext(RecitationContext);
+	const context = useContext(RecitationTextContext);
 	const word = context?.enabled
 		? context.words.find((w) => w.pasuk === pasuk && w.segment === segment)
 		: undefined;
+	// Keep the text-node boundaries: joining adjacent words changes Hebrew
+	// shaping. Listening still restores the original inline control and events.
+	if (plainWhenInactive && !word) return <>{children}</>;
 	const key = `${pasuk}:${segment}`;
 	return (
 		<InlineRecitationControl
@@ -116,7 +137,7 @@ export function RecitationPasukControl({
 	 */
 	onNavigate?: () => void;
 }) {
-	const context = useContext(RecitationContext);
+	const context = useContext(RecitationTextContext);
 	const range = context?.enabled ? verseRange(context.words, pasuk) : null;
 	const label = onNavigate
 		? `מעבר לפירוש על פסוק ${toLetters(pasuk)}`
@@ -217,7 +238,7 @@ export function RecitationLink({
 	children: ReactNode;
 	link: ReactNode;
 }) {
-	const context = useContext(RecitationContext);
+	const context = useContext(RecitationTextContext);
 	return <>{context?.enabled ? children : link}</>;
 }
 
@@ -475,6 +496,23 @@ export default function RecitationPlayer({
 	}
 
 	const alignedWords = useMemo(() => playableWords(data), [data]);
+	const textEnabled = open && alignedWords.length > 0;
+	const controlWords = textEnabled ? alignedWords : NO_RECITATION_WORDS;
+	const controlPlay: (start: number, end: number) => void = textEnabled
+		? play
+		: ignoreRecitation;
+	// Loading/progress/header updates must not invalidate every scripture word.
+	// Keep the original word elements and highlight state while sharing only
+	// changes that text controls actually consume.
+	const textState = useMemo<RecitationTextState>(
+		() => ({
+			enabled: textEnabled,
+			words: controlWords,
+			activeWord,
+			play: (start, end) => void controlPlay(start, end),
+		}),
+		[textEnabled, controlWords, activeWord, controlPlay],
+	);
 	useEffect(() => {
 		if (state !== "playing" || alignedWords.length === 0) return;
 		let frame = 0;
@@ -602,15 +640,16 @@ export default function RecitationPlayer({
 	return (
 		<RecitationContext.Provider
 			value={{
+				...textState,
 				controls,
 				playChapter: open && data ? () => void togglePlayback() : null,
-				enabled: open && alignedWords.length > 0,
-				words: alignedWords,
-				activeWord,
-				play: (start, end) => void play(start, end),
 			}}
 		>
-			{children}
+			<RecitationTextContext.Provider value={textState}>
+				<RecitationEnabledContext.Provider value={textEnabled}>
+					{children}
+				</RecitationEnabledContext.Provider>
+			</RecitationTextContext.Provider>
 		</RecitationContext.Provider>
 	);
 }

@@ -10,6 +10,15 @@ const cleanupDeadlineMs = 5000;
 const defaultDevicesRoot = posix.join(homedir(), "Library/Developer/CoreSimulator/Devices");
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function processIsAlive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (error) {
+    // Only kernel-confirmed absence completes cleanup; permission failures remain errors.
+    if (error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
 export function ownedIosTestAppProcesses(listing, udid, devicesRoot = defaultDevicesRoot) {
   if (typeof udid !== "string" || udid.length !== 36 || !uuid.test(udid)) {
     throw new Error("Simulator app cleanup requires this run's explicit UDID.");
@@ -42,6 +51,7 @@ export function ownedIosTestAppProcesses(listing, udid, devicesRoot = defaultDev
 export async function terminateIosTestApp(udid, {
   keepApp = false, execute = executeFile, signal = (pid, value) => process.kill(pid, value),
   sleep = delay, now = Date.now, devicesRoot = defaultDevicesRoot, observedPids = [], inspectorPath,
+  isAlive = processIsAlive,
 } = {}) {
   // Validate ownership even when keeping an app for local review.
   ownedIosTestAppProcesses("", udid, devicesRoot);
@@ -57,15 +67,19 @@ export async function terminateIosTestApp(udid, {
   if (typeof inspectorPath !== "string" || !posix.isAbsolute(inspectorPath)) {
     throw new Error("Require the prepared native iOS process inspector.");
   }
+  let inspections = 0;
   const list = async () => {
     const remaining = cleanupDeadlineMs - (now() - started);
     if (remaining <= 0) throw new Error("iOS app cleanup spent its five seconds before a process check; no kill was sent.");
     // The helper reads kernel BSD state and the actual executable path, without
     // requesting Mach task/thread data or trusting a mutable argv prefix.
+    inspections++;
     const { stdout, stderr = "" } = await execute(inspectorPath,
       [...new Set(candidates)].map(String), { timeout: remaining, windowsHide: true });
     if (stderr.trim()) throw new Error(`App process inspection failed: ${stderr.trim()}`);
-    if (now() - started >= cleanupDeadlineMs) throw new Error("The owned iOS app did not exit within five seconds.");
+    if (now() - started >= cleanupDeadlineMs) {
+      throw new Error(`The owned iOS app did not exit within five seconds (inspection ${inspections}).`);
+    }
     return ownedIosTestAppProcesses(stdout, udid, devicesRoot).filter(record => !record.state.startsWith("Z"));
   };
   const owned = await list();
@@ -76,10 +90,19 @@ export async function terminateIosTestApp(udid, {
     try { signal(pid, "SIGKILL"); }
     catch (error) { if (error.code !== "ESRCH") throw error; }
   }
+  // A reaped PID is definitive. Avoid launching a second inspector after a
+  // successful kill (or an empty first inspection) on a loaded simulator host.
+  // Surviving PIDs still get fresh native ownership and zombie checks below.
+  if (owned.every(({ pid }) => !isAlive(pid))) {
+    const elapsedMs = now() - started;
+    if (elapsedMs >= cleanupDeadlineMs) throw new Error("The owned iOS app did not exit within five seconds.");
+    return { status: owned.length ? "terminated" : "already-stopped", udid, bundleId,
+      pids: owned.map(({ pid }) => pid), elapsedMs, inspections };
+  }
   while (now() - started < cleanupDeadlineMs) {
     if (!(await list()).length) {
       return { status: owned.length ? "terminated" : "already-stopped", udid, bundleId,
-        pids: owned.map(({ pid }) => pid), elapsedMs: now() - started };
+        pids: owned.map(({ pid }) => pid), elapsedMs: now() - started, inspections };
     }
     await sleep(Math.min(50, cleanupDeadlineMs - (now() - started)));
   }
