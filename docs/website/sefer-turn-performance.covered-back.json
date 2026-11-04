@@ -1,0 +1,745 @@
+{
+  "sourceHead": "fa45ef73f3b5d5c7e6ab78112d678b9d7a32ad72",
+  "sourceTree": "da51ce090329a87be3b62ee11cc4a1a8e105ea2c",
+  "buildId": "N5WBWuRiA4bjxnty-3Wsk",
+  "libraryVersion": "0.0.0-alpha.104",
+  "registry": true,
+  "routes": 20504,
+  "prerenderedRoutes": 20497,
+  "fixture": {
+    "notes": 339715,
+    "perushim": 103,
+    "parshanim": 64,
+    "articles": 5,
+    "authors": 4
+  },
+  "profile": {
+    "browser": "Chromium 156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "cpuSlowdown": 4,
+    "workers": 1,
+    "retries": 0
+  },
+  "limits": {
+    "responseP95Ms": 200,
+    "frameGapMaxMs": 100,
+    "frameGapP95Ms": 50
+  },
+  "linuxPerformance": {
+    "passed": 35
+  },
+  "windowsReaderPerformance": {
+    "passed": 13
+  },
+  "functional": {
+    "passed": 57,
+    "skipped": 1
+  },
+  "appearance": {
+    "pairs": 24,
+    "changedPixels": 0,
+    "characterComparisons": 8,
+    "maxCharacterDeltaPx": 0
+  },
+  "environments": [
+    {
+      "environment": "Linux headless SwiftShader, four shared CPUs",
+      "source": "reader385-full-metrics.json",
+      "cases": 12,
+      "responseP95Ms": 91.7,
+      "frameGapMaxMs": 66.7,
+      "frameGapP95Ms": 50,
+      "firstTurnFrameGapP95Ms": 33.4,
+      "consecutiveTurnFrameGapP95Ms": 50,
+      "results": [
+        {
+          "case": "125-hidden-drag.json",
+          "metrics": {
+            "responseMs": [
+              60.3,
+              49.7,
+              81.7,
+              43.7,
+              83.1,
+              57.8
+            ],
+            "responseP95Ms": 83.1,
+            "responseMaxMs": 83.1,
+            "frameGapMaxMs": 49.9,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 60.3,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 83.1,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-hidden-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              48.2,
+              45.4,
+              32,
+              32.4,
+              43.8,
+              34.1
+            ],
+            "responseP95Ms": 48.2,
+            "responseMaxMs": 48.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 48.2,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 45.4,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-leaf-drag.json",
+          "metrics": {
+            "responseMs": [
+              83.1,
+              69.8,
+              52.2,
+              54.9,
+              52.4,
+              52.9
+            ],
+            "responseP95Ms": 83.1,
+            "responseMaxMs": 83.1,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 83.1,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 69.8,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-leaf-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              42.4,
+              47.4,
+              51.2,
+              49.9,
+              45.7,
+              33.9
+            ],
+            "responseP95Ms": 51.2,
+            "responseMaxMs": 51.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 42.4,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 51.2,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-pinned-drag.json",
+          "metrics": {
+            "responseMs": [
+              74.5,
+              49,
+              60.7,
+              50.1,
+              52,
+              63.3
+            ],
+            "responseP95Ms": 74.5,
+            "responseMaxMs": 74.5,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 74.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 63.3,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-pinned-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              56.4,
+              56.8,
+              44.4,
+              44.8,
+              32.7,
+              32.3
+            ],
+            "responseP95Ms": 56.8,
+            "responseMaxMs": 56.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 56.4,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 56.8,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-hidden-drag.json",
+          "metrics": {
+            "responseMs": [
+              73.7,
+              50.7,
+              31,
+              47.1,
+              45.1,
+              51.2
+            ],
+            "responseP95Ms": 73.7,
+            "responseMaxMs": 73.7,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 73.7,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 51.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-hidden-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              40.7,
+              47.5,
+              31.1,
+              44.1,
+              24.4,
+              32.7
+            ],
+            "responseP95Ms": 47.5,
+            "responseMaxMs": 47.5,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 40.7,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 47.5,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-leaf-drag.json",
+          "metrics": {
+            "responseMs": [
+              74.9,
+              55.5,
+              40.8,
+              56.2,
+              66.4,
+              60.9
+            ],
+            "responseP95Ms": 74.9,
+            "responseMaxMs": 74.9,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 74.9,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 66.4,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-leaf-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              55.9,
+              37.3,
+              26.1,
+              52.8,
+              27.5,
+              36.1
+            ],
+            "responseP95Ms": 55.9,
+            "responseMaxMs": 55.9,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 55.9,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 52.8,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-pinned-drag.json",
+          "metrics": {
+            "responseMs": [
+              77.2,
+              68.7,
+              39.6,
+              57.3,
+              91.7,
+              51.3
+            ],
+            "responseP95Ms": 91.7,
+            "responseMaxMs": 91.7,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 77.2,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 91.7,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-pinned-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              59.4,
+              39.6,
+              26.3,
+              42.6,
+              35.9,
+              34.7
+            ],
+            "responseP95Ms": 59.4,
+            "responseMaxMs": 59.4,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 59.4,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 42.6,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        }
+      ]
+    },
+    {
+      "environment": "Windows desktop, headed GPU compositing",
+      "source": "reader386-headed-metrics.json",
+      "cases": 12,
+      "responseP95Ms": 124.4,
+      "frameGapMaxMs": 83.4,
+      "frameGapP95Ms": 49.9,
+      "firstTurnFrameGapP95Ms": 50,
+      "consecutiveTurnFrameGapP95Ms": 49.9,
+      "results": [
+        {
+          "case": "125-hidden-drag.json",
+          "metrics": {
+            "responseMs": [
+              109.2,
+              63.2,
+              43.7,
+              48.8,
+              99.8,
+              52.4
+            ],
+            "responseP95Ms": 109.2,
+            "responseMaxMs": 109.2,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 109.2,
+              "frameGapMaxMs": 49.934,
+              "frameGapP95Ms": 33.5
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 99.8,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-hidden-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              35.8,
+              49.3,
+              42.1,
+              47.2,
+              40,
+              40.9
+            ],
+            "responseP95Ms": 49.3,
+            "responseMaxMs": 49.3,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.3,
+            "firstTurn": {
+              "responseP95Ms": 35.8,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 16.9
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 49.3,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.3
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-leaf-drag.json",
+          "metrics": {
+            "responseMs": [
+              82.8,
+              67.4,
+              63.5,
+              65.4,
+              64.6,
+              56.4
+            ],
+            "responseP95Ms": 82.8,
+            "responseMaxMs": 82.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 82.8,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 67.4,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-leaf-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              41.3,
+              62,
+              46.7,
+              51.6,
+              39.9,
+              60.3
+            ],
+            "responseP95Ms": 62,
+            "responseMaxMs": 62,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 41.3,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 62,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-pinned-drag.json",
+          "metrics": {
+            "responseMs": [
+              74.3,
+              44.5,
+              58.1,
+              55.1,
+              51.5,
+              59.8
+            ],
+            "responseP95Ms": 74.3,
+            "responseMaxMs": 74.3,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.3,
+            "firstTurn": {
+              "responseP95Ms": 74.3,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.2
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 59.8,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.3
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "125-pinned-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              58.4,
+              54.2,
+              43.7,
+              41.5,
+              38.5,
+              35.1
+            ],
+            "responseP95Ms": 58.4,
+            "responseMaxMs": 58.4,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 58.4,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 54.2,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-hidden-drag.json",
+          "metrics": {
+            "responseMs": [
+              89.9,
+              48.2,
+              49.9,
+              45.5,
+              82.2,
+              71.9
+            ],
+            "responseP95Ms": 89.9,
+            "responseMaxMs": 89.9,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.3,
+            "firstTurn": {
+              "responseP95Ms": 89.9,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 82.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.3
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-hidden-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              36.5,
+              53.3,
+              40.6,
+              48.1,
+              31,
+              50.1
+            ],
+            "responseP95Ms": 53.3,
+            "responseMaxMs": 53.3,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.3,
+            "firstTurn": {
+              "responseP95Ms": 36.5,
+              "frameGapMaxMs": 33.3,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 53.3,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.3
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-leaf-drag.json",
+          "metrics": {
+            "responseMs": [
+              87.4,
+              57.9,
+              69.6,
+              90.2,
+              49.7,
+              63.6
+            ],
+            "responseP95Ms": 90.2,
+            "responseMaxMs": 90.2,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.5,
+            "firstTurn": {
+              "responseP95Ms": 87.4,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.2
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 90.2,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.5
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-leaf-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              40.3,
+              41,
+              55.4,
+              45.1,
+              27.2,
+              44.5
+            ],
+            "responseP95Ms": 55.4,
+            "responseMaxMs": 55.4,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 40.3,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 55.4,
+              "frameGapMaxMs": 83.4,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-pinned-drag.json",
+          "metrics": {
+            "responseMs": [
+              80.2,
+              93.3,
+              72.6,
+              65.4,
+              124.4,
+              99.3
+            ],
+            "responseP95Ms": 124.4,
+            "responseMaxMs": 124.4,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 80.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 124.4,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "failures": []
+        },
+        {
+          "case": "300-pinned-toolbar.json",
+          "metrics": {
+            "responseMs": [
+              45,
+              52.8,
+              37.6,
+              52.3,
+              37.9,
+              37.5
+            ],
+            "responseP95Ms": 52.8,
+            "responseMaxMs": 52.8,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 45,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 52.8,
+              "frameGapMaxMs": 66.8,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        }
+      ]
+    }
+  ]
+}
