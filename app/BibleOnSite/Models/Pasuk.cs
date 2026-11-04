@@ -134,15 +134,20 @@ public partial class Pasuk : ObservableObject
                 }
             }
 
+            // Snapshot the ambient inputs BEFORE building: a masking-settings
+            // or theme flip mid-build must tag the entry with the pre-build
+            // state so the next pull rebuilds instead of trusting mixed spans.
+            var revision = DivineNameMasking.Revision;
+            var dark = IsDarkTheme;
             var formatted = BuildFormattedText();
-            _formattedRevision = DivineNameMasking.Revision;
-            _formattedDark = IsDarkTheme;
             lock (_formattedCacheLock)
             {
                 if (_formattedCache.Remove(this, out var stale))
                 {
                     _formattedMru.Remove(stale.Node);
                 }
+                _formattedRevision = revision;
+                _formattedDark = dark;
                 _formattedCache[this] = (_formattedMru.AddFirst(this), formatted);
                 while (_formattedMru.Count > FormattedCacheCapacity)
                 {
@@ -162,8 +167,8 @@ public partial class Pasuk : ObservableObject
             {
                 _formattedMru.Remove(entry.Node);
             }
+            _formattedRevision = -1;
         }
-        _formattedRevision = -1;
     }
 
     private static readonly Color QriColor = Color.FromArgb("#637598");
