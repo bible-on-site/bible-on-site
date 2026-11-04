@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 
@@ -128,5 +129,79 @@ internal static class PerushNoteBlob
             raw.CopyTo(zlib);
         }
         return output.ToArray();
+    }
+
+    /// <summary>
+    /// Re-chunks a whole-perek blob into per-pasuk compressed blobs in one
+    /// decompress pass. Each chunk is a self-contained PNB1 buffer holding
+    /// only that pasuk's records, so a later pasuk read inflates a few
+    /// percent of the perek instead of all of it. Record bytes are copied
+    /// through untouched — no note text is materialized by the split itself.
+    /// </summary>
+    internal static Dictionary<int, byte[]> SplitByPasuk(byte[] blob, CompressionLevel level)
+    {
+        using var stream = new ZLibStream(new MemoryStream(blob, writable: false), CompressionMode.Decompress);
+        using var reader = new BinaryReader(stream, Encoding.UTF8);
+        var magic = reader.ReadBytes(4);
+        if (magic.Length != 4 || !magic.AsSpan().SequenceEqual(Magic))
+        {
+            throw new InvalidDataException("Perushim note blob has a bad magic.");
+        }
+        var count = reader.ReadUInt32();
+        var records = new Dictionary<int, (MemoryStream Data, int Count)>();
+        Span<byte> header = stackalloc byte[16];
+        var copyBuffer = new byte[8192];
+        for (var i = 0; i < count; i++)
+        {
+            var perushId = reader.ReadUInt32();
+            var pasuk = reader.ReadUInt32();
+            var noteIdx = reader.ReadUInt32();
+            var len = reader.ReadUInt32();
+            if (len > MaxContentBytes)
+            {
+                throw new InvalidDataException("Perushim note blob record is implausibly large.");
+            }
+            if (!records.TryGetValue((int)pasuk, out var entry))
+            {
+                entry = (new MemoryStream(), 0);
+            }
+            BinaryPrimitives.WriteUInt32LittleEndian(header, perushId);
+            BinaryPrimitives.WriteUInt32LittleEndian(header[4..], pasuk);
+            BinaryPrimitives.WriteUInt32LittleEndian(header[8..], noteIdx);
+            BinaryPrimitives.WriteUInt32LittleEndian(header[12..], len);
+            entry.Data.Write(header);
+            CopyExactly(stream, entry.Data, len, copyBuffer);
+            records[(int)pasuk] = (entry.Data, entry.Count + 1);
+        }
+
+        var chunks = new Dictionary<int, byte[]>(records.Count);
+        foreach (var (pasuk, (data, recordCount)) in records)
+        {
+            using var raw = new MemoryStream();
+            raw.Write(Magic);
+            BinaryPrimitives.WriteUInt32LittleEndian(header, (uint)recordCount);
+            raw.Write(header[..4]);
+            data.WriteTo(raw);
+            data.Dispose();
+            raw.Position = 0;
+            using var output = new MemoryStream();
+            using (var zlib = new ZLibStream(output, level, leaveOpen: true))
+            {
+                raw.CopyTo(zlib);
+            }
+            chunks[pasuk] = output.ToArray();
+        }
+        return chunks;
+    }
+
+    private static void CopyExactly(Stream source, Stream dest, uint length, byte[] buffer)
+    {
+        while (length > 0)
+        {
+            var size = (int)Math.Min(length, (uint)buffer.Length);
+            source.ReadExactly(buffer, 0, size);
+            dest.Write(buffer, 0, size);
+            length -= (uint)size;
+        }
     }
 }
