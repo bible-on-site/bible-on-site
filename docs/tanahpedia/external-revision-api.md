@@ -85,6 +85,9 @@ rather than silently overwriting, and restores are themselves new `APPLIED` revi
 
 ## Query — triage queue (Admin / internal)
 
+Requires the same `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>` header as the
+mutations.
+
 ```graphql
 query Pending {
   tanahpediaEntryRevisions(status: "PENDING") {
