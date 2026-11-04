@@ -63,7 +63,9 @@ CREATE TABLE `tanah_article` (
     -- verified coverage and drive verse/range lookups.
     `coverage_verified` boolean NOT NULL DEFAULT FALSE,
     `content` mediumtext,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    KEY `idx_article_perek` (`perek_id`),
+    KEY `idx_article_author` (`author_id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */
 ;
