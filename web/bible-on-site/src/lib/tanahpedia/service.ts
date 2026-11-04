@@ -50,9 +50,12 @@ export const CATEGORY_LABELS: Record<CategoryKey, string> = {
 
 export const ENTITY_TYPES = Object.keys(ENTITY_TYPE_LABELS) as EntityType[];
 
-export async function getEntries(limit = 50, offset = 0): Promise<Entry[]> {
-	return query<Entry>(
-		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
+export async function getEntries(
+	limit = 50,
+	offset = 0,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
 		[String(limit), String(offset)],
 	);
 }
@@ -95,9 +98,9 @@ export async function getEntryByUniqueName(
 
 export async function getEntriesByEntityType(
 	entityType: EntityType,
-): Promise<Entry[]> {
-	return query<Entry>(
-		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title, ent.content, ent.created_at AS createdAt, ent.updated_at AS updatedAt
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title
      FROM tanahpedia_entry ent
      JOIN tanahpedia_entry_entity ee ON ee.entry_id = ent.id
      JOIN tanahpedia_entity e ON e.id = ee.entity_id
@@ -741,9 +744,9 @@ export async function getCategoryCounts(): Promise<
 	return counts;
 }
 
-export async function getRecentEntries(limit = 10): Promise<Entry[]> {
-	return query<Entry>(
-		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+export async function getRecentEntries(limit = 10): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
 		[String(limit)],
 	);
 }

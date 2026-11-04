@@ -572,6 +572,16 @@ async fn apply_article_covering_source_upgrade(
         &base_path.join("../tanah_article_covering_source_upgrade.sql"),
         "article-covering-source-upgrade",
     )
+    .await?;
+    apply_article_index_upgrade(conn, base_path).await
+}
+
+async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_index_upgrade.sql"),
+        "article-index-upgrade",
+    )
     .await
 }
 
@@ -1471,6 +1481,13 @@ SELECT 1";
             apply_article_covering_source_upgrade(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id = 42 AND perek_id = 1 AND pasuk = 3").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND coverage_verified = TRUE").fetch_one(&mut conn).await?, 1);
+
+            // Simulate the pre-index dynamic schema and upgrade it repeatedly.
+            raw_sql("ALTER TABLE tanah_article DROP INDEX idx_article_perek, DROP INDEX idx_article_author;")
+                .execute(&mut conn).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME IN ('idx_article_perek', 'idx_article_author')").fetch_one(&mut conn).await?, 2);
 
             // Simulate the pre-pasuk-count schema and upgrade it repeatedly;
             // the generated data file then fills the canonical bound for the
