@@ -25,6 +25,13 @@ export interface TurnSamples {
 	repeatedFrameTimestamps?: number[];
 	longAnimationFramesSupported?: boolean;
 	longAnimationFrames?: TurnLongAnimationFrame[];
+	visibility?: {
+		started: DocumentVisibilityState;
+		stopped: DocumentVisibilityState;
+		startedFocused: boolean;
+		stoppedFocused: boolean;
+		changes: { at: number; state: DocumentVisibilityState }[];
+	};
 }
 
 /** Passive browser diagnostics; these never change the cadence reduction. */
@@ -149,5 +156,79 @@ export function turnBudgetFailures(
 				([key, limit]) =>
 					`${phase}/${key}=${values[key as keyof typeof TURN_LIMITS]}ms > ${limit}ms`,
 			),
+	);
+}
+
+// LoAF blockingDuration measures time that the main thread cannot yield to input.
+// Keep this separate from rAF cadence: software rasterization and presentation
+// scheduling can miss frames even when the main thread remains interruptible.
+export const TURN_BLOCKING_LIMIT_MS = 50;
+
+export function reduceTurnBlockingSamples(
+	samples: TurnSamples,
+	initialChapter: number,
+	expectedTurns: number,
+) {
+	reduceTurnSamples(samples, initialChapter, expectedTurns);
+	if (
+		samples.longAnimationFramesSupported !== true ||
+		!Array.isArray(samples.longAnimationFrames)
+	) {
+		throw new Error("Browser long-animation-frame evidence missing");
+	}
+	const records = samples.longAnimationFrames;
+	if (
+		records.some(
+			(frame) =>
+				![frame.startTime, frame.duration, frame.blockingDuration].every(
+					Number.isFinite,
+				) ||
+				frame.startTime < 0 ||
+				frame.duration <= 0 ||
+				frame.blockingDuration < 0 ||
+				frame.blockingDuration > frame.duration,
+		)
+	) {
+		throw new Error("Invalid browser long-animation-frame evidence");
+	}
+	const first = samples.inputs[0];
+	const firstEnd = first.settled as number;
+	const summarize = (frames: TurnLongAnimationFrame[]) => ({
+		blockingDurationMaxMs:
+			Math.max(
+				0,
+				...frames.map((frame) => clockMicros(frame.blockingDuration)),
+			) / MICROS_PER_MS,
+	});
+	return {
+		...summarize(records),
+		firstTurn: summarize(
+			records.filter(
+				(frame) =>
+					frame.startTime < firstEnd &&
+					frame.startTime + frame.duration > first.at,
+			),
+		),
+		consecutiveTurns: summarize(
+			records.filter((frame) => frame.startTime + frame.duration > firstEnd),
+		),
+	};
+}
+
+export function turnBlockingBudgetFailures(
+	metrics: ReturnType<typeof reduceTurnBlockingSamples>,
+) {
+	return (
+		[
+			["all turns", metrics],
+			["first turn", metrics.firstTurn],
+			["consecutive turns", metrics.consecutiveTurns],
+		] as const
+	).flatMap(([phase, values]) =>
+		values.blockingDurationMaxMs > TURN_BLOCKING_LIMIT_MS
+			? [
+					`${phase}/blockingDurationMaxMs=${values.blockingDurationMaxMs}ms > ${TURN_BLOCKING_LIMIT_MS}ms`,
+				]
+			: [],
 	);
 }

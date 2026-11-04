@@ -11,8 +11,27 @@ page painting by about 11-15% at 6x CPU slowdown. That stress run is not release
 qualification: the original 4x profile and its 200/100/50ms limits remain required.
 All eight resting-page captures and character-position comparisons are exact;
 font settings and colors are unchanged. Chrome can change glyph-edge smoothing
-during motion. The actual source build and complete timing/behavior matrix still
-need qualification before delivery.
+during motion. The actual full build passes 57 reader behavior checks with one
+existing conditional skip, but the original Linux profile passes 24 checks and
+fails 11, and Windows passes four checks and fails nine. All samples remain
+retained; the painting reduction is not a frame-cadence pass or delivery.
+
+The additional blocking-work guard uses the browser's native long-animation-frame
+`blockingDuration`, independently for the first turn, consecutive turns and the
+whole sequence. Its 50ms maximum rejects all twelve recorded public 0.2.620 cases
+(97-184ms blocking maxima) and accepts the twelve current Linux blocking-work
+records. These complete samples are replayed in unit tests; their cadence misses
+remain failures under the original reducer. Missing browser evidence is an error.
+The original input-handler stall control remains, and a separate 250ms animation
+callback verifies the new guard. The latter fails if the observer disconnects
+before Chrome finalizes the blocked frame. Frame/input sampling closes first;
+pending browser records are collected after rendering, without extending the
+measured interval. Visibility transitions are recorded without filtering frames.
+
+[#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) tracks the
+temporary CI quarantine and the distinction between software-rendered work
+measurements and hardware desktop cadence. No frame limit or interaction deadline
+has been increased. Normal CI, deployment and public verification remain pending.
 
 The following records retain the earlier oblique-only candidate and its results.
 

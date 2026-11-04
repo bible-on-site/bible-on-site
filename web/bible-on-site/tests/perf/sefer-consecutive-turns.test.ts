@@ -7,8 +7,11 @@ import {
 } from "../util/turn-failure-trace";
 import { dispatchTurnInput, prepareTurnInput } from "../util/turn-input";
 import {
+	reduceTurnBlockingSamples,
 	reduceTurnSamples,
+	TURN_BLOCKING_LIMIT_MS,
 	TURN_LIMITS,
+	turnBlockingBudgetFailures,
 	turnBudgetFailures,
 } from "../util/turn-metrics";
 import {
@@ -90,6 +93,7 @@ for (const [chapter, bookmarks] of [
 				await expect(page.locator(".he-book .flipbook-bookmark")).toHaveCount(
 					mode === "hidden" ? 0 : bookmarks,
 				);
+				await page.bringToFront();
 				await page.screenshot({ path: testInfo.outputPath("before.png") });
 				await testInfo.attach("before", {
 					path: testInfo.outputPath("before.png"),
@@ -172,7 +176,23 @@ for (const [chapter, bookmarks] of [
 							upperValue: limit,
 						});
 				}
-				const failures = turnBudgetFailures(metrics);
+				const blocking = reduceTurnBlockingSamples(samples, chapter, 6);
+				for (const [phase, values] of [
+					["all-turns", blocking],
+					["first-turn", blocking.firstTurn],
+					["consecutive-turns", blocking.consecutiveTurns],
+				] as const) {
+					reportBenchmark({
+						name: `sefer-handoff/${chapter}/${mode}/${gesture}/${phase}/blockingDurationMaxMs`,
+						measure: "time_ms",
+						value: values.blockingDurationMaxMs,
+						upperValue: TURN_BLOCKING_LIMIT_MS,
+					});
+				}
+				const failures = [
+					...turnBudgetFailures(metrics),
+					...turnBlockingBudgetFailures(blocking),
+				];
 				if (failures.length) {
 					try {
 						await captureTurnFailureTrace(
@@ -196,184 +216,241 @@ for (const [chapter, bookmarks] of [
 	}
 }
 
-test("turn probe detects an injected second-turn stall", async ({
+test("turn probe retains visibility changes and removes its listener", async ({
 	page,
-	isMobile,
-}, testInfo) => {
-	test.skip(isMobile, "Desktop regression probe control");
-	await page.route("**/929/125?book", (route) =>
-		route.fulfill({
-			status: 200,
-			contentType: "text/html",
-			body: '<button class="flipbook-toolbar-next">Next</button><div class="he-book"><div class="page current-page"><div class="flipbook-page-content">Front</div></div><div class="page current-page"><div class="flipbook-page-content">Back</div></div></div>',
-		}),
-	);
-	await page.goto("/929/125?book", { waitUntil: "load" });
-	// A minimal control isolates the probe from app code. Native clicks still
-	// carry real browser timestamps; the second handler deliberately blocks.
-	await page.evaluate(() => {
-		// Native frames can be timestamped before their input. Exaggerate that
-		// ordering here: observations must use callback execution time while
-		// cadence must still report the blocked interval.
-		const raf = window.requestAnimationFrame.bind(window);
-		let currentFrame: number | undefined;
-		let previousFrame: number | undefined;
-		let repeatedFrame: number | undefined;
-		let repeatedValue = 0;
-		window.requestAnimationFrame = (callback) =>
-			raf((timestamp) => {
-				if (timestamp !== currentFrame) {
-					previousFrame = currentFrame;
-					currentFrame = timestamp;
-				}
-				// A repeated scheduled timestamp is the same render opportunity.
-				// It must not become a zero-duration frame or erase a later stall.
-				if (
-					repeatedFrame === undefined &&
-					previousFrame !== undefined &&
-					window.__seferTurns?.inputs.length
-				) {
-					repeatedFrame = timestamp;
-					repeatedValue = previousFrame;
-				}
-				callback(
-					(timestamp === repeatedFrame ? repeatedValue : timestamp) - 1_000,
-				);
-			});
-		history.replaceState(null, "", "/929/300?book");
-		let count = 0;
-		document.querySelector("button")?.addEventListener("click", () => {
-			if (count === 1) {
-				const end = performance.now() + 250;
-				while (performance.now() < end) {
-					/* deliberate positive control */
-				}
-			}
-			document.querySelector(".page")?.classList.add("page--flipping");
-			count++;
-			history.replaceState(null, "", `/929/${300 + count}?book`);
-			requestAnimationFrame(() =>
-				requestAnimationFrame(() =>
-					document.querySelector(".page")?.classList.remove("page--flipping"),
-				),
-			);
-		});
-	});
-	const client = await page.context().newCDPSession(page);
-	for (const [property, value] of [
-		["opacity", "0"],
-		["visibility", "hidden"],
-	]) {
-		await page.evaluate(
-			({ property, value }) => {
-				document
-					.querySelector<HTMLElement>(".page")
-					?.style.setProperty(property, value);
-			},
-			{ property, value },
-		);
-		expect(await page.evaluate(turnContentIsVisible)).toBe(false);
-		await page.evaluate(
-			(name) =>
-				document
-					.querySelector<HTMLElement>(".page")
-					?.style.removeProperty(name),
-			property,
-		);
-	}
-	expect(await page.evaluate(turnContentIsVisible)).toBe(true);
-	const inputPoint = await prepareTurnInput(page, "toolbar");
-	await page.evaluate(() => {
-		// The observer must not create a pause by forcing styles/layout itself.
-		for (const name of ["checkVisibility", "getBoundingClientRect"]) {
-			const descriptor = Object.getOwnPropertyDescriptor(
-				Element.prototype,
-				name,
-			);
-			if (!descriptor || typeof descriptor.value !== "function") {
-				throw new Error(`Missing layout-read control: ${name}`);
-			}
-			const original = descriptor.value;
-			Object.defineProperty(Element.prototype, name, {
-				...descriptor,
-				value: function (this: Element, ...args: unknown[]) {
-					if (window.__seferTurns) {
-						throw new Error(`Observer forced ${name} while timing turns`);
-					}
-					return Reflect.apply(original, this, args);
-				},
-			});
-		}
-		const serialization = { duringTiming: 0, total: 0 };
-		Object.defineProperty(window, "__seferDiagnosticSerialization", {
-			value: serialization,
-			configurable: true,
-		});
-	});
+}) => {
+	await page.goto("about:blank");
 	await startTurnProbe(page, "toolbar");
+	const initial = await page.evaluate(() => document.visibilityState);
 	await page.evaluate(() => {
-		// Native long-frame delivery is optional. These labelled diagnostic
-		// stubs exercise export ordering without requiring a browser entry.
-		const serialization = Reflect.get(window, "__seferDiagnosticSerialization");
-		for (const name of ["serialization-control:a", "serialization-control:b"]) {
-			const startTime = performance.now();
-			window.__seferTurns?.recordLongFrames([
-				{
-					name,
-					entryType: "serialization-control",
-					startTime,
-					duration: 1,
-					toJSON() {
-						serialization.total++;
-						if (window.__seferTurns) serialization.duringTiming++;
-						return {
+		for (const state of ["hidden", "visible"]) {
+			Object.defineProperty(document, "visibilityState", {
+				configurable: true,
+				value: state,
+			});
+			document.dispatchEvent(new Event("visibilitychange"));
+		}
+		Reflect.set(window, "__visibilityControl", window.__seferTurns);
+	});
+	const samples = await stopTurnProbe(page);
+	expect(samples.visibility?.started).toBe(initial);
+	expect(samples.visibility?.stopped).toBe("visible");
+	expect(samples.visibility?.changes.map((change) => change.state)).toEqual([
+		"hidden",
+		"visible",
+	]);
+	expect(samples.visibility?.changes.every((change) => change.at > 0)).toBe(
+		true,
+	);
+	const retainedChanges = await page.evaluate(() => {
+		document.dispatchEvent(new Event("visibilitychange"));
+		return Reflect.get(window, "__visibilityControl").visibilityChanges.length;
+	});
+	expect(retainedChanges).toBe(2);
+});
+
+for (const stallPhase of ["input", "animation"] as const) {
+	test(
+		stallPhase === "input"
+			? "turn probe detects an injected second-turn stall"
+			: "turn probe detects an injected second-turn animation stall",
+		async ({ page, isMobile }, testInfo) => {
+			test.skip(isMobile, "Desktop regression probe control");
+			await page.route("**/929/125?book", (route) =>
+				route.fulfill({
+					status: 200,
+					contentType: "text/html",
+					body: '<style>.page--flipping{transform:translateX(2px)}</style><button class="flipbook-toolbar-next">Next</button><div class="he-book"><div class="page current-page"><div class="flipbook-page-content">Front</div></div><div class="page current-page"><div class="flipbook-page-content">Back</div></div></div>',
+				}),
+			);
+			await page.goto("/929/125?book", { waitUntil: "load" });
+			// A minimal control isolates the probe from app code. Native clicks still
+			// carry real browser timestamps; the second handler deliberately blocks.
+			await page.evaluate((phase) => {
+				// Native frames can be timestamped before their input. Exaggerate that
+				// ordering here: observations must use callback execution time while
+				// cadence must still report the blocked interval.
+				const raf = window.requestAnimationFrame.bind(window);
+				let currentFrame: number | undefined;
+				let previousFrame: number | undefined;
+				let repeatedFrame: number | undefined;
+				let repeatedValue = 0;
+				window.requestAnimationFrame = (callback) =>
+					raf((timestamp) => {
+						if (timestamp !== currentFrame) {
+							previousFrame = currentFrame;
+							currentFrame = timestamp;
+						}
+						// A repeated scheduled timestamp is the same render opportunity.
+						// It must not become a zero-duration frame or erase a later stall.
+						if (
+							repeatedFrame === undefined &&
+							previousFrame !== undefined &&
+							window.__seferTurns?.inputs.length
+						) {
+							repeatedFrame = timestamp;
+							repeatedValue = previousFrame;
+						}
+						callback(
+							(timestamp === repeatedFrame ? repeatedValue : timestamp) - 1_000,
+						);
+					});
+				history.replaceState(null, "", "/929/300?book");
+				let count = 0;
+				const block = () => {
+					const end = performance.now() + 250;
+					while (performance.now() < end) {
+						/* deliberate positive control */
+					}
+				};
+				document.querySelector("button")?.addEventListener("click", () => {
+					const turn = () => {
+						if (count === 1 && phase === "animation") block();
+						document.querySelector(".page")?.classList.add("page--flipping");
+						count++;
+						history.replaceState(null, "", `/929/${300 + count}?book`);
+						requestAnimationFrame(() =>
+							requestAnimationFrame(() =>
+								document
+									.querySelector(".page")
+									?.classList.remove("page--flipping"),
+							),
+						);
+					};
+					if (count === 1 && phase === "input") block();
+					if (count === 1 && phase === "animation") requestAnimationFrame(turn);
+					else turn();
+				});
+			}, stallPhase);
+			const client = await page.context().newCDPSession(page);
+			for (const [property, value] of [
+				["opacity", "0"],
+				["visibility", "hidden"],
+			]) {
+				await page.evaluate(
+					({ property, value }) => {
+						document
+							.querySelector<HTMLElement>(".page")
+							?.style.setProperty(property, value);
+					},
+					{ property, value },
+				);
+				expect(await page.evaluate(turnContentIsVisible)).toBe(false);
+				await page.evaluate(
+					(name) =>
+						document
+							.querySelector<HTMLElement>(".page")
+							?.style.removeProperty(name),
+					property,
+				);
+			}
+			expect(await page.evaluate(turnContentIsVisible)).toBe(true);
+			const inputPoint = await prepareTurnInput(page, "toolbar");
+			await page.evaluate(() => {
+				// The observer must not create a pause by forcing styles/layout itself.
+				for (const name of ["checkVisibility", "getBoundingClientRect"]) {
+					const descriptor = Object.getOwnPropertyDescriptor(
+						Element.prototype,
+						name,
+					);
+					if (!descriptor || typeof descriptor.value !== "function") {
+						throw new Error(`Missing layout-read control: ${name}`);
+					}
+					const original = descriptor.value;
+					Object.defineProperty(Element.prototype, name, {
+						...descriptor,
+						value: function (this: Element, ...args: unknown[]) {
+							if (window.__seferTurns) {
+								throw new Error(`Observer forced ${name} while timing turns`);
+							}
+							return Reflect.apply(original, this, args);
+						},
+					});
+				}
+				const serialization = { duringTiming: 0, total: 0 };
+				Object.defineProperty(window, "__seferDiagnosticSerialization", {
+					value: serialization,
+					configurable: true,
+				});
+			});
+			await startTurnProbe(page, "toolbar");
+			await page.evaluate(() => {
+				// Native long-frame delivery is optional. These labelled diagnostic
+				// stubs exercise export ordering without requiring a browser entry.
+				const serialization = Reflect.get(
+					window,
+					"__seferDiagnosticSerialization",
+				);
+				for (const name of [
+					"serialization-control:a",
+					"serialization-control:b",
+				]) {
+					const startTime = performance.now();
+					window.__seferTurns?.recordLongFrames([
+						{
 							name,
 							entryType: "serialization-control",
 							startTime,
 							duration: 1,
-							blockingDuration: 0,
-							firstUIEventTimestamp: 0,
-							renderStart: 0,
-							styleAndLayoutStart: 0,
-							scripts: [],
-						};
-					},
-				} as PerformanceEntry,
-			]);
-		}
-	});
-	await page.evaluate(
-		() =>
-			new Promise<void>((resolve) =>
-				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-			),
+							toJSON() {
+								serialization.total++;
+								if (window.__seferTurns) serialization.duringTiming++;
+								return {
+									name,
+									entryType: "serialization-control",
+									startTime,
+									duration: 1,
+									blockingDuration: 0,
+									firstUIEventTimestamp: 0,
+									renderStart: 0,
+									styleAndLayoutStart: 0,
+									scripts: [],
+								};
+							},
+						} as PerformanceEntry,
+					]);
+				}
+			});
+			await page.evaluate(
+				() =>
+					new Promise<void>((resolve) =>
+						requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+					),
+			);
+			for (let index = 0; index < 2; index++) {
+				await dispatchTurnInput(client, "toolbar", inputPoint);
+				await waitForTurnCommit(page, 301 + index);
+				await markTurnSettled(page);
+			}
+			const samples = await stopTurnProbe(page);
+			const serialization = (await page.evaluate(() =>
+				Reflect.get(window, "__seferDiagnosticSerialization"),
+			)) as { duringTiming: number; total: number };
+			await client.detach();
+			await waitForVisibleTurnContent(page);
+			const samplePath = testInfo.outputPath("control-samples.json");
+			await writeFile(samplePath, JSON.stringify(samples, null, 2));
+			await testInfo.attach("control-samples", {
+				path: samplePath,
+				contentType: "application/json",
+			});
+			const metrics = reduceTurnSamples(samples, 300, 2);
+			expect(samples.inputs[0].frameStart).toBe(0);
+			expect(samples.repeatedFrameTimestamps?.length).toBeGreaterThan(0);
+			expect(metrics.responseMs[0]).toBeLessThan(200);
+			expect(metrics.responseMs[1]).toBeGreaterThanOrEqual(250);
+			expect(turnBudgetFailures(metrics).length).toBeGreaterThan(0);
+			if (stallPhase === "animation")
+				expect(
+					turnBlockingBudgetFailures(
+						reduceTurnBlockingSamples(samples, 300, 2),
+					).some((failure) => failure.startsWith("consecutive turns/")),
+				).toBe(true);
+			expect(serialization.duringTiming).toBe(0);
+			expect(serialization.total).toBe(2);
+			expect(
+				samples.longAnimationFrames?.filter((frame) => frame.duration === 1),
+			).toHaveLength(2);
+		},
 	);
-	for (let index = 0; index < 2; index++) {
-		await dispatchTurnInput(client, "toolbar", inputPoint);
-		await waitForTurnCommit(page, 301 + index);
-		await markTurnSettled(page);
-	}
-	const samples = await stopTurnProbe(page);
-	const serialization = (await page.evaluate(() =>
-		Reflect.get(window, "__seferDiagnosticSerialization"),
-	)) as { duringTiming: number; total: number };
-	await client.detach();
-	await waitForVisibleTurnContent(page);
-	const samplePath = testInfo.outputPath("control-samples.json");
-	await writeFile(samplePath, JSON.stringify(samples, null, 2));
-	await testInfo.attach("control-samples", {
-		path: samplePath,
-		contentType: "application/json",
-	});
-	const metrics = reduceTurnSamples(samples, 300, 2);
-	expect(samples.inputs[0].frameStart).toBe(0);
-	expect(samples.repeatedFrameTimestamps?.length).toBeGreaterThan(0);
-	expect(metrics.responseMs[0]).toBeLessThan(200);
-	expect(metrics.responseMs[1]).toBeGreaterThanOrEqual(250);
-	expect(turnBudgetFailures(metrics).length).toBeGreaterThan(0);
-	expect(serialization.duringTiming).toBe(0);
-	expect(serialization.total).toBe(2);
-	expect(
-		samples.longAnimationFrames?.filter((frame) => frame.duration === 1),
-	).toHaveLength(2);
-});
+}
