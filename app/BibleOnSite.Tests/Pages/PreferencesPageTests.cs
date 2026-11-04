@@ -1,6 +1,7 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Pages;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
@@ -13,12 +14,19 @@ namespace BibleOnSite.Tests.Pages;
 /// the overview on the same page instance — a packs query must not trap the
 /// page (#2926).
 /// </summary>
-public class PreferencesPageTests
+[Collection(PreferencesServiceCollection.Name)]
+public class PreferencesPageTests : IDisposable
 {
+    public void Dispose() => PreferencesService.ResetForTesting();
+
     private static (PreferencesPage Page, View Overview, PreferencesViewModel Settings, ExtensionPacksViewModel Packs) CreatePage()
     {
+        var storage = new InMemoryPreferencesStorage();
+        // PreferencesPageBase resolves the persisted Back-chrome policy from the
+        // singleton (#2927) — the page ctor throws unless it is initialized.
+        PreferencesService.Initialize(storage);
         var settings = new PreferencesViewModel(
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()));
+            PreferencesService.CreateForTesting(storage));
         var packs = new ExtensionPacksViewModel();
         var page = new PreferencesPage(settings, () => packs);
         var overview = new ContentView();
