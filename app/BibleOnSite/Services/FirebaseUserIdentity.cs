@@ -79,12 +79,8 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
             // (request.auth.uid is set) without collecting any user PII.
             await auth.SignInAnonymouslyAsync().WaitAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
 #pragma warning disable S2221 // Deliberate failure boundary: sign-in failure leaves the app local-only.
-        catch (Exception ex) //NOSONAR — sign-in failure leaves the app local-only.
+        catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — sign-in failure leaves the app local-only.
         {
 #pragma warning restore S2221
             Console.Error.WriteLine($"[PreferencesSync] anonymous sign-in unavailable — staying local ({ex.Message})");
