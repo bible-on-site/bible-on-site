@@ -378,6 +378,13 @@ describe("articles service", () => {
 				"DB error",
 			);
 		});
+
+		it("rethrows non-Error rejections unchanged", async () => {
+			mockQuery.mockRejectedValueOnce("DB exploded");
+			await expect(getArticleSummariesByPerekIds([1])).rejects.toBe(
+				"DB exploded",
+			);
+		});
 	});
 
 	describe("getAllArticlePerekIdPairs", () => {
