@@ -38,16 +38,29 @@ const NO_RECORDING_MESSAGE = "אין הקלטה לפרק זה";
 export function stopRecitation() {
 	window.dispatchEvent(new Event(STOP_EVENT));
 }
-const RecitationContext = createContext<{
-	controls: ReactNode;
-	playChapter: (() => void) | null;
+interface RecitationTextState {
 	enabled: boolean;
 	wordByKey: Map<string, RecitationWord>;
 	rangesByPasuk: Map<number, { startMs: number; endMs: number }>;
 	subscribeActive: (listener: () => void) => () => void;
 	isActive: (key: string) => boolean;
 	play: (start: number, end: number) => void;
-} | null>(null);
+}
+
+const RecitationTextContext = createContext<RecitationTextState | null>(null);
+const RecitationEnabledContext = createContext(false);
+const RecitationContext = createContext<
+	| (RecitationTextState & {
+			controls: ReactNode;
+			playChapter: (() => void) | null;
+	  })
+	| null
+>(null);
+
+/** Mode changes rebuild a scripture body; playback frames update its words. */
+export function useRecitationEnabled() {
+	return useContext(RecitationEnabledContext);
+}
 
 const noopSubscribe = () => () => {};
 
@@ -81,12 +94,15 @@ export function RecitationWordControl({
 	pasuk,
 	segment,
 	children,
+	plainWhenInactive = false,
 }: {
 	pasuk: number;
 	segment: number;
 	children: ReactNode;
+	/** The reader can keep the original text without an inert layout box. */
+	plainWhenInactive?: boolean;
 }) {
-	const context = useContext(RecitationContext);
+	const context = useContext(RecitationTextContext);
 	const key = `${pasuk}:${segment}`;
 	const word = context?.enabled ? context.wordByKey.get(key) : undefined;
 	// The active word lives outside the context value so a word-boundary change
@@ -96,6 +112,9 @@ export function RecitationWordControl({
 		() => context?.isActive(key) ?? false,
 		() => false,
 	);
+	// Keep the text-node boundaries: joining adjacent words changes Hebrew
+	// shaping. Listening still restores the original inline control and events.
+	if (plainWhenInactive && !word) return <>{children}</>;
 	return (
 		<InlineRecitationControl
 			className={styles.word}
@@ -125,7 +144,7 @@ export function RecitationPasukControl({
 	 */
 	onNavigate?: () => void;
 }) {
-	const context = useContext(RecitationContext);
+	const context = useContext(RecitationTextContext);
 	const range = context?.enabled
 		? (context.rangesByPasuk.get(pasuk) ?? null)
 		: null;
@@ -228,7 +247,7 @@ export function RecitationLink({
 	children: ReactNode;
 	link: ReactNode;
 }) {
-	const context = useContext(RecitationContext);
+	const context = useContext(RecitationTextContext);
 	return <>{context?.enabled ? children : link}</>;
 }
 
@@ -500,6 +519,7 @@ export default function RecitationPlayer({
 	}, [state, play, finish, fail]);
 
 	const alignedWords = useMemo(() => playableWords(data), [data]);
+	const textEnabled = open && alignedWords.length > 0;
 	// O(1) lookup structures shared by every word/pasuk control via context.
 	const wordByKey = useMemo(
 		() =>
@@ -520,6 +540,20 @@ export default function RecitationPlayer({
 		}
 		return ranges;
 	}, [alignedWords]);
+	// Loading/progress/header updates must not invalidate every scripture word.
+	// Keep the original word elements and highlight state while sharing only
+	// changes that text controls actually consume.
+	const textState = useMemo<RecitationTextState>(
+		() => ({
+			enabled: textEnabled,
+			wordByKey,
+			rangesByPasuk,
+			subscribeActive,
+			isActive,
+			play: (start, end) => void play(start, end),
+		}),
+		[textEnabled, wordByKey, rangesByPasuk, subscribeActive, isActive, play],
+	);
 	useEffect(() => {
 		if (state !== "playing" || alignedWords.length === 0) return;
 		let frame = 0;
@@ -662,31 +696,19 @@ export default function RecitationPlayer({
 	]);
 	const value = useMemo(
 		() => ({
+			...textState,
 			controls,
 			playChapter: open && data ? () => void togglePlayback() : null,
-			enabled: open && alignedWords.length > 0,
-			wordByKey,
-			rangesByPasuk,
-			subscribeActive,
-			isActive,
-			play: (start: number, end: number) => void play(start, end),
 		}),
-		[
-			controls,
-			open,
-			data,
-			togglePlayback,
-			alignedWords,
-			wordByKey,
-			rangesByPasuk,
-			subscribeActive,
-			isActive,
-			play,
-		],
+		[textState, controls, open, data, togglePlayback],
 	);
 	return (
 		<RecitationContext.Provider value={value}>
-			{children}
+			<RecitationTextContext.Provider value={textState}>
+				<RecitationEnabledContext.Provider value={textEnabled}>
+					{children}
+				</RecitationEnabledContext.Provider>
+			</RecitationTextContext.Provider>
 		</RecitationContext.Provider>
 	);
 }
