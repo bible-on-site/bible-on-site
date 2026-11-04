@@ -41,6 +41,10 @@ Same APK, `adb uninstall` + reinstall (shared_prefs contained only
   תרגום יונתן at defaults — single-line pasuk row bounds 66px vs perush
   row 64px; body ink pasuk ≈ 50px (Taamey D incl. taamim) vs perush ≈
   47px. Equal effective size, no perush inflation.
+- `shots/perush150-perek.png`: the complementary direction — פירושים 150%
+  (pasuk% 100) scales only the commentary: perush body ink ≈ 72px vs 47px
+  baseline (≈1.5×) while pasuk rows stay 66px / ink 50px. The categories
+  are independent in both directions.
 
 ## Device matrix
 
