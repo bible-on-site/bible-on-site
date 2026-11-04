@@ -277,8 +277,6 @@ async fn main() -> Result<()> {
 
         apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
-        apply_article_index_upgrade(&mut conn, base_path).await?;
-
         apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
 
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
@@ -555,7 +553,8 @@ async fn apply_article_covering_source_upgrade(
         &base_path.join("../tanah_article_covering_source_upgrade.sql"),
         "article-covering-source-upgrade",
     )
-    .await
+    .await?;
+    apply_article_index_upgrade(conn, base_path).await
 }
 
 async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
