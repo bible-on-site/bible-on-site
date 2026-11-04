@@ -4,7 +4,7 @@ import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
@@ -124,7 +124,7 @@ interface PasukGroup {
  * override) above the commentary grouped by pasuk; מאמרים holds a masonry
  * grid that keeps its place while an article opens over it.
  */
-export function SeferPanel({
+export const SeferPanel = memo(function SeferPanel({
 	isActive = true,
 	articles = NO_ARTICLES,
 	perushim = NO_PERUSHIM,
@@ -978,4 +978,4 @@ export function SeferPanel({
 				)}
 		</section>
 	);
-}
+});

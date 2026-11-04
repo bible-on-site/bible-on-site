@@ -3,13 +3,13 @@ import { Readable } from "node:stream";
 import test from "node:test";
 import { createAWSCaller } from "./api-rollout-aws.mjs";
 import {
-	APITaskProtection,
 	API_ACCOUNT,
 	API_CLUSTER,
 	API_REGION,
 	API_SERVICE,
-	LEASE_PREFIX,
+	APITaskProtection,
 	expirySecond,
+	LEASE_PREFIX,
 	sameTask,
 } from "./api-task-protection.mjs";
 
@@ -232,10 +232,10 @@ test("an existing protection is neither renewed nor cleared", async () => {
 });
 test("another protection marker remains untouched", async () => {
 	const { aws, lease } = fixture();
-	aws.tags[LEASE_PREFIX + "foreign"] = "other";
+	aws.tags[`${LEASE_PREFIX}foreign`] = "other";
 	await assert.rejects(lease.grant(), /existing task protection marker/);
 	assert.equal(writes(aws).length, 0);
-	assert.equal(aws.tags[LEASE_PREFIX + "foreign"], "other");
+	assert.equal(aws.tags[`${LEASE_PREFIX}foreign`], "other");
 });
 test("a lost grant acknowledgement is reconciled without another grant", async () => {
 	const { aws, lease } = fixture();
@@ -299,7 +299,7 @@ for (const [name, change] of [
 	[
 		"another lease appears",
 		(aws) => {
-			aws.tags[LEASE_PREFIX + "other"] = "other";
+			aws.tags[`${LEASE_PREFIX}other`] = "other";
 		},
 	],
 	[
@@ -309,17 +309,14 @@ for (const [name, change] of [
 		},
 	],
 ]) {
-	test(
-		name + " prevents clearing a foreign or changed protection",
-		async () => {
-			const { aws, lease } = fixture();
-			await lease.grant();
-			change(aws, lease);
-			const count = writes(aws).length;
-			await assert.rejects(lease.release());
-			assert.equal(writes(aws).length, count);
-		},
-	);
+	test(`${name} prevents clearing a foreign or changed protection`, async () => {
+		const { aws, lease } = fixture();
+		await lease.grant();
+		change(aws, lease);
+		const count = writes(aws).length;
+		await assert.rejects(lease.release());
+		assert.equal(writes(aws).length, count);
+	});
 }
 test("concurrent unrelated tags are preserved after an ungranted marker is removed", async () => {
 	const { aws, lease } = fixture();
@@ -420,5 +417,193 @@ test("publication cannot begin a rollout too close to the owned grant's expiry",
 	assert.throws(
 		() =>
 			new APITaskProtection({ call() {}, task: TASK, nonce: "-".repeat(32) }),
+	);
+});
+
+const stoppedTask = () => ({
+	taskArn: TASK,
+	clusterArn: `arn:aws:ecs:${API_REGION}:${API_ACCOUNT}:cluster/${API_CLUSTER}`,
+	group: `service:${API_SERVICE}`,
+	lastStatus: "STOPPED",
+	desiredStatus: "STOPPED",
+});
+
+function retiredTaskFixture(
+	stage = "read",
+	describe = () => ({ tasks: [stoppedTask()], failures: [] }),
+) {
+	const { aws, lease } = fixture();
+	const calls = [];
+	lease.call = async (operation, input) => {
+		calls.push({ operation, input: structuredClone(input) });
+		if (operation === "DescribeTasks") return describe();
+		if (
+			lease.clearConfirmed &&
+			((stage === "read" && operation === "ListTagsForResource") ||
+				(stage === "write" && operation === "UntagResource") ||
+				(stage === "verify" &&
+					operation === "ListTagsForResource" &&
+					!(lease.key in aws.tags)))
+		) {
+			throw Object.assign(new Error("The specified task is stopped"), {
+				name: "InvalidParameterException",
+			});
+		}
+		return aws.call(operation, input);
+	};
+	return { aws, lease, calls };
+}
+
+for (const stage of ["read", "write", "verify"]) {
+	test(`an acknowledged clear accepts verified task retirement during marker ${stage}`, async () => {
+		const { aws, lease, calls } = retiredTaskFixture(stage);
+		await lease.grant();
+		await lease.release();
+		assert.equal(lease.clearConfirmed, true);
+		assert.equal(lease.released, true);
+		assert.equal(aws.protected, false);
+		assert.deepEqual(
+			calls.filter((row) => row.operation === "DescribeTasks"),
+			[
+				{
+					operation: "DescribeTasks",
+					input: { cluster: API_CLUSTER, tasks: [TASK] },
+				},
+			],
+		);
+		assert.equal(
+			aws.calls.filter(
+				(row) =>
+					row.name === "UpdateTaskProtection" && !row.input.protectionEnabled,
+			).length,
+			1,
+		);
+		assert.ok(
+			aws.events.some((row) => row.name === "protection-marker-retired"),
+		);
+		const before = calls.length;
+		await lease.release();
+		assert.equal(calls.length, before);
+	});
+}
+
+for (const [name, describe] of [
+	[
+		"running task",
+		() => ({
+			tasks: [{ ...stoppedTask(), lastStatus: "RUNNING" }],
+			failures: [],
+		}),
+	],
+	[
+		"stopping task",
+		() => ({
+			tasks: [{ ...stoppedTask(), lastStatus: "STOPPING" }],
+			failures: [],
+		}),
+	],
+	[
+		"unexpected desired status",
+		() => ({
+			tasks: [{ ...stoppedTask(), desiredStatus: "RUNNING" }],
+			failures: [],
+		}),
+	],
+	[
+		"different task",
+		() => ({
+			tasks: [{ ...stoppedTask(), taskArn: TASK.replace(/a$/, "b") }],
+			failures: [],
+		}),
+	],
+	[
+		"different cluster",
+		() => ({
+			tasks: [{ ...stoppedTask(), clusterArn: "another-cluster" }],
+			failures: [],
+		}),
+	],
+	[
+		"different service",
+		() => ({
+			tasks: [{ ...stoppedTask(), group: "service:another-service" }],
+			failures: [],
+		}),
+	],
+	["missing task", () => ({ tasks: [], failures: [] })],
+	[
+		"ambiguous tasks",
+		() => ({ tasks: [stoppedTask(), stoppedTask()], failures: [] }),
+	],
+	[
+		"failed task lookup",
+		() => ({ tasks: [stoppedTask()], failures: [{ reason: "MISSING" }] }),
+	],
+	[
+		"task lookup error",
+		() => {
+			throw new Error("cannot inspect task");
+		},
+	],
+]) {
+	test(`marker cleanup still fails closed for ${name}`, async () => {
+		const { lease } = retiredTaskFixture("read", describe);
+		await lease.grant();
+		await assert.rejects(lease.release());
+		assert.equal(lease.clearConfirmed, true);
+		assert.equal(lease.released, false);
+	});
+}
+
+test("a stopped-task tag error before clearing protection cannot adopt retirement", async () => {
+	const { aws, lease, calls } = retiredTaskFixture();
+	await lease.grant();
+	const call = lease.call;
+	lease.call = async (operation, input) => {
+		if (operation === "ListTagsForResource") {
+			throw Object.assign(new Error("task is stopped"), {
+				name: "InvalidParameterException",
+			});
+		}
+		return call(operation, input);
+	};
+	await assert.rejects(lease.release(), { name: "InvalidParameterException" });
+	assert.equal(lease.clearConfirmed, false);
+	assert.equal(lease.released, false);
+	assert.equal(aws.protected, true);
+	assert.equal(
+		calls.some((row) => row.operation === "DescribeTasks"),
+		false,
+	);
+});
+
+test("running-task errors and an invalid clear receipt never adopt a retired marker", async () => {
+	for (const name of ["AccessDeniedException", "TimeoutError"]) {
+		const { lease } = fixture();
+		await lease.grant();
+		const call = lease.call;
+		let described = false;
+		lease.call = async (operation, input) => {
+			if (operation === "DescribeTasks") {
+				described = true;
+				return { tasks: [stoppedTask()], failures: [] };
+			}
+			if (operation === "ListTagsForResource" && lease.clearConfirmed)
+				throw Object.assign(new Error("cannot read marker"), { name });
+			return call(operation, input);
+		};
+		await assert.rejects(lease.release(), { name });
+		assert.equal(described, false);
+		assert.equal(lease.released, false);
+	}
+	const { aws, lease, calls } = retiredTaskFixture();
+	await lease.grant();
+	aws.wrongReceipt = true;
+	await assert.rejects(lease.release(), /release receipt/);
+	assert.equal(lease.clearConfirmed, false);
+	assert.equal(lease.released, false);
+	assert.equal(
+		calls.some((row) => row.operation === "DescribeTasks"),
+		false,
 	);
 });

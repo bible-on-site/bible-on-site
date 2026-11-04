@@ -440,6 +440,16 @@ jobs:
       - name: Verify AAB DEX optimization metadata
         run: python app/devops/verify_android_dex_metadata.py --package "$(find app/.artifacts -name '*.aab' -print -quit)"
 
+      # #2970: the archive Play receives is this zip — its entries must be
+      # symbol-bearing arm64 ELFs named after, and build-ID-matched to, the
+      # bundled libraries. Verify the stored artifact, not just intermediates.
+      - name: Verify native symbols archive
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          dotnet run --project devops -- VerifyAndroidSymbols \
+            --aab-path "$(realpath "$(find .artifacts -name '*.aab' -print -quit)")" \
+            --android-symbols-path "$(realpath "$(find .artifacts -name '*-native-symbols.zip' -print -quit)")"
+
       - name: Set artifact name output
         id: set_artifact_name
         run: echo "artifact_name=app-android-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
