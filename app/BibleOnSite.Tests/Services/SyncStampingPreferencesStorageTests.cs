@@ -81,6 +81,44 @@ public class SyncStampingPreferencesStorageTests
     }
 
     [Fact]
+    public void RaiseStampFloor_FutureWritesStampAboveTheRemoteMax()
+    {
+        var (storage, _) = Create();
+        storage.RaiseStampFloor(50_001); // remote max was 50_000
+
+        storage.Set("fontFactor", 1.4);
+
+        // Wall time is 1_000, but the observed remote clock leads it — the
+        // local write must still outstamp that remote entry.
+        storage.GetStampsSnapshot()["fontFactor"].UpdatedAtMs.Should().Be(50_001);
+    }
+
+    [Fact]
+    public void RaiseStampFloor_IsMonotonic_AndPersistsAcrossReloads()
+    {
+        var (storage, inner) = Create();
+        storage.RaiseStampFloor(50_001);
+        storage.RaiseStampFloor(10_000); // lower — ignored
+
+        var reloaded = new SyncStampingPreferencesStorage(inner, () => _now);
+        reloaded.Set("fontFactor", 1.4);
+
+        reloaded.GetStampsSnapshot()["fontFactor"].UpdatedAtMs.Should().Be(50_001);
+        inner.ContainsKey(SyncStampingPreferencesStorage.FloorStorageKey).Should().BeTrue();
+    }
+
+    [Fact]
+    public void OverrideStamp_RecordsVerbatim_EvenBelowFloor()
+    {
+        var (storage, _) = Create();
+        storage.RaiseStampFloor(50_001);
+        storage.OverrideStamp("fontFactor", 5_000, tombstone: false);
+
+        // Merge bookkeeping needs the winner's exact stamp, not a floored one.
+        storage.GetStampsSnapshot()["fontFactor"].UpdatedAtMs.Should().Be(5_000);
+    }
+
+    [Fact]
     public void CorruptStampJson_ResetsToEmpty()
     {
         var inner = new InMemoryPreferencesStorage();
