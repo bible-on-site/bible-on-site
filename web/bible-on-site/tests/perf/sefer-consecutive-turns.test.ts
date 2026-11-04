@@ -13,6 +13,9 @@ import {
 	TURN_LIMITS,
 	turnBlockingBudgetFailures,
 	turnBudgetFailures,
+	turnQualificationFailures,
+	turnRenderingProfile,
+	turnVisibilityFailures,
 } from "../util/turn-metrics";
 import {
 	markTurnSettled,
@@ -47,10 +50,6 @@ for (const [chapter, bookmarks] of [
 				browser,
 			}, testInfo) => {
 				test.skip(isMobile, "Desktop Chrome/Edge regression profile");
-				test.skip(
-					Boolean(process.env.CI),
-					"Unstable CI frame timing: https://github.com/bible-on-site/bible-on-site/issues/3090",
-				);
 				await page.addInitScript((attachment) => {
 					localStorage.setItem(
 						"seferBookmarks",
@@ -102,6 +101,7 @@ for (const [chapter, bookmarks] of [
 				const system = await browser.newBrowserCDPSession();
 				const hardware = await system.send("SystemInfo.getInfo");
 				await system.detach();
+				const renderingProfile = turnRenderingProfile(hardware.gpu);
 				const client = await page.context().newCDPSession(page);
 				const inputPoint = await prepareTurnInput(page, gesture);
 				await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
@@ -129,7 +129,9 @@ for (const [chapter, bookmarks] of [
 								browser: browser.version(),
 								headless: testInfo.project.use.headless ?? true,
 								gpu: hardware.gpu,
+								renderingProfile,
 								limits: TURN_LIMITS,
+								blockingLimitMs: TURN_BLOCKING_LIMIT_MS,
 								samples,
 							},
 							null,
@@ -157,42 +159,58 @@ for (const [chapter, bookmarks] of [
 				}
 				await waitForVisibleTurnContent(page);
 				const metrics = reduceTurnSamples(samples, chapter, 6);
-				for (const [key, limit] of Object.entries(TURN_LIMITS))
-					reportBenchmark({
-						name: `sefer-handoff/${chapter}/${mode}/${gesture}/${key}`,
-						measure: "time_ms",
-						value: metrics[key as keyof typeof TURN_LIMITS],
-						upperValue: limit,
-					});
-				for (const [phase, values] of [
-					["first-turn", metrics.firstTurn],
-					["consecutive-turns", metrics.consecutiveTurns],
-				] as const) {
-					for (const [key, limit] of Object.entries(TURN_LIMITS))
-						reportBenchmark({
-							name: `sefer-handoff/${chapter}/${mode}/${gesture}/${phase}/${key}`,
-							measure: "time_ms",
-							value: values[key as keyof typeof TURN_LIMITS],
-							upperValue: limit,
-						});
-				}
 				const blocking = reduceTurnBlockingSamples(samples, chapter, 6);
-				for (const [phase, values] of [
-					["all-turns", blocking],
-					["first-turn", blocking.firstTurn],
-					["consecutive-turns", blocking.consecutiveTurns],
+				for (const [phase, values, work] of [
+					["all-turns", metrics, blocking],
+					["first-turn", metrics.firstTurn, blocking.firstTurn],
+					[
+						"consecutive-turns",
+						metrics.consecutiveTurns,
+						blocking.consecutiveTurns,
+					],
 				] as const) {
+					const name = `sefer-handoff/${renderingProfile}/${chapter}/${mode}/${gesture}/${phase}`;
+					for (const [key, limit] of Object.entries(TURN_LIMITS)) {
+						if (renderingProfile === "software-work" && key !== "responseP95Ms")
+							continue;
+						// Fixed-budget ratios retain absolute limits, including zero
+						// blocking, without a noisy percentage-of-history threshold.
+						reportBenchmark({
+							name: `${name}/${key}`,
+							measure: "frame_budget_ratio",
+							value: values[key as keyof typeof TURN_LIMITS] / limit,
+							upperValue: 1,
+						});
+					}
 					reportBenchmark({
-						name: `sefer-handoff/${chapter}/${mode}/${gesture}/${phase}/blockingDurationMaxMs`,
-						measure: "time_ms",
-						value: values.blockingDurationMaxMs,
-						upperValue: TURN_BLOCKING_LIMIT_MS,
+						name: `${name}/blockingDurationMaxMs`,
+						measure: "frame_budget_ratio",
+						value: work.blockingDurationMaxMs / TURN_BLOCKING_LIMIT_MS,
+						upperValue: 1,
 					});
 				}
 				const failures = [
-					...turnBudgetFailures(metrics),
-					...turnBlockingBudgetFailures(blocking),
+					...turnQualificationFailures(metrics, blocking, renderingProfile),
+					...turnVisibilityFailures(samples.visibility),
 				];
+				const qualification = {
+					renderingProfile,
+					metrics,
+					blocking,
+					originalBudgetFailures: turnBudgetFailures(metrics),
+					failures,
+				};
+				const qualificationDirectory = `${TURN_DIAGNOSTICS}/qualification`;
+				await mkdir(qualificationDirectory, { recursive: true });
+				const qualificationPath = `${qualificationDirectory}/${chapter}-${mode}-${gesture}.json`;
+				await writeFile(
+					qualificationPath,
+					JSON.stringify(qualification, null, 2),
+				);
+				await testInfo.attach("turn-qualification", {
+					path: qualificationPath,
+					contentType: "application/json",
+				});
 				if (failures.length) {
 					try {
 						await captureTurnFailureTrace(

@@ -139,6 +139,8 @@ export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
 		const probe = window.__seferTurns;
 		if (!probe) throw new Error("Turn probe missing");
 		probe.stoppedAt = performance.now();
+		const stoppedVisibility = document.visibilityState;
+		const stoppedFocused = document.hasFocus();
 		window.__seferTurns = undefined;
 		cancelAnimationFrame(probe.raf);
 		document.removeEventListener(probe.eventType, probe.listener, true);
@@ -158,9 +160,9 @@ export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
 			frames: probe.frames,
 			visibility: {
 				started: probe.startedVisibility,
-				stopped: document.visibilityState,
+				stopped: stoppedVisibility,
 				startedFocused: probe.startedFocused,
-				stoppedFocused: document.hasFocus(),
+				stoppedFocused,
 				changes: probe.visibilityChanges,
 			},
 			repeatedFrameTimestamps: probe.repeatedFrameTimestamps,

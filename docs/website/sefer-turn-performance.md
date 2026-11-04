@@ -28,10 +28,26 @@ before Chrome finalizes the blocked frame. Frame/input sampling closes first;
 pending browser records are collected after rendering, without extending the
 measured interval. Visibility transitions are recorded without filtering frames.
 
-[#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) tracks the
-temporary CI quarantine and the distinction between software-rendered work
-measurements and hardware desktop cadence. No frame limit or interaction deadline
-has been increased. Normal CI, deployment and public verification remain pending.
+The [#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) repair
+restores all twelve CI scenarios and selects the guard from Chrome's reported
+primary graphics device, renderer and acceleration features. Hardware rendering
+still requires the original 200ms response p95, 100ms maximum frame gap and 50ms
+cadence p95, plus the blocking guard. Software rendering requires the same 200ms
+response p95 and the 50ms blocking maximum. It retains every frame interval and
+every original budget failure as diagnostics; a software-work pass does not
+establish a hardware cadence pass. SwiftShader remains a software profile even
+when its emulated GPU features report enabled. Missing graphics or browser API
+evidence is an error, and a background visibility interval fails qualification.
+
+Both profiles check the first turn, consecutive turns and complete sequence
+independently. The native input-handler stall is caught by response timing; a
+separate blocked animation callback is caught by the browser's
+[blocking-duration record](https://developer.chrome.com/docs/web-platform/long-animation-frames).
+Reporting separates the profiles and uses the existing fixed-budget ratio
+measure, so a zero blocking baseline does not become a noisy relative threshold.
+The ratios divide by fixed limits, never by host speed or observed refresh rate.
+No interaction deadline, CPU slowdown or retry setting changes. Normal CI,
+deployment and public verification remain pending.
 
 The following records retain the earlier oblique-only candidate and its results.
 

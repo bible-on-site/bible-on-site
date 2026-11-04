@@ -3,9 +3,13 @@ import numbers from "../../../../../docs/website/sefer-turn-performance.blocking
 import kings from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-300.json";
 import {
 	reduceTurnBlockingSamples,
+	reduceTurnSamples,
 	type TurnLongAnimationFrame,
 	type TurnSamples,
 	turnBlockingBudgetFailures,
+	turnQualificationFailures,
+	turnRenderingProfile,
+	turnVisibilityFailures,
 } from "../../util/turn-metrics";
 
 it.each([...numbers.cases, ...kings.cases])(
@@ -20,6 +24,13 @@ it.each([...numbers.cases, ...kings.cases])(
 		expect(turnBlockingBudgetFailures(metrics).length > 0).toBe(
 			record.expectedBlockingFailure,
 		);
+		expect(
+			turnQualificationFailures(
+				reduceTurnSamples(record.samples, record.chapter, 6),
+				metrics,
+				"software-work",
+			).length > 0,
+		).toBe(record.expectedBlockingFailure);
 		expect(record.samples).toEqual(before);
 	},
 );
@@ -114,3 +125,92 @@ it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])(
 		).toThrow("Invalid browser");
 	},
 );
+
+it.each([
+	["Intel Iris Xe", "enabled", "enabled", "hardware-cadence"],
+	["ANGLE SwiftShader", "enabled", "enabled", "software-work"],
+	["Mesa llvmpipe", "enabled", "enabled", "software-work"],
+	["Intel Iris Xe", "disabled_software", "enabled", "software-work"],
+	["Intel Iris Xe", "enabled", "disabled_software", "software-work"],
+] as const)(
+	"identifies %s / %s / %s",
+	(deviceString, compositing, rasterization, expected) => {
+		expect(
+			turnRenderingProfile({
+				featureStatus: { gpu_compositing: compositing, rasterization },
+				devices: [{ deviceString }],
+			}),
+		).toBe(expected);
+	},
+);
+
+it.each([
+	{ devices: [{ deviceString: "Intel Iris Xe" }] },
+	{ featureStatus: { gpu_compositing: "enabled" }, devices: [] },
+	{
+		featureStatus: { gpu_compositing: "enabled", rasterization: "enabled" },
+		devices: [{ deviceString: "" }],
+	},
+])("rejects incomplete rendering evidence: %j", (gpu) => {
+	expect(() => turnRenderingProfile(gpu)).toThrow(
+		"Browser rendering evidence missing",
+	);
+});
+
+it("retains strict physical cadence and distinguishes software work", () => {
+	const samples = sample(0, 100);
+	samples.frames.fill(50.1);
+	const metrics = reduceTurnSamples(samples, 300, 2);
+	const blocking = reduceTurnBlockingSamples(samples, 300, 2);
+	expect(
+		turnQualificationFailures(metrics, blocking, "hardware-cadence"),
+	).toHaveLength(3);
+	expect(turnQualificationFailures(metrics, blocking, "software-work")).toEqual(
+		[],
+	);
+});
+
+it("keeps the response limit strict in the software profile", () => {
+	const samples = sample(0, 100);
+	samples.inputs[0].responseFrame = 200.001;
+	expect(
+		turnQualificationFailures(
+			reduceTurnSamples(samples, 300, 2),
+			reduceTurnBlockingSamples(samples, 300, 2),
+			"software-work",
+		),
+	).toHaveLength(2);
+});
+
+it("uses the primary renderer rather than an unused software device", () => {
+	const gpu = {
+		featureStatus: { gpu_compositing: "enabled", rasterization: "enabled" },
+		devices: [
+			{ deviceString: "Intel Iris Xe" },
+			{ deviceString: "SwiftShader" },
+		],
+	};
+	expect(turnRenderingProfile(gpu)).toBe("hardware-cadence");
+	expect(
+		turnRenderingProfile({
+			...gpu,
+			auxAttributes: { glRenderer: "ANGLE SwiftShader" },
+		}),
+	).toBe("software-work");
+});
+
+it("rejects background intervals even when the page is visible again at the end", () => {
+	const visibility = {
+		started: "visible" as const,
+		stopped: "visible" as const,
+		startedFocused: false,
+		stoppedFocused: true,
+		changes: [] as { at: number; state: DocumentVisibilityState }[],
+	};
+	expect(turnVisibilityFailures(visibility)).toEqual([]);
+	visibility.changes.push({ at: 100, state: "hidden" });
+	expect(turnVisibilityFailures(visibility)).toHaveLength(1);
+	expect(() => turnVisibilityFailures(undefined)).toThrow(
+		"visibility evidence missing",
+	);
+});

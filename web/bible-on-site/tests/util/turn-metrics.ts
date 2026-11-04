@@ -232,3 +232,67 @@ export function turnBlockingBudgetFailures(
 			: [],
 	);
 }
+
+export type TurnRenderingProfile = "hardware-cadence" | "software-work";
+
+/** Software emulation does not establish hardware presentation cadence. */
+export function turnRenderingProfile(gpu: {
+	featureStatus?: Record<string, unknown>;
+	devices: { deviceString: string }[];
+	auxAttributes?: Record<string, unknown>;
+}): TurnRenderingProfile {
+	const compositing = gpu.featureStatus?.gpu_compositing;
+	const rasterization = gpu.featureStatus?.rasterization;
+	if (
+		typeof compositing !== "string" ||
+		typeof rasterization !== "string" ||
+		!gpu.devices[0]?.deviceString
+	) {
+		throw new Error("Browser rendering evidence missing");
+	}
+	const renderer = `${gpu.devices[0].deviceString} ${gpu.auxAttributes?.glRenderer ?? ""}`;
+	const softwareDevice =
+		/SwiftShader|llvmpipe|softpipe|Software Rasterizer|Microsoft Basic Render Driver/i.test(
+			renderer,
+		);
+	return compositing === "enabled" &&
+		rasterization === "enabled" &&
+		!softwareDevice
+		? "hardware-cadence"
+		: "software-work";
+}
+
+export function turnQualificationFailures(
+	metrics: ReturnType<typeof reduceTurnSamples>,
+	blocking: ReturnType<typeof reduceTurnBlockingSamples>,
+	profile: TurnRenderingProfile,
+) {
+	const responsiveness = (
+		[
+			["all turns", metrics],
+			["first turn", metrics.firstTurn],
+			["consecutive turns", metrics.consecutiveTurns],
+		] as const
+	).flatMap(([phase, values]) =>
+		values.responseP95Ms > TURN_LIMITS.responseP95Ms
+			? [
+					`${phase}/responseP95Ms=${values.responseP95Ms}ms > ${TURN_LIMITS.responseP95Ms}ms`,
+				]
+			: [],
+	);
+	return [
+		...(profile === "hardware-cadence"
+			? turnBudgetFailures(metrics)
+			: responsiveness),
+		...turnBlockingBudgetFailures(blocking),
+	];
+}
+
+export function turnVisibilityFailures(visibility: TurnSamples["visibility"]) {
+	if (!visibility) throw new Error("Browser visibility evidence missing");
+	return visibility.started !== "visible" ||
+		visibility.stopped !== "visible" ||
+		visibility.changes.some((change) => change.state !== "visible")
+		? ["Turn measurement entered background visibility"]
+		: [];
+}
