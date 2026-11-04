@@ -1,11 +1,13 @@
 jest.mock("../../../src/lib/articles", () => ({
 	getArticleById: jest.fn(),
 	getArticleSummariesByPerekId: jest.fn(),
+	getArticleSummariesByPerekIds: jest.fn(),
 }));
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushNotes: jest.fn(),
 	getPerushNotesBatch: jest.fn(),
 	getPerushimByPerekId: jest.fn(),
+	getPerushimByPerekIds: jest.fn(),
 }));
 jest.mock("../../../src/lib/reading-metrics", () => ({
 	getArticleProgressUnits: jest.fn(),
@@ -57,6 +59,7 @@ import {
 import {
 	getArticleById,
 	getArticleSummariesByPerekId,
+	getArticleSummariesByPerekIds,
 } from "../../../src/lib/articles";
 import { decorateArticleContent } from "../../../src/lib/tanahpedia/article-mention-refs";
 import { getArticleDedications } from "../../../src/lib/dedications/loaders";
@@ -66,6 +69,7 @@ import {
 } from "../../../src/lib/download/handlers";
 import {
 	getPerushimByPerekId,
+	getPerushimByPerekIds,
 	getPerushNotes,
 	getPerushNotesBatch,
 } from "../../../src/lib/perushim";
@@ -95,6 +99,13 @@ const mockGetArticleSummariesByPerekId =
 	getArticleSummariesByPerekId as jest.MockedFunction<
 		typeof getArticleSummariesByPerekId
 	>;
+const mockGetArticleSummariesByPerekIds =
+	getArticleSummariesByPerekIds as jest.MockedFunction<
+		typeof getArticleSummariesByPerekIds
+	>;
+const mockGetPerushimByPerekIds = getPerushimByPerekIds as jest.MockedFunction<
+	typeof getPerushimByPerekIds
+>;
 const mockGetSeferDownloadHandler =
 	getSeferDownloadHandler as jest.MockedFunction<
 		typeof getSeferDownloadHandler
@@ -301,12 +312,8 @@ describe("getPerekSummariesBatch", () => {
 			[5, [{ id: 10, name: "Rashi 5", parshanName: "Rashi", noteCount: 3 }]],
 			[6, [{ id: 11, name: "Rashi 6", parshanName: "Rashi", noteCount: 4 }]],
 		]);
-		mockGetArticleSummariesByPerekId.mockImplementation(
-			async (id) => articleSummaries.get(id) ?? [],
-		);
-		mockGetPerushimByPerekId.mockImplementation(
-			async (id) => perushSummaries.get(id) ?? [],
-		);
+		mockGetArticleSummariesByPerekIds.mockResolvedValue(articleSummaries);
+		mockGetPerushimByPerekIds.mockResolvedValue(perushSummaries);
 		const pasukUnits5 = [
 			{ key: "1", wordCount: 10, cumulativeWords: 10 },
 			{ key: "2", wordCount: 20, cumulativeWords: 30 },
@@ -338,10 +345,28 @@ describe("getPerekSummariesBatch", () => {
 				perekMetric: perekMetric6,
 			},
 		});
-		expect(mockGetArticleSummariesByPerekId).toHaveBeenCalledTimes(2);
-		expect(mockGetPerushimByPerekId).toHaveBeenCalledTimes(2);
+		expect(mockGetArticleSummariesByPerekIds).toHaveBeenCalledTimes(1);
+		expect(mockGetArticleSummariesByPerekIds).toHaveBeenCalledWith([5, 6]);
+		expect(mockGetPerushimByPerekIds).toHaveBeenCalledTimes(1);
+		expect(mockGetPerushimByPerekIds).toHaveBeenCalledWith([5, 6]);
 		expect(mockGetPerekProgressUnitsBatch).toHaveBeenCalledWith([5, 6]);
 		expect(mockGetPerekMetrics).toHaveBeenCalledWith([5, 6]);
+	});
+
+	it("defaults to empty summaries for perakim absent from the grouped maps", async () => {
+		mockGetArticleSummariesByPerekIds.mockResolvedValue(new Map());
+		mockGetPerushimByPerekIds.mockResolvedValue(new Map());
+		mockGetPerekProgressUnitsBatch.mockResolvedValue(new Map());
+		mockGetPerekMetrics.mockResolvedValue(new Map());
+
+		const result = await getPerekSummariesBatch([5]);
+
+		expect(result["5"]).toEqual({
+			articles: [],
+			perushim: [],
+			pasukUnits: [],
+			perekMetric: null,
+		});
 	});
 });
 

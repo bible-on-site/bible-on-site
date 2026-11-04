@@ -18,6 +18,7 @@ import {
 	getPerekProgressUnitsBatch,
 	getPerushMetric,
 	getPerushMetricsByPerekId,
+	getPerushMetricsByPerekIds,
 	getPerushProgressUnits,
 	getPerushProgressUnitsBatch,
 	isReadingMetricsSchemaMissing,
@@ -384,5 +385,39 @@ describe("metricOrFallback", () => {
 			await metricOrFallback("x", [], () => Promise.reject("raw")),
 		).toEqual([]);
 		expect(console.warn).toHaveBeenCalledWith(expect.any(String), "x", "raw");
+	});
+});
+
+describe("getPerushMetricsByPerekIds", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("keys metrics by perek then perush in one query", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ perek_id: 5, perush_id: 1, word_count: 10, estimated_seconds: 3 },
+			{ perek_id: 6, perush_id: 2, word_count: 20, estimated_seconds: 6 },
+		] as never);
+
+		const map = await getPerushMetricsByPerekIds([5, 6]);
+
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [5, 6]);
+		expect(map.get(5)?.get(1)).toEqual({
+			wordCount: 10,
+			estimatedSeconds: 3,
+		});
+		expect(map.get(6)?.get(2)).toEqual({
+			wordCount: 20,
+			estimatedSeconds: 6,
+		});
+	});
+
+	it("returns an empty map without querying for no perakim", async () => {
+		const map = await getPerushMetricsByPerekIds([]);
+		expect(map.size).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
+	it("degrades to an empty map on missing schema", async () => {
+		mockQuery.mockRejectedValueOnce({ errno: 1146 } as never);
+		expect((await getPerushMetricsByPerekIds([1])).size).toBe(0);
 	});
 });

@@ -1,7 +1,11 @@
 "use server";
 
 import type { Article, ArticleSummary } from "@/lib/articles";
-import { getArticleById, getArticleSummariesByPerekId } from "@/lib/articles";
+import {
+	getArticleById,
+	getArticleSummariesByPerekId,
+	getArticleSummariesByPerekIds,
+} from "@/lib/articles";
 import { ExportError } from "@/lib/download/export-error";
 import type {
 	PageRangesDownloadContext,
@@ -13,6 +17,7 @@ import { formatDedication } from "@/lib/dedications/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
 	getPerushimByPerekId,
+	getPerushimByPerekIds,
 	getPerushNotes,
 	getPerushNotesBatch,
 } from "@/lib/perushim";
@@ -130,34 +135,33 @@ export async function getPerekSummariesBatch(
 ): Promise<Record<string, PerekSummaries>> {
 	// Metric reads only decorate summaries — a flaky metric query must not
 	// reject the whole batch and hide the articles/perushim beneath it.
-	const [pasukUnits, perekMetrics] = await Promise.all([
-		metricOrFallback(
-			"perek progress units",
-			new Map<number, ReadingProgressUnit[]>(),
-			() => getPerekProgressUnitsBatch(perekIds),
-		),
-		metricOrFallback("perek metrics", new Map<number, ReadingMetric>(), () =>
-			getPerekMetrics(perekIds),
-		),
-	]);
-	const entries = await Promise.all(
-		perekIds.map(async (id) => {
-			const [articles, perushim] = await Promise.all([
-				getArticleSummariesByPerekId(id),
-				getPerushimByPerekId(id),
-			]);
-			return [
-				String(id),
-				{
-					articles,
-					perushim,
-					pasukUnits: pasukUnits.get(id) ?? [],
-					perekMetric: perekMetrics.get(id) ?? null,
-				},
-			] as const;
-		}),
+	// One grouped query per service for the whole sefer — per-perek
+	// fan-out over a 5-connection pool turned a large sefer's book open
+	// (Tehillim: 150 perakim) into hundreds of serialized round-trips.
+	const [pasukUnits, perekMetrics, articlesByPerek, perushimByPerek] =
+		await Promise.all([
+			metricOrFallback(
+				"perek progress units",
+				new Map<number, ReadingProgressUnit[]>(),
+				() => getPerekProgressUnitsBatch(perekIds),
+			),
+			metricOrFallback("perek metrics", new Map<number, ReadingMetric>(), () =>
+				getPerekMetrics(perekIds),
+			),
+			getArticleSummariesByPerekIds(perekIds),
+			getPerushimByPerekIds(perekIds),
+		]);
+	return Object.fromEntries(
+		perekIds.map((id) => [
+			String(id),
+			{
+				articles: articlesByPerek.get(id) ?? [],
+				perushim: perushimByPerek.get(id) ?? [],
+				pasukUnits: pasukUnits.get(id) ?? [],
+				perekMetric: perekMetrics.get(id) ?? null,
+			},
+		]),
 	);
-	return Object.fromEntries(entries);
 }
 
 /**
