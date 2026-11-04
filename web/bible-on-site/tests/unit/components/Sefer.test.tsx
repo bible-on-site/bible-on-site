@@ -931,7 +931,10 @@ describe("Sefer component", () => {
 							direction: "rtl" as const,
 						};
 						const template = p.getBookmarks(context)[0];
-						const renderContent = p[kind];
+						const renderContent =
+							kind === "renderBookmark"
+								? p.renderBookmark
+								: p.renderExpandedBookmark;
 						if (!renderContent) throw new Error("Missing chapter-tab renderer");
 						const bookmarks = Array.from({ length: count }, (_, index) => ({
 							...template,
