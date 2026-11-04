@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FIXTURE_BULLETIN } from "./native-admin-fixture.mjs";
 import {
+	assertAdminDbRead,
 	assertAdminResponses,
 	parseOptions,
 	verifyImage,
@@ -77,6 +79,104 @@ test("admin checks the actual SSO redirect and server-function protection", () =
 	);
 });
 
+test("admin document read requires the exact isolated fixture bytes", () => {
+	const result = {
+		documentStatus: 200,
+		documentType: "application/pdf",
+		documentBody: FIXTURE_BULLETIN.pdfText,
+		missingStatus: 404,
+	};
+	assertAdminDbRead(result);
+	assert.throws(() => assertAdminDbRead({ ...result, documentStatus: 302 }));
+	assert.throws(() =>
+		assertAdminDbRead({ ...result, documentType: "text/html" }),
+	);
+	assert.throws(() =>
+		assertAdminDbRead({ ...result, documentBody: "%PDF-1.4\n% forged\n" }),
+	);
+	assert.throws(() => assertAdminDbRead({ ...result, missingStatus: 200 }));
+});
+
+const adminDockerSuccess = (commands, documentBody) => (args) => {
+	commands.push(args);
+	if (args[0] === "image")
+		return JSON.stringify({
+			Os: "linux",
+			Architecture: "arm64",
+			Id: "sha256:test",
+		});
+	if (args[0] === "exec" && args[2] === "uname") return "aarch64";
+	if (args[0] === "exec") {
+		const location = new URL(
+			"https://login.example.invalid/oauth2/authorize",
+		);
+		location.searchParams.set("client_id", "native-smoke");
+		location.searchParams.set("identity_provider", "AWSSSO");
+		location.searchParams.set(
+			"redirect_uri",
+			"http://127.0.0.1:3101/auth/callback",
+		);
+		return JSON.stringify({
+			status: 302,
+			location: location.href,
+			serverFnStatus: 401,
+			serverFnBody: "SESSION_EXPIRED: admin session expired",
+			documentStatus: 200,
+			documentType: "application/pdf",
+			documentBody: documentBody ?? FIXTURE_BULLETIN.pdfText,
+			missingStatus: 404,
+		});
+	}
+	return "";
+};
+
+const adminFixture = (commands) => () => ({
+	network: "fixture-network",
+	databaseUrl: "mysql://root:x@db:3306/native_image_smoke",
+	cleanup() {
+		// The fixture must outlive the smoke container that uses its network.
+		assert.equal(commands.at(-1)[0], "rm");
+	},
+});
+
+test("admin verifies auth probes plus the isolated MySQL document read", async () => {
+	const commands = [];
+	const evidence = await verifyImage(
+		{ service: "admin", image: "test", arch: "arm64" },
+		{
+			runnerArch: "arm64",
+			runnerPlatform: "linux",
+			createAdminFixture: adminFixture(commands),
+			docker: adminDockerSuccess(commands),
+		},
+	);
+	assert.equal(evidence.service, "admin");
+	assert.equal(evidence.auth.documentStatus, 200);
+	const run = commands.find((args) => args[0] === "run");
+	assert.equal(run[run.indexOf("--network") + 1], "fixture-network");
+	assert.ok(
+		run.includes("DB_URL=mysql://root:x@db:3306/native_image_smoke"),
+		"admin must connect to the owned fixture database",
+	);
+});
+
+test("admin verification fails when the served document is not the fixture row", async (t) => {
+	const commands = [];
+	t.mock.method(console, "error", () => {});
+	await assert.rejects(
+		verifyImage(
+			{ service: "admin", image: "test", arch: "arm64" },
+			{
+				runnerArch: "arm64",
+				runnerPlatform: "linux",
+				createAdminFixture: adminFixture(commands),
+				docker: adminDockerSuccess(commands, "%PDF-1.4\n% forged\n"),
+			},
+		),
+		assert.AssertionError,
+	);
+});
+
 test("wrong image architecture fails before any container starts", async () => {
 	const commands = [];
 	await assert.rejects(
@@ -118,6 +218,7 @@ test("emulated ARM execution is never reported as a native ARM runner", async ()
 
 test("failed container startup retains logs and cleans up the isolated container", async (t) => {
 	const commands = [];
+	let fixtureCleaned = false;
 	t.mock.method(console, "error", () => {});
 	await assert.rejects(
 		verifyImage(
@@ -125,6 +226,14 @@ test("failed container startup retains logs and cleans up the isolated container
 			{
 				runnerArch: "arm64",
 				runnerPlatform: "linux",
+				createAdminFixture: async () => ({
+					network: "fixture-network",
+					databaseUrl: "mysql://root:x@db:3306/native_image_smoke",
+					cleanup() {
+						assert.equal(commands.at(-1)[0], "rm");
+						fixtureCleaned = true;
+					},
+				}),
 				docker(args) {
 					commands.push(args);
 					if (args[0] === "image")
@@ -144,8 +253,10 @@ test("failed container startup retains logs and cleans up the isolated container
 	);
 	assert.ok(commands.some((args) => args[0] === "logs"));
 	assert.equal(commands.at(-1)[0], "rm");
+	assert.ok(fixtureCleaned);
 	const run = commands.find((args) => args[0] === "run");
-	assert.ok(run.includes("none"));
+	assert.equal(run[run.indexOf("--network") + 1], "fixture-network");
+	assert.ok(run.includes("DB_URL=mysql://root:x@db:3306/native_image_smoke"));
 	assert.equal(run[run.indexOf("--cpus") + 1], "0.25");
 	assert.equal(run[run.indexOf("--memory") + 1], "512m");
 });

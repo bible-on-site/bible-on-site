@@ -12,6 +12,7 @@ engines:
   tsqllint:
     exclude_paths:
       - "devops/github/ci/native-api-fixture-rows.sql"
+      - "devops/github/ci/native-admin-fixture.sql"
   # Prospector enforces D213 (summary on line two) while the repo's ruff
   # config enforces the contradictory D212 (summary on line one). The repo
   # gate wins; prospector is excluded on these files only — Bandit and the
