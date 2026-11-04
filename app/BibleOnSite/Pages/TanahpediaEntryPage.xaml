@@ -31,10 +31,27 @@
         </controls:SharedTopBar>
 
         <Grid Grid.Row="1">
+            <!-- Word-weighted reading position over the stored block metrics
+                 (issue #2607): a hairline at the top of the reader viewport. -->
+            <ProgressBar x:Name="ReadingProgressBar"
+                         AutomationId="TanahpediaReadingProgressBar"
+                         ZIndex="50"
+                         HeightRequest="3"
+                         Margin="0"
+                         VerticalOptions="Start"
+                         IsVisible="{Binding HasReadingProgress}"
+                         Progress="{Binding ReadingProgress}"
+                         ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                         BackgroundColor="Transparent"/>
+
             <!-- Entry content -->
             <ScrollView x:Name="EntryScroll"
-                        IsVisible="{Binding ShowEntry}">
-                <VerticalStackLayout Padding="16" Spacing="14">
+                        IsVisible="{Binding ShowEntry}"
+                        Scrolled="OnEntryScrolled"
+                        SizeChanged="OnEntryContentSizeChanged">
+                <VerticalStackLayout Padding="16"
+                                     Spacing="14"
+                                     SizeChanged="OnEntryContentSizeChanged">
                 <VerticalStackLayout.MaximumWidthRequest>
                     <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
                     <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
