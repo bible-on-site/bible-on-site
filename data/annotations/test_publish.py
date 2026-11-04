@@ -163,6 +163,22 @@ def fake_corpus_two_perakim():
     return sefarim, lexicon
 
 
+def contract_row(**overrides):
+    """Minimal contract-shaped decoration row for checkpoint tests."""
+    row = {
+        "source_kind": "pasuk",
+        "surface": "אברם",
+        "intended_name": "אברם",
+        "entity_type": "PERSON",
+        "disambiguation": None,
+        "confidence": None,
+        "acceptance": "auto",
+        "model_revision": "test@1",
+        "source_hash": "src",
+    }
+    return row | overrides
+
+
 class TestCheckpointStore(unittest.TestCase):
     """The per-unit record contract: version + config + source keys."""
 
@@ -172,23 +188,25 @@ class TestCheckpointStore(unittest.TestCase):
     def test_roundtrip_hit(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.store(tmp)
-            store.save("perek-1", "src", [{"row": 1}])
+            store.save("perek-1", "src", [contract_row()])
             self.assertEqual(
-                store.load("perek-1", "src"), [{"row": 1}]
+                store.load("perek-1", "src"), [contract_row()]
             )
             self.assertEqual((store.hits, store.misses), (1, 0))
 
     def test_source_mismatch_is_a_miss(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.store(tmp)
-            store.save("perek-1", "src", [{"row": 1}])
+            store.save("perek-1", "src", [contract_row()])
             self.assertIsNone(store.load("perek-1", "edited"))
             self.assertEqual((store.hits, store.misses), (0, 1))
 
     def test_config_mismatch_is_a_miss(self):
         # A model/config change must invalidate every cached unit.
         with tempfile.TemporaryDirectory() as tmp:
-            self.store(tmp, "cfg-old").save("perek-1", "src", [{"r": 1}])
+            self.store(tmp, "cfg-old").save(
+                "perek-1", "src", [contract_row()]
+            )
             store = self.store(tmp, "cfg-new")
             self.assertIsNone(store.load("perek-1", "src"))
             self.assertEqual(store.misses, 1)
@@ -219,17 +237,44 @@ class TestCheckpointStore(unittest.TestCase):
             )
             self.assertIsNone(store.load("perek-1", "src"))
 
+    def test_malformed_row_element_is_a_miss(self):
+        # A list of non-contract elements must not replay as a hit —
+        # hand-edited or foreign unit files recompute instead.
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.store(tmp)
+            store.dir.mkdir(parents=True)
+            (store.dir / "perek-1.json").write_text(
+                json.dumps(
+                    {
+                        "version": publish.CHECKPOINT_VERSION,
+                        "config": "cfg",
+                        "source": "src",
+                        "rows": [{"intended_name": "partial"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertIsNone(store.load("perek-1", "src"))
+
     def test_domains_share_a_root_without_colliding(self):
         with tempfile.TemporaryDirectory() as tmp:
             pasuk_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
             article_store = publish.CheckpointStore(tmp, "article", "cfg")
-            pasuk_store.save("perek-1", "src", [{"d": "pasuk"}])
-            article_store.save("article-1", "src", [{"d": "article"}])
-            self.assertEqual(
-                pasuk_store.load("perek-1", "src"), [{"d": "pasuk"}]
+            pasuk_store.save(
+                "perek-1", "src", [contract_row(surface="אברם")]
+            )
+            article_store.save(
+                "article-1",
+                "src",
+                [contract_row(source_kind="article", surface="דוד")],
             )
             self.assertEqual(
-                article_store.load("article-1", "src"), [{"d": "article"}]
+                pasuk_store.load("perek-1", "src"),
+                [contract_row(surface="אברם")],
+            )
+            self.assertEqual(
+                article_store.load("article-1", "src"),
+                [contract_row(source_kind="article", surface="דוד")],
             )
 
     def test_config_hash_distinguishes_input_shapes(self):
@@ -305,6 +350,23 @@ class TestCheckpointedPasukRows(unittest.TestCase):
             # Only perek 2's view reached the model.
             calls = [c.args[0] for c in entities_fn.call_args_list]
             self.assertEqual(calls, ["ותאמר שרה המלך"])
+
+    def test_reordered_perakim_recompute(self):
+        # Chapter assignment is positional: moving an unchanged perek
+        # changes which lexicon chapter it matches — the checkpoint key
+        # covers stem+chapter, so both units recompute (never replay).
+        sefarim, lexicon = fake_corpus_two_perakim()
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.store(tmp)
+            publish.pasuk_rows(sefarim, lexicon, checkpoint=store)
+            self.assertEqual((store.hits, store.misses), (0, 2))
+            sefarim[0]["perakim"].reverse()
+            warm = publish.pasuk_rows(
+                sefarim, lexicon, checkpoint=store
+            )
+            self.assertEqual((store.hits, store.misses), (0, 4))
+            fresh = publish.pasuk_rows(sefarim, lexicon)
+        self.assertEqual(warm, fresh)
 
     def test_no_retype_run_is_byte_identical_through_cache(self):
         sefarim, lexicon = fake_corpus_two_perakim()

@@ -37,11 +37,13 @@ work unit cached as one JSON file keyed by its source hash plus the
 inference configuration (emitted model revision, lexicon digest, and —
 for the article domain, whose gazetteer is corpus-derived — the
 canonical digest). A resumed or repeated run reuses unchanged units
-without re-running detection or model calls; only changed/new sources
-or a deliberate model/config change recompute. Cached rows are the
-exact rows the unit would emit, so a warm run's output file is
-byte-identical to a cold run's. Entry creation never touches the cache
-— no entry lookup exists anywhere in the publish stage.
+without re-running detection or model calls — the encoder loads lazily
+on first inference, so a fully cached run needs neither weights nor
+torch; only changed/new sources or a deliberate model/config change
+recompute. Cached rows are the exact rows the unit would emit, so a
+warm run's output file is byte-identical to a cold run's. Entry
+creation never touches the cache — no entry lookup exists anywhere in
+the publish stage.
 """
 
 import hashlib
@@ -58,6 +60,28 @@ import encoders
 RETYPE_DEFAULT = "dictabert-ner-retype"
 
 CHECKPOINT_VERSION = 1
+
+# Contract keys every emitted row carries in both domains — the cheap
+# shape gate keeping a hand-edited or foreign unit file from replaying
+# garbage rows into the import payload.
+_ROW_KEYS = {
+    "source_kind",
+    "surface",
+    "intended_name",
+    "entity_type",
+    "disambiguation",
+    "confidence",
+    "acceptance",
+    "model_revision",
+    "source_hash",
+}
+
+
+def _valid_rows(rows):
+    """Cached `rows` is a list of contract-shaped row dicts."""
+    return isinstance(rows, list) and all(
+        isinstance(row, dict) and _ROW_KEYS <= row.keys() for row in rows
+    )
 
 
 def _file_digest(path):
@@ -107,7 +131,7 @@ class CheckpointStore:
             or record.get("version") != CHECKPOINT_VERSION
             or record.get("config") != self.config
             or record.get("source") != source_hash
-            or not isinstance(record.get("rows"), list)
+            or not _valid_rows(record.get("rows"))
         ):
             self.misses += 1
             return None
@@ -160,9 +184,18 @@ def resolve_retype_spec(name):
     )
 
 
-def _perek_source_hash(perek):
-    """Deterministic hash of one perek's canonical content."""
-    canonical = json.dumps(perek, ensure_ascii=False, sort_keys=True)
+def _perek_source_hash(perek, stem, chapter):
+    """Hash of one perek's canonical content plus its positional chapter.
+
+    `iter_perek_sources` assigns the lexicon's `stem`/`chapter` by the
+    perek's position in its sefer, so an unchanged perek that moves must
+    recompute — the chapter assignment is part of what produced its rows.
+    """
+    canonical = json.dumps(
+        {"stem": stem, "chapter": chapter, "perek": perek},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -182,7 +215,7 @@ def pasuk_rows(
             sefer_index, sefarim
         ):
             unit = f"perek-{perek['perekId']}"
-            source_hash = _perek_source_hash(perek)
+            source_hash = _perek_source_hash(perek, stem, chapter)
             unit_rows = (
                 checkpoint.load(unit, source_hash) if checkpoint else None
             )
@@ -324,7 +357,8 @@ def main():
     revision = None
     if not args.no_retype:
         spec = resolve_retype_spec(args.retype)
-        entities_fn = encoders.load_entities_fn(spec)
+        # Lazy: a fully cached run needs no weights — or torch — at all.
+        entities_fn = encoders.lazy_entities_fn(spec)
         revision = encoders.spec_revision_tag(spec)
 
     # Both domains derive from the same canonical + lexicon load.
