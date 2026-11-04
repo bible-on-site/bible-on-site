@@ -295,9 +295,10 @@ struct EntryNameRow {
 }
 
 /// Locks the name's existing rows for update so concurrent writers serialize.
-/// `name` has no index, so under MySQL's default REPEATABLE READ the locking
-/// scan next-key-locks the whole table — first writes of the same name
-/// serialize too, and the expectedTargets check that follows sees the
+/// `name` is indexed, so under MySQL's default REPEATABLE READ the locking
+/// scan next-key-locks only the matching name's index gap — concurrent writes
+/// of different names proceed in parallel while first writes of the same
+/// name serialize, and the expectedTargets check that follows sees the
 /// just-committed winner's rows (locking reads bypass the snapshot). Under
 /// READ COMMITTED only existing rows lock; a racing first save then merges
 /// rows, which the target-dedupe reads still resolve consistently, and the
@@ -811,19 +812,19 @@ mod tests {
     fn validate_alias_spec_rejects_each_bad_shape() {
         let target = target_input("e1", None);
         assert_eq!(
-            validate_alias_spec("", &[target.clone()])
+            validate_alias_spec("", std::slice::from_ref(&target))
                 .unwrap_err()
                 .to_string(),
             "שם הכתובת חייב להיות מלא"
         );
         assert_eq!(
-            validate_alias_spec("a/b", &[target.clone()])
+            validate_alias_spec("a/b", std::slice::from_ref(&target))
                 .unwrap_err()
                 .to_string(),
             "שם הכתובת אינו יכול להכיל '/'"
         );
         assert_eq!(
-            validate_alias_spec(&"א".repeat(256), &[target.clone()])
+            validate_alias_spec(&"א".repeat(256), std::slice::from_ref(&target))
                 .unwrap_err()
                 .to_string(),
             "שם הכתובת ארוך מדי (עד 255 תווים)"
