@@ -1,0 +1,1108 @@
+{
+  "kind": "Prototype diagnostics, not release qualification",
+  "date": "2026-11-03",
+  "baseSource": "8cd29fbbd1e7c0a861840db2344cca7adb885959",
+  "buildId": "9QztaMGoG4ZUuGwspY1yy",
+  "libraryVersion": "0.0.0-alpha.104",
+  "coreSha256": "e932993446ba93ec485535f2f958bd1dfedad538e21417e25a9470079dfb34a1",
+  "fixture": {
+    "notes": 339715,
+    "perush": 103,
+    "parshan": 64,
+    "articles": 5,
+    "authors": 4
+  },
+  "stylesheets": [
+    {
+      "name": "0_i06wp0hxc5y.css",
+      "controlSha256": "8d5b5312901aae25d73b5a55d205a6e5013a585ccc88bd6aa738bf1eae567a0c",
+      "candidateSha256": "9f3450eeeb3e9757a8b9e154800be2d4715be61fc787b7af51b2ae5e47c6ba27"
+    },
+    {
+      "name": "1uu68aa7-q0jw.css",
+      "controlSha256": "4238391894dfce1ef2da65792857699302666c89499082feff358bb9b8784c6f",
+      "candidateSha256": "cc176f1702921aa5394810f7be6301e8f314ebf3b150ceefc41890af7046b177"
+    }
+  ],
+  "appearance": {
+    "method": "Two stylesheet route replacements; exact old/new selector node lists compared; appearance only",
+    "pairs": [
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 288,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 288,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 288,
+        "mode": "leaf",
+        "colorScheme": "light",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 288,
+        "mode": "leaf",
+        "colorScheme": "dark",
+        "pose": "rest",
+        "changedPixels": 0,
+        "maxDelta": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 288,
+        "mode": "leaf",
+        "colorScheme": "dark",
+        "pose": "straight",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      },
+      {
+        "chapter": 288,
+        "mode": "leaf",
+        "colorScheme": "dark",
+        "pose": "angled",
+        "changedPixels": 0,
+        "selectorProof": {
+          "broad": 0,
+          "child": 1,
+          "navAnchor": 1,
+          "sameNav": true,
+          "sameGutter": true,
+          "directRoute": true
+        }
+      }
+    ]
+  },
+  "trace": {
+    "method": "One control/candidate pair at CPU6x, invalidation tracking enabled; not timing qualification",
+    "cases": [
+      {
+        "case": "reader-profile465-linux-30-117e3-af-bookmarks-control-before-Desktop",
+        "totals": {
+          "PrePaint": {
+            "count": 213,
+            "ms": 288.9519999999997,
+            "max": 13.863
+          },
+          "Layerize": {
+            "count": 101,
+            "ms": 632.4280000000002,
+            "max": 14.881
+          },
+          "UpdateLayoutTree": {
+            "count": 94,
+            "ms": 713.0189999999998,
+            "max": 48.008
+          },
+          "Layout": {
+            "count": 34,
+            "ms": 274.12399999999997,
+            "max": 62.605
+          },
+          "Paint": {
+            "count": 417,
+            "ms": 752.2049999999996,
+            "max": 26.151
+          }
+        },
+        "hasInvalidations": {
+          "BODY": 97
+        }
+      },
+      {
+        "case": "reader-profile465-linux-30-b660a-s-with-leaf-bookmarks-nav-1-Desktop",
+        "totals": {
+          "PrePaint": {
+            "count": 230,
+            "ms": 283.37399999999985,
+            "max": 10.001
+          },
+          "Layerize": {
+            "count": 110,
+            "ms": 516.827,
+            "max": 12.844
+          },
+          "UpdateLayoutTree": {
+            "count": 83,
+            "ms": 503.4910000000001,
+            "max": 33.656
+          },
+          "Layout": {
+            "count": 33,
+            "ms": 236.76400000000004,
+            "max": 49.325
+          },
+          "Paint": {
+            "count": 417,
+            "ms": 583.6150000000001,
+            "max": 20.156
+          }
+        },
+        "hasInvalidations": {}
+      }
+    ]
+  },
+  "timing": {
+    "method": "ABBA, CPU6x diagnostic, 4 container CPUs, one worker, no retries, original limits; normal HTTP cache via owned stylesheet asset swaps, restored after worker and runner",
+    "desktop": {
+      "before": {
+        "desktop": "Default",
+        "screenSaverCount": 0
+      },
+      "after": {
+        "desktop": "Default",
+        "screenSaverCount": 0
+      }
+    },
+    "cases": [
+      {
+        "case": "control-after-125-hidden-drag.json",
+        "metrics": {
+          "responseMs": [
+            100.2,
+            62.1,
+            59.9,
+            70.2,
+            72.4,
+            61
+          ],
+          "responseP95Ms": 100.2,
+          "responseMaxMs": 100.2,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 100.2,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 72.4,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-after-125-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            120.8,
+            88.2,
+            85.8,
+            88.9,
+            56.5,
+            126.1
+          ],
+          "responseP95Ms": 126.1,
+          "responseMaxMs": 126.1,
+          "frameGapMaxMs": 83.3,
+          "frameGapP95Ms": 66.7,
+          "firstTurn": {
+            "responseP95Ms": 120.8,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 126.1,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-after-125-leaf-toolbar.json",
+        "metrics": {
+          "responseMs": [
+            62.4,
+            67.5,
+            49.2,
+            56.3,
+            52.6,
+            58.5
+          ],
+          "responseP95Ms": 67.5,
+          "responseMaxMs": 67.5,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 62.4,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 67.5,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-after-300-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            124,
+            86.2,
+            83.6,
+            78.5,
+            86.3,
+            116.7
+          ],
+          "responseP95Ms": 124,
+          "responseMaxMs": 124,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 66.7,
+          "firstTurn": {
+            "responseP95Ms": 124,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 83.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 116.7,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.7ms > 50ms",
+          "first turn/frameGapP95Ms=83.4ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-after-300-pinned-drag.json",
+        "metrics": {
+          "responseMs": [
+            92.9,
+            75.4,
+            76.8,
+            97.7,
+            63.7,
+            67.6
+          ],
+          "responseP95Ms": 97.7,
+          "responseMaxMs": 97.7,
+          "frameGapMaxMs": 100,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 92.9,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 97.7,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-before-125-hidden-drag.json",
+        "metrics": {
+          "responseMs": [
+            91.3,
+            85.1,
+            70.9,
+            73.4,
+            68.8,
+            88.6
+          ],
+          "responseP95Ms": 91.3,
+          "responseMaxMs": 91.3,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 91.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.5
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 88.6,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-before-125-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            141.9,
+            84.7,
+            90.1,
+            82,
+            85.7,
+            134.8
+          ],
+          "responseP95Ms": 141.9,
+          "responseMaxMs": 141.9,
+          "frameGapMaxMs": 100,
+          "frameGapP95Ms": 66.7,
+          "firstTurn": {
+            "responseP95Ms": 141.9,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 50.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 134.8,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.7ms > 50ms",
+          "first turn/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-before-125-leaf-toolbar.json",
+        "metrics": {
+          "responseMs": [
+            56.8,
+            50.4,
+            45,
+            54.6,
+            61.9,
+            52.1
+          ],
+          "responseP95Ms": 61.9,
+          "responseMaxMs": 61.9,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 56.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 61.9,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-before-300-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            99.7,
+            82.8,
+            72.2,
+            79.2,
+            66,
+            81.7
+          ],
+          "responseP95Ms": 99.7,
+          "responseMaxMs": 99.7,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 99.7,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 82.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "case": "control-before-300-pinned-drag.json",
+        "metrics": {
+          "responseMs": [
+            92.1,
+            72.7,
+            69,
+            90.5,
+            76.3,
+            76.8
+          ],
+          "responseP95Ms": 92.1,
+          "responseMaxMs": 92.1,
+          "frameGapMaxMs": 100,
+          "frameGapP95Ms": 66.7,
+          "firstTurn": {
+            "responseP95Ms": 92.1,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 90.5,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-1-125-hidden-drag.json",
+        "metrics": {
+          "responseMs": [
+            94.9,
+            72.2,
+            53.3,
+            63.9,
+            65.6,
+            68.2
+          ],
+          "responseP95Ms": 94.9,
+          "responseMaxMs": 94.9,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 94.9,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 72.2,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": []
+      },
+      {
+        "case": "nav-1-125-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            110.5,
+            108.4,
+            67.3,
+            89.8,
+            109.9,
+            127.2
+          ],
+          "responseP95Ms": 127.2,
+          "responseMaxMs": 127.2,
+          "frameGapMaxMs": 100,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 110.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 127.2,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-1-125-leaf-toolbar.json",
+        "metrics": {
+          "responseMs": [
+            58.7,
+            60.6,
+            52.8,
+            62.1,
+            65.1,
+            63
+          ],
+          "responseP95Ms": 65.1,
+          "responseMaxMs": 65.1,
+          "frameGapMaxMs": 83.3,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 58.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 65.1,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-1-300-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            94.3,
+            70.5,
+            63,
+            85.6,
+            66.2,
+            81
+          ],
+          "responseP95Ms": 94.3,
+          "responseMaxMs": 94.3,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 94.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 85.6,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-1-300-pinned-drag.json",
+        "metrics": {
+          "responseMs": [
+            93.3,
+            79.2,
+            72,
+            75,
+            71.9,
+            82.9
+          ],
+          "responseP95Ms": 93.3,
+          "responseMaxMs": 93.3,
+          "frameGapMaxMs": 100,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 93.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 49.9
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 82.9,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-2-125-hidden-drag.json",
+        "metrics": {
+          "responseMs": [
+            79.6,
+            67.8,
+            65.4,
+            67.6,
+            79.8,
+            75
+          ],
+          "responseP95Ms": 79.8,
+          "responseMaxMs": 79.8,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 79.6,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 79.8,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 50
+          }
+        },
+        "failures": []
+      },
+      {
+        "case": "nav-2-125-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            106.8,
+            86.5,
+            70.3,
+            75.7,
+            67.2,
+            78.5
+          ],
+          "responseP95Ms": 106.8,
+          "responseMaxMs": 106.8,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 106.8,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 66.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 86.5,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-2-125-leaf-toolbar.json",
+        "metrics": {
+          "responseMs": [
+            56.3,
+            57.4,
+            46.7,
+            61.9,
+            48.4,
+            63.5
+          ],
+          "responseP95Ms": 63.5,
+          "responseMaxMs": 63.5,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 56.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 63.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-2-300-leaf-drag.json",
+        "metrics": {
+          "responseMs": [
+            103.5,
+            85.9,
+            84.3,
+            205.8,
+            116.8,
+            109.4
+          ],
+          "responseP95Ms": 205.8,
+          "responseMaxMs": 205.8,
+          "frameGapMaxMs": 183.3,
+          "frameGapP95Ms": 99.9,
+          "firstTurn": {
+            "responseP95Ms": 103.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 205.8,
+            "frameGapMaxMs": 183.3,
+            "frameGapP95Ms": 100
+          }
+        },
+        "failures": [
+          "all turns/responseP95Ms=205.8ms > 200ms",
+          "all turns/frameGapMaxMs=183.3ms > 100ms",
+          "all turns/frameGapP95Ms=99.9ms > 50ms",
+          "first turn/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/responseP95Ms=205.8ms > 200ms",
+          "consecutive turns/frameGapMaxMs=183.3ms > 100ms",
+          "consecutive turns/frameGapP95Ms=100ms > 50ms"
+        ]
+      },
+      {
+        "case": "nav-2-300-pinned-drag.json",
+        "metrics": {
+          "responseMs": [
+            164,
+            90.2,
+            78.8,
+            75.1,
+            82,
+            73.4
+          ],
+          "responseP95Ms": 164,
+          "responseMaxMs": 164,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 164,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 90.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      }
+    ]
+  }
+}
