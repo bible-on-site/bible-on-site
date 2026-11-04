@@ -54,15 +54,49 @@ test("protected latest handover waits for both public aliases and the unchanged 
 	);
 });
 
+test("retirement after a protection-clear receipt completes handover without rollback", async () => {
+	const f = fixture();
+	f.backend.hook = async (name, input) => {
+		if (
+			name === "ListTagsForResource" &&
+			input.resourceArn === f.backend.old.taskArn &&
+			f.backend.releasedAt !== null
+		) {
+			f.backend.old.lastStatus = "STOPPED";
+			f.backend.old.desiredStatus = "STOPPED";
+			throw Object.assign(new Error("The specified task is stopped"), {
+				name: "InvalidParameterException",
+			});
+		}
+	};
+	const result = await runAPIRollout(f);
+	assert.equal(result.changed, true);
+	assert.equal(result.protectionReleased, true);
+	assert.equal(result.instance, NEW_INSTANCE);
+	assert.equal(f.backend.protected, false);
+	assert.equal(f.backend.updates, 1);
+	assert.ok(
+		f.backend.records.some((row) => row.name === "protection-marker-retired"),
+	);
+	assert.equal(
+		f.backend.records.some(
+			(row) => row.name === "rollout-failed" || row.name === "recovery-started",
+		),
+		false,
+	);
+	assert.equal(
+		f.backend.calls.some((row) => row.name === "StopServiceDeployment"),
+		false,
+	);
+});
+
 function laggingHistoryFixture(successAt = 115000) {
 	const f = fixture();
 	const prefix = "arn:aws:ecs:il-central-1:250598594267:";
-	const serviceArn = prefix + "service/bible-on-site-cluster/bible-on-site-api";
-	const clusterArn = prefix + "cluster/bible-on-site-cluster";
-	const revisionArn =
-		prefix + "service-revision/bible-on-site-cluster/bible-on-site-api/22";
-	const deploymentArn =
-		prefix + "service-deployment/bible-on-site-cluster/bible-on-site-api/owned";
+	const serviceArn = `${prefix}service/bible-on-site-cluster/bible-on-site-api`;
+	const clusterArn = `${prefix}cluster/bible-on-site-cluster`;
+	const revisionArn = `${prefix}service-revision/bible-on-site-cluster/bible-on-site-api/22`;
+	const deploymentArn = `${prefix}service-deployment/bible-on-site-cluster/bible-on-site-api/owned`;
 	const epoch = Date.parse("2026-11-01T00:00:00Z");
 	f.backend.mutateService = (value) => {
 		if (f.backend.updates !== 1) return;
@@ -176,7 +210,7 @@ test("ARM pinned and normal latest use actual native descriptors without changin
 	assert.equal(f.backend.current.runtimePlatform.cpuArchitecture, "ARM64");
 	assert.equal(
 		f.backend.current.containerDefinitions[0].image,
-		IMAGE_URI + "@" + result.image.child,
+		`${IMAGE_URI}@${result.image.child}`,
 	);
 	assert.equal(f.backend.current.cpu, "256");
 	assert.equal(f.backend.current.memory, "512");
@@ -281,7 +315,7 @@ test("a completed rollout with changed public contracts restores the immutable o
 	assert.equal(f.backend.updates, 2);
 	assert.equal(
 		f.backend.current.containerDefinitions[0].image,
-		IMAGE_URI + "@" + f.backend.oldImages.children.amd64,
+		`${IMAGE_URI}@${f.backend.oldImages.children.amd64}`,
 	);
 	assert.ok(f.backend.records.some((row) => row.name === "recovery-completed"));
 	assert.equal(f.backend.protected, false);
