@@ -219,6 +219,25 @@ class LambdaParserSafetyTests(unittest.TestCase):
                 self.assertEqual(manifest.count(name), 1)
                 self.assertLess(base, manifest.index(name))
 
+    def test_entry_synonym_index_upgrade_is_in_manifest_and_lambda_safe(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        migration = "tanahpedia_alter_entry_synonym.sql"
+        self.assertIn(migration, manifest)
+        path = ROOT / "data/mysql" / migration
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        statements = LAMBDA.parse_statements(processed)
+        # Two session settings plus one SET/PREPARE/EXECUTE/DEALLOCATE block.
+        self.assertEqual(len(statements), 6)
+        self.assertRegex(
+            processed,
+            r"ALTER TABLE tanahpedia_entry_synonym ADD KEY idx_entry_synonym_name \(name\)",
+        )
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+        self.assertEqual(VALIDATOR.parse_statements(processed), statements)
+
     def test_whatsapp_upgrade_is_additive_and_all_prepared_blocks_survive_parser(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         filename = "tanah_daily_bulletin_whatsapp_upgrade.sql"

@@ -4,14 +4,14 @@ import { NextResponse } from "next/server";
  * Returns the Next.js server process memory usage.
  * Used by perf tests to benchmark server memory consumption.
  */
-export function GET(request: Request) {
-	// Allow only requests from localhost
-	const host = request.headers.get("host");
-	if (!host || (!host.includes("localhost") && !host.includes("127.0.0.1"))) {
-		return new NextResponse(
-			`Forbidden: This endpoint is only available on localhost. Your host is ${host}`,
-			{ status: 403 },
-		);
+export function GET() {
+	// 404 in production unless the perf-test flag is set; the Host header is
+	// client-controlled and must not be trusted as a gate.
+	if (
+		process.env.NODE_ENV === "production" &&
+		process.env.ENABLE_DEV_MEMORY_API !== "1"
+	) {
+		return new NextResponse("Not Found", { status: 404 });
 	}
 
 	const memoryUsage = process.memoryUsage();

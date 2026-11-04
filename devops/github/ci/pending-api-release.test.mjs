@@ -372,10 +372,27 @@ test("Git executable mode changes remain production differences", () => {
 	assert.deepEqual(result.changedFiles, ["web/api/Dockerfile"]);
 });
 
-test("stale version, checkout mismatch and fetch errors fail closed", () => {
+test("unreleased changes at the published version select the normal collision retry path", () => {
 	const after = files("0.1.93");
+	after.set("web/api/src/main.rs", 'fn main() { println!("pending"); }\n');
+	const result = pendingApiRelease(fixture({ after }));
+	assert.equal(result.pending, true);
+	assert.equal(result.baselineTag, tag);
+	assert.equal(result.baselineSha, baselineSha);
+	assert.deepEqual(result.changedFiles, ["web/api/src/main.rs"]);
+	assert.equal(
+		pendingApiRelease(fixture({ after: files("0.1.93") })).pending,
+		false,
+	);
+});
+
+test("older version, checkout mismatch and fetch errors fail closed", () => {
+	const after = files("0.1.92");
 	after.set("web/api/src/main.rs", "fn main() { panic!(); }\n");
-	assert.throws(() => pendingApiRelease(fixture({ after })), /version newer/);
+	assert.throws(
+		() => pendingApiRelease(fixture({ after })),
+		/version is older/,
+	);
 	const wrongHead = fixture();
 	assert.throws(
 		() => pendingApiRelease({ ...wrongHead, headSha: "d".repeat(40) }),
@@ -439,6 +456,31 @@ test("CLI skips non-master events and writes the exact workflow output contract"
 	assert.equal(existsSync(failedOutput), false);
 });
 
+test("CLI selects equal-version API changes for fresh quality gates on master", (t) => {
+	const temp = mkdtempSync(
+		path.join(os.tmpdir(), "pending-api-equal-version-"),
+	);
+	t.after(() => rmSync(temp, { recursive: true, force: true }));
+	const output = path.join(temp, "output");
+	const after = files("0.1.93");
+	after.set("web/api/src/main.rs", 'fn main() { println!("pending"); }\n');
+	const result = main(
+		{
+			GITHUB_EVENT_NAME: "push",
+			GITHUB_REF: "refs/heads/master",
+			GITHUB_REPOSITORY: repo,
+			GITHUB_SHA: headSha,
+			GITHUB_OUTPUT: output,
+		},
+		fixture({ after }),
+	);
+	assert.equal(result.pending, true);
+	assert.equal(
+		readFileSync(output, "utf8"),
+		`api_release_pending=true\napi_release_baseline_tag=${tag}\napi_release_baseline_sha=${baselineSha}\napi_release_reason=unreleased API production changes\n`,
+	);
+});
+
 for (const variant of [
 	{ name: "shallow", shallow: true, missing: true, orphan: false },
 	{
@@ -482,7 +524,8 @@ for (const variant of [
 		const base = gitAt(remote, ["rev-parse", "HEAD"]).trim();
 		gitAt(remote, ["tag", tag]);
 		if (variant.orphan) gitAt(remote, ["checkout", "--orphan", "independent"]);
-		const changed = files("0.1.94");
+		// A shallow master checkout can still carry the already-published version.
+		const changed = files(variant.shallow ? "0.1.93" : "0.1.94");
 		changed.set("web/api/src/main.rs", 'fn main() { println!("fixed"); }\n');
 		writeFiles(changed);
 		gitAt(remote, ["add", "."]);

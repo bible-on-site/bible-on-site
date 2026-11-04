@@ -106,7 +106,7 @@ the public article corpus.
 | article **created/updated/deleted** | the admin transaction enqueues the id into `article_search_queue` in the *same* transaction (`web/admin/src/server/articles.ts`) — a queue failure aborts the write |
 | worker tick (every 15 s) | drains ≤256 queue ids; fetches the article (canonical chapter 1-929 only) and upserts `article_search_doc` under the current model; `None` result (deleted or moved outside the canonical chapter range) purges the doc row |
 | sync failure | `attempts` + `last_error` are recorded; rows past `MAX_ATTEMPTS = 20` are skipped by the regular drain — a poison row can never wedge the worker — and retried only after the reconcile sweep re-enqueues them |
-| reconcile sweep (every ~10 min) | diffs server-side `MD5` content hashes between `tanah_article` and `article_search_doc`, re-enqueues drifted/missing ids, re-folds stale-epoch docs, and deletes docs whose source vanished or left the canonical chapter range |
+| reconcile sweep (every ~10 min) | diffs `tanah_article.content_hash` (a STORED generated column holding the `MD5` fingerprint of the indexable fields) against `article_search_doc.content_hash`, re-enqueues drifted/missing ids, re-folds stale-epoch docs, and deletes docs whose source vanished or left the canonical chapter range |
 | drift ≥ 32 docs or ≥ 8 % of corpus | full **retrain** under `GET_LOCK('article_search_retrain', 0)` so concurrent API instances never train in parallel; docs are persisted first, then `model_epoch` bumps, so readers never load a half-written snapshot |
 
 The enqueue write is idempotent (`ON DUPLICATE KEY UPDATE` resets the attempt
