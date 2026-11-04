@@ -1,12 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { metadata } from "@/app/layout";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo/jsonld";
 
 /**
  * Guards the static assets crawlers and Lighthouse probe on every origin —
  * /manifest.json and /apple-touch-icon.png. When they 404 the app router logs
- * NoFallbackError noise into stderr during perf runs (#1022).
+ * NoFallbackError noise into stderr during perf runs (#1022). The manifest is
+ * kept only as a compatibility resource for clients that already request it;
+ * the site no longer links it or advertises an installable app (#2936).
  */
 describe("public/manifest.json", () => {
 	const path = resolve(process.cwd(), "public/manifest.json");
@@ -27,6 +30,13 @@ describe("public/manifest.json", () => {
 		expect(m.scope).toBe("/");
 	});
 
+	it("does not advertise an installable standalone app (#2936)", () => {
+		// "browser" keeps legacy installs/clients working while making the
+		// manifest non-installable (standalone/minimal-ui/fullscreen would
+		// re-enable browser install UI).
+		expect(manifest().display).toBe("browser");
+	});
+
 	it("lists square icons that resolve to files under public/", () => {
 		const icons: { src: string; sizes: string; type: string }[] =
 			manifest().icons;
@@ -40,6 +50,14 @@ describe("public/manifest.json", () => {
 				existsSync(resolve(process.cwd(), "public", icon.src.slice(1))),
 			).toBe(true);
 		}
+	});
+});
+
+describe("root layout metadata", () => {
+	// Without a <link rel="manifest"> no browser discovers the manifest, so
+	// the site cannot be offered as an installable app (#2936).
+	it("does not link a web app manifest", () => {
+		expect(metadata.manifest).toBeUndefined();
 	});
 });
 

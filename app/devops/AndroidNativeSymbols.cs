@@ -21,19 +21,8 @@ internal static class AndroidNativeSymbols
             // .NET emits libxamarin-app.dbg.so beside stripped libxamarin-app.so.
             // Play needs the shipped library's name, not the .dbg filename.
             var name = relative[..^".dbg.so".Length] + ".so";
-            var shipped = bundle.Entries.Where(e => e.FullName == "base/lib/" + name).ToArray();
-            if (shipped.Length != 1)
-            {
-                throw new InvalidDataException($"Expected exactly one bundled library for {name}");
-            }
             var debugBytes = File.ReadAllBytes(file);
-            using var shippedStream = shipped[0].Open();
-            using var shippedBytes = new MemoryStream();
-            shippedStream.CopyTo(shippedBytes);
-            if (ReadBuildId(debugBytes, requireSymbols: true) != ReadBuildId(shippedBytes.ToArray(), requireSymbols: false))
-            {
-                throw new InvalidDataException($"Native symbols do not match the bundled library: {name}");
-            }
+            VerifyBundled(bundle, name, debugBytes);
             symbols.Add((name, debugBytes));
         }
 
@@ -50,6 +39,78 @@ internal static class AndroidNativeSymbols
         {
             using var entry = zip.CreateEntry(symbol.Name).Open();
             entry.Write(symbol.Data);
+        }
+    }
+
+    /// <summary>
+    /// Re-validates a packaged symbols archive against the AAB it deploys beside.
+    /// Play rejects a malformed archive only after the bundle is already
+    /// uploaded (#2970), so packaging and deployment run this over the stored
+    /// zip before any store write. Returns the bundled arm64 libraries the
+    /// archive does not cover; .NET/Android runtime libraries ship stripped-only
+    /// and Play accepts partial coverage.
+    /// </summary>
+    public static IReadOnlyList<string> Validate(string symbolsPath, string bundlePath)
+    {
+        var symbols = new List<(string Name, byte[] Data)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        using (var zip = ZipFile.OpenRead(symbolsPath))
+        {
+            foreach (var entry in zip.Entries.OrderBy(e => e.FullName, StringComparer.Ordinal))
+            {
+                var parts = entry.FullName.Split('/');
+                if (parts.Length != 2 || parts[0] != "arm64-v8a" ||
+                    !parts[1].StartsWith("lib", StringComparison.Ordinal) ||
+                    !parts[1].EndsWith(".so", StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException($"Unexpected native symbols entry: {entry.FullName}");
+                }
+                if (entry.Length == 0 || !seen.Add(entry.FullName))
+                {
+                    throw new InvalidDataException($"Empty or duplicate native symbols entry: {entry.FullName}");
+                }
+                using var stream = entry.Open();
+                using var data = new MemoryStream();
+                stream.CopyTo(data);
+                symbols.Add((entry.FullName, data.ToArray()));
+            }
+        }
+        if (symbols.Count == 0)
+        {
+            throw new InvalidDataException("Native symbols archive is empty");
+        }
+
+        var bundled = new List<string>();
+        using (var bundle = ZipFile.OpenRead(bundlePath))
+        {
+            foreach (var symbol in symbols)
+            {
+                VerifyBundled(bundle, symbol.Name, symbol.Data);
+            }
+            bundled.AddRange(bundle.Entries
+                .Where(e => e.FullName.StartsWith("base/lib/arm64-v8a/lib", StringComparison.Ordinal) &&
+                            e.FullName.EndsWith(".so", StringComparison.Ordinal))
+                .Select(e => e.FullName["base/lib/".Length..]));
+        }
+        var covered = symbols.Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
+        return bundled.Where(name => !covered.Contains(name)).Order(StringComparer.Ordinal).ToList();
+    }
+
+    // A symbols entry must name exactly one bundled arm64 library and carry the
+    // same GNU build ID — proof both were cut from the same native build.
+    private static void VerifyBundled(ZipArchive bundle, string name, byte[] symbolBytes)
+    {
+        var shipped = bundle.Entries.Where(e => e.FullName == "base/lib/" + name).ToArray();
+        if (shipped.Length != 1)
+        {
+            throw new InvalidDataException($"Expected exactly one bundled library for {name}");
+        }
+        using var shippedStream = shipped[0].Open();
+        using var shippedBytes = new MemoryStream();
+        shippedStream.CopyTo(shippedBytes);
+        if (ReadBuildId(symbolBytes, requireSymbols: true) != ReadBuildId(shippedBytes.ToArray(), requireSymbols: false))
+        {
+            throw new InvalidDataException($"Native symbols do not match the bundled library: {name}");
         }
     }
 
