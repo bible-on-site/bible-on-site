@@ -5,7 +5,32 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
-The latest site repair reuses immutable bookmark-label children while their
+The follow-up [engine marker](https://github.com/doradsoft/html-flip-book/pull/390)
+identifies an oblique reflected paper face directly from its geometry. Sefer
+uses a separate content layer only for that face, so the crease can move while
+the text rendering is reused. Straight and resting faces retain their original
+rasterization. This avoids matching an animated style attribute on every frame.
+Two before-failing lifecycle guards cover both reading directions, straight
+folds, resting pages and reverse previews. The producer passes all 892 unit
+tests, formatting/lint and its production build. Its existing mutation guard
+still requires two class writes at fold entry/exit and zero during steady poses.
+
+The actual local integration passes all 13 original Windows desktop timing
+checks and all 35 Linux desktop checks. All 24 page images and eight
+character-position comparisons are exact, with the layer verified active on
+oblique backs and absent on straight faces. These are explicit local-copy
+results. The merged engine is normally published as alpha.111, with both
+package integrities and all 153 producer distribution files verified. Registry
+consumer CI and public qualification remain required. The pre-layer hosted head fails all
+twelve cadence cases, reaching 66.7ms p95 against the unchanged 50ms limit.
+Its 4,025 unit tests, 327 end-to-end tests and both package builds pass; its
+uploaded website coverage contains 11,575/11,585 covered lines (99.91%).
+
+| Before angled-back layer | Actual local integration |
+| --- | --- |
+| ![Held Kings page before the layer](images/sefer-turn-lag/reader-angled-back-before.png) | ![Identical held Kings page with the layer](images/sefer-turn-lag/reader-angled-back-after.png) |
+
+The bookmark-label repair reuses immutable children while their
 visible text and cover color are unchanged. The native provider still refreshes
 on navigation; fresh equivalent bookmark objects no longer recreate all the
 React children. Before-failing guards count 16/96 new compact and expanded nodes
@@ -131,7 +156,7 @@ qualification remain required.
 | --- | --- |
 | ![Previous held Kings page](images/sefer-turn-lag/reader-bounded-visibility-before.png) | ![Unchanged held Kings page](images/sefer-turn-lag/reader-bounded-visibility-after.png) |
 
-This branch pins published `0.0.0-alpha.109`. Its earlier
+This branch pins published `0.0.0-alpha.111`. Its earlier
 [bookmark setup repair](https://github.com/doradsoft/html-flip-book/pull/379)
 assembles the first moving surface before inserting it into the live book.
 Before-failing LTR/RTL operation guards require zero changed style writes on

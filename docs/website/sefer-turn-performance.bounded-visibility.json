@@ -9351,5 +9351,1280 @@
     },
     "hosted": "Pending new source push",
     "public": "Still old 0.2.620; not delivered"
+  },
+  "hostedStaticBookmarkHead": {
+    "source": "0dc730e4da9d7ebb52a4b1af374b382af95ee7ec",
+    "url": "https://github.com/bible-on-site/bible-on-site/actions/runs/41867260471/job/126705259881",
+    "readerFailed": 12,
+    "otherPerformanceChecksPassed": 25,
+    "allCases": [
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            90.2,
+            71.9,
+            51.4,
+            67.3,
+            52.2,
+            119.8
+          ],
+          "responseP95Ms": 119.8,
+          "responseMaxMs": 119.8,
+          "frameGapMaxMs": 83.3,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 90.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 119.8,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "first turn/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            55.7,
+            63,
+            42.6,
+            75.2,
+            32.9,
+            49.8
+          ],
+          "responseP95Ms": 75.2,
+          "responseMaxMs": 75.2,
+          "frameGapMaxMs": 99.9,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 55.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 75.2,
+            "frameGapMaxMs": 99.9,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            104.5,
+            80.4,
+            63.9,
+            74,
+            56.1,
+            131.2
+          ],
+          "responseP95Ms": 131.2,
+          "responseMaxMs": 131.2,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 104.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 131.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            83.4,
+            67.2,
+            28.8,
+            67.4,
+            33.5,
+            52.9
+          ],
+          "responseP95Ms": 83.4,
+          "responseMaxMs": 83.4,
+          "frameGapMaxMs": 100,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 83.4,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 67.4,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 66.7
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.7ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            89.6,
+            72.6,
+            83,
+            66,
+            68.6,
+            127.6
+          ],
+          "responseP95Ms": 127.6,
+          "responseMaxMs": 127.6,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 89.6,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 127.6,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            47.2,
+            66.6,
+            41.5,
+            34.6,
+            28.5,
+            51.7
+          ],
+          "responseP95Ms": 66.6,
+          "responseMaxMs": 66.6,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 47.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 66.6,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            64.2,
+            63.9,
+            55.9,
+            69.3,
+            39.3,
+            97.9
+          ],
+          "responseP95Ms": 97.9,
+          "responseMaxMs": 97.9,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 64.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 97.9,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            72.7,
+            54.6,
+            35.1,
+            49.1,
+            40.6,
+            36.9
+          ],
+          "responseP95Ms": 72.7,
+          "responseMaxMs": 72.7,
+          "frameGapMaxMs": 83.3,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 72.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 54.6,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            109.2,
+            83.1,
+            85.4,
+            62.8,
+            57.7,
+            101
+          ],
+          "responseP95Ms": 109.2,
+          "responseMaxMs": 109.2,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 109.2,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.7
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 101,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "first turn/frameGapP95Ms=66.7ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            52.5,
+            62.2,
+            27.8,
+            34.5,
+            24.4,
+            66.1
+          ],
+          "responseP95Ms": 66.1,
+          "responseMaxMs": 66.1,
+          "frameGapMaxMs": 66.8,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 52.5,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50.1
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 66.1,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "first turn/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            95.3,
+            75.6,
+            60.9,
+            59.3,
+            58.2,
+            95.2
+          ],
+          "responseP95Ms": 95.3,
+          "responseMaxMs": 95.3,
+          "frameGapMaxMs": 83.3,
+          "frameGapP95Ms": 66.6,
+          "firstTurn": {
+            "responseP95Ms": 95.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 95.2,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 66.6
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=66.6ms > 50ms",
+          "consecutive turns/frameGapP95Ms=66.6ms > 50ms"
+        ]
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            37.3,
+            44.2,
+            33.3,
+            52.8,
+            32.2,
+            34.9
+          ],
+          "responseP95Ms": 52.8,
+          "responseMaxMs": 52.8,
+          "frameGapMaxMs": 83.4,
+          "frameGapP95Ms": 50.1,
+          "firstTurn": {
+            "responseP95Ms": 37.3,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 50
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 52.8,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 50.1
+          }
+        },
+        "failures": [
+          "all turns/frameGapP95Ms=50.1ms > 50ms",
+          "consecutive turns/frameGapP95Ms=50.1ms > 50ms"
+        ]
+      }
+    ],
+    "unitPassed": 4025,
+    "e2ePassed": 327,
+    "coverage": {
+      "files": 280,
+      "totals": {
+        "LF": 11585,
+        "LH": 11575,
+        "BRF": 7008,
+        "BRH": 6952,
+        "FNF": 2544,
+        "FNH": 2537
+      },
+      "lineCoveragePct": 99.91368148467846,
+      "touched": [
+        {
+          "file": "web/bible-on-site/src/app/929/[number]/components/Sefer.tsx",
+          "LF": 169,
+          "LH": 168,
+          "BRF": 113,
+          "BRH": 110,
+          "FNF": 56,
+          "FNH": 56
+        },
+        {
+          "file": "web/bible-on-site/src/app/929/[number]/components/sefer-bookmark-content.tsx",
+          "LF": 20,
+          "LH": 20,
+          "BRF": 8,
+          "BRH": 8,
+          "FNF": 3,
+          "FNH": 3
+        },
+        {
+          "file": "web/bible-on-site/src/app/components/ReadingProgress.tsx",
+          "LF": 117,
+          "LH": 117,
+          "BRF": 65,
+          "BRH": 62,
+          "FNF": 18,
+          "FNH": 18
+        }
+      ],
+      "junit": [
+        {
+          "kind": "unit",
+          "root": "<testsuites name=\"jest tests\" tests=\"4025\" failures=\"0\" errors=\"0\" time=\"452.525\">"
+        },
+        {
+          "kind": "e2e",
+          "root": "<testsuites id=\"\" name=\"\" tests=\"327\" failures=\"0\" skipped=\"0\" errors=\"0\" time=\"975.553525\">"
+        }
+      ]
+    },
+    "quality": "Codacy0issues; reviews/threads empty; performance and dependent Cross Module gate fail",
+    "raw": "site890-perf",
+    "released": false
+  },
+  "angledBackLayer": {
+    "producerPr": "https://github.com/doradsoft/html-flip-book/pull/390",
+    "producer": "89a465495fd4cc2ba90e732759ac5f8ffc488d49",
+    "consumer": "88a4e46184b4040ca3335cf2aedee60c67895006",
+    "localOverride": true,
+    "version": "0.0.0-alpha.110",
+    "publication": {
+      "version": "0.0.0-alpha.111",
+      "source": "5b92471128918f907b636cd39cf959f607f33518",
+      "normalCiRun": 41882613506,
+      "release": "https://github.com/doradsoft/html-flip-book/releases/tag/v0.0.0-alpha.111",
+      "packages": 2,
+      "integrityVerified": true,
+      "identicalProducerDistFiles": 153,
+      "evidence": "library932-publication.json"
+    },
+    "marker": "page--angled-back",
+    "scope": "Sefer opts in only for the reflected even paper face while oblique. Native geometry supplies the marker; no animated style-attribute selector. Straight and resting content keeps its original rasterization.",
+    "producerValidation": {
+      "newGuardsFailBefore": true,
+      "unitPassed": 892,
+      "files": 43,
+      "check": true,
+      "build": true,
+      "classWrites": {
+        "foldEntry": 2,
+        "foldExit": 2,
+        "steadyPose": 0
+      }
+    },
+    "consumerBuild": {
+      "routes": 20504,
+      "prerenderedRoutes": 20497,
+      "identicalCopiedDistFiles": 153,
+      "buildId": "vBGMUCAaJ8NIbn8v8KBM2",
+      "actualHttpBound": true
+    },
+    "appearance": {
+      "pairs": 24,
+      "pixelChanges": 0,
+      "characterComparisons": 8,
+      "maxDelta": 0,
+      "angledActivationVerified": true,
+      "straightHintAbsent": true
+    },
+    "windows": {
+      "passed": 13,
+      "failed": 0,
+      "allCases": [
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              72.7,
+              58.5,
+              67.9,
+              59,
+              51,
+              112.3
+            ],
+            "responseP95Ms": 112.3,
+            "responseMaxMs": 112.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 72.7,
+              "frameGapMaxMs": 33.3,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 112.3,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              49.5,
+              52.3,
+              34.7,
+              38.7,
+              42.6,
+              43.5
+            ],
+            "responseP95Ms": 52.3,
+            "responseMaxMs": 52.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 49.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 52.3,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              124.8,
+              74.9,
+              62.2,
+              65.3,
+              50.1,
+              105.5
+            ],
+            "responseP95Ms": 124.8,
+            "responseMaxMs": 124.8,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 124.8,
+              "frameGapMaxMs": 83.3,
+              "frameGapP95Ms": 50
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 105.5,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              46.8,
+              81.5,
+              34.8,
+              36.1,
+              64.4,
+              50.9
+            ],
+            "responseP95Ms": 81.5,
+            "responseMaxMs": 81.5,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 46.8,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 81.5,
+              "frameGapMaxMs": 83.4,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              84.4,
+              68.8,
+              62.3,
+              65,
+              48.5,
+              120.4
+            ],
+            "responseP95Ms": 120.4,
+            "responseMaxMs": 120.4,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 84.4,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 120.4,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              39.8,
+              42.6,
+              67.1,
+              42.1,
+              42.9,
+              40.4
+            ],
+            "responseP95Ms": 67.1,
+            "responseMaxMs": 67.1,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.5,
+            "firstTurn": {
+              "responseP95Ms": 39.8,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 67.1,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.5
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              88.6,
+              65,
+              63.5,
+              52.1,
+              37.3,
+              81.9
+            ],
+            "responseP95Ms": 88.6,
+            "responseMaxMs": 88.6,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 88.6,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 81.9,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              40.8,
+              40.5,
+              34.8,
+              26.6,
+              40.9,
+              36.1
+            ],
+            "responseP95Ms": 40.9,
+            "responseMaxMs": 40.9,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 40.8,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 40.9,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              77.5,
+              63.6,
+              71.8,
+              63.3,
+              46.9,
+              88.4
+            ],
+            "responseP95Ms": 88.4,
+            "responseMaxMs": 88.4,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 77.5,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 88.4,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              52.9,
+              39.6,
+              35.3,
+              29.7,
+              29.6,
+              35.1
+            ],
+            "responseP95Ms": 52.9,
+            "responseMaxMs": 52.9,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 52.9,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 39.6,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              110.5,
+              62.4,
+              59.5,
+              76.2,
+              62,
+              100.4
+            ],
+            "responseP95Ms": 110.5,
+            "responseMaxMs": 110.5,
+            "frameGapMaxMs": 100,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 110.5,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 49.9
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 100.4,
+              "frameGapMaxMs": 100,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              34.7,
+              52.4,
+              23.2,
+              35.8,
+              29,
+              43.2
+            ],
+            "responseP95Ms": 52.4,
+            "responseMaxMs": 52.4,
+            "frameGapMaxMs": 83.5,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 34.7,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 52.4,
+              "frameGapMaxMs": 83.5,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        }
+      ],
+      "raw": "reader917-desktop-artifacts"
+    },
+    "linux": {
+      "passed": 35,
+      "failed": 0,
+      "allCases": [
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              86.2,
+              54.2,
+              76,
+              49.5,
+              37.5,
+              109.1
+            ],
+            "responseP95Ms": 109.1,
+            "responseMaxMs": 109.1,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 86.2,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 109.1,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              46.5,
+              53.3,
+              44.4,
+              38,
+              34.5,
+              63.7
+            ],
+            "responseP95Ms": 63.7,
+            "responseMaxMs": 63.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 46.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 63.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              78.5,
+              62.4,
+              70.6,
+              55.1,
+              51.4,
+              115.4
+            ],
+            "responseP95Ms": 115.4,
+            "responseMaxMs": 115.4,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 78.5,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 115.4,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              47.5,
+              62.7,
+              28.4,
+              54.1,
+              39,
+              57
+            ],
+            "responseP95Ms": 62.7,
+            "responseMaxMs": 62.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 47.5,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 62.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              78.3,
+              57.7,
+              60.4,
+              58.7,
+              39.8,
+              106.6
+            ],
+            "responseP95Ms": 106.6,
+            "responseMaxMs": 106.6,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 78.3,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 106.6,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              58.5,
+              37.5,
+              42.5,
+              35.6,
+              45.2,
+              46.5
+            ],
+            "responseP95Ms": 58.5,
+            "responseMaxMs": 58.5,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 58.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 46.5,
+              "frameGapMaxMs": 66.8,
+              "frameGapP95Ms": 33.5
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              57.3,
+              52.1,
+              48.1,
+              48.2,
+              39.6,
+              81.9
+            ],
+            "responseP95Ms": 81.9,
+            "responseMaxMs": 81.9,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 57.3,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 81.9,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              35.3,
+              36.5,
+              25.5,
+              24.8,
+              29.8,
+              25.8
+            ],
+            "responseP95Ms": 36.5,
+            "responseMaxMs": 36.5,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 35.3,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 36.5,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              82.9,
+              54.4,
+              41.9,
+              55.5,
+              45.9,
+              87
+            ],
+            "responseP95Ms": 87,
+            "responseMaxMs": 87,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 82.9,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 87,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              51.7,
+              47.1,
+              55.7,
+              34.4,
+              40.5,
+              29.2
+            ],
+            "responseP95Ms": 55.7,
+            "responseMaxMs": 55.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 51.7,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 55.7,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              69.8,
+              67.4,
+              37.5,
+              55,
+              45.9,
+              86
+            ],
+            "responseP95Ms": 86,
+            "responseMaxMs": 86,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 69.8,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 86,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 50
+            }
+          },
+          "failures": []
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              36,
+              46.8,
+              57.4,
+              36.1,
+              28.9,
+              28.7
+            ],
+            "responseP95Ms": 57.4,
+            "responseMaxMs": 57.4,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 36,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 57.4,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "failures": []
+        }
+      ],
+      "raw": "reader918-perf-artifacts"
+    },
+    "functional": {
+      "passed": 57,
+      "existingConditionalSkips": 1,
+      "heldPageAndColorGuards": 7,
+      "raw": "reader919-functional-artifacts",
+      "log": "reader919-functional.log"
+    },
+    "hosted": "Native390 all24 checks complete, zero findings; published alpha111 registry-consumer qualification still required",
+    "public": "Original public verification remains required",
+    "nativeBenchmarks": {
+      "scenarios": 12,
+      "noRegression": 12,
+      "inconclusive": 0,
+      "invalidSamples": 0,
+      "allScenarioAndMetricVerdicts": 177,
+      "retainedCollection": {
+        "baseline": 4,
+        "retained": 2005,
+        "released": 4
+      },
+      "testedMerge": "3f23978773894d23ec5c71f58b416c3d09f3e77e",
+      "base": "9c5537d93fe5b4aa231dc669ec4c7d9d1444ebe5",
+      "candidate": "89a465495fd4cc2ba90e732759ac5f8ffc488d49"
+    },
+    "hostedBrowserValidation": {
+      "passed": 382,
+      "conditionalSkips": 35,
+      "flaky": 0
+    }
   }
 }
