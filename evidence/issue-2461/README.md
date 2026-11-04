@@ -36,6 +36,12 @@ sizes are equivalent, no 90% commentary hack. The effective-size labels
 | Debug APK `5.1.6` (versionCode 50100006), branch `fix/2461-font-size-relative` | this worktree | pasuk%150 → parasha 27sp, perush%100 → 18sp |
 | Emulator `sdk_gphone64_x86_64`, Android 15 (API 36), 1080×2400, 420dpi, font scale 1.0 | — | measurements from uiautomator bounds + PNG ink analysis |
 
+**Pending — required by `app-deployment` policy:** Android changes must be
+verified on the physical device (ADB wireless pairing), not the emulator.
+No physical device was reachable during this round, so the emulator
+captures above are supplementary evidence only. Physical-device before/
+after and an iOS capture remain open.
+
 Note: `adb install` does **not** clear Fast Deployment overrides —
 `files/.__override__/x86_64/*.dll` shadows the APK's bundled assemblies on
 this debug build. A stale override dll made an earlier verification round
