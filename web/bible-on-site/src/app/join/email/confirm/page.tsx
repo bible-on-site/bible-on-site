@@ -51,8 +51,13 @@ export default async function ConfirmEmailPage({ searchParams }: Props) {
 
 	return (
 		<main className={styles.page}>
+			{/* Codacy anchors the dangerouslySetInnerHTML finding at this
+			 * conditional expression, so the nosemgrep suppression must sit
+			 * here rather than only beside the attribute (same as SeferPanel). */}
+			{/* nosemgrep -- static self-contained script constant; no interpolated or user-controlled content */}
 			{hasToken && (
 				<script
+					// nosemgrep -- static self-contained script constant; no interpolated or user-controlled content
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: static, self-contained history cleanup
 					dangerouslySetInnerHTML={{ __html: STRIP_TOKEN_SCRIPT }}
 				/>

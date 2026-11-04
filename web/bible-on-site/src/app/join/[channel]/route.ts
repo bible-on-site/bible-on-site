@@ -10,8 +10,10 @@ const CHANNEL_NAMES = {
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-function unavailableHtml(channelName: string): string {
-	return `<!DOCTYPE html>
+// Static template: the channel name is substituted via replace() (never
+// interpolated into the markup) so the document carries no executable
+// expression — and the value is escaped regardless.
+const UNAVAILABLE_HTML = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8">
@@ -28,12 +30,27 @@ a { color: #28758a; }
 <body>
 <main>
 <h1>הצטרפות לעלון היומי</h1>
-<p>קישור ההצטרפות ב${channelName} אינו זמין כרגע. נסו שוב מאוחר יותר.</p>
+<p>קישור ההצטרפות ב__CHANNEL_NAME__ אינו זמין כרגע. נסו שוב מאוחר יותר.</p>
 <p><a href="/dailyBulletin">אפשרויות הצטרפות נוספות לעלון היומי</a></p>
 <p><a href="/contact">יצירת קשר</a></p>
 </main>
 </body>
 </html>`;
+
+function escapeHtml(text: string): string {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
+function unavailableHtml(channelName: string): string {
+	return UNAVAILABLE_HTML.replace(
+		"__CHANNEL_NAME__",
+		escapeHtml(channelName),
+	);
 }
 
 function unavailable(

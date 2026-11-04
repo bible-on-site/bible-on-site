@@ -28,9 +28,9 @@ function renderCarousel() {
 	render(
 		<div dir="rtl">
 			<BulletinJoinCarousel>
-				<article>telegram</article>
-				<article>whatsapp</article>
-				<article>email</article>
+				<article data-channel="telegram" />
+				<article data-channel="whatsapp" />
+				<article data-channel="email" />
 			</BulletinJoinCarousel>
 		</div>,
 	);
