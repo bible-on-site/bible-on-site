@@ -296,40 +296,8 @@
                                                 </controls:PasukTextLabel>
                                                 <!-- Perushim render once per pasuk on its last copy so
                                                      שניים מקרא reads מקרא, מקרא, פירוש (#2403) -->
-                                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
-                                                                     IsVisible="{Binding IsLastCopy}"
-                                                                     Spacing="2"
-                                                                     Margin="0,4,0,0">
-                                                    <BindableLayout.ItemTemplate>
-                                                        <DataTemplate x:DataType="models:PerushNoteDisplay">
-                                                            <!-- The whole perush surfaces as one update: a
-                                                                 fixed-height loading slot holds the row until
-                                                                 the HtmlView publishes its contents, so the
-                                                                 name never flashes alone and recycled cells
-                                                                 never pair a new name with stale contents (#2451). -->
-                                                            <VerticalStackLayout Spacing="2">
-                                                                <Grid HeightRequest="36"
-                                                                      IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}, Converter={StaticResource InvertedBoolConverter}}">
-                                                                    <ActivityIndicator IsRunning="True" WidthRequest="20" HeightRequest="20"
-                                                                                       HorizontalOptions="Center" VerticalOptions="Center"/>
-                                                                </Grid>
-                                                                <VerticalStackLayout Spacing="2"
-                                                                                     IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}}">
-                                                                    <Label Text="{Binding PerushName}"
-                                                                           AutomationId="InlinePerushName"
-                                                                           FontSize="{DynamicResource PerushNameFontSize}"
-                                                                           FontAttributes="Bold"
-                                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
-                                                                    <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
-                                                                                      FontSize="{DynamicResource PerushContentFontSize}"
-                                                                                      TextAlignment="Justify"
-                                                                                      TextDirection="Rtl"
-                                                                                      LineHeight="1.4"/>
-                                                                </VerticalStackLayout>
-                                                            </VerticalStackLayout>
-                                                        </DataTemplate>
-                                                    </BindableLayout.ItemTemplate>
-                                                </VerticalStackLayout>
+                                                <controls:InlinePerushimView ItemsSource="{Binding PerushNotes}"
+                                                                             IsVisible="{Binding IsLastCopy}"/>
                                             </VerticalStackLayout>
                                         </controls:ReaderCellBorder>
                                     </DataTemplate>

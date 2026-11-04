@@ -34,13 +34,13 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     // chrome coordinator (#2573).
     private ReaderPlatformChrome _platformChrome = null!;
 
-    // Guard: ignore CurrentItemChanged events fired by the CarouselView during
-    // initial collection assignment — the ViewModel already holds the unit.
-    private bool _carouselInitializing;
+    // Font/theme/notes availability sync is owned by the shared display-sync
+    // coordinator (#2573).
+    private ReaderDisplaySync _displaySync = null!;
 
-    // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
-    private double _carouselWidth;
-    private bool _pendingCarouselResnap;
+    // The programmatic-scroll guard, rotation resnap and Android swipe settle
+    // are owned by the shared carousel coordinator (#2573).
+    private ReaderCarousel _carousel = null!;
 
     // Unit requested via query attributes before the initial load finished.
     private int? _pendingUnitId;
@@ -69,7 +69,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     {
         SetupReaderChrome();
         SubscribeViewModelChanges();
-        SetupFontSizeResources();
+        SetupDisplaySync();
+        SetupCarousel();
         SetupCarouselNavigation();
         // פרשת השבוע on a festival Shabbat: explain the displaced reading
         // and offer the next regular one instead of jumping silently.
@@ -79,25 +80,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 $"הקריאה הבאה: {target.ReadingTitle} ({target.ShabbatDateText}).",
                 $"עבור ל{target.ReadingTitle}", "ביטול");
         SetupUnitPickerEvents();
-        SubscribeNotesMaterialization();
-        SubscribeThemeChange();
         InitializeSearchHeader();
         SetupPlatformChrome();
-#if ANDROID || IOS
-        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
-        {
-            var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
-            {
-                ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
-            };
-            statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
-                new Binding(nameof(BackgroundColor), source: ReaderToolbar));
-            statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
-                CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
-            Behaviors.Add(statusBar);
-        }
-#endif
-        ParashaCarousel.SizeChanged += OnCarouselSizeChanged;
         ChapterSearch.SetSource(_viewModel.Source);
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
         _viewModel.PropertyChanged += (_, e) =>
@@ -142,6 +126,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 SearchSurface = ChapterSearch,
                 SelectionSurface = SelectionBar,
                 PerushimSheet = PerushimPanel,
+                StatusBarColorSource = ReaderToolbar,
             },
             new ReaderPlatformChromeActions
             {
@@ -200,6 +185,74 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
         Shell.SetNavBarIsVisible(this, false);
         _platformChrome.RefreshNativeBack();
+    }
+
+    /// <summary>
+    /// Wires the shared display-sync coordinator (#2573) — font resources,
+    /// theme refresh of the realized pesukim and notes-materialization
+    /// re-check — through the one implementation every reader page uses. Only
+    /// the division plugs differ: which pasuk rows are loaded, the
+    /// focused-pasuk extras, and the unit notes reload.
+    /// </summary>
+    private void SetupDisplaySync()
+    {
+        _displaySync = new ReaderDisplaySync(
+            new ReaderDisplaySyncSurfaces
+            {
+                Page = this,
+                Notes = PerushimNotesService.Instance,
+                Preferences = PreferencesService.Instance,
+            },
+            new ReaderDisplaySyncActions
+            {
+                LoadedPasukim = () => _viewModel.CarouselUnits
+                    .SelectMany(unit => unit.Rows)
+                    .Select(row => row.Pasuk)
+                    .OfType<Pasuk>(),
+                AfterThemeRefresh = () =>
+                {
+                    if (_focusedPasuk != null)
+                    {
+                        _focusedPasuk.RefreshForThemeChange();
+                        RefreshFocusedRecitation();
+                    }
+                },
+                NotesAvailable = () => _viewModel.PerushimNotesAvailable,
+                NotesPending = () => _viewModel.PerushimNotesPending,
+                ReloadNotesAsync = () => _viewModel.Unit is { } unit
+                    ? _viewModel.LoadPerushimAsync(unit)
+                    : Task.CompletedTask,
+            });
+    }
+
+    /// <summary>
+    /// Wires the shared carousel coordinator (#2573) — programmatic-scroll
+    /// guard, rotation resnap and the Android swipe settle — through the one
+    /// implementation every reader page uses. Only the division plugs differ:
+    /// the suppression extras (articles/focused pasuk/search) and the
+    /// unit-typed long-press arming.
+    /// </summary>
+    private void SetupCarousel()
+    {
+        _carousel = new ReaderCarousel(
+            new ReaderCarouselSurfaces
+            {
+                Carousel = ParashaCarousel,
+                LoadingOverlay = CarouselLoadingOverlay,
+                FanMenu = FanMenu,
+                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton],
+                PressExcluded = [FanMenu.ToggleButton, SelectionBar],
+            },
+            new ReaderCarouselActions
+            {
+                CurrentPosition = () => _viewModel.CarouselPosition,
+                ItemCount = () => _viewModel.CarouselUnits.Count,
+                IsLoading = () => _isLoading,
+                IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen,
+#if ANDROID
+                ArmUnreceivedPress = (x, y) => LongPressBehavior.BeginUnreceivedPress(x, y, _viewModel.Unit),
+#endif
+            });
     }
 
     /// <summary>
@@ -262,13 +315,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     private void OnViewModelNavigationRequested(int index)
     {
         ResetRecitationSession();
-        // Guard: suppress OnCarouselItemChanged while we reposition
-        _carouselInitializing = true;
-        ParashaCarousel.ScrollTo(index, animate: false);
-        // Do not push CarouselPosition back into the two-way Position
-        // binding here — it queues a second (animated) scroll that can
-        // overshoot the target and land on the following unit.
-        _carouselInitializing = false;
+        _carousel.ScrollToUnit(index);
 
         ClearAllSelections();
         SetAnalyticsScreenForUnit();
@@ -280,106 +327,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         {
             _ = ShowUnitArticlesAsync();
         }
-    }
-
-    /// <summary>
-    /// Re-snaps the carousel when its measured width changes (rotation, fold,
-    /// window resize) — otherwise the items keep the old width and the swipe
-    /// lands mid-item.
-    /// </summary>
-    private void OnCarouselSizeChanged(object? sender, EventArgs e)
-    {
-        var width = ParashaCarousel.Width;
-        if (width <= 0)
-        {
-            return;
-        }
-        if (Math.Abs(width - _carouselWidth) < 0.5)
-        {
-            return;
-        }
-        var isFirstMeasure = _carouselWidth <= 0;
-        _carouselWidth = width;
-        if (isFirstMeasure || _carouselInitializing)
-        {
-            return;
-        }
-        if (_isLoading)
-        {
-            // Rotation during the initial load: retry the re-snap once the
-            // load completes instead of leaving stale item widths behind.
-            _pendingCarouselResnap = true;
-            return;
-        }
-
-        Dispatcher.Dispatch(ResnapCarousel);
-    }
-
-    /// <summary>
-    /// Re-snaps the carousel to the current position after its width changed,
-    /// restoring a single full-width item.
-    /// </summary>
-    private void ResnapCarousel()
-    {
-#if IOS
-        var collectionView = ParashaCarousel.Handler?.PlatformView switch
-        {
-            UIKit.UICollectionView cv => cv,
-            UIKit.UIView view => FindDescendantCollectionView(view),
-            _ => null,
-        };
-        collectionView?.CollectionViewLayout.InvalidateLayout();
-#elif ANDROID
-        if (ParashaCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
-        {
-            recyclerView.Post(recyclerView.RequestLayout);
-        }
-#endif
-        ParashaCarousel.InvalidateMeasure();
-        _carouselInitializing = true;
-        ParashaCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
-        _carouselInitializing = false;
-    }
-
-#if IOS || MACCATALYST
-    private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
-    {
-        foreach (var subview in view.Subviews)
-        {
-            if (subview is UIKit.UICollectionView collectionView)
-            {
-                return collectionView;
-            }
-            var found = FindDescendantCollectionView(subview);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-#endif
-
-    /// <summary>
-    /// Populates page-level DynamicResource entries for perush font sizes and
-    /// keeps them in sync when the user changes the font-factor preference.
-    /// </summary>
-    private void SetupFontSizeResources()
-    {
-        var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs);
-        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
-            MainThread.BeginInvokeOnMainThread(() => page.UpdateFontSizeResources(prefs)));
-    }
-
-    private void UpdateFontSizeResources(PreferencesService prefs)
-    {
-        var pasukFactor = prefs.PasukFontFactor;
-        var perushFactor = prefs.PerushFontFactor;
-        Resources["PasukFontSize"] = pasukFactor * 18;
-        Resources["PasukNumFontSize"] = pasukFactor * 16;
-        Resources["PerushNameFontSize"] = perushFactor * 14;
-        Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
     private void SubscribeViewModelChanges()
@@ -410,14 +357,9 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     {
         base.OnAppearing();
         _platformChrome.Appearing();
+        _carousel.Appearing();
         SubscribeRecitation();
         await InitializeRecitationAsync();
-#if ANDROID
-        MainActivity.TouchStarted += OnTouchStarted;
-        MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
-        MainActivity.TouchMoved += OnTouchMoved;
-        MainActivity.TouchReleased += OnTouchReleased;
-#endif
         if (_viewModel.Unit == null && !_isLoading)
         {
             _isLoading = true;
@@ -440,11 +382,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             finally
             {
                 _isLoading = false;
-                if (_pendingCarouselResnap)
-                {
-                    _pendingCarouselResnap = false;
-                    Dispatcher.Dispatch(ResnapCarousel);
-                }
+                _carousel.ConsumePendingResnap();
             }
         }
         else if (_viewModel.UnitId > 0 && !_isLoading)
@@ -472,111 +410,13 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             }
             // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
             // since this page last appeared. Re-check and reload so they show without an app restart.
-            await RefreshPerushimIfAvailabilityChangedAsync();
+            await _displaySync.RefreshNotesIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
         _platformChrome.ScheduleHistoryRefresh();
-    }
-
-    /// <summary>
-    /// A reader opened while the first-launch notes pack still materializes
-    /// skips awaiting it (#2430) — when the copy completes the service raises
-    /// OperationCompleted off the UI thread, so re-check availability here.
-    /// </summary>
-    private void SubscribeNotesMaterialization()
-    {
-        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
-        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
-    }
-
-    /// <summary>
-    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
-    /// each pasuk's cached FormattedString at build time — a theme flip while the
-    /// page is alive must refresh the realized rows so they don't keep the other
-    /// theme's colors (#2601).
-    /// </summary>
-    private void SubscribeThemeChange()
-    {
-        if (Microsoft.Maui.Controls.Application.Current is not { } app)
-        {
-            return;
-        }
-        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
-        // when navigation returns, and must re-check the theme then.
-        Loaded += (_, _) =>
-        {
-            app.RequestedThemeChanged += OnRequestedThemeChanged;
-            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
-        };
-        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
-    }
-
-    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
-    {
-        Dispatcher.Dispatch(() =>
-        {
-            foreach (var unit in _viewModel.CarouselUnits)
-            {
-                foreach (var row in unit.Rows)
-                {
-                    row.Pasuk?.RefreshForThemeChange();
-                }
-            }
-            if (_focusedPasuk != null)
-            {
-                _focusedPasuk.RefreshForThemeChange();
-                RefreshFocusedRecitation();
-            }
-        });
-    }
-
-    private bool _notesRefreshQueued;
-
-    private void OnNotesOperationCompleted()
-    {
-        // InitializeAsync releases the operation lock, which re-fires this
-        // event — and the refresh calls InitializeAsync itself. Without this
-        // guard every refresh queues another dispatcher turn forever, the UI
-        // thread never idles, and accessibility queries starve (#2430).
-        if (_notesRefreshQueued ||
-            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
-                && !_viewModel.PerushimNotesPending))
-        {
-            return;
-        }
-        _notesRefreshQueued = true;
-        _ = Dispatcher.DispatchAsync(async () =>
-        {
-            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
-            finally { _notesRefreshQueued = false; }
-        });
-    }
-
-    /// <summary>
-    /// Reloads perushim for the current unit when notes-availability changed since the last load
-    /// (e.g. the user downloaded the package in Preferences and returned to this page).
-    /// </summary>
-    private async Task RefreshPerushimIfAvailabilityChangedAsync()
-    {
-        try
-        {
-            await PerushimNotesService.Instance.InitializeAsync();
-            if ((PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
-                    || _viewModel.PerushimNotesPending) &&
-                _viewModel.Unit is { } unit)
-            {
-                await _viewModel.LoadPerushimAsync(unit);
-            }
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: on-appearing refresh is best-effort
-        catch (Exception ex) //NOSONAR — on-appearing refresh is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex}");
-        }
     }
 
     private void OnReaderListLoaded(object? sender, EventArgs e) =>
@@ -594,14 +434,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
         RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
-#if ANDROID
-        MainActivity.TouchStarted -= OnTouchStarted;
-        MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
-        MainActivity.TouchMoved -= OnTouchMoved;
-        MainActivity.TouchReleased -= OnTouchReleased;
-        _swipe.Cancel();
-        LongPressBehavior.CancelAllPending();
-#endif
+        _carousel.Disappearing();
         base.OnDisappearing();
     }
 
@@ -630,14 +463,14 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         unitId ??= await _viewModel.GetInitialUnitIdAsync();
 
         // Guard: ignore OnCarouselItemChanged during initial load.
-        _carouselInitializing = true;
+        _carousel.IsInitializing = true;
         try
         {
             await _viewModel.LoadByUnitIdAsync(unitId.Value);
 
             // CarouselView resets Position to 0 when ItemsSource changes.
             // Force it to the correct position without animation.
-            var targetPos = UnitIndexOf(_viewModel.UnitId);
+            var targetPos = ReaderCarousel.IndexOf(_viewModel.CarouselUnits, u => u.UnitId, _viewModel.UnitId);
             if (targetPos >= 0)
             {
                 ParashaCarousel.ScrollTo(targetPos, animate: false);
@@ -646,7 +479,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         }
         finally
         {
-            _carouselInitializing = false;
+            _carousel.IsInitializing = false;
         }
 
         // Hide loading overlay — carousel is ready
@@ -698,20 +531,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         finally
         {
             _isLoading = false;
+            _carousel.ConsumePendingResnap();
         }
-    }
-
-    /// <summary>The unit's index inside the carousel collection (-1 when missing).</summary>
-    private int UnitIndexOf(int unitId)
-    {
-        for (var i = 0; i < _viewModel.CarouselUnits.Count; i++)
-        {
-            if (_viewModel.CarouselUnits[i].UnitId == unitId)
-            {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /// <summary>
@@ -721,7 +542,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     /// </summary>
     private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
-        if (_carouselInitializing)
+        if (_carousel.IsInitializing)
         {
             return;
         }
@@ -871,90 +692,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         await _viewModel.LoadArticlesAsync(unit);
         ArticlesCollection.ItemsSource = _viewModel.Articles;
     }
-
-    #endregion
-
-    #region Android Touch / Swipe
-
-#if ANDROID
-    private readonly SwipeNavigationTracker _swipe = new();
-
-    private void OnTouchStarted(object? sender, TouchPosition position)
-    {
-        _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
-            ContainsTouch(ExitFullScreenButton, position))
-        {
-            return;
-        }
-        _swipe.Begin(position, ParashaCarousel.Position);
-    }
-
-    private void OnTouchDispatched(object? sender, TouchPosition position)
-    {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
-            ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
-            ContainsTouch(SelectionBar, position))
-        {
-            return;
-        }
-
-        LongPressBehavior.BeginUnreceivedPress(position.X, position.Y, _viewModel.Unit);
-    }
-
-    private static bool ContainsTouch(VisualElement element, TouchPosition position)
-    {
-        if (!element.IsVisible || element.Handler?.PlatformView is not Android.Views.View view)
-        {
-            return false;
-        }
-
-        if (!view.IsShown)
-        {
-            return false;
-        }
-
-        var location = new int[2];
-        view.GetLocationOnScreen(location);
-        return position.X >= location[0] && position.X < location[0] + view.Width &&
-            position.Y >= location[1] && position.Y < location[1] + view.Height;
-    }
-
-    private void OnTouchMoved(object? sender, TouchPosition position)
-    {
-        var slop = ParashaCarousel.Handler?.PlatformView is Android.Views.View view
-            ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
-            : 12;
-        _swipe.Move(position, slop);
-    }
-
-    // Releases and native cancels/interruptions both arrive here: a cancel
-    // mid-swipe can strand the carousel mid-offset just like a release, so
-    // it settles the same way (#2469).
-    private void OnTouchReleased(object? sender, TouchPosition position) =>
-        SettleSwipe(_swipe.Last ?? position);
-
-    private void SettleSwipe(TouchPosition position)
-    {
-        if (ParashaCarousel.Handler?.PlatformView is not Android.Views.View view)
-        {
-            return;
-        }
-
-        var configuration = Android.Views.ViewConfiguration.Get(view.Context!);
-        var target = _swipe.End(position, view.Width, configuration?.ScaledTouchSlop ?? 12,
-            configuration?.ScaledMinimumFlingVelocity ?? 50,
-            view.LayoutDirection == Android.Views.LayoutDirection.Rtl, _viewModel.CarouselUnits.Count);
-        if (target is int index)
-        {
-            // Run after native dispatch, so an intercepted Up/Cancel cannot stop
-            // the final snap. ScrollTo also resets MAUI's current snap target.
-            ParashaCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
-        }
-    }
-#endif
 
     #endregion
 
