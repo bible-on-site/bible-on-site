@@ -7,10 +7,13 @@ using Microsoft.Maui.ApplicationModel;
 namespace BibleOnSite.ViewModels;
 
 /// <summary>
-/// עלון יומי join cards (#2806): the three public bulletin channels —
-/// Telegram, WhatsApp and email — in the website's card order. Cards launch
-/// the external app through <see cref="ILauncher"/> and surface an in-app
-/// alert when the destination is unavailable or the launch fails.
+/// עלון יומי join cards (#2806, links #2942): the three public bulletin
+/// channels — Telegram, WhatsApp and email — in the website's card order.
+/// Each card hands the OS the website's stable first-party /join/{channel}
+/// route through <see cref="ILauncher"/>: provider destinations resolve
+/// server-side, an admin-disabled channel lands on the site's own
+/// unavailable page, and an actual launch failure shows the card's Hebrew
+/// alert rather than failing silently.
 /// </summary>
 #pragma warning disable S2333 // RelayCommand generates partial implementations.
 public partial class DailyBulletinViewModel : ObservableObject
@@ -34,9 +37,9 @@ public partial class DailyBulletinViewModel : ObservableObject
     public IReadOnlyList<BulletinJoinCard> Cards => BulletinJoinCards.All;
 
     /// <summary>
-    /// Opens the card's public join destination. A failed or unavailable
-    /// launch shows the card's Hebrew failure message rather than failing
-    /// silently (#2806).
+    /// Opens the card's stable first-party join route. A failed or
+    /// unavailable launch shows the card's Hebrew failure message rather
+    /// than failing silently (#2806, #2942).
     /// </summary>
     [RelayCommand]
     public async Task JoinAsync(BulletinJoinCard? card)

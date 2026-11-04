@@ -5,8 +5,9 @@ using BibleOnSite.ViewModels;
 namespace BibleOnSite.Pages;
 
 /// <summary>
-/// עלון יומי (#2806): the daily-bulletin join cards mirroring the website's
-/// public join surface — Telegram, WhatsApp and email. Supports the
+/// עלון יומי (#2806, links #2942): the daily-bulletin join cards mirroring
+/// the website's public join surface — Telegram, WhatsApp and email —
+/// bound to the stable first-party /join/{channel} routes. Supports the
 /// ?channel= deep link, which scrolls the matching card into view.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration and controls.

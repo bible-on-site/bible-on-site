@@ -1,3 +1,5 @@
+using BibleOnSite.Config;
+
 namespace BibleOnSite.Models;
 
 /// <summary>
@@ -25,13 +27,13 @@ public sealed record BulletinJoinCard(
 
 /// <summary>
 /// The three daily-bulletin join channels, mirroring the website's public join
-/// surface (#2806). The website currently arranges bulletin subscriptions
-/// through its published contact channels (its /dailyBulletin and
-/// /whatsappGroup routes land on the contact section) until the dedicated
-/// signup contract ships — see "Restore public email signup and channel/group
-/// join links" in docs/daily-bulletin/daily-bulletin.md. Only public
-/// destinations belong here: never private test groups, test destination IDs
-/// or API keys.
+/// surface (#2942). Every card points at the website's stable first-party
+/// join route (#2939/#2940): /join/telegram and /join/whatsapp answer 307 to
+/// the current admin-managed destination and /join/email is the shared public
+/// signup page, so a destination or invitation change in admin reaches
+/// installed app versions without an app release. Only these first-party
+/// routes belong here: never rotating provider invitations, private test
+/// destinations or API keys.
 /// </summary>
 public static class BulletinJoinCards
 {
@@ -39,23 +41,13 @@ public static class BulletinJoinCards
     public static string WhatsAppKey => "whatsapp";
     public static string EmailKey => "email";
 
-    /// <summary>The verified production Telegram bulletin channel (#2806).</summary>
-    private static readonly Uri TelegramChannelUri = new("https://t.me/alhaperek");
-
     /// <summary>
-    /// The website's published WhatsApp join number (ContactSection). The
-    /// prefilled text marks the request as a bulletin join rather than a
-    /// general contact ping.
+    /// The website's canonical first-party join route for a channel. The
+    /// production host is fixed: the routes only resolve server-side, so the
+    /// app always hands the OS the same stable URL.
     /// </summary>
-    private static readonly Uri WhatsAppJoinUri = new(
-        "https://wa.me/37257078640?text=" + Uri.EscapeDataString("הצטרפות לעלון היומי"));
-
-    /// <summary>
-    /// The website's published subscription email (ContactSection) with a join
-    /// subject, until the shared public signup API exists.
-    /// </summary>
-    private static readonly Uri EmailJoinUri = new(
-        "mailto:tanah.site@gmail.com?subject=" + Uri.EscapeDataString("הצטרפות לעלון היומי"));
+    private static Uri JoinRoute(string channel) =>
+        new($"{AppConfig.Instance.WebsiteUrl}/join/{channel}");
 
     /// <summary>Card order matches the website carousel: Telegram, WhatsApp, email.</summary>
     public static IReadOnlyList<BulletinJoinCard> All { get; } =
@@ -65,31 +57,31 @@ public static class BulletinJoinCards
             Title: "טלגרם",
             Icon: "telegram.png",
             BrandColorHex: "#517BA3",
-            Description: "העלון היומי בערוץ הטלגרם",
-            JoinLabel: "הצטרפות",
+            Description: "ערוץ הטלגרם של העלון - פרק יומי ומבזקים קצרים.",
+            JoinLabel: "הצטרפות לערוץ",
             SemanticDescription: "הצטרפות לעלון היומי בטלגרם",
-            JoinUri: TelegramChannelUri,
-            FailureMessage: "לא ניתן לפתוח את טלגרם. נסו שוב"),
+            JoinUri: JoinRoute(TelegramKey),
+            FailureMessage: "לא ניתן לפתוח את קישור הטלגרם. נסו שוב"),
         new BulletinJoinCard(
             Key: WhatsAppKey,
-            Title: "קבוצת ווטסאפ",
+            Title: "ווטסאפ",
             Icon: "whatsapp.png",
             BrandColorHex: "#075E55",
-            Description: "העלון היומי ישירות לטלפון",
-            JoinLabel: "הצטרפות",
-            SemanticDescription: "הצטרפות לעלון היומי בקבוצת הווטסאפ",
-            JoinUri: WhatsAppJoinUri,
-            FailureMessage: "לא ניתן לפתוח את וואטסאפ. נסו שוב"),
+            Description: "קבוצת הווטסאפ של העלון - פרק יומי ישירות לטלפון.",
+            JoinLabel: "הצטרפות לקבוצה",
+            SemanticDescription: "הצטרפות לעלון היומי בווטסאפ",
+            JoinUri: JoinRoute(WhatsAppKey),
+            FailureMessage: "לא ניתן לפתוח את קישור הווטסאפ. נסו שוב"),
         new BulletinJoinCard(
             Key: EmailKey,
             Title: "דוא\"ל",
-            Icon: "gmail.png",
+            Icon: "envelope.png",
             BrandColorHex: "#404040",
-            Description: "העלון היומי במייל",
-            JoinLabel: "הצטרפות",
-            SemanticDescription: "הצטרפות לעלון היומי בדוא\"ל",
-            JoinUri: EmailJoinUri,
-            FailureMessage: "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב"),
+            Description: "העלון היומי בתיבת הדוא\"ל שלכם, כל בוקר.",
+            JoinLabel: "הרשמה",
+            SemanticDescription: "הרשמה לעלון היומי בדוא\"ל",
+            JoinUri: JoinRoute(EmailKey),
+            FailureMessage: "לא ניתן לפתוח את דף ההרשמה. נסו שוב"),
     ];
 
     /// <summary>
