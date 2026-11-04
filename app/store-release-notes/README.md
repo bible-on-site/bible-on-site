@@ -61,10 +61,12 @@ job, after the deployment guard and under that job's lock:
    Microsoft 1500 Unicode chars). A release with no user-visible change
    announces honestly: `גרסה זו כוללת שיפורים פנימיים ותחזוקה.`
 4. The notes plus a manifest (baseline, feature ids, rendered text, digest)
-   are attached to the GitHub release as immutable artifacts, then written
-   to the store's own field: Play `TrackRelease.ReleaseNotes`, TestFlight
+   attach to the GitHub release as per-attempt artifacts, then write to the
+   store's own field: Play `TrackRelease.ReleaseNotes`, TestFlight
    "What to Test", Apple `appStoreVersionLocalizations.whatsNew` (only on an
-   editable version record), Microsoft flight-submission
+   editable version record, in the dedicated `publish_app_store_notes` job
+   so a later-created version record can be retried without touching the
+   binary), Microsoft flight-submission
    `listings.<he>.baseListing.releaseNotes`.
 
 Releases that predate this directory carry no curated entries (`notes:

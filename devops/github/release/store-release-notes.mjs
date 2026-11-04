@@ -231,20 +231,22 @@ export function entriesAt(ref, dir, git) {
 }
 
 /**
- * Features this store audience has not yet been told about: enabled at the
- * release tag while absent or disabled at the baseline tag. Skipped and
- * failed intermediate versions fall inside the diff automatically; reverted
- * or still-disabled work never appears.
+ * Features this store audience has not yet been told about: enabled for this
+ * platform at the release tag while absent, disabled or not applicable to
+ * this platform at the baseline tag. Skipped and failed intermediate
+ * versions fall inside the diff automatically; reverted or still-disabled
+ * work never appears, and an entry that gains a platform after shipping on
+ * another is announced to the new audience.
  */
-export function selectFeatures({ baselineTag, tag, dir, git = runGit }) {
+export function selectFeatures({ baselineTag, tag, dir, platform, git = runGit }) {
 	const current = entriesAt(tag, dir, git);
 	if (current === null) return null;
 	const previous = baselineTag ? (entriesAt(baselineTag, dir, git) ?? new Map()) : new Map();
 	const features = [];
 	for (const [id, entry] of current) {
-		if (!entry.enabled) continue;
+		if (!entry.enabled || !entry.platforms.includes(platform)) continue;
 		const before = previous.get(id);
-		if (before?.enabled) continue;
+		if (before?.enabled && before.platforms.includes(platform)) continue;
 		features.push({ id, ...entry });
 	}
 	return features;
@@ -319,7 +321,13 @@ export function generate({
 					api,
 				});
 	const baselineTag = baseline ? `app-v${baseline}` : null;
-	const selected = selectFeatures({ baselineTag, tag, dir, git });
+	const selected = selectFeatures({
+		baselineTag,
+		tag,
+		dir,
+		platform: spec.platform,
+		git,
+	});
 	const manifest = {
 		module: "app",
 		version,

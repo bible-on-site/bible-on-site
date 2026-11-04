@@ -136,8 +136,9 @@ jobs:
             --tag "app-v$MODULE_VERSION" \
             --out-dir "$RUNNER_TEMP/store-notes"
           # Evidence only — a failed attach must not flip binary delivery.
-          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest.json" &&
-          gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest.json" --clobber ||
+          # The per-attempt name keeps earlier manifests immutable.
+          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" &&
+          gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" ||
           echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
           # A generation failure must fail the phase: falling back to the
           # legacy English changelog here would still advance the delivered

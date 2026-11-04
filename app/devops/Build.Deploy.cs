@@ -81,23 +81,24 @@ partial class Build
             using var service = CreatePlayService(keyFile);
 
             // Create edit
+            // Hebrew release notes are validated locally before any store
+            // object exists — a bad file must not strand an open edit.
+            var releaseNotes = ReadStoreReleaseNotes(ReleaseNotesFile, 500);
+
             var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
             Serilog.Log.Information($"Created edit: {edit.Id}");
-
-            // Hebrew release notes are read inside the open edit so the
-            // localized language tag is proven from the store itself: Play
-            // still resolves Hebrew under the legacy "iw" listing code.
-            var releaseNotes = ReadStoreReleaseNotes(ReleaseNotesFile, 500);
-            string? notesLanguage = null;
-            if (releaseNotes is not null)
-            {
-                notesLanguage = HebrewListingLanguage(service, edit.Id);
-            }
 
             long? uploadedVersionCode = null;
             var committed = false;
             try
             {
+                // The localized language tag is proven from the store itself
+                // inside the cleanup boundary: Play still resolves Hebrew
+                // under the legacy "iw" listing code.
+                var notesLanguage = releaseNotes is null
+                    ? null
+                    : HebrewListingLanguage(service, edit.Id);
+
                 // Upload AAB
                 using var aabStream = File.OpenRead(aabFile);
                 var uploadRequest = service.Edits.Bundles.Upload(GooglePlayPackageName, edit.Id, aabStream, "application/octet-stream");
@@ -255,27 +256,26 @@ partial class Build
     /// <summary>
     /// Post-commit readback: a fresh read-only edit asks the store for the
     /// persisted track. Only a provably different value fails the deploy —
-    /// the update response already proved acceptance, so an absent field on
-    /// readback is logged as inconclusive rather than treated as delivery
-    /// failure after the binary is live.
+    /// the update response already proved acceptance, so an absent field or
+    /// a failed read is inconclusive evidence, never a reason to mark a live
+    /// bundle undelivered and re-announce its features on the next release.
     /// </summary>
     static void VerifyPlayReleaseNotes(AndroidPublisherService service, string track, long versionCode, string language, string expected)
     {
         AppEdit? verifyEdit = null;
+        string? actual;
         try
         {
             verifyEdit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
             var persisted = service.Edits.Tracks.Get(GooglePlayPackageName, verifyEdit.Id, track).Execute();
             var release = persisted.Releases?.FirstOrDefault(r => r.VersionCodes?.Contains(versionCode) == true);
-            var actual = release?.ReleaseNotes?.FirstOrDefault(n => n.Language == language)?.Text;
-            if (actual is null)
-            {
-                Serilog.Log.Warning($"Hebrew release-notes readback is inconclusive — track {track} returned no {language} releaseNotes field");
-                return;
-            }
-            Assert.True(actual == expected,
-                $"Google Play persisted different Hebrew release notes than submitted ({actual.Length} vs {expected.Length} chars)");
-            Serilog.Log.Information($"Verified persisted {language} release notes on {track} track");
+            actual = release?.ReleaseNotes?.FirstOrDefault(n => n.Language == language)?.Text;
+        }
+        catch (Exception probe) when (probe is GoogleApiException or HttpRequestException
+            or TaskCanceledException or IOException or AggregateException or InvalidOperationException)
+        {
+            Serilog.Log.Warning($"Hebrew release-notes readback is inconclusive — the post-commit track read failed: {probe.Message}");
+            return;
         }
         finally
         {
@@ -292,6 +292,14 @@ partial class Build
                 }
             }
         }
+        if (actual is null)
+        {
+            Serilog.Log.Warning($"Hebrew release-notes readback is inconclusive — track {track} returned no {language} releaseNotes field");
+            return;
+        }
+        Assert.True(actual == expected,
+            $"Google Play persisted different Hebrew release notes than submitted ({actual.Length} vs {expected.Length} chars)");
+        Serilog.Log.Information($"Verified persisted {language} release notes on {track} track");
     }
 
     Target SyncGooglePlayListing => _ => _
