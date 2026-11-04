@@ -5,7 +5,87 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
-The reader now pins published `0.0.0-alpha.106`. Its
+The [normal master run after #2943](https://github.com/bible-on-site/bible-on-site/actions/runs/41769850982/job/126384514699)
+failed two first-turn cadence checks: moving-bookmark dragging in Numbers and
+hidden-bookmark dragging in Kings each reached 50.1ms against the unchanged
+50ms limit. The release was blocked. Its passing PR checks and local results
+remain separate evidence and do not replace that failure.
+
+The [follow-up engine repair](https://github.com/doradsoft/html-flip-book/pull/381)
+stops reconciling every page holder when one mounted chapter changes. After
+initialization it visits the previous and next visibility windows, cover boards,
+moving faces and underlays, and explicitly refreshed slots. A before-failing
+guard compared 128 and 1,000 page holders touched in those book sizes; both now
+must touch the same number and fewer than 64. The cheap leaf-state scan remains.
+Compatibility checks preserve complete visibility and accessibility behavior
+through distant forward/backward jumps, fractional buffers and replaced slots.
+
+The subsequent [bookmark repair](https://github.com/doradsoft/html-flip-book/pull/383)
+targets moving bookmarks independently of the pause after a preceding turn.
+It reads a moving button's computed style once per capture instead of three
+times, without retaining that style across captures. For an adjacent turn with
+stable bookmark ordering and geometry, it updates only the tab changing sides.
+Before-failing guards measure 16 and 96 stack slots before the repair and one
+slot in either book afterward, for both moving and pinned bookmarks. Reordering,
+removal and geometry changes retain the full layout path and its exact output.
+Provider/model scans and navigation attributes still update; this is a bound
+on stack-geometry DOM work, not the entire navigation operation.
+
+The library passes 886 unit tests and 370 browser tests, with 31 unchanged
+conditional skips. Changed-line coverage is 100%. Eleven native benchmarks
+report no regression; 1,000-page resize remains inconclusive because its 70.6ms
+A/A noise floor exceeds the unchanged 40ms budget. No timing speedup is claimed
+from that result. Both published `0.0.0-alpha.108` packages match all 153 files
+of the tested producer build.
+
+The [bounded-visibility record](sefer-turn-performance.bounded-visibility.json)
+retains every candidate and registry-consumer timing result, including failures.
+The alpha.108 registry reader failed 11/13 Windows checks and 2/35 Linux checks.
+After the user closed unused applications, it failed 4/13 Windows checks and
+4/35 Linux checks. Memory pressure was observed but does not establish the sole
+cause or excuse a failed sample. All raw measurements remain intact.
+
+The follow-up [optional-mount lifecycle repair](https://github.com/doradsoft/html-flip-book/pull/386)
+pauses optional React page mounts throughout active turns, including overlapping
+leaves and pointer release during animation. Required moving faces and underlays
+remain available. This holds optional content work while preserving live page
+appearance. Four before-failing guards cover the lifecycle boundaries.
+All 24 library checks pass, with 890 unit tests, 370 browser tests, unchanged
+conditional skips and 100% changed-line coverage. All twelve native benchmarks
+report no regression, with no invalid samples. Both published alpha.109 packages
+match all 153 files of the tested producer build.
+
+The combined copied-source reader preserves all 24 appearance comparisons and
+eight character-position comparisons exactly. It passes 12/13 Windows checks
+and 34/35 Linux checks. Windows moving-bookmark dragging in Numbers still has
+50.1ms consecutive-turn cadence p95; Linux pinned-bookmark toolbar turns in
+Numbers reach a 116.7ms maximum gap and 50.1ms cadence p95. These are failures
+under the unchanged limits. Registry, hosted and public qualification remain
+required. An earlier adapter-pause prototype was rejected under a different
+source combination; that earlier result also remains in the record.
+
+A separate reading-progress defect reread its scroller geometry for every text
+fragment. Before-failing operation guards reduce 20/100 reads for 16/96 fragments
+to two per remeasure-and-paint, preserving progress through scroll and layout
+changes. Cleanup prevents retired font-ready callbacks from reading geometry.
+All 26 component tests pass. Neither timing fixture contains this progress bar,
+so this independent repair is not claimed as their lag fix.
+
+The restored alpha.109 registry build generates all 20,504 routes / 20,497
+prerenders, and the actual HTTP-loaded renderer matches the compiled source.
+All 35 Linux performance checks pass. Windows passes 12/13, retaining one
+first-turn Numbers moving-bookmark drag failure: frame-gap p95 50.1ms, maximum
+gap 66.5ms and response 90.9ms. Every consecutive-turn scope passes. The
+250ms deliberate-stall control passes in both profiles. All 24 image pairs
+and eight character-position comparisons remain exact. These measurements
+retain the original 4x slowdown, one worker, zero retries and fixed limits.
+The Windows miss remains open; hosted and public verification are still required.
+
+| Before bounded visibility work | Local prototype after |
+| --- | --- |
+| ![Previous held Kings page](images/sefer-turn-lag/reader-bounded-visibility-before.png) | ![Unchanged held Kings page](images/sefer-turn-lag/reader-bounded-visibility-after.png) |
+
+This branch pins published `0.0.0-alpha.109`. Its earlier
 [bookmark setup repair](https://github.com/doradsoft/html-flip-book/pull/379)
 assembles the first moving surface before inserting it into the live book.
 Before-failing LTR/RTL operation guards require zero changed style writes on
@@ -15,7 +95,7 @@ operations; paired timing differences were mixed and do not establish a
 consistent millisecond gain. Published-package and hosted timing gates remain
 independent requirements.
 
-The latest [retained-layout repair](https://github.com/doradsoft/html-flip-book/pull/376)
+The earlier [retained-layout repair](https://github.com/doradsoft/html-flip-book/pull/376)
 keeps the engine's bounded layout window aligned with the chapters React still
 mounts through a turn and its staged retirement. Previously the engine discarded
 that layout at completion. Moving bookmarks also capture their host coordinate
@@ -23,7 +103,7 @@ system once per turn instead of reading it separately for every tab part.
 Both defects have unit regressions that fail against the prior implementation;
 the bookmark guard preserves independent scales and border offsets.
 
-The [complete candidate qualification](sefer-turn-performance.retained-layout.json)
+The historical [candidate qualification](sefer-turn-performance.retained-layout.json)
 preserves all twelve scenarios, including the prior failures. The full reader
 with the exact repaired library source passes all 13 original Windows 4x checks,
 all 35 Linux checks and 57 functional checks with one existing conditional skip.
