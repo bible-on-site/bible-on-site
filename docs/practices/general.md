@@ -39,9 +39,22 @@ gh run view <run-id> --json workflowName,event,conclusion
 gh api repos/<owner>/<repo>/commits/<sha>
 ```
 
-### ripgrep (`rg`)
+### Fast CLI tools
 
-Use `rg` for all local content search and `rg --files` for file enumeration — never `grep -r`, `find`, or `Select-String`. `.gitignore` + root `.ignore` keep searches off build output, nested `artifacts-*/` evidence worktrees, and the 42 MB single-line corpus dump; `-u`/`--no-ignore` includes ignored paths. Filters: `-t` file types (`rg --type-list`), `-g` globs, `-F` literal text.
+| Task | Use | Instead of |
+| ---- | --- | ---------- |
+| Content search | `rg` | `grep -r`, `Select-String`, `find -exec grep` |
+| File enumeration | `fd` / `rg --files` | `find`, `ls -R`, `Get-ChildItem -Recurse` |
+| Disk usage | `dust` | `du` walks |
+| Text replace | `sd` | `sed -i` on Windows |
+| JSON / YAML | `jq` / `yq` | ad-hoc parsing |
+| Workflow lint | `prek run actionlint` (pinned fork) | push-to-CI; raw `actionlint` flags repo extensions |
+| Benchmarks | `hyperfine` | `time` loops |
+| Structural search | `ast-grep` | regex over code |
+| SQLite / archives | `sqlite3` / `7z` | ad-hoc scripts |
+| Rust rebuilds | `RUSTC_WRAPPER=sccache` | uncached builds |
+
+`.gitignore` + root `.ignore` keep searches off build output, nested `artifacts-*/` evidence worktrees, and the 42 MB single-line corpus dump; `-u`/`--no-ignore` includes ignored paths. Filters: `-t` file types (`rg --type-list`), `-g` globs, `-F` literal text.
 
 # Performance Failures
 

@@ -31,9 +31,24 @@ gh run view <run-id> --json workflowName,event,conclusion
 gh api repos/<owner>/<repo>/commits/<sha>
 ```
 
-## Local Search
+## Fast Local Tools
 
-Use `rg` for every content search — never `grep -r`, `find -exec grep`, or `Select-String`. Enumerate files with `rg --files`, not `find`/`ls -R`/`Get-ChildItem -Recurse`.
+| Task | Use | Instead of |
+| ---- | --- | ---------- |
+| Content search | `rg` | `grep -r`, `Select-String`, `find -exec grep` |
+| File enumeration | `fd <pat>` / `rg --files` | `find`, `ls -R`, `Get-ChildItem -Recurse` |
+| Disk usage | `dust` | `du`/explorer walks (minutes → instant) |
+| In-place text replace | `sd 'old' 'new'` | `sed -i` (flag/quoting quirks on Windows) |
+| JSON query/edit | `jq` | `Select-String`, ad-hoc `python -c` |
+| YAML query/edit | `yq` | manual parsing |
+| Workflow lint | `prek run actionlint --files <wf>` (repo-pinned fork; upstream `actionlint` flags `background`/`wait`/`queue` extensions) | push-to-CI trial and error |
+| Benchmarks | `hyperfine` | hand-rolled `time` loops |
+| Structural code search/refactor | `ast-grep` (`sg` name is deprecated) | regex over code structure |
+| SQLite inspect | `sqlite3` | ad-hoc scripts |
+| Archives | `7z` | `Expand-Archive` |
+| Rust rebuild cache | `RUSTC_WRAPPER=sccache cargo …` | uncached builds |
+
+`rg` specifics:
 
 - `.gitignore` + root `.ignore` already exclude build output, nested `artifacts-*/` evidence worktrees, and the 42 MB single-line corpus dump (`*.tanah_view.json`). Bypass only when needed: `-u`/`--no-ignore`, `--hidden` for dotfiles.
 - Filter: `-t ts -t rust -t py` (`rg --type-list`), `-g '*.csproj'`; `-l` paths only, `-c` counts, `-U` multiline, `-F` literal (Hebrew text, no regex escapes).
