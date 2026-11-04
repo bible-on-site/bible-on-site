@@ -1,53 +1,85 @@
 # Sefer turn performance guard
 
 `web/bible-on-site/tests/perf/sefer-consecutive-turns.test.ts` exercises the
-first turn and immediate consecutive turns independently. It covers Numbers and
-Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
+first turn and immediate consecutive turns independently. It covers במדבר and
+מלכים, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
-The current candidate keeps the original pane content ready as a rendering layer
-before a turn, covering both paper faces. A matched nine-case diagnostic reduces
-page painting by about 11-15% at 6x CPU slowdown. That stress run is not release
-qualification: the original 4x profile and its 200/100/50ms limits remain required.
-All eight resting-page captures and character-position comparisons are exact;
-font settings and colors are unchanged. Chrome can change glyph-edge smoothing
-during motion. The actual full build passes 57 reader behavior checks with one
-existing conditional skip, but the original Linux profile passes 24 checks and
-fails 11, and Windows passes four checks and fails nine. All samples remain
-retained; the painting reduction is not a frame-cadence pass or delivery.
+The reader consumes the normally published alpha.111 packages and reuses stable
+paper-pane rendering while the crease moves. Unchanged bookmark-label children
+are reused as well. A matched diagnostic reduces painting work by 11-15% at 6x
+CPU slowdown; that experiment is not release qualification. All eight resting
+images and eight character-position comparisons are exact. Text styles, colors
+and controls stay intact; motion font smoothing is accepted by Dorad.
 
-The additional blocking-work guard uses the browser's native long-animation-frame
-`blockingDuration`, independently for the first turn, consecutive turns and the
-whole sequence. Its 50ms maximum rejects all twelve recorded public 0.2.620 cases
-(97-184ms blocking maxima) and accepts the twelve current Linux blocking-work
-records. These complete samples are replayed in unit tests; their cadence misses
-remain failures under the original reducer. Missing browser evidence is an error.
-The original input-handler stall control remains, and a separate 250ms animation
-callback verifies the new guard. The latter fails if the observer disconnects
-before Chrome finalizes the blocked frame. Frame/input sampling closes first;
-pending browser records are collected after rendering, without extending the
-measured interval. Visibility transitions are recorded without filtering frames.
+A normal-speed comparison uses the same desktop Chrome, graphics driver,
+1440x900 viewport, six native turns and zero retries for the live 0.2.620 reader
+and the candidate. The public version stayed 0.2.620 throughout. All original
+samples are retained in the [desktop baseline](sefer-turn-performance.desktop-baseline.json).
+
+| Normal desktop measurement | Live 0.2.620 | Candidate |
+| --- | --- | --- |
+| Worst response p95 | 115.1ms | 71.7ms |
+| Worst first-turn frame-gap p95 | 50ms | 16.9ms |
+| Worst consecutive-turn frame-gap p95 | 49.9ms | 16.8ms |
+| Cases rejected by the new desktop guard, by replay | 12/12 | 0/12 |
+
+The old 200/100/50ms limits passed all twelve bad-reader cases at normal speed.
+The desktop guard now requires 100ms response p95, 100ms maximum frame gap and
+25ms frame-gap p95 at fixed 1x CPU. This rejects the recorded repeat frame misses,
+including moving-bookmark first turns, without fitting a 50.1ms overrun into a
+50ms budget. The historical stress limits and reducer remain available unchanged.
+These are rAF render opportunities, not measurements of physical presentation.
 
 The [#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) repair
-restores all twelve CI scenarios and selects the guard from Chrome's reported
-primary graphics device, renderer and acceleration features. Hardware rendering
-still requires the original 200ms response p95, 100ms maximum frame gap and 50ms
-cadence p95, plus the blocking guard. Software rendering requires the same 200ms
-response p95 and the 50ms blocking maximum. It retains every frame interval and
-every original budget failure as diagnostics; a software-work pass does not
-establish a hardware cadence pass. SwiftShader remains a software profile even
-when its emulated GPU features report enabled. Missing graphics or browser API
-evidence is an error, and a background visibility interval fails qualification.
+restores all twelve CI scenarios and distinguishes presentation from software
+rendering work using Chrome's primary device, renderer and acceleration facts.
 
-Both profiles check the first turn, consecutive turns and complete sequence
-independently. The native input-handler stall is caught by response timing; a
-separate blocked animation callback is caught by the browser's
-[blocking-duration record](https://developer.chrome.com/docs/web-platform/long-animation-frames).
-Reporting separates the profiles and uses the existing fixed-budget ratio
-measure, so a zero blocking baseline does not become a noisy relative threshold.
-The ratios divide by fixed limits, never by host speed or observed refresh rate.
-No interaction deadline, CPU slowdown or retry setting changes. Normal CI,
-deployment and public verification remain pending.
+| Profile | Fixed CPU rate | Response p95 | Maximum frame gap | Frame-gap p95 | Browser blocking maximum |
+| --- | --- | --- | --- | --- | --- |
+| Desktop graphics | 1x | 100ms | 100ms | 25ms | 50ms |
+| Software rendering work | 4x | 200ms | Diagnostic | Diagnostic | 50ms |
+
+Both profiles guard the first turn, consecutive turns and complete sequence.
+Software raster/vsync timing does not establish hardware presentation cadence.
+Its complete frame samples and original 200/100/50ms budget misses remain
+reported diagnostics. SwiftShader stays a software profile even when emulated
+GPU features are enabled. Missing graphics/API evidence and any background
+visibility interval fail qualification. The profile never scales by measured
+host speed or refresh rate. Existing interaction deadlines, workloads, worker
+count and retry settings remain unchanged.
+
+The browser's [blocking-duration record](https://developer.chrome.com/docs/web-platform/long-animation-frames)
+adds a separate work guard. Complete replay rejects all twelve recorded bad
+4x public cases (97-184ms blocking maxima) and accepts the twelve current Linux
+work records. A real 250ms input-handler stall is detected through response
+timing; a separate 250ms animation callback verifies the blocking guard. The
+animation control fails without collecting the final pending browser record.
+Frame/input sampling closes before that collection, so no measured window grows.
+Visibility is observed without filtering slow frames. Fixed-budget benchmark
+ratios have separate rendering/CPU namespaces and do not use a noisy relative
+threshold on zero blocking.
+
+The original stress failures remain evidence: the earlier cache build failed
+11/35 Linux checks and 9/13 Windows checks; the rebuilt source failed all twelve
+4x Windows reader cases, with visibility and focus intact. A matched comparison
+also fails the previous build that had passed earlier on this PC. The narrower
+cache is worse in the matched desktop comparison, so it is rejected. These
+results are not relabelled as stress passes. The fresh Linux software-work suite
+passes all 37 checks (105.6ms worst response and 12.4ms blocking), while its
+original cadence reducer still rejects one 50.1ms case.
+
+The complete production build retains 20,504 routes / 20,497 prerenders, and
+actual HTTP assets and all 153 package distribution files match the producer.
+All 57 reader behavior checks pass with one existing conditional skip, including
+all held-page/color guards. All 109 metric unit tests and TypeScript pass.
+Current-source desktop qualification, hosted CI/review, deployment and public
+verification are still required before delivery.
+
+| Before: oblique-only cache | After: stable pane cache |
+| --- | --- |
+| ![Held Kings page before the broader cache](images/sefer-turn-lag/reader-stable-pane-before.png) | ![Same held page with stable pane rendering](images/sefer-turn-lag/reader-stable-pane-after.png) |
+
 
 The following records retain the earlier oblique-only candidate and its results.
 

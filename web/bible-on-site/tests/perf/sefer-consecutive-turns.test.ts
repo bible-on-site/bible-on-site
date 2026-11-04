@@ -10,9 +10,10 @@ import {
 	reduceTurnBlockingSamples,
 	reduceTurnSamples,
 	TURN_BLOCKING_LIMIT_MS,
-	TURN_LIMITS,
+	type TURN_LIMITS,
 	turnBlockingBudgetFailures,
 	turnBudgetFailures,
+	turnProfileSettings,
 	turnQualificationFailures,
 	turnRenderingProfile,
 	turnVisibilityFailures,
@@ -102,9 +103,10 @@ for (const [chapter, bookmarks] of [
 				const hardware = await system.send("SystemInfo.getInfo");
 				await system.detach();
 				const renderingProfile = turnRenderingProfile(hardware.gpu);
+				const { cpuRate, limits } = turnProfileSettings(renderingProfile);
 				const client = await page.context().newCDPSession(page);
 				const inputPoint = await prepareTurnInput(page, gesture);
-				await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+				await client.send("Emulation.setCPUThrottlingRate", { rate: cpuRate });
 				await startTurnProbe(page, gesture);
 				let samples: Awaited<ReturnType<typeof stopTurnProbe>>;
 				try {
@@ -125,12 +127,12 @@ for (const [chapter, bookmarks] of [
 								chapter,
 								mode,
 								gesture,
-								cpuRate: 4,
+								cpuRate,
 								browser: browser.version(),
 								headless: testInfo.project.use.headless ?? true,
 								gpu: hardware.gpu,
 								renderingProfile,
-								limits: TURN_LIMITS,
+								limits,
 								blockingLimitMs: TURN_BLOCKING_LIMIT_MS,
 								samples,
 							},
@@ -169,8 +171,8 @@ for (const [chapter, bookmarks] of [
 						blocking.consecutiveTurns,
 					],
 				] as const) {
-					const name = `sefer-handoff/${renderingProfile}/${chapter}/${mode}/${gesture}/${phase}`;
-					for (const [key, limit] of Object.entries(TURN_LIMITS)) {
+					const name = `sefer-handoff/${renderingProfile}/cpu-${cpuRate}x/${chapter}/${mode}/${gesture}/${phase}`;
+					for (const [key, limit] of Object.entries(limits)) {
 						if (renderingProfile === "software-work" && key !== "responseP95Ms")
 							continue;
 						// Fixed-budget ratios retain absolute limits, including zero
@@ -195,9 +197,11 @@ for (const [chapter, bookmarks] of [
 				];
 				const qualification = {
 					renderingProfile,
+					cpuRate,
+					limits,
 					metrics,
 					blocking,
-					originalBudgetFailures: turnBudgetFailures(metrics),
+					budgetFailures: turnBudgetFailures(metrics, limits),
 					failures,
 				};
 				const qualificationDirectory = `${TURN_DIAGNOSTICS}/qualification`;

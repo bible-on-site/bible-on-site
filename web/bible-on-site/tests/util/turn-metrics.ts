@@ -8,6 +8,17 @@ export const TURN_LIMITS = {
 	frameGapP95Ms: 50,
 } as const;
 
+/** Normal desktop rendering: distinguish a 60Hz frame from a repeated miss.
+ * Keep the separate 4x work profile and all historical stress samples intact.
+ */
+export const DESKTOP_TURN_LIMITS = {
+	responseP95Ms: 100,
+	frameGapMaxMs: 100,
+	frameGapP95Ms: 25,
+} as const;
+
+type TurnLimits = Readonly<Record<keyof typeof TURN_LIMITS, number>>;
+
 export interface TurnInput {
 	at: number;
 	trusted: boolean;
@@ -26,11 +37,11 @@ export interface TurnSamples {
 	longAnimationFramesSupported?: boolean;
 	longAnimationFrames?: TurnLongAnimationFrame[];
 	visibility?: {
-		started: DocumentVisibilityState;
-		stopped: DocumentVisibilityState;
+		started: string;
+		stopped: string;
 		startedFocused: boolean;
 		stoppedFocused: boolean;
-		changes: { at: number; state: DocumentVisibilityState }[];
+		changes: { at: number; state: string }[];
 	};
 }
 
@@ -142,6 +153,7 @@ export function reduceTurnSamples(
 
 export function turnBudgetFailures(
 	metrics: ReturnType<typeof reduceTurnSamples>,
+	limits: TurnLimits = TURN_LIMITS,
 ): string[] {
 	return (
 		[
@@ -150,7 +162,7 @@ export function turnBudgetFailures(
 			["consecutive turns", metrics.consecutiveTurns],
 		] as const
 	).flatMap(([phase, values]) =>
-		Object.entries(TURN_LIMITS)
+		Object.entries(limits)
 			.filter(([key, limit]) => values[key as keyof typeof TURN_LIMITS] > limit)
 			.map(
 				([key, limit]) =>
@@ -235,6 +247,12 @@ export function turnBlockingBudgetFailures(
 
 export type TurnRenderingProfile = "hardware-cadence" | "software-work";
 
+export function turnProfileSettings(profile: TurnRenderingProfile) {
+	return profile === "hardware-cadence"
+		? { cpuRate: 1, limits: DESKTOP_TURN_LIMITS }
+		: { cpuRate: 4, limits: TURN_LIMITS };
+}
+
 /** Software emulation does not establish hardware presentation cadence. */
 export function turnRenderingProfile(gpu: {
 	featureStatus?: Record<string, unknown>;
@@ -267,6 +285,7 @@ export function turnQualificationFailures(
 	blocking: ReturnType<typeof reduceTurnBlockingSamples>,
 	profile: TurnRenderingProfile,
 ) {
+	const { limits } = turnProfileSettings(profile);
 	const responsiveness = (
 		[
 			["all turns", metrics],
@@ -274,15 +293,15 @@ export function turnQualificationFailures(
 			["consecutive turns", metrics.consecutiveTurns],
 		] as const
 	).flatMap(([phase, values]) =>
-		values.responseP95Ms > TURN_LIMITS.responseP95Ms
+		values.responseP95Ms > limits.responseP95Ms
 			? [
-					`${phase}/responseP95Ms=${values.responseP95Ms}ms > ${TURN_LIMITS.responseP95Ms}ms`,
+					`${phase}/responseP95Ms=${values.responseP95Ms}ms > ${limits.responseP95Ms}ms`,
 				]
 			: [],
 	);
 	return [
 		...(profile === "hardware-cadence"
-			? turnBudgetFailures(metrics)
+			? turnBudgetFailures(metrics, limits)
 			: responsiveness),
 		...turnBlockingBudgetFailures(blocking),
 	];

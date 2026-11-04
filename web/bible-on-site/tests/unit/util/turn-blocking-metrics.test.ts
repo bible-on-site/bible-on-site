@@ -1,16 +1,53 @@
 /** @jest-environment node */
 import numbers from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-125.json";
 import kings from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-300.json";
+import desktop from "../../../../../docs/website/sefer-turn-performance.desktop-baseline.json";
 import {
 	reduceTurnBlockingSamples,
 	reduceTurnSamples,
 	type TurnLongAnimationFrame,
 	type TurnSamples,
 	turnBlockingBudgetFailures,
+	turnProfileSettings,
 	turnQualificationFailures,
 	turnRenderingProfile,
 	turnVisibilityFailures,
 } from "../../util/turn-metrics";
+
+it.each(desktop.cases)(
+	"guards the natural desktop bad mark: $phase $chapter $mode $gesture",
+	(record) => {
+		const before = structuredClone(record.samples);
+		const failures = turnQualificationFailures(
+			reduceTurnSamples(record.samples, record.chapter, 6),
+			reduceTurnBlockingSamples(record.samples, record.chapter, 6),
+			"hardware-cadence",
+		);
+		expect(failures.length > 0).toBe(record.expectedFailure);
+		if (record.expectedFailure) {
+			expect(
+				failures.some((failure) => failure.startsWith("consecutive turns/")),
+			).toBe(true);
+			if (record.mode === "leaf" && record.gesture === "drag") {
+				expect(
+					failures.some((failure) => failure.startsWith("first turn/")),
+				).toBe(true);
+			}
+		}
+		expect(record.samples).toEqual(before);
+	},
+);
+
+it("uses fixed presentation and work profiles without host calibration", () => {
+	expect(turnProfileSettings("hardware-cadence")).toEqual({
+		cpuRate: 1,
+		limits: { responseP95Ms: 100, frameGapMaxMs: 100, frameGapP95Ms: 25 },
+	});
+	expect(turnProfileSettings("software-work")).toEqual({
+		cpuRate: 4,
+		limits: { responseP95Ms: 200, frameGapMaxMs: 100, frameGapP95Ms: 50 },
+	});
+});
 
 it.each([...numbers.cases, ...kings.cases])(
 	"replays $dataset $chapter $mode $gesture without changing its samples",
@@ -159,7 +196,7 @@ it.each([
 
 it("retains strict physical cadence and distinguishes software work", () => {
 	const samples = sample(0, 100);
-	samples.frames.fill(50.1);
+	samples.frames.fill(25.001);
 	const metrics = reduceTurnSamples(samples, 300, 2);
 	const blocking = reduceTurnBlockingSamples(samples, 300, 2);
 	expect(
