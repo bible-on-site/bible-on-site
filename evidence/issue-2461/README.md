@@ -29,6 +29,19 @@ now render 27sp (bounds 186/274px), matching the perek reader.
 sizes are equivalent, no 90% commentary hack. The effective-size labels
 (`shots/display-preferences-effective-18.png`) honestly report 18/18.
 
+## Clean-install pass
+
+Same APK, `adb uninstall` + reinstall (shared_prefs contained only
+`lastLearntPerek` — no font keys at all, so all defaults apply):
+
+- `shots/clean-install-display-preferences.png`: master 100, פסוקים 100 →
+  גודל בפועל 18, פירושים 100 → גודל בפועל 18 (מאמרים shows 16 — its own
+  base size).
+- `shots/clean-install-perek-perush-parity.png`: perek reader with inline
+  תרגום יונתן at defaults — single-line pasuk row bounds 66px vs perush
+  row 64px; body ink pasuk ≈ 50px (Taamey D incl. taamim) vs perush ≈
+  47px. Equal effective size, no perush inflation.
+
 ## Device matrix
 
 | Build | Source | Result |
