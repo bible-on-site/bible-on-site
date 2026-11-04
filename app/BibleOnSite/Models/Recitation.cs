@@ -16,15 +16,28 @@ public sealed record RecitationTrack(int PerekId, string AudioUrl, string AudioS
     [JsonIgnore]
     public string PlaybackFileName => PlaybackSha256 + (Playback == null ? ".mp3" : ".ogg");
 
+    // The readers always pass PerekDataService's stored list, so the verdict is
+    // memoized by reference. Words is part of the key because `with` clones copy
+    // this cache while swapping Words.
+    // shortcut: a pasukim list mutated in place keeps its cached verdict; pass a
+    // new list instance when the content changes.
+    private (IReadOnlyList<Pasuk> Pasukim, List<RecitationWord> Words, bool Result)? _matchCache;
+
     public bool Matches(IReadOnlyList<Pasuk> pasukim)
     {
+        if (_matchCache is { } cached && ReferenceEquals(cached.Pasukim, pasukim) && ReferenceEquals(cached.Words, Words))
+        {
+            return cached.Result;
+        }
         var canonical = pasukim.SelectMany(p => p.Segments.Select((s, i) => (p.PasukNum, Segment: i + 1, s.Type, s.Value)))
             .Where(s => s.Type == SegmentType.Qri && s.Value.Any(c => c >= 'א' && c <= 'ת'))
             .Select(s => new RecitationWord(s.PasukNum, s.Segment, s.Value, null, null)).ToList();
         var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
             string.Join("\n", canonical.Select(w => $"{w.Pasuk}:{w.Segment}:{w.Text}")))));
-        return hash == TextSha256 && (AlignmentStatus != "ready" || canonical.Select(w => (w.Pasuk, w.Segment, w.Text))
+        var result = hash == TextSha256 && (AlignmentStatus != "ready" || canonical.Select(w => (w.Pasuk, w.Segment, w.Text))
             .SequenceEqual(Words.Select(w => (w.Pasuk, w.Segment, w.Text))));
+        _matchCache = (pasukim, Words, result);
+        return result;
     }
 
     public void Validate()
