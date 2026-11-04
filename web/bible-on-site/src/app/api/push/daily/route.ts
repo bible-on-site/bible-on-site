@@ -76,9 +76,13 @@ export async function POST(request: Request) {
 	}
 	// Only the absent-body broadcast may omit `endpoint`: a supplied body is a
 	// targeting request, so a missing or mistyped key fails closed as 400.
-	const endpoint = (body as { endpoint?: unknown } | null)?.endpoint;
-	if (body !== null && !isPushServiceEndpoint(endpoint)) {
-		return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
+	let endpoint: string | undefined;
+	if (body !== null) {
+		const candidate = (body as { endpoint?: unknown }).endpoint;
+		if (!isPushServiceEndpoint(candidate)) {
+			return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
+		}
+		endpoint = candidate;
 	}
 	const day = resolveCalendarDay(constructTsetAwareHDate(getCurrentDate()));
 	if (day.status !== "study" || day.perekId === undefined) {
