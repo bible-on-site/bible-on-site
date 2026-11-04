@@ -812,19 +812,19 @@ mod tests {
     fn validate_alias_spec_rejects_each_bad_shape() {
         let target = target_input("e1", None);
         assert_eq!(
-            validate_alias_spec("", &[target.clone()])
+            validate_alias_spec("", std::slice::from_ref(&target))
                 .unwrap_err()
                 .to_string(),
             "שם הכתובת חייב להיות מלא"
         );
         assert_eq!(
-            validate_alias_spec("a/b", &[target.clone()])
+            validate_alias_spec("a/b", std::slice::from_ref(&target))
                 .unwrap_err()
                 .to_string(),
             "שם הכתובת אינו יכול להכיל '/'"
         );
         assert_eq!(
-            validate_alias_spec(&"א".repeat(256), &[target.clone()])
+            validate_alias_spec(&"א".repeat(256), std::slice::from_ref(&target))
                 .unwrap_err()
                 .to_string(),
             "שם הכתובת ארוך מדי (עד 255 תווים)"
