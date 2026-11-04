@@ -21,5 +21,7 @@ export default defineConfig({
 		command: "bun run start",
 	},
 	fullyParallel: false,
+	// Timing profiles require an idle browser host, including across projects.
+	workers: 1,
 	retries: process.env.CI ? 4 : 0,
 });

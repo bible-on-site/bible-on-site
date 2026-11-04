@@ -82,10 +82,8 @@ if (!related) {
 	process.exit(runIn(resolve(dir), fullCommand));
 }
 
-// Filenames cmd.exe would re-interpret can't safely join the shelled argv on
-// Windows (spawn only concatenates args — &, %, ^, quotes and whitespace break
-// out of the command line) — they take the full-suite path too. POSIX spawns
-// argv verbatim, but one rule keeps behavior identical across platforms.
+// Keep the conservative full-suite selection for unusual filenames consistent
+// across platforms. The native process launch still passes each path literally.
 const UNSAFE_ARG_PATTERN = /[\s&%^!"'|<>]/;
 const isFullSuiteChange = (file) =>
 	UNSAFE_ARG_PATTERN.test(file) ||

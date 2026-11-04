@@ -1,6 +1,7 @@
 import { closeSync, openSync, readSync, fstatSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { iosAppLogPids, iosAppPids } from './ios-processes.mjs';
+import { posix, resolve } from 'node:path';
+import { iosAppLogPids } from './ios-processes.mjs';
+import { ownedIosTestAppProcesses } from './ios-app-cleanup.mjs';
 import { captureNativeFrame } from './native-logs.mjs';
 
 // Read only a bounded tail of the existing device-scoped stream. No process
@@ -20,7 +21,8 @@ function errorDetails(error) {
     signal: error.signal, stdout: error.stdout, stderr: error.stderr };
 }
 
-export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execute, now = Date.now, signal: handoffSignal }) {
+export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execute, inspectorPath, devicesRoot,
+  now = Date.now, signal: handoffSignal }) {
   const remaining = Math.min(15000, Date.parse(deadlineUtc) - now());
   if (!Number.isSafeInteger(pid) || pid <= 1) return { status: 'unknown', pid: null };
   if (!Number.isFinite(remaining) || remaining <= 0) return { status: 'expired', pid };
@@ -28,37 +30,51 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
   const signal = handoffSignal ? AbortSignal.any([handoffSignal, deadlineSignal]) : deadlineSignal;
   try {
     signal.throwIfAborted();
-    const listing = await execute('xcrun', ['simctl', 'spawn', udid, 'launchctl', 'list'],
-      { timeout: 5000, signal });
+    if (typeof inspectorPath !== 'string' || !posix.isAbsolute(inspectorPath)) {
+      throw new Error('Require the prepared native iOS process inspector.');
+    }
+    // The simulator may be the stalled component. Confirm only the pinned
+    // PID through the host kernel, without another CoreSimulator RPC or ps's
+    // Mach task inspection. The executable path proves this device owns it.
+    const listing = await execute(inspectorPath, [String(pid)],
+      { timeout: 5000, signal, windowsHide: true });
+    if (listing.stderr?.trim()) throw new Error(`App process inspection failed: ${listing.stderr.trim()}`);
     writeFileSync(`${prefix}-processes.txt`, listing.stdout);
-    const observedPids = iosAppPids(listing.stdout).map(Number);
+    const observedPids = ownedIosTestAppProcesses(listing.stdout, udid, devicesRoot)
+      .filter(record => !record.state.startsWith('Z')).map(record => record.pid);
     if (!observedPids.includes(pid)) {
       return { status: 'exited', pid, observedPids,
         reason: 'Pinned process is no longer this device\'s running app; no replacement sampled.' };
     }
+    writeFileSync(`${prefix}-process-${pid}.txt`, listing.stdout);
     let frameError;
     signal.throwIfAborted();
-    try {
-      await execute('xcrun', ['simctl', 'io', udid, 'screenshot', `${prefix}.png`],
-        { timeout: 5000, signal });
-    } catch (error) {
-      frameError = errorDetails(error);
-      writeFileSync(`${prefix}-screenshot-error.json`, JSON.stringify(frameError, null, 2));
-    }
-    signal.throwIfAborted();
-    const stats = await execute('ps', ['-p', String(pid), '-o', 'pid,ppid,%cpu,rss,state'],
-      { timeout: 5000, signal });
-    writeFileSync(`${prefix}-process-${pid}.txt`, stats.stdout);
     // Existing 10s debugger cap, within the same 15s overall failure budget.
     // This branch runs only after the test has actually failed and while its
     // request/ack handoff prevents the following scenario from relaunching.
-    signal.throwIfAborted();
-    const captured = await execute('sudo', ['-n', 'xcrun', 'lldb', '--no-lldbinit', '--batch',
-      '--one-line-before-file', 'settings set target.preload-symbols false',
-      '--one-line-before-file', 'settings set target.detach-on-error true',
-      '--attach-pid', String(pid), '--one-line', 'thread backtrace -c 40 all',
-      '--one-line', 'process detach'], { timeout: 10000, signal });
-    writeFileSync(`${prefix}-stack-${pid}.txt`, captured.stdout + captured.stderr);
+    // Capture the frame and stack independently: a stuck screenshot must not
+    // consume the debugger's budget. Both finish before acknowledging failure.
+    const [frame, stack] = await Promise.allSettled([
+      (async () => {
+        try {
+          await execute('xcrun', ['simctl', 'io', udid, 'screenshot', `${prefix}.png`],
+            { timeout: 5000, signal });
+        } catch (error) {
+          frameError = errorDetails(error);
+          writeFileSync(`${prefix}-screenshot-error.json`, JSON.stringify(frameError, null, 2));
+        }
+      })(),
+      (async () => {
+        const captured = await execute('sudo', ['-n', 'xcrun', 'lldb', '--no-lldbinit', '--batch',
+          '--one-line-before-file', 'settings set target.preload-symbols false',
+          '--one-line-before-file', 'settings set target.detach-on-error true',
+          '--attach-pid', String(pid), '--one-line', 'thread backtrace -c 40 all',
+          '--one-line', 'process detach'], { timeout: 10000, signal });
+        writeFileSync(`${prefix}-stack-${pid}.txt`, captured.stdout + captured.stderr);
+      })(),
+    ]);
+    if (stack.status === 'rejected') throw stack.reason;
+    if (frame.status === 'rejected') throw frame.reason;
     return { status: frameError ? 'error' : 'captured', pid, ...(frameError ? { frameError } : {}) };
   } catch (error) {
     const details = errorDetails(error);
@@ -67,7 +83,7 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
   }
 }
 
-export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
+export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute, inspectorPath, devicesRoot,
   readPid = () => readLoggedIosAppPid(nativeLog), now = Date.now }) {
   const records = [];
   return {
@@ -104,7 +120,7 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
       const prefix = resolve(artifacts, `native-failure-${request.id}`);
       const result = record
         ? await samplePinnedIosApp({ udid, pid: record.pid, prefix,
-          deadlineUtc: request.deadlineUtc, execute, now, signal })
+          deadlineUtc: request.deadlineUtc, execute, inspectorPath, devicesRoot, now, signal })
         : { status: 'unknown', pid: null, reason: 'No pending or failed request had a passively pinned app identity.' };
       writeFileSync(`${prefix}.json`, JSON.stringify({ request, observation: record ?? null, result }, null, 2));
       return result;

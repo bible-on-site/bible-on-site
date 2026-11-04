@@ -4,7 +4,23 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { BookmarkProvider } from "html-flip-book-react";
 import { renderPasukWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
+import {
+	RecitationWordControl,
+	useRecitationEnabled,
+} from "@/app/929/[number]/components/RecitationPlayer";
 import { sampleImage } from "./perek-image-fixture";
+
+jest.mock("@/app/929/[number]/components/RecitationPlayer", () => {
+	const actual = jest.requireActual(
+		"@/app/929/[number]/components/RecitationPlayer",
+	);
+	return {
+		__esModule: true,
+		...actual,
+		RecitationWordControl: jest.fn(actual.RecitationWordControl),
+		useRecitationEnabled: jest.fn(actual.useRecitationEnabled),
+	};
+});
 
 jest.mock("@/app/929/[number]/components/pasuk-renderer", () => {
 	const actual = jest.requireActual(
@@ -149,6 +165,15 @@ jest.mock("@/app/components/Bookshelf", () => ({
 		) : null,
 }));
 
+jest.mock("@/app/components/ReadingProgress", () => ({
+	ReadingProgress: ({ units }: { units: { key: string | null }[] }) => (
+		<span
+			data-testid="reading-progress"
+			data-unit-keys={units.map((unit) => unit.key).join(",")}
+		/>
+	),
+}));
+
 jest.mock("@/data/db/tanah-view-types", () => ({
 	isQriDifferentThanKtiv: (segment: { value: string }) =>
 		segment.value === "בְּרֵאשִׁית",
@@ -259,6 +284,34 @@ const Sefer = (props: Omit<ComponentProps<typeof SeferContents>, "sefer">) => (
 );
 
 describe("Sefer component", () => {
+	it("does not mount word controls while listening is inactive", () => {
+		jest.mocked(RecitationWordControl).mockClear();
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		expect(screen.getByTestId("mock-flipbook")).toHaveTextContent("הָאָ֖רֶץ");
+		expect(RecitationWordControl).not.toHaveBeenCalled();
+	});
+	it("mounts word controls when listening is enabled", () => {
+		jest.mocked(useRecitationEnabled).mockReturnValueOnce(true);
+		jest.mocked(RecitationWordControl).mockClear();
+		render(
+			<Sefer
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1]}
+			/>,
+		);
+		expect(RecitationWordControl).toHaveBeenCalledTimes(2);
+		expect(screen.getByTestId("mock-flipbook")).toHaveTextContent("הָאָ֖רֶץ");
+	});
+
 	it("builds scripture only when its page enters the mounted book window", async () => {
 		const summaries = Promise.resolve({});
 		mockGetPerekSummariesBatch.mockReturnValueOnce(summaries);
@@ -329,6 +382,62 @@ describe("Sefer component", () => {
 		await act(async () => finish({ "2": { articles: [], perushim: [] } }));
 		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
 	});
+	it("refreshes reading metrics without rebuilding scripture", async () => {
+		let finish!: (value: unknown) => void;
+		mockGetPerekSummariesBatch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer: { ...original, perakim: [chapter, chapter] },
+			perekMetric: { wordCount: 20, estimatedSeconds: 120 },
+			perekPasukUnits: [{ key: "current", wordCount: 20, cumulativeWords: 0 }],
+		};
+		const { container, rerender } = render(<SeferContents {...props} />);
+		const page = (id: number) =>
+			container.querySelector(`[data-sefer-perek="${id}"]`);
+		expect(page(1)).toHaveTextContent("2 דקות");
+		expect(page(2)?.querySelector(".pageHeaderMetric")).toBeNull();
+		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
+		await act(async () =>
+			finish({
+				"2": {
+					articles: [],
+					perushim: [],
+					perekMetric: { wordCount: 70, estimatedSeconds: 420 },
+					pasukUnits: [{ key: "later", wordCount: 70, cumulativeWords: 0 }],
+				},
+			}),
+		);
+		expect(page(2)).toHaveTextContent("7 דקות");
+		expect(
+			page(2)?.querySelector('[data-testid="reading-progress"]'),
+		).toHaveAttribute("data-unit-keys", "later");
+		rerender(
+			<SeferContents
+				{...props}
+				perekMetric={{ wordCount: 30, estimatedSeconds: 180 }}
+				perekPasukUnits={[
+					{ key: "updated", wordCount: 30, cumulativeWords: 0 },
+				]}
+			/>,
+		);
+		expect(page(1)).toHaveTextContent("3 דקות");
+		expect(
+			page(1)?.querySelector('[data-testid="reading-progress"]'),
+		).toHaveAttribute("data-unit-keys", "updated");
+		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
 	it("updates commentary selection without rebuilding scripture", () => {
 		render(
 			<Sefer
@@ -353,6 +462,52 @@ describe("Sefer component", () => {
 		act(() => panel().onNavigate());
 		expect(panel().initialSlug).toBeUndefined();
 		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("keeps chapter navigation stable across turns and refreshes it for a new corpus", async () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2, 3],
+			sefer: { ...original, perakim: [chapter, chapter, chapter] },
+		};
+		const previousUrl = location.pathname + location.search;
+		const previousState = history.state;
+		const view = render(<SeferContents {...props} />);
+		const navigate = (index: number) => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{
+				children: React.ReactElement<{ onNavigate: (slug?: string) => void }>;
+			}>[];
+			return pages[4 + index * 2].props.children.props.onNavigate;
+		};
+		try {
+			await act(async () => {});
+			const before = [navigate(0), navigate(1), navigate(2)];
+			mockGetCurrentPageIndex.mockReturnValue(5);
+			await act(async () =>
+				(
+					capturedFlipBookProps.handlers as { onPageFlipped: () => void }
+				).onPageFlipped(),
+			);
+			for (const [index, callback] of before.entries())
+				expect(navigate(index)).toBe(callback);
+			act(() => navigate(2)("222"));
+			expect(location.pathname).toBe("/929/3/222");
+			await act(async () =>
+				view.rerender(<SeferContents {...props} perekIds={[11, 12, 13]} />),
+			);
+			expect(navigate(1)).not.toBe(before[1]);
+			act(() => navigate(1)());
+			expect(location.pathname + location.search).toBe("/929/12?book");
+		} finally {
+			view.unmount();
+			history.replaceState(previousState, "", previousUrl);
+		}
 	});
 	it("refreshes scripture when the book corpus changes", () => {
 		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
@@ -388,6 +543,12 @@ describe("Sefer component", () => {
 	});
 
 	beforeEach(() => {
+		jest
+			.mocked(useRecitationEnabled)
+			.mockImplementation(
+				jest.requireActual("@/app/929/[number]/components/RecitationPlayer")
+					.useRecitationEnabled,
+			);
 		mockVisiblePageIndices = undefined;
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
@@ -434,6 +595,50 @@ describe("Sefer component", () => {
 			history.replaceState(history.state, "", "/929/2?book");
 		});
 		expect(blankProps().initialSlug).toBeUndefined();
+	});
+
+	it("keeps the active content title when a background chapter publishes or cleans up", async () => {
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const previousUrl = location.pathname + location.search + location.hash;
+		const previousState = history.state;
+		const rendered = render(
+			<SeferContents
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2]}
+				sefer={{ ...original, perakim: [chapter, chapter] }}
+			/>,
+		);
+		const panel = (index: number) => {
+			const pages = capturedFlipBookProps.pages as React.ReactElement<{
+				children: React.ReactElement<{
+					onNavigate: (slug?: string) => void;
+					onContentTitle?: (title: string | null) => void;
+				}>;
+			}>[];
+			return pages[4 + index * 2].props.children.props;
+		};
+		try {
+			await act(async () =>
+				(
+					capturedFlipBookProps.handlers as { onPageFlipped: () => void }
+				).onPageFlipped(),
+			);
+			act(() => panel(1).onNavigate("222"));
+			const activeTitle = 'תוכן פעיל | תנ"ך על הפרק';
+			act(() => panel(1).onContentTitle?.(activeTitle));
+			expect(document.title).toBe(activeTitle);
+			act(() => panel(0).onContentTitle?.(null));
+			expect(document.title).toBe(activeTitle);
+		} finally {
+			rendered.unmount();
+			history.replaceState(previousState, "", previousUrl);
+		}
 	});
 
 	it("activates commentary only on the displayed chapter and pauses it on the TOC or close", async () => {
