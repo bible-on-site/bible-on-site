@@ -112,6 +112,16 @@ task ARN and return fractional expiration seconds while subsequent reads use
 the long ARN and whole seconds; normalize only those verified observations.
 An uncertain grant is preserved for investigation rather than cleared blindly.
 
+After an owned protection-clear receipt is acknowledged and protection is read
+back as disabled, ECS can retire the old task before its temporary tag is
+removed. ECS tag APIs reject stopped tasks with `InvalidParameterException`.
+In that case, describe the exact task and require its original account, region,
+cluster, API service group and terminal `STOPPED` status (both current and desired).
+Record the retired marker and finish release without another tag write. A running
+or ambiguous task, an unconfirmed clear, or another API error still fails closed.
+This state transition avoids unnecessary rollback after a healthy replacement
+became visible; it does not extend any protection or deployment deadline.
+
 ## Switch architecture and retain release continuity
 
 Register the otherwise equivalent ARM64 definition against the qualified
@@ -138,6 +148,17 @@ per second, with a 2-second whole-request deadline and no retries. Reuse verifie
 TLS connections and authoritative DNS TTLs; never increase deadlines to hide
 client-side DNS/TLS setup or a real 502. Save the complete pass/failure journal
 as the workflow's API handover artifact, without task-definition secrets.
+
+Archive uploads must run as asynchronous child processes while this monitor is
+active. Wait for each upload to close successfully before verifying its immutable
+child and publishing the index; retain the isolated Docker credentials directory
+until publication finishes. A synchronous `crane push` blocks network callbacks
+and deadline timers in the deployment process. In API deployment
+[41822586920](https://github.com/bible-on-site/bible-on-site/actions/runs/41822586920/job/126549154705),
+the images reached ECR but a public probe stalled during upload, so the owner
+refused to start the ECS rollout and released its task protection. Replaying that
+release with current automation can reuse the verified published images; it
+still requires a fresh healthy baseline and the full protected runtime handover.
 
 After the pinned ARM deployment passes, restore the ordinary ARM task
 definition's image reference to the verified multiarch `latest` index and
