@@ -15,7 +15,7 @@ impl StarterQuery {
     async fn starter(&self, ctx: &Context<'_>) -> Result<Starter> {
         let db = ctx.data::<Database>()?;
 
-        // Fetch authors, articles, and counts in parallel-friendly single queries
+        // Fetch authors and article summaries; counts derive from the rows in memory
         let authors = authors_service::find_all(db)
             .await
             .map_err(|e| e.extend())?;
@@ -24,13 +24,9 @@ impl StarterQuery {
             .await
             .map_err(|e| e.extend())?;
 
-        let author_article_counts = articles_service::count_by_author(db)
-            .await
-            .map_err(|e| e.extend())?;
-
-        let perek_articles_counters = articles_service::count_by_perek(db)
-            .await
-            .map_err(|e| e.extend())?;
+        // Counts derive from the rows already fetched — no extra aggregate scans
+        let author_article_counts = articles_service::count_by_author(&all_articles);
+        let perek_articles_counters = articles_service::count_by_perek(&all_articles);
 
         // Map authors with their pre-computed article counts
         let authors_with_counts: Vec<Author> = authors
@@ -68,8 +64,7 @@ impl StarterQuery {
 mod tests {
     use super::*;
     use entities::{article, article_covering_source, author, tanah_article_metric};
-    use sea_orm::{DatabaseBackend, MockDatabase, Value};
-    use std::collections::BTreeMap;
+    use sea_orm::{DatabaseBackend, MockDatabase};
 
     fn article_model(id: i32) -> article::Model {
         article::Model {
@@ -92,15 +87,6 @@ mod tests {
         }
     }
 
-    fn count_row(key: &str, id: i16, count: i64) -> BTreeMap<String, Value> {
-        [
-            (key.to_string(), Value::from(id)),
-            ("count".to_string(), Value::from(count)),
-        ]
-        .into_iter()
-        .collect()
-    }
-
     /// Selecting `articles { coveringSources }` on `starter` batch-loads the
     /// full article table's sources in one IN query — never one per article.
     #[tokio::test]
@@ -112,12 +98,6 @@ mod tests {
                     article_model(1),
                     article_model(2),
                 ]])
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![count_row("author_id", 1, 2)],
-                ])
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    Vec::<BTreeMap<String, Value>>::new(),
-                ])
                 .append_query_results::<tanah_article_metric::Model, Vec<_>, _>([Vec::<
                     tanah_article_metric::Model,
                 >::new(
