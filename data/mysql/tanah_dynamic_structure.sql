@@ -63,6 +63,11 @@ CREATE TABLE `tanah_article` (
     -- verified coverage and drive verse/range lookups.
     `coverage_verified` boolean NOT NULL DEFAULT FALSE,
     `content` mediumtext,
+    -- Stored fingerprint of the indexable fields; the article-search reconcile
+    -- sweep diffs this column instead of re-hashing `content` (the largest
+    -- column) for every row on each sweep. Keep the expression identical to
+    -- tanah_article_content_hash_upgrade.sql.
+    `content_hash` binary(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(`name`, ''), IFNULL(`abstract`, ''), IFNULL(`content`, ''), `perek_id`, `author_id`)))) STORED,
     PRIMARY KEY (`id`),
     KEY `idx_article_perek` (`perek_id`),
     KEY `idx_article_author` (`author_id`)
