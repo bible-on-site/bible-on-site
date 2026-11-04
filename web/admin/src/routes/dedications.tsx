@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	type AdminDedication,
 	type DedicationTargetInput,
@@ -43,6 +43,17 @@ interface FormState {
 	targets: TargetRow[];
 }
 
+const SEARCH_DEBOUNCE_MS = 350;
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const t = setTimeout(() => setDebounced(value), delayMs);
+		return () => clearTimeout(t);
+	}, [value, delayMs]);
+	return debounced;
+}
+
 const emptyForm = (): FormState => ({ id: null, subject: "", purposeTypeIds: [], expiresAt: "", targets: [] });
 
 /** datetime-local input value <-> stored UTC "YYYY-MM-DD HH:mm:ss". */
@@ -52,12 +63,13 @@ const toInputExpiry = (value: string | null) => (value ? value.replace(" ", "T")
 function DedicationsPage() {
 	const queryClient = useQueryClient();
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 	const [show, setShow] = useState<"active" | "expired" | "all">("active");
 	const [form, setForm] = useState<FormState | null>(null);
 
 	const { data: dedications, isLoading } = useQuery({
-		queryKey: ["dedications", search, show],
-		queryFn: () => listDedications({ data: { search, show } }),
+		queryKey: ["dedications", debouncedSearch, show],
+		queryFn: () => listDedications({ data: { search: debouncedSearch, show } }),
 	});
 	const { data: types, isLoading: typesLoading } = useQuery({ queryKey: ["dedication-types"], queryFn: () => getDedicationTypes() });
 	const { data: targetOptions } = useQuery({

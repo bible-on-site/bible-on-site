@@ -54,7 +54,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
             Acknowledge(Path.Join(_directory, $"{id}.request.json"));
             await ReplyAsync(id, stream, cancellation);
         });
-        await Task.Run(() => FailureDiagnostics.WaitForCapture(_directory, "test identity", "session identity", _log.Add,
+        await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test identity", "session identity", _log.Add,
             TimeSpan.FromSeconds(1), request =>
             {
                 using var json = JsonDocument.Parse(File.ReadAllText(request));
@@ -81,7 +81,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
             await stream.ReadAsync(new byte[1], cancellation);
         });
         var timer = Stopwatch.StartNew();
-        await Task.Run(() => FailureDiagnostics.WaitForCapture(_directory, "test", null, _log.Add,
+        await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test", null, _log.Add,
             TimeSpan.FromMilliseconds(50), notificationPort: supervisor.Port));
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds(2));
         Assert.Contains(_log, line => line.Contains("acknowledgement was not received"));
@@ -127,7 +127,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 await stream.WriteAsync(new byte[] { 1 }, cancellation);
             }
         });
-        await Task.Run(() => FailureDiagnostics.WaitForCapture(_directory, "test", null, _log.Add,
+        await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test", null, _log.Add,
             TimeSpan.FromSeconds(1), notificationPort: supervisor.Port));
         await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Contains(_log, line => line.Contains("handshake failed"));
@@ -152,7 +152,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
         Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, supervisor.Port);
         var failure = new InvalidOperationException("original scenario failure");
         var scenario = new FakeDeviceTest(new ListOutput(_log), new FakeSession(artifacts));
-        var continuation = Task.Run(() => Assert.Throws<InvalidOperationException>(() => scenario.Execute(() => throw failure)));
+        var continuation = StartClient(() => Assert.Throws<InvalidOperationException>(() => scenario.Execute(() => throw failure)));
         await observed.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.False(continuation.IsCompleted);
         Assert.False(Directory.Exists(artifacts));
@@ -234,6 +234,14 @@ public sealed class FailureDiagnosticsTests : IDisposable
 
         Assert.Equal("existing file must survive", File.ReadAllText(artifacts));
     }
+    // The synchronous client must not occupy the pool used by this in-process
+    // asynchronous supervisor. Production uses a separate supervisor process.
+    private static Task StartClient(Action operation) =>
+        Task.Factory.StartNew(operation, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task<T> StartClient<T>(Func<T> operation) =>
+        Task.Factory.StartNew(operation, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     private static void Acknowledge(string request)
     {
         var ack = request.Replace(".request.json", ".ack.json", StringComparison.Ordinal);

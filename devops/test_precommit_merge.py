@@ -1,5 +1,6 @@
 """Exercise the module hook runner: merge-aware gating and --related narrowing."""
 
+import json
 import shutil
 import subprocess  # nosec B404: fixed test fixture commands, argument vectors, no shell.
 import tempfile
@@ -137,6 +138,36 @@ class PrecommitRelatedTests(unittest.TestCase):
             f"../../{related}",
             "related",
         )
+
+    def test_native_commands_preserve_literal_arguments_without_shell_warnings(self):
+        self.write(
+            "probe argv.mjs",
+            "console.log(JSON.stringify(process.argv.slice(2)))\n",
+        )
+        self.write("web/mod/src/example.ts", "changed")
+        self.git("add", ".")
+        arguments = ["two words", "a&b", "c|d", "single'quote", 'double"quote']
+        for capturing in (False, True):
+            with self.subTest(capturing=capturing):
+                command = ["web/mod", NODE, "../../probe argv.mjs", *arguments]
+                expected = arguments
+                if capturing:
+                    command = [
+                        "--related",
+                        "web/mod",
+                        NODE,
+                        "../../probe argv.mjs",
+                        "full",
+                        "::",
+                        NODE,
+                        "../../probe argv.mjs",
+                        *arguments,
+                    ]
+                    expected = [*arguments, "src/example.ts"]
+                result = self.run_hook(*command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout.splitlines()[-1]), expected)
+                self.assertNotIn("DEP0190", result.stderr)
 
     def test_related_appends_module_relative_staged_files(self):
         self.write("web/mod/src/example.ts", "changed")
