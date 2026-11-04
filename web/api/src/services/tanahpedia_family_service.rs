@@ -2367,6 +2367,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn find_persons_by_name_skips_person_query_when_no_entities_match() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let results = find_persons_by_name(&db, "יעקב".to_string())
+            .await
+            .expect("should query");
+
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
     async fn get_person_unions_rejects_blank_person_id() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
@@ -2426,6 +2440,100 @@ mod tests {
             unions[0].person_source_citation.as_deref(),
             Some("בראשית כט טז")
         );
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_returns_empty_when_no_unions_exist() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert!(unions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_falls_back_to_empty_name_when_other_person_row_is_missing() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![
+                union_model(
+                    "union-1",
+                    "yaakov",
+                    "leah",
+                    Some(1),
+                    Some("בראשית כט"),
+                    Some("בראשית כט טז"),
+                ),
+            ]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![union_type_model("ut-marriage", "MARRIAGE")],
+            ])
+            .append_query_results::<lookup_union_end_reason::Model, Vec<lookup_union_end_reason::Model>, _>([
+                vec![lookup_union_end_reason::Model {
+                    id: "uer-death".to_string(),
+                    name: "DEATH".to_string(),
+                }],
+            ])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert_eq!(unions.len(), 1);
+        assert_eq!(unions[0].other_person_id, "leah");
+        assert_eq!(unions[0].other_display_name, "");
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_resolves_display_name_when_queried_person_is_person2() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![
+                union_model(
+                    "union-1",
+                    "yaakov",
+                    "leah",
+                    Some(1),
+                    Some("בראשית כט"),
+                    Some("בראשית כט טז"),
+                ),
+            ]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![union_type_model("ut-marriage", "MARRIAGE")],
+            ])
+            .append_query_results::<lookup_union_end_reason::Model, Vec<lookup_union_end_reason::Model>, _>([
+                vec![lookup_union_end_reason::Model {
+                    id: "uer-death".to_string(),
+                    name: "DEATH".to_string(),
+                }],
+            ])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "yaakov",
+                "entity-yaakov",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-yaakov",
+                "יעקב",
+            )]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "leah".to_string())
+            .await
+            .expect("should query");
+
+        assert_eq!(unions.len(), 1);
+        assert_eq!(unions[0].other_person_id, "yaakov");
+        assert_eq!(unions[0].other_display_name, "יעקב");
     }
 
     #[tokio::test]
@@ -2578,6 +2686,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_entity_tanah_sources_skips_perek_query_when_no_sources_exist() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let sources = get_entity_tanah_sources(&db, "entity-bilhah".to_string())
+            .await
+            .expect("should query");
+
+        assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
     async fn get_person_parent_child_rejects_blank_person_id() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
@@ -2634,6 +2758,50 @@ mod tests {
         assert!(links[0].queried_is_parent);
         assert_eq!(links[0].other_person_id, "yosef");
         assert_eq!(links[0].other_display_name, "יוסף");
+    }
+
+    #[tokio::test]
+    async fn get_person_parent_child_marks_queried_side_when_person_is_child() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_parent_child::Model, Vec<person_parent_child::Model>, _>(
+                [vec![parent_child_model(
+                    "pc-1",
+                    "yaakov",
+                    "yosef",
+                    Some("בראשית ל כד"),
+                )]],
+            )
+            .append_query_results::<lookup_parent_child_type::Model, Vec<lookup_parent_child_type::Model>, _>(
+                [vec![lookup_parent_child_type::Model {
+                    id: "pct-biological".to_string(),
+                    name: "BIOLOGICAL".to_string(),
+                }]],
+            )
+            .append_query_results::<lookup_parent_role::Model, Vec<lookup_parent_role::Model>, _>([
+                vec![lookup_parent_role::Model {
+                    id: "pr-father".to_string(),
+                    name: "FATHER".to_string(),
+                }],
+            ])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "yaakov",
+                "entity-yaakov",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-yaakov",
+                "יעקב",
+            )]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let links = get_person_parent_child(&db, "yosef".to_string())
+            .await
+            .expect("should query");
+
+        assert_eq!(links.len(), 1);
+        assert!(!links[0].queried_is_parent);
+        assert_eq!(links[0].other_person_id, "yaakov");
+        assert_eq!(links[0].other_display_name, "יעקב");
     }
 
     #[tokio::test]
