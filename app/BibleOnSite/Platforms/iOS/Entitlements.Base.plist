@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shared with the AssetPackDownloader extension so Background Assets can
+	     coordinate managed asset-pack downloads between the two processes. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.tanah.daily929.assets</string>
+	</array>
+	<!-- #1097: no aps-environment — the App ID's Push Notifications capability
+	     is not enabled yet, so none of the provisioning profiles authorize
+	     `aps-environment` and signing with it would fail codesign and
+	     ios_signing_requirements validation. Once the operator enables the
+	     capability and regenerates the profiles, pass
+	     -p:IosPushProvisioned=true to sign with Entitlements.App.plist
+	     (development) / Entitlements.Dist.plist (production) instead. -->
+</dict>
+</plist>
