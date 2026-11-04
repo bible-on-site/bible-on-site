@@ -5,6 +5,33 @@ first turn and immediate consecutive turns independently. It covers Numbers and
 Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
+The latest site repair reuses immutable bookmark-label children while their
+visible text and cover color are unchanged. The native provider still refreshes
+on navigation; fresh equivalent bookmark objects no longer recreate all the
+React children. Before-failing guards count 16/96 new compact and expanded nodes
+before the repair and zero afterward. Changed references, titles and provider
+colors still update. All 58 related unit tests pass, and the new helper has
+100% line, statement, function and branch coverage.
+
+The full registry production build preserves all 24 page-image comparisons and
+eight character-position comparisons exactly. The actual HTTP-loaded provider
+also reuses all 36 compact and expanded tab nodes. All 35 Linux performance
+checks pass. Windows passes 12/13 checks: the first Numbers moving-bookmark drag
+still reaches 50.1ms cadence p95 against the unchanged 50ms limit. Every
+consecutive-turn scope passes. This miss remains a failure, with its original
+samples and separate profile retained; these results do not replace hosted CI
+or establish public delivery.
+
+| Before static-label reuse | After static-label reuse |
+| --- | --- |
+| ![Held Kings page before label reuse](images/sefer-turn-lag/reader-static-bookmarks-before.png) | ![Identical held Kings page after label reuse](images/sefer-turn-lag/reader-static-bookmarks-after.png) |
+
+The [latest hosted run before that site repair](https://github.com/bible-on-site/bible-on-site/actions/runs/41848253815/job/126638364228)
+fails 11 cadence cases and passes 26 checks. Its deliberate-stall control passes.
+All failed scopes and samples remain in the evidence record. The public site
+still serves 0.2.620; its fresh full baseline fails all twelve reader cases,
+including moving bookmarks on their first turn.
+
 The [normal master run after #2943](https://github.com/bible-on-site/bible-on-site/actions/runs/41769850982/job/126384514699)
 failed two first-turn cadence checks: moving-bookmark dragging in Numbers and
 hidden-bookmark dragging in Kings each reached 50.1ms against the unchanged
