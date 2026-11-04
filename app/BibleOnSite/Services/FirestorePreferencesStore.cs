@@ -31,8 +31,11 @@ public sealed class FirestorePreferencesStore : IPreferencesCloudStore
 
     public async Task SaveAsync(string userId, PreferencesCloudDocument document, CancellationToken cancellationToken)
     {
+        // Merge(), not a plain set: only the fields this device merged are
+        // written, so keys another device saved between our fetch and this
+        // write survive instead of being overwritten by a stale snapshot.
         await DocumentFor(userId)
-            .SetDataAsync(PreferencesCloudCodec.ToFirestoreMap(document))
+            .SetDataAsync(PreferencesCloudCodec.ToFirestoreMap(document), SetOptions.Merge())
             .WaitAsync(cancellationToken);
     }
 }

@@ -237,6 +237,49 @@ public class PreferencesSyncServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RejectedRemoteValue_IsHealedWithLocalValue_AndNeverClaimsStamp()
+    {
+        _preferences.Load(); // fontFactor stays at its 1.0 default, unstamped
+        await SeedRemoteAsync(RemoteDoc(("fontFactor", "not-a-number", 5_000)));
+
+        await StartSignedInAsync();
+
+        // The unparseable remote value is ignored locally and healed remotely:
+        // the saved entry carries the current local value at the remote's own
+        // timestamp, so no device re-fails on it.
+        _preferences.FontFactor.Should().Be(1.0);
+        var healed = _store.Document!.Entries["fontFactor"];
+        healed.Value.Should().Be(1.0);
+        healed.UpdatedAtMs.Should().Be(5_000);
+        _storage.GetStampsSnapshot().Should().NotContainKey("fontFactor");
+
+        // Converged: the healed document applies cleanly, no further write.
+        var saves = _store.SaveCount;
+        await _sync.SyncNowAsync();
+        _store.SaveCount.Should().Be(saves);
+    }
+
+    [Fact]
+    public async Task FutureDatedRemoteEntry_DoesNotBlockLaterLocalEdits()
+    {
+        _preferences.Load();
+        // A device with a fast clock stamped this entry far in the future.
+        await SeedRemoteAsync(RemoteDoc(("fontFactor", 2.0, _now + 1_000_000)));
+
+        await StartSignedInAsync();
+        _preferences.FontFactor.Should().Be(2.0);
+
+        // The local edit happens after the remote entry was observed — the
+        // stamp floor keeps it winning despite the skewed remote clock.
+        _preferences.FontFactor = 1.7;
+        await _sync.PendingSync;
+
+        _preferences.FontFactor.Should().Be(1.7);
+        _store.Document!.Entries["fontFactor"].Value.Should().Be(1.7);
+        _store.Document.Entries["fontFactor"].UpdatedAtMs.Should().Be(_now + 1_000_000 + 1);
+    }
+
+    [Fact]
     public async Task UnknownRemoteKeys_PassThroughUnchanged_AndAreNotApplied()
     {
         _preferences.Load();

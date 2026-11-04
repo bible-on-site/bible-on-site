@@ -13,7 +13,9 @@ public interface IPreferencesCloudStore
     /// keep local".</summary>
     Task<PreferencesCloudDocument?> FetchAsync(string userId, CancellationToken cancellationToken);
 
-    /// <summary>Overwrites the user's document with the merged result.</summary>
+    /// <summary>Writes the merged result into the user's document. Only the
+    /// fields in <paramref name="document"/> are touched — entries a concurrent
+    /// device wrote after this device's fetch are left alone.</summary>
     Task SaveAsync(string userId, PreferencesCloudDocument document, CancellationToken cancellationToken);
 }
 
