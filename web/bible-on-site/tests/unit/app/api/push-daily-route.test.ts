@@ -88,6 +88,10 @@ describe("POST /api/push/daily", () => {
 			{ endpoint: "https://evil.example/fcm" },
 			{ endpoint: "http://fcm.googleapis.com/fcm/send/x" },
 			{ endpoint: 42 },
+			{ endpoint: null },
+			{ endpont: FCM }, // mistyped key must not broadcast
+			{ note: "all" },
+			{},
 		])("rejects an invalid targeting body %#", async (body) => {
 			expect((await call("Bearer s3cret", body)).status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
@@ -107,12 +111,6 @@ describe("POST /api/push/daily", () => {
 			});
 			expect(response.status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
-		});
-
-		it("broadcasts for a well-formed body without an endpoint", async () => {
-			const response = await call("Bearer s3cret", { note: "all" });
-			expect(response.status).toBe(200);
-			expect(mockSend).toHaveBeenCalledWith(expect.any(Number), undefined);
 		});
 
 		it("returns 500 when sending fails", async () => {

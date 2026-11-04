@@ -48,8 +48,9 @@ function isAuthorized(request: Request): boolean {
  * An optional JSON body `{"endpoint": "<push service URL>"}` restricts the
  * send to that single subscription — the controlled one-browser delivery
  * check the operator runs before the daily schedule is armed. An empty or
- * absent body broadcasts to every subscriber; a malformed, oversized or
- * non-object body is rejected so it can never broadcast by accident.
+ * absent body broadcasts to every subscriber; any supplied body must name a
+ * valid `endpoint`, so a malformed, oversized, non-object or mistyped body
+ * is rejected and can never broadcast by accident.
  *
  * Only study days notify: Shabbat, review days and days without a scheduled
  * perek return `{ skipped }` so subscribers are never pinged on those days,
@@ -73,8 +74,10 @@ export async function POST(request: Request) {
 	) {
 		return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 	}
+	// Only the absent-body broadcast may omit `endpoint`: a supplied body is a
+	// targeting request, so a missing or mistyped key fails closed as 400.
 	const endpoint = (body as { endpoint?: unknown } | null)?.endpoint;
-	if (endpoint !== undefined && !isPushServiceEndpoint(endpoint)) {
+	if (body !== null && !isPushServiceEndpoint(endpoint)) {
 		return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
 	}
 	const day = resolveCalendarDay(constructTsetAwareHDate(getCurrentDate()));
