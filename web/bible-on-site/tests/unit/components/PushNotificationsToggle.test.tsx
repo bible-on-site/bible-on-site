@@ -66,7 +66,6 @@ function setup(env: Env = {}) {
 		configurable: true,
 		value: userAgent,
 	});
-	window.matchMedia = jest.fn().mockReturnValue({ matches: false });
 	if (supported) {
 		Object.defineProperty(navigator, "serviceWorker", {
 			configurable: true,
@@ -140,25 +139,31 @@ describe("PushNotificationsToggle", () => {
 		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 
-	it("asks iOS readers to add the site to the home screen", async () => {
-		setup({ supported: false, userAgent: "Mozilla/5.0 (iPhone)" });
-		await renderToggle();
-		expect(screen.getByRole("status")).toHaveTextContent("מסך הבית");
-	});
-
-	it("treats touch-screen iPadOS as iOS", async () => {
-		setup({ supported: false, userAgent: "Mozilla/5.0 (Macintosh)" });
-		Object.defineProperty(navigator, "platform", {
-			configurable: true,
-			value: "MacIntel",
-		});
-		Object.defineProperty(navigator, "maxTouchPoints", {
-			configurable: true,
-			value: 5,
-		});
-		await renderToggle();
-		expect(screen.getByRole("status")).toHaveTextContent("מסך הבית");
-	});
+	// Apple limits iOS/iPadOS Web Push to Home Screen apps; the product
+	// decision (#2936) is an accurate unavailable state, never install advice.
+	it.each([
+		["iPhone", "Mozilla/5.0 (iPhone)", {}],
+		[
+			"touch-screen iPadOS reporting a Mac UA",
+			"Mozilla/5.0 (Macintosh)",
+			{ platform: "MacIntel", maxTouchPoints: 5 },
+		],
+	] as const)(
+		"reports %s as unsupported without Home Screen advice",
+		async (_device, userAgent, navigatorExtras) => {
+			setup({ supported: false, userAgent });
+			for (const [key, value] of Object.entries(navigatorExtras))
+				Object.defineProperty(navigator, key, {
+					configurable: true,
+					value,
+				});
+			await renderToggle();
+			const status = screen.getByRole("status");
+			expect(status).toHaveTextContent("אינו תומך");
+			expect(status).not.toHaveTextContent("מסך הבית");
+			expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+		},
+	);
 
 	it("ignores a status check that resolves after unmount", async () => {
 		setup();
