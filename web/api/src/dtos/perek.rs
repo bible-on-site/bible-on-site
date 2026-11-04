@@ -465,4 +465,59 @@ mod tests {
         let count = res.data.into_json().unwrap()["perek"]["articlesCount"].clone();
         assert_eq!(count.as_i64(), Some(3));
     }
+
+    /// A perek without a preloaded count answers `articlesCount` from the
+    /// per-perek COUNT query — the single-perek path (`perekByPerekId`
+    /// before batch preloading, direct DTO use).
+    #[tokio::test]
+    async fn articles_count_falls_back_to_a_db_query_when_not_preloaded() {
+        use sea_orm::{DatabaseBackend, MockDatabase, Value};
+        use std::collections::BTreeMap;
+
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn perek(&self) -> Perek {
+                Perek {
+                    id: 7,
+                    perek_id: Some(42),
+                    sefer_id: None,
+                    additional: None,
+                    perek: None,
+                    date: None,
+                    hebdate: None,
+                    compiled_hebdate: None,
+                    tseit: None,
+                    header: None,
+                    compiled_source: None,
+                    pasuk_count: None,
+                    reading_metric: None,
+                    precomputed_articles_count: None,
+                }
+            }
+        }
+        let count_row: BTreeMap<String, Value> = [("count".to_string(), Value::from(5_i64))]
+            .into_iter()
+            .collect();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![count_row],
+                ])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema.execute("{ perek { articlesCount } }").await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let count = res.data.into_json().unwrap()["perek"]["articlesCount"].clone();
+        assert_eq!(count.as_i64(), Some(5));
+    }
 }

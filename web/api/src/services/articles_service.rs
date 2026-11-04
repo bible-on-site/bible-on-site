@@ -765,9 +765,8 @@ mod tests {
 
     #[tokio::test]
     async fn count_by_perek_ids_empty_input_skips_the_query() {
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
-        );
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
 
         let result = count_by_perek_ids(&db, &[])
             .await
@@ -1103,15 +1102,27 @@ mod tests {
 
     #[tokio::test]
     async fn find_covering_sources_by_article_ids_empty_input_skips_the_query() {
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
-        );
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
 
         let grouped = find_covering_sources_by_article_ids(&db, &[])
             .await
             .expect("empty input should return an empty map");
 
         assert!(grouped.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("covering table missing");
+
+        let result = find_covering_sources_by_article_ids(&db, &[7]).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
     }
 
     #[tokio::test]

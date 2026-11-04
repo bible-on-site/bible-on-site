@@ -138,3 +138,108 @@ pub struct ArticleSearchResults {
     pub total: i32,
     pub hits: Vec<ArticleSearchHit>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use entities::article_covering_source;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    fn article() -> Article {
+        Article {
+            id: 1,
+            perek_id: 1,
+            author_id: 1,
+            article_abstract: None,
+            article_content: None,
+            name: "Article".to_string(),
+            priority: 1,
+            coverage_verified: false,
+            reading_metric: None,
+            covering_sources: None,
+        }
+    }
+
+    /// An article with preloaded sources answers `coveringSources` without
+    /// touching the database — the list path batch-loads them in one query.
+    #[tokio::test]
+    async fn covering_sources_returns_the_preloaded_sources_without_a_db_query() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn article(&self) -> Article {
+                Article {
+                    covering_sources: Some(vec![ArticleCoveringSource {
+                        perek_id: 3,
+                        pasuk: 1,
+                    }]),
+                    ..article()
+                }
+            }
+        }
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+
+        let res = schema
+            .execute("{ article { coveringSources { perekId pasuk } } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let sources = res.data.into_json().unwrap()["article"]["coveringSources"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+    }
+
+    /// An article without preloaded sources falls back to the per-article
+    /// query — the single-article path (`articleById`).
+    #[tokio::test]
+    async fn covering_sources_falls_back_to_a_db_query_when_not_preloaded() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn article(&self) -> Article {
+                article()
+            }
+        }
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    article_covering_source::Model {
+                        article_id: 1,
+                        perek_id: 3,
+                        pasuk: 1,
+                        created_at: chrono::Utc::now(),
+                    },
+                ]])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema
+            .execute("{ article { coveringSources { perekId pasuk } } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let sources = res.data.into_json().unwrap()["article"]["coveringSources"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+    }
+}

@@ -155,3 +155,114 @@ impl ArticlesQuery {
         Ok(articles)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use entities::{article, article_covering_source};
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    fn article_model(id: i32) -> article::Model {
+        article::Model {
+            id,
+            perek_id: 1,
+            author_id: 1,
+            article_abstract: None,
+            name: format!("Article {id}"),
+            priority: 1,
+            content: None,
+            coverage_verified: false,
+        }
+    }
+
+    fn covering_source(
+        article_id: i32,
+        perek_id: i32,
+        pasuk: i16,
+    ) -> article_covering_source::Model {
+        article_covering_source::Model {
+            article_id,
+            perek_id,
+            pasuk,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    async fn execute(query: &str) -> async_graphql::Response {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![
+                    article_model(1),
+                    article_model(2),
+                ]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_source(1, 3, 1),
+                    covering_source(1, 5, 2),
+                ]])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            ArticlesQuery,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+        schema.execute(query).await
+    }
+
+    /// Selecting `coveringSources` on `articlesByPerekId` batch-loads every
+    /// article's sources in one IN query; articles without rows get an
+    /// authoritative empty list.
+    #[tokio::test]
+    async fn articles_by_perek_id_batches_covering_sources_in_one_query() {
+        let res =
+            execute("{ articlesByPerekId(perekId: 1) { id coveringSources { perekId pasuk } } }")
+                .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let articles = res.data.into_json().unwrap()["articlesByPerekId"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(articles.len(), 2);
+        let sources = articles[0]["coveringSources"].as_array().unwrap().clone();
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+        assert_eq!(sources[1]["perekId"].as_i64(), Some(5));
+        assert_eq!(sources[1]["pasuk"].as_i64(), Some(2));
+        assert!(
+            articles[1]["coveringSources"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// Selecting `coveringSources` on `articlesByAuthorId` uses the same
+    /// single batched IN query.
+    #[tokio::test]
+    async fn articles_by_author_id_batches_covering_sources_in_one_query() {
+        let res =
+            execute("{ articlesByAuthorId(authorId: 1) { id coveringSources { perekId pasuk } } }")
+                .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let articles = res.data.into_json().unwrap()["articlesByAuthorId"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(articles.len(), 2);
+        let sources = articles[0]["coveringSources"].as_array().unwrap().clone();
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+        assert!(
+            articles[1]["coveringSources"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
