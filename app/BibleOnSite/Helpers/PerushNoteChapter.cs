@@ -75,12 +75,13 @@ internal sealed class PerushNoteChapter
     /// compressed records into per-pasuk chunks, then releases the blob.</summary>
     private Dictionary<int, byte[]> SplitIntoPasukChunks()
     {
-        var blob = _blob
-            ?? throw new InvalidDataException("The perek's note blob was already split.");
+        // The factory runs once while the blob is still held: a successful
+        // split releases it below, and a faulted one is swapped for a fresh
+        // Lazy — _blob is never null here.
         // Fastest deflate: the chunks exist to bound memory, and a single-pasuk
         // slice loses little ratio. This pass runs inside the first scroll
         // miss, so it stays off the slowest setting.
-        var chunks = PerushNoteBlob.SplitByPasuk(blob, CompressionLevel.Fastest);
+        var chunks = PerushNoteBlob.SplitByPasuk(_blob!, CompressionLevel.Fastest);
         _blob = null;
         Interlocked.Increment(ref _fullScans);
         return chunks;
