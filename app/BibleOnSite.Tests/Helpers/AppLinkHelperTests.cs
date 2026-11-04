@@ -41,13 +41,25 @@ public class AppLinkHelperTests
     [InlineData("https://xn--febl3a.co.il/929/123?pasuk=5&note=2", 5)]
     [InlineData("https://xn--febl3a.co.il/929/123?note=2&pasuk=9", 9)]
     [InlineData("https://xn--febl3a.co.il/929/123#pasuk-7", 7)]
-    [InlineData("https://xn--febl3a.co.il/929/123/456?pasuk=3", 3)]
     [InlineData("https://xn--febl3a.co.il/929/123/%D7%90%D7%99%D7%95%D7%91-%D7%9B%D7%92?pasuk=4", 4)]
     [InlineData("https://xn--febl3a.co.il/929/123?pasuk=3#pasuk-9", 3)] // query wins over the fragment
     public void TryParse_PasukMarkedUrl_ReturnsPasukNumber(string url, int expectedPasuk)
     {
         AppLinkHelper.TryParse(url, out var target).Should().BeTrue();
         target.PasukNumber.Should().Be(expectedPasuk);
+    }
+
+    [Theory]
+    [InlineData("https://xn--febl3a.co.il/929/123/456?pasuk=3")]
+    [InlineData("https://xn--febl3a.co.il/929/123/456#pasuk-3")]
+    public void TryParse_ArticleUrl_DropsThePasukAnchor(string url)
+    {
+        // The website's article route ignores ?pasuk — it scrolls to
+        // article-view and only ?q marks an in-article landing — so an
+        // article target must not carry a reader pasuk landing.
+        AppLinkHelper.TryParse(url, out var target).Should().BeTrue();
+        target.ArticleId.Should().Be(456);
+        target.PasukNumber.Should().BeNull();
     }
 
     [Theory]
@@ -216,6 +228,7 @@ public class AppLinkHelperTests
     [InlineData("/929/125/337", 125, 337, null)]
     [InlineData("/929/125", 125, null, null)]
     [InlineData("/929/125#pasuk-4", 125, null, 4)]
+    [InlineData("/929/125/337?pasuk=4", 125, 337, null)] // article route ignores the anchor
     [InlineData("https://xn--febl3a.co.il/929/7/8", 7, 8, null)]
     public void ClassifyContentLink_PerekLink_ReturnsPerekTarget(
         string href, int expectedPerek, int? expectedArticle, int? expectedPasuk)

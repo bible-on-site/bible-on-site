@@ -60,7 +60,12 @@ public static class AppLinkHelper
             articleId = article;
         }
 
-        target = new AppLinkTarget(perekId, articleId, ParsePasukNumber(uri));
+        // A pasuk anchor only has meaning on perek and perush-slug routes:
+        // the website's article route ignores ?pasuk (it scrolls to
+        // article-view; only ?q marks an in-article landing), so an article
+        // target drops the anchor instead of carrying a dead field.
+        target = new AppLinkTarget(perekId, articleId,
+            articleId is null ? ParsePasukNumber(uri) : null);
         return true;
     }
 
