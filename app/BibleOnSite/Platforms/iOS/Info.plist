@@ -53,6 +53,12 @@
 	<false/>
 	<key>FirebaseScreenReportingEnabled</key>
 	<false/>
+	<!-- #1097: lets APNs deliver notification content while the app is in the
+	     background (data-only pushes and FCM delegate dispatch). -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

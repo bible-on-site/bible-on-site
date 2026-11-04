@@ -38,7 +38,7 @@ The app uses a hybrid data strategy:
 The app integrates with Firebase for:
 
 - **User Settings Storage** - Persisting user preferences across devices
-- **Push Notifications** - Delivering updates and reminders via Firebase Cloud Messaging (FCM)
+- **Push Notifications** - Delivering updates and reminders via Firebase Cloud Messaging (FCM) — see [push-notifications.md](push-notifications.md) for the opt-in flow, identity design and backend contract
 
 ## Development
 

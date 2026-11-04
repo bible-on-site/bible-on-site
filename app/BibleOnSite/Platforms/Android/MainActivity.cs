@@ -68,6 +68,7 @@ public class MainActivity : MauiAppCompatActivity
         Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 #endif
         HandleAppLinkIntent(Intent);
+        HandlePushIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
     }
@@ -88,6 +89,7 @@ public class MainActivity : MauiAppCompatActivity
         }
 #endif
         HandleAppLinkIntent(intent);
+        HandlePushIntent(intent);
     }
 
     /// <summary>Routes a VIEW intent for a website perek URL into app navigation.</summary>
@@ -101,6 +103,18 @@ public class MainActivity : MauiAppCompatActivity
         {
             AppLinkHelper.Request(target);
         }
+    }
+
+    /// <summary>
+    /// Routes a notification-tap launch intent (#1097) into the shared data
+    /// payload → app-link pipeline. Fire-and-forget: the tapped target lands in
+    /// <see cref="AppLinkHelper.PendingTarget"/> or the running reader's event.
+    /// </summary>
+    private static void HandlePushIntent(Intent? intent)
+    {
+#if !DISABLE_PUSH
+        _ = Services.AndroidPushPlatformClient.HandleLaunchIntentAsync(intent);
+#endif
     }
 
     private readonly PressGestureTracker _touch = new();

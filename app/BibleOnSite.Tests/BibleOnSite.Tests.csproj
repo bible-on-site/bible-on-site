@@ -78,6 +78,8 @@
     <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PushNotificationService.cs" Link="Services\PushNotificationService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PushNotificationPlatform.cs" Link="Services\PushNotificationPlatform.cs" />
     <Compile Include="..\BibleOnSite\Services\PlaybackAudioOwnership.cs" Link="Services\PlaybackAudioOwnership.cs" />
     <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
