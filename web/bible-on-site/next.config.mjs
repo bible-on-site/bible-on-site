@@ -187,8 +187,8 @@ const nextConfig = {
 				source: "/join/whatsapp",
 				headers: [{ key: "Cache-Control", value: "no-store" }],
 			},
-			// The email confirmation page embeds the mailed challenge token in
-			// the rendered form — it must never sit in a browser or CDN cache.
+			// The email confirmation page varies on the staged challenge
+			// cookie — it must never sit in a browser or CDN cache.
 			{
 				source: "/join/email/confirm",
 				headers: [{ key: "Cache-Control", value: "no-store" }],

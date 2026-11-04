@@ -4,8 +4,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ConfirmEmailForm } from "@/app/join/email/confirm/ConfirmEmailForm";
 
-const TOKEN = "a".repeat(43);
-
 describe("ConfirmEmailForm", () => {
 	const mockFetch = jest.fn();
 	beforeEach(() => {
@@ -14,24 +12,25 @@ describe("ConfirmEmailForm", () => {
 	});
 	afterEach(() => jest.restoreAllMocks());
 
-	it("posts the token to the confirm endpoint", async () => {
+	it("posts to the confirm endpoint and lets the staged cookie carry the token", async () => {
 		mockFetch.mockResolvedValue({
 			ok: true,
 			json: async () => ({ status: "confirmed" }),
 		} as Response);
-		render(<ConfirmEmailForm token={TOKEN} />);
+		render(<ConfirmEmailForm />);
 		fireEvent.click(screen.getByRole("button", { name: "אישור ההרשמה" }));
 		await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+		// The challenge rides in the HttpOnly cookie — no token in the request
+		// body or anywhere in the DOM.
 		expect(mockFetch).toHaveBeenCalledWith("/api/bulletin/confirm", {
 			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ token: TOKEN }),
 		});
+		expect(document.querySelector("input[name='token']")).toBeNull();
 		expect(await screen.findByRole("status")).toHaveTextContent(/אושרה בהצלחה/);
 	});
 
 	it("works as a plain form post without JavaScript", () => {
-		render(<ConfirmEmailForm token={TOKEN} />);
+		render(<ConfirmEmailForm />);
 		const form = document.querySelector("form") as HTMLFormElement;
 		expect(form).toHaveAttribute("method", "post");
 		expect(form).toHaveAttribute("action", "/api/bulletin/confirm");
@@ -45,14 +44,14 @@ describe("ConfirmEmailForm", () => {
 			ok: true,
 			json: async () => ({ status }),
 		} as Response);
-		render(<ConfirmEmailForm token={TOKEN} />);
+		render(<ConfirmEmailForm />);
 		fireEvent.click(screen.getByRole("button", { name: "אישור ההרשמה" }));
 		expect(await screen.findByRole("status")).toHaveTextContent(pattern);
 	});
 
 	it("keeps the form with a retry message on failure", async () => {
 		mockFetch.mockRejectedValue(new Error("offline"));
-		render(<ConfirmEmailForm token={TOKEN} />);
+		render(<ConfirmEmailForm />);
 		fireEvent.click(screen.getByRole("button", { name: "אישור ההרשמה" }));
 		expect(await screen.findByRole("alert")).toHaveTextContent(/נסו שוב/);
 		expect(

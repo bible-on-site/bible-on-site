@@ -20,3 +20,11 @@ export const CONSENT_TEXT =
 export const CONSENT_VERSION = "2026-11";
 
 export type ConfirmOutcome = "confirmed" | "expired" | "invalid";
+
+/**
+ * Carries the mailed challenge from the link click to the explicit confirm
+ * POST. HttpOnly keeps the token out of rendered page data, the DOM, and
+ * client-side script entirely; the API moves it there and the page reads it
+ * server-side only to decide which UI to render.
+ */
+export const CONFIRM_TOKEN_COOKIE = "bulletin_confirm";

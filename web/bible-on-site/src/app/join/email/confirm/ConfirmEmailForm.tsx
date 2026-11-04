@@ -4,21 +4,17 @@ import { useState } from "react";
 import type { ConfirmOutcome } from "@/lib/bulletin-signup/shared";
 import styles from "../page.module.css";
 
-interface ConfirmEmailFormProps {
-	token: string;
-}
-
 type FormState = "idle" | "pending" | ConfirmOutcome | "error";
 
 /**
  * Explicit confirmation for the emailed challenge (#2940).
  *
- * The mailed link lands on the confirm page as a GET (scanner-safe — GET only
- * renders this form) and the actual consume is a POST to
- * `/api/bulletin/confirm`, here via fetch or a no-JS form post. The hidden
- * input keeps the native POST working end to end without JavaScript.
+ * The mailed link lands via `/api/bulletin/confirm`, which stages the
+ * challenge in an HttpOnly cookie — the token never reaches rendered page
+ * data or client script. The consume is a POST to the same endpoint, here
+ * via fetch or a no-JS form post; both carry the cookie automatically.
  */
-export function ConfirmEmailForm({ token }: ConfirmEmailFormProps) {
+export function ConfirmEmailForm() {
 	const [state, setState] = useState<FormState>("idle");
 
 	async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -28,8 +24,6 @@ export function ConfirmEmailForm({ token }: ConfirmEmailFormProps) {
 		try {
 			const response = await fetch("/api/bulletin/confirm", {
 				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ token }),
 			});
 			const body = (await response.json()) as { status?: ConfirmOutcome };
 			setState(
@@ -71,7 +65,6 @@ export function ConfirmEmailForm({ token }: ConfirmEmailFormProps) {
 
 	return (
 		<form method="post" action="/api/bulletin/confirm" onSubmit={onSubmit}>
-			<input type="hidden" name="token" value={token} />
 			<p className={styles.confirmText}>
 				לחצו על הכפתור כדי לאשר את ההרשמה לעלון היומי בדוא&quot;ל.
 			</p>
