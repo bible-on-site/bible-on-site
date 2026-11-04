@@ -65,6 +65,23 @@ impl From<Model> for Article {
     }
 }
 
+impl From<articles_service::ArticleSummary> for Article {
+    fn from(value: articles_service::ArticleSummary) -> Self {
+        Self {
+            id: value.id,
+            perek_id: value.perek_id as i32,
+            author_id: value.author_id as i32,
+            article_abstract: value.article_abstract,
+            // Starter rows project out `content`; bodies load via `article(id)`.
+            article_content: None,
+            name: value.name,
+            priority: value.priority as i32,
+            coverage_verified: value.coverage_verified,
+            reading_metric: None,
+        }
+    }
+}
+
 #[ComplexObject]
 impl Article {
     /// The article's persisted covering sources, ordered by coordinate.
