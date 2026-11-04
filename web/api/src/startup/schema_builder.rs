@@ -1111,11 +1111,9 @@ mod tests {
 
     #[tokio::test]
     async fn schema_executes_authorized_dedication_create() {
-        use entities::{
-            dedication, dedication_dedication_type, dedication_type, sefer, sefer_dedication,
-        };
+        use crate::services::dedications_service::{KIND_SEFER_DED, urow};
+        use entities::{dedication, dedication_dedication_type, dedication_type, sefer};
 
-        let now = chrono::Utc::now().naive_utc();
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 // purpose validation
@@ -1152,7 +1150,7 @@ mod tests {
                         rows_affected: 1,
                     },
                 ])
-                // find_aggregate: the new row, then its link rows.
+                // find_aggregate: the new row, then its union of link rows.
                 .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                     dedication::Model {
                         id: 42,
@@ -1160,46 +1158,14 @@ mod tests {
                         expires_at: None,
                     },
                 ]])
-                .append_query_results::<
-                    entities::perek_dedication::Model,
-                    Vec<entities::perek_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    sefer_dedication::Model,
-                    Vec<sefer_dedication::Model>,
-                    _,
-                >([vec![sefer_dedication::Model {
-                    sefer_id: 24,
-                    dedication_id: 42,
-                    expires_at: None,
-                    created_at: now.and_utc(),
-                }]])
-                .append_query_results::<
-                    entities::helek_dedication::Model,
-                    Vec<entities::helek_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::parasha_dedication::Model,
-                    Vec<entities::parasha_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::article_dedication::Model,
-                    Vec<entities::article_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::tanahpedia_entry_dedication::Model,
-                    Vec<entities::tanahpedia_entry_dedication::Model>,
-                    _,
-                >([vec![]])
-                .append_query_results::<
-                    entities::masora_dedication::Model,
-                    Vec<entities::masora_dedication::Model>,
-                    _,
-                >([vec![]])
+                .append_query_results([vec![urow(
+                    KIND_SEFER_DED,
+                    Some(42),
+                    Some(24),
+                    None,
+                    None,
+                    None,
+                )]])
                 .append_query_results::<
                     dedication_dedication_type::Model,
                     Vec<dedication_dedication_type::Model>,
@@ -1245,49 +1211,20 @@ mod tests {
 
     #[tokio::test]
     async fn schema_resolves_public_dedications_for_sefer_context() {
-        use entities::{
-            dedication, dedication_dedication_type, dedication_type, helek, sefer, sefer_dedication,
-        };
+        use crate::services::dedications_service::{KIND_HELEK, KIND_SEFER, KIND_SEFER_DED, urow};
+        use entities::{dedication, dedication_dedication_type, dedication_type};
 
-        let now = chrono::Utc::now().naive_utc();
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                // ancestor expansion: canonical sefer + helek tables
-                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
-                    sefer::Model {
-                        id: 24,
-                        name: "מלאכי".to_string(),
-                        tanach_us_name: None,
-                        perek_id_from: 565,
-                        perek_id_to: 567,
-                    },
+                // ancestor expansion: canonical sefer + helek union
+                .append_query_results([vec![
+                    urow(KIND_SEFER, Some(24), Some(565), Some(567), None, None),
+                    urow(KIND_HELEK, Some(1), Some(1), Some(5), None, None),
                 ]])
-                .append_query_results::<helek::Model, Vec<helek::Model>, _>([vec![
-                    helek::Model {
-                        id: 1,
-                        name: "תורה".to_string(),
-                        sefer_id_from: 1,
-                        sefer_id_to: 5,
-                    },
-                ]])
-                // sefer-scope link rows — one matches sefer 24
-                .append_query_results::<
-                    sefer_dedication::Model,
-                    Vec<sefer_dedication::Model>,
-                    _,
-                >([vec![
-                    sefer_dedication::Model {
-                        sefer_id: 24,
-                        dedication_id: 42,
-                        expires_at: None,
-                        created_at: now.and_utc(),
-                    },
-                    sefer_dedication::Model {
-                        sefer_id: 7,
-                        dedication_id: 43,
-                        expires_at: None,
-                        created_at: now.and_utc(),
-                    },
+                // sefer-scope link union — one matches sefer 24
+                .append_query_results([vec![
+                    urow(KIND_SEFER_DED, Some(42), Some(24), None, None, None),
+                    urow(KIND_SEFER_DED, Some(43), Some(7), None, None, None),
                 ]])
                 // hydrate: dedication 42 (+43 filtered out upstream)
                 .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
