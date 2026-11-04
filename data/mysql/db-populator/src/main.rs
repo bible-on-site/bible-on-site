@@ -152,6 +152,12 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    run(cli).await
+}
+
+/// The full drop/populate flow, kept out of `main` so the MySQL-backed test
+/// can drive the real end-to-end path.
+async fn run(cli: Cli) -> Result<()> {
     // Parse the database URL
     let options = MySqlConnectOptions::from_str(&cli.db_url)
         .context("Failed to parse database URL")?
@@ -1511,6 +1517,18 @@ SELECT 1";
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             assert_eq!(table_count(&mut conn, "external_reference").await?, 0);
+
+            // The real entrypoint must populate a database end-to-end,
+            // including on a schema that already ran every upgrade.
+            let populate_url = format!(
+                "{}/{}",
+                server_url
+                    .rsplit_once('/')
+                    .map(|(host, _)| host)
+                    .unwrap_or(server_url.as_str()),
+                database_name
+            );
+            run(Cli::parse_from(["db-populator", "--db-url", &populate_url])).await?;
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())
