@@ -139,6 +139,17 @@ TLS connections and authoritative DNS TTLs; never increase deadlines to hide
 client-side DNS/TLS setup or a real 502. Save the complete pass/failure journal
 as the workflow's API handover artifact, without task-definition secrets.
 
+Archive uploads must run as asynchronous child processes while this monitor is
+active. Wait for each upload to close successfully before verifying its immutable
+child and publishing the index; retain the isolated Docker credentials directory
+until publication finishes. A synchronous `crane push` blocks network callbacks
+and deadline timers in the deployment process. In API deployment
+[41822586920](https://github.com/bible-on-site/bible-on-site/actions/runs/41822586920/job/126549154705),
+the images reached ECR but a public probe stalled during upload, so the owner
+refused to start the ECS rollout and released its task protection. Replaying that
+release with current automation can reuse the verified published images; it
+still requires a fresh healthy baseline and the full protected runtime handover.
+
 After the pinned ARM deployment passes, restore the ordinary ARM task
 definition's image reference to the verified multiarch `latest` index and
 verify its completed rollout and exact ARM child again. Leave multiarch
