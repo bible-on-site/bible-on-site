@@ -46,7 +46,11 @@ test.describe("Articles Management", () => {
 		).toBeVisible();
 		await expect(page.getByText("אנוטציות תנכפדיה")).toBeVisible();
 		await expect(page.getByText("תאריך עברי חוזר")).toBeVisible();
-		await expect(page.getByText("מועדים")).toBeVisible();
+		// The panel section heading — the bare text also matches the nav
+		// link and the form's checkbox group label.
+		await expect(
+			page.getByRole("heading", { name: "מועדים", exact: true }),
+		).toBeVisible();
 	});
 
 	test("quick navigation to perek works", async ({ page }) => {

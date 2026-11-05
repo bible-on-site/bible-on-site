@@ -14,14 +14,17 @@
 //!   pipeline (`data/annotations` + `devops/import-tanahpedia-mentions.mts`);
 //!   read-only here by design — a second write path would compete with the
 //!   pipeline's dedupe/content-hash lifecycle.
-//! - `recurringHebrewDate` (#3098) and `moadim` (#3101) — pending schemas;
-//!   surfaced honestly as `pending-schema`, never silently dropped.
+//! - `moadim` (#3101) — the article↔moed many-to-many; `moedIds` replaces
+//!   the full link set. Explicit links are the editorially approved set —
+//!   unapproved pipeline proposals (#3103) never land here.
+//! - `recurringHebrewDate` (#3098) — pending schema; surfaced honestly as
+//!   `pending-schema`, never silently dropped.
 //!
 //! The relationship catalogue itself lives in
 //! `web/shared/article-relationships/registry.json` — the single source of
 //! truth compiled into this binary and imported by the admin TS side.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::LazyLock;
 
 use sea_orm::sea_query::Expr;
@@ -35,12 +38,15 @@ use crate::common::website_revalidate::{
     ArticleAssociations, ArticleCoveringSpan, Revalidation, WebsiteRevalidator,
 };
 use crate::dtos::article_relationships::{
-    ArticleDedicationLink, ArticleMentionAnnotation, ArticleRelationships, CoveringSource,
-    CoveringSourceInput, UpdateArticleRelationshipsInput,
+    ArticleDedicationLink, ArticleMentionAnnotation, ArticleMoedLink, ArticleRelationships,
+    CoveringSource, CoveringSourceInput, UpdateArticleRelationshipsInput,
 };
 use crate::providers::Database;
 use crate::services::article_search::store;
-use entities::{article, article_covering_source, article_dedication, author, dedication, perek};
+use crate::services::moed_service;
+use entities::{
+    article, article_covering_source, article_dedication, author, dedication, moed, perek,
+};
 
 /// The shared registry, embedded at compile time so the API's
 /// `articleRelationshipCapabilities` can never drift from the file the admin
@@ -136,6 +142,8 @@ pub struct ArticleRelationshipsAggregate {
     pub covering_sources: Vec<article_covering_source::Model>,
     pub dedications: Vec<ArticleDedicationLink>,
     pub mention_annotations: Vec<ArticleMentionAnnotation>,
+    /// The article's explicit moed links — the `moadim` relationship (#3101).
+    pub moadim: Vec<ArticleMoedLink>,
 }
 
 /// Loads the article's generated `content_hash` as lowercase hex — the
@@ -270,6 +278,7 @@ pub async fn load_relationships(
         covering_sources: load_covering_sources(conn, article_id).await?,
         dedications: load_article_dedications(conn, article_id).await?,
         mention_annotations: load_mention_annotations(conn, article_id).await?,
+        moadim: moed_service::load_article_moed_links(conn, article_id).await?,
         article,
     })
 }
@@ -292,6 +301,7 @@ impl From<ArticleRelationshipsAggregate> for ArticleRelationships {
                 .collect(),
             dedications: value.dedications,
             mention_annotations: value.mention_annotations,
+            moadim: value.moadim,
         }
     }
 }
@@ -412,6 +422,28 @@ fn merge_covering_spans(rows: &[article_covering_source::Model]) -> Vec<ArticleC
 
 fn is_hex(value: &str, len: usize) -> bool {
     value.len() == len && value.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Validates a `moedIds` replacement set — positive, unique moed ids —
+/// before the transaction starts (target existence is checked inside the
+/// lock by `replace_article_moed_links`).
+fn normalize_moed_ids(rows: &[i32], field: &str) -> Result<Vec<i32>, ServiceError> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::with_capacity(rows.len());
+    for id in rows {
+        if *id < 1 {
+            return Err(ServiceError::bad_request(&format!(
+                "{field}: moed id must be a positive integer (got {id})"
+            )));
+        }
+        if !seen.insert(*id) {
+            return Err(ServiceError::bad_request(&format!(
+                "{field}: duplicate moed id {id}"
+            )));
+        }
+        out.push(*id);
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -541,6 +573,30 @@ pub async fn search_targets(
                 .take(limit as usize)
                 .collect()
         }
+        Kind::Moed => {
+            let moadim = moed::Entity::find()
+                .order_by_asc(moed::Column::Name)
+                .all(conn)
+                .await
+                .map_err(db_error)?;
+            moadim
+                .into_iter()
+                .map(|model| TargetHit {
+                    id: model.id,
+                    hint: Some(model.slug.clone()),
+                    label: model.name,
+                })
+                .filter(|hit| {
+                    needle.is_empty()
+                        || normalize_query(&hit.label).contains(&needle)
+                        || hit
+                            .hint
+                            .as_deref()
+                            .is_some_and(|slug| normalize_query(slug).contains(&needle))
+                })
+                .take(limit as usize)
+                .collect()
+        }
     };
     Ok(hits)
 }
@@ -561,9 +617,9 @@ pub struct UpdateOutcome {
 /// Omitted fields leave their relation untouched; an explicitly empty
 /// `coveringSources` clears only that relation — a single-link edit never
 /// replaces unrelated fields/links. `expectedContentHash` /
-/// `expectedCoveringSources` are the freshness contract: supplied snapshots
-/// are compared under the article row lock, so a stale editor can never
-/// overwrite a newer link it never saw.
+/// `expectedCoveringSources` / `expectedMoedIds` are the freshness
+/// contract: supplied snapshots are compared under the article row lock,
+/// so a stale editor can never overwrite a newer link it never saw.
 pub async fn update_relationships(
     db: &Database,
     revalidator: &WebsiteRevalidator,
@@ -601,6 +657,16 @@ pub async fn update_relationships(
         .as_deref()
         .map(|rows| normalize_coordinates(rows, "expectedCoveringSources"))
         .transpose()?;
+    let moed_ids = input
+        .moed_ids
+        .as_deref()
+        .map(|ids| normalize_moed_ids(ids, "moedIds"))
+        .transpose()?;
+    let expected_moed_ids = input
+        .expected_moed_ids
+        .as_deref()
+        .map(|ids| normalize_moed_ids(ids, "expectedMoedIds"))
+        .transpose()?;
 
     let txn = db.get_connection().begin().await.map_err(db_error)?;
     // Lock the article row for the whole read-check-write sequence: the
@@ -637,6 +703,23 @@ pub async fn update_relationships(
         if actual != expected_sorted {
             return Err(ServiceError::bad_request(
                 "the article's covering sources were changed since this edit loaded - reload and submit again",
+            ));
+        }
+    }
+    // Pre-write moed link set — the undo snapshot plus half of the old∪new
+    // invalidation payload when `moedIds` lands below.
+    let previous_moadim = moed_service::load_article_moed_links(&txn, article_id).await?;
+    // content_hash covers the article row alone, never junction rows — a
+    // full-set moed replacement needs its own snapshot guard so a stale
+    // editor cannot erase links it never saw.
+    if let Some(expected) = expected_moed_ids {
+        let mut actual: Vec<i32> = previous_moadim.iter().map(|link| link.moed_id).collect();
+        actual.sort_unstable();
+        let mut expected_sorted = expected;
+        expected_sorted.sort_unstable();
+        if actual != expected_sorted {
+            return Err(ServiceError::bad_request(
+                "the article's moed links were changed since this edit loaded - reload and submit again",
             ));
         }
     }
@@ -752,6 +835,21 @@ pub async fn update_relationships(
         coverage_state_changed = true;
     }
 
+    // Moed link-set replacement — the `moadim` relationship (#3101). The
+    // (id, slug) pairs of the old ∪ new targets are collected inside the
+    // transaction so the post-commit invalidation expires every moed page
+    // the edit touched without a second lookup.
+    let mut affected_moadim: Vec<(i32, String)> = Vec::new();
+    if let Some(ids) = &moed_ids
+        && moed_service::replace_article_moed_links(&txn, article_id, ids).await?
+    {
+        changed = true;
+        let mut moed_id_union: BTreeSet<i32> =
+            previous_moadim.iter().map(|link| link.moed_id).collect();
+        moed_id_union.extend(ids.iter().copied());
+        affected_moadim = moed_service::moed_id_slugs(&txn, &moed_id_union).await?;
+    }
+
     let previous = ArticleRelationshipsAggregate {
         // Loaded post-write on purpose: it is the freshness token the undo
         // write must present, since the generated hash covers the link fields.
@@ -760,6 +858,7 @@ pub async fn update_relationships(
         covering_sources: previous_covering,
         dedications: load_article_dedications(&txn, article_id).await?,
         mention_annotations: load_mention_annotations(&txn, article_id).await?,
+        moadim: previous_moadim,
     };
 
     if changed {
@@ -793,13 +892,14 @@ pub async fn update_relationships(
             Vec::new()
         };
         revalidator
-            .invalidate_article(
+            .invalidate_article_with_moadim(
                 article_id,
                 &ArticleAssociations {
                     perek_ids: perek_sorted,
                     author_ids: author_sorted,
                     covering_spans,
                 },
+                &affected_moadim,
             )
             .await
             .as_str()
@@ -819,10 +919,20 @@ pub async fn update_relationships(
         previous_author_id = current.author_id,
         previous_covering_count,
         previous_coverage_verified = current.coverage_verified,
+        previous_moed_ids = ?previous
+            .moadim
+            .iter()
+            .map(|link| link.moed_id)
+            .collect::<Vec<_>>(),
         new_perek_id = updated.article.perek_id,
         new_author_id = updated.article.author_id,
         new_covering_count,
         new_coverage_verified = updated.article.coverage_verified,
+        new_moed_ids = ?updated
+            .moadim
+            .iter()
+            .map(|link| link.moed_id)
+            .collect::<Vec<_>>(),
         revalidation,
         "Article relationships updated"
     );
@@ -860,9 +970,15 @@ mod tests {
             .iter()
             .filter(|entry| entry.status == "pending-schema")
             .collect();
-        assert_eq!(pending.len(), 2);
+        assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].pending_issue, Some(3098));
-        assert_eq!(pending[1].pending_issue, Some(3101));
+        // #3101 landed — moadim is a supported replace/clear relationship.
+        let moadim = relationship_registry()
+            .iter()
+            .find(|entry| entry.key == "moadim")
+            .unwrap();
+        assert_eq!(moadim.status, "supported");
+        assert_eq!(moadim.pending_issue, None);
         // Supported entries all carry operations; pending ones do not.
         for entry in relationship_registry() {
             if entry.status == "supported" {
@@ -973,10 +1089,12 @@ mod tests {
             source: "admin".to_string(),
             perek_id: Some(1),
             author_id: None,
+            moed_ids: None,
             covering_sources: Some(vec![coordinate]),
             coverage_verified: None,
             expected_content_hash: None,
             expected_covering_sources: None,
+            expected_moed_ids: None,
         };
         let input = input.clone();
         assert!(format!("{input:?}").contains("UpdateArticleRelationshipsInput"));
@@ -1009,6 +1127,7 @@ mod tests {
     mod update {
         use super::*;
         use crate::dtos::article_relationships::ArticleRelationshipTargetKind;
+        use entities::article_moed;
         use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, Value};
         use std::collections::BTreeMap;
 
@@ -1053,10 +1172,12 @@ mod tests {
                 source: "admin".to_string(),
                 perek_id: None,
                 author_id: None,
+                moed_ids: None,
                 covering_sources: None,
                 coverage_verified: None,
                 expected_content_hash: None,
                 expected_covering_sources: None,
+                expected_moed_ids: None,
             }
         }
 
@@ -1069,7 +1190,7 @@ mod tests {
             }
         }
 
-        /// The four queries of the post-commit `load_relationships` reload
+        /// The queries of the post-commit `load_relationships` reload
         /// (empty link sets for the fixture article).
         fn reload_results(mock: MockDatabase, article: article::Model) -> MockDatabase {
             mock.append_query_results::<article::Model, Vec<_>, _>([vec![article]])
@@ -1077,6 +1198,7 @@ mod tests {
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]])
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
         }
 
         #[tokio::test]
@@ -1143,12 +1265,61 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn rejects_a_stale_expected_moed_link_set() {
+            // content_hash covers the article row only — the moed junction
+            // set gets its own snapshot guard so a stale editor cannot
+            // erase links it never saw.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // The stored link set is {moed 3} — the caller's
+                    // snapshot says {4} (it last read a different set).
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![moed_link(3)]])
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_row(3, "סוכות")]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.expected_moed_ids = Some(vec![4]);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("moed links were changed"));
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn accepts_a_matching_expected_moed_link_set() {
+            // The same stored set {3} echoed back passes the guard and the
+            // write proceeds to target validation (unknown perek 9999 —
+            // the lock ordering proves the guard ran first and matched).
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![moed_link(3)]])
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_row(3, "סוכות")]])
+                    .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.expected_moed_ids = Some(vec![3]);
+            edit.perek_id = Some(9999);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("Perek 9999 does not exist"));
+        }
+
+        #[tokio::test]
         async fn rejects_unknown_targets_and_out_of_range_pesukim() {
             // Unknown perek for the single-valued replacement.
             let db = Database::from_connection(
                 MockDatabase::new(DatabaseBackend::MySql)
                     .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                     .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                     .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
                     .into_connection(),
             );
@@ -1180,6 +1351,7 @@ mod tests {
                 MockDatabase::new(DatabaseBackend::MySql)
                     .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                     .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                     .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_bound(1, 31)]])
                     .into_connection(),
             );
@@ -1202,6 +1374,7 @@ mod tests {
                     MockDatabase::new(DatabaseBackend::MySql)
                         .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                         .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                        .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                         .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
                         .into_connection(),
                 );
@@ -1239,6 +1412,8 @@ mod tests {
                     covering_model(7, 1, 3),
                     covering_model(7, 1, 4),
                 ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // coordinate bound check
                 .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_bound]])
                 // delete + insert + flag update + enqueue
@@ -1305,6 +1480,8 @@ mod tests {
             let mut mock = MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // previous snapshot reads
                 .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
@@ -1372,6 +1549,30 @@ mod tests {
             assert!(matches!(err, ServiceError::BadRequest(_)));
         }
 
+        fn moed_row(id: i32, slug: &str) -> moed::Model {
+            moed::Model {
+                id,
+                slug: slug.to_string(),
+                name: slug.replace('-', " "),
+                summary: None,
+                hebrew_month: None,
+                date_label: None,
+                annual_order: id as i16,
+                published: true,
+            }
+        }
+
+        fn moed_link(moed_id: i32) -> article_moed::Model {
+            article_moed::Model {
+                article_id: 7,
+                moed_id,
+                created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            }
+        }
+
         fn perek_row(id: i32, pasuk_count: Option<i16>) -> perek::Model {
             perek::Model {
                 id,
@@ -1391,6 +1592,126 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn rejects_duplicate_and_unknown_moed_ids() {
+            // Duplicates fail normalization before any database access.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql).into_connection(),
+            );
+            let mut edit = input();
+            edit.moed_ids = Some(vec![1, 1]);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("duplicate moed id"));
+            assert!(
+                db.get_connection()
+                    .clone()
+                    .into_transaction_log()
+                    .is_empty()
+            );
+
+            // An id that does not exist fails inside the lock.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                    // moed existence check for the submitted ids
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.moed_ids = Some(vec![99]);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("Moed 99 does not exist"));
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn replaces_the_moed_link_set_and_keeps_the_undo_record() {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                // lock read + previous covering set (empty)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                // previous moed link set {moed 1}
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![moed_link(1)]])
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_row(1, "פסח")]])
+                // replace: existence check for the submitted ids {2}
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_row(2, "סוכות")]])
+                // current links read {1}
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![moed_link(1)]])
+                // delete link(1) + insert link(2)
+                .append_exec_results((0..2).map(|_| MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }))
+                // moed_id_slugs for the old ∪ new invalidation payload {1,2}
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![
+                    moed_row(1, "פסח"),
+                    moed_row(2, "סוכות"),
+                ]])
+                // previous snapshot reads: hash, dedications, mentions
+                .append_query_results([vec![hash_row("d".repeat(32).as_str())]])
+                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]])
+                // search-index enqueue
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }]);
+            // Post-commit reload — `reload_results` ends with the
+            // article_moed read (empty here; the link-set assertion lives on
+            // `previous` and the transaction log).
+            mock = reload_results(mock, article_model(7));
+            let db = Database::from_connection(mock.into_connection());
+
+            let mut edit = input();
+            edit.moed_ids = Some(vec![2]);
+            let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap();
+
+            assert_eq!(outcome.revalidation, "SKIPPED");
+            // `previous` carries the pre-write set — the undo record.
+            assert_eq!(
+                outcome
+                    .previous
+                    .moadim
+                    .iter()
+                    .map(|link| (link.moed_id, link.slug.as_str()))
+                    .collect::<Vec<_>>(),
+                [(1, "פסח")]
+            );
+            let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+            assert!(log.contains("DELETE FROM `tanah_article_moed`"), "{log}");
+            assert!(log.contains("INSERT INTO `tanah_article_moed`"), "{log}");
+            assert!(log.contains("INSERT INTO article_search_queue"), "{log}");
+        }
+
+        #[tokio::test]
+        async fn moed_target_search_matches_name_and_slug() {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![
+                        moed_row(1, "ראש-השנה"),
+                        moed_row(2, "סוכות"),
+                    ]])
+                    .into_connection(),
+            );
+            let hits = search_targets(&db, ArticleRelationshipTargetKind::Moed, "סוכ", Some(10))
+                .await
+                .unwrap();
+            assert_eq!(hits.len(), 1);
+            assert_eq!(hits[0].id, 2);
+            assert_eq!(hits[0].hint.as_deref(), Some("סוכות"));
+        }
+
+        #[tokio::test]
         async fn replaces_perek_and_author_and_invalidates_old_and_new() {
             let mut mock = MockDatabase::new(DatabaseBackend::MySql)
                 // lock read + previous covering set
@@ -1398,6 +1719,8 @@ mod tests {
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
                     covering_model(7, 1, 1),
                 ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // single-valued target existence checks
                 .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_row(3, Some(10))]])
                 .append_query_results::<author::Model, Vec<_>, _>([vec![author::Model {
@@ -1448,6 +1771,8 @@ mod tests {
                 MockDatabase::new(DatabaseBackend::MySql)
                     .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                     .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                     .append_query_results::<author::Model, Vec<_>, _>([vec![]])
                     .into_connection(),
             );
@@ -1468,6 +1793,8 @@ mod tests {
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
                     covering_model(7, 1, 1),
                 ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // flag update + search-index enqueue
                 .append_exec_results((0..2).map(|_| MockExecResult {
                     last_insert_id: 0,
@@ -1506,6 +1833,8 @@ mod tests {
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
                     covering_model(7, 1, 1),
                 ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // `previous` snapshot reads
                 .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
@@ -1529,6 +1858,8 @@ mod tests {
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
                     covering_model(7, 1, 3),
                 ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // delete + flag update + search-index enqueue (no insert —
                 // the replacement set is empty)
                 .append_exec_results((0..3).map(|_| MockExecResult {
@@ -1569,6 +1900,8 @@ mod tests {
                 MockDatabase::new(DatabaseBackend::MySql)
                     .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                     .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                     .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
                     .into_connection(),
             );
@@ -1589,6 +1922,8 @@ mod tests {
                 MockDatabase::new(DatabaseBackend::MySql)
                     .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
                     .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                     .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_row(1, None)]])
                     .into_connection(),
             );
@@ -1616,6 +1951,8 @@ mod tests {
                 .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
                     covering_model(7, 1, 1),
                 ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
                 // `previous` snapshot reads
                 .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
                 .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
