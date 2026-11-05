@@ -1,0 +1,2378 @@
+{
+  "kind": "Complete local registry-consumer qualification summary; hosted CI/review and public delivery pending",
+  "createdAt": "2026-11-04T22:35:28.880Z",
+  "compiledRuntimeHead": "f2b8120a3e733529a22489f27b2b0818fcbed9cc",
+  "validatedGuardHead": "ec0a8e2472d8b31f09dba671640d33d68f9166d5",
+  "productionSourceTree": "0509bd17158c22ff4071c2306b6a11e6d8399d03",
+  "productionSourceUnchanged": true,
+  "sourceBindingSha256": "d6e63433245aeed999aab254666c9fcfca9c096e816281337e25188ad4c51722",
+  "library": {
+    "version": "0.0.0-alpha.111",
+    "source": "5b92471128918f907b636cd39cf959f607f33518",
+    "localOverrides": false,
+    "matchedDistributionFiles": 153,
+    "publishedRelease": "https://github.com/doradsoft/html-flip-book/releases/tag/v0.0.0-alpha.111",
+    "byteBindingSha256": "f917f3f9117d92a68735fab82d831dc7bab8e9c70ad5971184544d183ef2d9f2"
+  },
+  "build": {
+    "generatedRoutes": 20504,
+    "prerenderedRoutes": 20497,
+    "buildId": "sYHhvxFJm1srYKwALYjmA",
+    "compiledCore": [
+      {
+        "name": "0qckd970f6ln4.js",
+        "sha256": "c09b2769ff68cc32e8e338e6b5260a33457eb43e8063ee7bff61a025421bd73e"
+      }
+    ],
+    "compiledAdapter": [
+      {
+        "name": "0qckd970f6ln4.js",
+        "sha256": "c09b2769ff68cc32e8e338e6b5260a33457eb43e8063ee7bff61a025421bd73e"
+      }
+    ]
+  },
+  "appearance": {
+    "poses": 24,
+    "restingImages": 8,
+    "changedRestingPixels": 0,
+    "characterComparisons": 8,
+    "maxCharacterDelta": 0,
+    "motionSmoothingAccepted": true,
+    "recordSha256": "9c7faa643720a961014abc19d117e7ca38796ad07ad9d5e85ed8159cd00e32f5"
+  },
+  "behavior": {
+    "passed": 57,
+    "conditionalSkipped": 1,
+    "artifact": "reader1044-functional-artifacts",
+    "report": "reader1044-functional-report"
+  },
+  "unitMetricTests": 109,
+  "desktop": {
+    "testCount": 15,
+    "passed": 15,
+    "profile": "hardware-cadence",
+    "cpuRate": 1,
+    "limits": {
+      "responseP95Ms": 100,
+      "frameGapMaxMs": 100,
+      "frameGapP95Ms": 25
+    },
+    "blockingLimitMs": 50,
+    "cases": [
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            30.7,
+            31.8,
+            32.3,
+            32.2,
+            33,
+            31.2
+          ],
+          "responseP95Ms": 33,
+          "responseMaxMs": 33,
+          "frameGapMaxMs": 17,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 30.7,
+            "frameGapMaxMs": 16.8,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 33,
+            "frameGapMaxMs": 17,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            23.4,
+            30.7,
+            31.5,
+            30.1,
+            31.4,
+            30.4
+          ],
+          "responseP95Ms": 31.5,
+          "responseMaxMs": 31.5,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 23.4,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.5,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            31.2,
+            31.7,
+            31.9,
+            31.4,
+            31.5,
+            31.3
+          ],
+          "responseP95Ms": 31.9,
+          "responseMaxMs": 31.9,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 31.2,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.9,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            24.7,
+            30.2,
+            30.8,
+            29.9,
+            31.1,
+            30.4
+          ],
+          "responseP95Ms": 31.1,
+          "responseMaxMs": 31.1,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 24.7,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.1,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            30.3,
+            27.3,
+            31.1,
+            31,
+            32.2,
+            31.3
+          ],
+          "responseP95Ms": 32.2,
+          "responseMaxMs": 32.2,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 30.3,
+            "frameGapMaxMs": 16.8,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 32.2,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 125,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            18.9,
+            27,
+            31.5,
+            30,
+            31.5,
+            29.8
+          ],
+          "responseP95Ms": 31.5,
+          "responseMaxMs": 31.5,
+          "frameGapMaxMs": 33.4,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 18.9,
+            "frameGapMaxMs": 33.4,
+            "frameGapP95Ms": 16.9
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.5,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            30.9,
+            31.8,
+            30,
+            32,
+            32.1,
+            32
+          ],
+          "responseP95Ms": 32.1,
+          "responseMaxMs": 32.1,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 30.9,
+            "frameGapMaxMs": 16.8,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 32.1,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "hidden",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            24.5,
+            30.3,
+            31.7,
+            30.2,
+            30.5,
+            30.3
+          ],
+          "responseP95Ms": 31.7,
+          "responseMaxMs": 31.7,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 24.5,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.7,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            30.5,
+            31.3,
+            32.1,
+            31.5,
+            32.1,
+            31.2
+          ],
+          "responseP95Ms": 32.1,
+          "responseMaxMs": 32.1,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 30.5,
+            "frameGapMaxMs": 16.8,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 32.1,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "leaf",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            25.4,
+            29.9,
+            31.1,
+            30.2,
+            26.4,
+            30.3
+          ],
+          "responseP95Ms": 31.1,
+          "responseMaxMs": 31.1,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 25.4,
+            "frameGapMaxMs": 16.8,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.1,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "drag",
+        "metrics": {
+          "responseMs": [
+            30.3,
+            31.3,
+            31.3,
+            31.8,
+            32.1,
+            31.9
+          ],
+          "responseP95Ms": 32.1,
+          "responseMaxMs": 32.1,
+          "frameGapMaxMs": 16.9,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 30.3,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 32.1,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      },
+      {
+        "chapter": 300,
+        "mode": "pinned",
+        "gesture": "toolbar",
+        "metrics": {
+          "responseMs": [
+            24.6,
+            29.8,
+            31.6,
+            29.9,
+            30.3,
+            30.7
+          ],
+          "responseP95Ms": 31.6,
+          "responseMaxMs": 31.6,
+          "frameGapMaxMs": 33.4,
+          "frameGapP95Ms": 16.8,
+          "firstTurn": {
+            "responseP95Ms": 24.6,
+            "frameGapMaxMs": 16.9,
+            "frameGapP95Ms": 16.8
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 31.6,
+            "frameGapMaxMs": 33.4,
+            "frameGapP95Ms": 16.8
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "firstTurn": {
+            "blockingDurationMaxMs": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0
+          }
+        },
+        "budgetFailures": [],
+        "failures": [],
+        "visibility": {
+          "started": "visible",
+          "stopped": "visible",
+          "startedFocused": true,
+          "stoppedFocused": true,
+          "changes": []
+        }
+      }
+    ],
+    "artifact": "reader1063-desktop-artifacts"
+  },
+  "softwareRepeats": [
+    {
+      "run": "1062",
+      "testCount": 37,
+      "passed": 37,
+      "profile": "software-work",
+      "cpuRate": 4,
+      "limits": {
+        "responseP95Ms": 200,
+        "frameGapMaxMs": 100,
+        "frameGapP95Ms": 50
+      },
+      "blockingLimitMs": 50,
+      "cases": [
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              80.9,
+              44,
+              41.2,
+              54.7,
+              81.5,
+              60.8
+            ],
+            "responseP95Ms": 81.5,
+            "responseMaxMs": 81.5,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 80.9,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 81.5,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              31.7,
+              27,
+              31.5,
+              33.7,
+              43.9,
+              24
+            ],
+            "responseP95Ms": 43.9,
+            "responseMaxMs": 43.9,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 31.7,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 43.9,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              84.5,
+              52.9,
+              67.9,
+              60.2,
+              81.1,
+              57.7
+            ],
+            "responseP95Ms": 84.5,
+            "responseMaxMs": 84.5,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 84.5,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 81.1,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              36.5,
+              45.2,
+              28.8,
+              25.5,
+              46.3,
+              28.4
+            ],
+            "responseP95Ms": 46.3,
+            "responseMaxMs": 46.3,
+            "frameGapMaxMs": 83.4,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 36.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 46.3,
+              "frameGapMaxMs": 83.4,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 7.2,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 7.2
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              68.5,
+              44.4,
+              64.4,
+              53.9,
+              79,
+              56.2
+            ],
+            "responseP95Ms": 79,
+            "responseMaxMs": 79,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 68.5,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 79,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              63.7,
+              33.3,
+              39.6,
+              31,
+              43.7,
+              29.2
+            ],
+            "responseP95Ms": 63.7,
+            "responseMaxMs": 63.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 63.7,
+              "frameGapMaxMs": 33.5,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 43.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              88.4,
+              49.7,
+              51.8,
+              49.2,
+              33,
+              71
+            ],
+            "responseP95Ms": 88.4,
+            "responseMaxMs": 88.4,
+            "frameGapMaxMs": 66.8,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 88.4,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 71,
+              "frameGapMaxMs": 66.8,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              33.8,
+              35.6,
+              34.3,
+              20.5,
+              31.5,
+              47.7
+            ],
+            "responseP95Ms": 47.7,
+            "responseMaxMs": 47.7,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 33.8,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 47.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              79.2,
+              46.4,
+              37,
+              58.6,
+              39.3,
+              79.7
+            ],
+            "responseP95Ms": 79.7,
+            "responseMaxMs": 79.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50,
+            "firstTurn": {
+              "responseP95Ms": 79.2,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 79.7,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 50
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              57.5,
+              31.4,
+              40.7,
+              38.5,
+              37.7,
+              30
+            ],
+            "responseP95Ms": 57.5,
+            "responseMaxMs": 57.5,
+            "frameGapMaxMs": 83.2,
+            "frameGapP95Ms": 33.5,
+            "firstTurn": {
+              "responseP95Ms": 57.5,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 40.7,
+              "frameGapMaxMs": 83.2,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 2.7,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 2.7
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              85.3,
+              42.2,
+              41.3,
+              53.5,
+              41.4,
+              79
+            ],
+            "responseP95Ms": 85.3,
+            "responseMaxMs": 85.3,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 49.9,
+            "firstTurn": {
+              "responseP95Ms": 85.3,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 79,
+              "frameGapMaxMs": 83.3,
+              "frameGapP95Ms": 49.9
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 5.4,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 5.4
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              53.6,
+              37,
+              31.5,
+              26.3,
+              27.3,
+              21.7
+            ],
+            "responseP95Ms": 53.6,
+            "responseMaxMs": 53.6,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 53.6,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 37,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        }
+      ],
+      "artifact": "reader1062-perf-artifacts"
+    },
+    {
+      "run": "1066",
+      "testCount": 37,
+      "passed": 37,
+      "profile": "software-work",
+      "cpuRate": 4,
+      "limits": {
+        "responseP95Ms": 200,
+        "frameGapMaxMs": 100,
+        "frameGapP95Ms": 50
+      },
+      "blockingLimitMs": 50,
+      "cases": [
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              54.4,
+              38.5,
+              57.9,
+              58.3,
+              54.5,
+              54.5
+            ],
+            "responseP95Ms": 58.3,
+            "responseMaxMs": 58.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 54.4,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 58.3,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              43.9,
+              36.8,
+              23.1,
+              30.6,
+              46.2,
+              26.3
+            ],
+            "responseP95Ms": 46.2,
+            "responseMaxMs": 46.2,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 43.9,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 46.2,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              109.9,
+              50.9,
+              53.5,
+              63.1,
+              67.6,
+              57.1
+            ],
+            "responseP95Ms": 109.9,
+            "responseMaxMs": 109.9,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 109.9,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 67.6,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              34.2,
+              34,
+              42.2,
+              30.7,
+              33.5,
+              37.8
+            ],
+            "responseP95Ms": 42.2,
+            "responseMaxMs": 42.2,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 34.2,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 42.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              72.1,
+              44.2,
+              60.1,
+              55.1,
+              40.4,
+              85.8
+            ],
+            "responseP95Ms": 85.8,
+            "responseMaxMs": 85.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 72.1,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 85.8,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              51,
+              34,
+              33.5,
+              36.8,
+              46.2,
+              33.8
+            ],
+            "responseP95Ms": 51,
+            "responseMaxMs": 51,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 51,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 46.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              72.5,
+              49,
+              39.2,
+              55.7,
+              37.7,
+              94.6
+            ],
+            "responseP95Ms": 94.6,
+            "responseMaxMs": 94.6,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 72.5,
+              "frameGapMaxMs": 33.3,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 94.6,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              46,
+              35.5,
+              24.6,
+              27.5,
+              26.5,
+              31.3
+            ],
+            "responseP95Ms": 46,
+            "responseMaxMs": 46,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 46,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 50.1
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 35.5,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [
+            "first turn/frameGapP95Ms=50.1ms > 50ms"
+          ],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              91.9,
+              49.9,
+              38.9,
+              53.9,
+              41,
+              80.7
+            ],
+            "responseP95Ms": 91.9,
+            "responseMaxMs": 91.9,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 91.9,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 80.7,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              37.6,
+              43.3,
+              37.4,
+              26,
+              41.5,
+              29.9
+            ],
+            "responseP95Ms": 43.3,
+            "responseMaxMs": 43.3,
+            "frameGapMaxMs": 83.3,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 37.6,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 43.3,
+              "frameGapMaxMs": 83.3,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 5.4,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 5.4
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              68.5,
+              50.3,
+              47.9,
+              48.5,
+              42,
+              67.4
+            ],
+            "responseP95Ms": 68.5,
+            "responseMaxMs": 68.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 68.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 67.4,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              51.9,
+              36.4,
+              33.1,
+              25.7,
+              27.7,
+              57.4
+            ],
+            "responseP95Ms": 57.4,
+            "responseMaxMs": 57.4,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 51.9,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 57.4,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        }
+      ],
+      "artifact": "reader1066-perf-artifacts"
+    },
+    {
+      "run": "1067",
+      "testCount": 37,
+      "passed": 37,
+      "profile": "software-work",
+      "cpuRate": 4,
+      "limits": {
+        "responseP95Ms": 200,
+        "frameGapMaxMs": 100,
+        "frameGapP95Ms": 50
+      },
+      "blockingLimitMs": 50,
+      "cases": [
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              78.7,
+              39.9,
+              40.6,
+              52.2,
+              77.7,
+              41.5
+            ],
+            "responseP95Ms": 78.7,
+            "responseMaxMs": 78.7,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 78.7,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 77.7,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              28.8,
+              28.6,
+              36.9,
+              38.6,
+              33.7,
+              50
+            ],
+            "responseP95Ms": 50,
+            "responseMaxMs": 50,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 28.8,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 50,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0.4,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0.4
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              78.3,
+              50.9,
+              60.9,
+              59.6,
+              40.1,
+              91.8
+            ],
+            "responseP95Ms": 91.8,
+            "responseMaxMs": 91.8,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 78.3,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 91.8,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              38,
+              27.4,
+              46.2,
+              31,
+              31.2,
+              41.3
+            ],
+            "responseP95Ms": 46.2,
+            "responseMaxMs": 46.2,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 38,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 46.2,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              61.6,
+              52.7,
+              36.4,
+              53.4,
+              46.8,
+              55.1
+            ],
+            "responseP95Ms": 61.6,
+            "responseMaxMs": 61.6,
+            "frameGapMaxMs": 33.4,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 61.6,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 55.1,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 125,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              55.3,
+              35,
+              38.1,
+              35.2,
+              33.1,
+              23.3
+            ],
+            "responseP95Ms": 55.3,
+            "responseMaxMs": 55.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 55.3,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 38.1,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              61,
+              39.1,
+              42.9,
+              49.4,
+              35.4,
+              69.5
+            ],
+            "responseP95Ms": 69.5,
+            "responseMaxMs": 69.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 61,
+              "frameGapMaxMs": 33.3,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 69.5,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "hidden",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              46,
+              29.6,
+              30.5,
+              25.7,
+              33.2,
+              24.5
+            ],
+            "responseP95Ms": 46,
+            "responseMaxMs": 46,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 46,
+              "frameGapMaxMs": 50,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 33.2,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              85.1,
+              49.6,
+              57.8,
+              39.2,
+              41.1,
+              83.6
+            ],
+            "responseP95Ms": 85.1,
+            "responseMaxMs": 85.1,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 85.1,
+              "frameGapMaxMs": 49.9,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 83.6,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "leaf",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              38.9,
+              27.9,
+              20.6,
+              40.1,
+              41.9,
+              29.4
+            ],
+            "responseP95Ms": 41.9,
+            "responseMaxMs": 41.9,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 38.9,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 41.9,
+              "frameGapMaxMs": 66.6,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "drag",
+          "metrics": {
+            "responseMs": [
+              61.9,
+              43.1,
+              35.3,
+              47.5,
+              39.1,
+              82.3
+            ],
+            "responseP95Ms": 82.3,
+            "responseMaxMs": 82.3,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 61.9,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.3
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 82.3,
+              "frameGapMaxMs": 50.1,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        },
+        {
+          "chapter": 300,
+          "mode": "pinned",
+          "gesture": "toolbar",
+          "metrics": {
+            "responseMs": [
+              44.5,
+              37.3,
+              39.1,
+              36.5,
+              30.7,
+              22.4
+            ],
+            "responseP95Ms": 44.5,
+            "responseMaxMs": 44.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4,
+            "firstTurn": {
+              "responseP95Ms": 44.5,
+              "frameGapMaxMs": 33.4,
+              "frameGapP95Ms": 33.4
+            },
+            "consecutiveTurns": {
+              "responseP95Ms": 39.1,
+              "frameGapMaxMs": 66.7,
+              "frameGapP95Ms": 33.4
+            }
+          },
+          "blocking": {
+            "blockingDurationMaxMs": 0,
+            "firstTurn": {
+              "blockingDurationMaxMs": 0
+            },
+            "consecutiveTurns": {
+              "blockingDurationMaxMs": 0
+            }
+          },
+          "budgetFailures": [],
+          "failures": [],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          }
+        }
+      ],
+      "artifact": "reader1067-perf-artifacts"
+    }
+  ],
+  "publication": {
+    "website": "pending-hosted-CI-review-merge-normal-deployment-and-live-verification",
+    "issue3090": "local-three-run-proof-complete-hosted-repeatability-pending"
+  },
+  "historicalFailures": "All preceding4xhardware and legacy cadence misses remain in the performance record; none are converted into stress passes."
+}

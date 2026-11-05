@@ -73,12 +73,15 @@ function documentGeometry(): ScrollGeometry {
 }
 
 function elementGeometry(el: Element): ScrollGeometry {
+	// One synchronous measure/paint pass shares this origin across every text
+	// fragment. Refresh it on the next pass, including after scrolling/resizing.
+	const top = el.getBoundingClientRect().top;
+	const scrollTop = el.scrollTop;
 	return {
-		scrollTop: el.scrollTop,
+		scrollTop,
 		scrollHeight: el.scrollHeight,
 		clientHeight: el.clientHeight,
-		toContentY: (clientTop) =>
-			clientTop - el.getBoundingClientRect().top + el.scrollTop,
+		toContentY: (clientTop) => clientTop - top + scrollTop,
 	};
 }
 
@@ -148,6 +151,7 @@ export function ReadingProgress({
 		/** Content-root top from the last measure — a cheap drift detector. */
 		let measuredTop = Number.NaN;
 		let frame = 0;
+		let disposed = false;
 
 		const measure = () => {
 			const geo = geometry();
@@ -271,19 +275,18 @@ export function ReadingProgress({
 			passive: true,
 		});
 		const onResize = () => {
+			if (disposed) return;
 			measure();
 			paint();
 		};
 		window.addEventListener("resize", onResize);
-		const observer = new ResizeObserver(() => {
-			measure();
-			paint();
-		});
+		const observer = new ResizeObserver(onResize);
 		observer.observe(contentEl);
 		// Late-loading webfonts rewrap lines and move every line box.
 		document.fonts?.ready.then(onResize).catch(() => {});
 
 		return () => {
+			disposed = true;
 			if (frame !== 0) cancelAnimationFrame(frame);
 			scrollTarget.removeEventListener("scroll", requestPaint);
 			window.removeEventListener("resize", onResize);
