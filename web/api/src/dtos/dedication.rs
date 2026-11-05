@@ -54,6 +54,9 @@ pub struct Dedication {
     /// Whole-dedication expiry as a UTC ISO-8601 string; `null` means ongoing.
     pub expires_at: Option<String>,
     pub scopes: Vec<DedicationScope>,
+    /// Post-commit website-invalidation outcome — only set on mutation
+    /// results (`null` on reads): APPLIED / FAILED / SKIPPED (#3102).
+    pub revalidation: Option<String>,
 }
 
 impl From<DedicationAggregate> for Dedication {
@@ -67,7 +70,19 @@ impl From<DedicationAggregate> for Dedication {
                 .expires_at
                 .map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
             scopes: value.scopes.into_iter().map(Into::into).collect(),
+            revalidation: None,
         }
+    }
+}
+
+impl Dedication {
+    /// The mutation-result shape: the stored aggregate plus the post-commit
+    /// invalidation status (`FAILED` means the write committed but public
+    /// pages have not expired yet).
+    pub fn from_write(outcome: crate::services::dedications_service::WriteOutcome) -> Self {
+        let mut dto = Self::from(outcome.aggregate);
+        dto.revalidation = Some(outcome.revalidation.to_string());
+        dto
     }
 }
 

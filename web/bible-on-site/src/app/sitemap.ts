@@ -6,6 +6,11 @@ import {
 } from "../data/parasha/parasha-units";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
+import {
+	getPublishedMoedSlugs,
+	MOADIM_ROOT,
+	moedHref,
+} from "../lib/moadim";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getAllPerushPerekNamePairs } from "../lib/perushim";
 import { SITE_ORIGIN } from "../lib/seo/jsonld";
@@ -244,6 +249,34 @@ export function generatePediaCategoryEntries(
 }
 
 /**
+ * Generates the מועדים על הפרק landing entry (#3101). The catalogue is
+ * indexable; unpublished moadim never reach the slug list.
+ */
+export function generateMoadimIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}${MOADIM_ROOT}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/** One canonical Hebrew-slug URL per published moed. */
+export function generateMoedEntries(
+	config: SitemapConfig,
+	moedSlugs: string[],
+): MetadataRoute.Sitemap {
+	return moedSlugs.map((slug) => ({
+		url: `${config.baseUrl}${moedHref(slug)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
@@ -253,6 +286,7 @@ export function generateSitemapEntries(
 	perushim: PerushPerekPair[] = [],
 	pediaUniqueNames: string[] = [],
 	imagesByPerek: Record<number, PerekIllustration[]> = {},
+	moedSlugs: string[] = [],
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
@@ -266,6 +300,8 @@ export function generateSitemapEntries(
 		generatePediaIndexEntry(config),
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
+		generateMoadimIndexEntry(config),
+		...generateMoedEntries(config, moedSlugs),
 		generateParashaIndexEntry(config),
 		...generateParashaUnitEntries(config),
 	];
@@ -280,12 +316,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		pediaUniqueNames,
 		imagesByPerek,
 		perushPerekPairs,
+		moedSlugs,
 	] = await Promise.all([
 		getAllAuthorSlugs(),
 		getAllArticlePerekIdPairs(),
 		getAllEntryUniqueNames(),
 		getPerekImagesByChapter(),
 		getAllPerushPerekNamePairs(),
+		getPublishedMoedSlugs(),
 	]);
 
 	return generateSitemapEntries(
@@ -297,5 +335,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		perushPerekPairs,
 		pediaUniqueNames,
 		imagesByPerek,
+		moedSlugs,
 	);
 }

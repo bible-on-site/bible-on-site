@@ -32,20 +32,18 @@ impl TanahpediaRevisionsQuery {
 
         let limit = limit.unwrap_or(50).clamp(1, MAX_REVISIONS_LIMIT) as u64;
         let offset = offset.unwrap_or(0).max(0) as u64;
-        Ok(
-            tanahpedia_revisions_service::find_revisions(
-                ctx.data::<Database>()?,
-                status,
-                entry_id,
-                limit,
-                offset,
-            )
-            .await
-            .map_err(|e| e.extend())?
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+        Ok(tanahpedia_revisions_service::find_revisions(
+            ctx.data::<Database>()?,
+            status,
+            entry_id,
+            limit,
+            offset,
         )
+        .await
+        .map_err(|e| e.extend())?
+        .into_iter()
+        .map(Into::into)
+        .collect())
     }
 }
 

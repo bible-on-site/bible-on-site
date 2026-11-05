@@ -498,9 +498,7 @@ mod tests {
     #[tokio::test]
     async fn find_revisions_bounds_the_query() {
         let conn = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([
-                vec![],
-            ])
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![]])
             .into_connection();
         let db = Database::from_connection(conn.clone());
 
@@ -523,9 +521,7 @@ mod tests {
             .into_connection();
         let db = Database::from_connection(mock_db);
 
-        let err = find_revisions(&db, None, None, 50, 0)
-            .await
-            .unwrap_err();
+        let err = find_revisions(&db, None, None, 50, 0).await.unwrap_err();
         assert!(matches!(err, ServiceError::InternalServerError(_)));
     }
 

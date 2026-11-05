@@ -228,6 +228,16 @@ const nextConfig = {
 					source: `/${encodeURIComponent("מסורה")}/:path*`,
 					destination: "/masora/:path*",
 				},
+				// /מועדים — the DB-backed מועדים על הפרק section (#3101) lives
+				// in the ASCII /moadim route dir; slugs are canonical Hebrew
+				// and pass through the :path* wildcard like מסורה does.
+				{ source: "/מועדים", destination: "/moadim" },
+				{ source: `/${encodeURIComponent("מועדים")}`, destination: "/moadim" },
+				{ source: "/מועדים/:path*", destination: "/moadim/:path*" },
+				{
+					source: `/${encodeURIComponent("מועדים")}/:path*`,
+					destination: "/moadim/:path*",
+				},
 				// /פרשה — the parasha reading division's public Hebrew root.
 				// Book-chrome URLs (/פרשה/{sefer}/{cover-slug}) land on the
 				// sefer's first parasha in book mode; unit URLs resolve through
@@ -264,6 +274,18 @@ const nextConfig = {
 			{
 				source: "/calendar",
 				destination: "/לוח",
+				permanent: true,
+			},
+			// Same convention for /moadim — the public canonical URLs are
+			// the Hebrew /מועדים ones (#3101).
+			{
+				source: "/moadim",
+				destination: "/מועדים",
+				permanent: true,
+			},
+			{
+				source: "/moadim/:path*",
+				destination: "/מועדים/:path*",
 				permanent: true,
 			},
 			// Legacy /authors → /929/authors permanent redirect

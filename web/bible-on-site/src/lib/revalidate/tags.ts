@@ -31,7 +31,12 @@ export const COLLECTION_TAGS = {
 	 * carries `dedicationsBookshelf` since it aggregates every scope.
 	 */
 	dedications: "dedications",
+	/** Every cached moed read — catalogue and per-slug detail (#3101). */
+	moadim: "moadim",
 } as const;
+
+/** One moed detail read + the `/מועדים/{slug}` page that collected it. */
+export const moedTag = (slug: string) => `moed:${slug}`;
 
 /** The bookshelf's aggregate helek/sefer dedication view (homepage). */
 export const bookshelfDedicationsTag = "dedications:bookshelf";

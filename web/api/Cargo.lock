@@ -700,6 +700,7 @@ dependencies = [
  "sea-orm",
  "sea-query-sqlx",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-actix-web",

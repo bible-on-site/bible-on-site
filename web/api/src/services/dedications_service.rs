@@ -7,6 +7,7 @@ use sea_orm::{
 };
 
 use crate::common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError};
+use crate::common::website_revalidate::{DedicationAssignments, PerekRange, WebsiteRevalidator};
 use crate::dtos::dedication::{DedicationTargetInput, UpdateDedicationInput};
 use crate::providers::Database;
 use entities::{
@@ -430,7 +431,7 @@ pub async fn resolve(
 /// read instead of seven sequential scans — or only one dedication's rows
 /// when `dedication_id` is given.
 async fn link_scopes(
-    db: &Database,
+    conn: &impl ConnectionTrait,
     dedication_id: Option<i32>,
 ) -> Result<Vec<(i32, ScopeMatch)>, ServiceError> {
     let kinds = [
@@ -455,14 +456,14 @@ async fn link_scopes(
         })
         .collect::<Vec<_>>()
         .join("\nUNION ALL\n");
-    let rows = union_scan(db.get_connection(), sql, values).await?;
+    let rows = union_scan(conn, sql, values).await?;
     Ok(rows.iter().filter_map(scope_of).collect())
 }
 
 /// Admin listing: every dedication with every assignment, including expired —
 /// management must still inspect and edit lapsed rows.
 pub async fn list_all(db: &Database) -> Result<Vec<DedicationAggregate>, ServiceError> {
-    let matched = link_scopes(db, None).await?;
+    let matched = link_scopes(db.get_connection(), None).await?;
     // The dedication table drives the listing — a row with no assignments
     // still appears (empty scope list) so an unassigned creation neither
     // errors the mutation's post-commit read nor hides from the admin list.
@@ -899,15 +900,91 @@ fn normalize_subject(subject: &str) -> Result<String, ServiceError> {
     Ok(trimmed.to_string())
 }
 
+/// A mutation outcome: the stored aggregate plus the post-commit website
+/// invalidation status — `FAILED` means the write committed but public
+/// pages have not expired yet, so callers can surface that explicitly.
+#[derive(Debug)]
+pub struct WriteOutcome {
+    pub aggregate: DedicationAggregate,
+    pub revalidation: &'static str,
+}
+
+/// Folds one dedication's scope matches into the invalidation shape —
+/// sorted + deduplicated so union-of-old-and-new is idempotent.
+fn assignments_of(matches: &[(i32, ScopeMatch)]) -> DedicationAssignments {
+    let mut out = DedicationAssignments::default();
+    for (_, scope) in matches {
+        match &scope.target {
+            ScopeTarget::Perek { low, high } => out.perek_ranges.push(PerekRange {
+                low: *low,
+                high: *high,
+            }),
+            ScopeTarget::Sefer { sefer_id } => out.sefer_ids.push(*sefer_id),
+            ScopeTarget::Helek { helek_id } => out.helek_ids.push(*helek_id),
+            ScopeTarget::Parasha { parasha_id } => out.parasha_ids.push(*parasha_id),
+            ScopeTarget::Article { article_id } => out.article_ids.push(*article_id),
+            ScopeTarget::TanahpediaEntry { entry_id } => out.entry_ids.push(entry_id.clone()),
+            ScopeTarget::Masora => out.masora = true,
+        }
+    }
+    out
+}
+
+/// Merges the old and new assignment snapshots — every surface either set
+/// rendered on must expire.
+fn union_assignments(
+    old: &[(i32, ScopeMatch)],
+    new: &[(i32, ScopeMatch)],
+) -> DedicationAssignments {
+    let mut out = assignments_of(old);
+    let new_side = assignments_of(new);
+    out.perek_ranges.extend(new_side.perek_ranges);
+    out.sefer_ids.extend(new_side.sefer_ids);
+    out.helek_ids.extend(new_side.helek_ids);
+    out.parasha_ids.extend(new_side.parasha_ids);
+    out.article_ids.extend(new_side.article_ids);
+    out.entry_ids.extend(new_side.entry_ids);
+    out.masora = out.masora || new_side.masora;
+    out.perek_ranges.sort_by_key(|r| (r.low, r.high));
+    out.perek_ranges.dedup_by_key(|r| (r.low, r.high));
+    out.sefer_ids.sort_unstable();
+    out.sefer_ids.dedup();
+    out.helek_ids.sort_unstable();
+    out.helek_ids.dedup();
+    out.parasha_ids.sort_unstable();
+    out.parasha_ids.dedup();
+    out.article_ids.sort_unstable();
+    out.article_ids.dedup();
+    out.entry_ids.sort();
+    out.entry_ids.dedup();
+    out
+}
+
+/// Post-commit invalidation for a dedication write — expires every scoped
+/// surface the old ∪ new assignments render on (#3102). Logged on failure
+/// and reported to the caller so a stale public page is never silent.
+async fn revalidate_dedication(
+    revalidator: &WebsiteRevalidator,
+    dedication_id: i32,
+    old: &[(i32, ScopeMatch)],
+    new: &[(i32, ScopeMatch)],
+) -> &'static str {
+    revalidator
+        .invalidate_dedication(dedication_id, &union_assignments(old, new))
+        .await
+        .as_str()
+}
+
 /// Creates a dedication with its purposes and validated targets in one
 /// transaction. Returns the stored aggregate (every assignment attached).
 pub async fn create(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     subject: String,
     expires_at: Option<String>,
     purpose_type_ids: Vec<i32>,
     targets: Vec<DedicationTargetInput>,
-) -> Result<DedicationAggregate, ServiceError> {
+) -> Result<WriteOutcome, ServiceError> {
     let subject = normalize_subject(&subject)?;
     let expires_at = expires_at.as_deref().map(parse_expiry).transpose()?;
 
@@ -929,7 +1006,17 @@ pub async fn create(
     insert_targets(&txn, id, &validated).await?;
     txn.commit().await.map_err(internal)?;
 
-    find_aggregate(db, id).await
+    let aggregate = find_aggregate(db, id).await?;
+    let new_matches: Vec<(i32, ScopeMatch)> = aggregate
+        .scopes
+        .iter()
+        .map(|scope| (id, scope.clone()))
+        .collect();
+    let revalidation = revalidate_dedication(revalidator, id, &[], &new_matches).await;
+    Ok(WriteOutcome {
+        aggregate,
+        revalidation,
+    })
 }
 
 /// Reloads one dedication with all its assignments and purposes — the
@@ -940,7 +1027,7 @@ async fn find_aggregate(db: &Database, id: i32) -> Result<DedicationAggregate, S
         .await
         .map_err(internal)?
         .ok_or_else(|| ServiceError::not_found("Dedication Not Found", None::<ServiceError>))?;
-    let matched = link_scopes(db, Some(id)).await?;
+    let matched = link_scopes(db.get_connection(), Some(id)).await?;
     let mut aggregates = hydrate(db, vec![model], matched, false, Utc::now().naive_utc()).await?;
     Ok(aggregates.remove(0))
 }
@@ -949,9 +1036,10 @@ async fn find_aggregate(db: &Database, id: i32) -> Result<DedicationAggregate, S
 /// replacement sets, atomically.
 pub async fn update(
     db: &Database,
+    revalidator: &WebsiteRevalidator,
     id: i32,
     input: UpdateDedicationInput,
-) -> Result<DedicationAggregate, ServiceError> {
+) -> Result<WriteOutcome, ServiceError> {
     let txn = db.get_connection().begin().await.map_err(internal)?;
 
     let existing = dedication::Entity::find_by_id(id)
@@ -959,6 +1047,10 @@ pub async fn update(
         .await
         .map_err(internal)?
         .ok_or_else(|| ServiceError::not_found("Dedication Not Found", None::<ServiceError>))?;
+
+    // The pre-write assignment set — subject/purpose edits also expire these
+    // surfaces since the dedication's text renders on them.
+    let old_matches = link_scopes(&txn, Some(id)).await?;
 
     let mut model: dedication::ActiveModel = existing.into();
     if let Some(subject) = &input.subject {
@@ -991,13 +1083,30 @@ pub async fn update(
     }
 
     txn.commit().await.map_err(internal)?;
-    find_aggregate(db, id).await
+    let aggregate = find_aggregate(db, id).await?;
+    let new_matches: Vec<(i32, ScopeMatch)> = aggregate
+        .scopes
+        .iter()
+        .map(|scope| (id, scope.clone()))
+        .collect();
+    let revalidation = revalidate_dedication(revalidator, id, &old_matches, &new_matches).await;
+    Ok(WriteOutcome {
+        aggregate,
+        revalidation,
+    })
 }
 
 /// Deletes a dedication and all its assignments/purpose links atomically.
 /// Returns false when nothing was removed.
-pub async fn remove(db: &Database, id: i32) -> Result<bool, ServiceError> {
+pub async fn remove(
+    db: &Database,
+    revalidator: &WebsiteRevalidator,
+    id: i32,
+) -> Result<bool, ServiceError> {
     let txn = db.get_connection().begin().await.map_err(internal)?;
+    // The assignment set must be captured before the delete — the website
+    // expires the surfaces those targets render on.
+    let old_matches = link_scopes(&txn, Some(id)).await?;
     delete_targets(&txn, id).await?;
     dedication_dedication_type::Entity::delete_many()
         .filter(dedication_dedication_type::Column::DedicationId.eq(id))
@@ -1009,6 +1118,18 @@ pub async fn remove(db: &Database, id: i32) -> Result<bool, ServiceError> {
         .await
         .map_err(internal)?;
     txn.commit().await.map_err(internal)?;
+    if result.rows_affected > 0 {
+        // The bool result cannot carry the invalidation status — surface a
+        // failed expiry loudly in logs instead (the public pages still hold
+        // the deleted dedication until the revalidate succeeds).
+        let revalidation = revalidate_dedication(revalidator, id, &old_matches, &[]).await;
+        if revalidation == "FAILED" {
+            tracing::error!(
+                dedication_id = id,
+                "dedication delete committed but website revalidation failed"
+            );
+        }
+    }
     Ok(result.rows_affected > 0)
 }
 
@@ -1021,6 +1142,12 @@ mod tests {
 
     fn ts(value: &str) -> NaiveDateTime {
         NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    /// A revalidator that always reports SKIPPED — deterministic for unit
+    /// tests (no WEBSITE_URL/REVALIDATE_SECRET influence).
+    fn rv() -> crate::common::website_revalidate::WebsiteRevalidator {
+        crate::common::website_revalidate::WebsiteRevalidator::new(None, None)
     }
 
     const NOW: &str = "2030-06-15 12:00:00";
@@ -1474,9 +1601,11 @@ mod tests {
             .into_connection();
         let db = Database::from_connection(mock);
 
-        let out = create(&db, "x".into(), None, vec![], vec![]).await.unwrap();
-        assert_eq!(out.dedication.id, 42);
-        assert!(out.scopes.is_empty());
+        let out = create(&db, &rv(), "x".into(), None, vec![], vec![])
+            .await
+            .unwrap();
+        assert_eq!(out.aggregate.dedication.id, 42);
+        assert!(out.aggregate.scopes.is_empty());
     }
 
     fn target_input(
@@ -1504,6 +1633,7 @@ mod tests {
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let err = create(
             &db,
+            &rv(),
             "x".into(),
             None,
             vec![],
@@ -1531,7 +1661,7 @@ mod tests {
             target_input(DedicationScopeKind::Article, |_| {}),
             target_input(DedicationScopeKind::TanahpediaEntry, |_| {}),
         ] {
-            let err = create(&db, "x".into(), None, vec![], vec![input])
+            let err = create(&db, &rv(), "x".into(), None, vec![], vec![input])
                 .await
                 .unwrap_err();
             assert!(matches!(err, ServiceError::BadRequest(_)), "{err}");
@@ -1558,7 +1688,7 @@ mod tests {
                 i.entry_id = Some("missing".into())
             }),
         ] {
-            let err = create(&db, "x".into(), None, vec![], vec![input])
+            let err = create(&db, &rv(), "x".into(), None, vec![], vec![input])
                 .await
                 .unwrap_err();
             assert!(matches!(err, ServiceError::BadRequest(_)), "{err}");
@@ -1575,6 +1705,7 @@ mod tests {
         let db = Database::from_connection(mock);
         let err = create(
             &db,
+            &rv(),
             "x".into(),
             None,
             vec![],
@@ -1594,6 +1725,7 @@ mod tests {
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let err = create(
             &db,
+            &rv(),
             "x".into(),
             None,
             vec![],
@@ -1614,7 +1746,7 @@ mod tests {
             ])
             .into_connection();
         let db = Database::from_connection(mock);
-        let err = create(&db, "x".into(), None, vec![77], vec![])
+        let err = create(&db, &rv(), "x".into(), None, vec![77], vec![])
             .await
             .unwrap_err();
         assert!(matches!(err, ServiceError::BadRequest(_)));
@@ -1633,6 +1765,7 @@ mod tests {
         let db = Database::from_connection(mock);
         let err = create(
             &db,
+            &rv(),
             "x".into(),
             None,
             vec![],
@@ -1651,13 +1784,13 @@ mod tests {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         assert!(matches!(
-            create(&db, "  ".into(), None, vec![], vec![])
+            create(&db, &rv(), "  ".into(), None, vec![], vec![])
                 .await
                 .unwrap_err(),
             ServiceError::BadRequest(_)
         ));
         assert!(matches!(
-            create(&db, "x".into(), Some("soon".into()), vec![], vec![])
+            create(&db, &rv(), "x".into(), Some("soon".into()), vec![], vec![])
                 .await
                 .unwrap_err(),
             ServiceError::BadRequest(_)
@@ -1715,6 +1848,7 @@ mod tests {
 
         let out = create(
             &db,
+            &rv(),
             "מרדכי בן זאב".into(),
             None,
             vec![1],
@@ -1725,10 +1859,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(out.dedication.id, 42);
-        assert_eq!(out.purposes, vec!["לע\"נ".to_string()]);
+        assert_eq!(out.aggregate.dedication.id, 42);
+        assert_eq!(out.aggregate.purposes, vec!["לע\"נ".to_string()]);
         assert_eq!(
-            out.scopes,
+            out.aggregate.scopes,
             vec![ScopeMatch {
                 target: ScopeTarget::Sefer { sefer_id: 24 },
                 expires_at: None,
@@ -1744,6 +1878,7 @@ mod tests {
         let db = Database::from_connection(mock);
         let err = update(
             &db,
+            &rv(),
             9,
             UpdateDedicationInput {
                 subject: Some("new".into()),
@@ -1763,7 +1898,9 @@ mod tests {
         let mock = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
                 dedication_model(9, "old", Some(ts("2031-01-01 00:00:00"))),
-            ]])
+            ]]);
+        // The pre-write link read feeding the old∪new invalidation payload.
+        let mock = empty_link_tables(mock)
             .append_exec_results([MockExecResult {
                 last_insert_id: 0,
                 rows_affected: 1,
@@ -1795,6 +1932,7 @@ mod tests {
 
         let out = update(
             &db,
+            &rv(),
             9,
             UpdateDedicationInput {
                 subject: Some("new".into()),
@@ -1806,22 +1944,22 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(out.dedication.id, 9);
-        assert_eq!(out.dedication.expires_at, None);
+        assert_eq!(out.aggregate.dedication.id, 9);
+        assert_eq!(out.aggregate.dedication.expires_at, None);
     }
 
     #[tokio::test]
     async fn remove_returns_false_for_unknown_id() {
-        let mock = MockDatabase::new(DatabaseBackend::MySql)
+        let mock = empty_link_tables(MockDatabase::new(DatabaseBackend::MySql))
             .append_exec_results(exec_results(9, 0, 0))
             .into_connection();
         let db = Database::from_connection(mock);
-        assert!(!remove(&db, 1234).await.unwrap());
+        assert!(!remove(&db, &rv(), 1234).await.unwrap());
     }
 
     #[tokio::test]
     async fn remove_returns_true_when_row_deleted() {
-        let mock = MockDatabase::new(DatabaseBackend::MySql)
+        let mock = empty_link_tables(MockDatabase::new(DatabaseBackend::MySql))
             .append_exec_results(exec_results(8, 0, 0))
             .append_exec_results([MockExecResult {
                 last_insert_id: 0,
@@ -1829,14 +1967,16 @@ mod tests {
             }])
             .into_connection();
         let db = Database::from_connection(mock);
-        assert!(remove(&db, 1).await.unwrap());
+        assert!(remove(&db, &rv(), 1).await.unwrap());
     }
 
     #[tokio::test]
     async fn update_target_replacement_preserves_purposes() {
         for replace_purposes in [false, true] {
-            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results([vec![dedication_model(9, "subject", None)]])
+            let mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results([vec![dedication_model(9, "subject", None)]]);
+            // Pre-write link read (old ∪ new invalidation payload).
+            let mut mock = empty_link_tables(mock)
                 // Extra result lets this test observe an unintended purpose deletion too.
                 .append_exec_results(exec_results(12, 0, 1));
             if replace_purposes {
@@ -1858,6 +1998,7 @@ mod tests {
             let db = Database::from_connection(mock.into_connection());
             let result = update(
                 &db,
+                &rv(),
                 9,
                 UpdateDedicationInput {
                     subject: None,
@@ -1869,8 +2010,8 @@ mod tests {
             )
             .await
             .unwrap();
-            assert_eq!(result.purposes, ["purpose"]);
-            assert!(result.scopes.is_empty());
+            assert_eq!(result.aggregate.purposes, ["purpose"]);
+            assert!(result.aggregate.scopes.is_empty());
             let log = db.get_connection().clone().into_transaction_log();
             let sql = format!("{log:?}");
             assert_eq!(
@@ -1974,6 +2115,7 @@ mod tests {
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
         let error = create(
             &db,
+            &rv(),
             "subject".into(),
             None,
             vec![],
@@ -2135,8 +2277,9 @@ mod tests {
     async fn update_sets_expiry_in_utc_without_replacing_targets_or_purposes() {
         let expiry = ts("2030-06-15 12:00:00");
         let mock = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results([vec![dedication_model(9, "subject", None)]])
-            .append_exec_results(exec_results(1, 0, 1));
+            .append_query_results([vec![dedication_model(9, "subject", None)]]);
+        // Pre-write link read (old ∪ new invalidation payload).
+        let mock = empty_link_tables(mock).append_exec_results(exec_results(1, 0, 1));
         let mock = mock.append_query_results([vec![dedication_model(9, "subject", Some(expiry))]]);
         let mock = empty_link_tables(mock)
             .append_query_results::<dedication_dedication_type::Model, Vec<_>, _>([vec![]])
@@ -2144,6 +2287,7 @@ mod tests {
         let db = Database::from_connection(mock.into_connection());
         let result = update(
             &db,
+            &rv(),
             9,
             UpdateDedicationInput {
                 subject: None,
@@ -2155,7 +2299,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(result.dedication.expires_at, Some(expiry));
+        assert_eq!(result.aggregate.dedication.expires_at, Some(expiry));
         let sql = format!("{:?}", db.get_connection().clone().into_transaction_log());
         assert!(
             sql.contains("UPDATE `tanah_dedication` SET `expires_at` = ?"),
@@ -2177,5 +2321,96 @@ mod tests {
             !sql.contains("FROM `tanah_dedication_dedication_type`"),
             "{sql}"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown union kind 99")]
+    fn scope_branch_rejects_an_unknown_union_kind() {
+        scope_branch(99);
+    }
+
+    #[test]
+    fn scope_of_ignores_an_unknown_union_kind() {
+        let row = UnionRow {
+            kind: 99,
+            c1: Some(5),
+            c2: Some(1),
+            c3: None,
+            c4: None,
+            expires_at: None,
+        };
+        assert!(scope_of(&row).is_none());
+    }
+
+    #[test]
+    fn union_assignments_collects_every_scope_kind() {
+        let scope = |target| ScopeMatch {
+            target,
+            expires_at: None,
+        };
+        let old = vec![
+            (5, scope(ScopeTarget::Helek { helek_id: 2 })),
+            (5, scope(ScopeTarget::Article { article_id: 7 })),
+        ];
+        let new = vec![
+            (5, scope(ScopeTarget::Parasha { parasha_id: 9 })),
+            (
+                5,
+                scope(ScopeTarget::TanahpediaEntry {
+                    entry_id: "entry-1".to_string(),
+                }),
+            ),
+            (5, scope(ScopeTarget::Masora)),
+        ];
+        let merged = union_assignments(&old, &new);
+        assert_eq!(merged.helek_ids, [2]);
+        assert_eq!(merged.article_ids, [7]);
+        assert_eq!(merged.parasha_ids, [9]);
+        assert_eq!(merged.entry_ids, ["entry-1".to_string()]);
+        assert!(merged.masora);
+    }
+
+    #[tokio::test]
+    async fn resolve_ignores_unknown_canonical_union_rows() {
+        // A forward-compatible row the decoder does not recognize is skipped,
+        // not fatal.
+        let mock = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results([vec![urow(99, Some(1), Some(1), Some(5), None, None)]])
+            .append_query_results::<
+                std::collections::BTreeMap<String, Value>,
+                Vec<std::collections::BTreeMap<String, Value>>,
+                _,
+            >([vec![]]);
+        let db = Database::from_connection(mock.into_connection());
+        let resolved = resolve(
+            &db,
+            DedicationContext {
+                perek_ids: vec![1],
+                ..Default::default()
+            },
+            ts(NOW),
+        )
+        .await
+        .unwrap();
+        assert!(resolved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn remove_reports_a_failed_post_commit_revalidation() {
+        // The delete committed; only the website expiry failed — the write
+        // still reports success and the failure is logged.
+        let mock = empty_link_tables(MockDatabase::new(DatabaseBackend::MySql))
+            .append_exec_results(exec_results(8, 0, 0))
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let db = Database::from_connection(mock);
+        let failing = crate::common::website_revalidate::WebsiteRevalidator::new(
+            Some("http://127.0.0.1:1".to_string()),
+            Some("s".to_string()),
+        );
+        assert!(remove(&db, &failing, 1).await.unwrap());
     }
 }
