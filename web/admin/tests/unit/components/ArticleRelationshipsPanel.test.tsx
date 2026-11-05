@@ -26,7 +26,11 @@ vi.mock("@tanstack/react-router", () => ({
 	),
 }));
 
-import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPanel";
+import {
+	ArticleRelationshipsPanel,
+	requireEntry,
+} from "~/components/ArticleRelationshipsPanel";
+import { supportedRelationships } from "~/lib/article-relationships";
 
 function renderPanel(
 	props: Partial<
@@ -160,6 +164,64 @@ describe("ArticleRelationshipsPanel", () => {
 		).toHaveAttribute("href", "/moadim");
 	});
 
+	it("falls back to the raw author id when no name is provided", () => {
+		renderPanel({ authorName: undefined });
+		expect(screen.getByText(/מזהה 2/)).toBeInTheDocument();
+	});
+
+	it("shows the covering-source schema as undeployed when the count is missing", () => {
+		renderPanel({ coveringCount: undefined });
+		expect(
+			screen.getByText(/סכמת מקורות הכיסוי עוד לא נפרסה/),
+		).toBeInTheDocument();
+	});
+
+	it("marks coverage as unknown when it is not verified", () => {
+		renderPanel({ coverageVerified: false });
+		expect(screen.getByText(/כיסוי לא ידוע/)).toBeInTheDocument();
+	});
+
+	it("shows the empty state and id fallbacks for dedications", async () => {
+		mocks.getArticleRelationshipDetails.mockResolvedValue({
+			...details,
+			dedications: [
+				{
+					dedicationId: 9,
+					subject: null,
+					expiresAt: null,
+					dedicationExpiresAt: "2020-05-06 07:08:09",
+				},
+			],
+		});
+		renderPanel();
+		expect(await screen.findByText("הקדשה 9")).toBeInTheDocument();
+		expect(
+			screen.getByText(/ההקדשה פגה 2020-05-06 07:08:09/),
+		).toBeInTheDocument();
+	});
+
+	it("shows an explicit empty state when no dedications are assigned", async () => {
+		mocks.getArticleRelationshipDetails.mockResolvedValue({
+			...details,
+			dedications: [],
+		});
+		renderPanel();
+		expect(
+			await screen.findByText(/אין הקדשות משויכות/),
+		).toBeInTheDocument();
+	});
+
+	it("shows an explicit empty state when no annotations are stored", async () => {
+		mocks.getArticleRelationshipDetails.mockResolvedValue({
+			...details,
+			mentionAnnotations: [],
+		});
+		renderPanel();
+		expect(
+			await screen.findByText(/אין אנוטציות מאוחסנות/),
+		).toBeInTheDocument();
+	});
+
 	it("shows the annotation schema as undeployed, not empty", async () => {
 		mocks.getArticleRelationshipDetails.mockResolvedValue({
 			...details,
@@ -179,5 +241,24 @@ describe("ArticleRelationshipsPanel", () => {
 		expect(
 			await screen.findByText(/שגיאה בטעינה: db down/),
 		).toBeInTheDocument();
+	});
+});
+
+describe("requireEntry", () => {
+	it("falls back to the registry when the supported list lacks the key", () => {
+		const entry = requireEntry([], "primaryPerek");
+		expect(entry.key).toBe("primaryPerek");
+		expect(supportedRelationships()).toContainEqual(entry);
+	});
+
+	it("returns the supplied entry when present", () => {
+		const [first] = supportedRelationships();
+		expect(requireEntry([first], first.key)).toBe(first);
+	});
+
+	it("throws for a key that is not in the registry at all", () => {
+		expect(() => requireEntry([], "no-such-relationship")).toThrow(
+			"registry entry missing: no-such-relationship",
+		);
 	});
 });

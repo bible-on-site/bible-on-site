@@ -14,12 +14,16 @@ declare global {
 			startedAt: number;
 			stoppedAt: number | undefined;
 			longAnimationFramesSupported: boolean;
-			longAnimationFrames: TurnLongAnimationFrame[];
+			longAnimationFrames: PerformanceEntry[];
 			observer: PerformanceObserver | undefined;
 			recordLongFrames: (entries: PerformanceEntry[]) => void;
 			raf: number;
 			listener: (event: Event) => void;
 			eventType: string;
+			startedVisibility: DocumentVisibilityState;
+			startedFocused: boolean;
+			visibilityChanges: { at: number; state: DocumentVisibilityState }[];
+			visibilityListener: () => void;
 		};
 	}
 }
@@ -30,17 +34,27 @@ declare global {
 export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 	await page.evaluate((inputGesture) => {
 		if (window.__seferTurns) throw new Error("Turn probe already running");
+		performance.mark("sefer-qualification:begin");
 		const probe = {
 			inputs: [] as TurnInput[],
 			frames: [] as number[],
 			repeatedFrameTimestamps: [] as number[],
 			startedAt: performance.now(),
 			stoppedAt: undefined as number | undefined,
+			startedVisibility: document.visibilityState,
+			startedFocused: document.hasFocus(),
+			visibilityChanges: [] as { at: number; state: DocumentVisibilityState }[],
+			visibilityListener: () => {
+				probe.visibilityChanges.push({
+					at: performance.now(),
+					state: document.visibilityState,
+				});
+			},
 			longAnimationFramesSupported:
 				PerformanceObserver.supportedEntryTypes.includes(
 					"long-animation-frame",
 				),
-			longAnimationFrames: [] as TurnLongAnimationFrame[],
+			longAnimationFrames: [] as PerformanceEntry[],
 			observer: undefined as PerformanceObserver | undefined,
 			recordLongFrames: (entries: PerformanceEntry[]): void => {
 				for (const entry of entries) {
@@ -48,7 +62,9 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 						entry.startTime + entry.duration > probe.startedAt &&
 						entry.startTime < (probe.stoppedAt ?? Infinity)
 					) {
-						probe.longAnimationFrames.push(entry.toJSON());
+						// Keep browser records intact while timing. Serializing script
+						// attribution here adds observer work after an already slow frame.
+						probe.longAnimationFrames.push(entry);
 					}
 				}
 			},
@@ -86,6 +102,8 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 			probe.observer.observe({ type: "long-animation-frame", buffered: true });
 		}
 		document.addEventListener(probe.eventType, probe.listener, true);
+		// Observe background scheduling without polling or filtering slow frames.
+		document.addEventListener("visibilitychange", probe.visibilityListener);
 		let previous: number | null = null;
 		const tick = (now: number) => {
 			if (window.__seferTurns !== probe) return;
@@ -118,23 +136,42 @@ export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 }
 
 export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
-	return page.evaluate(() => {
+	return page.evaluate(async () => {
 		const probe = window.__seferTurns;
 		if (!probe) throw new Error("Turn probe missing");
 		probe.stoppedAt = performance.now();
+		performance.mark("sefer-qualification:end");
+		const stoppedVisibility = document.visibilityState;
+		const stoppedFocused = document.hasFocus();
 		window.__seferTurns = undefined;
 		cancelAnimationFrame(probe.raf);
 		document.removeEventListener(probe.eventType, probe.listener, true);
+		document.removeEventListener("visibilitychange", probe.visibilityListener);
 		if (probe.observer) {
+			// A blocked animation callback is reported after its rendering phase.
+			// Stop frame/input sampling first, then collect that pending record.
+			// Later entries are excluded by stoppedAt; no timing window grows.
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			);
 			probe.recordLongFrames(probe.observer.takeRecords());
 			probe.observer.disconnect();
 		}
 		return {
 			inputs: probe.inputs,
 			frames: probe.frames,
+			visibility: {
+				started: probe.startedVisibility,
+				stopped: stoppedVisibility,
+				startedFocused: probe.startedFocused,
+				stoppedFocused,
+				changes: probe.visibilityChanges,
+			},
 			repeatedFrameTimestamps: probe.repeatedFrameTimestamps,
 			longAnimationFramesSupported: probe.longAnimationFramesSupported,
-			longAnimationFrames: probe.longAnimationFrames,
+			longAnimationFrames: probe.longAnimationFrames.map(
+				(entry) => entry.toJSON() as TurnLongAnimationFrame,
+			),
 		};
 	});
 }

@@ -189,4 +189,36 @@ mod tests {
             .is_ok()
         );
     }
+
+    #[test]
+    fn article_manager_fails_closed_when_the_key_is_not_configured() {
+        let err = ApiAuth::with_article_api_key(Some("anything".to_string()), None)
+            .authorize_article_manager()
+            .unwrap_err();
+        assert_eq!(err.to_string(), "Article API is not configured");
+    }
+
+    #[test]
+    fn article_manager_rejects_wrong_or_missing_bearer() {
+        let expected = Some("correct-horse".to_string());
+        for bearer in [Some("wrong".to_string()), None] {
+            assert!(
+                ApiAuth::with_article_api_key(bearer, expected.clone())
+                    .authorize_article_manager()
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn article_manager_accepts_the_configured_token() {
+        assert!(
+            ApiAuth::with_article_api_key(
+                Some("correct-horse".to_string()),
+                Some("correct-horse".to_string()),
+            )
+            .authorize_article_manager()
+            .is_ok()
+        );
+    }
 }

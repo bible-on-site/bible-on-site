@@ -910,12 +910,14 @@ pub async fn update_relationships(
     let updated = load_relationships(db, article_id).await?;
     // The audit record: the actor (`source`) plus before/after link state.
     // Correction/undo is supported by re-submitting `previous`' fields.
+    let previous_covering_count = previous.covering_sources.len();
+    let new_covering_count = updated.covering_sources.len();
     tracing::info!(
         %source,
         %article_id,
         previous_perek_id = current.perek_id,
         previous_author_id = current.author_id,
-        previous_covering_count = previous.covering_sources.len(),
+        previous_covering_count,
         previous_coverage_verified = current.coverage_verified,
         previous_moed_ids = ?previous
             .moadim
@@ -924,7 +926,7 @@ pub async fn update_relationships(
             .collect::<Vec<_>>(),
         new_perek_id = updated.article.perek_id,
         new_author_id = updated.article.author_id,
-        new_covering_count = updated.covering_sources.len(),
+        new_covering_count,
         new_coverage_verified = updated.article.coverage_verified,
         new_moed_ids = ?updated
             .moadim
@@ -1067,6 +1069,38 @@ mod tests {
     }
 
     #[test]
+    fn covering_source_input_and_update_input_derives_are_exercised() {
+        let coordinate = CoveringSourceInput {
+            perek_id: 1,
+            pasuk: 2,
+        };
+        let cloned = coordinate.clone();
+        assert_eq!(coordinate, cloned);
+        assert_ne!(
+            coordinate,
+            CoveringSourceInput {
+                perek_id: 1,
+                pasuk: 3
+            }
+        );
+        assert!(format!("{coordinate:?}").contains("CoveringSourceInput"));
+
+        let input = UpdateArticleRelationshipsInput {
+            source: "admin".to_string(),
+            perek_id: Some(1),
+            author_id: None,
+            moed_ids: None,
+            covering_sources: Some(vec![coordinate]),
+            coverage_verified: None,
+            expected_content_hash: None,
+            expected_covering_sources: None,
+            expected_moed_ids: None,
+        };
+        let input = input.clone();
+        assert!(format!("{input:?}").contains("UpdateArticleRelationshipsInput"));
+    }
+
+    #[test]
     fn perek_label_matches_the_website_compiled_source() {
         let mut model = perek::Model {
             id: 1,
@@ -1094,7 +1128,7 @@ mod tests {
         use super::*;
         use crate::dtos::article_relationships::ArticleRelationshipTargetKind;
         use entities::article_moed;
-        use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, Value};
+        use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, Value};
         use std::collections::BTreeMap;
 
         fn skipped_revalidator() -> WebsiteRevalidator {
@@ -1539,6 +1573,24 @@ mod tests {
             }
         }
 
+        fn perek_row(id: i32, pasuk_count: Option<i16>) -> perek::Model {
+            perek::Model {
+                id,
+                perek_id: Some(id),
+                sefer_id: Some(1),
+                sefer_name: Some("בראשית".to_string()),
+                additional: None,
+                additional_letter: None,
+                perek: Some(1),
+                perek_in_context: Some(1),
+                date: None,
+                hebdate: None,
+                tseit: None,
+                header: None,
+                pasuk_count,
+            }
+        }
+
         #[tokio::test]
         async fn rejects_duplicate_and_unknown_moed_ids() {
             // Duplicates fail normalization before any database access.
@@ -1657,6 +1709,352 @@ mod tests {
             assert_eq!(hits.len(), 1);
             assert_eq!(hits[0].id, 2);
             assert_eq!(hits[0].hint.as_deref(), Some("סוכות"));
+        }
+
+        #[tokio::test]
+        async fn replaces_perek_and_author_and_invalidates_old_and_new() {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                // lock read + previous covering set
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_model(7, 1, 1),
+                ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                // single-valued target existence checks
+                .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_row(3, Some(10))]])
+                .append_query_results::<author::Model, Vec<_>, _>([vec![author::Model {
+                    id: 4,
+                    name: "רמב\"ם".to_string(),
+                    details: String::new(),
+                }]])
+                // article update + search-index enqueue
+                .append_exec_results((0..2).map(|_| MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }))
+                // `previous` snapshot reads
+                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
+            mock = reload_results(mock, {
+                let mut after = article_model(7);
+                after.perek_id = 3;
+                after.author_id = 4;
+                after
+            });
+            let db = Database::from_connection(mock.into_connection());
+
+            let mut edit = input();
+            edit.perek_id = Some(3);
+            edit.author_id = Some(4);
+            let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap();
+
+            assert_eq!(outcome.revalidation, "SKIPPED");
+            assert_eq!(outcome.relationships.perek_id, 3);
+            assert_eq!(outcome.relationships.author_id, 4);
+            // `previous` is the undo record — the pre-write association.
+            assert_eq!(outcome.previous.perek_id, 1);
+            assert_eq!(outcome.previous.author_id, 2);
+            let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+            assert!(log.contains("UPDATE `tanah_article`"), "{log}");
+            assert!(log.contains("INSERT INTO article_search_queue"), "{log}");
+            // The covering rows were untouched — the undo record still holds them.
+            assert_eq!(outcome.previous.covering_sources.len(), 1);
+        }
+
+        #[tokio::test]
+        async fn rejects_an_unknown_author_target() {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<author::Model, Vec<_>, _>([vec![]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.author_id = Some(9999);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("does not exist"));
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn flag_only_verified_toggle_updates_the_article() {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_model(7, 1, 1),
+                ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                // flag update + search-index enqueue
+                .append_exec_results((0..2).map(|_| MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }))
+                // `previous` snapshot reads
+                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
+            mock = reload_results(mock, {
+                let mut after = article_model(7);
+                after.coverage_verified = true;
+                after
+            });
+            let db = Database::from_connection(mock.into_connection());
+
+            let mut edit = input();
+            edit.coverage_verified = Some(true);
+            let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap();
+            assert!(outcome.relationships.coverage_verified);
+            let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+            assert!(log.contains("UPDATE `tanah_article`"), "{log}");
+            // A flag toggle touches no covering rows.
+            assert!(
+                !log.contains("INSERT INTO `tanah_article_covering_source`"),
+                "{log}"
+            );
+        }
+
+        #[tokio::test]
+        async fn flag_only_same_value_stays_write_free() {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_model(7, 1, 1),
+                ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                // `previous` snapshot reads
+                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
+            mock = reload_results(mock, article_model(7));
+            let db = Database::from_connection(mock.into_connection());
+
+            let mut edit = input();
+            edit.coverage_verified = Some(false);
+            let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap();
+            assert!(!outcome.relationships.coverage_verified);
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn explicit_empty_covering_set_clears_the_rows() {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_model(7, 1, 3),
+                ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                // delete + flag update + search-index enqueue (no insert —
+                // the replacement set is empty)
+                .append_exec_results((0..3).map(|_| MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }))
+                // `previous` snapshot reads
+                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
+            mock = reload_results(mock, article_model(7));
+            let db = Database::from_connection(mock.into_connection());
+
+            let mut edit = input();
+            edit.covering_sources = Some(vec![]);
+            let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap();
+            assert!(!outcome.relationships.coverage_verified);
+            assert!(outcome.relationships.covering_sources.is_empty());
+            // The undo record keeps the cleared coordinate.
+            assert_eq!(outcome.previous.covering_sources.len(), 1);
+            let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+            assert!(
+                log.contains("DELETE FROM `tanah_article_covering_source`"),
+                "{log}"
+            );
+            assert!(
+                !log.contains("INSERT INTO `tanah_article_covering_source`"),
+                "{log}"
+            );
+        }
+
+        #[tokio::test]
+        async fn covering_source_validation_rejects_missing_perek_and_missing_count() {
+            // A perek id that is not canonical at all.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.covering_sources = Some(vec![CoveringSourceInput {
+                perek_id: 9999,
+                pasuk: 1,
+            }]);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("does not exist"), "{err}");
+            assert_no_writes(&db);
+
+            // A canonical perek whose corpus pasuk count was never loaded.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // previous moed link set (empty)
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_row(1, None)]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.covering_sources = Some(vec![CoveringSourceInput {
+                perek_id: 1,
+                pasuk: 1,
+            }]);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("pasuk count is missing"), "{err}");
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn matching_freshness_tokens_proceed_to_the_write() {
+            // The caller's snapshot matches the locked state — the guards
+            // pass and the (otherwise empty) write commits untouched.
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                // expectedContentHash comparison read
+                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_model(7, 1, 1),
+                ]])
+                // previous moed link set (empty)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                // `previous` snapshot reads
+                .append_query_results([vec![hash_row("a".repeat(32).as_str())]])
+                .append_query_results::<article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]);
+            mock = reload_results(mock, article_model(7));
+            let db = Database::from_connection(mock.into_connection());
+
+            let mut edit = input();
+            edit.expected_content_hash = Some("a".repeat(32));
+            // Order-insensitive: [{1:1}] matches the stored set.
+            edit.expected_covering_sources = Some(vec![CoveringSourceInput {
+                perek_id: 1,
+                pasuk: 1,
+            }]);
+            let outcome = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap();
+            assert_eq!(outcome.revalidation, "SKIPPED");
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn a_database_error_surfaces_as_internal() {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_errors([DbErr::Custom("db down".to_string())])
+                    .into_connection(),
+            );
+            let err = load_relationships(&db, 7).await.unwrap_err();
+            assert!(matches!(err, ServiceError::InternalServerError(_)));
+        }
+
+        #[tokio::test]
+        async fn search_targets_covers_author_and_dedication_kinds() {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<author::Model, Vec<_>, _>([vec![
+                        author::Model {
+                            id: 1,
+                            name: "רש\"י".to_string(),
+                            details: String::new(),
+                        },
+                        author::Model {
+                            id: 2,
+                            name: "רמב\"ם".to_string(),
+                            details: String::new(),
+                        },
+                    ]])
+                    .into_connection(),
+            );
+            let hits = search_targets(&db, ArticleRelationshipTargetKind::Author, "רמב", Some(10))
+                .await
+                .unwrap();
+            assert_eq!(hits.len(), 1);
+            assert_eq!(hits[0].id, 2);
+            assert_eq!(hits[0].label, "רמב\"ם");
+            assert_eq!(hits[0].hint, None);
+
+            let expiry =
+                chrono::NaiveDateTime::parse_from_str("2030-01-02 03:04:05", "%Y-%m-%d %H:%M:%S")
+                    .unwrap();
+            let dedications = || {
+                vec![
+                    dedication::Model {
+                        id: 5,
+                        subject: "לעילוי נשמת".to_string(),
+                        expires_at: Some(expiry),
+                    },
+                    dedication::Model {
+                        id: 6,
+                        subject: "לרפואה שלמה".to_string(),
+                        expires_at: None,
+                    },
+                ]
+            };
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<dedication::Model, Vec<_>, _>([dedications()])
+                    .append_query_results::<dedication::Model, Vec<_>, _>([dedications()])
+                    .into_connection(),
+            );
+            let hits = search_targets(
+                &db,
+                ArticleRelationshipTargetKind::Dedication,
+                "רפואה",
+                Some(10),
+            )
+            .await
+            .unwrap();
+            assert_eq!(hits.len(), 1);
+            assert_eq!(hits[0].id, 6);
+            assert_eq!(hits[0].hint, None);
+
+            // Expiry renders as the picker's secondary hint.
+            let hits = search_targets(&db, ArticleRelationshipTargetKind::Dedication, "", Some(10))
+                .await
+                .unwrap();
+            assert_eq!(hits.len(), 2);
+            assert_eq!(
+                hits[0].hint.as_deref(),
+                Some("פג תוקף 2030-01-02T03:04:05Z")
+            );
         }
     }
 }

@@ -478,4 +478,84 @@ mod tests {
             Some(&Value::from("BAD_REQUEST"))
         );
     }
+
+    #[tokio::test]
+    async fn update_returns_the_new_state_previous_and_revalidation() {
+        let covering = |pasuk: i16| entities::article_covering_source::Model {
+            article_id: 7,
+            perek_id: 1,
+            pasuk,
+            created_at: chrono::Utc::now(),
+        };
+        let perek_bound = entities::perek::Model {
+            id: 1,
+            perek_id: Some(1),
+            sefer_id: Some(1),
+            sefer_name: Some("בראשית".to_string()),
+            additional: None,
+            additional_letter: None,
+            perek: Some(1),
+            perek_in_context: Some(1),
+            date: None,
+            hebdate: None,
+            tseit: None,
+            header: None,
+            pasuk_count: Some(31),
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // lock read + previous covering set {1:3}
+                .append_query_results::<entities::article::Model, Vec<_>, _>([vec![article_model(
+                    7,
+                )]])
+                .append_query_results::<entities::article_covering_source::Model, Vec<_>, _>([
+                    vec![covering(3)],
+                ])
+                // previous moed link set (unconditional pre-write read)
+                .append_query_results::<entities::article_moed::Model, Vec<_>, _>([vec![]])
+                // covering-source canonical bound check
+                .append_query_results::<entities::perek::Model, Vec<_>, _>([vec![perek_bound]])
+                // delete + insert + flag update + search-index enqueue
+                .append_exec_results((0..4).map(|_| sea_orm::MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }))
+                // `previous` snapshot reads
+                .append_query_results([vec![hash_row("b".repeat(32).as_str())]])
+                .append_query_results::<entities::article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results([Vec::<BTreeMap<String, DbValue>>::new()])
+                // post-commit reload
+                .append_query_results::<entities::article::Model, Vec<_>, _>([vec![{
+                    let mut after = article_model(7);
+                    after.coverage_verified = false;
+                    after
+                }]])
+                .append_query_results([vec![hash_row("c".repeat(32).as_str())]])
+                .append_query_results::<entities::article_covering_source::Model, Vec<_>, _>([
+                    vec![covering(2)],
+                ])
+                .append_query_results::<entities::article_dedication::Model, Vec<_>, _>([vec![]])
+                .append_query_results([Vec::<BTreeMap<String, DbValue>>::new()])
+                .append_query_results::<entities::article_moed::Model, Vec<_>, _>([vec![]])
+                .into_connection(),
+        );
+        let response = schema(db)
+            .execute(
+                Request::new(
+                    r#"mutation { updateArticleRelationships(articleId: 7, input: { source: "admin", coveringSources: [{ perekId: 1, pasuk: 2 }] }) { revalidation relationships { coverageVerified coveringSources { perekId pasuk } } previous { coveringSources { perekId pasuk } contentHash } } }"#,
+                )
+                .data(auth(Some("article-key"))),
+            )
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let result = response.data.into_json().unwrap();
+        let result = &result["updateArticleRelationships"];
+        assert_eq!(result["revalidation"], "SKIPPED");
+        // `previous` is the pre-write snapshot — the undo record.
+        assert_eq!(result["previous"]["coveringSources"][0]["pasuk"], 3);
+        assert_eq!(result["previous"]["contentHash"], "b".repeat(32));
+        let relationships = &result["relationships"];
+        assert_eq!(relationships["coverageVerified"], false);
+        assert_eq!(relationships["coveringSources"][0]["pasuk"], 2);
+    }
 }
