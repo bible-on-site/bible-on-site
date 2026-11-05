@@ -647,6 +647,10 @@ async fn apply_daily_bulletin_upgrades(conn: &mut MySqlConnection, base_path: &P
             "tanah_daily_bulletin_whatsapp_upgrade.sql",
             "daily-bulletin-whatsapp-upgrade",
         ),
+        (
+            "tanah_daily_bulletin_join_upgrade.sql",
+            "daily-bulletin-join-upgrade",
+        ),
     ] {
         execute_script(conn, &base_path.join("..").join(filename), label).await?;
     }

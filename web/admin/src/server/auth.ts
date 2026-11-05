@@ -78,7 +78,7 @@ export async function exchangeCodeForTokens(
  */
 export async function verifyIdTokenClaims(
 	token: string,
-): Promise<{ sub?: string } | null> {
+): Promise<{ sub?: string; email?: string } | null> {
 	try {
 		const { payload } = await jwtVerify(token, jwks, {
 			issuer: ISSUER,

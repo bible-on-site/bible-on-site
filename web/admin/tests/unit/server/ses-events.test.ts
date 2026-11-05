@@ -84,7 +84,7 @@ function subscription() {
 	};
 }
 
-const common = { messageId, attemptId, email };
+const common = { messageId, attemptId, signupIntentId: null, email };
 
 describe("SES event normalization", () => {
 	it("correlates delivery to the provider ID and full recipient attempt token", () => {
@@ -355,6 +355,23 @@ describe("SES event normalization", () => {
 		const event = delivery();
 		Object.assign(event.mail.tags, { bulletin_attempt: value });
 		expect(parseSesEvent(event, expected)).toBeNull();
+	});
+
+	it("routes signup-confirmation sends by their own attempt tag (#2940)", () => {
+		const event = bounce();
+		Object.assign(event.mail.tags, {
+			bulletin_attempt: undefined,
+			bulletin_signup_attempt: ["7_5a3bee60-4bda-4d0a-9e6e-303a0b788717"],
+		});
+		expect(parseSesEvent(event, expected)).toEqual({
+			messageId,
+			attemptId: "7_5a3bee60-4bda-4d0a-9e6e-303a0b788717",
+			signupIntentId: 7,
+			email,
+			type: "bounce",
+			timestamp: changedAt,
+			permanent: true,
+		});
 	});
 
 	it.each([

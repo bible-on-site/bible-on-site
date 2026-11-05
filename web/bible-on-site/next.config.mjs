@@ -174,6 +174,28 @@ const nextConfig = {
 	// Increasing this further may cause OOM kills on the 1024 MB Fargate task.
 	cacheMaxMemorySize: 256 * MB,
 
+	async headers() {
+		return [
+			// Stable join routes (#2939) resolve admin-managed destinations at
+			// request time; neither the redirect nor the unavailable page may
+			// be cached by browsers or the CDN.
+			{
+				source: "/join/telegram",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
+			{
+				source: "/join/whatsapp",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
+			// The email confirmation page varies on the staged challenge
+			// cookie — it must never sit in a browser or CDN cache.
+			{
+				source: "/join/email/confirm",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
+		];
+	},
+
 	async rewrites() {
 		return {
 			beforeFiles: [

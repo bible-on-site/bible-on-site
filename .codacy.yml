@@ -40,6 +40,7 @@ exclude_paths:
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_join_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_article_content_hash_upgrade.sql"
   - "data/mysql/tanah_article_index_upgrade.sql"

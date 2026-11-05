@@ -32,6 +32,14 @@ The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive s
 
 The new controls have actual desktop/mobile [before and after captures](screenshots/README.md). Local implementation and native database validation do not establish production deployment or successful provider delivery. The public join carousel and native-app counterpart ([issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)) follow channel validation and must expose only public join links.
 
+## Public joining (#2939, #2940, #2941)
+
+Stable first-party routes `GET`/`HEAD /join/telegram` and `/join/whatsapp` resolve admin-managed destinations from `tanah_daily_bulletin_join_link` and answer 307 with `Cache-Control: no-store`. The admin `/bulletins` page edits each channel's enabled flag and destination behind an optimistic-concurrency revision; every change appends a `tanah_daily_bulletin_join_link_audit` row. Destinations are validated identically at write and at every read — HTTPS only, exact provider host (`t.me`, `chat.whatsapp.com`), exactly one path segment, no credentials, query, fragment or port — so no stored value can produce an open redirect. Telegram ships seeded enabled at the verified `https://t.me/alhaperek`; WhatsApp ships disabled and is populated post-deploy through the admin panel (the invitation is never committed).
+
+Public email signup posts to `/api/bulletin/subscribe`, which always answers the same 202 and records a durable `tanah_daily_bulletin_signup_intent` with the explicit consent text, version and source. The audience is fixed server-side to `real`. The email worker claims pending intents, mints a 48-hour one-use challenge (only its SHA-256 is stored), mails it through SES `sendTransactional`, and syncs confirmed signups into the contact list with `resubscribeContact`. `POST /api/bulletin/confirm` consumes the challenge atomically and upserts the subscriber; `/join/email` is the shareable signup page and `/join/email/confirm?t=` strips the token from the URL immediately (GET never confirms — only POST does). Permanent bounces and complaints on the confirmation mail fail the intent and record provider suppression.
+
+The homepage `#bulletin` section shows exactly three Hebrew RTL join cards — Telegram, WhatsApp, email — as a scroll-snap carousel on narrow screens. `/dailyBulletin` scrolls to `#bulletin` and `/whatsappGroup` to `#bulletin-whatsapp`; both legacy URLs and the sitemap contract are preserved. The native app (#2942) consumes these same public routes rather than embedding invitations.
+
 ## Database deployment
 
 `data/mysql/tanah_daily_bulletin_upgrade.sql` is an additive, repeatable migration in the normal data deployment manifest. It retains article eligibility, prepared bulletins, and delivery records. It intentionally builds table DDL with `CONCAT`: the existing database deployment Lambda rewrites literal `CREATE TABLE` statements into destructive rebuilds, even with `IF NOT EXISTS`.
@@ -69,6 +77,6 @@ Its state table stored a date, Smoove campaign ID, Telegram success flag, and Wh
 - Extend durable claims, provider IDs and ambiguous-outcome handling to Telegram and WhatsApp.
 - Add EventBridge scheduling in `Asia/Jerusalem`, holiday advance sends, and calendar regression tests.
 - Add failure monitoring and admin controls for reviewing/rebuilding unsent bulletins and retrying failed delivery.
-- Restore public email signup and channel/group join links.
+- ~~Restore public email signup and channel/group join links~~ — delivered: stable `/join/{telegram,whatsapp,email}` routes, admin-managed destinations, and the SES-confirmed signup flow.
 
 The older sequence diagram is a target sketch, not deployed behavior. In particular its Smoove PDF-generation step does not match the legacy code or the current Rust renderer.

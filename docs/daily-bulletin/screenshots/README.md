@@ -70,3 +70,16 @@ Real captures from Android emulators running the native עלון יומי join c
 - [Tablet side by side](app-bulletin-tablet-side-by-side.png): tablet viewport — the three cards lay out side by side.
 
 The cards mirror the website's join order — Telegram, WhatsApp, email — in RTL, show the shared top bar and expose `BulletinJoin{Telegram|Whatsapp|Email}` automation identifiers with Hebrew semantic descriptions on each join button. הצטרפות opens the verified public channel `https://t.me/alhaperek`, the published `wa.me` join number with a prefilled join request, and the published subscription address with a join subject until the shared public signup API ships (see "Restore public email signup and channel/group join links" in `docs/daily-bulletin/daily-bulletin.md`). No private test groups, destination IDs or provider credentials appear in the captures.
+
+## Public join flow evidence (#2939, #2940, #2941)
+
+Real captures from the local Next.js dev server (`.dev.env`, `tanah-dev`) at `localhost:3001` and the local Vite admin at `localhost:3101`, taken through isolated Chromium contexts — no user profile, no provider calls, no real invitations.
+
+- [Homepage before](join-home-before.png): the same homepage flow with the new section removed — the legacy state, where joining meant scrolling to the contact section.
+- [Bulletin section desktop](join-section-desktop.png): the new `#bulletin` homepage section at 1280 x 900 — exactly three Hebrew RTL cards (Telegram, WhatsApp, email). The Telegram and WhatsApp actions point only at the stable first-party `/join/{channel}` routes; no provider destination appears in markup.
+- [Bulletin carousel mobile](join-carousel-mobile.png): the same section at 390 x 844 — scroll-snap carousel with prev/next arrows and dots.
+- [Email signup page](join-email-page.png): `/join/email`, the shareable standalone signup page reusing the homepage card's `EmailSignupForm` with the explicit consent checkbox.
+- [WhatsApp unavailable](join-whatsapp-unavailable.png): `/join/whatsapp` before an admin saves a destination — 503 with `Cache-Control: no-store`, Hebrew guidance, and links back to `/dailyBulletin` and `/contact`. The WhatsApp invitation is intentionally absent from source control and is entered post-deploy through the admin editor.
+- [Admin join links](join-admin-links.png): the new "קישורי הצטרפות לעלון" panel on the admin `/bulletins` page — per-channel enable toggle, validated destination field, stable public URL display, save with optimistic-concurrency revision, and the append-only audit list. Captured with `SKIP_AUTH=true`; telegram shown seeded enabled at the verified public channel, whatsapp still unset.
+
+Verified live at capture time: `GET`/`HEAD /join/telegram` → 307 to `https://t.me/alhaperek` with `Cache-Control: no-store`; `POST /api/bulletin/subscribe` → 202 generic acknowledgement; a known-token `POST /api/bulletin/confirm` → `confirmed`, durable subscriber upsert, and replayed no-op.
