@@ -12,7 +12,6 @@ engines:
   tsqllint:
     exclude_paths:
       - "devops/github/ci/native-api-fixture-rows.sql"
-      - "devops/github/ci/native-admin-fixture.sql"
   # Prospector enforces D213 (summary on line two) while the repo's ruff
   # config enforces the contradictory D212 (summary on line one). The repo
   # gate wins; prospector is excluded on these files only — Bandit and the
@@ -105,6 +104,10 @@ exclude_paths:
   # taint pattern is a systemic false positive for a URL-diffing tool — the
   # repo's own codacy-gate/precommit still lint this file.
   - "devops/edge-compat-check.mjs"
+  # Same T-SQL-dialect false positive as the data/mysql files: this MySQL
+  # fixture uses UNSIGNED/MEDIUMBLOB/ENGINE clauses the SQL parser rejects.
+  # It is exercised against a real MySQL 8.4 server by the native verifier.
+  - "devops/github/ci/native-admin-fixture.sql"
   # Coverage-universe builder: its whole job is walking the website's src/
   # tree and reading each file to build the canonical instrument map, so
   # non-literal-fs-filename is the same systemic false positive as the
