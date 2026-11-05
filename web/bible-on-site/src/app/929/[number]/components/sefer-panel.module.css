@@ -3,13 +3,29 @@
    perush tag list, pasuk-grouped commentary, and the articles masonry. */
 
 /* The component replaces BlankPageContent's .pageBlank section: a flex
-   column filling the book page. */
-
+   column filling the book page. The panel stretches to the leaf's usable
+   borders (#2994) — no .pageBlank inset around the tabbed view; text and
+   controls keep their own deliberate padding. */
 .panelRoot {
+	background-color: var(--surface-elevated, white);
+	box-sizing: border-box;
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
+}
+
+/* The leaf's free outer edge stays a page-turn surface (#2994): the same
+   grab margin .pageContentPage and .pageBlank keep opposite the spine,
+   while the panel hugs the leaf's other borders. The inner scrollers
+   carry data-flipbook-no-flip, so without this strip a swipe can only
+   start on the header row. */
+:global(.page[data-scrollbar-side="left"]) .panelRoot {
+	padding-right: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .panelRoot {
+	padding-left: 15px;
 }
 
 /* Header: tab - date - tab; the date stays centered and visible. */
@@ -19,7 +35,6 @@
 	align-items: stretch;
 	gap: 4px;
 	flex-shrink: 0;
-	padding-top: 6px;
 }
 
 .panelTab {
@@ -106,14 +121,24 @@
 	font-weight: 700;
 }
 
+/* Paired-header contract (#2994): the date sits on the same baseline as
+   the facing leaf's sefer/perek source — same offset below the leaf's
+   top edge (--sefer-leaf-header-offset, shared with .pageHeaderRight)
+   and the same font size/weight/line-height/color as .pageHeaderRow.
+   The cell stretches with the taller tab row while the text pins to the
+   shared offset. */
 .panelDate {
-	align-self: center;
-	font-size: clamp(0.75rem, 1.1vw, 0.95rem);
-	color: var(--muted-text, #637598);
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: var(--sefer-leaf-header-offset, 17px) 4px 0;
+	font-size: 0.95rem;
+	font-weight: 600;
+	line-height: normal;
+	color: var(--pasuk-num-color, #1c2c5d);
 	text-align: center;
 	white-space: nowrap;
 	direction: rtl;
-	padding: 0 4px;
 }
 
 /* Panels stay mounted in one cell to preserve their scroll positions.
@@ -179,11 +204,18 @@
 	list-style: none;
 	display: flex;
 	flex-wrap: wrap;
+	/* Spine-side scrollbar (#2994): the leaf's scroll direction places the
+	   native bar at the inner edge; --sefer-spine-row supplies the
+	   matching main axis so the chips keep Hebrew first-item-at-right
+	   order whichever way the scroller's direction resolves. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
+	flex-direction: var(--sefer-spine-row, row);
 	gap: 6px;
 	margin: 0;
 	padding: 0;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
 }
@@ -193,18 +225,20 @@
 	align-items: center;
 }
 
+/* Commentary chip (#2994): the name carries equal inline padding — no
+   checkmark slot or icon reserve; selection shows through the filled
+   surface plus aria-pressed. */
 .perushTag {
 	appearance: none;
 	font: inherit;
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
 	border: 1px solid #d4c9a8;
 	border-radius: var(--radius-pill);
 	background: #fffdf5;
 	color: #5a4a2e;
 	font-size: 0.85rem;
-	padding: 3px 8px 3px 12px;
+	padding: 3px 10px;
 	cursor: pointer;
 	text-decoration: none;
 	transition:
@@ -213,14 +247,6 @@
 		color 0.15s;
 }
 
-.perushTagCheck {
-	width: 0.85rem;
-	color: transparent;
-	font-size: 0.7rem;
-	line-height: 1;
-}
-
-.perushTagItem[data-selected] .perushTagCheck,
 .perushTagItem[data-selected] .perushTag {
 	background: #5a4a2e;
 	border-color: #5a4a2e;
@@ -341,10 +367,17 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
 	padding: 8px 12px 12px;
+	/* Spine-side scrollbar (#2994); each block child keeps RTL. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
+}
+
+.commentaryScroll > * {
+	direction: rtl;
 }
 
 .commentaryGroup {
@@ -497,10 +530,17 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
 	padding: 10px 12px 12px;
+	/* Spine-side scrollbar (#2994); the masonry keeps RTL column order. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
+}
+
+.articlesScroll > * {
+	direction: rtl;
 }
 
 .articlesMasonry {
@@ -600,14 +640,16 @@
 	overflow: hidden;
 }
 
+/* One active vertical scroller in article fullscreen (#2994): this box
+   only lays out the ArticleFullView — its own .articleBodyWrapper is
+   the single scrolling surface, so no scrolling wrapper wraps another
+   scroller here. */
 .articleFullscreenBody {
 	flex: 1;
 	min-height: 0;
-	overflow-y: auto;
-	scrollbar-gutter: stable;
+	display: flex;
+	flex-direction: column;
 	padding: 16px max(16px, 10vw);
-	scrollbar-width: thin;
-	scrollbar-color: #c4b896 transparent;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -629,9 +671,9 @@
 		color: #e0d0a8;
 	}
 
-	.panelDate {
-		color: var(--muted-text, #9aa0a6);
-	}
+	/* .panelDate needs no dark override (#2994): it now reads
+	   --pasuk-num-color, the same token .pageHeaderRow uses, so it
+	   tracks the facing header color in every scheme. */
 
 	.panelStage {
 		border-color: #4a4030;
@@ -662,17 +704,12 @@
 		color: var(--hc-muted, #cbb98c);
 	}
 
-	.perushTagCheck {
-		color: transparent;
-	}
-
 	@media (hover: hover) {
 		.perushTag:hover {
 			border-color: var(--hc-muted, #8b7355);
 		}
 	}
 
-	.perushTagItem[data-selected] .perushTagCheck,
 	.perushTagItem[data-selected] .perushTag {
 		background: #cbb98c;
 		border-color: var(--hc-muted, #cbb98c);

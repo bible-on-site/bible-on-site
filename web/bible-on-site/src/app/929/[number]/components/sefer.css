@@ -61,6 +61,29 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
    scroll panes — so every page root carries the library's
    flipbook-page-bounded class (#279) and the scrollport never engages. */
 
+/* ===================================================================
+ * Spine-side in-leaf scrollbars (issue #2994)
+ * The library computes each leaf's scrollbar side:
+ *   .page[data-scrollbar-side=left]  → --flipbook-page-scroll-direction:rtl
+ *   .page[data-scrollbar-side=right] → --flipbook-page-scroll-direction:ltr
+ * — the `direction` value that puts a native scrollbar on that leaf's
+ * inner (spine-facing) edge. Because Sefer pages are flipbook-page-
+ * bounded, the library's own scrollport never consumes that token, so
+ * the bounded inner panes adopt it on their scrolling element while
+ * their content children keep direction:rtl.
+ * --sefer-spine-row is the matching main axis for flex-wrap scrollers
+ * (the perush chip list): direction:ltr puts the bar on the right edge,
+ * so row-reverse restores Hebrew first-item-at-right order, and vice
+ * versa.
+ * =================================================================== */
+.page[data-scrollbar-side="right"] {
+	--sefer-spine-row: row-reverse;
+}
+
+.page[data-scrollbar-side="left"] {
+	--sefer-spine-row: row;
+}
+
 /* Toolbar: base styles now come from html-flip-book-react/styles.css.
    Only site-specific overrides below. */
 
@@ -112,6 +135,19 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Spine-side scrollbar (#2994): the TOC leaf scrolls through its bounded
+   .toc-page__scroll pane (the library scrollport stays disengaged), so
+   the pane adopts the leaf's scroll direction while the entry list keeps
+   RTL order — matching every other in-leaf scroller. */
+.toc-page__scroll {
+	overscroll-behavior: contain;
+	direction: var(--flipbook-page-scroll-direction, rtl);
+}
+
+.toc-page__scroll > * {
+	direction: rtl;
 }
 
 @media (prefers-color-scheme: dark) {
