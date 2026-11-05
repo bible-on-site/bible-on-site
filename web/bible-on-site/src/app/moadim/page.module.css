@@ -1,0 +1,232 @@
+.container {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 96px 16px 48px;
+	font-family: inherit;
+}
+
+.heading {
+	font-size: 1.8rem;
+	font-weight: 700;
+	color: var(--pasuk-num-color, #1c2c5d);
+	margin-bottom: 12px;
+}
+
+.intro {
+	color: var(--muted-text, #555);
+	line-height: 1.7;
+	margin-bottom: 32px;
+	max-width: 60ch;
+}
+
+.empty {
+	color: var(--muted-text, #555);
+	padding: 24px 0;
+}
+
+/* מעגל השנה — the decorative annual wheel. The rings are pure chrome;
+   only the anchors carry semantics. */
+.wheel {
+	position: relative;
+	width: min(100%, 34rem);
+	aspect-ratio: 1;
+	margin: 0 auto 40px;
+}
+
+.wheelRing,
+.wheelRingInner {
+	position: absolute;
+	border-radius: 50%;
+	pointer-events: none;
+}
+
+.wheelRing {
+	inset: 4%;
+	border: 2px solid rgba(21, 82, 172, 0.25);
+	background: radial-gradient(
+		circle,
+		rgba(21, 82, 172, 0.05) 55%,
+		transparent 56%
+	);
+}
+
+.wheelRingInner {
+	inset: 30%;
+	border: 1px dashed rgba(21, 82, 172, 0.3);
+}
+
+.wheelList {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	position: absolute;
+	inset: 0;
+}
+
+/* The item is a zero-size pivot at the circle center: rotate + outward
+   translate around its own center lands it on the ring at --angle. The
+   anchor then counter-rotates around its own center — the label stays
+   upright and the Hebrew never flips. */
+.wheelItem {
+	position: absolute;
+	inset-block-start: 50%;
+	inset-inline-start: 50%;
+	width: 0;
+	height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transform: rotate(var(--angle)) translateY(-14rem);
+}
+
+/* A full year of moadim on one ring crowds the labels; alternating items
+   drop to an inner ring so every name keeps breathing room. The DOM order
+   (and therefore keyboard order) stays the annual order either way. */
+.wheelItem:nth-child(even) {
+	transform: rotate(var(--angle)) translateY(-10rem);
+}
+
+.wheelLink {
+	transform: rotate(calc(-1 * var(--angle)));
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1px;
+	padding: 8px 12px;
+	border-radius: 10px;
+	background: var(--card-bg, #fff);
+	border: 1px solid rgba(21, 82, 172, 0.3);
+	box-shadow: 0 2px 8px rgba(21, 82, 172, 0.12);
+	text-decoration: none;
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-weight: 600;
+	font-size: 0.95rem;
+	line-height: 1.25;
+	text-align: center;
+	max-width: 8rem;
+	white-space: normal;
+}
+
+.wheelLink:hover,
+.wheelLink:focus-visible {
+	border-color: rgba(21, 82, 172, 0.65);
+	box-shadow: 0 4px 14px rgba(21, 82, 172, 0.25);
+}
+
+.wheelLink:focus-visible {
+	outline: 3px solid rgba(21, 82, 172, 0.8);
+	outline-offset: 2px;
+}
+
+.wheelName {
+	display: block;
+}
+
+.wheelDate {
+	font-size: 0.7rem;
+	font-weight: 400;
+	color: var(--muted-text, #666);
+}
+
+/* The ordered index — same links, guaranteed order and touch targets
+   regardless of how the wheel fits the viewport. */
+.index {
+	margin-top: 8px;
+}
+
+.indexList {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	gap: 8px;
+	counter-reset: moed;
+}
+
+.indexItem {
+	counter-increment: moed;
+}
+
+.indexLink {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 10px 14px;
+	border: 1px solid rgba(21, 82, 172, 0.18);
+	border-radius: 10px;
+	text-decoration: none;
+	color: var(--pasuk-num-color, #1c2c5d);
+	background: var(--card-bg, #fff);
+}
+
+.indexLink::before {
+	content: counter(moed);
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: rgba(21, 82, 172, 0.55);
+	min-width: 1.2em;
+}
+
+.indexLink:hover,
+.indexLink:focus-visible {
+	border-color: rgba(21, 82, 172, 0.55);
+	background: rgba(21, 82, 172, 0.05);
+}
+
+.indexLink:focus-visible {
+	outline: 3px solid rgba(21, 82, 172, 0.8);
+	outline-offset: 2px;
+}
+
+.indexName {
+	font-weight: 600;
+}
+
+.indexDate,
+.indexMonth {
+	font-size: 0.75rem;
+	color: var(--muted-text, #666);
+	font-weight: 400;
+}
+
+@media (max-width: 640px) {
+	.container {
+		padding-top: 80px;
+	}
+
+	.wheelItem {
+		transform: rotate(var(--angle)) translateY(-42vw);
+	}
+
+	.wheelItem:nth-child(even) {
+		transform: rotate(var(--angle)) translateY(-28vw);
+	}
+
+	.wheelLink {
+		font-size: 0.7rem;
+		padding: 5px 7px;
+		max-width: 4.5rem;
+	}
+
+	.wheelDate {
+		font-size: 0.6rem;
+	}
+}
+
+@media (prefers-contrast: more) {
+	.wheelLink,
+	.indexLink {
+		border-color: currentColor;
+	}
+
+	.wheelRing {
+		border-color: currentColor;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.wheelLink {
+		transition: box-shadow 0.15s ease, border-color 0.15s ease;
+	}
+}

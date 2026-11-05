@@ -49,16 +49,105 @@ pub struct WebsiteRevalidator {
     secret: Option<String>,
 }
 
+/// A pasuk-granular span of article covering-source rows — mirrors the
+/// admin/website `ArticleCoveringSpan` contract shape.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArticleCoveringSpan {
+    pub perek_id: i32,
+    pub pasuk_from: i32,
+    pub pasuk_to: i32,
+}
+
+/// An inclusive canonical perek-id range — the dedication change's
+/// `perekRanges` element shape.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct PerekRange {
+    pub low: i32,
+    pub high: i32,
+}
+
+/// The typed entity-change body the website's `/api/revalidate` consumes —
+/// a subset of the admin `EntityChange` contract, serialized identically
+/// (`kind` tags + camelCase fields), so the website's dependency resolver
+/// handles API-originated writes exactly like admin ones.
 #[derive(serde::Serialize)]
-struct PediaEntriesChange<'a> {
-    kind: &'a str,
-    #[serde(rename = "uniqueNames")]
-    unique_names: &'a [String],
+#[serde(tag = "kind")]
+enum EntityChange<'a> {
+    #[serde(rename = "pedia-entries")]
+    PediaEntries {
+        #[serde(rename = "uniqueNames")]
+        unique_names: &'a [String],
+    },
+    /// An article create/update/move/delete — `perek_ids` is old ∪ new.
+    #[serde(rename = "article", rename_all = "camelCase")]
+    Article {
+        id: i32,
+        perek_ids: &'a [i32],
+        #[serde(skip_serializing_if = "Option::is_none")]
+        author_ids: Option<&'a [i32]>,
+        /// Covering spans destroyed by the change (replaced/removed side).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        covering_spans: Option<&'a [ArticleCoveringSpan]>,
+    },
+    /// A moed create/update/delete or a link-set change touching it (#3101)
+    /// — `old_slug` expires the pre-rename route on slug edits and deletes.
+    #[serde(rename = "moed", rename_all = "camelCase")]
+    Moed {
+        id: i32,
+        slug: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        old_slug: Option<&'a str>,
+    },
+    /// A dedication create/update/delete — assignment sets are old ∪ new.
+    #[serde(rename = "dedication", rename_all = "camelCase")]
+    Dedication {
+        id: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        perek_ranges: Option<&'a [PerekRange]>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sefer_ids: Option<&'a [i32]>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        helek_ids: Option<&'a [i32]>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        parasha_ids: Option<&'a [i32]>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        article_ids: Option<&'a [i32]>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        entry_ids: Option<&'a [String]>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        masora: Option<bool>,
+    },
+}
+
+/// The assignment set of one dedication change — mirrors the admin
+/// `dedicationChange` input; empty lists are omitted from the payload.
+#[derive(Clone, Debug, Default)]
+pub struct DedicationAssignments {
+    pub perek_ranges: Vec<PerekRange>,
+    pub sefer_ids: Vec<i32>,
+    pub helek_ids: Vec<i32>,
+    pub parasha_ids: Vec<i32>,
+    pub article_ids: Vec<i32>,
+    pub entry_ids: Vec<String>,
+    pub masora: bool,
+}
+
+/// The association set of an article change — mirrors the admin
+/// `articleChange` input.
+#[derive(Clone, Debug, Default)]
+pub struct ArticleAssociations {
+    /// Old ∪ new primary perek ids — required by the website resolver.
+    pub perek_ids: Vec<i32>,
+    /// Old ∪ new author ids.
+    pub author_ids: Vec<i32>,
+    /// Destroyed covering spans (the website unions the live rows itself).
+    pub covering_spans: Vec<ArticleCoveringSpan>,
 }
 
 #[derive(serde::Serialize)]
 struct ChangesBody<'a> {
-    changes: [PediaEntriesChange<'a>; 1],
+    changes: Vec<EntityChange<'a>>,
 }
 
 impl WebsiteRevalidator {
@@ -84,6 +173,76 @@ impl WebsiteRevalidator {
     /// names of every entry whose alias membership changed — the website's
     /// `pedia-entries` change resolves each to its route path.
     pub async fn invalidate_pedia_names(&self, names: &[String]) -> Revalidation {
+        self.post_changes(vec![EntityChange::PediaEntries {
+            unique_names: names,
+        }])
+        .await
+    }
+
+    /// Expires every scoped page/tag a dedication's old ∪ new assignments
+    /// render on — perek ranges, sefer/helek/parasha/article/entry scopes and
+    /// the masora feature (#2731, #3102).
+    pub async fn invalidate_dedication(
+        &self,
+        id: i32,
+        assignments: &DedicationAssignments,
+    ) -> Revalidation {
+        self.post_changes(vec![EntityChange::Dedication {
+            id,
+            perek_ranges: non_empty(&assignments.perek_ranges),
+            sefer_ids: non_empty(&assignments.sefer_ids),
+            helek_ids: non_empty(&assignments.helek_ids),
+            parasha_ids: non_empty(&assignments.parasha_ids),
+            article_ids: non_empty(&assignments.article_ids),
+            entry_ids: non_empty(&assignments.entry_ids),
+            masora: assignments.masora.then_some(true),
+        }])
+        .await
+    }
+
+    /// Posts an article change — the same `{changes}` body the admin server
+    /// sends (article page/tag, old ∪ new perek listings, old ∪ new author
+    /// pages and the destroyed covering spans, #3102) — plus, for a
+    /// `updateArticleRelationships.moedIds` write, one moed change per
+    /// affected moed so every touched moed page expires atomically (#3101).
+    pub async fn invalidate_article_with_moadim(
+        &self,
+        id: i32,
+        associations: &ArticleAssociations,
+        moadim: &[(i32, String)],
+    ) -> Revalidation {
+        let mut changes = vec![EntityChange::Article {
+            id,
+            perek_ids: &associations.perek_ids,
+            author_ids: non_empty(&associations.author_ids),
+            covering_spans: non_empty(&associations.covering_spans),
+        }];
+        changes.extend(moadim.iter().map(|(moed_id, slug)| EntityChange::Moed {
+            id: *moed_id,
+            slug: slug.as_str(),
+            old_slug: None,
+        }));
+        self.post_changes(changes).await
+    }
+
+    /// Expires the surfaces one moed change touches: its detail page/tag
+    /// under the current slug, the catalogue and — on rename/delete — the
+    /// old slug's prerendered route (`old_slug`, #3101).
+    pub async fn invalidate_moed(
+        &self,
+        id: i32,
+        slug: &str,
+        old_slug: Option<&str>,
+    ) -> Revalidation {
+        self.post_changes(vec![EntityChange::Moed { id, slug, old_slug }])
+            .await
+    }
+
+    /// Posts one `{changes}` body to the website's `/api/revalidate`. The
+    /// `Skipped`/`Failed`/`Applied` outcomes mirror the admin server's
+    /// semantics — `Failed` callers surface the string in their result so the
+    /// client knows the committed write is not yet visible publicly.
+    async fn post_changes(&self, changes: Vec<EntityChange<'_>>) -> Revalidation {
         let (Some(base), Some(secret)) = (self.base_url.as_deref(), self.secret.as_deref()) else {
             tracing::warn!(
                 "website revalidation skipped: WEBSITE_URL/REVALIDATE_SECRET not configured"
@@ -91,12 +250,7 @@ impl WebsiteRevalidator {
             return Revalidation::Skipped;
         };
 
-        let body = ChangesBody {
-            changes: [PediaEntriesChange {
-                kind: "pedia-entries",
-                unique_names: names,
-            }],
-        };
+        let body = ChangesBody { changes };
         let url = format!("{}/api/revalidate", base.trim_end_matches('/'));
         let client = match reqwest::Client::builder().timeout(TIMEOUT).build() {
             Ok(client) => client,
@@ -124,6 +278,10 @@ impl WebsiteRevalidator {
             }
         }
     }
+}
+
+fn non_empty<T>(items: &[T]) -> Option<&[T]> {
+    (!items.is_empty()).then_some(items)
 }
 
 #[cfg(test)]
@@ -220,6 +378,55 @@ mod tests {
         assert!(request.contains(
             r#"{"changes":[{"kind":"pedia-entries","uniqueNames":["משה","משה-רבנו"]}]}"#
         ));
+    }
+
+    #[tokio::test]
+    async fn posts_moed_changes_with_old_slug_and_link_pairs() {
+        let (base, rx) = serve_once("200 OK");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+
+        let outcome = revalidator
+            .invalidate_moed(3, "סוכות", Some("סוכות-ישן"))
+            .await;
+
+        assert_eq!(outcome, Revalidation::Applied);
+        let request = rx.recv().unwrap();
+        assert!(
+            request.contains(
+                r#"{"changes":[{"kind":"moed","id":3,"slug":"סוכות","oldSlug":"סוכות-ישן"}]}"#
+            ),
+            "{request}"
+        );
+
+        // A link edit batches one moed change per affected moed after the
+        // article change — no `oldSlug` on link updates (#3101).
+        let (base, rx) = serve_once("200 OK");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+        let outcome = revalidator
+            .invalidate_article_with_moadim(
+                7,
+                &ArticleAssociations {
+                    perek_ids: vec![1],
+                    author_ids: vec![2],
+                    covering_spans: Vec::new(),
+                },
+                &[(1, "פסח".to_string()), (2, "סוכות".to_string())],
+            )
+            .await;
+        assert_eq!(outcome, Revalidation::Applied);
+        let request = rx.recv().unwrap();
+        assert!(
+            request.contains(r#"{"kind":"article","id":7,"perekIds":[1],"authorIds":[2]}"#),
+            "{request}"
+        );
+        assert!(
+            request.contains(r#"{"kind":"moed","id":1,"slug":"פסח"}"#),
+            "{request}"
+        );
+        assert!(
+            request.contains(r#"{"kind":"moed","id":2,"slug":"סוכות"}"#),
+            "{request}"
+        );
     }
 
     #[tokio::test]

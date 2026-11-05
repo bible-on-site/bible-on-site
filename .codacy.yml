@@ -47,6 +47,8 @@ exclude_paths:
   - "data/mysql/tanah_web_push_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
+  - "data/mysql/tanah_moed_upgrade.sql"
+  - "data/mysql/tanah_moed_data.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
   - "data/mysql/tanahpedia_alter_saying_date.sql"
   - "data/mysql/tanahpedia_alter_person_source_citation.sql"
