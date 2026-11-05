@@ -238,6 +238,105 @@ describe("resolveEntityChanges", () => {
 		expect(out.tags).toContain("moed:פסח");
 	});
 
+	it("skips moed invalidation while the moed schema is not deployed", async () => {
+		stubDb({ authorName: "רשי" });
+		const inner = mockQuery.getMockImplementation();
+		const missing = Object.assign(new Error("no table"), {
+			code: "ER_NO_SUCH_TABLE",
+		});
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/tanah_moed/.test(sql)) throw missing;
+			return inner!(sql);
+		});
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [3],
+				coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
+			},
+		]);
+		// The article's own deps still resolve; only the moed side degrades.
+		expect(out.tags).toContain("article:12");
+		expect(out.tags.some((tag) => tag.startsWith("moed:"))).toBe(false);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("Moed schema is not deployed"),
+		);
+		warn.mockRestore();
+	});
+
+	it("propagates a moed lookup failure instead of under-invalidating", async () => {
+		stubDb({});
+		const inner = mockQuery.getMockImplementation();
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_moed m\s+JOIN/.test(sql))
+				throw new Error("connection lost");
+			return inner!(sql);
+		});
+		await expect(
+			resolveEntityChanges([
+				{
+					kind: "article",
+					id: 12,
+					perekIds: [5],
+					authorIds: [],
+					coveringSpans: [],
+				},
+			]),
+		).rejects.toThrow("connection lost");
+	});
+
+	it("matches an interior perek of a multi-perek range and dedupes the moed", async () => {
+		stubDb({
+			moedRanges: [
+				// Two stored ranges of one moed — the first matches through an
+				// interior perek's full width, the second matches too but the
+				// moed still lists once.
+				{
+					moed_id: 1,
+					slug: "סליחות",
+					perek_id_start: 9,
+					pasuk_start: 10,
+					perek_id_end: 11,
+					pasuk_end: 4,
+				},
+				{
+					moed_id: 1,
+					slug: "סליחות",
+					perek_id_start: 10,
+					pasuk_start: 1,
+					perek_id_end: 10,
+					pasuk_end: 3,
+				},
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [],
+				authorIds: [],
+				coveringSpans: [{ perekId: 10, pasukFrom: 1, pasukTo: 1 }],
+			},
+		]);
+		expect(out.tags.filter((tag) => tag === "moed:סליחות")).toHaveLength(1);
+	});
+
+	it("resolves an author with no articles without touching the link read", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toContain("author:3:articles");
+		expect(
+			mockQuery.mock.calls.some(([sql]) =>
+				/FROM tanah_article_moed/.test(sql),
+			),
+		).toBe(false);
+	});
+
 	it("expires the articles collection for an unlocatable article", async () => {
 		stubDb({});
 		const out = await resolveEntityChanges([

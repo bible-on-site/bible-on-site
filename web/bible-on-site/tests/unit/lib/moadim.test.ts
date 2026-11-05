@@ -34,6 +34,7 @@ jest.mock("../../../src/lib/reading-metrics", () => ({
 
 import { query } from "../../../src/lib/api-client";
 import { getArticleSummariesForRanges } from "../../../src/lib/articles/service";
+import { getArticleMetrics } from "../../../src/lib/reading-metrics";
 import type { ArticleSummary } from "../../../src/lib/articles/types";
 import {
 	getMoedArticleSummaries,
@@ -46,6 +47,9 @@ import type { ScriptureRange } from "../../../src/lib/reading/contract";
 const mockQuery = query as jest.MockedFunction<typeof query>;
 const mockRangeArticles = getArticleSummariesForRanges as jest.MockedFunction<
 	typeof getArticleSummariesForRanges
+>;
+const mockGetMetrics = getArticleMetrics as jest.MockedFunction<
+	typeof getArticleMetrics
 >;
 
 const MOED_ROW = {
@@ -187,5 +191,76 @@ describe("moadim service", () => {
 		const articles = await getMoedArticleSummaries(3, ranges);
 		expect(articles.map((a) => a.id)).toEqual([1, 2, 9, 8]);
 		expect(articles[2].authorName).toBe("אחר");
+	});
+
+	it("serves a detail with no sections and skips the range join", async () => {
+		stubDb({ moedRow: MOED_ROW, sections: [] });
+		const moed = await getMoedBySlug("פסח");
+		expect(moed?.sections).toEqual([]);
+		expect(moed?.ranges).toEqual([]);
+		expect(
+			mockQuery.mock.calls.some(([sql]) =>
+				/FROM tanah_moed_range/.test(sql),
+			),
+		).toBe(false);
+	});
+
+	it("keeps a section empty when the range join returns none of its rows", async () => {
+		stubDb({
+			moedRow: MOED_ROW,
+			sections: [{ id: 10, label: "קריאה", position: 1 }],
+			ranges: [
+				{
+					section_id: 99,
+					position: 1,
+					perek_id_start: 1,
+					pasuk_start: 1,
+					perek_id_end: 1,
+					pasuk_end: 5,
+				},
+			],
+		});
+		const moed = await getMoedBySlug("פסח");
+		expect(moed?.sections).toEqual([
+			{ id: 10, label: "קריאה", ranges: [] },
+		]);
+	});
+
+	it("answers null while the moed schema is missing and propagates other errors", async () => {
+		const missing = Object.assign(new Error("no table"), {
+			code: "ER_NO_SUCH_TABLE",
+		});
+		mockQuery.mockRejectedValue(missing);
+		expect(await getMoedBySlug("פסח")).toBeNull();
+
+		mockQuery.mockRejectedValue(new Error("connection lost"));
+		await expect(getPublishedMoadim()).rejects.toThrow("connection lost");
+		await expect(getMoedBySlug("פסח")).rejects.toThrow("connection lost");
+	});
+
+	it("decorates explicit-only articles with stored reading metrics", async () => {
+		mockRangeArticles.mockResolvedValue([]);
+		mockGetMetrics.mockResolvedValueOnce(
+			new Map([[9, { wordCount: 1200, estimatedSeconds: 327 }]]),
+		);
+		stubDb({
+			linkedArticles: [
+				{
+					id: 9,
+					perek_id: 30,
+					author_id: 5,
+					abstract: null,
+					name: "מאמר 9",
+					priority: 1,
+					author_name: "אחר",
+				},
+			],
+		});
+		const articles = await getMoedArticleSummaries(3, []);
+		expect(articles).toHaveLength(1);
+		expect(articles[0].metric).toEqual({
+			wordCount: 1200,
+			estimatedSeconds: 327,
+		});
 	});
 });

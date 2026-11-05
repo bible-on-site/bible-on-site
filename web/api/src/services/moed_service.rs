@@ -819,3 +819,729 @@ mod tests {
         assert_eq!(params.len(), 6);
     }
 }
+
+#[cfg(test)]
+mod db_tests {
+    use super::*;
+    use crate::dtos::moed::{MoedRangeInput, MoedSectionInput};
+    use entities::{article, article_covering_source};
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, Value};
+    use std::collections::BTreeMap;
+
+    fn skipped_revalidator() -> WebsiteRevalidator {
+        WebsiteRevalidator::new(None, None)
+    }
+
+    fn mock_db(mock: MockDatabase) -> Database {
+        Database::from_connection(mock.into_connection())
+    }
+
+    fn moed_model(id: i32) -> moed::Model {
+        moed::Model {
+            id,
+            slug: format!("slug-{id}"),
+            name: format!("moed-{id}"),
+            summary: None,
+            hebrew_month: None,
+            date_label: None,
+            annual_order: id as i16,
+            published: true,
+        }
+    }
+
+    fn section_model(id: i32, moed_id: i32, position: i16) -> moed_section::Model {
+        moed_section::Model {
+            id,
+            moed_id,
+            label: format!("section-{id}"),
+            position,
+        }
+    }
+
+    fn range_model(id: i32, section_id: i32) -> moed_range::Model {
+        moed_range::Model {
+            id,
+            section_id,
+            position: id as i16,
+            perek_id_start: 100 + id,
+            pasuk_start: 1,
+            perek_id_end: 100 + id,
+            pasuk_end: 5,
+        }
+    }
+
+    fn perek_row(id: i32, pasuk_count: i16) -> perek::Model {
+        perek::Model {
+            id,
+            perek_id: Some(id),
+            sefer_id: Some(1),
+            sefer_name: Some("בראשית".to_string()),
+            additional: None,
+            additional_letter: None,
+            perek: Some(id),
+            perek_in_context: Some(id),
+            date: None,
+            hebdate: None,
+            tseit: None,
+            header: None,
+            pasuk_count: Some(pasuk_count),
+        }
+    }
+
+    fn article_link(article_id: i32, moed_id: i32) -> article_moed::Model {
+        article_moed::Model {
+            article_id,
+            moed_id,
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    fn article_model(id: i32) -> article::Model {
+        article::Model {
+            id,
+            perek_id: 1,
+            author_id: 2,
+            article_abstract: None,
+            name: format!("article-{id}"),
+            priority: 1,
+            content: Some("content".to_string()),
+            coverage_verified: false,
+        }
+    }
+
+    fn id_row(id: i32) -> BTreeMap<String, Value> {
+        [("id".to_string(), id.into())].into_iter().collect()
+    }
+
+    fn moed_dto(id: i32, sections: Vec<MoedSection>) -> Moed {
+        Moed {
+            id,
+            slug: format!("slug-{id}"),
+            name: format!("moed-{id}"),
+            summary: None,
+            hebrew_month: None,
+            date_label: None,
+            annual_order: id,
+            published: true,
+            sections,
+            explicit_article_ids: Vec::new(),
+        }
+    }
+
+    fn upsert_input() -> UpsertMoedInput {
+        UpsertMoedInput {
+            id: None,
+            name: "פסח".to_string(),
+            slug: None,
+            summary: None,
+            hebrew_month: None,
+            date_label: None,
+            annual_order: 3,
+            published: true,
+            sections: None,
+        }
+    }
+
+    fn range_input(start: i32, pasuk_start: i32, end: i32, pasuk_end: i32) -> MoedRangeInput {
+        MoedRangeInput {
+            perek_id_start: start,
+            pasuk_start,
+            perek_id_end: end,
+            pasuk_end,
+        }
+    }
+
+    /// Asserts no INSERT/UPDATE/DELETE statement ran — validation failures
+    /// must leave the store untouched.
+    fn assert_no_writes(db: &Database) {
+        let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        for verb in ["INSERT INTO", "UPDATE `", "DELETE FROM"] {
+            assert!(!log.contains(verb), "unexpected write {verb}: {log}");
+        }
+    }
+
+    #[tokio::test]
+    async fn load_by_slug_returns_sections_ranges_and_explicit_ids() {
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(7)]])
+                .append_query_results::<moed_section::Model, Vec<_>, _>([vec![
+                    section_model(1, 7, 1),
+                    section_model(2, 7, 2),
+                ]])
+                .append_query_results::<moed_range::Model, Vec<_>, _>([vec![
+                    range_model(1, 1),
+                    range_model(2, 2),
+                ]])
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![
+                    article_link(9, 7),
+                    article_link(11, 7),
+                ]]),
+        );
+        let aggregate = load_by_slug(db.get_connection(), "slug-7", true)
+            .await
+            .unwrap()
+            .unwrap();
+        let dto: Moed = aggregate.into();
+        assert_eq!(dto.id, 7);
+        assert_eq!(dto.sections.len(), 2);
+        assert_eq!(dto.sections[0].position, 1);
+        assert_eq!(dto.sections[0].ranges[0].perek_id_start, 101);
+        assert_eq!(dto.sections[1].ranges[0].perek_id_start, 102);
+        assert_eq!(dto.explicit_article_ids, vec![9, 11]);
+    }
+
+    #[tokio::test]
+    async fn load_by_slug_missing_and_load_by_id_missing_return_none() {
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]]),
+        );
+        assert!(
+            load_by_slug(db.get_connection(), "nope", false)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(load_by_id(db.get_connection(), 99).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn list_queries_load_each_moads_aggregate_in_wheel_order() {
+        for published_only in [true, false] {
+            let db = mock_db(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![
+                        moed_model(1),
+                        moed_model(2),
+                    ]])
+                    // moed 1: one section with one range, no explicit links
+                    .append_query_results::<moed_section::Model, Vec<_>, _>([vec![section_model(
+                        1, 1, 1,
+                    )]])
+                    .append_query_results::<moed_range::Model, Vec<_>, _>([vec![range_model(1, 1)]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]])
+                    // moed 2: no sections, one explicit link
+                    .append_query_results::<moed_section::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![article_link(
+                        5, 2,
+                    )]]),
+            );
+            let moadim = if published_only {
+                list_published(db.get_connection()).await.unwrap()
+            } else {
+                list_all(db.get_connection()).await.unwrap()
+            };
+            assert_eq!(moadim.len(), 2);
+            assert_eq!(moadim[0].sections.len(), 1);
+            assert!(moadim[1].sections.is_empty());
+            assert_eq!(moadim[1].explicit_article_ids, vec![5]);
+        }
+    }
+
+    #[tokio::test]
+    async fn articles_for_moed_returns_the_union_in_slice_order() {
+        let dto = moed_dto(
+            7,
+            vec![MoedSection {
+                id: 1,
+                label: "קריאה".to_string(),
+                position: 1,
+                ranges: vec![MoedRange {
+                    id: 1,
+                    position: 1,
+                    perek_id_start: 100,
+                    pasuk_start: 10,
+                    perek_id_end: 102,
+                    pasuk_end: 5,
+                }],
+            }],
+        );
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // pasuk-count bound read for perakim 100..=102
+                .append_query_results::<perek::Model, Vec<_>, _>([vec![
+                    perek_row(100, 30),
+                    perek_row(101, 25),
+                    perek_row(102, 20),
+                ]])
+                // union read — slice-matched 3 then explicit-only 9
+                .append_query_results([vec![id_row(3), id_row(9)]])
+                .append_query_results::<article::Model, Vec<_>, _>([vec![
+                    article_model(3),
+                    article_model(9),
+                ]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    article_covering_source::Model {
+                        article_id: 3,
+                        perek_id: 100,
+                        pasuk: 12,
+                        created_at: chrono::Utc::now(),
+                    },
+                ]]),
+        );
+        let articles = articles_for_moed(&db, &dto).await.unwrap();
+        assert_eq!(articles.len(), 2);
+        assert_eq!(articles[0].id, 3);
+        assert_eq!(articles[0].covering_sources.as_ref().unwrap()[0].pasuk, 12);
+        assert_eq!(articles[1].id, 9);
+        assert!(articles[1].covering_sources.as_ref().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn articles_for_moed_falls_back_to_explicit_only_without_slices() {
+        let dto = moed_dto(7, Vec::new());
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // no ranges — the pasuk-count read still runs over an empty set
+                .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
+                .append_query_results([vec![id_row(9)]])
+                .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(9)]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]]),
+        );
+        let articles = articles_for_moed(&db, &dto).await.unwrap();
+        assert_eq!(articles.len(), 1);
+        assert_eq!(articles[0].id, 9);
+    }
+
+    #[tokio::test]
+    async fn articles_for_moed_empty_union_returns_without_article_reads() {
+        let dto = moed_dto(7, Vec::new());
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<_>, _>([vec![]]),
+        );
+        assert!(articles_for_moed(&db, &dto).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn upsert_moed_creates_sections_and_returns_the_reload() {
+        let mut input = upsert_input();
+        input.sections = Some(vec![MoedSectionInput {
+            label: "קריאה".to_string(),
+            ranges: vec![range_input(100, 1, 100, 5)],
+        }]);
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // slug/order conflict check — clear
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]])
+                // range bound validation reads
+                .append_query_results::<perek::Model, Vec<_>, _>([vec![perek_row(100, 31)]])
+                // moed insert + section delete + section insert + range
+                // insert — ActiveModelTrait::insert re-SELECTs the row on
+                // MySQL, so each exec is followed by a find_by_id read
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 42,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 0,
+                    },
+                    MockExecResult {
+                        last_insert_id: 8,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 3,
+                        rows_affected: 1,
+                    },
+                ])
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(42)]])
+                .append_query_results::<moed_section::Model, Vec<_>, _>([vec![section_model(
+                    8, 42, 1,
+                )]])
+                .append_query_results::<moed_range::Model, Vec<_>, _>([vec![range_model(3, 8)]])
+                // post-commit load_by_id reload — the row as persisted
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![{
+                    let mut model = moed_model(42);
+                    model.slug = "פסח".to_string();
+                    model.name = "פסח".to_string();
+                    model
+                }]])
+                .append_query_results::<moed_section::Model, Vec<_>, _>([vec![section_model(
+                    8, 42, 1,
+                )]])
+                .append_query_results::<moed_range::Model, Vec<_>, _>([vec![{
+                    let mut range = range_model(3, 8);
+                    range.perek_id_start = 100;
+                    range.perek_id_end = 100;
+                    range
+                }]])
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]]),
+        );
+        let (dto, revalidation) = upsert_moed(&db, &skipped_revalidator(), input)
+            .await
+            .unwrap();
+        assert_eq!(dto.id, 42);
+        assert_eq!(dto.slug, "פסח");
+        assert_eq!(dto.sections.len(), 1);
+        assert_eq!(dto.sections[0].ranges[0].perek_id_start, 100);
+        assert_eq!(revalidation, "SKIPPED");
+    }
+
+    #[tokio::test]
+    async fn upsert_moed_updates_and_keeps_stored_sections_when_omitted() {
+        let mut input = upsert_input();
+        input.id = Some(7);
+        input.name = "שם אחר".to_string();
+        input.slug = Some("slug-7".to_string());
+        input.annual_order = 7;
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // row lock
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(7)]])
+                // conflict check — clear
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]])
+                // UPDATE + the update() re-SELECT on MySQL
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }])
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![{
+                    let mut model = moed_model(7);
+                    model.slug = "slug-7".to_string();
+                    model.name = "שם אחר".to_string();
+                    model
+                }]])
+                // post-commit reload — no sections replaced so the stored
+                // ones come back
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![{
+                    let mut model = moed_model(7);
+                    model.slug = "slug-7".to_string();
+                    model.name = "שם אחר".to_string();
+                    model
+                }]])
+                .append_query_results::<moed_section::Model, Vec<_>, _>([vec![section_model(
+                    4, 7, 1,
+                )]])
+                .append_query_results::<moed_range::Model, Vec<_>, _>([vec![range_model(9, 4)]])
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]]),
+        );
+        let (dto, revalidation) = upsert_moed(&db, &skipped_revalidator(), input)
+            .await
+            .unwrap();
+        assert_eq!(dto.id, 7);
+        assert_eq!(dto.sections[0].id, 4);
+        assert_eq!(revalidation, "SKIPPED");
+        let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(log.contains("UPDATE"));
+        assert!(!log.contains("INSERT INTO `tanah_moed_section`"));
+    }
+
+    #[tokio::test]
+    async fn upsert_moed_missing_id_is_not_found() {
+        let mut input = upsert_input();
+        input.id = Some(999);
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]]),
+        );
+        let err = upsert_moed(&db, &skipped_revalidator(), input)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::NotFound(_)));
+        assert_no_writes(&db);
+    }
+
+    #[tokio::test]
+    async fn upsert_moed_rejects_blank_name_and_bad_annual_order() {
+        let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
+        let mut input = upsert_input();
+        input.name = "   ".to_string();
+        let err = upsert_moed(&db, &skipped_revalidator(), input.clone())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+        let mut input = upsert_input();
+        input.annual_order = 0;
+        let err = upsert_moed(&db, &skipped_revalidator(), input)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+        assert_no_writes(&db);
+    }
+
+    #[tokio::test]
+    async fn upsert_moed_rejects_slug_and_annual_order_conflicts() {
+        // Slug conflict: the same normalized slug on another row.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![{
+                    let mut model = moed_model(2);
+                    model.slug = "פסח".to_string();
+                    model
+                }]]),
+        );
+        let err = upsert_moed(&db, &skipped_revalidator(), upsert_input())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+        assert_no_writes(&db);
+
+        // annualOrder conflict: a different slug on the same wheel slot.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(2)]]),
+        );
+        let err = upsert_moed(&db, &skipped_revalidator(), upsert_input())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+        assert_no_writes(&db);
+    }
+
+    #[tokio::test]
+    async fn upsert_moed_rejects_bad_section_shapes_and_ranges() {
+        let cases: Vec<(Vec<MoedSectionInput>, Vec<Vec<perek::Model>>, &str)> = vec![
+            // blank label — fails before any perek read
+            (
+                vec![MoedSectionInput {
+                    label: "  ".to_string(),
+                    ranges: vec![range_input(100, 1, 100, 5)],
+                }],
+                vec![],
+                "label",
+            ),
+            // a section with no ranges
+            (
+                vec![MoedSectionInput {
+                    label: "קריאה".to_string(),
+                    ranges: vec![],
+                }],
+                vec![],
+                "at least one range",
+            ),
+            // unknown perek id
+            (
+                vec![MoedSectionInput {
+                    label: "קריאה".to_string(),
+                    ranges: vec![range_input(999, 1, 999, 5)],
+                }],
+                vec![vec![]],
+                "does not exist",
+            ),
+            // perek without canonical pasuk_count
+            (
+                vec![MoedSectionInput {
+                    label: "קריאה".to_string(),
+                    ranges: vec![range_input(100, 1, 100, 5)],
+                }],
+                vec![vec![{
+                    let mut row = perek_row(100, 31);
+                    row.pasuk_count = None;
+                    row
+                }]],
+                "pasuk count is missing",
+            ),
+            // pasuk beyond the canonical bound
+            (
+                vec![MoedSectionInput {
+                    label: "קריאה".to_string(),
+                    ranges: vec![range_input(100, 40, 100, 50)],
+                }],
+                vec![vec![perek_row(100, 31)]],
+                "out of range",
+            ),
+            // start coordinate after the end coordinate
+            (
+                vec![MoedSectionInput {
+                    label: "קריאה".to_string(),
+                    ranges: vec![range_input(101, 1, 100, 5)],
+                }],
+                vec![vec![perek_row(100, 31), perek_row(101, 20)]],
+                "after the end",
+            ),
+        ];
+        for (sections, perek_results, needle) in cases {
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]]);
+            for rows in perek_results {
+                mock = mock.append_query_results::<perek::Model, Vec<_>, _>([rows]);
+            }
+            let db = mock_db(mock);
+            let mut input = upsert_input();
+            input.sections = Some(sections);
+            let err = upsert_moed(&db, &skipped_revalidator(), input)
+                .await
+                .unwrap_err();
+            match &err {
+                ServiceError::BadRequest(message) => {
+                    assert!(message.contains(needle), "{message} ~ {needle}")
+                }
+                other => panic!("expected BadRequest, got {other:?}"),
+            }
+            assert_no_writes(&db);
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_moed_removes_the_row_and_missing_is_not_found() {
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(7)]])
+                .append_exec_results([MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                }]),
+        );
+        let revalidation = delete_moed(&db, &skipped_revalidator(), 7).await.unwrap();
+        assert_eq!(revalidation, "SKIPPED");
+        let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(log.contains("DELETE FROM"));
+
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![]]),
+        );
+        let err = delete_moed(&db, &skipped_revalidator(), 999)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn load_article_moed_links_maps_rows_and_drops_orphans() {
+        // Empty link set — a single junction read, no moed join.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![]]),
+        );
+        assert!(
+            load_article_moed_links(db.get_connection(), 7)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        // Links join their moed rows; a link whose moed vanished is dropped.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![
+                    article_link(7, 3),
+                    article_link(7, 9),
+                ]])
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![{
+                    let mut model = moed_model(3);
+                    model.slug = "פסח".to_string();
+                    model.name = "פסח".to_string();
+                    model
+                }]]),
+        );
+        let links = load_article_moed_links(db.get_connection(), 7)
+            .await
+            .unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].moed_id, 3);
+        assert_eq!(links[0].slug, "פסח");
+    }
+
+    #[tokio::test]
+    async fn replace_article_moed_links_diffs_and_rejects_unknown_ids() {
+        // Unknown moed id — existence check fails before any write.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(3)]]),
+        );
+        let err = replace_article_moed_links(db.get_connection(), 7, &[3, 99])
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::BadRequest(_)));
+        assert_no_writes(&db);
+
+        // Identical set — a no-op that skips the writes entirely.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_model(3)]])
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![article_link(7, 3)]]),
+        );
+        assert!(
+            !replace_article_moed_links(db.get_connection(), 7, &[3])
+                .await
+                .unwrap()
+        );
+        assert_no_writes(&db);
+
+        // Add one, drop one — one DELETE + one INSERT.
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![
+                    moed_model(3),
+                    moed_model(4),
+                ]])
+                .append_query_results::<article_moed::Model, Vec<_>, _>([vec![article_link(7, 4)]])
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ]),
+        );
+        assert!(
+            replace_article_moed_links(db.get_connection(), 7, &[3])
+                .await
+                .unwrap()
+        );
+        let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+        assert!(log.contains("DELETE FROM"));
+        assert!(log.contains("INSERT INTO"));
+    }
+
+    #[tokio::test]
+    async fn moed_id_slugs_skips_the_empty_set_and_sorts_by_id() {
+        let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
+        assert!(
+            moed_id_slugs(db.get_connection(), &BTreeSet::new())
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            db.get_connection()
+                .clone()
+                .into_transaction_log()
+                .is_empty()
+        );
+
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<moed::Model, Vec<_>, _>([vec![
+                    moed_model(9),
+                    moed_model(3),
+                ]]),
+        );
+        let pairs = moed_id_slugs(db.get_connection(), &BTreeSet::from([3, 9]))
+            .await
+            .unwrap();
+        assert_eq!(
+            pairs,
+            vec![(3, "slug-3".to_string()), (9, "slug-9".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn db_failures_surface_as_internal_errors() {
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([sea_orm::DbErr::Custom("down".to_string())]),
+        );
+        let err = list_all(db.get_connection()).await.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+
+        let db = mock_db(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([sea_orm::DbErr::Custom("down".to_string())]),
+        );
+        let err = load_article_moed_links(db.get_connection(), 7)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+    }
+}
