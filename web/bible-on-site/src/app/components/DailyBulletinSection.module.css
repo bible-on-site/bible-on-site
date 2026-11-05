@@ -113,12 +113,16 @@
 
 .dot {
 	background-color: rgba(21, 82, 172, 0.3);
+	/* The visible dot stays 0.7rem; padding grows the tap target to the
+	   48px floor (Lighthouse target-size) without enlarging the glyph. */
+	background-clip: content-box;
 	border: none;
 	border-radius: 50%;
+	box-sizing: border-box;
 	cursor: pointer;
-	height: 0.7rem;
-	padding: 0;
-	width: 0.7rem;
+	height: 3rem;
+	padding: 1.15rem;
+	width: 3rem;
 }
 
 .dotActive {
