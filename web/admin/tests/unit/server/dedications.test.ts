@@ -50,6 +50,10 @@ import {
 	rescanDedicationExpiries,
 	syncDedicationExpiry,
 } from "~/server/dedication-expiry";
+import {
+	applyArticleDedicationLink,
+	normalizeExpiry,
+} from "~/server/dedication-targets.server";
 import type { DedicationTargetInput } from "~/server/dedications";
 import {
 	createDedication,
@@ -58,7 +62,6 @@ import {
 	getDedicationTargetOptions,
 	getDedicationTypes,
 	listDedications,
-	normalizeExpiry,
 	updateDedication,
 } from "~/server/dedications";
 
@@ -828,5 +831,147 @@ describe("rescanDedicationExpiries", () => {
 
 		const sqls = mocks.query.mock.calls.map(([sql]) => sql as string);
 		expect(sqls.some((s) => s.includes("MIN(CASE"))).toBe(true);
+	});
+});
+
+describe("applyArticleDedicationLink", () => {
+	it("reports a missing dedication without writing", async () => {
+		mocks.queryOne.mockResolvedValue(null);
+		await expect(
+			applyArticleDedicationLink({
+				dedicationId: 9,
+				articleId: 6,
+				op: "add",
+			}),
+		).resolves.toEqual({ changed: false, reason: "ההקדשה לא נמצאה" });
+		expect(mocks.txExecute).not.toHaveBeenCalled();
+	});
+
+	it("skips an add when the article is already assigned", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 9 });
+		stubQueries({
+			article: [{ article_id: 6, expires_at: null }],
+		});
+		await expect(
+			applyArticleDedicationLink({
+				dedicationId: 9,
+				articleId: 6,
+				op: "add",
+			}),
+		).resolves.toEqual({
+			changed: false,
+			reason: "המאמר כבר משויך להקדשה",
+		});
+		expect(mocks.txExecute).not.toHaveBeenCalled();
+	});
+
+	it("skips a remove when the article is not assigned", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 9 });
+		stubQueries({
+			sefer: [{ sefer_id: 4, expires_at: null }],
+		});
+		await expect(
+			applyArticleDedicationLink({
+				dedicationId: 9,
+				articleId: 6,
+				op: "remove",
+			}),
+		).resolves.toEqual({
+			changed: false,
+			reason: "המאמר אינו משויך להקדשה",
+		});
+		expect(mocks.txExecute).not.toHaveBeenCalled();
+	});
+
+	it("rewrites the full target set when adding an article", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 9 });
+		stubQueries({
+			sefer: [{ sefer_id: 4, expires_at: null }],
+			state: [{ next_expiry: null, has_elapsed: 0 }],
+		});
+
+		const out = await applyArticleDedicationLink({
+			dedicationId: 9,
+			articleId: 6,
+			op: "add",
+			expiresAt: "2030-05-06T07:08",
+		});
+
+		expect(out).toEqual({ changed: true });
+		const written = mocks.txExecute.mock.calls.map(([, sql]) => sql);
+		expect(
+			written.some((s) => s.includes("DELETE FROM tanah_sefer_dedication")),
+		).toBe(true);
+		expect(
+			written.some((s) => s.includes("DELETE FROM tanah_article_dedication")),
+		).toBe(true);
+		// Both the kept sefer target and the new article target are re-inserted.
+		expect(written.some((s) => s.includes("INTO tanah_sefer_dedication"))).toBe(
+			true,
+		);
+		expect(
+			written.some((s) => s.includes("INTO tanah_article_dedication")),
+		).toBe(true);
+		const articleInsert = mocks.txExecute.mock.calls.find(([, sql]) =>
+			sql.includes("INTO tanah_article_dedication"),
+		);
+		expect(articleInsert?.[2]).toEqual([6, 9, "2030-05-06 07:08:00"]);
+		expect(mocks.dedicationChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: 9,
+				seferIds: [4],
+				articleIds: [6],
+			}),
+		);
+		await flush();
+	});
+
+	it("filters only the removed article out of the rewritten set", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 9 });
+		stubQueries({
+			article: [
+				{ article_id: 6, expires_at: null },
+				{ article_id: 7, expires_at: null },
+			],
+			sefer: [{ sefer_id: 4, expires_at: null }],
+			state: [{ next_expiry: null, has_elapsed: 0 }],
+		});
+
+		const out = await applyArticleDedicationLink({
+			dedicationId: 9,
+			articleId: 6,
+			op: "remove",
+		});
+
+		expect(out).toEqual({ changed: true });
+		const articleInserts = mocks.txExecute.mock.calls.filter(([, sql]) =>
+			sql.includes("INTO tanah_article_dedication"),
+		);
+		// Only the surviving article row is written back.
+		expect(articleInserts).toHaveLength(1);
+		expect(articleInserts[0]?.[2]).toEqual([7, 9, null]);
+		expect(mocks.dedicationChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: 9,
+				articleIds: expect.arrayContaining([6, 7]),
+			}),
+		);
+		await flush();
+	});
+
+	it("rejects a malformed assignment expiry before writing", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 9 });
+		stubQueries({
+			sefer: [{ sefer_id: 4, expires_at: null }],
+		});
+		await expect(
+			applyArticleDedicationLink({
+				dedicationId: 9,
+				articleId: 6,
+				op: "add",
+				expiresAt: "not-a-date",
+			}),
+		).rejects.toThrow("תוקף");
+		expect(mocks.txExecute).not.toHaveBeenCalled();
 	});
 });

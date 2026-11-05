@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArticlesRouteImport } from './routes/articles'
 import { Route as BulletinsRouteImport } from './routes/bulletins'
 import { Route as DedicationsRouteImport } from './routes/dedications'
+import { Route as LinkProposalsRouteImport } from './routes/link-proposals'
 import { Route as RabbisRouteImport } from './routes/rabbis'
 import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
 import { Route as ArticlesIdRouteImport } from './routes/articles.$id'
@@ -40,6 +41,11 @@ const BulletinsRoute = BulletinsRouteImport.update({
 const DedicationsRoute = DedicationsRouteImport.update({
   id: '/dedications',
   path: '/dedications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LinkProposalsRoute = LinkProposalsRouteImport.update({
+  id: '/link-proposals',
+  path: '/link-proposals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RabbisRoute = RabbisRouteImport.update({
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
   '/dedications': typeof DedicationsRoute
+  '/link-proposals': typeof LinkProposalsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/articles/$id': typeof ArticlesIdRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
   '/dedications': typeof DedicationsRoute
+  '/link-proposals': typeof LinkProposalsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/articles/$id': typeof ArticlesIdRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
   '/dedications': typeof DedicationsRoute
+  '/link-proposals': typeof LinkProposalsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/articles/$id': typeof ArticlesIdRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/articles'
     | '/bulletins'
     | '/dedications'
+    | '/link-proposals'
     | '/rabbis'
     | '/tanahpedia'
     | '/articles/$id'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/articles'
     | '/bulletins'
     | '/dedications'
+    | '/link-proposals'
     | '/rabbis'
     | '/tanahpedia'
     | '/articles/$id'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/articles'
     | '/bulletins'
     | '/dedications'
+    | '/link-proposals'
     | '/rabbis'
     | '/tanahpedia'
     | '/articles/$id'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   ArticlesRoute: typeof ArticlesRouteWithChildren
   BulletinsRoute: typeof BulletinsRoute
   DedicationsRoute: typeof DedicationsRoute
+  LinkProposalsRoute: typeof LinkProposalsRoute
   RabbisRoute: typeof RabbisRouteWithChildren
   TanahpediaRoute: typeof TanahpediaRouteWithChildren
 }
@@ -208,6 +221,13 @@ declare module '@tanstack/react-router' {
       path: '/dedications'
       fullPath: '/dedications'
       preLoaderRoute: typeof DedicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/link-proposals': {
+      id: '/link-proposals'
+      path: '/link-proposals'
+      fullPath: '/link-proposals'
+      preLoaderRoute: typeof LinkProposalsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rabbis': {
@@ -315,6 +335,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArticlesRoute: ArticlesRouteWithChildren,
   BulletinsRoute: BulletinsRoute,
   DedicationsRoute: DedicationsRoute,
+  LinkProposalsRoute: LinkProposalsRoute,
   RabbisRoute: RabbisRouteWithChildren,
   TanahpediaRoute: TanahpediaRouteWithChildren,
 }

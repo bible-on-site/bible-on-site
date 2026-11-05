@@ -115,6 +115,33 @@ VALUES (
         FALSE
     );
 
+-- Article with explicit scripture citations — the link-proposal pipeline
+-- (#3103) heuristic engine extracts covering-source candidates from them.
+-- Appended after the shared article rows above so its auto-increment id (6)
+-- stays stable for e2e runs.
+-- Hidden-row idiom like the row above: perek_id 5000 sits outside the 929
+-- counters and DISTRIBUTABLE FALSE keeps it out of public article/author
+-- counts, so shared-fixture assertions (API + website e2e) stay unchanged.
+-- The admin pipeline reads the row directly by id.
+INSERT INTO tanah_article (
+        PEREK_ID,
+        AUTHOR_ID,
+        ABSTRACT,
+        NAME,
+        PRIORITY,
+        CONTENT,
+        DISTRIBUTABLE
+    )
+VALUES (
+        5000,
+        4,
+        '<h1>מאמר ציטוטים לצינור ההצעות</h1>',
+        'מאמר ציטוטים לצינור ההצעות',
+        1,
+        '<p>המאמר דן באברהם אבינו: בראשית יח, ב מתאר את התחנוננות על סדום, ושמואל ב ה, ז מזכיר את מלכות החברון.</p>',
+        FALSE
+    );
+
 -- Representative test data for tanah_article_covering_source. Article 1 gets
 -- verified coverage of its two opening pesukim. Every other fixture article
 -- keeps coverage_verified = FALSE (coverage unknown -> primary-perek
