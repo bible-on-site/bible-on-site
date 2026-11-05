@@ -32,6 +32,7 @@ vi.mock("~/server/website-revalidate", () => ({
 	revalidateWebsite: mocks.revalidateWebsite,
 	moedChange: mocks.moedChange,
 }));
+vi.mock("@tanstack/react-start/server-only", () => ({}));
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
 		validator: (validate: (data: unknown) => unknown) => ({
@@ -44,13 +45,11 @@ vi.mock("@tanstack/react-start", () => ({
 	}),
 }));
 
+import { deleteMoed, normalizeMoedSlug, upsertMoed } from "~/server/moadim";
 import {
-	deleteMoed,
 	loadArticleMoedIds,
-	normalizeMoedSlug,
 	txReplaceArticleMoadim,
-	upsertMoed,
-} from "~/server/moadim";
+} from "~/server/moadim-links.server";
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -77,9 +76,7 @@ describe("normalizeMoedSlug", () => {
 describe("upsertMoed", () => {
 	const baseSection = {
 		label: "תורה",
-		ranges: [
-			{ perekIdStart: 1, pasukStart: 1, perekIdEnd: 1, pasukEnd: 3 },
-		],
+		ranges: [{ perekIdStart: 1, pasukStart: 1, perekIdEnd: 1, pasukEnd: 3 }],
 	};
 
 	it("creates a moed with its sections atomically and revalidates", async () => {
@@ -219,9 +216,7 @@ describe("upsertMoed", () => {
 		});
 		const writes = mocks.txExecute.mock.calls.map((c) => String(c[1]));
 		expect(
-			writes.some((sql) =>
-				sql.includes("DELETE FROM tanah_moed_section"),
-			),
+			writes.some((sql) => sql.includes("DELETE FROM tanah_moed_section")),
 		).toBe(false);
 	});
 });
@@ -239,9 +234,7 @@ describe("deleteMoed", () => {
 		).toBe(true);
 		expect(mocks.revalidateWebsite).toHaveBeenCalledWith([
 			{
-				changes: [
-					{ kind: "moed", id: 3, slug: "סוכות", oldSlug: "סוכות" },
-				],
+				changes: [{ kind: "moed", id: 3, slug: "סוכות", oldSlug: "סוכות" }],
 			},
 		]);
 	});
@@ -267,13 +260,13 @@ describe("article moed links", () => {
 	});
 
 	it("rejects duplicate and missing moed ids before any write", async () => {
-		await expect(
-			txReplaceArticleMoadim(conn, 1, [2, 2]),
-		).rejects.toThrow(/כפול/);
+		await expect(txReplaceArticleMoadim(conn, 1, [2, 2])).rejects.toThrow(
+			/כפול/,
+		);
 		mocks.txQuery.mockResolvedValueOnce([{ id: 4 }]); // existence check
-		await expect(
-			txReplaceArticleMoadim(conn, 1, [4, 5]),
-		).rejects.toThrow(/מועד 5/);
+		await expect(txReplaceArticleMoadim(conn, 1, [4, 5])).rejects.toThrow(
+			/מועד 5/,
+		);
 	});
 
 	it("walks 0 -> 1 -> many -> 0 and returns the touched moed set", async () => {
@@ -324,9 +317,7 @@ describe("article moed links", () => {
 		mocks.txQuery
 			.mockResolvedValueOnce([{ id: 3 }])
 			.mockResolvedValueOnce([{ id: 3, slug: "שלישי" }]);
-		await expect(
-			txReplaceArticleMoadim(conn, 1, [3]),
-		).resolves.toBeNull();
+		await expect(txReplaceArticleMoadim(conn, 1, [3])).resolves.toBeNull();
 		expect(mocks.txExecute).not.toHaveBeenCalled();
 	});
 });

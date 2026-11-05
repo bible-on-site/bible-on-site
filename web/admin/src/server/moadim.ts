@@ -1,15 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
-import { isCoveringSourceSchemaMissing } from "./covering-sources";
 import { query, queryOne, transaction, txExecute, txQuery } from "./db";
+import { isMoedSchemaMissing } from "./moadim-links.server";
 import { moedChange, revalidateWebsite } from "./website-revalidate";
 
 /**
  * מועדים על הפרק management (#3101): the catalogue list/editor reads and the
- * transactional upsert/delete plus the article↔moed link helpers the article
- * form uses. Everything degrades gracefully while the moed schema is not
- * deployed — reads return `undefined`-shaped "unavailable" state instead of
- * errors, exactly like the covering-source schema conventions.
+ * transactional upsert/delete the moed form uses. Everything degrades
+ * gracefully while the moed schema is not deployed — reads return
+ * `undefined`-shaped "unavailable" state instead of errors, exactly like
+ * the covering-source schema conventions.
+ *
+ * Client-safety contract: this module is importable from routes, so every
+ * top-level export must be a `createServerFn` stub or a pure function.
+ * Plain db helpers (the article↔moed link set) live in
+ * moadim-links.server.ts — a surviving export that touches ./db would ship
+ * mysql2 into the browser bundle and crash at module init.
  */
 
 /** One moed row in the admin list. */
@@ -68,12 +74,6 @@ export interface MoedUpsert {
 	sections?: MoedSectionInput[];
 }
 
-/** Distinguishes "schema not deployed" from a real failure (same predicate
- * as the covering-source convention — missing table/column). */
-export function isMoedSchemaMissing(error: unknown): boolean {
-	return isCoveringSourceSchemaMissing(error);
-}
-
 /** Normalizes a slug the same way the API's `normalize_moed_slug` does. */
 export function normalizeMoedSlug(raw: string): string {
 	const slug = raw
@@ -84,9 +84,7 @@ export function normalizeMoedSlug(raw: string): string {
 	const valid =
 		slug.length > 0 &&
 		slug.length <= 191 &&
-		[...slug].every(
-			(c) => c === "-" || /[a-zA-Z0-9֐-׿]/u.test(c),
-		) &&
+		[...slug].every((c) => c === "-" || /[a-zA-Z0-9֐-׿]/u.test(c)) &&
 		!slug.startsWith("-") &&
 		!slug.endsWith("-") &&
 		!slug.includes("--");
@@ -132,7 +130,11 @@ async function assertMoedRangesExist(
 			[range.perekIdEnd, range.pasukEnd],
 		] as const) {
 			const bound = byId.get(perekId);
-			if (bound !== undefined && bound !== null && (pasuk < 1 || pasuk > bound)) {
+			if (
+				bound !== undefined &&
+				bound !== null &&
+				(pasuk < 1 || pasuk > bound)
+			) {
 				throw new Error(
 					`${field}: פסוק ${pasuk} מחוץ לתחום של פרק ${perekId} (1-${bound})`,
 				);
@@ -276,9 +278,7 @@ export const getMoed = createServerFn({ method: "GET" })
 export const upsertMoed = createServerFn({ method: "POST" })
 	.validator((data: { id?: number } & MoedUpsert) => data)
 	.handler(async ({ data }) => {
-		const slug = normalizeMoedSlug(
-			data.slug?.trim() ? data.slug : data.name,
-		);
+		const slug = normalizeMoedSlug(data.slug?.trim() ? data.slug : data.name);
 		if (!data.name.trim()) throw new Error("שם המועד הוא חובה");
 		if (data.annualOrder < 1) throw new Error("annualOrder חייב להיות >= 1");
 		for (const section of data.sections ?? []) {
@@ -408,102 +408,6 @@ export const deleteMoed = createServerFn({ method: "POST" })
 			await txExecute(conn, "DELETE FROM tanah_moed WHERE id = ?", [moedId]);
 			return row[0].slug;
 		});
-		await revalidateWebsite([
-			moedChange({ id: moedId, slug, oldSlug: slug }),
-		]);
+		await revalidateWebsite([moedChange({ id: moedId, slug, oldSlug: slug })]);
 		return { success: true };
 	});
-
-/** The moed ids explicitly linked to an article — undefined when the moed
- * schema is not deployed (never "the article links to nothing"). */
-export async function loadArticleMoedIds(
-	articleId: number,
-): Promise<number[] | undefined> {
-	try {
-		const rows = await query<{ moed_id: number }>(
-			"SELECT moed_id FROM tanah_article_moed WHERE article_id = ? ORDER BY moed_id",
-			[articleId],
-		);
-		return (rows ?? []).map((row) => row.moed_id);
-	} catch (error) {
-		if (!isMoedSchemaMissing(error)) throw error;
-		return undefined;
-	}
-}
-
-/**
- * Replaces the article's moed link set inside a save transaction. Returns
- * the (id, slug) pairs of every affected moed (old ∪ new) for the
- * post-commit invalidation; `null` when nothing changed.
- */
-export async function txReplaceArticleMoadim(
-	conn: mysql.PoolConnection,
-	articleId: number,
-	moedIds: number[],
-): Promise<{ id: number; slug: string }[] | null> {
-	const unique = [...new Set(moedIds)];
-	if (unique.length !== moedIds.length) {
-		throw new Error("moedIds: מועד כפול");
-	}
-	if (unique.length > 0) {
-		const placeholders = unique.map(() => "?").join(",");
-		const existing = await txQuery<{ id: number }>(
-			conn,
-			`SELECT id FROM tanah_moed WHERE id IN (${placeholders})`,
-			unique,
-		);
-		const existingIds = new Set(existing.map((row) => row.id));
-		for (const id of unique) {
-			if (!existingIds.has(id)) throw new Error(`מועד ${id} לא קיים`);
-		}
-	}
-	const current = await txMoedArticleLinks(conn, articleId);
-	const currentIds = new Set(current.map((link) => link.id));
-	const wanted = new Set(unique);
-	const toAdd = unique.filter((id) => !currentIds.has(id));
-	const toRemove = [...currentIds].filter((id) => !wanted.has(id));
-	if (toAdd.length === 0 && toRemove.length === 0) return null;
-	if (toRemove.length > 0) {
-		await txExecute(
-			conn,
-			`DELETE FROM tanah_article_moed WHERE article_id = ? AND moed_id IN (${toRemove.map(() => "?").join(",")})`,
-			[articleId, ...toRemove],
-		);
-	}
-	for (const moedId of toAdd) {
-		await txExecute(
-			conn,
-			"INSERT INTO tanah_article_moed (article_id, moed_id) VALUES (?, ?)",
-			[articleId, moedId],
-		);
-	}
-	// old ∪ new — every touched moed page expires.
-	const affected = new Map<number, { id: number; slug: string }>();
-	for (const link of current) {
-		if (!wanted.has(link.id)) affected.set(link.id, link);
-	}
-	if (toAdd.length > 0) {
-		const placeholders = toAdd.map(() => "?").join(",");
-		const rows = await txQuery<{ id: number; slug: string }>(
-			conn,
-			`SELECT id, slug FROM tanah_moed WHERE id IN (${placeholders})`,
-			toAdd,
-		);
-		for (const row of rows) affected.set(row.id, row);
-	}
-	return [...affected.values()];
-}
-
-/** Loads the article's moed links with slugs inside a txn. */
-async function txMoedArticleLinks(
-	conn: mysql.PoolConnection,
-	articleId: number,
-): Promise<{ id: number; slug: string }[]> {
-	return txQuery<{ id: number; slug: string }>(
-		conn,
-		`SELECT m.id, m.slug FROM tanah_article_moed am
-		 JOIN tanah_moed m ON m.id = am.moed_id
-		 WHERE am.article_id = ? ORDER BY m.id`,
-		[articleId],
-	);
-}
