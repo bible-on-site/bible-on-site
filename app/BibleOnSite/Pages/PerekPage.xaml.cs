@@ -221,7 +221,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 Carousel = PerekCarousel,
                 LoadingOverlay = CarouselLoadingOverlay,
                 FanMenu = FanMenu,
-                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton],
+                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton, PerekPickerPopup],
                 PressExcluded = [FanMenu.ToggleButton, SelectionBar],
             },
             new ReaderCarouselActions
