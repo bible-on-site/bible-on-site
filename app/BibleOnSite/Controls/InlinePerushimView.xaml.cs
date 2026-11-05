@@ -7,7 +7,8 @@ namespace BibleOnSite.Controls;
 /// content. The no-flash contract (#2451) now lives in one template instead
 /// of three page copies that could drift apart.
 /// </summary>
-public partial class InlinePerushimView : VerticalStackLayout
+// 'partial' is required — the XAML codegen partial declares InitializeComponent.
+public partial class InlinePerushimView : VerticalStackLayout //NOSONAR — S2333 false positive on code-behind.
 {
     /// <summary>The <see cref="Models.PerushNoteDisplay"/> items to render.</summary>
     public static readonly BindableProperty ItemsSourceProperty = BindableProperty.Create(
@@ -20,7 +21,7 @@ public partial class InlinePerushimView : VerticalStackLayout
 
     public System.Collections.IEnumerable? ItemsSource
     {
-        get => (System.Collections.IEnumerable?)GetValue(ItemsSourceProperty);
+        get => GetValue(ItemsSourceProperty) as System.Collections.IEnumerable;
         set => SetValue(ItemsSourceProperty, value);
     }
 }
