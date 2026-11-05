@@ -42,6 +42,14 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	will-change: transform, clip-path;
 }
 
+/* Keep the original pane content ready before the paper's crease moves.
+   A steady hint lets both faces reuse their rendering during consecutive turns.
+   Chrome can change glyph-edge smoothing in motion; text layout, font styles,
+   colors, controls and resting-page appearance stay intact. */
+.he-book .page--paper > .flipbook-page-scrollport {
+	will-change: opacity;
+}
+
 /* Skip covered pane painting while retaining its layout and existing masks.
    Keep page boxes available for back-face preparation; the library clears
    the pane mask before exposing its content. */

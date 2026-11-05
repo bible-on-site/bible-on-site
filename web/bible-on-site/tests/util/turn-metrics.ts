@@ -8,6 +8,17 @@ export const TURN_LIMITS = {
 	frameGapP95Ms: 50,
 } as const;
 
+/** Normal desktop rendering: distinguish a 60Hz frame from a repeated miss.
+ * Keep the separate 4x work profile and all historical stress samples intact.
+ */
+export const DESKTOP_TURN_LIMITS = {
+	responseP95Ms: 100,
+	frameGapMaxMs: 100,
+	frameGapP95Ms: 25,
+} as const;
+
+type TurnLimits = Readonly<Record<keyof typeof TURN_LIMITS, number>>;
+
 export interface TurnInput {
 	at: number;
 	trusted: boolean;
@@ -25,6 +36,13 @@ export interface TurnSamples {
 	repeatedFrameTimestamps?: number[];
 	longAnimationFramesSupported?: boolean;
 	longAnimationFrames?: TurnLongAnimationFrame[];
+	visibility?: {
+		started: string;
+		stopped: string;
+		startedFocused: boolean;
+		stoppedFocused: boolean;
+		changes: { at: number; state: string }[];
+	};
 }
 
 /** Passive browser diagnostics; these never change the cadence reduction. */
@@ -135,6 +153,7 @@ export function reduceTurnSamples(
 
 export function turnBudgetFailures(
 	metrics: ReturnType<typeof reduceTurnSamples>,
+	limits: TurnLimits = TURN_LIMITS,
 ): string[] {
 	return (
 		[
@@ -143,11 +162,156 @@ export function turnBudgetFailures(
 			["consecutive turns", metrics.consecutiveTurns],
 		] as const
 	).flatMap(([phase, values]) =>
-		Object.entries(TURN_LIMITS)
+		Object.entries(limits)
 			.filter(([key, limit]) => values[key as keyof typeof TURN_LIMITS] > limit)
 			.map(
 				([key, limit]) =>
 					`${phase}/${key}=${values[key as keyof typeof TURN_LIMITS]}ms > ${limit}ms`,
 			),
 	);
+}
+
+// LoAF blockingDuration measures time that the main thread cannot yield to input.
+// Keep this separate from rAF cadence: software rasterization and presentation
+// scheduling can miss frames even when the main thread remains interruptible.
+export const TURN_BLOCKING_LIMIT_MS = 50;
+
+export function reduceTurnBlockingSamples(
+	samples: TurnSamples,
+	initialChapter: number,
+	expectedTurns: number,
+) {
+	reduceTurnSamples(samples, initialChapter, expectedTurns);
+	if (
+		samples.longAnimationFramesSupported !== true ||
+		!Array.isArray(samples.longAnimationFrames)
+	) {
+		throw new Error("Browser long-animation-frame evidence missing");
+	}
+	const records = samples.longAnimationFrames;
+	if (
+		records.some(
+			(frame) =>
+				![frame.startTime, frame.duration, frame.blockingDuration].every(
+					Number.isFinite,
+				) ||
+				frame.startTime < 0 ||
+				frame.duration <= 0 ||
+				frame.blockingDuration < 0 ||
+				frame.blockingDuration > frame.duration,
+		)
+	) {
+		throw new Error("Invalid browser long-animation-frame evidence");
+	}
+	const first = samples.inputs[0];
+	const firstEnd = first.settled as number;
+	const summarize = (frames: TurnLongAnimationFrame[]) => ({
+		blockingDurationMaxMs:
+			Math.max(
+				0,
+				...frames.map((frame) => clockMicros(frame.blockingDuration)),
+			) / MICROS_PER_MS,
+	});
+	return {
+		...summarize(records),
+		firstTurn: summarize(
+			records.filter(
+				(frame) =>
+					frame.startTime < firstEnd &&
+					frame.startTime + frame.duration > first.at,
+			),
+		),
+		consecutiveTurns: summarize(
+			records.filter((frame) => frame.startTime + frame.duration > firstEnd),
+		),
+	};
+}
+
+export function turnBlockingBudgetFailures(
+	metrics: ReturnType<typeof reduceTurnBlockingSamples>,
+) {
+	return (
+		[
+			["all turns", metrics],
+			["first turn", metrics.firstTurn],
+			["consecutive turns", metrics.consecutiveTurns],
+		] as const
+	).flatMap(([phase, values]) =>
+		values.blockingDurationMaxMs > TURN_BLOCKING_LIMIT_MS
+			? [
+					`${phase}/blockingDurationMaxMs=${values.blockingDurationMaxMs}ms > ${TURN_BLOCKING_LIMIT_MS}ms`,
+				]
+			: [],
+	);
+}
+
+export type TurnRenderingProfile = "hardware-cadence" | "software-work";
+
+export function turnProfileSettings(profile: TurnRenderingProfile) {
+	return profile === "hardware-cadence"
+		? { cpuRate: 1, limits: DESKTOP_TURN_LIMITS }
+		: { cpuRate: 4, limits: TURN_LIMITS };
+}
+
+/** Software emulation does not establish hardware presentation cadence. */
+export function turnRenderingProfile(gpu: {
+	featureStatus?: Record<string, unknown>;
+	devices: { deviceString: string }[];
+	auxAttributes?: Record<string, unknown>;
+}): TurnRenderingProfile {
+	const compositing = gpu.featureStatus?.gpu_compositing;
+	const rasterization = gpu.featureStatus?.rasterization;
+	if (
+		typeof compositing !== "string" ||
+		typeof rasterization !== "string" ||
+		!gpu.devices[0]?.deviceString
+	) {
+		throw new Error("Browser rendering evidence missing");
+	}
+	const renderer = `${gpu.devices[0].deviceString} ${gpu.auxAttributes?.glRenderer ?? ""}`;
+	const softwareDevice =
+		/SwiftShader|llvmpipe|softpipe|Software Rasterizer|Microsoft Basic Render Driver/i.test(
+			renderer,
+		);
+	return compositing === "enabled" &&
+		rasterization === "enabled" &&
+		!softwareDevice
+		? "hardware-cadence"
+		: "software-work";
+}
+
+export function turnQualificationFailures(
+	metrics: ReturnType<typeof reduceTurnSamples>,
+	blocking: ReturnType<typeof reduceTurnBlockingSamples>,
+	profile: TurnRenderingProfile,
+) {
+	const { limits } = turnProfileSettings(profile);
+	const responsiveness = (
+		[
+			["all turns", metrics],
+			["first turn", metrics.firstTurn],
+			["consecutive turns", metrics.consecutiveTurns],
+		] as const
+	).flatMap(([phase, values]) =>
+		values.responseP95Ms > limits.responseP95Ms
+			? [
+					`${phase}/responseP95Ms=${values.responseP95Ms}ms > ${limits.responseP95Ms}ms`,
+				]
+			: [],
+	);
+	return [
+		...(profile === "hardware-cadence"
+			? turnBudgetFailures(metrics, limits)
+			: responsiveness),
+		...turnBlockingBudgetFailures(blocking),
+	];
+}
+
+export function turnVisibilityFailures(visibility: TurnSamples["visibility"]) {
+	if (!visibility) throw new Error("Browser visibility evidence missing");
+	return visibility.started !== "visible" ||
+		visibility.stopped !== "visible" ||
+		visibility.changes.some((change) => change.state !== "visible")
+		? ["Turn measurement entered background visibility"]
+		: [];
 }

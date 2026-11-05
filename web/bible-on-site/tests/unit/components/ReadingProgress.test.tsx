@@ -235,6 +235,59 @@ describe("ReadingProgress", () => {
 		expect(fill.style.width).toBe("100%");
 	});
 
+	it.each([16, 96])(
+		"bounds scroller geometry reads independently of %i text fragments",
+		async (fragments) => {
+			const { container } = renderInScroller(
+				<ReadingProgress
+					units={[unit("a", fragments)]}
+					scroller=".scroll"
+					content=".content"
+					unitSelector='[data-u="{key}"]'
+				/>,
+			);
+			const scroller = container.querySelector(".scroll") as Element;
+			const content = container.querySelector(".content") as Element;
+			const a = container.querySelector('[data-u="a"]') as Element;
+			const setOffset = (offset: number) => {
+				setRect(scroller, offset, 200);
+				setRect(content, offset, fragments * 10);
+				setRect(a, offset, fragments * 10);
+				rangeLines.set(
+					a,
+					Array.from({ length: fragments }, (_, i) => ({
+						top: offset + i * 10,
+						height: 10,
+					})),
+				);
+			};
+			setOffset(25);
+			setScroller(scroller);
+			const reads = jest.mocked(Element.prototype.getBoundingClientRect);
+			const scrollerReads = () =>
+				reads.mock.contexts.filter((element) => element === scroller).length;
+			reads.mockClear();
+			await remeasure();
+			expect(scrollerReads()).toBe(2);
+
+			reads.mockClear();
+			await scroll(scroller, 400);
+			expect(scrollerReads()).toBe(1);
+			expect(
+				container.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow"),
+			).toBe("50");
+
+			// A later layout gets a fresh origin without retaining stale geometry.
+			reads.mockClear();
+			setOffset(125);
+			await remeasure();
+			expect(scrollerReads()).toBe(2);
+			expect(
+				container.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow"),
+			).toBe("50");
+		},
+	);
+
 	it("treats a missing keyed element as a zero-height unit", async () => {
 		const units = [unit("gone", 50), unit("b", 50)];
 		const { container } = renderInScroller(
@@ -667,6 +720,35 @@ describe("ReadingProgress", () => {
 		setScroller(container.querySelector(".scroll") as Element);
 		await act(async () => {});
 		delete (document as { fonts?: unknown }).fonts;
+	});
+
+	it("does not measure a retired page when its fonts finish loading", async () => {
+		let finishFonts: () => void = () => {};
+		Object.defineProperty(document, "fonts", {
+			value: {
+				ready: new Promise<void>((resolve) => {
+					finishFonts = resolve;
+				}),
+			},
+			configurable: true,
+		});
+		try {
+			const { unmount } = renderInScroller(
+				<ReadingProgress
+					units={[unit("a", 10)]}
+					scroller=".scroll"
+					content=".content"
+					unitSelector='[data-u="{key}"]'
+				/>,
+			);
+			unmount();
+			const reads = jest.mocked(Element.prototype.getBoundingClientRect);
+			reads.mockClear();
+			await act(async () => finishFonts());
+			expect(reads).not.toHaveBeenCalled();
+		} finally {
+			delete (document as { fonts?: unknown }).fonts;
+		}
 	});
 
 	it("re-measures through ResizeObserver when the content resizes", async () => {
