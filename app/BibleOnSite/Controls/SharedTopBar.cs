@@ -165,12 +165,11 @@ public class SharedTopBar : ContentView
         };
         NavigationButton.SetAppThemeColor(Button.TextColorProperty, Colors.Black, Colors.White);
         SemanticProperties.SetDescription(NavigationButton, "פתיחת תפריט הניווט");
-        if (OperatingSystem.IsWindows())
-        {
-            // Desktop pointer label (#2766): the button toggles the nav pane
-            // there, not just opens a flyout.
-            ToolTipProperties.SetText(NavigationButton, "תפריט ניווט");
-        }
+#if WINDOWS
+        // Desktop pointer label (#2766): the button toggles the nav pane
+        // there, not just opens a flyout.
+        ToolTipProperties.SetText(NavigationButton, "תפריט ניווט");
+#endif
         NavigationButton.Clicked += OnBarNavigationClicked;
 
         BackButton = new Button
@@ -380,16 +379,26 @@ public class SharedTopBar : ContentView
             opener();
             return;
         }
-        if (Shell.Current is IAdaptiveNavPane adaptiveNav)
+        RequestNavPane(Shell.Current);
+    }
+
+    /// <summary>
+    /// One hamburger action for both flyout presentations (#2766): an
+    /// adaptive Shell toggles the locked pane or the overlay; a plain Shell
+    /// still opens the overlay. Toggle, not open-only — on Windows the
+    /// hamburger also collapses the locked nav pane; on touch the button is
+    /// unreachable while the overlay covers it, so a press still always
+    /// opens.
+    /// </summary>
+    internal static void RequestNavPane(Shell? shell)
+    {
+        if (shell is IAdaptiveNavPane adaptiveNav)
         {
-            // Toggle, not open-only: on Windows the hamburger also collapses
-            // the locked nav pane; on touch the button is unreachable while
-            // the overlay covers it, so a press still always opens (#2766).
             adaptiveNav.ToggleNavPane();
         }
-        else if (Shell.Current is { } shell)
+        else if (shell is { } plainShell)
         {
-            shell.FlyoutIsPresented = true;
+            plainShell.FlyoutIsPresented = true;
         }
     }
 }
