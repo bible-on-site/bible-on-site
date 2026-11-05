@@ -3,17 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
-import {
-	AuthorizeSecurityGroupIngressCommand,
-	EC2Client,
-	RevokeSecurityGroupIngressCommand,
-} from "@aws-sdk/client-ec2";
+import { EC2Client } from "@aws-sdk/client-ec2";
 import * as dotenv from "dotenv";
 import {
 	isCheckpointCurrent,
 	parseTableTimes,
 } from "./dev-db-checkpoint.mts";
 import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
+import { withDevSyncIngress } from "./rds-sync-access.mts";
 import { assertLocalAssetTarget, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
@@ -137,8 +134,6 @@ function decompressPerushimNotes(): void {
 }
 
 // --- sync-from-prod subcommand ---
-
-const DEV_SYNC_TAG = "dev-sync";
 
 interface MysqlUrlParts {
 	host: string;
@@ -296,55 +291,6 @@ async function resolveSyncContext(): Promise<SyncContext> {
 	};
 }
 
-function ingressPermission(publicIp: string) {
-	return {
-		IpProtocol: "tcp",
-		FromPort: 3306,
-		ToPort: 3306,
-		IpRanges: [{ CidrIp: `${publicIp}/32`, Description: DEV_SYNC_TAG }],
-	};
-}
-
-async function authorizeIngress(
-	ec2: EC2Client,
-	sgId: string,
-	publicIp: string,
-): Promise<void> {
-	console.info("Authorizing RDS security group ingress for your IP...");
-	try {
-		await ec2.send(
-			new AuthorizeSecurityGroupIngressCommand({
-				GroupId: sgId,
-				IpPermissions: [ingressPermission(publicIp)],
-			}),
-		);
-	} catch (e) {
-		// A rule left behind by an interrupted run shouldn't block the next one.
-		if (!String(e).includes("InvalidPermission.Duplicate")) throw e;
-	}
-}
-
-async function revokeIngress(
-	ec2: EC2Client,
-	sgId: string,
-	publicIp: string,
-): Promise<void> {
-	console.info("Revoking RDS security group ingress...");
-	try {
-		await ec2.send(
-			new RevokeSecurityGroupIngressCommand({
-				GroupId: sgId,
-				IpPermissions: [ingressPermission(publicIp)],
-			}),
-		);
-	} catch (e) {
-		console.warn(
-			"Revoke ingress failed (you may need to remove the rule manually):",
-			e,
-		);
-	}
-}
-
 async function runSyncFromProd(): Promise<void> {
 	const dryRun = process.argv.includes("--dry-run");
 	if (dryRun) console.info("[dry-run] Would execute the following steps.");
@@ -366,14 +312,12 @@ async function runSyncFromProd(): Promise<void> {
 	// the checkpoint older-or-equal to the synced content, never newer.
 	let prodWatermark = new Map<string, string | null>();
 
-	try {
+	// The sync body — runs only while holding owned ingress, so cleanup
+	// revokes exactly the rule this invocation created even when a step fails
+	// (see withDevSyncIngress).
+	const syncBody = async (): Promise<void> => {
 		if (!dryRun) {
-			await authorizeIngress(ec2, sgId, publicIp);
 			prodWatermark = queryTableUpdateTimes(prodDb);
-		} else {
-			console.info(
-				`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
-			);
 		}
 
 		// Dump from prod and restore to dev
@@ -761,12 +705,16 @@ async function runSyncFromProd(): Promise<void> {
 		}
 		// A failed asset refresh must not mark the complete local sync fresh.
 		if (!dryRun) writeDevCheckpoint(devDb, prodWatermark);
-	} finally {
-		if (!dryRun) {
-			await revokeIngress(ec2, sgId, publicIp);
-		} else {
-			console.info("[dry-run] Would revoke ingress on", sgId);
-		}
+	};
+
+	if (dryRun) {
+		console.info(
+			`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
+		);
+		await syncBody();
+		console.info("[dry-run] Would revoke ingress on", sgId);
+	} else {
+		await withDevSyncIngress(ec2, sgId, `${publicIp}/32`, syncBody);
 	}
 
 	console.info("sync-from-prod finished.");
@@ -864,16 +812,16 @@ function writeDevCheckpoint(
  */
 async function runCheckFreshness(): Promise<void> {
 	const { prodDb, devDb, sgId, publicIp, ec2 } = await resolveSyncContext();
-	let fresh = false;
-	try {
-		await authorizeIngress(ec2, sgId, publicIp);
-		fresh = isCheckpointCurrent(
-			queryDevCheckpoint(devDb),
-			queryTableUpdateTimes(prodDb),
-		);
-	} finally {
-		await revokeIngress(ec2, sgId, publicIp);
-	}
+	const fresh = await withDevSyncIngress(
+		ec2,
+		sgId,
+		`${publicIp}/32`,
+		async () =>
+			isCheckpointCurrent(
+				queryDevCheckpoint(devDb),
+				queryTableUpdateTimes(prodDb),
+			),
+	);
 	console.info(
 		fresh
 			? "dev DB matches the recorded prod checkpoint — sync not needed"
