@@ -29,7 +29,7 @@ const mockLoad = jest.mocked(loadSefer);
 function perek(perekId = 1): PerekObj {
 	return {
 		perekId,
-		sefer: perekId < 51 ? "בראשית" : "שמות",
+		sefer: perekId < 51 ? "בראשית" : perekId < 91 ? "שמות" : "תהילים",
 		helek: "תורה",
 		perekHeb: "א",
 		header: "",
@@ -44,6 +44,10 @@ const props = (perekId = 1) => ({
 });
 beforeEach(() => {
 	mockLoad.mockReset();
+	localStorage.clear();
+});
+afterEach(() => {
+	jest.useRealTimers();
 });
 
 it("shows loading feedback before displaying the selected book", async () => {
@@ -60,24 +64,88 @@ it("shows loading feedback before displaying the selected book", async () => {
 	});
 	expect(screen.getByTestId("loaded-book")).toHaveTextContent("בראשית/1");
 });
-it.each([new Error("network"), new BookRequestError(503)])("retries a failed book load with visible feedback and a contextual diagnostic (%s)", async (failure) => {
+
+it("retries a transient book load failure automatically with loading feedback (#3095)", async () => {
+	jest.useFakeTimers();
 	const diagnostic = jest.spyOn(console, "error").mockImplementation(() => {});
 	try {
-		mockLoad.mockRejectedValueOnce(failure).mockResolvedValueOnce(seferFixture(perek()));
+		mockLoad
+			.mockRejectedValueOnce(new Error("network"))
+			.mockResolvedValueOnce(seferFixture(perek()));
 		render(<LoadedSefer {...props()} />);
-		expect(await screen.findByRole("alert")).toHaveTextContent("לא ניתן לטעון את הספר.");
-		expect(diagnostic).toHaveBeenCalledTimes(1);
+		// The first rejection schedules a bounded automatic retry — the reader
+		// keeps the loading indicator instead of surfacing a deploy-window blip.
+		await act(async () => {});
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		expect(screen.getByLabelText("טוען תצוגת ספר...")).toBeInTheDocument();
 		expect(diagnostic).toHaveBeenCalledWith("Failed to load reader book", {
 			file: expect.stringMatching(/^\/generated\/sefarim\/1\..+\.json$/),
-			error: failure,
+			error: expect.any(Error),
 		});
-		fireEvent.click(screen.getByRole("button", { name: "נסה שוב" }));
-		expect(await screen.findByTestId("loaded-book")).toHaveTextContent("בראשית/1");
+		await act(async () => {
+			jest.advanceTimersByTime(1500);
+		});
+		expect(screen.getByTestId("loaded-book")).toHaveTextContent("בראשית/1");
 		expect(mockLoad).toHaveBeenCalledTimes(2);
 	} finally {
 		diagnostic.mockRestore();
 	}
 });
+
+it.each([new Error("network"), new BookRequestError(503)])(
+	"surfaces a persistent failure with bounded retries, refresh and a flat-view escape (%s)",
+	async (failure) => {
+		jest.useFakeTimers();
+		const previousUrl = window.location.href;
+		const diagnostic = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		try {
+			history.replaceState(null, "", "/929/693/2215?book=");
+			localStorage.setItem("perekViewMode", "book");
+			mockLoad.mockRejectedValue(failure);
+			render(<LoadedSefer {...props(693)} />);
+			await act(async () => {});
+			// Two bounded automatic retries run before the error surfaces.
+			await act(async () => {
+				jest.advanceTimersByTime(1500);
+			});
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+			await act(async () => {
+				jest.advanceTimersByTime(3000);
+			});
+			expect(mockLoad).toHaveBeenCalledTimes(3);
+			expect(screen.getByRole("alert")).toHaveTextContent(
+				"לא ניתן לטעון את הספר.",
+			);
+			// Manual retry stays available for a later transient, refresh picks up
+			// a redeployed bundle, and the escape returns to the same flat article.
+			expect(
+				screen.getByRole("button", { name: "נסה שוב" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("link", { name: "רענן את הדף" }),
+			).toHaveAttribute("href", "/929/693/2215?book=");
+			expect(
+				screen.getByRole("link", { name: "חזרה לתצוגת הפרק" }),
+			).toHaveAttribute("href", "/929/693/2215");
+			// The escape also clears the stored book preference — otherwise the
+			// flat page's composite would restore ?book and reopen the failure.
+			fireEvent.click(screen.getByRole("link", { name: "חזרה לתצוגת הפרק" }));
+			expect(localStorage.getItem("perekViewMode")).toBe("seo");
+			// A manual retry issues exactly one new request per click.
+			mockLoad.mockResolvedValueOnce(seferFixture(perek(693)));
+			fireEvent.click(screen.getByRole("button", { name: "נסה שוב" }));
+			expect(mockLoad).toHaveBeenCalledTimes(4);
+			await act(async () => {});
+			expect(screen.getByTestId("loaded-book")).toBeInTheDocument();
+		} finally {
+			diagnostic.mockRestore();
+			history.replaceState(null, "", previousUrl);
+		}
+	},
+);
+
 it("does not replace a new book with an earlier request's late result", async () => {
 	let first!: (value: ReturnType<typeof seferFixture>) => void;
 	let second!: (value: ReturnType<typeof seferFixture>) => void;
@@ -111,10 +179,32 @@ it("keeps the selected book across chapter navigation without fetching again", a
 	expect(mockLoad).toHaveBeenCalledTimes(1);
 });
 
-it("reports an unavailable chapter instead of leaving an endless loading indicator", () => {
-	render(<LoadedSefer {...props(0)} />);
-	expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן לטעון את הספר.");
-	expect(mockLoad).not.toHaveBeenCalled();
+it("reports an unavailable chapter honestly with refresh and escape, not a dead retry (#3095)", () => {
+	const previousUrl = window.location.href;
+	const diagnostic = jest.spyOn(console, "error").mockImplementation(() => {});
+	try {
+		history.replaceState(null, "", "/929/693/2215?book=");
+		render(<LoadedSefer {...props(0)} />);
+		expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן לטעון את הספר.");
+		expect(mockLoad).not.toHaveBeenCalled();
+		// No catalog mapping means there is nothing to re-fetch — the old
+		// dead "נסה שוב" is replaced by reload and a flat-view escape.
+		expect(
+			screen.queryByRole("button", { name: "נסה שוב" }),
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "רענן את הדף" }),
+		).toHaveAttribute("href", "/929/693/2215?book=");
+		expect(
+			screen.getByRole("link", { name: "חזרה לתצוגת הפרק" }),
+		).toHaveAttribute("href", "/929/693/2215");
+		expect(diagnostic).toHaveBeenCalledWith("Reader book missing from catalog", {
+			perekId: 0,
+		});
+	} finally {
+		diagnostic.mockRestore();
+		history.replaceState(null, "", previousUrl);
+	}
 });
 
 it("does not replace a newer book with an earlier request's late failure", async () => {
@@ -136,10 +226,33 @@ it("offers a full page refresh for a missing asset while preserving the reader r
 		history.replaceState(null, "", "/929/1?book&bookPage=5#pasuk-1");
 		mockLoad.mockRejectedValueOnce(new BookRequestError(404));
 		render(<LoadedSefer {...props()} />);
-		await screen.findByRole("alert");
+		// A missing asset cannot self-heal — the error surfaces immediately
+		// without spending the automatic retry budget.
+		expect(await screen.findByRole("alert")).toBeInTheDocument();
+		expect(mockLoad).toHaveBeenCalledTimes(1);
 		expect(screen.getByRole("link", { name: "רענן את הדף" })).toHaveAttribute("href", "/929/1?book&bookPage=5");
 		expect(screen.queryByRole("button", { name: "נסה שוב" })).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "חזרה לתצוגת הפרק" }),
+		).toHaveAttribute("href", "/929/1");
 		expect(diagnostic).toHaveBeenCalledTimes(1);
+	} finally {
+		diagnostic.mockRestore();
+		history.replaceState(null, "", previousUrl);
+	}
+});
+
+it("escapes a book-chrome URL to the plain perek page rather than re-entering the reader", async () => {
+	const previousUrl = window.location.href;
+	const diagnostic = jest.spyOn(console, "error").mockImplementation(() => {});
+	try {
+		history.replaceState(null, "", "/929/בראשית/תוכן?book");
+		mockLoad.mockRejectedValueOnce(new BookRequestError(404));
+		render(<LoadedSefer {...props()} />);
+		await screen.findByRole("alert");
+		expect(
+			screen.getByRole("link", { name: "חזרה לתצוגת הפרק" }),
+		).toHaveAttribute("href", "/929/1");
 	} finally {
 		diagnostic.mockRestore();
 		history.replaceState(null, "", previousUrl);
