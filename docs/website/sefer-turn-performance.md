@@ -100,6 +100,44 @@ locally. No CPU profiler, input wait, new retry, timeout or budget adjustment is
 added to the measured sequence. This is additional diagnosis, not a repair of
 the hosted stall or completed release qualification.
 
+At diagnostic head `d72c0e032`, the second execution also fails: the moving-tab
+drag records 50.1ms blocking and the pinned-tab toolbar turn records 85.6ms.
+Their original traces locate the pauses at turn completion, with 95.992ms and
+133.951ms main-thread CPU and substantial Style/Layout/PrePaint work. These
+traces rule out treating those two frames as pure host descheduling; they do not
+explain the older, untraced 238ms first-turn frame. The three complete diagnostic
+datasets are retained separately: [first execution](sefer-turn-performance.hosted-diagnostic-1.json),
+[failed second execution](sefer-turn-performance.hosted-diagnostic-2.json), and
+[maintainer-triggered third execution](sefer-turn-performance.hosted-diagnostic-3.json).
+The third passes, but the earlier failure still invalidates repeatability.
+All 36 records replay through the unchanged profile and blocking guards,
+including both failures, in the 169-test metric suite. No third unchanged
+execution was requested by this agent.
+
+Read-only lifecycle recording also identifies a separate React scheduling race:
+an optional covered chapter can commit after a new turn starts because cancelling
+its animation frame does not cancel an already queued transition. The repair in
+[flip-book #393](https://github.com/doradsoft/html-flip-book/pull/393) cancels that
+queued plan and releases its preparation hold. Four regression cases cover
+mounting and retirement interrupted by pointer or animation input. The actual
+built-source consumer passes all 37 performance checks and 57 functional checks
+with one existing conditional skip. All 24 appearance poses and eight character
+comparisons match exactly. The normal release published alpha.112 from merge
+`1cdbe14d1`; both registry tarballs verify against their published integrity and
+source revision, and all 153 distribution files match the validated source build.
+The consumer pins both React and transitive vanilla alpha.112 and updates the
+local/npm toggle and exact-version freshness exceptions. Full registry consumer
+delivery and hosted acceptance remain separate requirements.
+
+The lifecycle records contain no cold mount or preparation inside the 24 measured
+completion tasks, so the scheduling race does not establish the cause of those
+completion stalls. The paper endpoint experiment in
+[flip-book #392](https://github.com/doradsoft/html-flip-book/pull/392) was closed
+without merging: the stronger 36-case source-build comparison had only about 1.3%
+aggregate CPU benefit and mixed response results. The original failures remain
+preserved, and three complete passing hosted executions at a repaired head are
+still required before delivery.
+
 The [registry validation record](sefer-turn-performance.registry-validation.json)
 retains every case's metrics and links the package, compiled assets, visual
 proof and three stability runs by hash. The runtime was compiled at `f2b8120a3`;

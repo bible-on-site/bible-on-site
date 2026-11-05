@@ -2,6 +2,9 @@
 import numbers from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-125.json";
 import kings from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-300.json";
 import desktop from "../../../../../docs/website/sefer-turn-performance.desktop-baseline.json";
+import diagnosticFirst from "../../../../../docs/website/sefer-turn-performance.hosted-diagnostic-1.json";
+import diagnosticSecond from "../../../../../docs/website/sefer-turn-performance.hosted-diagnostic-2.json";
+import diagnosticThird from "../../../../../docs/website/sefer-turn-performance.hosted-diagnostic-3.json";
 import hosted from "../../../../../docs/website/sefer-turn-performance.hosted-repeatability.json";
 import {
 	reduceTurnBlockingSamples,
@@ -14,6 +17,27 @@ import {
 	turnRenderingProfile,
 	turnVisibilityFailures,
 } from "../../util/turn-metrics";
+
+it.each([
+	...diagnosticFirst.cases,
+	...diagnosticSecond.cases,
+	...diagnosticThird.cases,
+])(
+	"retains original diagnostic attempt $attempt: $chapter $mode $gesture",
+	(record) => {
+		const original = structuredClone(record.samples);
+		expect(record.samples.inputs).toHaveLength(6);
+		expect(
+			turnQualificationFailures(
+				reduceTurnSamples(record.samples, record.chapter, 6),
+				reduceTurnBlockingSamples(record.samples, record.chapter, 6),
+				turnRenderingProfile(record.gpu),
+			),
+		).toEqual(record.expectedFailures);
+		expect(turnVisibilityFailures(record.samples.visibility)).toEqual([]);
+		expect(record.samples).toEqual(original);
+	},
+);
 
 it.each(hosted.cases)(
 	"retains hosted attempt $attempt: $chapter $mode $gesture",
