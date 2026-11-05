@@ -80,6 +80,7 @@ class BackupTests(unittest.TestCase):
         patches = {
             "server_identity": {"uuid": "production", "version": "8.4.9"},
             "catalog": self.schema,
+            "validate_scratch": None,
             "dump_archive": None,
             "restore_archive": self.restoration,
         }
@@ -131,7 +132,12 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(args[1], f"--defaults-file={path}")
         self.assertIn("--ssl-mode=VERIFY_IDENTITY", args)
         self.assertNotIn(self.source.password, " ".join(args))
-        self.assertIn("--ssl-mode=DISABLED", self.scratch.command("mysql", path))
+        self.assertNotIn("--get-server-public-key", args)
+        scratch_args = self.scratch.command("mysql", path)
+        self.assertIn("--ssl-mode=DISABLED", scratch_args)
+        # The cold-cache caching_sha2_password login on the loopback-only
+        # scratch path needs the RSA key exchange (MySQL error 2061 without it).
+        self.assertIn("--get-server-public-key", scratch_args)
         self.source.ca = None
         with self.assertRaises(backup.BackupError):
             self.source.command("mysql", path)
@@ -151,39 +157,66 @@ class BackupTests(unittest.TestCase):
             return_value=SimpleNamespace(returncode=0, stdout=b"one\ntwo\n"),
         ) as command:
             self.assertEqual(
-                self.source.query("SELECT 1;", self.directory), ["one", "two"]
+                self.source.query("SELECT 1;", self.directory, "phase"),
+                ["one", "two"],
             )
-            self.assertEqual(command.call_args.kwargs["stderr"], subprocess.DEVNULL)
+            self.assertEqual(command.call_args.kwargs["stderr"], subprocess.PIPE)
             self.assertFalse(command.call_args.kwargs["shell"])
         with (
             patch.object(
                 backup.subprocess,
                 "run",
-                return_value=SimpleNamespace(returncode=1, stdout=b""),
+                return_value=SimpleNamespace(returncode=1, stdout=b"", stderr=b""),
             ),
             self.assertRaises(backup.BackupError),
         ):
-            self.source.query("SELECT 1;", self.directory)
+            self.source.query("SELECT 1;", self.directory, "phase")
         self.assertFalse(list(self.directory.glob("client-*.cnf")))
+
+    def test_query_failure_reports_phase_and_code_without_stderr(self):
+        stderr = b'ERROR 2061 (HY000): plugin text secret p\\a"ss\nword detail'
+        with patch.object(
+            backup.subprocess,
+            "run",
+            return_value=SimpleNamespace(returncode=1, stdout=b"", stderr=stderr),
+        ):
+            with self.assertRaises(backup.BackupError) as caught:
+                self.scratch.query("SELECT 1;", self.directory, "Scratch phase")
+            message = str(caught.exception)
+            self.assertIn("Scratch phase", message)
+            self.assertIn("2061", message)
+            self.assertNotIn("secret", message)
+            self.assertNotIn("plugin text", message)
+        with patch.object(
+            backup.subprocess,
+            "run",
+            return_value=SimpleNamespace(
+                returncode=1, stdout=b"", stderr=b"unstructured detail"
+            ),
+        ):
+            with self.assertRaises(backup.BackupError) as caught:
+                self.scratch.query("SELECT 1;", self.directory, "Scratch phase")
+            self.assertEqual(str(caught.exception), "Scratch phase failed")
 
     def test_identity_requires_exactly_one_json_row(self):
         self.source.query = MagicMock(return_value=[json.dumps({"uuid": "a"})])
         self.assertEqual(
-            backup.server_identity(self.source, self.directory), {"uuid": "a"}
+            backup.server_identity(self.source, self.directory, "phase"),
+            {"uuid": "a"},
         )
         self.source.query.return_value = []
         with self.assertRaises(backup.BackupError):
-            backup.server_identity(self.source, self.directory)
+            backup.server_identity(self.source, self.directory, "phase")
 
     def test_catalog_rejects_inconsistent_engines_and_empty_database(self):
         for rows in [[], [{"type": "BASE TABLE", "engine": "MyISAM"}]]:
             self.source.query = MagicMock(
-                side_effect=lambda sql, directory: (
+                side_effect=lambda sql, directory, phase: (
                     [json.dumps(r) for r in rows] if ".TABLES " in sql else []
                 )
             )
             with self.assertRaises(backup.BackupError):
-                backup.catalog(self.source, self.directory)
+                backup.catalog(self.source, self.directory, "phase")
 
     def test_export_uses_complete_nonlocking_dump_and_detects_failure(self):
         for code in [0, 1]:
@@ -211,6 +244,7 @@ class BackupTests(unittest.TestCase):
                     self.assertIn(flag, args)
                 self.assertFalse(any("ignore-table" in arg for arg in args))
         self.assertFalse(list(self.directory.glob("client-*.cnf")))
+        self.assertFalse(list(self.directory.glob("*.stderr")))
 
     def test_restore_refuses_remote_wrong_schema_or_corrupt_archive(self):
         for target in [
@@ -272,6 +306,15 @@ class BackupTests(unittest.TestCase):
                         backup.digest(self.path),
                     )
         self.assertFalse(list(self.directory.glob("client-*.cnf")))
+        self.assertFalse(list(self.directory.glob("*.stderr")))
+
+    def test_scratch_is_validated_before_the_complete_export(self):
+        self.mock_backup()
+        calls = []
+        backup.validate_scratch.side_effect = lambda *args: calls.append("scratch")
+        backup.dump_archive.side_effect = lambda *args: calls.append("export")
+        backup.backup(self.source, self.scratch, self.s3, "weekly", self.directory)
+        self.assertEqual(calls, ["scratch", "export"])
 
     def test_multipart_checksum_version_retention_and_abort(self):
         until = datetime(2027, 1, 1, tzinfo=UTC)

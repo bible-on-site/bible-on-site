@@ -90,12 +90,24 @@ class InfrastructureTests(unittest.TestCase):
                 "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${RdsSecurityGroupId}"
             },
         )
+        # Each resource context is authorized separately. New-rule request tags
+        # are absent when authorizing against the existing security group, so
+        # the group statement scopes by region and VPC (matching the deployed
+        # template); rule tagging is enforced on the rule/CreateTags contexts.
         self.assertEqual(
-            indexed["LeaseOnlyTheDatabaseGroup"]["Condition"]["StringEquals"][
-                "aws:RequestTag/Job"
-            ],
-            "backup",
+            indexed["LeaseOnlyTheDatabaseGroup"]["Condition"],
+            {
+                "StringEquals": {
+                    "ec2:Region": "il-central-1",
+                    "ec2:Vpc": "arn:aws:ec2:il-central-1:250598594267:vpc/vpc-0d6af72e472db138c",
+                }
+            },
         )
+        for sid in ["CreateOnlyBackupRules", "TagOnlyNewBackupRules"]:
+            tags = indexed[sid]["Condition"]["StringEquals"]
+            self.assertEqual(tags["aws:RequestTag/Source"], "github-actions-build")
+            self.assertEqual(tags["aws:RequestTag/Job"], "backup")
+            self.assertIn("security-group-rule/", str(indexed[sid]["Resource"]))
         self.assertEqual(
             indexed["DecryptBackupCredentialOnly"]["Resource"], {"Ref": "SsmKeyArn"}
         )
@@ -112,6 +124,16 @@ class InfrastructureTests(unittest.TestCase):
         )
         self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
         steps = job["steps"]
+        # The setup action launches mysqld bound to all interfaces, so the
+        # workflow must firewall port 3306 to loopback before it starts and
+        # prove non-loopback connections are refused before trusting it.
+        firewall = next(
+            i for i, s in enumerate(steps) if "iptables" in s.get("run", "")
+        )
+        setup = next(
+            i for i, s in enumerate(steps) if "actions-setup-mysql" in s.get("uses", "")
+        )
+        verify = next(i for i, s in enumerate(steps) if "/dev/tcp" in s.get("run", ""))
         check = next(
             i
             for i, s in enumerate(steps)
@@ -122,7 +144,12 @@ class InfrastructureTests(unittest.TestCase):
             for i, s in enumerate(steps)
             if s.get("run", "").endswith("rds-build-access.mjs grant")
         )
+        self.assertLess(firewall, setup)
+        self.assertLess(setup, verify)
+        self.assertLess(verify, check)
         self.assertLess(check, grant)
+        self.assertIn("3306", steps[firewall]["run"])
+        self.assertIn("127.0.0.1", steps[verify]["run"])
         self.assertEqual(steps[-1]["if"], "${{ always() }}")
         self.assertIn("rds-build-access.mjs cleanup", steps[-1]["run"])
         self.assertFalse(any("upload-artifact" in s.get("uses", "") for s in steps))
