@@ -7,9 +7,11 @@ use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 
 use crate::common::auth::ApiAuth;
 use crate::providers::Database;
+use crate::resolvers::article_relationships_resolver;
 use crate::resolvers::articles_resolver;
 use crate::resolvers::authors_resolver;
 use crate::resolvers::dedications_resolver;
+use crate::resolvers::moed_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
@@ -22,9 +24,11 @@ use crate::services::article_search::ArticleSearchIndex;
 
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(
+    article_relationships_resolver::ArticleRelationshipsQuery,
     articles_resolver::ArticlesQuery,
     authors_resolver::AuthorsQuery,
     dedications_resolver::DedicationsQuery,
+    moed_resolver::MoedQuery,
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
     starter_resolver::StarterQuery,
@@ -37,7 +41,9 @@ pub struct QueryRoot(
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
+    article_relationships_resolver::ArticleRelationshipsMutation,
     dedications_resolver::DedicationsMutation,
+    moed_resolver::MoedMutation,
     tanahpedia_aliases_resolver::TanahpediaAliasesMutation,
     tanahpedia_family_resolver::TanahpediaFamilyMutation,
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
