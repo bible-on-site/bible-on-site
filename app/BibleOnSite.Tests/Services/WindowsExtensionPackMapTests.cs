@@ -15,7 +15,7 @@ public class WindowsExtensionPackMapTests
     {
         foreach (var json in new[] { null, "", "   " })
         {
-            var map = WindowsExtensionPackMap.Parse(json);
+            var map = new WindowsExtensionPackMap(json);
 
             map.StoreIdFor("recitation_1").Should().BeNull();
             map.PackageNameFor("Main.App-", "recitation_1").Should().Be("Main.App-.recitation-1");
@@ -25,7 +25,7 @@ public class WindowsExtensionPackMapTests
     [Fact]
     public void ConfiguredAddOn_ResolvesItsStoreId()
     {
-        var map = WindowsExtensionPackMap.Parse("""
+        var map = new WindowsExtensionPackMap("""
             { "version": 1, "addOns": {
                 "recitation_1": { "storeId": "9ABCDEF1234", "packageName": "Main.App-.dlc.recitation-1" },
                 "perushim_notes": { "storeId": "9ZZZZZZZZZ" }
@@ -43,7 +43,7 @@ public class WindowsExtensionPackMapTests
     [Fact]
     public void AddOnWithoutStoreId_IsNotStoreDeliverable_ButKeepsPackageIdentity()
     {
-        var map = WindowsExtensionPackMap.Parse("""
+        var map = new WindowsExtensionPackMap("""
             { "version": 1, "addOns": { "recitation_2": { "storeId": "" } } }
             """);
 
@@ -54,7 +54,7 @@ public class WindowsExtensionPackMapTests
     [Fact]
     public void CommentsAreTolerated_SoTheBundledAssetCanDocumentItself()
     {
-        var map = WindowsExtensionPackMap.Parse("""
+        var map = new WindowsExtensionPackMap("""
             {
                 // partner-center durable add-ons, keyed by pack name
                 "version": 1,
@@ -73,7 +73,7 @@ public class WindowsExtensionPackMapTests
     [InlineData("""{ "version": 1, "addOns": { "recitation_1": null } }""", "null entries are rejected")]
     public void MalformedMap_IsRejected(string json, string because)
     {
-        var act = () => WindowsExtensionPackMap.Parse(json);
+        var act = () => new WindowsExtensionPackMap(json);
 
         act.Should().Throw<InvalidDataException>(because);
     }

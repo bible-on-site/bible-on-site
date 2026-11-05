@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace BibleOnSite.Services;
 
@@ -13,16 +12,30 @@ namespace BibleOnSite.Services;
 /// <see cref="PadDeliveryService"/> reads this only on Windows, where the
 /// asset is packaged — other platforms never parse the file.
 /// </summary>
-public sealed partial class WindowsExtensionPackMap
+public sealed class WindowsExtensionPackMap
 {
     /// <summary>Bundled-asset logical name (see BibleOnSite.csproj).</summary>
     public static string FileName => "windows-extension-packs.json";
 
+    // The checked-in map is tiny and parsed once per process; comments are
+    // tolerated so the bundled asset can document its own schema. Reflection
+    // serialization is disabled app-wide, so parse the document directly —
+    // the same approach WindowsExtensionPack.LoadPackageNameOverrides takes
+    // in the packaging pipeline.
+    private static readonly JsonDocumentOptions DocumentOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+    };
+
     private readonly IReadOnlyDictionary<string, Entry> _addOns;
 
-    private WindowsExtensionPackMap(IReadOnlyDictionary<string, Entry> addOns)
+    /// <summary>
+    /// Parses the bundled map document. A missing or empty document yields an
+    /// empty map — packs still deliver through the release-payload fallback.
+    /// </summary>
+    public WindowsExtensionPackMap(string? json)
     {
-        _addOns = addOns;
+        _addOns = ParseAddOns(json);
     }
 
     /// <summary>An add-on configured with no StoreId is simply not store-deliverable.</summary>
@@ -51,27 +64,32 @@ public sealed partial class WindowsExtensionPackMap
     public static string OptionalPackageName(string mainPackageName, string packName) =>
         $"{mainPackageName}.{packName.Replace('_', '-')}";
 
-    /// <summary>
-    /// Parses the bundled map. A missing or empty file yields an empty map —
-    /// packs still deliver through the release-payload fallback.
-    /// </summary>
-    public static WindowsExtensionPackMap Parse(string? json)
+    private static IReadOnlyDictionary<string, Entry> ParseAddOns(string? json)
     {
+        var addOns = new Dictionary<string, Entry>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(json))
         {
-            return new WindowsExtensionPackMap(new Dictionary<string, Entry>());
+            return addOns;
         }
 
-        var root = JsonSerializer.Deserialize<Root>(json, JsonContext.Default.Root)
-            ?? throw new InvalidDataException("Empty extension-pack map.");
-        if (root.Version != 1)
+        using var document = JsonDocument.Parse(json, DocumentOptions);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("version", out var version) ||
+            version.ValueKind != JsonValueKind.Number ||
+            version.GetInt32() != 1)
         {
-            throw new InvalidDataException($"Unsupported extension-pack map version {root.Version}.");
+            throw new InvalidDataException("Unsupported extension-pack map version.");
+        }
+        if (!root.TryGetProperty("addOns", out var addOnsElement) ||
+            addOnsElement.ValueKind != JsonValueKind.Object)
+        {
+            return addOns;
         }
 
-        var addOns = new Dictionary<string, Entry>(StringComparer.Ordinal);
-        foreach (var (packName, entry) in root.AddOns ?? new Dictionary<string, Entry>())
+        foreach (var addOn in addOnsElement.EnumerateObject())
         {
+            var packName = addOn.Name;
             if (string.IsNullOrWhiteSpace(packName))
             {
                 throw new InvalidDataException("Extension-pack map contains an unnamed add-on.");
@@ -80,22 +98,29 @@ public sealed partial class WindowsExtensionPackMap
             {
                 throw new InvalidDataException($"Invalid extension-pack name '{packName}'.");
             }
-            if (entry == null)
+            if (addOn.Value.ValueKind != JsonValueKind.Object)
             {
                 throw new InvalidDataException($"Extension-pack map has a null entry for '{packName}'.");
             }
-            if (entry.StoreId.Length > 0 && !entry.StoreId.All(char.IsLetterOrDigit))
+            var storeId = StringProperty(addOn.Value, "storeId");
+            var packageName = StringProperty(addOn.Value, "packageName");
+            if (storeId.Length > 0 && !storeId.All(char.IsLetterOrDigit))
             {
                 throw new InvalidDataException($"Invalid StoreId for '{packName}'.");
             }
-            if (entry.PackageName.Length > 0 && !IsValidPackageName(entry.PackageName))
+            if (packageName.Length > 0 && !IsValidPackageName(packageName))
             {
-                throw new InvalidDataException($"Invalid package name '{entry.PackageName}' for '{packName}'.");
+                throw new InvalidDataException($"Invalid package name '{packageName}' for '{packName}'.");
             }
-            addOns[packName] = entry;
+            addOns[packName] = new Entry(storeId, packageName);
         }
-        return new WindowsExtensionPackMap(addOns);
+        return addOns;
     }
+
+    private static string StringProperty(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? ""
+            : "";
 
     private static bool IsValidPackId(string packName) =>
         packName.Length <= 64 && packName.All(c => char.IsLetterOrDigit(c) || c is '_' or '-');
@@ -105,29 +130,5 @@ public sealed partial class WindowsExtensionPackMap
     private static bool IsValidPackageName(string name) =>
         name.Length is >= 3 and <= 50 && name.All(c => char.IsLetterOrDigit(c) || c is '.' or '-');
 
-    private sealed class Root
-    {
-        [JsonPropertyName("version")]
-        public int Version { get; set; }
-
-        [JsonPropertyName("addOns")]
-        public Dictionary<string, Entry>? AddOns { get; set; }
-    }
-
-    private sealed class Entry
-    {
-        [JsonPropertyName("storeId")]
-        public string StoreId { get; set; } = "";
-
-        [JsonPropertyName("packageName")]
-        public string PackageName { get; set; } = "";
-    }
-
-    // Native release builds trim reflection metadata; keep the wire format explicit.
-    // Comments are tolerated so the bundled asset can document its own schema.
-    [JsonSourceGenerationOptions(
-        PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-        ReadCommentHandling = JsonCommentHandling.Skip)]
-    [JsonSerializable(typeof(Root))]
-    private partial class JsonContext : JsonSerializerContext;
+    private sealed record Entry(string StoreId, string PackageName);
 }

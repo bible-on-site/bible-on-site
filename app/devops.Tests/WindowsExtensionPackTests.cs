@@ -61,16 +61,17 @@ public sealed class WindowsExtensionPackTests : IDisposable
     [Fact]
     public void ManifestXml_ProducesARelatedSetOptionalPackage_WithoutAnApplication()
     {
+        var version = new Version(5, 1, 8, 0).ToString();
         var xml = WindowsExtensionPack.ManifestXml(
             "54181DoradSoft.929-.recitation-1", "CN=ABC-123", "DoradSoft",
-            "5.1.8.0", "929 recitation 1", "54181DoradSoft.929-");
+            version, "929 recitation 1", "54181DoradSoft.929-");
 
         var root = XDocument.Parse(xml).Root!;
         Assert.Contains("uap3", root.Attribute("IgnorableNamespaces")!.Value);
         var identity = root.Elements().Single(e => e.Name.LocalName == "Identity");
         Assert.Equal("54181DoradSoft.929-.recitation-1", identity.Attribute("Name")!.Value);
         Assert.Equal("CN=ABC-123", identity.Attribute("Publisher")!.Value);
-        Assert.Equal("5.1.8.0", identity.Attribute("Version")!.Value);
+        Assert.Equal(version, identity.Attribute("Version")!.Value);
         // A content-only optional package declares no executable.
         Assert.Empty(root.Elements().Where(e => e.Name.LocalName == "Applications"));
         var mainDependency = root.Descendants().Single(e => e.Name.LocalName == "MainPackageDependency");
@@ -82,7 +83,7 @@ public sealed class WindowsExtensionPackTests : IDisposable
     public void ManifestXml_RejectsNamesOutsideTheAppxCharset()
     {
         Assert.Throws<InvalidDataException>(() => WindowsExtensionPack.ManifestXml(
-            "54181DoradSoft.929-.recitation_1", "CN=A", "D", "5.1.8.0", "x", "54181DoradSoft.929-"));
+            "54181DoradSoft.929-.recitation_1", "CN=A", "D", new Version(5, 1, 8, 0).ToString(), "x", "54181DoradSoft.929-"));
     }
 
     [Fact]

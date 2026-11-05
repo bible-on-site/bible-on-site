@@ -1131,14 +1131,14 @@ partial class PadDeliveryService
         {
             await using var stream = await FileSystem.OpenAppPackageFileAsync(WindowsExtensionPackMap.FileName);
             using var reader = new StreamReader(stream);
-            _storeMap = WindowsExtensionPackMap.Parse(await reader.ReadToEndAsync());
+            _storeMap = new WindowsExtensionPackMap(await reader.ReadToEndAsync());
         }
         #pragma warning disable S2221 // Deliberate failure boundary: map load failure degrades to no store leg
         catch (Exception ex) //NOSONAR — map load failure degrades to no store leg.
         {
             #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Extension-pack Store map unavailable: {ex.Message}");
-            _storeMap = WindowsExtensionPackMap.Parse(null);
+            _storeMap = new WindowsExtensionPackMap(null);
         }
         return _storeMap;
     }

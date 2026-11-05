@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess  # nosec B404: only ever invokes the fixed argv 'aa extract' below.
 import tempfile
-import xml.etree.ElementTree as ElementTree
+from defusedxml import ElementTree
 import zipfile
 
 PACK_MANIFEST = "asset-packs.json"
@@ -230,7 +230,7 @@ def base_manifest_identity(archive):
 
 
 def store_map_package_names(extension_pack_dir):
-    """packageName overrides from the bundled store map beside ExtensionPacks."""
+    """Optional-package name overrides from the bundled store map beside ExtensionPacks."""
     map_path = extension_pack_dir.parent / "extension-packs.json5"
     if not map_path.is_file():
         return {}
