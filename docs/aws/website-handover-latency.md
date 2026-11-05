@@ -23,16 +23,22 @@ still carry request or response bytes (`ESTABLISHED`, `SYN_RECV`,
 same-host clients — the container's own health-check curls and exec sessions —
 which need no DNS protection and cannot outlive the task.
 
-SIGTERM now ends the drain as soon as inbound connections have been quiet for
-30 seconds, capped by the same 90-second deadline as before:
+SIGTERM now ends the drain once inbound connections have been quiet for 30
+seconds — but no earlier than a 45-second floor and no later than the same
+90-second deadline as before:
 
+- The 45-second floor covers DNS removal: registration-side propagation was
+  observed at ~35 seconds and the router caches answers for 10, so a socket
+  count of zero cannot prove the old address is out of answers until then.
+  Quiet termination before the floor could drop requests still routed to the
+  removed address.
 - A client still arriving at the removed address refreshes the activity
   timestamp, so slow Cloud Map removal propagation stretches the drain toward
   the cap exactly like the old fixed wait — up to and including pathological
   cases. Nothing that was served before is refused earlier.
-- A connection arriving after the quiet decision is refused only in the
-  sub-second window before the listener closes — the same exposure the fixed
-  deadline had at its own edge.
+- Past the floor, refusing the removed address requires answers to violate
+  the 10-second TTL while no connection arrived for a full quiet window — the
+  same exposure class the fixed deadline had at its own edge.
 - An unreadable socket table (non-Linux, restricted procfs) is treated as
   busy, so the drain falls back to the original 90-second deadline instead of
   exiting early or hanging. The 90-second bound still holds in every case.
@@ -40,15 +46,17 @@ SIGTERM now ends the drain as soon as inbound connections have been quiet for
   are preserved, and the 120-second `StopTimeout` still leaves ~30 seconds
   for the Next graceful shutdown after the forward.
 
-`drainMs`, `quietMs`, `pollMs`, the port, the metric reader and the logger are
-injectable for tests; production uses `PORT` (default 3000) and procfs.
+`drainMs`, `minDrainMs`, `quietMs`, `pollMs`, the port, the metric reader and
+the logger are injectable for tests; production uses `PORT` (default 3000) and
+procfs.
 
 ## Lifecycle timing evidence
 
 The launcher logs the two boundaries that were previously invisible:
 
 - `Website draining cached DNS requests: forwarding SIGTERM after <quiet>ms
-  without inbound connections, or <drain>ms at most` — drain began.
+  without inbound connections, no earlier than <min>ms, or <drain>ms at most`
+  — drain began.
 - `Website drain <reason> after <elapsed>ms; forwarding SIGTERM to server.js` —
   drain ended (`saw no inbound connections` or `reached the deadline`).
 
@@ -63,7 +71,7 @@ correlates with these boundaries by timestamp.
 ## Earlier container health
 
 The website container health check already doubles as the route-bundle warm
-(readiness, recitation catalog, chapter 2). Its first run happened one full
+(readiness, recitation catalog, `api/recitation/2`). Its first run happened one full
 30-second interval after container start, making interval itself the
 time-to-healthy bound. The interval is now 10 seconds (5-second start interval
 in the Dockerfile check), keeping timeout 10s, retries 5 and start period

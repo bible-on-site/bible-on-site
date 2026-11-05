@@ -301,8 +301,8 @@ Resources:
           Image: !Ref WebsiteImageUri
           Essential: true
           # Measured drain keeps serving cached-DNS requests while non-loopback
-          # inbound connections remain, ending early once they stay quiet
-          # (~30s) or at 90 seconds; 30 more seconds cover the Next shutdown.
+          # inbound connections remain, ending early once they stay quiet (30s)
+          # past a 45-second minimum, or at 90 seconds; 30 more cover shutdown.
           StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000

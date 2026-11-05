@@ -157,6 +157,7 @@ const options = {
 	drainMs: Number(process.argv[4]),
 	quietMs: Number(process.argv[5]),
 	pollMs: Number(process.argv[6]),
+	minDrainMs: Number(process.argv[7]),
 };
 if (process.env.MEASURE_FILE) {
 	const metric = process.env.MEASURE_FILE;
@@ -174,6 +175,7 @@ startServer(options);
 			String(options.drainMs ?? 90_000),
 			String(options.quietMs ?? 30_000),
 			String(options.pollMs ?? 500),
+			String(options.minDrainMs ?? 0),
 		],
 		{
 			stdio: ["ignore", "pipe", "pipe"],
@@ -316,6 +318,37 @@ test(
 			elapsed < 30_000,
 			`measured drain should end far before the 90s deadline (${elapsed}ms)`,
 		);
+	},
+);
+
+test(
+	"the quiet exit waits out the minimum drain covering DNS removal",
+	nativeSignals,
+	async (t) => {
+		const server = await fixture(t, httpServer, {
+			drainMs: 90_000,
+			minDrainMs: 800,
+			quietMs: 100,
+			pollMs: 100,
+		});
+		await server.waitFor("READY ");
+		const started = Date.now();
+		server.wrapper.kill("SIGTERM");
+		await server.waitFor("Website draining");
+		// Quiet from the start, but DNS removal may still be propagating.
+		await sleep(400);
+		assert.equal(
+			server.wrapper.exitCode,
+			null,
+			"quiet must not end the drain before the minimum",
+		);
+		assert.deepEqual(await server.exited, [143, null]);
+		const elapsed = Date.now() - started;
+		assert.ok(
+			elapsed >= 750,
+			`drain must hold until the minimum (${elapsed}ms)`,
+		);
+		assert.match(server.output(), /saw no inbound connections/);
 	},
 );
 

@@ -125,9 +125,15 @@ export async function inboundConnections(
 	return total;
 }
 
-/** Keep accepting requests while Cloud Map removal reaches cached DNS answers. */
+/**
+ * Keep accepting requests while Cloud Map removal reaches cached DNS answers.
+ * `minDrainMs` is the floor covering that propagation: quiet termination is
+ * allowed only after it elapses, because a zero socket count cannot prove the
+ * router has stopped resolving the old address.
+ */
 export function startServer({
 	drainMs = 90_000,
+	minDrainMs = 45_000,
 	quietMs = 30_000,
 	pollMs = 500,
 	port = Number(process.env.PORT) || 3000,
@@ -138,6 +144,7 @@ export function startServer({
 } = {}) {
 	for (const [name, value] of [
 		["drain", drainMs],
+		["minimum drain", minDrainMs],
 		["quiet window", quietMs],
 	]) {
 		if (!Number.isSafeInteger(value) || value < 0 || value > 90_000)
@@ -145,6 +152,8 @@ export function startServer({
 				`Website ${name} must be between 0 and 90000 milliseconds`,
 			);
 	}
+	if (minDrainMs > drainMs)
+		throw new RangeError("Website minimum drain must not exceed the drain");
 	if (!Number.isSafeInteger(pollMs) || pollMs < 1 || pollMs > 90_000)
 		throw new RangeError(
 			"Website drain poll must be between 1 and 90000 milliseconds",
@@ -166,7 +175,7 @@ export function startServer({
 	const terminate = () => {
 		if (stopping || drainTimer) return;
 		log(
-			`Website draining cached DNS requests: forwarding SIGTERM after ${quietMs}ms without inbound connections, or ${drainMs}ms at most`,
+			`Website draining cached DNS requests: forwarding SIGTERM after ${quietMs}ms without inbound connections, no earlier than ${minDrainMs}ms, or ${drainMs}ms at most`,
 		);
 		const startedAt = now();
 		let lastBusy = startedAt;
@@ -195,7 +204,8 @@ export function startServer({
 			// Only an exact zero is quiet; errors and junk fail closed.
 			if (!Number.isFinite(inbound) || inbound !== 0) lastBusy = at;
 			if (at - startedAt >= drainMs) return finish("reached the deadline");
-			if (at - lastBusy >= quietMs) return finish("saw no inbound connections");
+			if (at - startedAt >= minDrainMs && at - lastBusy >= quietMs)
+				return finish("saw no inbound connections");
 		};
 		void check();
 		drainTimer = setInterval(() => void check(), pollMs);
