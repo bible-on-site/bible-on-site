@@ -3,6 +3,7 @@ export {
 	getMoedBySlug,
 	getPublishedMoadim,
 	getPublishedMoedSlugs,
+	MOED_STALE_BOUND_SECONDS,
 } from "./service";
 export type { Moed, MoedSection, MoedSummary } from "./types";
 

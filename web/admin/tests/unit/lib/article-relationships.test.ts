@@ -39,6 +39,9 @@ describe("article relationship registry", () => {
 		expect(
 			ARTICLE_RELATIONSHIP_REGISTRY.freshness.expectedCoveringSources,
 		).toContain("perekId");
+		expect(ARTICLE_RELATIONSHIP_REGISTRY.freshness.expectedMoedIds).toContain(
+			"moed",
+		);
 	});
 
 	it("marks #3098 as pending-schema without operations", () => {

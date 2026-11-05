@@ -119,13 +119,9 @@ impl DedicationsMutation {
         ctx.data::<ApiAuth>()?
             .authorize_dedication_manager()
             .map_err(|e| e.extend())?;
-        dedications_service::remove(
-            ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
-            id,
-        )
-        .await
-        .map_err(|e| e.extend())
+        dedications_service::remove(ctx.data::<Database>()?, &WebsiteRevalidator::from_env(), id)
+            .await
+            .map_err(|e| e.extend())
     }
 }
 

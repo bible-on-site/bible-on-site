@@ -234,12 +234,8 @@ impl WebsiteRevalidator {
         slug: &str,
         old_slug: Option<&str>,
     ) -> Revalidation {
-        self.post_changes(vec![EntityChange::Moed {
-            id,
-            slug,
-            old_slug,
-        }])
-        .await
+        self.post_changes(vec![EntityChange::Moed { id, slug, old_slug }])
+            .await
     }
 
     /// Posts one `{changes}` body to the website's `/api/revalidate`. The
@@ -395,9 +391,12 @@ mod tests {
 
         assert_eq!(outcome, Revalidation::Applied);
         let request = rx.recv().unwrap();
-        assert!(request.contains(
-            r#"{"changes":[{"kind":"moed","id":3,"slug":"סוכות","oldSlug":"סוכות-ישן"}]}"#
-        ), "{request}");
+        assert!(
+            request.contains(
+                r#"{"changes":[{"kind":"moed","id":3,"slug":"סוכות","oldSlug":"סוכות-ישן"}]}"#
+            ),
+            "{request}"
+        );
 
         // A link edit batches one moed change per affected moed after the
         // article change — no `oldSlug` on link updates (#3101).
@@ -416,11 +415,18 @@ mod tests {
             .await;
         assert_eq!(outcome, Revalidation::Applied);
         let request = rx.recv().unwrap();
-        assert!(request.contains(
-            r#"{"kind":"article","id":7,"perekIds":[1],"authorIds":[2]}"#
-        ), "{request}");
-        assert!(request.contains(r#"{"kind":"moed","id":1,"slug":"פסח"}"#), "{request}");
-        assert!(request.contains(r#"{"kind":"moed","id":2,"slug":"סוכות"}"#), "{request}");
+        assert!(
+            request.contains(r#"{"kind":"article","id":7,"perekIds":[1],"authorIds":[2]}"#),
+            "{request}"
+        );
+        assert!(
+            request.contains(r#"{"kind":"moed","id":1,"slug":"פסח"}"#),
+            "{request}"
+        );
+        assert!(
+            request.contains(r#"{"kind":"moed","id":2,"slug":"סוכות"}"#),
+            "{request}"
+        );
     }
 
     #[tokio::test]

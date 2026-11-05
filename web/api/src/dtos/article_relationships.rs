@@ -232,4 +232,10 @@ pub struct UpdateArticleRelationshipsInput {
     /// the caller last read (order-insensitive). A mismatch rejects the
     /// write for the same reason.
     pub expected_covering_sources: Option<Vec<CoveringSourceInput>>,
+    /// Stale-edit guard for the moed link set (#3101): the exact moed ids
+    /// the caller last read in `articleRelationships.moadim`
+    /// (order-insensitive). The generated `contentHash` covers only the
+    /// article row, so a second full-set replacement could otherwise erase
+    /// links its caller never saw; a mismatch rejects the write.
+    pub expected_moed_ids: Option<Vec<i32>>,
 }

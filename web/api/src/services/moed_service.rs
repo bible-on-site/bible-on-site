@@ -294,9 +294,10 @@ struct UnionRow {
 /// Coverage semantics (mirrors the website's `getArticleSummariesForRanges`):
 /// a `coverage_verified` article matches when any covering row lands inside
 /// a slice; an unverified one falls back to its primary perek. Explicit
-/// links always match. Ordering: editorial priority, then first matched
-/// slice order (explicit-only last within the priority tier), then id —
-/// deterministic with a stable tie-breaker.
+/// links always match. Ordering mirrors the website range matcher: the
+/// article's FIRST matched slice order, editorial priority within that
+/// slice, then id — explicit-only links (no matched slice) follow all
+/// range matches under the same priority/id tie-breakers.
 pub async fn articles_for_moed(db: &Database, dto: &Moed) -> Result<Vec<Article>, ServiceError> {
     let conn = db.get_connection();
     let ranges = all_ranges(dto);
@@ -346,8 +347,8 @@ pub async fn articles_for_moed(db: &Database, dto: &Moed) -> Result<Vec<Article>
                      SELECT 1 FROM tanah_article_moed am \
                      WHERE am.moed_id = ? AND am.article_id = a.id) \
                  GROUP BY a.id, a.priority \
-                 ORDER BY a.priority ASC, (MIN(sm.slice_order) IS NULL) ASC, \
-                     MIN(sm.slice_order) ASC, a.id ASC"
+                 ORDER BY (MIN(sm.slice_order) IS NULL) ASC, \
+                     MIN(sm.slice_order) ASC, a.priority ASC, a.id ASC"
             ),
             params,
         )
@@ -406,9 +407,7 @@ pub fn normalize_moed_slug(raw: &str) -> Result<String, ServiceError> {
         .join("-");
     let valid = !slug.is_empty()
         && slug.chars().all(|c| {
-            c == '-'
-                || c.is_ascii_alphanumeric()
-                || ('\u{0590}'..='\u{05ff}').contains(&c)
+            c == '-' || c.is_ascii_alphanumeric() || ('\u{0590}'..='\u{05ff}').contains(&c)
         })
         && !slug.starts_with('-')
         && !slug.ends_with('-')
@@ -701,7 +700,9 @@ pub async fn replace_article_moed_links(
     let existing_ids: BTreeSet<i32> = existing.into_iter().map(|m| m.id).collect();
     for id in moed_ids {
         if !existing_ids.contains(id) {
-            return Err(ServiceError::bad_request(&format!("Moed {id} does not exist")));
+            return Err(ServiceError::bad_request(&format!(
+                "Moed {id} does not exist"
+            )));
         }
     }
     let current = article_moed::Entity::find()

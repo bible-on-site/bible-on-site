@@ -2,15 +2,23 @@ import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { getPublishedMoadim, MOADIM_ROOT, moedHref } from "@/lib/moadim";
+import {
+	getPublishedMoadim,
+	MOADIM_ROOT,
+	MOED_STALE_BOUND_SECONDS,
+	moedHref,
+} from "@/lib/moadim";
 import { COLLECTION_TAGS } from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
 
+// Hourly bound keeps a pre-migration empty catalogue from pinning — the
+// data-deploy seed lands without a website invalidation, so the catalogue
+// self-heals on the next ISR window (editorial writes still expire via tag).
 const getCachedMoadim = unstable_cache(getPublishedMoadim, ["moadim-catalogue"], {
 	tags: [COLLECTION_TAGS.moadim],
-	revalidate: false,
+	revalidate: MOED_STALE_BOUND_SECONDS,
 });
 
 export async function generateMetadata(): Promise<Metadata> {

@@ -113,6 +113,10 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.pediaLanding,
 		COLLECTION_TAGS.pediaEntries,
 		COLLECTION_TAGS.dedications,
+		// The moed collection tag expires every cached moed read — without
+		// it an overflowing batch leaves catalogue/detail data stale behind
+		// its path-only invalidation.
+		COLLECTION_TAGS.moadim,
 	]);
 	sink.patterns.add("/pedia/[slug]");
 	sink.paths.add("/pedia");
@@ -347,7 +351,12 @@ async function moadimMatchingCoverage(
 		);
 	} catch (error) {
 		// Moed schema not deployed yet — nothing to expire.
-		if (isMissingMysqlSchema(error)) return [];
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Moed schema is not deployed yet; skipping moed invalidation for this change until the migration runs.",
+			);
+			return [];
+		}
 		throw error;
 	}
 	const matches = new Map<number, MoedRangeRef>();

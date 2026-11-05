@@ -3,7 +3,8 @@
 	"articleKey": "articleId",
 	"freshness": {
 		"expectedContentHash": "Lowercase hex of the article's generated tanah_article.content_hash (covers name/abstract/content/perek_id/author_id). Compared under the article row lock; a mismatch rejects the write as stale.",
-		"expectedCoveringSources": "The exact {perekId,pasuk} set the caller read (order-insensitive). Compared under the same lock so a replaced covering set cannot overwrite an unseen edit."
+		"expectedCoveringSources": "The exact {perekId,pasuk} set the caller read (order-insensitive). Compared under the same lock so a replaced covering set cannot overwrite an unseen edit.",
+		"expectedMoedIds": "The exact moed id set the caller read in articleRelationships.moadim (order-insensitive). The generated contentHash covers the article row alone, so the junction set gets its own snapshot — a mismatch rejects the write the same way."
 	},
 	"relationships": [
 		{

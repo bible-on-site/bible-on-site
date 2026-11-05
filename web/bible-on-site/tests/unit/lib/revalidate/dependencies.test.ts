@@ -524,6 +524,10 @@ describe("resolveEntityChanges", () => {
 				"authors",
 				"tanahpedia-entity-refs",
 				"tanahpedia-mention-refs",
+				// An overflowing batch must still expire every cached moed
+				// read — the moed loaders are tag-keyed, paths alone cannot
+				// reach them.
+				"moadim",
 			]),
 		);
 		expect(out.paths).toEqual(

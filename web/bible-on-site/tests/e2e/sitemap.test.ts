@@ -146,8 +146,14 @@ test.describe("sitemap.xml", () => {
 			.length;
 		// Pedia URLs use URL-encoded Hebrew unique names: /pedia/%D7...
 		const pediaEntries = (body.match(/\/pedia\/[^<]+<\/loc>/g) || []).length;
+		// Moed detail URLs under the canonical מועדים root — counted from the
+		// decoded body since Hebrew slugs arrive percent-encoded (#3101).
+		const decoded = decodeURIComponent(body);
+		const moedEntries = (decoded.match(/\/מועדים\/[^<]+<\/loc>/g) || [])
+			.length;
 
-		// Root, sections, 929 index, 55 Parasha URLs, chapters, content and pedia.
+		// Root, sections, 929 index, 55 Parasha URLs, chapters, content and
+		// pedia, the מועדים landing + one URL per published moed.
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
@@ -159,7 +165,9 @@ test.describe("sitemap.xml", () => {
 			1 +
 			authorEntries +
 			1 +
-			pediaEntries;
+			pediaEntries +
+			1 +
+			moedEntries;
 		expect(urlCount).toBe(expectedCount);
 	});
 

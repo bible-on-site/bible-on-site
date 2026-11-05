@@ -65,7 +65,10 @@ function ArticleEditPage() {
 		content: "",
 		coveringSources: isNew ? [] : undefined,
 		coverageVerified: false,
-		moedIds: isNew ? [] : undefined,
+		// New articles keep moedIds undefined until the catalogue query
+		// proves the moed schema exists — an eager [] would still hit the
+		// link table on save and roll the create back pre-migration.
+		moedIds: undefined,
 	});
 
 	const [hasChanges, setHasChanges] = useState(false);
@@ -96,6 +99,17 @@ function ArticleEditPage() {
 		queryKey: ["moadim"],
 		queryFn: () => listMoadim(),
 	});
+
+	// Once the catalogue answers (even as an empty list) the moed schema
+	// exists, so a new article may carry an explicit empty link set —
+	// `undefined` stays the "schema unknown, omit on save" state.
+	useEffect(() => {
+		if (isNew && moadim !== undefined) {
+			setFormData((prev) =>
+				prev.moedIds === undefined ? { ...prev, moedIds: [] } : prev,
+			);
+		}
+	}, [isNew, moadim]);
 
 	const selectedPerek = perakim?.find(
 		(perek) => perek.id === formData.perek_id,

@@ -11,6 +11,7 @@ import {
 	getPublishedMoedSlugs,
 	type Moed,
 	MOADIM_ROOT,
+	MOED_STALE_BOUND_SECONDS,
 	moedHref,
 } from "@/lib/moadim";
 import { getPerushimForRanges } from "@/lib/perushim/service";
@@ -33,12 +34,15 @@ export async function generateStaticParams() {
 	return (await getPublishedMoedSlugs()).map((slug) => ({ slug }));
 }
 
-/** One moed detail — tagged by slug so editorial changes expire it. */
+/** One moed detail — tagged by slug so editorial changes expire it. The
+ * hourly bound lets a pre-migration not-found self-heal after the seed
+ * deploys (it emits no invalidation); tagged expiry stays instant. */
 const getCachedMoed = cachedPerKey(
 	"moed-detail",
 	(slug: string) => slug,
 	(slug) => [COLLECTION_TAGS.moadim, moedTag(slug)],
 	(slug) => getMoedBySlug(slug),
+	MOED_STALE_BOUND_SECONDS,
 );
 
 /** Range-bounded perushim — expire with the moed and the perush corpus. */

@@ -54,8 +54,10 @@ use entities::{
 /// Anchored at the crate root (not this file's depth): `web/api` in the
 /// worktree, `/app` inside the build image where the Dockerfile copies the
 /// registry to `/shared/article-relationships`.
-const REGISTRY_JSON: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared/article-relationships/registry.json"));
+const REGISTRY_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../shared/article-relationships/registry.json"
+));
 
 /// One registry entry — the Rust mirror of `ArticleRelationshipEntry` in the
 /// shared TS module; field names must stay identical for parity.
@@ -615,9 +617,9 @@ pub struct UpdateOutcome {
 /// Omitted fields leave their relation untouched; an explicitly empty
 /// `coveringSources` clears only that relation — a single-link edit never
 /// replaces unrelated fields/links. `expectedContentHash` /
-/// `expectedCoveringSources` are the freshness contract: supplied snapshots
-/// are compared under the article row lock, so a stale editor can never
-/// overwrite a newer link it never saw.
+/// `expectedCoveringSources` / `expectedMoedIds` are the freshness
+/// contract: supplied snapshots are compared under the article row lock,
+/// so a stale editor can never overwrite a newer link it never saw.
 pub async fn update_relationships(
     db: &Database,
     revalidator: &WebsiteRevalidator,
@@ -659,6 +661,11 @@ pub async fn update_relationships(
         .moed_ids
         .as_deref()
         .map(|ids| normalize_moed_ids(ids, "moedIds"))
+        .transpose()?;
+    let expected_moed_ids = input
+        .expected_moed_ids
+        .as_deref()
+        .map(|ids| normalize_moed_ids(ids, "expectedMoedIds"))
         .transpose()?;
 
     let txn = db.get_connection().begin().await.map_err(db_error)?;
@@ -702,6 +709,20 @@ pub async fn update_relationships(
     // Pre-write moed link set — the undo snapshot plus half of the old∪new
     // invalidation payload when `moedIds` lands below.
     let previous_moadim = moed_service::load_article_moed_links(&txn, article_id).await?;
+    // content_hash covers the article row alone, never junction rows — a
+    // full-set moed replacement needs its own snapshot guard so a stale
+    // editor cannot erase links it never saw.
+    if let Some(expected) = expected_moed_ids {
+        let mut actual: Vec<i32> = previous_moadim.iter().map(|link| link.moed_id).collect();
+        actual.sort_unstable();
+        let mut expected_sorted = expected;
+        expected_sorted.sort_unstable();
+        if actual != expected_sorted {
+            return Err(ServiceError::bad_request(
+                "the article's moed links were changed since this edit loaded - reload and submit again",
+            ));
+        }
+    }
 
     // Target validation — inside the lock so the checked state is the
     // committed state. Single-valued relations validate their target exists.
@@ -1122,6 +1143,7 @@ mod tests {
                 coverage_verified: None,
                 expected_content_hash: None,
                 expected_covering_sources: None,
+                expected_moed_ids: None,
             }
         }
 
@@ -1206,6 +1228,54 @@ mod tests {
                 .await
                 .unwrap_err();
             assert!(matches!(err, ServiceError::BadRequest(_)));
+        }
+
+        #[tokio::test]
+        async fn rejects_a_stale_expected_moed_link_set() {
+            // content_hash covers the article row only — the moed junction
+            // set gets its own snapshot guard so a stale editor cannot
+            // erase links it never saw.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    // The stored link set is {moed 3} — the caller's
+                    // snapshot says {4} (it last read a different set).
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![moed_link(3)]])
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_row(3, "סוכות")]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.expected_moed_ids = Some(vec![4]);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::BadRequest(_)));
+            assert!(err.to_string().contains("moed links were changed"));
+            assert_no_writes(&db);
+        }
+
+        #[tokio::test]
+        async fn accepts_a_matching_expected_moed_link_set() {
+            // The same stored set {3} echoed back passes the guard and the
+            // write proceeds to target validation (unknown perek 9999 —
+            // the lock ordering proves the guard ran first and matched).
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<article::Model, Vec<_>, _>([vec![article_model(7)]])
+                    .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![]])
+                    .append_query_results::<article_moed::Model, Vec<_>, _>([vec![moed_link(3)]])
+                    .append_query_results::<moed::Model, Vec<_>, _>([vec![moed_row(3, "סוכות")]])
+                    .append_query_results::<perek::Model, Vec<_>, _>([vec![]])
+                    .into_connection(),
+            );
+            let mut edit = input();
+            edit.expected_moed_ids = Some(vec![3]);
+            edit.perek_id = Some(9999);
+            let err = update_relationships(&db, &skipped_revalidator(), 7, edit)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("Perek 9999 does not exist"));
         }
 
         #[tokio::test]

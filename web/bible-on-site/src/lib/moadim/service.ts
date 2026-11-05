@@ -18,8 +18,22 @@ import type { Moed, MoedSection, MoedSummary } from "./types";
  * The website ships independently of Data CD, so a database that reports
  * the moed schema missing degrades to an empty catalogue / a not-found
  * detail instead of failing the build — matching the covering-source
- * convention (isMissingMysqlSchema).
+ * convention (isMissingMysqlSchema). A build/deploy that lands before the
+ * seed must not pin that degraded result forever: the moed caches carry
+ * {@link MOED_STALE_BOUND_SECONDS} so the route re-reads the database on
+ * the next ISR window after the migration arrives, while editorial writes
+ * still expire instantly through the moed tags.
  */
+
+/**
+ * Upper bound on how long a missing-schema catalogue/detail stays cached.
+ * Data deploy seeds the moed tables without emitting a website
+ * invalidation, so the degraded result gets this hourly TTL instead of
+ * the usual tag-only eternity. A positive `revalidate` on `unstable_cache`
+ * propagates to the consuming route's `initialRevalidateSeconds` — the
+ * moadim routes are hourly ISR.
+ */
+export const MOED_STALE_BOUND_SECONDS = 3600;
 
 interface MoedRow {
 	id: number;
@@ -57,7 +71,12 @@ export async function getPublishedMoadim(): Promise<MoedSummary[]> {
 	} catch (error) {
 		// Moed schema not deployed yet: the public section stays reachable
 		// and honest about having no catalogue rather than failing builds.
-		if (isMissingMysqlSchema(error)) return [];
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Moed schema is not deployed yet; serving an empty מועדים catalogue until the migration runs.",
+			);
+			return [];
+		}
 		throw error;
 	}
 }
@@ -139,7 +158,12 @@ export async function getMoedBySlug(slug: string): Promise<Moed | null> {
 			ranges: mapped.flatMap((section) => section.ranges),
 		};
 	} catch (error) {
-		if (isMissingMysqlSchema(error)) return null;
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				`Moed schema is not deployed yet; /מועדים/${slug} answers not-found until the migration runs.`,
+			);
+			return null;
+		}
 		throw error;
 	}
 }

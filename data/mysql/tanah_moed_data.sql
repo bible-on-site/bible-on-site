@@ -154,11 +154,8 @@ WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_section WHERE moed_id = 14);
 -- ---------------------------------------------------------------------------
 
 INSERT INTO tanah_moed_range (id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
-SELECT * FROM (SELECT 1011 AS id, 101 AS section_id, 1 AS position, 233 AS perek_id_start, 1 AS pasuk_start, 234 AS perek_id_end, 10 AS pasuk_end) seed
-WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range r JOIN tanah_moed_section s ON s.id = r.section_id WHERE s.moed_id = 1);
-
-INSERT INTO tanah_moed_range (id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
-SELECT * FROM (SELECT 1021 AS id, 102 AS section_id, 1 AS position, 431 AS perek_id_start, 1 AS pasuk_start, 431 AS perek_id_end, 19 AS pasuk_end) seed
+SELECT * FROM (SELECT 1011 AS id, 101 AS section_id, 1 AS position, 233 AS perek_id_start, 1 AS pasuk_start, 234 AS perek_id_end, 10 AS pasuk_end UNION ALL
+               SELECT 1021, 102, 1, 431, 1, 431, 19) seed
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range r JOIN tanah_moed_section s ON s.id = r.section_id WHERE s.moed_id = 1);
 
 INSERT INTO tanah_moed_range (id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)

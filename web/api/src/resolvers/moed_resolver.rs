@@ -24,14 +24,12 @@ impl MoedQuery {
     /// One published moed by its canonical slug — null when no published
     /// moed owns the slug (the website's detail page maps that to 404).
     async fn moed(&self, ctx: &Context<'_>, slug: String) -> Result<Option<Moed>> {
-        Ok(moed_service::load_by_slug(
-            ctx.data::<Database>()?.get_connection(),
-            slug.trim(),
-            true,
+        Ok(
+            moed_service::load_by_slug(ctx.data::<Database>()?.get_connection(), slug.trim(), true)
+                .await
+                .map_err(|e| e.extend())?
+                .map(Into::into),
         )
-        .await
-        .map_err(|e| e.extend())?
-        .map(Into::into))
     }
 
     /// Every moed including unpublished drafts, in wheel order — the
@@ -86,13 +84,10 @@ impl MoedMutation {
         ctx.data::<ApiAuth>()?
             .authorize_article_manager()
             .map_err(|e| e.extend())?;
-        let revalidation = moed_service::delete_moed(
-            ctx.data::<Database>()?,
-            &WebsiteRevalidator::from_env(),
-            id,
-        )
-        .await
-        .map_err(|e| e.extend())?;
+        let revalidation =
+            moed_service::delete_moed(ctx.data::<Database>()?, &WebsiteRevalidator::from_env(), id)
+                .await
+                .map_err(|e| e.extend())?;
         Ok(UpsertMoedResult {
             moed: None,
             revalidation: revalidation.to_string(),
@@ -271,11 +266,15 @@ mod tests {
                         coverage_verified: false,
                     },
                 ]])
-                .append_query_results::<entities::article_covering_source::Model, Vec<_>, _>([vec![]])
+                .append_query_results::<entities::article_covering_source::Model, Vec<_>, _>([
+                    vec![],
+                ])
                 .into_connection(),
         );
         let response = schema(db)
-            .execute(Request::new("{ moed(slug: \"moed-3\") { id articles { id name } } }"))
+            .execute(Request::new(
+                "{ moed(slug: \"moed-3\") { id articles { id name } } }",
+            ))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let json = response.data.into_json().unwrap();
@@ -405,14 +404,15 @@ mod tests {
                 .append_query_errors([DbErr::Custom("private database detail".into())])
                 .into_connection(),
         );
-        let response = schema(db)
-            .execute(Request::new("{ moadim { id } }"))
-            .await;
+        let response = schema(db).execute(Request::new("{ moadim { id } }")).await;
         assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
         let error = &response.errors[0];
         assert!(!error.message.contains("private database detail"));
         let extensions = error.extensions.as_ref().unwrap();
-        assert_eq!(extensions.get("code"), Some(&Value::from("INTERNAL_SERVER_ERROR")));
+        assert_eq!(
+            extensions.get("code"),
+            Some(&Value::from("INTERNAL_SERVER_ERROR"))
+        );
         assert_eq!(extensions.get("statusCode"), Some(&Value::from(500)));
     }
 }
