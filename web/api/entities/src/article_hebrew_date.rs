@@ -9,10 +9,12 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "tanah_article_hebrew_date")]
 pub struct Model {
+    /// TINYINT UNSIGNED.
     #[sea_orm(primary_key, auto_increment = false)]
-    pub hebrew_month: i16,
+    pub hebrew_month: u8,
+    /// TINYINT UNSIGNED.
     #[sea_orm(primary_key, auto_increment = false)]
-    pub hebrew_day: i16,
+    pub hebrew_day: u8,
     pub article_id: i32,
     /// MySQL TIMESTAMP, decoded in the connection's UTC time zone.
     pub created_at: DateTimeUtc,

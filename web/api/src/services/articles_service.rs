@@ -182,8 +182,8 @@ pub async fn find_article_by_hebrew_date(
     use entities::article_hebrew_date::{Column as DateColumn, Entity as DateEntity};
 
     let article = DateEntity::find()
-        .filter(DateColumn::HebrewMonth.eq(hebrew_month as i16))
-        .filter(DateColumn::HebrewDay.eq(hebrew_day as i16))
+        .filter(DateColumn::HebrewMonth.eq(hebrew_month as u8))
+        .filter(DateColumn::HebrewDay.eq(hebrew_day as u8))
         .find_also_related(Entity)
         .one(db.get_connection())
         .await
