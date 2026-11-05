@@ -63,10 +63,7 @@ describe("normalizeSeferBookmarkSettings", () => {
 			order: "reverse-page",
 			upcomingOnly: true,
 		});
-		expect(Object.keys(normalized).sort()).toEqual([
-			"attachment",
-			"enabled",
-		]);
+		expect(Object.keys(normalized).sort()).toEqual(["attachment", "enabled"]);
 	});
 });
 

@@ -38,8 +38,8 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	getAllEntryUniqueNames: jest.fn(),
 	getAllEntrySynonymNames: jest.fn().mockResolvedValue([]),
 	getEntriesBySynonym: jest.fn().mockResolvedValue([]),
-	getEntries: jest.fn(),
-	getEntriesByEntityType: jest.fn(),
+	getAllEntrySummaries: jest.fn(),
+	getEntityTypeEntrySummaries: jest.fn(),
 	getEntryByUniqueName: jest.fn(),
 	getEntryOccurrences: jest.fn().mockResolvedValue([]),
 	getPersonFamilySummary: jest.fn().mockResolvedValue(null),
@@ -58,10 +58,10 @@ import {
 	generateStaticParams,
 } from "../../../src/app/pedia/[slug]/page";
 import {
+	getAllEntrySummaries,
 	getAllEntryUniqueNames,
-	getEntries,
-	getEntriesByEntityType,
 	getEntriesBySynonym,
+	getEntityTypeEntrySummaries,
 	getEntryByUniqueName,
 	getEntryOccurrences,
 	getPersonFamilySummary,
@@ -76,9 +76,12 @@ const mockGetEntryByUniqueName = getEntryByUniqueName as jest.MockedFunction<
 const mockGetEntryOccurrences = getEntryOccurrences as jest.MockedFunction<
 	typeof getEntryOccurrences
 >;
-const mockGetEntries = getEntries as jest.MockedFunction<typeof getEntries>;
-const mockGetEntriesByEntityType =
-	getEntriesByEntityType as jest.MockedFunction<typeof getEntriesByEntityType>;
+const mockGetAllEntrySummaries =
+	getAllEntrySummaries as jest.MockedFunction<typeof getAllEntrySummaries>;
+const mockGetEntityTypeEntrySummaries =
+	getEntityTypeEntrySummaries as jest.MockedFunction<
+		typeof getEntityTypeEntrySummaries
+	>;
 const mockGetEntriesBySynonym = getEntriesBySynonym as jest.MockedFunction<
 	typeof getEntriesBySynonym
 >;
@@ -271,7 +274,7 @@ describe("pedia/[uniqueName] page", () => {
 		it.each(["PERSON", "PLACE", "OBJECT"] as const)(
 			"shows the shared occurrences table on a %s entry",
 			async (entityType) => {
-				mockGetEntriesByEntityType.mockResolvedValue([]);
+				mockGetEntityTypeEntrySummaries.mockResolvedValue([]);
 				mockGetPersonFamilySummary.mockResolvedValue(null);
 				mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
 				mockGetEntryByUniqueName.mockResolvedValue({
@@ -309,7 +312,7 @@ describe("pedia/[uniqueName] page", () => {
 		);
 
 		it("rejects when occurrence loading fails so a partial page is never cached", async () => {
-			mockGetEntries.mockResolvedValue([]);
+			mockGetAllEntrySummaries.mockResolvedValue([]);
 			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
 			mockGetEntryOccurrences.mockRejectedValueOnce(
 				new Error("sources unavailable"),
@@ -329,7 +332,7 @@ describe("pedia/[uniqueName] page", () => {
 		});
 
 		it("rejects when family loading fails so a partial page is never cached", async () => {
-			mockGetEntriesByEntityType.mockResolvedValue([
+			mockGetEntityTypeEntrySummaries.mockResolvedValue([
 				{
 					id: "entry-1",
 					uniqueName: "\u05de\u05e9\u05d4-\u05e8\u05d1\u05e0\u05d5",
@@ -359,7 +362,7 @@ describe("pedia/[uniqueName] page", () => {
 			await expect(EntryView({ slug: "משה-רבנו" })).rejects.toThrow(
 				"family down",
 			);
-			expect(mockGetEntriesByEntityType).toHaveBeenCalledWith("PERSON");
+			expect(mockGetEntityTypeEntrySummaries).toHaveBeenCalledWith("PERSON");
 			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
 				"entity-1",
 				"משה רבנו",
@@ -419,7 +422,7 @@ describe("pedia/[uniqueName] page", () => {
 		});
 
 		it("renders empty content and sibling fallback when entry has no entities", async () => {
-			mockGetEntries.mockResolvedValue([
+			mockGetAllEntrySummaries.mockResolvedValue([
 				{
 					id: "entry-sibling",
 					uniqueName: "sibling",
@@ -447,11 +450,11 @@ describe("pedia/[uniqueName] page", () => {
 					/\u05d0\u05d9\u05df \u05ea\u05d5\u05db\u05df \u05e2\u05d3\u05d9\u05d9\u05df/,
 				),
 			).toBeInTheDocument();
-			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
+			expect(mockGetAllEntrySummaries).toHaveBeenCalledWith(500, 0);
 		});
 
 		it("rejects when fallback sibling loading fails so a partial page is never cached", async () => {
-			mockGetEntries.mockRejectedValue(new Error("siblings down"));
+			mockGetAllEntrySummaries.mockRejectedValue(new Error("siblings down"));
 			mockGetPlaceMapMarkersForEntry.mockResolvedValue([]);
 			mockGetEntryByUniqueName.mockResolvedValue({
 				id: "entry-no-siblings",
@@ -466,11 +469,11 @@ describe("pedia/[uniqueName] page", () => {
 			await expect(EntryView({ slug: "no-siblings" })).rejects.toThrow(
 				"siblings down",
 			);
-			expect(mockGetEntries).toHaveBeenCalledWith(500, 0);
+			expect(mockGetAllEntrySummaries).toHaveBeenCalledWith(500, 0);
 		});
 
 		it("rejects when place-map loading fails so a partial page is never cached", async () => {
-			mockGetEntries.mockResolvedValue([]);
+			mockGetAllEntrySummaries.mockResolvedValue([]);
 			mockGetPlaceMapMarkersForEntry.mockRejectedValueOnce(
 				new Error("map unavailable"),
 			);
@@ -489,8 +492,8 @@ describe("pedia/[uniqueName] page", () => {
 		});
 
 		it("renders place maps and person family sections when available", async () => {
-			mockGetEntries.mockResolvedValue([]);
-			mockGetEntriesByEntityType.mockResolvedValue([]);
+			mockGetAllEntrySummaries.mockResolvedValue([]);
+			mockGetEntityTypeEntrySummaries.mockResolvedValue([]);
 			mockGetPersonFamilySummary.mockResolvedValue({
 				focalPersonId: "person-1",
 				focalEntityId: "person-entity",
@@ -568,7 +571,7 @@ describe("pedia/[uniqueName] page", () => {
 			expect(
 				screen.getByText("\u05de\u05e9\u05e4\u05d7\u05d4"),
 			).toBeInTheDocument();
-			expect(mockGetEntriesByEntityType).toHaveBeenCalledWith("PLACE");
+			expect(mockGetEntityTypeEntrySummaries).toHaveBeenCalledWith("PLACE");
 			expect(mockGetPersonFamilySummary).toHaveBeenCalledWith(
 				"person-entity",
 				"\u05d3\u05de\u05d5\u05ea",

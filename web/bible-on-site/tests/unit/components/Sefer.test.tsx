@@ -910,6 +910,58 @@ describe("Sefer component", () => {
 			]);
 		});
 
+		describe.each(["renderBookmark", "renderExpandedBookmark"] as const)(
+			"%s",
+			(kind) => {
+				it.each([16, 96])(
+					"bounds new static bookmark content allocations for %i tabs",
+					(count) => {
+						render(
+							<Sefer
+								perekObj={minimalPerek}
+								articles={[]}
+								perushim={[]}
+								perekIds={[1]}
+							/>,
+						);
+						const p = provider();
+						const context = {
+							currentPageIndex: 3,
+							currentLeafIndex: 1,
+							direction: "rtl" as const,
+						};
+						const template = p.getBookmarks(context)[0];
+						const renderContent =
+							kind === "renderBookmark"
+								? p.renderBookmark
+								: p.renderExpandedBookmark;
+						if (!renderContent) throw new Error("Missing chapter-tab renderer");
+						const bookmarks = Array.from({ length: count }, (_, index) => ({
+							...template,
+							id: `static-${index}`,
+							data: {
+								compact: String(index + 1),
+								source: "בראשית א",
+								title: `כותרת ${index + 1}`,
+							},
+						}));
+						const before = bookmarks.map(renderContent);
+						p.getBookmarks({
+							...context,
+							currentPageIndex: 5,
+							currentLeafIndex: 2,
+						});
+						const after = bookmarks.map((bookmark) =>
+							renderContent({ ...bookmark, data: { ...bookmark.data } }),
+						);
+						expect(
+							after.filter((node, index) => node !== before[index]),
+						).toHaveLength(0);
+					},
+				);
+			},
+		);
+
 		it.each([
 			{ name: "בראשית", additional: undefined, chapter: "יב" },
 			{ name: "מלכים", additional: "א", chapter: "א יב" },

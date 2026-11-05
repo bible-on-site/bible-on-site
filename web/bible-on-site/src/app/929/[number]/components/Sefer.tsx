@@ -1,6 +1,5 @@
 "use client";
 import type {
-	Bookmark,
 	BookmarkProvider,
 	FlipBookHandle,
 	HistoryMapper,
@@ -83,10 +82,8 @@ import { SeferPasukNumber } from "./SeferPasukNumber";
 import { SeferPasukSelectionBar } from "./SeferPasukSelectionBar";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
-import {
-	buildSeferChapterBookmarks,
-	type SeferBookmarkData,
-} from "./sefer-bookmarks";
+import { createSeferBookmarkContent } from "./sefer-bookmark-content";
+import { buildSeferChapterBookmarks } from "./sefer-bookmarks";
 import {
 	articleDocumentTitle,
 	buildSeferDocumentTitleResolver,
@@ -299,29 +296,9 @@ const Sefer = (props: {
 			// All chapters stay reachable — issue #2974 retired the
 			// upcoming-only filter.
 			getBookmarks: () => chapterBookmarks,
-			renderBookmark: (bookmark: Bookmark) => (
-				<span className="sefer-bookmark-label">
-					{(bookmark.data as SeferBookmarkData).compact}
-				</span>
-			),
-			renderExpandedBookmark: (bookmark: Bookmark) => {
-				const data = bookmark.data as SeferBookmarkData;
-				return (
-					<span
-						className="sefer-bookmark-expanded"
-						style={{ "--cover-color": seferColor } as React.CSSProperties}
-					>
-						<span className="sefer-bookmark-expanded-perek">
-							פרק {data.compact}
-						</span>
-						{data.title && (
-							<span className="sefer-bookmark-expanded-title">
-								{data.title}
-							</span>
-						)}
-					</span>
-				);
-			},
+			// The native provider refreshes every turn. Reuse immutable children
+			// so unchanged tab text does not reconcile throughout the portal tree.
+			...createSeferBookmarkContent(seferColor),
 			...SEFER_BOOKMARK_PRESENTATION,
 			attachment: bookmarkSettings.attachment,
 			className: "sefer-bookmarks",

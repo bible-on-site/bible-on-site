@@ -32,13 +32,8 @@ test.describe("Sefer in-leaf chrome (#2994)", () => {
 
 		// Right (scripture) leaf: spine is its left edge, so the scrollport
 		// runs RTL — the native bar lands left, next to the fold.
-		const scriptureLeaf = page.locator(
-			'.he-book .page[data-page-index="3"]',
-		);
-		await expect(scriptureLeaf).toHaveAttribute(
-			"data-scrollbar-side",
-			"left",
-		);
+		const scriptureLeaf = page.locator('.he-book .page[data-page-index="3"]');
+		await expect(scriptureLeaf).toHaveAttribute("data-scrollbar-side", "left");
 		const scriptureScroll = scriptureLeaf.locator(
 			'[class*="perekTextScrollWrapper"]',
 		);
@@ -141,23 +136,17 @@ test.describe("Sefer in-leaf chrome (#2994)", () => {
 		expect(Math.round(fs.box.left)).toBeLessThanOrEqual(1);
 		expect(Math.round(fs.box.top)).toBeLessThanOrEqual(1);
 		expect(Math.round(fs.box.width)).toBeGreaterThanOrEqual(fs.viewport.w - 2);
-		expect(Math.round(fs.box.height)).toBeGreaterThanOrEqual(
-			fs.viewport.h - 2,
-		);
+		expect(Math.round(fs.box.height)).toBeGreaterThanOrEqual(fs.viewport.h - 2);
 		expect(fs.scrollerCount).toBe(1);
 
 		// Scrolling inside the dialog never reaches the outer document.
-		await dialog
-			.locator('[class*="articleBodyWrapper"]')
-			.hover();
+		await dialog.locator('[class*="articleBodyWrapper"]').hover();
 		await page.mouse.wheel(0, 4000);
-		expect(
-			await page.evaluate(() => document.documentElement.scrollTop),
-		).toBe(0);
+		expect(await page.evaluate(() => document.documentElement.scrollTop)).toBe(
+			0,
+		);
 
-		await dialog
-			.getByRole("button", { name: "יציאה ממסך מלא" })
-			.click();
+		await dialog.getByRole("button", { name: "יציאה ממסך מלא" }).click();
 		await expect(dialog).toBeHidden();
 	});
 
