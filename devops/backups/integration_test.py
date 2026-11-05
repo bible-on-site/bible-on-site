@@ -96,9 +96,9 @@ class ContainerDatabase(Database):
             args[-1] = "--ssl-ca=/tls/server.pem"
         return [host_executable("docker"), "exec", "-i", self.client, *args]
 
-    def query(self, sql, directory):
+    def query(self, sql, directory, phase):
         try:
-            return super().query(sql, directory)
+            return super().query(sql, directory, phase)
         except BackupError:
             # This diagnostic is restricted to these disposable public-fixture
             # credentials. Production deliberately never prints SQL stderr.
@@ -174,9 +174,18 @@ def run():
         root = Path(root)
         tls = root / "tls"
         initial = root / "initial"
+        probe = root / "probe"
         work = root / "work"
-        for directory in [tls, initial, work]:
+        for directory in [tls, initial, probe, work]:
             directory.mkdir()
+        # The scratch fixture gets only a dedicated unprivileged probe account;
+        # its readiness check authenticates that account over the socket so it
+        # never performs the root login whose cold caching_sha2_password cache
+        # is under test (a warmed cache masked MySQL error 2061).
+        (probe / "probe.sql").write_text(
+            "CREATE USER 'fixture_probe'@'localhost' IDENTIFIED BY 'probe-only';\n",
+            encoding="utf-8",
+        )
         # Absolute OpenSSL executable and generated fixture paths, no shell.
         # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
         subprocess.run(  # nosec B603 # Fixed certificate operation and fixture-only argv.
@@ -224,7 +233,12 @@ def run():
                     "-e",
                     "MYSQL_ROOT_HOST=%",
                     "--health-cmd",
-                    "mysqladmin ping -h127.0.0.1 -pfixture-only --silent",
+                    (
+                        "mysqladmin ping -h127.0.0.1 -pfixture-only --silent"
+                        if name == source_name
+                        else "mysqladmin ping -hlocalhost -ufixture_probe"
+                        " -pprobe-only --silent"
+                    ),
                     "--health-interval",
                     "2s",
                     "--health-timeout",
@@ -238,6 +252,11 @@ def run():
                         f"{initial}:/docker-entrypoint-initdb.d:ro",
                         "-v",
                         f"{tls}:/tls:ro",
+                    ]
+                else:
+                    args += [
+                        "-v",
+                        f"{probe}:/docker-entrypoint-initdb.d:ro",
                     ]
                 args += [image, "--event-scheduler=OFF", "--local-infile=OFF"]
                 if name == source_name:
@@ -303,11 +322,13 @@ def run():
             assert manifest["restoration"]["tables"]["entries"]["rows"] == 1
             assert manifest["restoration"]["tables"]["audit"]["rows"] == 0
             assert scratch.query(
-                "SELECT HEX(payload),optional_text IS NULL FROM tanah.entries;", work
+                "SELECT HEX(payload),optional_text IS NULL FROM tanah.entries;",
+                work,
+                "Restored data check",
             ) == ["0001FF0A\t1"]
             # Only this process's disposable scratch instance is cleared to also
             # exercise the independent version-pinned download/restore command.
-            scratch.query("DROP DATABASE tanah;", work)
+            scratch.query("DROP DATABASE tanah;", work, "Scratch reset")
             (work / "second").mkdir()
             result = restore(
                 s3,
@@ -325,6 +346,8 @@ def run():
                         "tables": len(result["tables"]),
                         "checks": [
                             "TLS hostname verification",
+                            "cold-cache loopback scratch authentication",
+                            "pre-export scratch validation",
                             "dedicated dump grants",
                             "Unicode",
                             "binary",
