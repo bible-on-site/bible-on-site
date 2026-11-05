@@ -6,8 +6,15 @@ import { getTodayInTanahEntities } from "@/lib/tanahpedia/service";
 jest.mock("@/lib/api-client", () => ({ query: jest.fn() }));
 
 // Execute the production query against relational fixtures instead of mocking
-// its results. The anniversary SELECT uses SQL shared by SQLite and MySQL.
+// its results. The anniversary SELECT uses SQL shared by SQLite and MySQL;
+// the *_month_day columns stand in for the MySQL generated columns.
 let db: DatabaseSync;
+
+// Mirrors the MySQL generated column: the month*100+day anniversary key of
+// a stored Hebrew date, NULL for the unknown/not-yet/forever sentinels.
+function monthDayOf(date: number | null): number | null {
+	return date !== null && date > 0 && date !== 99991229 ? date % 10000 : null;
+}
 
 beforeEach(() => {
 	db = new DatabaseSync(":memory:");
@@ -16,12 +23,12 @@ beforeEach(() => {
 		CREATE TABLE tanahpedia_entry (id TEXT PRIMARY KEY, unique_name TEXT, title TEXT);
 		CREATE TABLE tanahpedia_entry_entity (entity_id TEXT, entry_id TEXT);
 		CREATE TABLE tanahpedia_event (id TEXT PRIMARY KEY, entity_id TEXT);
-		CREATE TABLE tanahpedia_event_date_range (event_id TEXT, start_date INTEGER, end_date INTEGER);
-		CREATE TABLE tanahpedia_saying (id TEXT PRIMARY KEY, entity_id TEXT, saying_date INTEGER);
+		CREATE TABLE tanahpedia_event_date_range (event_id TEXT, start_date INTEGER, end_date INTEGER, start_month_day INTEGER, end_month_day INTEGER);
+		CREATE TABLE tanahpedia_saying (id TEXT PRIMARY KEY, entity_id TEXT, saying_date INTEGER, month_day INTEGER);
 		CREATE TABLE tanahpedia_person (id TEXT PRIMARY KEY, entity_id TEXT);
-		CREATE TABLE tanahpedia_person_birth_date (person_id TEXT, birth_date INTEGER);
-		CREATE TABLE tanahpedia_person_death_date (person_id TEXT, death_date INTEGER);
-		CREATE TABLE tanahpedia_person_union (person1_id TEXT, person2_id TEXT, start_date INTEGER, end_date INTEGER);
+		CREATE TABLE tanahpedia_person_birth_date (person_id TEXT, birth_date INTEGER, month_day INTEGER);
+		CREATE TABLE tanahpedia_person_death_date (person_id TEXT, death_date INTEGER, month_day INTEGER);
+		CREATE TABLE tanahpedia_person_union (person1_id TEXT, person2_id TEXT, start_date INTEGER, end_date INTEGER, start_month_day INTEGER, end_month_day INTEGER);
 	`);
 	jest
 		.mocked(query)
@@ -44,11 +51,9 @@ function entity(id: string, type: string) {
 function event(id: string, start: number | null, end: number | null) {
 	entity(id, "EVENT");
 	db.prepare("INSERT INTO tanahpedia_event VALUES (?, ?)").run(id, id);
-	db.prepare("INSERT INTO tanahpedia_event_date_range VALUES (?, ?, ?)").run(
-		id,
-		start,
-		end,
-	);
+	db.prepare(
+		"INSERT INTO tanahpedia_event_date_range VALUES (?, ?, ?, ?, ?)",
+	).run(id, start, end, monthDayOf(start), monthDayOf(end));
 }
 
 function person(id: string) {
@@ -58,10 +63,11 @@ function person(id: string) {
 
 function saying(id: string, date: number | null) {
 	entity(id, "SAYING");
-	db.prepare("INSERT INTO tanahpedia_saying VALUES (?, ?, ?)").run(
+	db.prepare("INSERT INTO tanahpedia_saying VALUES (?, ?, ?, ?)").run(
 		id,
 		id,
 		date,
+		monthDayOf(date),
 	);
 }
 
@@ -73,21 +79,19 @@ test("unites event endpoints, saying dates, births, deaths, and both relationshi
 	saying("saying-today", 701); // Known month/day with unknown year.
 	saying("saying-wrong-day", 24490702);
 	person("birth-today");
-	db.prepare("INSERT INTO tanahpedia_person_birth_date VALUES (?, ?)").run(
-		"birth-today",
-		20010701,
-	);
+	db.prepare(
+		"INSERT INTO tanahpedia_person_birth_date VALUES (?, ?, ?)",
+	).run("birth-today", 20010701, monthDayOf(20010701));
 	person("death-today");
-	db.prepare("INSERT INTO tanahpedia_person_death_date VALUES (?, ?)").run(
-		"death-today",
-		24880701,
-	);
+	db.prepare(
+		"INSERT INTO tanahpedia_person_death_date VALUES (?, ?, ?)",
+	).run("death-today", 24880701, monthDayOf(24880701));
 	for (const id of ["spouse1", "spouse2", "ended1", "ended2", "unrelated"]) {
 		person(id);
 	}
 	db.exec(`
-		INSERT INTO tanahpedia_person_union VALUES ('spouse1', 'spouse2', 22000701, NULL);
-		INSERT INTO tanahpedia_person_union VALUES ('ended1', 'ended2', 22000628, 22010701);
+		INSERT INTO tanahpedia_person_union VALUES ('spouse1', 'spouse2', 22000701, NULL, 701, NULL);
+		INSERT INTO tanahpedia_person_union VALUES ('ended1', 'ended2', 22000628, 22010701, 628, 701);
 	`);
 	const rows = await getTodayInTanahEntities(7, 1);
 	expect(rows.map((row) => row.entityId)).toEqual([
@@ -106,8 +110,8 @@ test("unites event endpoints, saying dates, births, deaths, and both relationshi
 test("returns each entity once across multiple matching dates and preserves every entry link", async () => {
 	person("person");
 	db.exec(`
-		INSERT INTO tanahpedia_person_birth_date VALUES ('person', 20010701), ('person', 20020701);
-		INSERT INTO tanahpedia_person_death_date VALUES ('person', 21010701);
+		INSERT INTO tanahpedia_person_birth_date VALUES ('person', 20010701, 701), ('person', 20020701, 701);
+		INSERT INTO tanahpedia_person_death_date VALUES ('person', 21010701, 701);
 		INSERT INTO tanahpedia_entry VALUES ('a', 'entry-a', 'A'), ('b', 'entry-b', 'B');
 		INSERT INTO tanahpedia_entry_entity VALUES ('person', 'a'), ('person', 'b'), ('person', 'a');
 	`);
@@ -148,19 +152,21 @@ test("excludes incomplete dates and the unknown, not-yet, and forever sentinels"
 		event(`event-${index}`, date, date);
 		saying(`saying-${index}`, date);
 		person(`person-${index}`);
-		db.prepare("INSERT INTO tanahpedia_person_birth_date VALUES (?, ?)").run(
+		db.prepare(
+			"INSERT INTO tanahpedia_person_birth_date VALUES (?, ?, ?)",
+		).run(`person-${index}`, date, monthDayOf(date));
+		db.prepare(
+			"INSERT INTO tanahpedia_person_death_date VALUES (?, ?, ?)",
+		).run(`person-${index}`, date, monthDayOf(date));
+		db.prepare(
+			"INSERT INTO tanahpedia_person_union VALUES (?, ?, ?, ?, ?, ?)",
+		).run(
+			`person-${index}`,
 			`person-${index}`,
 			date,
-		);
-		db.prepare("INSERT INTO tanahpedia_person_death_date VALUES (?, ?)").run(
-			`person-${index}`,
 			date,
-		);
-		db.prepare("INSERT INTO tanahpedia_person_union VALUES (?, ?, ?, ?)").run(
-			`person-${index}`,
-			`person-${index}`,
-			date,
-			date,
+			monthDayOf(date),
+			monthDayOf(date),
 		);
 	}
 	expect(await getTodayInTanahEntities(7, 1)).toEqual([]);

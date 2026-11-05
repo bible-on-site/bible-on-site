@@ -366,9 +366,11 @@ CREATE TABLE `tanahpedia_person_birth_date` (
     `id` char(36) NOT NULL,
     `person_id` char(36) NOT NULL,
     `birth_date` int NOT NULL COMMENT 'YYYYMMDD format, see docs',
+    `month_day` int GENERATED ALWAYS AS (IF(`birth_date` > 0 AND `birth_date` <> 99991229, `birth_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of birth_date, NULL for sentinels',
     `alt_group_id` char(36) DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_person_birth_date_person` (`person_id`),
+    KEY `idx_person_birth_date_month_day` (`month_day`),
     CONSTRAINT `fk_person_birth_date_person` FOREIGN KEY (`person_id`) REFERENCES `tanahpedia_person` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_person_death_date`;
@@ -376,9 +378,11 @@ CREATE TABLE `tanahpedia_person_death_date` (
     `id` char(36) NOT NULL,
     `person_id` char(36) NOT NULL,
     `death_date` int NOT NULL COMMENT 'YYYYMMDD format, -1 = not yet (Eliyahu)',
+    `month_day` int GENERATED ALWAYS AS (IF(`death_date` > 0 AND `death_date` <> 99991229, `death_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of death_date, NULL for sentinels',
     `alt_group_id` char(36) DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_person_death_date_person` (`person_id`),
+    KEY `idx_person_death_date_month_day` (`month_day`),
     CONSTRAINT `fk_person_death_date_person` FOREIGN KEY (`person_id`) REFERENCES `tanahpedia_person` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_person_death_cause`;
@@ -465,9 +469,13 @@ CREATE TABLE `tanahpedia_event_date_range` (
     `event_id` char(36) NOT NULL,
     `start_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
     `end_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
+    `start_month_day` int GENERATED ALWAYS AS (IF(`start_date` > 0 AND `start_date` <> 99991229, `start_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of start_date, NULL for sentinels',
+    `end_month_day` int GENERATED ALWAYS AS (IF(`end_date` > 0 AND `end_date` <> 99991229, `end_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of end_date, NULL for sentinels',
     `alt_group_id` char(36) DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_event_date_range_event` (`event_id`),
+    KEY `idx_event_date_range_start_month_day` (`start_month_day`),
+    KEY `idx_event_date_range_end_month_day` (`end_month_day`),
     CONSTRAINT `fk_event_date_range_event` FOREIGN KEY (`event_id`) REFERENCES `tanahpedia_event` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
@@ -704,8 +712,10 @@ CREATE TABLE `tanahpedia_saying` (
     `entity_id` char(36) NOT NULL,
     `content` text,
     `saying_date` int DEFAULT NULL COMMENT 'YYYYMMDD Hebrew date; 00 for unknown components',
+    `month_day` int GENERATED ALWAYS AS (IF(`saying_date` > 0 AND `saying_date` <> 99991229, `saying_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of saying_date, NULL for sentinels',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_saying_entity` (`entity_id`),
+    KEY `idx_saying_month_day` (`month_day`),
     CONSTRAINT `fk_saying_entity` FOREIGN KEY (`entity_id`) REFERENCES `tanahpedia_entity` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_saying_location`;
@@ -864,6 +874,8 @@ CREATE TABLE `tanahpedia_person_union` (
     `union_order` int DEFAULT NULL,
     `start_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
     `end_date` int DEFAULT NULL COMMENT 'YYYYMMDD format',
+    `start_month_day` int GENERATED ALWAYS AS (IF(`start_date` > 0 AND `start_date` <> 99991229, `start_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of start_date, NULL for sentinels',
+    `end_month_day` int GENERATED ALWAYS AS (IF(`end_date` > 0 AND `end_date` <> 99991229, `end_date` % 10000, NULL)) VIRTUAL COMMENT 'Anniversary key: month*100+day of end_date, NULL for sentinels',
     `end_reason_id` char(36) DEFAULT NULL,
     `alt_group_id` char(36) DEFAULT NULL,
     `source_citation` varchar(400) DEFAULT NULL,
@@ -872,6 +884,8 @@ CREATE TABLE `tanahpedia_person_union` (
     KEY `idx_person_union_person1` (`person1_id`),
     KEY `idx_person_union_person2` (`person2_id`),
     KEY `idx_person_union_type` (`union_type_id`),
+    KEY `idx_person_union_start_month_day` (`start_month_day`),
+    KEY `idx_person_union_end_month_day` (`end_month_day`),
     CONSTRAINT `fk_person_union_person1` FOREIGN KEY (`person1_id`) REFERENCES `tanahpedia_person` (`id`),
     CONSTRAINT `fk_person_union_person2` FOREIGN KEY (`person2_id`) REFERENCES `tanahpedia_person` (`id`),
     CONSTRAINT `fk_person_union_type` FOREIGN KEY (`union_type_id`) REFERENCES `tanahpedia_lookup_union_type` (`id`),
