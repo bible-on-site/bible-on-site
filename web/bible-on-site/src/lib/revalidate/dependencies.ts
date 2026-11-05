@@ -34,6 +34,7 @@ import {
 	parashaDedicationsTag,
 	perekArticlesTag,
 	perekDedicationsTag,
+	pediaCategoryTag,
 	seferDedicationsTag,
 	seferPerekDedicationsTag,
 } from "@/lib/revalidate/tags";
@@ -48,7 +49,8 @@ import type { CategoryKey } from "@/lib/tanahpedia/types";
  *   collects the tags of the caches it read, the tag also expires the
  *   rendered pages of those entries.
  * - `paths` expire prerendered routes directly — needed where the page's
- *   data is not tag-cached (every `/pedia/*` view reads the DB plainly).
+ *   data is not tag-cached (the pedia entry/category views still read
+ *   most of the DB plainly).
  * - `patterns` cover the fallback case where precise enumeration is
  *   impossible (a dynamic route pattern is expired whole rather than
  *   losing the update).
@@ -107,8 +109,9 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.authors,
 		COLLECTION_TAGS.pediaEntityRefs,
 		COLLECTION_TAGS.pediaMentionRefs,
+		COLLECTION_TAGS.pediaLanding,
+		COLLECTION_TAGS.pediaEntries,
 		COLLECTION_TAGS.dedications,
-		COLLECTION_TAGS.pedia,
 	]);
 	sink.patterns.add("/pedia/[slug]");
 	sink.paths.add("/pedia");
@@ -421,12 +424,16 @@ function addPediaEntryDeps(
 	for (const name of names) {
 		addPath(sink, `/pedia/${name}`);
 	}
-	// The landing page's cached counts/recents/anniversaries.
-	addTag(sink, COLLECTION_TAGS.pedia);
+	// The landing page's cached counts/recents/anniversaries, and the
+	// entry-page sibling/category summaries. Category tags are per entity
+	// type so an entry change expires only the categories it belongs to.
 	addPath(sink, "/pedia");
+	addTag(sink, COLLECTION_TAGS.pediaLanding);
+	addTag(sink, COLLECTION_TAGS.pediaEntries);
 	for (const entityType of entityTypes) {
 		const path = categoryPath(entityType);
 		if (path) addPath(sink, path);
+		addTag(sink, pediaCategoryTag(entityType));
 	}
 	for (const perekId of refPerekIds) {
 		addTag(sink, entityRefsTag(perekId));
