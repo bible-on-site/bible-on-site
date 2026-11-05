@@ -264,6 +264,20 @@ function archiveChecksumMatches(checksum, archiveSha256, localMd5) {
 	return localMd5 != null && checksum.hash === localMd5;
 }
 
+/**
+ * Whether Apple's checksum of a remote version is consistent with the
+ * receipt's producer archive proof. The receipt records the checksums of the
+ * archive bytes that produced the recorded version — in every algorithm Apple
+ * may report — because a rebuilt .aar is not byte-identical even when its
+ * content is (#2794). An absent remote checksum cannot contradict the tie.
+ */
+function receiptChecksumMatches(checksum, receiptEntry) {
+	if (!checksum) return true;
+	if (checksum.algorithm === "sha256")
+		return checksum.hash === receiptEntry?.archiveSha256?.toLowerCase();
+	return checksum.hash === receiptEntry?.archiveMd5?.toLowerCase();
+}
+
 async function findPack(app, identifier, read) {
 	const packs = (
 		await read(`apps/${encodeURIComponent(app.id)}/backgroundAssets`, {
@@ -339,7 +353,12 @@ function validReceiptEntry(entry) {
 		typeof entry === "object" &&
 		typeof entry.versionId === "string" &&
 		entry.versionId.length > 0 &&
-		HEX64.test(entry.contentSha256 ?? "")
+		HEX64.test(entry.contentSha256 ?? "") &&
+		// Producer archive proof fields are optional — receipts predate the
+		// dual-algorithm proof — but must be well formed when present.
+		(entry.archiveSha256 == null || HEX64.test(entry.archiveSha256)) &&
+		(entry.archiveMd5 == null || HEX32.test(entry.archiveMd5)) &&
+		(entry.archiveBytes == null || Number.isSafeInteger(entry.archiveBytes))
 	);
 }
 
@@ -550,8 +569,7 @@ export function planPack(pack, remote, receiptEntry, localMd5 = null) {
 		(matches(top) ||
 			(receiptEntry?.versionId === top.id &&
 				receiptEntry?.contentSha256 === pack.contentSha256 &&
-				(!top.checksum ||
-					top.checksum.hash === receiptEntry.archiveSha256?.toLowerCase())));
+				receiptChecksumMatches(top.checksum, receiptEntry)));
 	if (contentMatch) {
 		const beta = top.releases.internalBeta;
 		if (beta == null || beta.state === INTERNAL_BETA_READY)
@@ -578,8 +596,7 @@ export function planPack(pack, remote, receiptEntry, localMd5 = null) {
 	if (
 		receiptEntry?.versionId === top.id &&
 		receiptEntry.contentSha256 !== pack.contentSha256 &&
-		(!top.checksum ||
-			top.checksum.hash === receiptEntry.archiveSha256?.toLowerCase())
+		receiptChecksumMatches(top.checksum, receiptEntry)
 	)
 		return {
 			action: "upload",
@@ -613,10 +630,7 @@ async function liveVersionMatches(top, pack, receiptEntry) {
 		receiptEntry?.contentSha256 === pack.contentSha256;
 	if (!top.checksum) return receiptMatch;
 	if (await archiveChecksumResolved(top.checksum, pack)) return true;
-	return (
-		receiptMatch &&
-		top.checksum.hash === receiptEntry.archiveSha256?.toLowerCase()
-	);
+	return receiptMatch && receiptChecksumMatches(top.checksum, receiptEntry);
 }
 
 /**
@@ -739,12 +753,51 @@ function releaseContext(releaseTag) {
 	};
 }
 
+/**
+ * The archive checksums a publication receipt records are the *producer*
+ * proof — the bytes the recorded Apple version actually carries. They are our
+ * archive only when we uploaded it or Apple's checksum already proves the
+ * version holds our exact bytes; otherwise the version still carries the
+ * original producer's archive (rebuilt .aar containers are nondeterministic —
+ * #2794) and the proof chains from the prior receipt's entry for the same
+ * version. Apple's live checksum of the version is itself producer proof and
+ * is overlaid in whichever algorithm it reports, which also self-heals
+ * receipts written before that algorithm was stored.
+ */
+function producerProof(pack, result, prior) {
+	const previous = prior?.versionId === result.id ? prior : null;
+	const ownBytes =
+		result.action === "uploaded" ||
+		archiveChecksumMatches(
+			result.checksum,
+			pack.archiveSha256,
+			pack.archiveMd5,
+		);
+	const proof = ownBytes
+		? {
+				archiveSha256: pack.archiveSha256,
+				archiveMd5: pack.archiveMd5 ?? null,
+				archiveBytes: pack.archiveBytes,
+			}
+		: {
+				archiveSha256: previous?.archiveSha256 ?? null,
+				archiveMd5: previous?.archiveMd5 ?? null,
+				archiveBytes: previous?.archiveBytes ?? null,
+			};
+	if (result.checksum?.algorithm === "sha256")
+		proof.archiveSha256 = result.checksum.hash;
+	if (result.checksum?.algorithm === "md5")
+		proof.archiveMd5 = result.checksum.hash;
+	proof.archiveBytes ??=
+		result.fileSize ?? result.checksum?.fileSize ?? null;
+	return proof;
+}
+
 function receiptEntryFor(pack, result, prior, context, action) {
 	const previous = prior?.[pack.id];
 	return {
 		contentSha256: pack.contentSha256,
-		archiveSha256: pack.archiveSha256,
-		archiveBytes: pack.archiveBytes,
+		...producerProof(pack, result, previous),
 		packId: result.packId,
 		versionId: result.id,
 		version: result.number,
@@ -855,12 +908,12 @@ export async function uploadAssetPacks(
 	for (const pack of withPaths) {
 		const remote = await readRemotePack(app, pack.id, read);
 		// Apple may report MD5 instead of SHA-256 for the uploaded file.
-		const localMd5 = remote.versions.some(
+		pack.archiveMd5 = remote.versions.some(
 			(version) => version.checksum?.algorithm === "md5",
 		)
 			? await fileDigest(pack.archivePath, "md5")
 			: null;
-		const planned = planPack(pack, remote, priorEntries?.[pack.id], localMd5);
+		const planned = planPack(pack, remote, priorEntries?.[pack.id], pack.archiveMd5);
 		const decision =
 			planned.action === "upload" &&
 			planned.evidence === "unverifiable" &&
@@ -924,6 +977,19 @@ export async function uploadAssetPacks(
 				...top,
 			});
 		}
+	}
+
+	// The producer archive proof needs both checksum algorithms whenever the
+	// recorded version may carry our archive bytes (an upload, or a version
+	// whose remote checksum we could compare).
+	for (const pack of withPaths) {
+		const result = results.get(pack.id);
+		if (
+			result &&
+			pack.archiveMd5 == null &&
+			(result.action === "uploaded" || result.checksum != null)
+		)
+			pack.archiveMd5 = await fileDigest(pack.archivePath, "md5");
 	}
 
 	const context = releaseContext(releaseTag);
