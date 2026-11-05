@@ -6,7 +6,7 @@
       "name": "bible-on-site-mobile-e2e",
       "devDependencies": {
         "appium": "3.9.0",
-        "appium-uiautomator2-driver": "9.0.0",
+        "appium-uiautomator2-driver": "9.0.1",
         "appium-xcuitest-driver": "12.22.8",
       },
     },
@@ -118,7 +118,7 @@
 
     "appium": ["appium@3.9.0", "", { "dependencies": { "@appium/base-driver": "10.8.2", "@appium/base-plugin": "3.3.6", "@appium/docutils": "3.0.2", "@appium/logger": "2.0.12", "@appium/schema": "1.3.0", "@appium/support": "7.2.9", "@appium/types": "1.7.2", "@sidvind/better-ajv-errors": "5.0.0", "ajv": "8.20.0", "ajv-formats": "3.0.1", "argparse": "3.0.3", "asyncbox": "6.5.0", "axios": "1.20.0", "lilconfig": "3.1.4", "lru-cache": "11.5.3", "ora": "5.4.1", "semver": "7.8.5", "teen_process": "4.2.1", "type-fest": "5.10.0", "winston": "3.19.0", "ws": "8.22.0", "yaml": "2.9.1" }, "hasInstallScript": true, "bin": { "appium": "index.js" } }, "sha512-OGOk9PURzjLoaP76Vm7gbZ4xK6MSskX64xHwMNs+g8gMbW+EHPoN2uFJRLGWW0ChaanhJklwux01BTg1gz4RqA=="],
 
-    "appium-uiautomator2-driver": ["appium-uiautomator2-driver@9.0.0", "", { "dependencies": { "@appium/css-locator-to-native": "1.0.7", "appium-adb": "16.3.1", "appium-android-driver": "15.1.0", "appium-uiautomator2-server": "10.7.9", "asyncbox": "6.5.0", "axios": "1.21.0", "io.appium.settings": "8.5.2", "portscanner": "2.2.0", "teen_process": "4.2.1" }, "optionalDependencies": { "sharp": "0.35.5" }, "peerDependencies": { "appium": "^4.0.0-beta.6" } }, "sha512-7tB3o66Mr7SdpCvurjUpT4s4J/X05D9eaRX6AY/Cc/IWO+UnxVeq+gNNF4xbI+JaUHfYhkmiXzC1wfd0OzCeUQ=="],
+    "appium-uiautomator2-driver": ["appium-uiautomator2-driver@9.0.1", "", { "dependencies": { "@appium/css-locator-to-native": "1.0.7", "appium-adb": "16.3.1", "appium-android-driver": "15.1.0", "appium-uiautomator2-server": "10.7.10", "asyncbox": "6.5.0", "axios": "1.21.0", "io.appium.settings": "8.5.2", "portscanner": "2.2.0", "teen_process": "4.2.1" }, "optionalDependencies": { "sharp": "0.35.5" }, "peerDependencies": { "appium": "^4.0.0-beta.6" } }, "sha512-0MsyNPb1bxc4F2AyAsvlwEMe4gvf6gcF4QGSole52xjKO2qD2el4zl4bvBmF12GhmKqcTkBcXmDMLD5ZIyBZGw=="],
 
     "appium-xcuitest-driver": ["appium-xcuitest-driver@12.22.8", "", { "dependencies": { "@appium/css-locator-to-native": "1.0.7", "@appium/strongbox": "2.0.1", "@colors/colors": "1.6.1", "appium-ios-device": "3.1.26", "appium-ios-simulator": "10.10.0", "appium-remote-debugger": "17.7.13", "appium-webdriveragent": "16.17.7", "appium-xcode": "7.2.4", "async-lock": "1.4.1", "asyncbox": "6.5.0", "axios": "1.21.0", "commander": "14.0.3", "dayjs": "1.11.23", "js2xmlparser2": "0.2.0", "lru-cache": "11.5.3", "node-devicectl": "2.2.2", "portscanner": "2.2.0", "semver": "7.8.5", "teen_process": "4.2.1", "winston": "3.19.0", "ws": "8.22.1" }, "optionalDependencies": { "appium-ios-remotexpc": "5.28.6", "sharp": "0.35.5" }, "peerDependencies": { "appium": "^3.0.0-rc.2" } }, "sha512-aLZLEAXQe8HXiP197tmg/WvVPZ2T8DFnOQaq1wJi6NejMLdtS6FK2+LrmMJADNp0mXxxeCgYMntBIqQnwLuTqw=="],
 
@@ -722,7 +722,7 @@
 
     "appium-uiautomator2-driver/appium-chromedriver": ["appium-chromedriver@9.1.14", "", { "dependencies": { "@appium/base-driver": "^10.8.0", "@appium/support": "^7.2.6", "@xmldom/xmldom": "^0.x", "appium-adb": "^16.3.1", "asyncbox": "^6.5.0", "axios": "^1.21.0", "compare-versions": "^6.0.0", "semver": "^7.0.0", "teen_process": "^4.2.0", "xpath": "^0.x" } }, "sha512-gLqUutXzerto+AYwNLtFHHB287o+fR9ZK+ok9Tvu4TvsiqUJ5L67PoLty3thZZ+6J/E19SwcoeVNu1NiK131VA=="],
 
-    "appium-uiautomator2-driver/appium-uiautomator2-server": ["appium-uiautomator2-server@10.7.9", "", { "bundled": true }, "sha512-iUpcmHk4fb1HqHuc4nO5hP9DT+3ESKT81DATkHEcWQW3Uq5Mc+3F1F0C1GoLYtDS41jFfS+r1IhIx2W2f+LK3g=="],
+    "appium-uiautomator2-driver/appium-uiautomator2-server": ["appium-uiautomator2-server@10.7.10", "", { "bundled": true }, "sha512-FzjmwuNPT/lH0CgBuEcD5XmH/aufN3CcMvymrGypYHQgXRaAcADD9/fau7FjdR/mwZb4oUrszLLsSpWinQc0mw=="],
 
     "appium-uiautomator2-driver/archiver": ["archiver@8.0.0", "", { "dependencies": { "async": "^3.2.4", "buffer-crc32": "^1.0.0", "is-stream": "^4.0.0", "lazystream": "^1.0.0", "normalize-path": "^3.0.0", "readable-stream": "^4.0.0", "readdir-glob": "^3.0.0", "tar-stream": "^3.0.0", "zip-stream": "^7.0.2" } }, "sha512-fV1orZfsnPn9BaSByR/qE67rJCLJEy2Ox5bq7nJh+jquWaNh6Sfec75kJ2T6PtdGUbPQlrVoSVCEOa5SdiTQ1g=="],
 
