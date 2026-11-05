@@ -113,6 +113,10 @@ ENV HOSTNAME="0.0.0.0"
 # Keep these settings aligned with the ECS container health check.
 # The first passing probe already marks the task healthy, so a short interval
 # bounds time-to-healthy and lets the route-bundle warm start earlier (#2997).
+# The CMD inside HEALTHCHECK is the probe command, not a container process;
+# USER 1001 above already applies. Codacy's missing-user rule predates the
+# upstream HEALTHCHECK exclusion, so this is a documented false positive.
+# nosemgrep
 HEALTHCHECK --interval=10s --timeout=10s --start-period=120s --start-interval=5s --retries=5 \
     CMD ["sh", "-c", "for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 \"http://localhost:3000/$route\" > /dev/null || exit 1; done"]
 
