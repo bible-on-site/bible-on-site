@@ -139,6 +139,27 @@ describe("getArticleRelationshipDetails", () => {
 		expect(details.contentHash).toBe("");
 	});
 
+	it("degrades a missing hash row to an empty token", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: 7 })
+			.mockResolvedValueOnce(null); // article exists but hash select returned no row
+		queryMock.mockResolvedValue([]);
+		const details = await getArticleRelationshipDetails({ data: 7 });
+		expect(details.contentHash).toBe("");
+	});
+
+	it("propagates real errors from the mention query", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: 7 })
+			.mockResolvedValueOnce({ h: "aa" });
+		queryMock
+			.mockResolvedValueOnce([]) // dedications
+			.mockRejectedValueOnce(new Error("connection lost")); // mention query
+		await expect(
+			getArticleRelationshipDetails({ data: 7 }),
+		).rejects.toThrow("connection lost");
+	});
+
 	it("surfaces real database errors instead of degrading", async () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: 7 })

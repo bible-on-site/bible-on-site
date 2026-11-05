@@ -213,7 +213,7 @@ function RelationshipSection({
 	);
 }
 
-function requireEntry(
+export function requireEntry(
 	entries: ArticleRelationshipEntry[],
 	key: string,
 ): ArticleRelationshipEntry {

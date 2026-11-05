@@ -2322,4 +2322,95 @@ mod tests {
             "{sql}"
         );
     }
+
+    #[test]
+    #[should_panic(expected = "unknown union kind 99")]
+    fn scope_branch_rejects_an_unknown_union_kind() {
+        scope_branch(99);
+    }
+
+    #[test]
+    fn scope_of_ignores_an_unknown_union_kind() {
+        let row = UnionRow {
+            kind: 99,
+            c1: Some(5),
+            c2: Some(1),
+            c3: None,
+            c4: None,
+            expires_at: None,
+        };
+        assert!(scope_of(&row).is_none());
+    }
+
+    #[test]
+    fn union_assignments_collects_every_scope_kind() {
+        let scope = |target| ScopeMatch {
+            target,
+            expires_at: None,
+        };
+        let old = vec![
+            (5, scope(ScopeTarget::Helek { helek_id: 2 })),
+            (5, scope(ScopeTarget::Article { article_id: 7 })),
+        ];
+        let new = vec![
+            (5, scope(ScopeTarget::Parasha { parasha_id: 9 })),
+            (
+                5,
+                scope(ScopeTarget::TanahpediaEntry {
+                    entry_id: "entry-1".to_string(),
+                }),
+            ),
+            (5, scope(ScopeTarget::Masora)),
+        ];
+        let merged = union_assignments(&old, &new);
+        assert_eq!(merged.helek_ids, [2]);
+        assert_eq!(merged.article_ids, [7]);
+        assert_eq!(merged.parasha_ids, [9]);
+        assert_eq!(merged.entry_ids, ["entry-1".to_string()]);
+        assert!(merged.masora);
+    }
+
+    #[tokio::test]
+    async fn resolve_ignores_unknown_canonical_union_rows() {
+        // A forward-compatible row the decoder does not recognize is skipped,
+        // not fatal.
+        let mock = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results([vec![urow(99, Some(1), Some(1), Some(5), None, None)]])
+            .append_query_results::<
+                std::collections::BTreeMap<String, Value>,
+                Vec<std::collections::BTreeMap<String, Value>>,
+                _,
+            >([vec![]]);
+        let db = Database::from_connection(mock.into_connection());
+        let resolved = resolve(
+            &db,
+            DedicationContext {
+                perek_ids: vec![1],
+                ..Default::default()
+            },
+            ts(NOW),
+        )
+        .await
+        .unwrap();
+        assert!(resolved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn remove_reports_a_failed_post_commit_revalidation() {
+        // The delete committed; only the website expiry failed — the write
+        // still reports success and the failure is logged.
+        let mock = empty_link_tables(MockDatabase::new(DatabaseBackend::MySql))
+            .append_exec_results(exec_results(8, 0, 0))
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let db = Database::from_connection(mock);
+        let failing = crate::common::website_revalidate::WebsiteRevalidator::new(
+            Some("http://127.0.0.1:1".to_string()),
+            Some("s".to_string()),
+        );
+        assert!(remove(&db, &failing, 1).await.unwrap());
+    }
 }
