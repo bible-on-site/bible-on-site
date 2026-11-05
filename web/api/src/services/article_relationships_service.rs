@@ -45,7 +45,11 @@ use entities::{article, article_covering_source, article_dedication, author, ded
 /// The shared registry, embedded at compile time so the API's
 /// `articleRelationshipCapabilities` can never drift from the file the admin
 /// and the LLM pipeline consume (`web/shared/article-relationships/`).
-const REGISTRY_JSON: &str = include_str!("../../../shared/article-relationships/registry.json");
+/// Anchored at the crate root (not this file's depth): `web/api` in the
+/// worktree, `/app` inside the build image where the Dockerfile copies the
+/// registry to `/shared/article-relationships`.
+const REGISTRY_JSON: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared/article-relationships/registry.json"));
 
 /// One registry entry — the Rust mirror of `ArticleRelationshipEntry` in the
 /// shared TS module; field names must stay identical for parity.
