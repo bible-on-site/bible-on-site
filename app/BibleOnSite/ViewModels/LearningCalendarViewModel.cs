@@ -731,7 +731,10 @@ public partial class LearningCalendarViewModel : ObservableObject
 
         try
         {
-            await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
+            // The tapped Hebrew date rides along so the reader's daily article
+            // override (#3098) resolves against the selected day.
+            var dateQuery = cell.DateNumber > 0 ? $"&dateNum={cell.DateNumber}" : string.Empty;
+            await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}{dateQuery}");
         }
         #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
         catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.

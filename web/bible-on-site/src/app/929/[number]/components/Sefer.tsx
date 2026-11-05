@@ -110,6 +110,7 @@ import {
 	toHebrewChapterNumber,
 } from "./sefer-page-utils";
 import { TanahpediaLink } from "./TanahpediaLink";
+import { useDailyArticleOverride } from "./use-daily-article-override";
 import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
@@ -623,6 +624,10 @@ const Sefer = (props: {
 		],
 	);
 
+	// Daily Hebrew-date override (#3098): the panel whose perek is today's
+	// resolved daily perek swaps its whole article list for the assignment.
+	const dailyOverride = useDailyArticleOverride();
+
 	const panelPages = useMemo(
 		() =>
 			perakim.map((_perek, perekIdx) => {
@@ -638,9 +643,13 @@ const Sefer = (props: {
 								pagePerekId === activePerekId
 							}
 							articles={
-								perekIdx === currentPerekIdx
-									? articles
-									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles
+								perekIds?.[perekIdx] === dailyOverride?.perekId &&
+								dailyOverride != null
+									? dailyOverride.articles
+									: perekIdx === currentPerekIdx
+										? articles
+										: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
+												?.articles
 							}
 							perushim={
 								perekIdx === currentPerekIdx
@@ -678,6 +687,7 @@ const Sefer = (props: {
 			articles,
 			perushim,
 			batchSummaries,
+			dailyOverride,
 			hebrewDateStr,
 			seferPerekTitles,
 			contentNavigation.content,

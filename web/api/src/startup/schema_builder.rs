@@ -632,6 +632,12 @@ mod tests {
                 .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
                     vec![author_model(3), author_model(4)],
                 ])
+                // Recurring Hebrew-date overrides ride the starter (#3098).
+                .append_query_results::<
+                    entities::article_hebrew_date::Model,
+                    Vec<entities::article_hebrew_date::Model>,
+                    _,
+                >([vec![]])
                 // Starter fetches article summaries only (no content column); author
                 // and perek counts are derived from these rows in memory.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
