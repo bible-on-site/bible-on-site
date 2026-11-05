@@ -150,6 +150,13 @@ pub fn normalize_strict(text: &str) -> String {
 
 fn normalize_impl(text: &str, fold_finals: bool) -> String {
     let mut out = String::with_capacity(text.len());
+    write_normalized(text, fold_finals, &mut out);
+    out.trim().to_string()
+}
+
+/// Appends the normalized form of `text` to `out` without trimming, so callers
+/// scanning many tokens can reuse one allocation.
+fn write_normalized(text: &str, fold_finals: bool, out: &mut String) {
     // ASCII and regular Hebrew letters have identity NFD decompositions.
     // Keep the generic per-character path for every other Unicode scalar.
     for c in text.chars() {
@@ -198,7 +205,6 @@ fn normalize_impl(text: &str, fold_finals: bool) -> String {
             }
         }
     }
-    out.trim().to_string()
 }
 
 /// Splits text into normalized tokens.
@@ -241,6 +247,9 @@ pub fn excerpt(plain: &str, terms: &[String], max_chars: usize) -> String {
     }
     let mut positions: Vec<usize> = Vec::new();
     if !terms.is_empty() {
+        // Word chars never normalize to a space, so a word span produces a
+        // contiguous normalized token with no separators to trim.
+        let mut word = String::new();
         let mut word_start: Option<usize> = None;
         for (i, c) in trimmed.char_indices() {
             if is_word_char(c) {
@@ -248,7 +257,8 @@ pub fn excerpt(plain: &str, terms: &[String], max_chars: usize) -> String {
                     word_start = Some(i);
                 }
             } else if let Some(start) = word_start.take() {
-                let word = normalize(&trimmed[start..i]);
+                word.clear();
+                write_normalized(&trimmed[start..i], true, &mut word);
                 if !word.is_empty()
                     && terms
                         .iter()
@@ -259,7 +269,8 @@ pub fn excerpt(plain: &str, terms: &[String], max_chars: usize) -> String {
             }
         }
         if let Some(start) = word_start {
-            let word = normalize(&trimmed[start..]);
+            word.clear();
+            write_normalized(&trimmed[start..], true, &mut word);
             if terms
                 .iter()
                 .any(|term| !term.is_empty() && word.starts_with(term.as_str()))

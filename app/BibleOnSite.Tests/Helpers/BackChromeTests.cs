@@ -19,6 +19,7 @@ public class BackChromeTests : IDisposable
 
     public void Dispose()
     {
+        BackChrome.TestPlatform = null;
         PreferencesService.ResetForTesting();
     }
 
@@ -71,14 +72,34 @@ public class BackChromeTests : IDisposable
         bar.BackEnabled.Should().BeTrue(
             "a page-owned transient surface keeps Back enabled even at a root");
     }
-    [Fact]
-    public void Apply_UpdatesTheSharedPreferencesTemplateBackState()
+    /// <summary>
+    /// The #2927 invariant through the shared preferences template: the
+    /// template's capsule Back binds to <c>PreferencesPageBase.ShowBack</c>,
+    /// which must already hold the persisted policy when the page is built —
+    /// the navigation-time apply correcting a stale default is what reflowed
+    /// headers in 5.0.210.
+    /// </summary>
+    [Theory]
+    [InlineData(BackChromePlatform.Android, InAppBackButtonPreference.PlatformDefault, false)]
+    [InlineData(BackChromePlatform.Android, InAppBackButtonPreference.Hide, false)]
+    [InlineData(BackChromePlatform.Android, InAppBackButtonPreference.Show, true)]
+    [InlineData(BackChromePlatform.Apple, InAppBackButtonPreference.PlatformDefault, true)]
+    [InlineData(BackChromePlatform.Windows, InAppBackButtonPreference.Show, false)]
+    public void PreferencesPageBase_ShowBack_ResolvedAtConstruction_BeforeAnyNavigationApply(
+        BackChromePlatform platform, InAppBackButtonPreference preference, bool expected)
     {
-        var page = new BibleOnSite.Controls.PreferencesPageBase();
-        page.ShowBack.Should().BeFalse();
+        BackChrome.TestPlatform = platform;
+        PreferencesService.Instance.InAppBackButton = preference;
 
+        var page = new BibleOnSite.Controls.PreferencesPageBase();
+        var atConstruction = page.ShowBack;
+
+        // The navigation-time apply runs after the first frame can paint.
         BackChrome.Apply(page);
 
-        page.ShowBack.Should().BeTrue("non-Android preferences keep their in-app Back control");
+        atConstruction.Should().Be(expected,
+            "the persisted policy must own the template Back state before the first frame");
+        page.ShowBack.Should().Be(atConstruction,
+            "the navigation-time apply must never flip the template binding — that flip is the reflow");
     }
 }

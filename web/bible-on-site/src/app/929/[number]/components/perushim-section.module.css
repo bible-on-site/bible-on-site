@@ -2,7 +2,7 @@
   margin: 16px 0;
   padding: 16px;
   background: linear-gradient(to bottom, #faf8f2, #ffffff);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border: 1px solid #d4c9a8;
 }
@@ -67,7 +67,7 @@
   flex: 0 0 auto;
   width: 180px;
   background: #fffdf5;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 14px 12px;
   border: 1px solid #d4c9a8;
   transition: all 0.2s ease;
@@ -82,10 +82,18 @@
   text-align: center;
 }
 
-.carouselItem:hover {
-  border-color: var(--hc-muted, #8b7355);
-  box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .carouselItem:hover {
+    border-color: var(--hc-muted, #8b7355);
+    box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+    transform: translateY(-1px);
+  }
+}
+
+/* Loading placeholder card: same box as a real card, not interactive. */
+.skeletonItem {
+  cursor: default;
+  pointer-events: none;
 }
 
 .perushIcon {
@@ -115,7 +123,7 @@
   font-size: 0.75rem;
   color: #5c4e36;
   background: #f0ead8;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 2px 10px;
   margin-top: 4px;
 }
@@ -136,7 +144,7 @@
   font: inherit;
   background: none;
   border: 1px solid #d4c9a8;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   cursor: pointer;
   color: #5a4a2e;
@@ -145,8 +153,10 @@
   transition: background 0.15s;
 }
 
-.backButton:hover {
-  background: #f0ead8;
+@media (hover: hover) {
+  .backButton:hover {
+    background: #f0ead8;
+  }
 }
 
 .fullViewTitle {
@@ -181,7 +191,7 @@
   background: rgba(254, 243, 199, 0.95);
   border-right-color: #f59e0b;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .pasukLabel {
@@ -204,9 +214,11 @@
   display: inline-block;
 }
 
-.pasukLink:hover {
-  color: #5a4a2e;
-  text-decoration: underline;
+@media (hover: hover) {
+  .pasukLink:hover {
+    color: #5a4a2e;
+    text-decoration: underline;
+  }
 }
 
 /* Body text justified like the perek pesukim (.perekText); the last line of
@@ -261,7 +273,7 @@
   font: inherit;
   background: #f0ead8;
   border: 1px solid #d4c9a8;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   cursor: pointer;
   color: #5a4a2e;
@@ -270,10 +282,23 @@
   transition: background 0.15s;
   text-decoration: none;
   display: inline-block;
+  position: relative;
 }
 
-.shareButton:hover {
-  background: #e8e0cc;
+/* Compact chip, 44px-tall hit area. */
+.shareButton::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+@media (hover: hover) {
+  .shareButton:hover {
+    background: #e8e0cc;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -294,8 +319,10 @@
     color: var(--hc-muted, #b8a578);
   }
 
-  .pasukLink:hover {
-    color: var(--hc-muted, #cbb98c);
+  @media (hover: hover) {
+    .pasukLink:hover {
+      color: var(--hc-muted, #cbb98c);
+    }
   }
 
   .pasukGroup[data-pasuk-highlight] {
@@ -317,8 +344,10 @@
     border-color: #4a4030;
   }
 
-  .carouselItem:hover {
-    border-color: var(--hc-muted, #8b7355);
+  @media (hover: hover) {
+    .carouselItem:hover {
+      border-color: var(--hc-muted, #8b7355);
+    }
   }
 
   .noteCount {
@@ -332,9 +361,11 @@
     color: var(--hc-muted, #cbb98c);
   }
 
-  .backButton:hover,
-  .shareButton:hover {
-    background: #2a241a;
+  @media (hover: hover) {
+    .backButton:hover,
+    .shareButton:hover {
+      background: #2a241a;
+    }
   }
 
   .shareButton {
@@ -344,4 +375,10 @@
   .noteContent {
     color: #e8eaed;
   }
+}
+
+.carouselItem:active,
+.backButton:active,
+.shareButton:active {
+  scale: var(--press-scale);
 }

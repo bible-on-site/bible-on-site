@@ -1,12 +1,56 @@
 use async_graphql::{Context, ErrorExtensions, Object, Result};
 
-use crate::dtos::article::{Article, ArticleSearchResults};
+use crate::dtos::article::{Article, ArticleCoveringSource, ArticleSearchResults};
 use crate::providers::Database;
 use crate::services::article_search::ArticleSearchIndex;
-use crate::services::articles_service;
+use crate::services::{articles_service, reading_metrics_service};
 
 #[derive(Default)]
 pub struct ArticlesQuery;
+
+/// Batch-attach persisted reading metrics to emitted articles — one IN query
+/// regardless of list size, so selecting `readingMetric` on a list never
+/// becomes N+1 (issue #2607).
+pub(crate) async fn attach_article_reading_metrics(
+    db: &Database,
+    articles: &mut [Article],
+) -> Result<()> {
+    let ids: Vec<i32> = articles.iter().map(|article| article.id).collect();
+    let metrics = reading_metrics_service::metrics_by_article_ids(db, &ids)
+        .await
+        .map_err(|e| e.extend())?;
+    for article in articles.iter_mut() {
+        article.reading_metric = metrics.get(&article.id).cloned().map(Into::into);
+    }
+    Ok(())
+}
+
+/// Batch-attach covering sources to emitted articles — one IN query
+/// regardless of list size, so selecting `coveringSources` on a list never
+/// becomes N+1. Articles without rows get an authoritative empty list.
+pub(crate) async fn attach_article_covering_sources(
+    db: &Database,
+    articles: &mut [Article],
+) -> Result<()> {
+    let ids: Vec<i32> = articles.iter().map(|article| article.id).collect();
+    let mut sources = articles_service::find_covering_sources_by_article_ids(db, &ids)
+        .await
+        .map_err(|e| e.extend())?;
+    for article in articles.iter_mut() {
+        article.covering_sources = Some(
+            sources
+                .remove(&article.id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|model| ArticleCoveringSource {
+                    perek_id: model.perek_id,
+                    pasuk: model.pasuk as i32,
+                })
+                .collect(),
+        );
+    }
+    Ok(())
+}
 
 #[Object]
 impl ArticlesQuery {
@@ -21,8 +65,9 @@ impl ArticlesQuery {
         offset: Option<i32>,
         author_id: Option<i32>,
     ) -> Result<ArticleSearchResults> {
-        articles_service::search_articles(
-            ctx.data::<Database>()?,
+        let db = ctx.data::<Database>()?;
+        let mut results = articles_service::search_articles(
+            db,
             ctx.data::<ArticleSearchIndex>()?,
             &phrase,
             limit,
@@ -30,29 +75,62 @@ impl ArticlesQuery {
             author_id,
         )
         .await
-        .map_err(|e| e.extend())
+        .map_err(|e| e.extend())?;
+        // Legacy clients do not select readingMetric. Avoid touching its
+        // optional schema unless the hit fields actually request it.
+        if !ctx
+            .look_ahead()
+            .field("hits")
+            .field("readingMetric")
+            .exists()
+        {
+            return Ok(results);
+        }
+        // One batched lookup so hit lists can render the same estimate badges
+        // as every other article list (issue #2607).
+        let ids: Vec<i32> = results.hits.iter().map(|hit| hit.article_id).collect();
+        let metrics = reading_metrics_service::metrics_by_article_ids(db, &ids)
+            .await
+            .map_err(|e| e.extend())?;
+        for hit in results.hits.iter_mut() {
+            hit.reading_metric = metrics.get(&hit.article_id).cloned().map(Into::into);
+        }
+        Ok(results)
     }
 
     /// Get an article by its ID
     async fn article_by_id(&self, ctx: &Context<'_>, id: i32) -> Result<Article> {
-        Ok(
-            articles_service::find_one_by_id(ctx.data::<Database>()?, id)
+        let db = ctx.data::<Database>()?;
+        let mut article = Article::from(
+            articles_service::find_one_by_id(db, id)
                 .await
-                .map_err(|e| e.extend())?
-                .into(),
-        )
+                .map_err(|e| e.extend())?,
+        );
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, std::slice::from_mut(&mut article)).await?;
+        }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, std::slice::from_mut(&mut article)).await?;
+        }
+        Ok(article)
     }
 
     /// Get all articles for a specific perek
     async fn articles_by_perek_id(&self, ctx: &Context<'_>, perek_id: i32) -> Result<Vec<Article>> {
-        Ok(
-            articles_service::find_by_perek_id(ctx.data::<Database>()?, perek_id)
-                .await
-                .map_err(|e| e.extend())?
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        )
+        let db = ctx.data::<Database>()?;
+        let mut articles: Vec<Article> = articles_service::find_by_perek_id(db, perek_id)
+            .await
+            .map_err(|e| e.extend())?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, &mut articles).await?;
+        }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, &mut articles).await?;
+        }
+        Ok(articles)
     }
 
     /// Get all articles by a specific author
@@ -61,13 +139,130 @@ impl ArticlesQuery {
         ctx: &Context<'_>,
         author_id: i32,
     ) -> Result<Vec<Article>> {
-        Ok(
-            articles_service::find_by_author_id(ctx.data::<Database>()?, author_id)
-                .await
-                .map_err(|e| e.extend())?
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+        let db = ctx.data::<Database>()?;
+        let mut articles: Vec<Article> = articles_service::find_by_author_id(db, author_id)
+            .await
+            .map_err(|e| e.extend())?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, &mut articles).await?;
+        }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, &mut articles).await?;
+        }
+        Ok(articles)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use entities::{article, article_covering_source};
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    fn article_model(id: i32) -> article::Model {
+        article::Model {
+            id,
+            perek_id: 1,
+            author_id: 1,
+            article_abstract: None,
+            name: format!("Article {id}"),
+            priority: 1,
+            content: None,
+            coverage_verified: false,
+        }
+    }
+
+    fn covering_source(
+        article_id: i32,
+        perek_id: i32,
+        pasuk: i16,
+    ) -> article_covering_source::Model {
+        article_covering_source::Model {
+            article_id,
+            perek_id,
+            pasuk,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    async fn execute(query: &str) -> async_graphql::Response {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article::Model, Vec<_>, _>([vec![
+                    article_model(1),
+                    article_model(2),
+                ]])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_source(1, 3, 1),
+                    covering_source(1, 5, 2),
+                ]])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            ArticlesQuery,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
         )
+        .data(db)
+        .finish();
+        schema.execute(query).await
+    }
+
+    /// Selecting `coveringSources` on `articlesByPerekId` batch-loads every
+    /// article's sources in one IN query; articles without rows get an
+    /// authoritative empty list.
+    #[tokio::test]
+    async fn articles_by_perek_id_batches_covering_sources_in_one_query() {
+        let res =
+            execute("{ articlesByPerekId(perekId: 1) { id coveringSources { perekId pasuk } } }")
+                .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let articles = res.data.into_json().unwrap()["articlesByPerekId"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(articles.len(), 2);
+        let sources = articles[0]["coveringSources"].as_array().unwrap().clone();
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+        assert_eq!(sources[1]["perekId"].as_i64(), Some(5));
+        assert_eq!(sources[1]["pasuk"].as_i64(), Some(2));
+        assert!(
+            articles[1]["coveringSources"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// Selecting `coveringSources` on `articlesByAuthorId` uses the same
+    /// single batched IN query.
+    #[tokio::test]
+    async fn articles_by_author_id_batches_covering_sources_in_one_query() {
+        let res =
+            execute("{ articlesByAuthorId(authorId: 1) { id coveringSources { perekId pasuk } } }")
+                .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let articles = res.data.into_json().unwrap()["articlesByAuthorId"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(articles.len(), 2);
+        let sources = articles[0]["coveringSources"].as_array().unwrap().clone();
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+        assert!(
+            articles[1]["coveringSources"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 }

@@ -4,18 +4,27 @@ import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
+import { Skeleton, SkeletonLabel } from "@/app/components/Skeleton";
 import type { Article, ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
+import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
 import {
 	resolveSeferPerushSelection,
 	SEFER_PERUSH_SELECTION_EVENT,
 	setSeferPerushSelection,
 } from "@/lib/sefer-perush-selection";
-import { getArticleForBook, getPerushNotesForPerekBatch } from "../actions";
+import {
+	getArticleForBook,
+	getArticleProgressUnitsForBook,
+	getNoteProgressUnitsForPerekBatch,
+	getPerushNotesForPerekBatch,
+} from "../actions";
 import { ArticleFullView } from "./ArticleFullView";
 import { ShareButton } from "./ShareButton";
 import seferStyles from "./sefer.module.css";
@@ -42,8 +51,11 @@ type PanelTab = "perushim" | "articles";
 /** Stable empty list — the effect reset must reuse one reference or a
  * new `[]` identity re-triggers the render loop (#2731). */
 const NO_LINES: string[] = [];
+const COMMENTARY_SKELETON_KEYS = ["a", "b", "c"];
 
 interface SeferPanelProps {
+	/** Only the displayed chapter may start commentary reads. */
+	isActive?: boolean;
 	articles?: ArticleSummary[];
 	perushim?: PerushSummary[];
 	perekId?: number;
@@ -112,7 +124,8 @@ interface PasukGroup {
  * override) above the commentary grouped by pasuk; מאמרים holds a masonry
  * grid that keeps its place while an article opens over it.
  */
-export function SeferPanel({
+export const SeferPanel = memo(function SeferPanel({
+	isActive = true,
 	articles = NO_ARTICLES,
 	perushim = NO_PERUSHIM,
 	perekId = 0,
@@ -188,10 +201,14 @@ export function SeferPanel({
 		useState(NO_LINES);
 	const [articleLoading, setArticleLoading] = useState(false);
 	const [articleFullscreen, setArticleFullscreen] = useState(false);
+	const [articleProgressUnits, setArticleProgressUnits] = useState<
+		ReadingProgressUnit[]
+	>([]);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSelectedArticle(null);
+		setArticleProgressUnits([]);
 		setArticleDedicationLines(NO_LINES);
 		setArticleLoading(false);
 		setArticleFullscreen(false);
@@ -216,22 +233,134 @@ export function SeferPanel({
 				.finally(() => {
 					if (!cancelled) setArticleLoading(false);
 				});
+			getArticleProgressUnitsForBook(deepArticleSummary.id)
+				.then((progressUnits) => {
+					if (!cancelled) setArticleProgressUnits(progressUnits);
+				})
+				.catch((error) => {
+					console.warn("Failed to load article reading progress", {
+						articleId: deepArticleSummary.id,
+						error,
+					});
+				});
 		}
 		return () => {
 			cancelled = true;
 		};
 	}, [deepArticleSummary, perekId]);
 
+	/* ─── Article fullscreen modal + return-to-grid focus (#2786) ─── */
+	const rootRef = useRef<HTMLElement>(null);
+	// Set by an explicit חזרה למאמרים click — the article card that should
+	// receive focus once the overlay unmounts.
+	const pendingArticleFocus = useRef<number | null>(null);
+	const wasArticleFullscreen = useRef(false);
+	// The dialog body's reading position, snapshotted before React detaches
+	// the portal — by the time the modal effect's exit path runs the dialog
+	// is already unmounted and its scrollTop reads 0.
+	const closingScrollTop = useRef<number | null>(null);
+
+	// Every fullscreen-exit path (exit command, Escape) goes through here so
+	// the reading position is captured while the dialog still lives.
+	const closeArticleFullscreen = useCallback(() => {
+		const body = document
+			.querySelector<HTMLElement>("[data-article-dialog]")
+			?.querySelector<HTMLElement>("[data-article-body]");
+		closingScrollTop.current = body ? body.scrollTop : null;
+		setArticleFullscreen(false);
+	}, []);
+
 	// Escape exits the article fullscreen (browser fullscreen stays the
 	// book's own concern — this overlay is the article's, #2544 item 7).
 	useEffect(() => {
 		if (!articleFullscreen) return;
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape") setArticleFullscreen(false);
+			if (event.key === "Escape") closeArticleFullscreen();
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
+	}, [articleFullscreen, closeArticleFullscreen]);
+
+	// Escape raised inside the dialog stops at this topmost surface; the
+	// document listener above stays the fallback for focus outside it.
+	const onArticleDialogKeyDown = (
+		event: React.KeyboardEvent<HTMLDivElement>,
+	) => {
+		if (event.key === "Escape") {
+			event.stopPropagation();
+			closeArticleFullscreen();
+		}
+	};
+
+	// The article fullscreen is a modal dialog: aria-modal alone does not
+	// keep Tab inside, so every body sibling of the portal goes inert (the
+	// panel's own inert covers the embedded twin). Focus enters on the exit
+	// control and returns to the embedded twin on exit. The reading position
+	// follows the reader: mirrored into the fullscreen body on open and
+	// written back to the embedded body on exit.
+	useEffect(() => {
+		const wasFullscreen = wasArticleFullscreen.current;
+		wasArticleFullscreen.current = articleFullscreen;
+		if (articleFullscreen === wasFullscreen) return;
+		if (articleFullscreen) {
+			const dialog = document.querySelector<HTMLElement>(
+				"[data-article-dialog]",
+			);
+			/* istanbul ignore if -- the portal mounts in the same commit */
+			if (!dialog) return;
+			const inerted: Element[] = [];
+			for (const sibling of document.body.children) {
+				if (sibling === dialog || sibling.hasAttribute("inert")) continue;
+				sibling.setAttribute("inert", "");
+				inerted.push(sibling);
+			}
+			(
+				dialog.querySelector<HTMLElement>(
+					"[data-article-action='fullscreen']",
+				) ?? dialog
+			).focus();
+			const embeddedBody = rootRef.current?.querySelector<HTMLElement>(
+				"[data-article-body]",
+			);
+			const fullscreenBody = dialog.querySelector<HTMLElement>(
+				"[data-article-body]",
+			);
+			if (embeddedBody && fullscreenBody) {
+				fullscreenBody.scrollTop = embeddedBody.scrollTop;
+			}
+			const previousOverflow = document.body.style.overflow;
+			document.body.style.overflow = "hidden";
+			return () => {
+				for (const el of inerted) el.removeAttribute("inert");
+				document.body.style.overflow = previousOverflow;
+			};
+		}
+		if (pendingArticleFocus.current == null) {
+			rootRef.current
+				?.querySelector<HTMLElement>("[data-article-action='fullscreen']")
+				?.focus({ preventScroll: true });
+		}
+		const embeddedBody = rootRef.current?.querySelector<HTMLElement>(
+			"[data-article-body]",
+		);
+		if (embeddedBody && closingScrollTop.current != null) {
+			embeddedBody.scrollTop = closingScrollTop.current;
+		}
+		closingScrollTop.current = null;
 	}, [articleFullscreen]);
+
+	// After an explicit return to the grid, hand focus to the article's card —
+	// the masonry never unmounted, so its DOM order and scroll are intact.
+	// preventScroll keeps that restored scroll position: the card may sit
+	// just outside the viewport and a scroll-into-view would move the grid.
+	useEffect(() => {
+		if (selectedArticle || pendingArticleFocus.current == null) return;
+		const card = document.getElementById(
+			`article-${pendingArticleFocus.current}`,
+		);
+		pendingArticleFocus.current = null;
+		card?.focus({ preventScroll: true });
+	}, [selectedArticle]);
 
 	/* ─── Perush selection (global default / sefer override) ─── */
 	// Read directly (the panel lives in the client-only flipbook) and re-read
@@ -266,6 +395,9 @@ export function SeferPanel({
 
 	/* ─── Commentary notes (batched per perek) ─── */
 	const [notesByPerush, setNotesByPerush] = useState<PerushNotes>({});
+	const [noteUnitsByPerush, setNoteUnitsByPerush] = useState<
+		Record<number, ReadingProgressUnit[]>
+	>({});
 	const [failedIds, setFailedIds] = useState<ReadonlySet<number>>(new Set());
 	const requestedIds = useRef(new Set<number>());
 	const notesGeneration = useRef({ perekId });
@@ -273,6 +405,7 @@ export function SeferPanel({
 		notesGeneration.current = { perekId };
 		requestedIds.current = new Set();
 		setNotesByPerush({});
+		setNoteUnitsByPerush({});
 		setFailedIds(new Set());
 		return () => {
 			notesGeneration.current = { perekId };
@@ -285,6 +418,9 @@ export function SeferPanel({
 		.sort((a, b) => a - b)
 		.join(",");
 	useEffect(() => {
+		// Neighboring buffered pages share the selection, but their reads must
+		// not queue ahead of the chapter the reader is actually viewing.
+		if (!isActive) return;
 		const missing = wantedIds
 			.split(",")
 			.filter(Boolean)
@@ -319,7 +455,24 @@ export function SeferPanel({
 				setFailedIds((prev) => new Set([...prev, ...missing]));
 				for (const id of missing) requestedIds.current.delete(id);
 			});
-	}, [wantedIds, notesByPerush, failedIds, perekId]);
+		getNoteProgressUnitsForPerekBatch(perekId, missing)
+			.then((batch) => {
+				if (generation !== notesGeneration.current) return;
+				setNoteUnitsByPerush((prev) => {
+					const next = { ...prev };
+					for (const id of missing) next[id] = batch[id] ?? [];
+					return next;
+				});
+			})
+			.catch((error) => {
+				if (generation !== notesGeneration.current) return;
+				console.warn("Failed to load commentary reading progress", {
+					perekId,
+					perushIds: missing,
+					error,
+				});
+			});
+	}, [isActive, wantedIds, notesByPerush, failedIds, perekId]);
 
 	const retryPerush = useCallback((perushId: number) => {
 		setFailedIds((prev) => {
@@ -352,6 +505,28 @@ export function SeferPanel({
 		return [...byPasuk.entries()]
 			.sort(([a], [b]) => a - b)
 			.map(([pasuk, perushim]) => ({ pasuk, perushim }));
+	})();
+
+	/**
+	 * Stored note units for the commentary pane's reading progress (#2607),
+	 * keyed `perushId:pasuk:noteIdx` to match the `data-reading-unit`
+	 * attributes below. Only notes actually rendered contribute — a pasuk
+	 * selection or a still-loading perush must not inflate progress.
+	 */
+	const commentaryProgressUnits = (() => {
+		const rendered = new Set<string>();
+		for (const group of groups) {
+			for (const { perush, notes } of group.perushim) {
+				for (const note of notes) {
+					rendered.add(`${perush.id}:${note.pasuk}:${note.noteIdx}`);
+				}
+			}
+		}
+		return displayPerushim.flatMap((perush) =>
+			(noteUnitsByPerush[perush.id] ?? [])
+				.map((unit) => ({ ...unit, key: `${perush.id}:${unit.key}` }))
+				.filter((unit) => rendered.has(unit.key ?? "")),
+		);
 	})();
 
 	const loadingNotes = wantedIds
@@ -398,13 +573,24 @@ export function SeferPanel({
 		[onNavigate, perekId],
 	);
 
+	// חזרה למאמרים always lands on the articles grid — from the embedded view
+	// and from article fullscreen alike (#2786). The card it came from gets
+	// focus once the overlay clears.
+	const returnToArticles = useCallback(() => {
+		pendingArticleFocus.current = selectedArticle?.id ?? null;
+		setArticleFullscreen(false);
+		navigate();
+	}, [selectedArticle?.id, navigate]);
+
 	const tabId = (tab: PanelTab) => `sefer-tab-${tab}-${perekId}`;
 	const panelId = (tab: PanelTab) => `sefer-panel-${tab}-${perekId}`;
 
 	return (
 		<section
+			ref={rootRef}
 			className={`${seferStyles.pageBlank} ${styles.panelRoot} flipbook-page-bounded`}
 			aria-label="פירושים ומאמרים"
+			inert={articleFullscreen}
 		>
 			{/* tablist header: פרשנים - date - מאמרים (RTL order) */}
 			<div
@@ -472,6 +658,10 @@ export function SeferPanel({
 								<span className={styles.deepParshan}>
 									{deepPerush.parshanName}
 								</span>
+								<ReadingTime
+									estimatedSeconds={deepPerush.metric?.estimatedSeconds}
+									className={styles.deepMetric}
+								/>
 							</div>
 							{perekId > 0 && (
 								<ShareButton
@@ -519,6 +709,14 @@ export function SeferPanel({
 												? "סמנו פסוקים על גבי הפרק"
 												: "כל פסוקי הפרק"}
 									</span>
+									{displayPerushim.length === 1 && (
+										<ReadingTime
+											estimatedSeconds={
+												displayPerushim[0].metric?.estimatedSeconds
+											}
+											className={styles.scopeMetric}
+										/>
+									)}
 									{activePesukim && (
 										<button
 											type="button"
@@ -544,6 +742,12 @@ export function SeferPanel({
 					)}
 
 					<div className={styles.commentaryScroll} data-flipbook-no-flip>
+						<ReadingProgress
+							units={commentaryProgressUnits}
+							scroller={`.${styles.commentaryScroll}`}
+							content={`.${styles.commentaryScroll}`}
+							unitSelector='[data-reading-unit="{key}"]'
+						/>
 						{eligible.length === 0 ? (
 							<p className={styles.emptyState}>אין פרשנות לפרק זה</p>
 						) : displayPerushim.length === 0 && !deepPerush ? (
@@ -551,9 +755,23 @@ export function SeferPanel({
 								לא נבחרו פרשנים. בחרו פרשן מהרשימה כדי לראות פירוש.
 							</p>
 						) : loadingNotes ? (
-							<p className={styles.emptyState} aria-busy="true">
-								מתחבר לפירוש...
-							</p>
+							<div aria-busy="true">
+								<SkeletonLabel>מתחבר לפירוש...</SkeletonLabel>
+								{COMMENTARY_SKELETON_KEYS.map((key) => (
+									<div key={key} className={styles.commentaryGroup}>
+										<Skeleton
+											width="4.5em"
+											height="0.85rem"
+											className={styles.skeletonPasuk}
+										/>
+										<div className={styles.noteContent}>
+											<Skeleton className={styles.skeletonLine} />
+											<Skeleton className={styles.skeletonLine} />
+											<Skeleton width="60%" className={styles.skeletonLine} />
+										</div>
+									</div>
+								))}
+							</div>
 						) : groups.length === 0 && !hasFailures ? (
 							<p className={styles.emptyState}>
 								{activePesukim
@@ -588,6 +806,10 @@ export function SeferPanel({
 											{displayPerushim.length > 1 && (
 												<div className={styles.commentaryPerushName}>
 													{perush.name}
+													<ReadingTime
+														estimatedSeconds={perush.metric?.estimatedSeconds}
+														className={styles.commentaryPerushMetric}
+													/>
 												</div>
 											)}
 											{/* Codacy anchors the XSS finding at this map
@@ -598,6 +820,7 @@ export function SeferPanel({
 												<div
 													key={`${note.pasuk}-${note.noteIdx}`}
 													className={styles.noteContent}
+													data-reading-unit={`${perush.id}:${note.pasuk}:${note.noteIdx}`}
 													// nosemgrep -- DOMPurify-sanitized note HTML
 													// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 													dangerouslySetInnerHTML={{
@@ -701,6 +924,10 @@ export function SeferPanel({
 												}}
 											/>
 										)}
+										<ReadingTime
+											estimatedSeconds={article.metric?.estimatedSeconds}
+											className={styles.articleCardMetric}
+										/>
 									</Link>
 								))}
 							</div>
@@ -712,10 +939,11 @@ export function SeferPanel({
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => navigate()}
+								onBack={returnToArticles}
 								fullPage
 								fullscreen={articleFullscreen}
 								onToggleFullscreen={() => setArticleFullscreen((prev) => !prev)}
+								progressUnits={articleProgressUnits}
 							/>
 						</div>
 					)}
@@ -730,15 +958,19 @@ export function SeferPanel({
 						role="dialog"
 						aria-modal="true"
 						aria-label={selectedArticle.name}
+						data-article-dialog
+						tabIndex={-1}
+						onKeyDown={onArticleDialogKeyDown}
 					>
 						<div className={styles.articleFullscreenBody}>
 							<ArticleFullView
 								article={selectedArticle}
 								dedicationLines={articleDedicationLines}
-								onBack={() => setArticleFullscreen(false)}
+								onBack={returnToArticles}
 								fullPage
 								fullscreen
-								onToggleFullscreen={() => setArticleFullscreen(false)}
+								onToggleFullscreen={closeArticleFullscreen}
+								progressUnits={articleProgressUnits}
 							/>
 						</div>
 					</div>,
@@ -746,4 +978,4 @@ export function SeferPanel({
 				)}
 		</section>
 	);
-}
+});

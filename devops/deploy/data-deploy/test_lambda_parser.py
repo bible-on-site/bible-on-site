@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import sqlite3
 import sys
 import tempfile
@@ -133,6 +134,19 @@ class LambdaParserSafetyTests(unittest.TestCase):
         # new or preserved dedication table is built inside a string.
         self.assertNotIn("CREATE TABLE", processed.upper().replace("CREATE ', 'TABLE", ""))
 
+    def test_web_push_upgrade_is_in_manifest_and_additive(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        migration = "tanah_web_push_upgrade.sql"
+        self.assertIn(migration, manifest)
+        path = ROOT / "data/mysql" / migration
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        # Two session settings plus one SET/PREPARE/EXECUTE/DEALLOCATE block.
+        self.assertEqual(len(LAMBDA.parse_statements(processed)), 6)
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+
     def test_telegram_upgrade_is_additive_and_follows_saved_bulletin_schema(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         migration = "tanah_daily_bulletin_telegram_upgrade.sql"
@@ -168,6 +182,23 @@ class LambdaParserSafetyTests(unittest.TestCase):
         for subject in ("מרדכי בן זאב", "יעל בת רחל", "מזל בת רחל", "עלושה בת גֿזלה", "ראובן בן יקוט"):
             self.assertIn(subject, processed)
 
+    def test_external_reference_schema_precedes_its_seed_and_never_drops(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        for name in ("perushim_data.sql", "tanahpedia_seed_data.sql", "external_reference_structure.sql"):
+            self.assertLess(manifest.index(name), manifest.index("external_reference_data.sql"))
+        structure = LAMBDA.preprocess_sql((ROOT / "data/mysql/external_reference_structure.sql").read_text(encoding="utf-8"))
+        self.assertRegex(structure, r"CREATE TABLE IF NOT EXISTS `external_reference`")
+        self.assertNotRegex(structure, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
+        path = ROOT / "data/mysql/external_reference_data.sql"
+        VALIDATOR.validate_lambda_safe_comments(path)
+        seed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
+        # 2 session settings + PARSHAN rebuild (DELETE + INSERT) + entity upsert.
+        self.assertEqual(len(LAMBDA.parse_statements(seed)), 5)
+        # Only the regenerated PARSHAN rows are ever wiped.
+        self.assertEqual([m.strip() for m in re.findall(r"(?im)^\s*DELETE\b.*$", seed)], ["DELETE FROM external_reference WHERE subject_kind = 'PARSHAN';"])
+        self.assertNotRegex(seed, r"(?im)^\s*(?:DROP|TRUNCATE|CREATE)\b")
+        self.assertNotIn("'TANAH_AUTHOR'", seed)
+
     def test_mention_schema_is_in_manifest_and_remains_one_additive_statement(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
         self.assertIn(MIGRATION, manifest)
@@ -187,6 +218,25 @@ class LambdaParserSafetyTests(unittest.TestCase):
             with self.subTest(migration=name):
                 self.assertEqual(manifest.count(name), 1)
                 self.assertLess(base, manifest.index(name))
+
+    def test_entry_synonym_index_upgrade_is_in_manifest_and_lambda_safe(self):
+        manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
+        migration = "tanahpedia_alter_entry_synonym.sql"
+        self.assertIn(migration, manifest)
+        path = ROOT / "data/mysql" / migration
+        VALIDATOR.validate_lambda_safe_comments(path)
+        source = path.read_text(encoding="utf-8")
+        processed = LAMBDA.preprocess_sql(source)
+        statements = LAMBDA.parse_statements(processed)
+        # Two session settings plus one SET/PREPARE/EXECUTE/DEALLOCATE block.
+        self.assertEqual(len(statements), 6)
+        self.assertRegex(
+            processed,
+            r"ALTER TABLE tanahpedia_entry_synonym ADD KEY idx_entry_synonym_name \(name\)",
+        )
+        self.assertNotRegex(processed, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE|UPDATE|REPLACE)\b")
+        self.assertEqual(VALIDATOR.preprocess_sql(source), processed)
+        self.assertEqual(VALIDATOR.parse_statements(processed), statements)
 
     def test_whatsapp_upgrade_is_additive_and_all_prepared_blocks_survive_parser(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))

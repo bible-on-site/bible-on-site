@@ -61,9 +61,10 @@ const NATIVE_IMAGE_CI_PATHS = [
 // (the Appium suite already lists the selector under `app`, #2085).
 const E2E_IMPACT_CI_PATHS = ["devops/github/ci/e2e-impact", "web/shared"];
 
-// This evaluation guide is documentation, not an annotation or SQL input.
-// Keep the exception exact: other Markdown paths may be pipeline inputs.
-const DATA_DOCUMENTATION_PATTERN = /^data\/annotations\/GOLDEN\.md$/;
+// The evaluation guide and MongoDB test image are not delivered data inputs.
+// Keep exact boundaries so actual annotations, SQL and pipelines still deliver.
+const DATA_CI_ONLY_PATTERN =
+	/^data\/(?:annotations\/GOLDEN\.md$|sefaria\/mongodb-docker\/)/;
 
 export const MODULES = {
 	website: {
@@ -82,6 +83,19 @@ export const MODULES = {
 			// cd-aws.yml owns the post-deploy verifier invocation contract
 			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
 			".github/workflows/cd-aws.yml",
+			".github/workflows/website-handover-lock.yml",
+			"devops/github/release/website-handover-lock.mjs",
+			"devops/github/release/website-handover-lock.test.mjs",
+			".github/workflows/shared-dockerize.yml",
+			"devops/deploy/ecr-deploy/website-images.mts",
+			"devops/deploy/ecr-deploy/api-images.mts",
+			"devops/deploy/ecr-deploy/api-images.test.mts",
+			"devops/github/ci/website-image-gates.test.mjs",
+			"devops/deploy/ecr-deploy/ecr-deployer-base.mts",
+			"devops/deploy/ecr-deploy/index.mts",
+			"devops/github/release/api-image-assets.mjs",
+			"devops/github/release/release-provenance.mjs",
+			"devops/github/release/check-deployment.mjs",
 			// The calendar-PDF artifact publisher defines the generation/publish
 			// contract verified by the calendar_pdf_artifacts job (#2608).
 			".github/workflows/calendar-pdf-publish.yml",
@@ -169,7 +183,7 @@ export const MODULES = {
 	},
 	data: {
 		directory: "data",
-		ciOnlyPattern: DATA_DOCUMENTATION_PATTERN,
+		ciOnlyPattern: DATA_CI_ONLY_PATTERN,
 		// Data-deploy tooling changes require checks and normally re-run data CD.
 		// ECR recovery/version tests run in recitation_ci, without data delivery.
 		// Schema-only changes use a separate manual-deployment routing gate.
@@ -240,9 +254,7 @@ export function isDataDeployChange(changedFiles: string[]): boolean {
  * also stay manual rather than triggering a full production bootstrap.
  */
 export function isSchemaOnlyDataChange(files: string[]): boolean {
-	const changedFiles = files.filter(
-		(file) => !DATA_DOCUMENTATION_PATTERN.test(file),
-	);
+	const changedFiles = files.filter((file) => !DATA_CI_ONLY_PATTERN.test(file));
 	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
 	// Calendar exports are repaired through a guarded date-only database operation.
 	// Converter/fixture changes must not launch a replacement production bootstrap.

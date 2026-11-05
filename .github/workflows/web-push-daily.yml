@@ -1,0 +1,33 @@
+name: Web Push Daily Perek
+
+# Triggers the website's daily perek push notification (#1096). The route
+# itself skips Shabbat, review days and days without a scheduled perek, so
+# the schedule only needs to pick the delivery time: 05:00 UTC is 07:00/08:00
+# in Israel. Runs only once the repository variable WEB_PUSH_ENABLED is
+# `true` and the PUSH_SEND_SECRET secret matches the website's environment.
+
+on:
+  schedule:
+    - cron: "0 5 * * 0-5"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: web-push-daily
+  cancel-in-progress: false
+
+jobs:
+  send:
+    if: vars.WEB_PUSH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Send daily perek notifications
+        env:
+          PUSH_SEND_SECRET: ${{ secrets.PUSH_SEND_SECRET }}
+          SITE_ORIGIN: ${{ vars.WEB_PUSH_SITE_ORIGIN || 'https://xn--febl3a.co.il' }}
+        run: >-
+          curl --fail-with-body --silent --show-error --max-time 300
+          -X POST -H "Authorization: Bearer ${PUSH_SEND_SECRET}"
+          "${SITE_ORIGIN}/api/push/daily"

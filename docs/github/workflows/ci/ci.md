@@ -148,9 +148,29 @@ or deployed; `cross_module_ci` gates them under the same triggers. Any
 Dockerfile under a module dir counts as `module_changed`; the shared
 `web/.dockerignore` context, `shared-dockerize.yml` (API) and
 `web/api/entities` (compiled into the Bulletin image) count as `ci_changed`.
-Package Website stays master-only: its SSG image build reads the production
-DB (SSM + RDS allow-listing), which PR runs must not access; Website
-Performance builds the same Next.js app pre-merge.
+Website packaging also validates both native architectures on same-repository
+PRs and merge-queue events, without publishing release artifacts. Its SSG build
+uses the production DB through SSM and temporary RDS access. Fork PRs cannot
+run this privileged packaging path. Master pushes package website releases
+when website content changes; Website Performance validates the app pre-merge.
+
+The shared package job normally removes its temporary database ingress in an
+`always()` step. If its hosted runner disappears, that step cannot run.
+[`rds-build-access-cleanup.yml`](../../../../.github/workflows/rds-build-access-cleanup.yml)
+therefore also cleans access after CI completes, using trusted default-branch
+code and the existing deployment role. It verifies the exact repository,
+workflow, attempt and every completed job before using AWS credentials. It
+reads the actual `tanah-mysql` security groups, validates all matching leases,
+then rechecks each rule's ownership before revoking its exact ID and confirming
+absence. Only tagged website build leases for that completed attempt qualify;
+active attempts and other rules are preserved. No new IAM permission, database
+credential, service setting or public URL is needed.
+
+For an older completed run, manually dispatch **Clean completed CI database
+access** with its exact `run_id` and `run_attempt`. Repeating a completed cleanup
+is harmless. Incomplete metadata or changed ownership fails the job without
+guessing. Reverting the cleanup workflow disables independent recovery while
+retaining the package job's ordinary cleanup.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|
@@ -187,18 +207,22 @@ published baseline. Delivery metadata must agree with the tag when present.
 Only the API package's own manifest and source-less lockfile version are
 normalized. Dependencies, source, build inputs, file modes, additions and
 deletions remain meaningful; an automatic version-only bump cannot trigger a
-new release. Real unpublished changes with a newer API version select fresh API
-checks and packaging. Other module flags stay unchanged, and all existing
-Cross Module CI, release and CD provenance guards still apply. Nothing promotes
-an artifact from a failed source run.
+new release. Real unpublished changes with an equal or newer API version select
+fresh API checks and packaging. An equal version reaches the existing
+`shared-release` tag-collision guard, which skips publishing and deployment for
+that run and requests a retry version bump on master. The bumped run must pass
+fresh quality gates before releasing under its new tag. Other module flags stay
+unchanged, and all existing Cross Module CI, release and CD provenance guards
+still apply. Nothing promotes an artifact from a failed source run.
 
 Available pinned commits are reused. A missing commit is fetched without
 changing repository history depth; depth-limited fetches are restricted to
 checkouts that were already shallow.
 
 The lookup is read-only and fails the selection job on metadata, provenance,
-fetch or version ambiguity. It runs only as a fallback on master pushes;
-ordinary API-change pushes retain their existing version-collision path.
+fetch or a changed source whose version is older than the published release.
+It runs only as a fallback on master pushes; ordinary API-change pushes retain
+their existing version-collision path.
 Removing the reconciliation step and its API output ORs disables this recovery
 without changing the ordinary release path. Its regression suite runs in the
 selection job on every CI event.
@@ -401,17 +425,17 @@ See [Apple's build query](https://developer.apple.com/documentation/appstoreconn
 and [Fastlane's upload/distribution options](https://docs.fastlane.tools/actions/pilot/).
 
 
-## Obsolete merge-group inspection
+## Obsolete merge-group cleanup
 
 A deleted queue branch can leave its old CI run queued or running after the
 queue has rebuilt a replacement. CI currently assigns each merge-group run a
 unique concurrency key, so normal PR supersession does not remove these runs.
 
-`reap-obsolete-merge-groups.yml` initially runs in **read-only dry-run mode**.
-It consumes only trusted default-branch code and GitHub metadata, never a
-candidate checkout or artifact. It inspects CI workflow-run and queue-branch
-delete events; delivery of internal queue delete events is not assumed, so
-workflow-run scans and manual cleanup remain available.
+`reap-obsolete-merge-groups.yml` runs `--apply` with `actions: write` after
+merge-group CI run requests/completions and matching queue-branch delete
+events. It consumes trusted default-branch code and GitHub metadata, never a
+candidate checkout or artifact. Delivery of internal queue delete events is
+not assumed, so the CI workflow-run scans also provide cleanup opportunities.
 
 A candidate must belong to this exact repository and CI workflow, retain its
 original run/ref/head identity, have an absent queue ref, and appear in no
@@ -422,10 +446,9 @@ checks finish. Unknown identity, incomplete topology, API errors and races
 fail closed. The controller caps requests and permits at most two normal
 cancellations per invocation; it never force-cancels or retries a mutation.
 
-The shipped inspection job has `actions: read`, calls `--dry-run`, and cannot
-cancel builds. Enabling cancellation requires a separately validated rollout
-after real inspection artifacts confirm event/ref behavior. Apply mode also
-requires a successful fsynced intent journal before every POST and retains
-one outcome-reconciliation read, so unknown outcomes are not retried. Rollback
-is returning to dry-run/read-only mode; exact stale builds can still be
+The cleanup job requires a successful fsynced intent journal before every
+POST and retains one outcome-reconciliation read, so unknown outcomes are not
+retried. It uploads its proof artifact even after failure. For read-only
+inspection, the helper also supports `--dry-run`. Rollback changes the job to
+that mode and restores `actions: read`; exact stale builds can still be
 cleaned up manually after the same current-state checks.

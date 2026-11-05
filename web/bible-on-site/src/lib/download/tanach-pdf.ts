@@ -23,10 +23,8 @@ import { PDFDocument, type PDFFont, rgb } from "pdf-lib";
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
 const fontkit: any = (_fontkit as any).default ?? _fontkit;
 
-import { toNumber } from "gematry";
 import type { Segment } from "@/data/db/tanah-view-types";
 import { getPerekByPerekId } from "@/data/perek-dto";
-import { getPerekIdsForSefer, getSeferByName } from "@/data/sefer-dto";
 import { getArticlesByPerekId } from "@/lib/articles/service";
 import { getPerushimByPerekId } from "@/lib/perushim";
 import {
@@ -36,9 +34,15 @@ import {
 	memoizeGlyphEncoding,
 	visualTextRuns,
 } from "./bidi-text";
-import { ExportError } from "./export-error";
 import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
+import { semanticPagesToPerekIds } from "./semantic-pages";
 import type { SemanticPageInfo } from "./types";
+
+// Preserve the existing PDF module's public selection helpers.
+export {
+	REVERSED_RANGE_MESSAGE,
+	semanticPagesToPerekIds,
+} from "./semantic-pages";
 
 /* ──────────────────────────── Text helpers ─────────────────────────── */
 
@@ -117,51 +121,6 @@ export function wrapText(
 	}
 	if (current) lines.push(current);
 	return lines.length ? lines : [""];
-}
-
-/* ─────────────────────── Mapping helpers ───────────────────────────── */
-
-/**
- * Export boundary rejection message for a reversed perek range (issue #2407).
- * ExportError messages are safe to surface to the reader.
- */
-export const REVERSED_RANGE_MESSAGE =
-	"טווח לא תקין: פרק ההתחלה מאוחר מפרק הסיום.";
-
-/**
- * Convert semantic page info to perek IDs using the sefer's perek range.
- *
- * semanticPages contains entries like { semanticName: "א'", pageIndex: 3 }.
- * We parse the Hebrew number and map to the sefer's perek ID array.
- * The entries must arrive in reading order (selection from → to); a start
- * after the end is rejected so a UI bypass cannot export a reversed range.
- */
-export function semanticPagesToPerekIds(
-	semanticPages: SemanticPageInfo[],
-	seferName: string,
-): number[] {
-	const sefer = getSeferByName(seferName);
-	const allPerekIds = getPerekIdsForSefer(sefer);
-
-	const perekIds: number[] = [];
-	const seen = new Set<number>();
-	let lastPerekNum = 0;
-
-	for (const sp of semanticPages) {
-		const perekNum = toNumber(sp.semanticName);
-		if (perekNum <= 0 || perekNum > allPerekIds.length) continue;
-		if (perekNum < lastPerekNum) {
-			throw new ExportError(REVERSED_RANGE_MESSAGE);
-		}
-		lastPerekNum = perekNum;
-		const perekId = allPerekIds[perekNum - 1];
-		if (perekId !== undefined && !seen.has(perekId)) {
-			seen.add(perekId);
-			perekIds.push(perekId);
-		}
-	}
-
-	return perekIds;
 }
 
 /* ─────────────────── PDF layout constants ──────────────────────────── */

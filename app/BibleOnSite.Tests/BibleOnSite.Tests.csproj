@@ -33,6 +33,8 @@
       Note: We don't reference BibleOnSite.csproj directly as it targets MAUI platforms.
       Instead, we include the source files directly for testing.
     -->
+    <!-- Cover the pure release-archive validator through the existing host unit/coverage run. -->
+    <Compile Include="../devops/AndroidNativeSymbols.cs" Link="Build/AndroidNativeSymbols.cs" />
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Converters\*.cs" Link="Converters\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\AccessibilityStatement.cs" Link="Services\AccessibilityStatement.cs" />
@@ -46,6 +48,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\PerekPreferencesViewModel.cs" Link="ViewModels\PerekPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SoundPreferencesViewModel.cs" Link="ViewModels\SoundPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SupportPreferencesViewModel.cs" Link="ViewModels\SupportPreferencesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\DailyBulletinViewModel.cs" Link="ViewModels\DailyBulletinViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation,
          and DeferredMediaElement which needs the MediaElement package. -->
     <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs;..\BibleOnSite\Controls\DeferredMediaElement.cs" Link="Controls\%(Filename)%(Extension)" />

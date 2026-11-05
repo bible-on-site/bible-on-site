@@ -48,7 +48,7 @@
 	display: block;
 	width: 100%;
 	height: auto;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 }
 
 .perekIntro figcaption {
@@ -92,9 +92,9 @@
 .perekText > [data-pasuk-highlight] {
 	background: rgba(254, 243, 199, 0.95);
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 }
-.qri label::before {
+.qri span:where([data-qri-label])::before {
 	color: var(--muted-text, #637598);
 	content: "קְרִי:";
 	cursor: text;
@@ -111,9 +111,11 @@
 	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
-.tanahpediaLink:hover {
-	border-bottom-style: solid;
-	border-bottom-color: var(--link-accent, #1552ac);
+@media (hover: hover) {
+	.tanahpediaLink:hover {
+		border-bottom-style: solid;
+		border-bottom-color: var(--link-accent-hover);
+	}
 }
 
 @media (prefers-color-scheme: dark) {
@@ -138,15 +140,17 @@
 	gap: 4px;
 	padding: 10px 16px;
 	border: 1px solid rgba(21, 82, 172, 0.25);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	text-decoration: none;
 	color: var(--pasuk-num-color, #1c2c5d);
 	transition: background-color 0.2s ease;
 	max-width: 48%;
 }
 
-.unitNavLink:hover {
-	background-color: rgba(21, 82, 172, 0.06);
+@media (hover: hover) {
+	.unitNavLink:hover {
+		background-color: rgba(21, 82, 172, 0.06);
+	}
 }
 
 .unitNavNext {

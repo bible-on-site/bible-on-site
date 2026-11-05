@@ -4,6 +4,7 @@
 
 /* The component replaces BlankPageContent's .pageBlank section: a flex
    column filling the book page. */
+
 .panelRoot {
 	display: flex;
 	flex-direction: column;
@@ -87,8 +88,10 @@
 	}
 }
 
-.panelTab:hover {
-	--tab-fill: #e8e0cc;
+@media (hover: hover) {
+	.panelTab:hover {
+		--tab-fill: #e8e0cc;
+	}
 }
 
 .panelTab:focus-visible {
@@ -121,7 +124,7 @@
 	margin-top: 0;
 	display: grid;
 	border: 1px solid #d4c9a8;
-	border-radius: 0 0 8px 8px;
+	border-radius: 0 0 var(--radius-md) var(--radius-md);
 	background: #fffdf5;
 	overflow: hidden;
 }
@@ -195,7 +198,7 @@
 	align-items: center;
 	gap: 4px;
 	border: 1px solid #d4c9a8;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: #fffdf5;
 	color: #5a4a2e;
 	font-size: 0.85rem;
@@ -222,8 +225,10 @@
 	color: #fffdf5;
 }
 
-.perushTag:hover {
-	border-color: var(--hc-muted, #8b7355);
+@media (hover: hover) {
+	.perushTag:hover {
+		border-color: var(--hc-muted, #8b7355);
+	}
 }
 
 .perushTag:focus-visible {
@@ -243,20 +248,28 @@
 	color: var(--hc-muted, #6b5835);
 }
 
+/* Reading-time estimate for a single displayed perush (#2607). */
+.scopeMetric {
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
 .scopeToggle {
 	appearance: none;
 	font: inherit;
 	font-size: 0.78rem;
 	border: 1px solid #d4c9a8;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: #f0ead8;
 	color: #5a4a2e;
 	padding: 1px 10px;
 	cursor: pointer;
 }
 
-.scopeToggle:hover {
-	background: #e8e0cc;
+@media (hover: hover) {
+	.scopeToggle:hover {
+		background: #e8e0cc;
+	}
 }
 
 .scopeToggle:focus-visible {
@@ -293,12 +306,20 @@
 	color: var(--hc-muted, #6b5835);
 }
 
+/* Reading-time estimate on the deep-linked perush header (#2607). */
+.deepMetric {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: #8b7355;
+}
+
 .deepBack {
 	appearance: none;
 	font: inherit;
 	font-size: 0.8rem;
 	border: 1px solid #d4c9a8;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: none;
 	color: #5a4a2e;
 	padding: 3px 10px;
@@ -306,8 +327,10 @@
 	white-space: nowrap;
 }
 
-.deepBack:hover {
-	background: #f0ead8;
+@media (hover: hover) {
+	.deepBack:hover {
+		background: #f0ead8;
+	}
 }
 
 /* Grouped commentary: pasuk groups in canonical order; inside each, the
@@ -334,7 +357,7 @@
 	background: rgba(254, 243, 199, 0.95);
 	border-right-color: #f59e0b;
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 }
 
 .commentaryPasuk {
@@ -351,9 +374,11 @@
 	margin-bottom: 6px;
 }
 
-.commentaryPasuk:hover {
-	color: #5a4a2e;
-	text-decoration: underline;
+@media (hover: hover) {
+	.commentaryPasuk:hover {
+		color: #5a4a2e;
+		text-decoration: underline;
+	}
 }
 
 .commentaryPasuk:focus-visible {
@@ -363,6 +388,15 @@
 
 .commentaryPerush {
 	margin-bottom: 10px;
+}
+
+.skeletonPasuk {
+	margin-bottom: 6px;
+}
+
+/* One skeleton bar per .noteContent line box (line-height 1.7). */
+.skeletonLine {
+	margin-block: calc((1lh - 0.8em) / 2);
 }
 
 .commentaryPerush + .commentaryPerush {
@@ -375,6 +409,14 @@
 	font-weight: 700;
 	color: var(--hc-muted, #8b7355);
 	margin-bottom: 4px;
+}
+
+/* Per-perush reading-time estimate in the multi-perush commentary view
+   (#2607). */
+.commentaryPerushMetric {
+	margin-inline-start: 8px;
+	font-size: 0.72rem;
+	font-weight: 400;
 }
 
 .noteContent {
@@ -431,7 +473,7 @@
 	font: inherit;
 	font-size: 0.8rem;
 	border: 1px solid #d4c9a8;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: none;
 	color: #5a4a2e;
 	padding: 2px 10px;
@@ -471,7 +513,7 @@
 	margin: 0 0 10px;
 	background: #fffdf5;
 	border: 1px solid #d4c9a8;
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	padding: 10px;
 	text-decoration: none;
 	color: inherit;
@@ -480,9 +522,11 @@
 		box-shadow 0.15s;
 }
 
-.articleCard:hover {
-	border-color: var(--hc-muted, #8b7355);
-	box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+@media (hover: hover) {
+	.articleCard:hover {
+		border-color: var(--hc-muted, #8b7355);
+		box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+	}
 }
 
 .articleCard:focus-visible {
@@ -530,6 +574,14 @@
 	margin: 0;
 }
 
+/* Full-article reading-time estimate under the card abstract (#2607). */
+.articleCardMetric {
+	display: block;
+	margin-top: 4px;
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
 /* ─── Article fullscreen (item 7) ───────────────────── */
 
 .articleFullscreen {
@@ -556,28 +608,6 @@
 	scrollbar-color: #c4b896 transparent;
 }
 
-.fullscreenToggle {
-	appearance: none;
-	font: inherit;
-	font-size: 0.8rem;
-	border: 1px solid #d4c9a8;
-	border-radius: 6px;
-	background: #f0ead8;
-	color: #5a4a2e;
-	padding: 3px 10px;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.fullscreenToggle:hover {
-	background: #e8e0cc;
-}
-
-.fullscreenToggle:focus-visible {
-	outline: 2px solid var(--link-accent, #1a73e8);
-	outline-offset: 2px;
-}
-
 @media (prefers-color-scheme: dark) {
 	.panelTab {
 		--tab-fill: #2a241a;
@@ -586,8 +616,10 @@
 		color: var(--hc-muted, #cbb98c);
 	}
 
-	.panelTab:hover {
-		--tab-fill: #342c1e;
+	@media (hover: hover) {
+		.panelTab:hover {
+			--tab-fill: #342c1e;
+		}
 	}
 
 	.panelTab[aria-selected="true"] {
@@ -632,8 +664,10 @@
 		color: transparent;
 	}
 
-	.perushTag:hover {
-		border-color: var(--hc-muted, #8b7355);
+	@media (hover: hover) {
+		.perushTag:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.perushTagItem[data-selected] .perushTagCheck,
@@ -654,18 +688,18 @@
 
 	.scopeToggle,
 	.deepBack,
-	.noteRetry,
-	.fullscreenToggle {
+	.noteRetry {
 		border-color: #4a4030;
 		background: #2a241a;
 		color: var(--hc-muted, #cbb98c);
 	}
 
-	.scopeToggle:hover,
-	.deepBack:hover,
-	.noteRetry:hover,
-	.fullscreenToggle:hover {
-		background: #342c1e;
+	@media (hover: hover) {
+		.scopeToggle:hover,
+		.deepBack:hover,
+		.noteRetry:hover {
+			background: #342c1e;
+		}
 	}
 
 	.deepName,
@@ -688,8 +722,10 @@
 		color: var(--hc-muted, #b8a578);
 	}
 
-	.commentaryPasuk:hover {
-		color: var(--hc-muted, #cbb98c);
+	@media (hover: hover) {
+		.commentaryPasuk:hover {
+			color: var(--hc-muted, #cbb98c);
+		}
 	}
 
 	.articleCard {
@@ -697,8 +733,10 @@
 		border-color: #4a4030;
 	}
 
-	.articleCard:hover {
-		border-color: var(--hc-muted, #8b7355);
+	@media (hover: hover) {
+		.articleCard:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
 	}
 
 	.panelArticleOverlay {
@@ -724,4 +762,13 @@
 	.commentaryGroup[data-pasuk-highlight="fading"] {
 		transition: none;
 	}
+}
+
+.panelTab:active,
+.perushTag:active,
+.scopeToggle:active,
+.deepBack:active,
+.noteRetry:active,
+.articleCard:active {
+	scale: var(--press-scale);
 }

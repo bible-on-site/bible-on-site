@@ -243,7 +243,6 @@ describe("resolveEntityChanges", () => {
 				"authors",
 				"author:רשי",
 				"author:ישן",
-				"author:3",
 				"author:3:articles",
 				"article:12",
 				"perek:5:articles",
@@ -274,10 +273,11 @@ describe("resolveEntityChanges", () => {
 			expect.arrayContaining([
 				"authors",
 				"author:רשי",
-				"author:3",
 				"author:3:articles",
 			]),
 		);
+		// Author pages are addressed by name only: no numeric-id page tag.
+		expect(out.tags).not.toContain("author:3");
 	});
 
 	it("resolves a live pedia entry including synonyms, old name and category", async () => {
@@ -657,7 +657,7 @@ describe("resolveEntityChanges", () => {
 
 	it("resolves parasha, article, entry and masora dedication scopes", async () => {
 		mockQuery.mockImplementation(async (sql: string) => {
-			if (/FROM tanah_article/.test(sql)) return [{ perek_id: 5 }];
+			if (/FROM tanah_article/.test(sql)) return [{ id: 9, perek_id: 5 }];
 			if (/FROM tanahpedia_entry/.test(sql))
 				return [{ unique_name: "persons#abraham" }];
 			throw new Error(`unstubbed SQL: ${sql}`);

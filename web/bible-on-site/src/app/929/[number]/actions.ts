@@ -1,7 +1,11 @@
 "use server";
 
 import type { Article, ArticleSummary } from "@/lib/articles";
-import { getArticleById, getArticleSummariesByPerekId } from "@/lib/articles";
+import {
+	getArticleById,
+	getArticleSummariesByPerekId,
+	getArticleSummariesByPerekIds,
+} from "@/lib/articles";
 import { ExportError } from "@/lib/download/export-error";
 import type {
 	PageRangesDownloadContext,
@@ -13,9 +17,19 @@ import { formatDedication } from "@/lib/dedications/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
 	getPerushimByPerekId,
+	getPerushimByPerekIds,
 	getPerushNotes,
 	getPerushNotesBatch,
 } from "@/lib/perushim";
+import {
+	getArticleProgressUnits,
+	getPerekMetrics,
+	getPerekProgressUnitsBatch,
+	getPerushProgressUnitsBatch,
+	metricOrFallback,
+	type ReadingMetric,
+} from "@/lib/reading-metrics";
+import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
 import { decorateArticleContent } from "@/lib/tanahpedia/article-mention-refs";
 
 /**
@@ -61,6 +75,30 @@ export async function getPerushNotesForPerekBatch(
 }
 
 /**
+ * Stored readable-block units for an in-book article's scroll progress
+ * (#2607) — same block rows as the standalone article route, keyed
+ * positionally (`key: null`); the view segments the rendered body.
+ */
+export async function getArticleProgressUnitsForBook(
+	articleId: number,
+): Promise<ReadingProgressUnit[]> {
+	return getArticleProgressUnits(articleId);
+}
+
+/**
+ * Stored note-level units for several perushim on one perek (server
+ * action) — the Sefer commentary pane weights scroll progress by each
+ * note's stored word count. Keys are perush ids.
+ */
+export async function getNoteProgressUnitsForPerekBatch(
+	perekId: number,
+	perushIds: number[],
+): Promise<Record<number, ReadingProgressUnit[]>> {
+	const batch = await getPerushProgressUnitsBatch(perekId, perushIds);
+	return Object.fromEntries(batch);
+}
+
+/**
  * Fetch article summaries for a perek (no full content) for book view carousel.
  */
 export async function getArticleSummariesForPerek(
@@ -82,6 +120,10 @@ export async function getPerushimSummariesForPerek(
 export interface PerekSummaries {
 	articles: ArticleSummary[];
 	perushim: PerushSummary[];
+	/** Stored per-pasuk units for the flipbook page's progress bar (#2607). */
+	pasukUnits: ReadingProgressUnit[];
+	/** Stored perek-level metric for the flipbook page's badge (#2607). */
+	perekMetric: ReadingMetric | null;
 }
 
 /**
@@ -91,16 +133,35 @@ export interface PerekSummaries {
 export async function getPerekSummariesBatch(
 	perekIds: number[],
 ): Promise<Record<string, PerekSummaries>> {
-	const entries = await Promise.all(
-		perekIds.map(async (id) => {
-			const [articles, perushim] = await Promise.all([
-				getArticleSummariesByPerekId(id),
-				getPerushimByPerekId(id),
-			]);
-			return [String(id), { articles, perushim }] as const;
-		}),
+	// Metric reads only decorate summaries — a flaky metric query must not
+	// reject the whole batch and hide the articles/perushim beneath it.
+	// One grouped query per service for the whole sefer — per-perek
+	// fan-out over a 5-connection pool turned a large sefer's book open
+	// (Tehillim: 150 perakim) into hundreds of serialized round-trips.
+	const [pasukUnits, perekMetrics, articlesByPerek, perushimByPerek] =
+		await Promise.all([
+			metricOrFallback(
+				"perek progress units",
+				new Map<number, ReadingProgressUnit[]>(),
+				() => getPerekProgressUnitsBatch(perekIds),
+			),
+			metricOrFallback("perek metrics", new Map<number, ReadingMetric>(), () =>
+				getPerekMetrics(perekIds),
+			),
+			getArticleSummariesByPerekIds(perekIds),
+			getPerushimByPerekIds(perekIds),
+		]);
+	return Object.fromEntries(
+		perekIds.map((id) => [
+			String(id),
+			{
+				articles: articlesByPerek.get(id) ?? [],
+				perushim: perushimByPerek.get(id) ?? [],
+				pasukUnits: pasukUnits.get(id) ?? [],
+				perekMetric: perekMetrics.get(id) ?? null,
+			},
+		]),
 	);
-	return Object.fromEntries(entries);
 }
 
 /**

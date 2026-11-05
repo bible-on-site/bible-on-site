@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	type AdminDedication,
 	type DedicationTargetInput,
@@ -13,16 +13,11 @@ import {
 	listDedications,
 	updateDedication,
 } from "~/server/dedications";
+import { previewDedicationLine } from "~/lib/dedication-line";
 
 export const Route = createFileRoute("/dedications")({
 	component: DedicationsPage,
 });
-
-/** Mirrors the public formatDedication line (#2731) — kept client-side. */
-function previewLine(subject: string, purposes: string[]): string {
-	const clean = purposes.filter((p) => p.trim().length > 0);
-	return clean.length === 0 ? `מוקדש ל${subject}` : `מוקדש ל${subject} (${clean.join(", ")})`;
-}
 
 const KIND_LABELS: Record<DedicationTargetKind, string> = {
 	perek: "טווח פרקים",
@@ -48,6 +43,17 @@ interface FormState {
 	targets: TargetRow[];
 }
 
+const SEARCH_DEBOUNCE_MS = 350;
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const t = setTimeout(() => setDebounced(value), delayMs);
+		return () => clearTimeout(t);
+	}, [value, delayMs]);
+	return debounced;
+}
+
 const emptyForm = (): FormState => ({ id: null, subject: "", purposeTypeIds: [], expiresAt: "", targets: [] });
 
 /** datetime-local input value <-> stored UTC "YYYY-MM-DD HH:mm:ss". */
@@ -57,12 +63,13 @@ const toInputExpiry = (value: string | null) => (value ? value.replace(" ", "T")
 function DedicationsPage() {
 	const queryClient = useQueryClient();
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 	const [show, setShow] = useState<"active" | "expired" | "all">("active");
 	const [form, setForm] = useState<FormState | null>(null);
 
 	const { data: dedications, isLoading } = useQuery({
-		queryKey: ["dedications", search, show],
-		queryFn: () => listDedications({ data: { search, show } }),
+		queryKey: ["dedications", debouncedSearch, show],
+		queryFn: () => listDedications({ data: { search: debouncedSearch, show } }),
 	});
 	const { data: types, isLoading: typesLoading } = useQuery({ queryKey: ["dedication-types"], queryFn: () => getDedicationTypes() });
 	const { data: targetOptions } = useQuery({
@@ -162,7 +169,7 @@ function DedicationsPage() {
 					<table className="min-w-full text-sm">
 						<thead className="bg-gray-50 text-right">
 							<tr>
-								<th className="px-4 py-2">מוקדש ל</th>
+								<th className="px-4 py-2">הקדשה</th>
 								<th className="px-4 py-2">מטרות</th>
 								<th className="px-4 py-2">יעדים</th>
 								<th className="px-4 py-2">תוקף (UTC)</th>
@@ -172,7 +179,7 @@ function DedicationsPage() {
 						<tbody>
 							{(dedications ?? []).map((d) => (
 								<tr key={d.id} className={`border-t ${d.expired ? "opacity-60" : ""}`}>
-									<td className="px-4 py-2 font-medium">{previewLine(d.subject, d.purposes)}</td>
+									<td className="px-4 py-2 font-medium">{previewDedicationLine(d.subject, d.purposes)}</td>
 									<td className="px-4 py-2">{d.purposes.join(", ")}</td>
 									<td className="px-4 py-2">
 										{d.targets.map((t, i) => (
@@ -449,7 +456,7 @@ function DedicationForm({
 
 				<div className="mt-4 rounded-lg bg-gray-50 border px-3 py-2 text-sm">
 					<span className="text-gray-500">תצוגה מקדימה: </span>
-					{previewLine(form.subject || "...", selectedPurposeNames)}
+					{previewDedicationLine(form.subject || "...", selectedPurposeNames)}
 				</div>
 
 				<div className="flex justify-end gap-3 mt-6">

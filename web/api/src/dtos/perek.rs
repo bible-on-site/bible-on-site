@@ -1,6 +1,10 @@
-use async_graphql::{ComplexObject, Context, Result, SimpleObject};
+use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
 
-use crate::{providers::Database, services::articles_service};
+use crate::{
+    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    providers::Database,
+    services::{articles_service, reading_metrics_service},
+};
 use entities::perek::Model;
 
 /// Convert a number to Hebrew letters (gematry) with gershayim.
@@ -125,6 +129,14 @@ pub struct Perek {
     /// Canonical number of pesukim in the perek; NULL means the bound is
     /// unknown (corpus counts not loaded), not that the perek is empty.
     pub pasuk_count: Option<i32>,
+    /// Shared persisted reading metrics over the complete perek text
+    /// (issue #2607). `null` = unknown/not computed.
+    pub reading_metric: Option<ReadingMetric>,
+    /// Article count preloaded by list resolvers in one batched GROUP BY
+    /// query — `None` means it was not preloaded and resolves on demand
+    /// (single-perek fields), `Some` is authoritative (possibly zero).
+    #[graphql(skip)]
+    pub precomputed_articles_count: Option<i64>,
 }
 
 impl From<Model> for Perek {
@@ -161,6 +173,8 @@ impl From<Model> for Perek {
             header: value.header,
             compiled_source,
             pasuk_count: value.pasuk_count.map(|count| count as i32),
+            reading_metric: None,
+            precomputed_articles_count: None,
         }
     }
 }
@@ -170,11 +184,28 @@ impl Perek {
     /// Returns the count of articles for this perek
     #[graphql(name = "articlesCount")]
     async fn articles_count(&self, ctx: &Context<'_>) -> Result<i64> {
+        if let Some(count) = self.precomputed_articles_count {
+            return Ok(count);
+        }
         // Use perek_id (1-929) for counting, not the DB id
         let perek_id = self.perek_id.unwrap_or(self.id);
         let db = ctx.data::<Database>()?;
         let count = articles_service::count_by_perek_id(db, perek_id).await?;
         Ok(count)
+    }
+
+    /// Ordered pasuk-level units for word-weighted reading-position progress
+    /// (issue #2607). Empty when uncomputed or when the perek lacks a
+    /// canonical id — resolved only when selected.
+    async fn progress_units(&self, ctx: &Context<'_>) -> Result<Vec<ReadingProgressUnit>> {
+        let Some(perek_id) = self.perek_id else {
+            return Ok(vec![]);
+        };
+        let units =
+            reading_metrics_service::pasuk_units_by_perek_id(ctx.data::<Database>()?, perek_id)
+                .await
+                .map_err(|e| e.extend())?;
+        Ok(units.into_iter().map(Into::into).collect())
     }
 }
 
@@ -353,5 +384,140 @@ mod tests {
                 .as_deref()
                 .is_some_and(|s| s.starts_with("Book "))
         );
+    }
+
+    /// A perek row without a canonical perek_id (a null join arm) has no
+    /// stored units — the resolver must answer empty without touching the DB.
+    #[tokio::test]
+    async fn progress_units_returns_empty_when_perek_id_is_absent() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn perek(&self) -> Perek {
+                Perek {
+                    id: 7,
+                    perek_id: None,
+                    sefer_id: None,
+                    additional: None,
+                    perek: None,
+                    date: None,
+                    hebdate: None,
+                    compiled_hebdate: None,
+                    tseit: None,
+                    header: None,
+                    compiled_source: None,
+                    pasuk_count: None,
+                    reading_metric: None,
+                    precomputed_articles_count: None,
+                }
+            }
+        }
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+
+        let res = schema.execute("{ perek { progressUnits { key } } }").await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let units = res.data.into_json().unwrap()["perek"]["progressUnits"].clone();
+        assert!(units.as_array().unwrap().is_empty());
+    }
+
+    /// A perek with a preloaded count answers `articlesCount` without touching
+    /// the database — the list path batch-loads counts in one GROUP BY query.
+    #[tokio::test]
+    async fn articles_count_returns_the_precomputed_count_without_a_db_query() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn perek(&self) -> Perek {
+                Perek {
+                    id: 7,
+                    perek_id: Some(42),
+                    sefer_id: None,
+                    additional: None,
+                    perek: None,
+                    date: None,
+                    hebdate: None,
+                    compiled_hebdate: None,
+                    tseit: None,
+                    header: None,
+                    compiled_source: None,
+                    pasuk_count: None,
+                    reading_metric: None,
+                    precomputed_articles_count: Some(3),
+                }
+            }
+        }
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+
+        let res = schema.execute("{ perek { articlesCount } }").await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let count = res.data.into_json().unwrap()["perek"]["articlesCount"].clone();
+        assert_eq!(count.as_i64(), Some(3));
+    }
+
+    /// A perek without a preloaded count answers `articlesCount` from the
+    /// per-perek COUNT query — the single-perek path (`perekByPerekId`
+    /// before batch preloading, direct DTO use).
+    #[tokio::test]
+    async fn articles_count_falls_back_to_a_db_query_when_not_preloaded() {
+        use sea_orm::{DatabaseBackend, MockDatabase, Value};
+        use std::collections::BTreeMap;
+
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn perek(&self) -> Perek {
+                Perek {
+                    id: 7,
+                    perek_id: Some(42),
+                    sefer_id: None,
+                    additional: None,
+                    perek: None,
+                    date: None,
+                    hebdate: None,
+                    compiled_hebdate: None,
+                    tseit: None,
+                    header: None,
+                    compiled_source: None,
+                    pasuk_count: None,
+                    reading_metric: None,
+                    precomputed_articles_count: None,
+                }
+            }
+        }
+        let count_row: BTreeMap<String, Value> = [("count".to_string(), Value::from(5_i64))]
+            .into_iter()
+            .collect();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![count_row],
+                ])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema.execute("{ perek { articlesCount } }").await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let count = res.data.into_json().unwrap()["perek"]["articlesCount"].clone();
+        assert_eq!(count.as_i64(), Some(5));
     }
 }

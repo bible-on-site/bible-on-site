@@ -63,19 +63,9 @@ test.describe("Sefer commentary navigation", () => {
 						touchPoints: [{ x: x - Math.round((step * distance) / 12), y }],
 					});
 					if (step === 6) {
-						await expect
-							.poll(() =>
-								page
-									.locator(".he-book .page")
-									.evaluateAll((pages) =>
-										pages.some(
-											(element) =>
-												(element as HTMLElement).style.willChange ===
-												"transform",
-										),
-									),
-							)
-							.toBe(true);
+						await expect(
+							page.locator(".he-book .page.page--folded.page--flipping"),
+						).toHaveCount(2);
 					}
 				}
 				// Complete the held turn by distance, independent of CI's input speed.
@@ -136,7 +126,7 @@ test.describe("Sefer commentary navigation", () => {
 						? blank.locator("a#article-1")
 						: blank.getByRole("button", { name: /בחירת רש"י/ });
 				const back = blank.getByRole("button", {
-					name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+					name: kind === "article" ? "חזרה למאמרים" : "→ חזרה לפרשנים",
 				});
 				await item.click();
 				if (kind === "perush") {
@@ -182,7 +172,7 @@ test.describe("Sefer commentary navigation", () => {
 		const blank = page.locator('.he-book .page[data-page-index="4"]');
 		await blank.getByRole("tab", { name: "מאמרים" }).click();
 		const scroller = blank.locator('[class*="articlesScroll"]');
-		const back = blank.getByRole("button", { name: "חזרה למאמרים →" });
+		const back = blank.getByRole("button", { name: "חזרה למאמרים" });
 
 		// Scroll the masonry off its top edge.
 		const position = await scroller.evaluate((el) => {
@@ -407,10 +397,27 @@ test.describe("Sefer commentary navigation", () => {
 			await seferPage.openSeferViewForPerek(1);
 			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
-			await blank.getByRole("button", { name: /בחירת רש"י/ }).click();
+			// Full data can annotate every verse with Rashi. Prefer the sparse
+			// Sforno commentary there; the small fixture only supplies Rashi.
+			const perushName = (await blank
+				.getByRole("button", { name: "בחירת ספורנו", exact: true })
+				.count())
+				? "ספורנו"
+				: 'רש"י';
+			const selection = blank.getByRole("button", {
+				name: `בחירת ${perushName}`,
+				exact: true,
+			});
+			await selection.click();
+			await expect(selection).toBeVisible({ timeout: 30_000 });
+			const panel = blank.locator('[data-sefer-perush-perek="1"]');
+			await expect(panel).toHaveAttribute("data-sefer-perush", perushName);
+			// The selection button is visible while note data is still loading.
+			// Wait for the selected commentary before treating a verse as missing.
+			await expect(panel.locator("[data-perush-pasuk]").first()).toBeAttached();
 			await expect(
-				blank.getByRole("button", { name: 'בחירת רש"י' }),
-			).toBeVisible({ timeout: 30_000 });
+				perekPage.getByRole("button", { name: /מעבר לפירוש/ }).first(),
+			).toBeAttached();
 			const perushUrl = page.url();
 
 			// Find a scripture pasuk that the open perush does not annotate. The
@@ -445,9 +452,7 @@ test.describe("Sefer commentary navigation", () => {
 					.getByRole("button", { name: /מעבר לפירוש/ }),
 			).toHaveCount(0);
 			await expect(blank.locator("[data-pasuk-highlight]")).toHaveCount(0);
-			await expect(
-				blank.getByRole("button", { name: 'בחירת רש"י' }),
-			).toBeVisible();
+			await expect(selection).toBeVisible();
 			expect(page.url()).toBe(perushUrl);
 		});
 	});
@@ -490,7 +495,7 @@ test.describe("Sefer commentary navigation", () => {
 			await page.goto(route);
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
 			const back = blank.getByRole("button", {
-				name: kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+				name: kind === "article" ? "חזרה למאמרים" : "→ חזרה לפרשנים",
 			});
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await expect(page).toHaveURL(

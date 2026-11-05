@@ -80,6 +80,7 @@ export function summarizeLighthouse(
 		environment,
 		fetchTime: lhr.fetchTime,
 		lighthouseVersion: lhr.lighthouseVersion,
+		cpuCalibration: lhr.cpuCalibration,
 		runtimeError: lhr.runtimeError,
 		warnings: lhr.runWarnings || [],
 		settings: lhr.configSettings,

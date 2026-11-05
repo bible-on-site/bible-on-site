@@ -10,7 +10,7 @@
 	flex: 1;
 	min-width: 0;
 	border: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	padding: 5px 3px;
 	margin: 0;
 	color: var(--muted-text, #637598);
@@ -26,10 +26,16 @@
 button.heading {
 	cursor: pointer;
 }
-.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
 .headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
 	background: #eaf0f8;
 	color: #264c88;
+}
+
+@media (hover: hover) {
+	.headerRow:has([data-chapter-play]:hover) [data-chapter-play] {
+		background: #eaf0f8;
+		color: #264c88;
+	}
 }
 .controls {
 	direction: rtl;
@@ -52,7 +58,7 @@ button.heading {
 	max-width: 250px;
 	padding: 6px 10px;
 	border: 1px solid #e4e8ef;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: #fff;
 	box-shadow: 0 3px 10px #20396018;
 	color: #526789;
@@ -78,7 +84,7 @@ button.heading {
 	min-height: 32px;
 	min-width: 32px;
 	border: 0;
-	border-radius: 20px;
+	border-radius: var(--radius-pill);
 	padding: 0;
 	background: transparent;
 	color: inherit;
@@ -89,14 +95,16 @@ button.heading {
 	color: #264c88;
 	background: #eaf0f8;
 }
-.toggle:hover:not(:disabled),
-.action:hover:not(:disabled) {
-	background: #f0f3f8;
+@media (hover: hover) {
+	.toggle:hover:not(:disabled),
+	.action:hover:not(:disabled) {
+		background: #f0f3f8;
+	}
 }
 .action:disabled,
 .toggle:disabled {
 	opacity: 0.35;
-	cursor: default;
+	cursor: not-allowed;
 }
 .word,
 .pasuk {
@@ -104,7 +112,7 @@ button.heading {
 	border: 0;
 	padding: 0;
 	margin: 0;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: inherit;
 	font: inherit;
@@ -117,18 +125,32 @@ button.heading {
 .pasuk[role="button"] {
 	cursor: pointer;
 }
-.word[role="button"]:hover,
-.word[data-recitation-active="true"],
-.pasuk[role="button"]:hover {
+.word[data-recitation-active="true"] {
 	color: #1c427b;
 	background: #e9eff8;
 	box-shadow: 0 2px 0 #a9bddb;
 }
-.verse:has(.pasuk[role="button"]:hover),
+
+@media (hover: hover) {
+	.word[role="button"]:hover,
+	.pasuk[role="button"]:hover {
+		color: #1c427b;
+		background: #e9eff8;
+		box-shadow: 0 2px 0 #a9bddb;
+	}
+}
 .verse:has(.pasuk:focus-visible) {
 	background: #e9eff8;
 	-webkit-box-decoration-break: clone;
 	box-decoration-break: clone;
+}
+
+@media (hover: hover) {
+	.verse:has(.pasuk[role="button"]:hover) {
+		background: #e9eff8;
+		-webkit-box-decoration-break: clone;
+		box-decoration-break: clone;
+	}
 }
 .toggle:focus-visible,
 .action:focus-visible,
@@ -183,10 +205,16 @@ button.heading {
 		color: var(--muted-text, #9aa0a6);
 	}
 
-	.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
 	.headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
 		background: #232a45;
-		color: #a8b9ff;
+		color: var(--accent-200);
+	}
+
+	@media (hover: hover) {
+		.headerRow:has([data-chapter-play]:hover) [data-chapter-play] {
+			background: #232a45;
+			color: var(--accent-200);
+		}
 	}
 
 	.controls {
@@ -200,24 +228,42 @@ button.heading {
 	}
 
 	.toggle[aria-pressed="true"] {
-		color: #a8b9ff;
+		color: var(--accent-200);
 		background: #232a45;
 	}
 
-	.toggle:hover:not(:disabled),
-	.action:hover:not(:disabled) {
-		background: #12151c;
+	@media (hover: hover) {
+		.toggle:hover:not(:disabled),
+		.action:hover:not(:disabled) {
+			background: #12151c;
+		}
 	}
 
-	.word[role="button"]:hover,
-	.word[data-recitation-active="true"],
-	.pasuk[role="button"]:hover {
-		color: #a8b9ff;
+	.word[data-recitation-active="true"] {
+		color: var(--accent-200);
 		background: #232a45;
 	}
 
-	.verse:has(.pasuk[role="button"]:hover),
+	@media (hover: hover) {
+		.word[role="button"]:hover,
+		.pasuk[role="button"]:hover {
+			color: var(--accent-200);
+			background: #232a45;
+		}
+	}
+
 	.verse:has(.pasuk:focus-visible) {
 		background: #232a45;
 	}
+
+	@media (hover: hover) {
+		.verse:has(.pasuk[role="button"]:hover) {
+			background: #232a45;
+		}
+	}
+}
+
+.toggle:active:not(:disabled),
+.action:active:not(:disabled) {
+	scale: var(--press-scale);
 }

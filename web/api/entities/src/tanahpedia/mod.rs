@@ -6,6 +6,8 @@ pub mod entity;
 pub mod entity_tanah_source;
 pub mod entry;
 pub mod entry_entity;
+pub mod entry_metric;
+pub mod entry_metric_block;
 pub mod entry_revision;
 pub mod entry_synonym;
 pub mod entry_synonym_disambiguation;

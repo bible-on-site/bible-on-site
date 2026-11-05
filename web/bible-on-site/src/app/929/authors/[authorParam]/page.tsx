@@ -6,7 +6,6 @@ import {
 	authorNameToSlug,
 	getAllAuthorSlugs,
 	getArticlesByAuthorId,
-	getAuthorById,
 	getAuthorByName,
 } from "../../../../lib/authors";
 import {
@@ -17,14 +16,15 @@ import {
 } from "../../../../lib/revalidate/tags";
 import { authorPath, buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
+import { sameAsFor } from "../../../../lib/seo/same-as";
 import { JsonLd } from "../../../components/JsonLd";
 import { AuthorArticlesTable } from "./AuthorArticlesTable";
 import styles from "./page.module.css";
 
 /**
  * Authors are pre-generated at build time using normalised-name slugs.
- * dynamicParams is true so numeric-ID URLs (legacy / backward-compat) still
- * resolve on-demand rather than returning 404.
+ * dynamicParams is true so authors added after the build still render
+ * on demand.
  */
 export const dynamicParams = true;
 
@@ -38,24 +38,18 @@ export async function generateStaticParams() {
 }
 
 /**
- * Resolve the `authorParam` segment to an AuthorDetails.
- * Tries numeric ID first (backward-compat), then normalised-name match.
+ * Resolve the `authorParam` segment (a percent-encoded normalised author
+ * name) to an AuthorDetails. Author pages are addressed by name only.
  */
 async function resolveAuthor(
 	authorParam: string,
 ): Promise<AuthorDetails | null> {
-	const maybeId = Number.parseInt(authorParam, 10);
-	if (!Number.isNaN(maybeId) && String(maybeId) === authorParam) {
-		return getAuthorById(maybeId);
-	}
-	// Decode percent-encoded Hebrew name and resolve by normalised match
-	const decoded = decodeURIComponent(authorParam);
-	return getAuthorByName(decoded);
+	return getAuthorByName(decodeURIComponent(authorParam));
 }
 
 /**
- * Author data keyed by the URL param (normalised slug or legacy numeric
- * id) with entity-scoped tags: an author change expires exactly the
+ * Author data keyed by the URL param (normalised name slug) with
+ * entity-scoped tags: an author change expires exactly the
  * `author:{param}` entries that name it, not every author's page.
  */
 const getCachedAuthor = cachedPerKey(
@@ -98,8 +92,6 @@ export async function generateMetadata({
 		description: author.details
 			? author.details.slice(0, 160)
 			: `מאמרים מאת ${author.name}`,
-		// The canonical author URL is name-slug based even when the page was
-		// reached through a legacy numeric-ID param.
 		canonical: authorPath(authorNameToSlug(author.name)),
 		type: "profile",
 		image: {
@@ -131,6 +123,7 @@ export default async function AuthorPage({
 		({ perekId }) =>
 			Number.isInteger(perekId) && perekId >= 1 && perekId <= 929,
 	);
+	const authorSameAs = await sameAsFor("TANAH_AUTHOR", author.id);
 	const rows = articles.map((article) => {
 		const perek = getPerekByPerekId(article.perekId);
 		return { ...article, sefer: perek.sefer, source: perek.source };
@@ -142,6 +135,7 @@ export default async function AuthorPage({
 				data={buildAuthorGraph({
 					author,
 					slug: authorNameToSlug(author.name),
+					sameAs: authorSameAs,
 				})}
 			/>
 			<header className={styles.authorHeader}>
