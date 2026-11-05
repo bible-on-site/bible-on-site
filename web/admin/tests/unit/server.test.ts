@@ -181,6 +181,24 @@ describe("admin server auth gate", () => {
 		expect(verifyServiceAccessTokenMock).not.toHaveBeenCalled();
 		expect(verifyIdTokenMock).not.toHaveBeenCalled();
 	});
+
+	// #3069: a stray SKIP_AUTH in the deployment environment must never
+	// disable the Cognito boundary — the bypass fails closed in production.
+	it("enforces auth in production even when SKIP_AUTH is accidentally set", async () => {
+		vi.stubEnv("SKIP_AUTH", "true");
+		vi.stubEnv("NODE_ENV", "production");
+		const entry = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("https://admin.example.com/"),
+		);
+
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(
+			"https://login.example.com/",
+		);
+	});
 });
 
 describe("admin server auth routes", () => {
