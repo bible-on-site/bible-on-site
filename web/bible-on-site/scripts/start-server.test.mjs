@@ -143,9 +143,11 @@ async function fixture(t, source, options = {}) {
 	);
 	await writeFile(path.join(directory, "server.js"), source);
 	// A file-backed counter lets tests steer the measured drain: rewrite it
-	// mid-test to simulate remote clients appearing or disappearing.
+	// mid-test to simulate remote clients appearing or disappearing. `false`
+	// selects real procfs counting, so the file is not written at all.
 	const measureFile = path.join(directory, "inbound-count.txt");
-	await writeFile(measureFile, options.measure ?? "0");
+	if (options.measure !== false)
+		await writeFile(measureFile, options.measure ?? "0");
 	const launcher = path.join(directory, "launcher.mjs");
 	await writeFile(
 		launcher,
