@@ -72,6 +72,7 @@ describe("prepared bulletins", () => {
 		mocks.queryOne
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce(row);
 		mocks.query
 			.mockResolvedValueOnce([
@@ -95,6 +96,7 @@ describe("prepared bulletins", () => {
 		mocks.queryOne
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce(winner);
 		mocks.query
 			.mockResolvedValueOnce([])
@@ -107,7 +109,8 @@ describe("prepared bulletins", () => {
 	it("rolls back and releases the connection when channel initialization fails", async () => {
 		mocks.queryOne
 			.mockResolvedValueOnce(null)
-			.mockResolvedValueOnce({ perek_id: 1 });
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null);
 		mocks.query.mockResolvedValue([]);
 		mocks.execute
 			.mockResolvedValueOnce({})
@@ -120,7 +123,8 @@ describe("prepared bulletins", () => {
 	it("does not save a bulletin when rendering fails", async () => {
 		mocks.queryOne
 			.mockResolvedValueOnce(null)
-			.mockResolvedValueOnce({ perek_id: 1 });
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null);
 		mocks.query.mockResolvedValue([]);
 		mocks.render.mockRejectedValue(new Error("Rendering failed"));
 		await expect(prepareBulletin(input.date)).rejects.toThrow(
@@ -157,6 +161,7 @@ describe("prepared bulletins", () => {
 		mocks.queryOne
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce(null);
 		mocks.query
 			.mockResolvedValueOnce([])
@@ -173,5 +178,108 @@ describe("prepared bulletins", () => {
 		expect(storedInput.dedications).toEqual(["לזכרון", "לרפואה"]);
 		expect(mocks.commit).toHaveBeenCalledOnce();
 		expect(mocks.release).toHaveBeenCalledOnce();
+	});
+});
+
+describe("Hebrew-date article override (#3098)", () => {
+	const assigned = {
+		id: 2199,
+		name: "מאמר לתאריך",
+		author: "מחבר מיוחד",
+		content: "<p>תוכן התאריך</p>",
+		distributable: 1,
+	};
+
+	beforeEach(() => {
+		for (const mock of Object.values(mocks)) mock.mockReset();
+		mocks.getConnection.mockResolvedValue(mocks);
+		mocks.render.mockResolvedValue({
+			subject: row.subject,
+			source: row.source,
+			emailHtml: row.email_html,
+			pdfBase64: row.pdf_data.toString("base64"),
+			filename: row.filename,
+		});
+	});
+
+	it("makes the assigned article the sole winner without random selection", async () => {
+		// 2024-08-13 is 9 Av 5784 — the assignment lookup must get (11, 9).
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 700 })
+			.mockResolvedValueOnce(assigned)
+			.mockResolvedValueOnce(row);
+		mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce(deliveries);
+		await prepareBulletin("2024-08-13");
+		expect(mocks.queryOne.mock.calls[2]?.[1]).toEqual([11, 9]);
+		// The candidate-article query for the perek never ran — the only
+		// query() calls are dedications and the read-back delivery list.
+		expect(mocks.query.mock.calls[0]?.[0]).toContain("tanah_dedication");
+		expect(mocks.render).toHaveBeenCalledWith(
+			expect.objectContaining({
+				article: {
+					id: 2199,
+					title: "מאמר לתאריך",
+					author: "מחבר מיוחד",
+					html: "<p>תוכן התאריך</p>",
+				},
+			}),
+		);
+		// The stored snapshot carries the same assigned article — the
+		// persisted bulletin is internally consistent with what was rendered.
+		const storedInput = JSON.parse(mocks.execute.mock.calls[0][1][3]);
+		expect(storedInput.article.id).toBe(2199);
+	});
+
+	it("rejects an assigned article that is not distribution-eligible", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 700 })
+			.mockResolvedValueOnce({ ...assigned, distributable: 0 });
+		await expect(prepareBulletin("2024-08-13")).rejects.toThrow(
+			"אינו זמין להפצה",
+		);
+		expect(mocks.render).not.toHaveBeenCalled();
+	});
+
+	it("rejects an assigned article with an empty body", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 700 })
+			.mockResolvedValueOnce({ ...assigned, content: "   " });
+		await expect(prepareBulletin("2024-08-13")).rejects.toThrow(
+			"אינו זמין להפצה",
+		);
+	});
+
+	it("resolves the TARGET Hebrew date, not the Thursday study date, on Fridays", async () => {
+		// Friday 2024-08-16 is 12 Av 5784; its study chapter comes from
+		// Thursday the 15th, but the article override follows 12 Av.
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 700 })
+			.mockResolvedValueOnce(assigned)
+			.mockResolvedValueOnce(row);
+		mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce(deliveries);
+		await prepareBulletin("2024-08-16");
+		expect(mocks.queryOne.mock.calls[1]?.[1]).toEqual(["2024-08-15"]);
+		expect(mocks.queryOne.mock.calls[2]?.[1]).toEqual([11, 12]);
+	});
+
+	it("keeps ordinary chapter selection when the date has no assignment", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(row);
+		mocks.query
+			.mockResolvedValueOnce([
+				{ id: 7, name: "מאמר", author: "מחבר", content: "<p>תוכן</p>" },
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(deliveries);
+		const result = await prepareBulletin(input.date);
+		expect(mocks.render).toHaveBeenCalledWith(input);
+		expect(result.input.article?.id).toBe(7);
 	});
 });

@@ -111,6 +111,100 @@ pub async fn find_covering_sources_by_article_id(
     Ok(sources)
 }
 
+/// Maximum day a uniform Hebrew month can reach in some year (#3098).
+/// Cheshvan and Kislev vary 29/30 by year so 30 is a valid *input* for them
+/// (a 30th that a given year lacks simply matches no real date). Months that
+/// can never reach 30 (Tevet, Adar of a non-leap year, Iyar, Tammuz, Elul,
+/// Adar II) reject 30. Returns `None` for out-of-range months.
+pub fn max_day_for_hebrew_month(hebrew_month: i32) -> Option<i32> {
+    match hebrew_month {
+        1 | 2 | 3 | 5 | 7 | 9 | 11 | 13 => Some(30),
+        4 | 6 | 8 | 10 | 12 | 14 => Some(29),
+        _ => None,
+    }
+}
+
+/// Validates a recurring Hebrew {month, day} against the uniform numbering and
+/// each month's real maximum. The message names the offending bound so callers
+/// see a clear 400 rather than a silently empty lookup (#3098).
+pub fn validate_hebrew_month_day(
+    hebrew_month: i32,
+    hebrew_day: i32,
+) -> Result<(), ServiceError> {
+    let Some(max_day) = max_day_for_hebrew_month(hebrew_month) else {
+        return Err(ServiceError::bad_request(
+            "Hebrew month must be between 1 and 14 (uniform numbering: 1=Tishrei, 13=Adar I, 14=Adar II)",
+        ));
+    };
+    if !(1..=max_day).contains(&hebrew_day) {
+        return Err(ServiceError::bad_request(&format!(
+            "Hebrew day {} is invalid for month {} (allowed: 1-{})",
+            hebrew_day, hebrew_month, max_day
+        )));
+    }
+    Ok(())
+}
+
+/// Every recurring Hebrew-date article override (#3098), for the starter
+/// payload: native clients cache the whole map so daily-override resolution
+/// works offline without a per-day network call.
+pub async fn find_all_hebrew_date_overrides(
+    db: &Database,
+) -> Result<Vec<entities::article_hebrew_date::Model>, ServiceError> {
+    tracing::info_span!("articles_service::find_all_hebrew_date_overrides");
+    let overrides = entities::article_hebrew_date::Entity::find()
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+    tracing::info!(
+        "Found {} recurring Hebrew-date article overrides",
+        overrides.len()
+    );
+    Ok(overrides)
+}
+
+/// The article assigned to one recurring Hebrew {month, day} (#3098).
+/// `None` means the date has no assignment and callers keep the ordinary
+/// per-perek selection. The returned article is the day's sole article —
+/// never one candidate among many.
+pub async fn find_article_by_hebrew_date(
+    db: &Database,
+    hebrew_month: i32,
+    hebrew_day: i32,
+) -> Result<Option<Model>, ServiceError> {
+    tracing::info_span!(
+        "articles_service::find_article_by_hebrew_date",
+        %hebrew_month,
+        %hebrew_day
+    );
+    use entities::article_hebrew_date::{Column as DateColumn, Entity as DateEntity};
+
+    let article = DateEntity::find()
+        .filter(DateColumn::HebrewMonth.eq(hebrew_month as i16))
+        .filter(DateColumn::HebrewDay.eq(hebrew_day as i16))
+        .find_also_related(Entity)
+        .one(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?
+        .and_then(|(_, article)| article);
+    match &article {
+        Some(value) => {
+            tracing::info!(
+                "Hebrew date {}-{} overrides to article {}",
+                hebrew_month,
+                hebrew_day,
+                value.id
+            );
+        }
+        None => tracing::info!("No Hebrew-date override for {}-{}", hebrew_month, hebrew_day),
+    }
+    Ok(article)
+}
+
 /// Batch variant of `find_covering_sources_by_article_id`: one IN query for
 /// many articles, grouped by article_id with the same per-article ordering
 /// (perek_id, pasuk). Articles without rows are absent from the map.

@@ -32,3 +32,44 @@ describe("bulletin dates", () => {
 		expect(hebrewBulletinDate(date)).toBe(expected);
 	});
 });
+
+describe("hebrewBulletinMonthDay (#3098)", () => {
+	it("maps Gregorian dates to the uniform Hebrew month/day", async () => {
+		const { hebrewBulletinMonthDay } = await import("~/lib/daily-bulletin");
+		// Verified against Intl/Temporal: 9 Av 5784, 5 Iyar 5785, 1 Tishrei 5785.
+		expect(hebrewBulletinMonthDay("2024-08-13")).toEqual({
+			hebrewMonth: 11,
+			hebrewDay: 9,
+		});
+		expect(hebrewBulletinMonthDay("2025-05-03")).toEqual({
+			hebrewMonth: 8,
+			hebrewDay: 5,
+		});
+		expect(hebrewBulletinMonthDay("2024-10-03")).toEqual({
+			hebrewMonth: 1,
+			hebrewDay: 1,
+		});
+	});
+
+	it("keeps Adar semantics distinct across leap years", async () => {
+		const { hebrewBulletinMonthDay } = await import("~/lib/daily-bulletin");
+		// 5784 is a leap year: Adar I -> uniform 13, Adar II -> uniform 14.
+		expect(hebrewBulletinMonthDay("2024-02-10")).toEqual({
+			hebrewMonth: 13,
+			hebrewDay: 1,
+		});
+		expect(hebrewBulletinMonthDay("2024-03-25")).toEqual({
+			hebrewMonth: 14,
+			hebrewDay: 15,
+		});
+		// 5783 is a non-leap year: plain Adar -> uniform 6, and Nisan stays 7.
+		expect(hebrewBulletinMonthDay("2023-03-07")).toEqual({
+			hebrewMonth: 6,
+			hebrewDay: 14,
+		});
+		expect(hebrewBulletinMonthDay("2023-03-23")).toEqual({
+			hebrewMonth: 7,
+			hebrewDay: 1,
+		});
+	});
+});

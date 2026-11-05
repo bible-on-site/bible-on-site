@@ -22,12 +22,23 @@ public class StarterService : BaseGraphQLService
 
     private readonly IFileSystem _fileSystem;
 
-    private StarterService() { _fileSystem = FileSystem.Current; }
+    private StarterService()
+    {
+        _fileSystem = FileSystem.Current;
+        _scheduleService = PerekScheduleService.Instance;
+    }
 
-    public StarterService(GraphQLHttpClient client, IFileSystem fileSystem) : base(client)
+    public StarterService(GraphQLHttpClient client, IFileSystem fileSystem)
+        : this(client, fileSystem, PerekScheduleService.Instance) { }
+
+    public StarterService(GraphQLHttpClient client, IFileSystem fileSystem,
+        PerekScheduleService scheduleService) : base(client)
     {
         _fileSystem = fileSystem;
+        _scheduleService = scheduleService;
     }
+
+    private readonly PerekScheduleService _scheduleService;
 
     /// <summary>
     /// List of all authors loaded from the API.
@@ -80,6 +91,11 @@ public class StarterService : BaseGraphQLService
                     }
                 }
                 perekArticlesCounters
+                articleHebrewDateOverrides {
+                    articleId
+                    hebrewMonth
+                    hebrewDay
+                }
             }
         }
         """;
@@ -176,7 +192,16 @@ public class StarterService : BaseGraphQLService
             .ToList();
 
         PerekArticlesCounters = response.Starter.PerekArticlesCounters.ToList();
+
+        // Recurring Hebrew-date overrides (#3098): keyed by month*100+day so a
+        // daily-perek view resolves its assigned article from cached data with
+        // no network call. Null on caches written before the field existed.
+        _hebrewDateOverrideArticleIds = (response.Starter.ArticleHebrewDateOverrides ?? [])
+            .ToDictionary(o => o.HebrewMonth * 100 + o.HebrewDay, o => o.ArticleId);
     }
+
+    /// <summary>month*100+day -> articleId assignments from the starter payload (#3098).</summary>
+    private Dictionary<int, int> _hebrewDateOverrideArticleIds = new();
 
     /// <summary>
     /// Gets articles for a specific author from cached data.
@@ -201,6 +226,82 @@ public class StarterService : BaseGraphQLService
     }
 
     /// <summary>
+    /// <summary>
+    /// Articles for the daily reading surface (#3098). When the viewed perek
+    /// is the resolved daily perek of a Hebrew date carrying an assignment,
+    /// that article alone replaces the ordinary per-perek list — even when
+    /// its primary perek_id is unrelated. Two date contexts apply: today
+    /// (always active — the daily surface stays overridden on any entry path)
+    /// and <paramref name="selectedDateNum"/>, the calendar-selected date the
+    /// reader was opened for (YYYYMMDD or null). Everywhere else falls back
+    /// to the unchanged per-perek list.
+    /// </summary>
+    public List<Article> GetDailyArticles(int perekId) => GetDailyArticles(perekId, null);
+
+    /// <inheritdoc cref="GetDailyArticles(int)"/>
+    public List<Article> GetDailyArticles(int perekId, int? selectedDateNum)
+    {
+        if (DailyOverrideArticleId(perekId, selectedDateNum) is int articleId)
+        {
+            return Articles.Where(a => a.Id == articleId).Take(1).ToList();
+        }
+        return GetArticlesByPerekId(perekId);
+    }
+
+    /// <summary>
+    /// Article-count badge for the daily surface (#3098): 1 when a Hebrew-date
+    /// override governs the viewed perek, otherwise the startup counter.
+    /// </summary>
+    public int GetDailyPerekArticlesCount(int perekId) =>
+        GetDailyPerekArticlesCount(perekId, null);
+
+    /// <inheritdoc cref="GetDailyPerekArticlesCount(int)"/>
+    public int GetDailyPerekArticlesCount(int perekId, int? selectedDateNum) =>
+        DailyOverrideArticleId(perekId, selectedDateNum) is not null
+            ? 1
+            : GetPerekArticlesCount(perekId);
+
+    /// <summary>
+    /// The assigned article for the viewed perek when it is the resolved
+    /// daily perek of an assigned Hebrew date, else null.
+    /// </summary>
+    private int? DailyOverrideArticleId(int perekId, int? selectedDateNum)
+    {
+        if (!IsLoaded || !_scheduleService.IsLoaded)
+        {
+            return null;
+        }
+        // The calendar-selected context first — it is the explicit daily date
+        // the reader was opened for; today stays an active context too so any
+        // visit to today's daily perek keeps the override.
+        foreach (var dateNum in ActiveDailyDateNums(selectedDateNum))
+        {
+            var (year, month, day) = HebrewDateHelper.NumberToHebrewDate(dateNum);
+            if (_scheduleService.ResolveDay(year, month, day).PerekId != perekId)
+            {
+                continue;
+            }
+            if (_hebrewDateOverrideArticleIds.TryGetValue(month * 100 + day, out var articleId))
+            {
+                return articleId;
+            }
+        }
+        return null;
+    }
+
+    private static IEnumerable<int> ActiveDailyDateNums(int? selectedDateNum)
+    {
+        if (selectedDateNum is int selected)
+        {
+            yield return selected;
+        }
+        var today = HebrewDateHelper.GetTodayDateNumber();
+        if (today != selectedDateNum)
+        {
+            yield return today;
+        }
+    }
+
     /// Number of articles attached to a perek, read from the startup counters
     /// (index = perekId - 1). Returns 0 when starter data is not loaded yet or
     /// the id is out of range — callers treat that as "no badge".
@@ -336,7 +437,14 @@ public class StarterService : BaseGraphQLService
     internal record StarterData(
         List<AuthorData> Authors,
         List<ArticleData> Articles,
-        List<int> PerekArticlesCounters);
+        List<int> PerekArticlesCounters,
+        List<ArticleHebrewDateOverrideData>? ArticleHebrewDateOverrides = null);
+
+    /// <summary>One recurring Hebrew month/day -> article assignment (#3098), uniform month numbering (13/14 = Adar I/II).</summary>
+    internal record ArticleHebrewDateOverrideData(
+        int ArticleId,
+        int HebrewMonth,
+        int HebrewDay);
 
     internal record AuthorData(
         int Id,

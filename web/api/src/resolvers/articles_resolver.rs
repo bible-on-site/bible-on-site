@@ -133,6 +133,38 @@ impl ArticlesQuery {
         Ok(articles)
     }
 
+    /// The article assigned to one recurring Hebrew month/day (#3098), or
+    /// null when the date has no assignment and ordinary per-perek selection
+    /// applies. `hebrewMonth` uses the uniform numbering shared with the app,
+    /// the website and the bulletin: 1=Tishrei..12=Elul, 6=Adar of a non-leap
+    /// year, 13=Adar I and 14=Adar II (leap years only). The assigned article
+    /// is the day's sole article — the response never includes ordinary
+    /// perek articles alongside it.
+    async fn article_by_hebrew_date(
+        &self,
+        ctx: &Context<'_>,
+        hebrew_month: i32,
+        hebrew_day: i32,
+    ) -> Result<Option<Article>> {
+        articles_service::validate_hebrew_month_day(hebrew_month, hebrew_day)
+            .map_err(|e| e.extend())?;
+        let db = ctx.data::<Database>()?;
+        let Some(model) = articles_service::find_article_by_hebrew_date(db, hebrew_month, hebrew_day)
+            .await
+            .map_err(|e| e.extend())?
+        else {
+            return Ok(None);
+        };
+        let mut article = Article::from(model);
+        if ctx.look_ahead().field("readingMetric").exists() {
+            attach_article_reading_metrics(db, std::slice::from_mut(&mut article)).await?;
+        }
+        if ctx.look_ahead().field("coveringSources").exists() {
+            attach_article_covering_sources(db, std::slice::from_mut(&mut article)).await?;
+        }
+        Ok(Some(article))
+    }
+
     /// Get all articles by a specific author
     async fn articles_by_author_id(
         &self,
@@ -264,5 +296,116 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    /// `articleByHebrewDate` returns the single assigned article for a
+    /// matching recurring date (#3098) — a complete override, not a list.
+    #[tokio::test]
+    async fn article_by_hebrew_date_returns_assigned_article() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<(entities::article_hebrew_date::Model, Option<article::Model>), Vec<_>, _>([
+                    vec![(
+                        entities::article_hebrew_date::Model {
+                            hebrew_month: 11,
+                            hebrew_day: 9,
+                            article_id: 2199,
+                            created_at: chrono::Utc::now(),
+                        },
+                        Some(article_model(2199)),
+                    )],
+                ])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            ArticlesQuery,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema
+            .execute("{ articleByHebrewDate(hebrewMonth: 11, hebrewDay: 9) { id name } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        assert_eq!(res.data.into_json().unwrap()["articleByHebrewDate"]["id"].as_i64(), Some(2199));
+    }
+
+    /// A recurring date with no assignment resolves to null so callers keep
+    /// ordinary per-perek selection (#3098).
+    #[tokio::test]
+    async fn article_by_hebrew_date_returns_null_without_assignment() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<(entities::article_hebrew_date::Model, Option<article::Model>), Vec<_>, _>([
+                    Vec::new(),
+                ])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            ArticlesQuery,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema
+            .execute("{ articleByHebrewDate(hebrewMonth: 12, hebrewDay: 1) { id } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        assert!(res.data.into_json().unwrap()["articleByHebrewDate"].is_null());
+    }
+
+    /// Out-of-range uniform months and impossible month/day pairs are a
+    /// client error (#3098) — including day 30 for months that never have 30.
+    #[tokio::test]
+    async fn article_by_hebrew_date_rejects_invalid_dates() {
+        for args in [
+            "(hebrewMonth: 0, hebrewDay: 1)",
+            "(hebrewMonth: 15, hebrewDay: 1)",
+            "(hebrewMonth: 11, hebrewDay: 0)",
+            "(hebrewMonth: 11, hebrewDay: 31)",
+            "(hebrewMonth: 4, hebrewDay: 30)", // Tevet is always 29 days
+            "(hebrewMonth: 14, hebrewDay: 30)", // Adar II is always 29 days
+        ] {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql).into_connection(),
+            );
+            let schema = async_graphql::Schema::build(
+                ArticlesQuery,
+                async_graphql::EmptyMutation,
+                async_graphql::EmptySubscription,
+            )
+            .data(db)
+            .finish();
+            let res = schema
+                .execute(format!("{{ articleByHebrewDate{args} {{ id }} }}"))
+                .await;
+            assert!(
+                res.errors
+                    .iter()
+                    .any(|e| e.message.contains("Hebrew")),
+                "{args}: {:?}",
+                res.errors
+            );
+        }
+    }
+
+    /// Leap-year-only months and variable-length months stay within the real
+    /// Hebrew calendar (#3098): Adar I/II (13/14) accept leap dates, and
+    /// Cheshvan/Kislev accept 30 because some years have it.
+    #[test]
+    fn hebrew_month_day_bounds_match_the_uniform_calendar() {
+        use articles_service::validate_hebrew_month_day;
+        for (month, day) in [(2, 30), (3, 30), (13, 30), (13, 29), (14, 29), (6, 29)] {
+            assert!(validate_hebrew_month_day(month, day).is_ok(), "{month}/{day}");
+        }
+        for (month, day) in [(6, 30), (14, 30), (12, 30), (0, 1), (15, 1), (1, 31)] {
+            assert!(validate_hebrew_month_day(month, day).is_err(), "{month}/{day}");
+        }
     }
 }

@@ -220,6 +220,12 @@ jest.mock("@/util/hebdates-util", () => ({
 	}),
 }));
 
+// The live date check has dedicated tests; here the Sefer renders its
+// static article lists.
+jest.mock("@/app/929/[number]/components/use-daily-article-override", () => ({
+	useDailyArticleOverride: () => null,
+}));
+
 jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
 	SeferPanel: () => <div data-testid="blank-page" />,
 }));

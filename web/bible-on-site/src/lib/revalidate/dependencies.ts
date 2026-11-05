@@ -19,6 +19,7 @@ import type {
 	EntityChange,
 } from "@/lib/revalidate/contract";
 import {
+	articleDateOverridesTag,
 	articleDedicationsTag,
 	articleTag,
 	authorArticlesTag,
@@ -448,6 +449,9 @@ async function resolveArticle(
 	change: Extract<EntityChange, { kind: "article" }>,
 ) {
 	addTag(sink, articleTag(change.id));
+	// Any article change can alter a date-assigned article's rendered summary —
+	// the override reads carry this one collection tag (#3098).
+	addTag(sink, articleDateOverridesTag);
 	for (const perekId of change.perekIds) {
 		addTag(sink, perekArticlesTag(perekId));
 		addPath(sink, `/929/${perekId}`);

@@ -17,6 +17,14 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import {
+	assertHebrewDatesAvailable,
+	type HebrewDateAssignment,
+	invalidateUnsentBulletinsForHebrewDates,
+	isHebrewDateSchemaMissing,
+	normalizeHebrewDates,
+	replaceHebrewDates,
+} from "./hebrew-dates";
 import { recomputeArticleMetrics } from "./reading-metrics";
 import {
 	articleChange,
@@ -88,6 +96,13 @@ export interface Article {
 	 */
 	coveringSources?: CoveringSource[];
 	/**
+	 * The article's recurring Hebrew-date assignments (#3098), ordered by
+	 * month/day. `undefined` means the Hebrew-date schema is not deployed —
+	 * never "the article has no dates"; an explicitly empty array means no
+	 * assignments.
+	 */
+	hebrewDates?: HebrewDateAssignment[];
+	/**
 	 * Number of covering-source rows, populated by the list queries for
 	 * review badges; `undefined` when the schema is not deployed.
 	 */
@@ -116,6 +131,14 @@ export interface ArticleFormData {
 	 */
 	coveringSources?: CoveringSource[];
 	coverageVerified?: boolean;
+	/**
+	 * Hebrew-date assignment semantics (#3098):
+	 * - omitted: the article's date assignments are left untouched.
+	 * - array (including []): atomically replaces the persisted set after
+	 *   shape/calendar/conflict validation; at most one article may hold a
+	 *   given recurring date.
+	 */
+	hebrewDates?: HebrewDateAssignment[];
 }
 
 const ARTICLE_COLUMNS =
@@ -165,6 +188,42 @@ async function txLoadCoveringSources(
 		);
 	} catch (error) {
 		if (!isCoveringSourceSchemaMissing(error)) throw error;
+		return undefined;
+	}
+}
+
+/**
+ * Loads the article's Hebrew-date assignments (#3098). Returns undefined when
+ * the Hebrew-date table is not deployed — distinct from an explicitly empty
+ * set — so save round-trips omit the field instead of wiping.
+ */
+async function loadHebrewDates(
+	articleId: number,
+): Promise<HebrewDateAssignment[] | undefined> {
+	try {
+		return await query<HebrewDateAssignment>(
+			"SELECT hebrew_month, hebrew_day FROM tanah_article_hebrew_date WHERE article_id = ? ORDER BY hebrew_month, hebrew_day",
+			[articleId],
+		);
+	} catch (error) {
+		if (!isHebrewDateSchemaMissing(error)) throw error;
+		return undefined;
+	}
+}
+
+/** Loads Hebrew-date assignments inside a save transaction; see loadHebrewDates. */
+async function txLoadHebrewDates(
+	conn: mysql.PoolConnection,
+	articleId: number,
+): Promise<HebrewDateAssignment[] | undefined> {
+	try {
+		return await txQuery<HebrewDateAssignment>(
+			conn,
+			"SELECT hebrew_month, hebrew_day FROM tanah_article_hebrew_date WHERE article_id = ? ORDER BY hebrew_month, hebrew_day",
+			[articleId],
+		);
+	} catch (error) {
+		if (!isHebrewDateSchemaMissing(error)) throw error;
 		return undefined;
 	}
 }
@@ -250,7 +309,11 @@ export const getArticle = createServerFn({ method: "GET" })
 			throw new Error("Article not found");
 		}
 
-		return { ...article, coveringSources: await loadCoveringSources(id) };
+		return {
+			...article,
+			coveringSources: await loadCoveringSources(id),
+			hebrewDates: await loadHebrewDates(id),
+		};
 	});
 
 // Create article
@@ -265,6 +328,10 @@ export const createArticle = createServerFn({ method: "POST" })
 			data.coveringSources === undefined
 				? undefined
 				: normalizeCoveringSources(data.coveringSources);
+		const hebrewRows =
+			data.hebrewDates === undefined
+				? undefined
+				: normalizeHebrewDates(data.hebrewDates);
 
 		await ensureArticleSearchQueue();
 		const created = await transaction(async (conn) => {
@@ -299,6 +366,10 @@ export const createArticle = createServerFn({ method: "POST" })
 					data.coverageVerified,
 				);
 			}
+			if (hebrewRows !== undefined) {
+				await assertHebrewDatesAvailable(conn, result.insertId, hebrewRows);
+				await replaceHebrewDates(conn, result.insertId, hebrewRows);
+			}
 
 			const newArticle = await queryArticleRow(
 				(sql, params) => txQueryOne<ArticleRow>(conn, sql, params),
@@ -310,13 +381,18 @@ export const createArticle = createServerFn({ method: "POST" })
 			}
 			// Same-transaction reading metrics (#2607): the stored decoration
 			// commits atomically with the content it describes.
-			await recomputeArticleMetrics(conn, newArticle.id, newArticle.content ?? null);
+			await recomputeArticleMetrics(
+				conn,
+				newArticle.id,
+				newArticle.content ?? null,
+			);
 			// Same-transaction enqueue: the index update request commits atomically
 			// with the article row.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [newArticle.id]);
 			return {
 				...newArticle,
 				coveringSources: await txLoadCoveringSources(conn, newArticle.id),
+				hebrewDates: await txLoadHebrewDates(conn, newArticle.id),
 			};
 		});
 		// Post-commit: expire the website's article caches so the new article
@@ -328,6 +404,9 @@ export const createArticle = createServerFn({ method: "POST" })
 				authorIds: [created.author_id],
 			}),
 		]);
+		if (hebrewRows !== undefined) {
+			await invalidateUnsentBulletinsForHebrewDates(hebrewRows);
+		}
 		return created;
 	});
 
@@ -342,6 +421,10 @@ export const updateArticle = createServerFn({ method: "POST" })
 			data.coveringSources === undefined
 				? undefined
 				: normalizeCoveringSources(data.coveringSources);
+		const hebrewRows =
+			data.hebrewDates === undefined
+				? undefined
+				: normalizeHebrewDates(data.hebrewDates);
 
 		await ensureArticleSearchQueue();
 		let previousPerekId: number | null = null;
@@ -349,6 +432,9 @@ export const updateArticle = createServerFn({ method: "POST" })
 		// The covering rows destroyed by a replace — the website unions them
 		// with the live rows to expire every touched reading unit.
 		let previousCovering: CoveringSource[] = [];
+		// The Hebrew dates destroyed by a replace — unsent prepared bulletins
+		// for either side must regenerate post-commit (#3098).
+		let previousHebrewDates: HebrewDateAssignment[] = [];
 		const updatedArticle = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
@@ -365,8 +451,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 			previousAuthorId = prev?.author_id ?? null;
 			// Captured unconditionally: a coverage replace OR a verified→false
 			// flip both destroy the previously-effective coverage surfaces.
-			previousCovering =
-				(await txLoadCoveringSources(conn, data.id)) ?? [];
+			previousCovering = (await txLoadCoveringSources(conn, data.id)) ?? [];
 			await txExecute(
 				conn,
 				"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, distributable = ?, content = ? WHERE id = ?",
@@ -392,6 +477,11 @@ export const updateArticle = createServerFn({ method: "POST" })
 			} else if (data.coverageVerified !== undefined) {
 				await updateCoverageVerified(conn, data.id, data.coverageVerified);
 			}
+			if (hebrewRows !== undefined) {
+				previousHebrewDates = (await txLoadHebrewDates(conn, data.id)) ?? [];
+				await assertHebrewDatesAvailable(conn, data.id, hebrewRows);
+				await replaceHebrewDates(conn, data.id, hebrewRows);
+			}
 
 			const updated = await queryArticleRow(
 				(sql, params) => txQueryOne<ArticleRow>(conn, sql, params),
@@ -406,6 +496,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 			return {
 				...updated,
 				coveringSources: await txLoadCoveringSources(conn, data.id),
+				hebrewDates: await txLoadHebrewDates(conn, data.id),
 			};
 		});
 		// Old ∪ new associations: a perek/author move or a coverage replace
@@ -424,6 +515,13 @@ export const updateArticle = createServerFn({ method: "POST" })
 					: {}),
 			}),
 		]);
+		if (hebrewRows !== undefined) {
+			// Both sides of the replace can govern a prepared bulletin's date.
+			await invalidateUnsentBulletinsForHebrewDates([
+				...previousHebrewDates,
+				...hebrewRows,
+			]);
+		}
 		return updatedArticle;
 	});
 
@@ -439,6 +537,9 @@ export const deleteArticle = createServerFn({ method: "POST" })
 			[data],
 		);
 		const deletedCovering = (await loadCoveringSources(data)) ?? [];
+		// Assignment rows cascade-delete with the article — captured now so
+		// unsent prepared bulletins for those dates regenerate (#3098).
+		const deletedHebrewDates = (await loadHebrewDates(data)) ?? [];
 		await transaction(async (conn) => {
 			// Coverage rows are removed with the article — explicitly (the FK
 			// ON DELETE CASCADE is the backstop) so cleanup does not depend on
@@ -472,5 +573,6 @@ export const deleteArticle = createServerFn({ method: "POST" })
 				}),
 			]);
 		}
+		await invalidateUnsentBulletinsForHebrewDates(deletedHebrewDates);
 		return { success: true };
 	});
