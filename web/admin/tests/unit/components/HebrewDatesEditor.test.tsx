@@ -60,4 +60,18 @@ describe("HebrewDatesEditor", () => {
 			{ hebrew_month: 14, hebrew_day: 29 },
 		]);
 	});
+
+	it("falls back to a 30-day bound for a month outside the uniform table", () => {
+		// Server-side normalization rejects out-of-range months; the editor
+		// still renders a stale row sanely while the user fixes it.
+		const onChange = vi.fn();
+		render(
+			<HebrewDatesEditor
+				dates={[{ hebrew_month: 99, hebrew_day: 31 }]}
+				onChange={onChange}
+			/>,
+		);
+		const input = screen.getByDisplayValue("31");
+		expect(input.getAttribute("max")).toBe("30");
+	});
 });

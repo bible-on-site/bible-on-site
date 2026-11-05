@@ -234,4 +234,17 @@ describe("invalidateUnsentBulletinsForHebrewDates", () => {
 		);
 		warn.mockRestore();
 	});
+
+	it("warns with the raw value when the failure is not an Error", async () => {
+		mocks.query.mockRejectedValue("dropped connection");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		await invalidateUnsentBulletinsForHebrewDates([
+			{ hebrew_month: 11, hebrew_day: 9 },
+		]);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("invalidate unsent bulletins"),
+			"dropped connection",
+		);
+		warn.mockRestore();
+	});
 });
