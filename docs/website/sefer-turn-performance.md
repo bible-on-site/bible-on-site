@@ -31,7 +31,7 @@ including moving-bookmark first turns, without fitting a 50.1ms overrun into a
 50ms budget. The historical stress limits and reducer remain available unchanged.
 These are rAF render opportunities, not measurements of physical presentation.
 
-The [#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) repair
+The [#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) investigation
 restores all twelve CI scenarios and distinguishes presentation from software
 rendering work using Chrome's primary device, renderer and acceleration facts.
 
@@ -71,12 +71,34 @@ diagnostics, including a 50.1ms miss in one of the final fixed repeats.
 The complete production build retains 20,504 routes / 20,497 prerenders, and
 actual HTTP assets and all 153 package distribution files match the producer.
 All 57 reader behavior checks pass with one existing conditional skip, including
-all held-page/color guards. All 109 metric unit tests and TypeScript pass.
+all held-page/color guards. The original 109 metric unit tests and TypeScript pass.
 At guard commit `ec0a8e247`, all 15 desktop checks pass: twelve reader cases and
 three probe controls. Its worst response p95 is 33ms, with zero recorded blocking.
 Three predeclared full software-work runs at that same commit each pass all
 37 checks; across them the worst response p95 is 109.9ms and blocking is 7.2ms.
 No samples are selected to make those results pass.
+
+Hosted repeatability is still failing. At `e3d4574c8`, the first complete CI
+workflow passes, including all twelve reader scenarios and three controls.
+The second predeclared execution fails the first moving-bookmark drag case:
+Chrome records a 238ms frame with 187.9ms blocking, no script attribution, and
+visible/focused state throughout. Its response p95 is only 103.5ms, so the
+separate blocking guard catches a pause that response alone would miss.
+The independent after-failure trace does not reproduce that pause (5.9ms
+maximum blocking); it cannot identify the original cause. The complete raw
+records from both attempts are retained in the
+[hosted repeatability fixture](sefer-turn-performance.hosted-repeatability.json),
+including the failure. Twenty-four additional fixture replays keep that failure
+in the guard's 133 passing unit checks. The third execution is not requested.
+
+CI now records the original sequence from before navigation and retains that
+trace when qualification or setup fails. Main-thread wall/CPU task timings,
+rendering events and the probe's timing marks can locate the original stall.
+Recording ends before the independent replay; successful traces are closed
+without keeping their bulk data. `SEFER_TURN_TRACE=1` enables the same recording
+locally. No CPU profiler, input wait, new retry, timeout or budget adjustment is
+added to the measured sequence. This is additional diagnosis, not a repair of
+the hosted stall or completed release qualification.
 
 The [registry validation record](sefer-turn-performance.registry-validation.json)
 retains every case's metrics and links the package, compiled assets, visual

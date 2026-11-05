@@ -2,6 +2,7 @@
 import numbers from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-125.json";
 import kings from "../../../../../docs/website/sefer-turn-performance.blocking-baseline-300.json";
 import desktop from "../../../../../docs/website/sefer-turn-performance.desktop-baseline.json";
+import hosted from "../../../../../docs/website/sefer-turn-performance.hosted-repeatability.json";
 import {
 	reduceTurnBlockingSamples,
 	reduceTurnSamples,
@@ -13,6 +14,31 @@ import {
 	turnRenderingProfile,
 	turnVisibilityFailures,
 } from "../../util/turn-metrics";
+
+it.each(hosted.cases)(
+	"retains hosted attempt $attempt: $chapter $mode $gesture",
+	(record) => {
+		const original = structuredClone(record.samples);
+		const failures = turnQualificationFailures(
+			reduceTurnSamples(record.samples, record.chapter, 6),
+			reduceTurnBlockingSamples(record.samples, record.chapter, 6),
+			turnRenderingProfile(record.gpu),
+		);
+		expect(failures.length > 0).toBe(record.expectedFailure);
+		if (record.expectedFailure) {
+			expect(failures).toContain(
+				"first turn/blockingDurationMaxMs=187.9ms > 50ms",
+			);
+			expect(
+				record.samples.longAnimationFrames.find(
+					(frame) => frame.blockingDuration === 187.9,
+				)?.scripts,
+			).toEqual([]);
+		}
+		expect(turnVisibilityFailures(record.samples.visibility)).toEqual([]);
+		expect(record.samples).toEqual(original);
+	},
+);
 
 it.each(desktop.cases)(
 	"guards the natural desktop bad mark: $phase $chapter $mode $gesture",

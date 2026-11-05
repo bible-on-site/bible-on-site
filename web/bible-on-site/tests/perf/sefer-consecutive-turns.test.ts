@@ -1,5 +1,5 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { expect, type TestInfo, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
 import {
 	captureTurnFailureTrace,
@@ -26,6 +26,7 @@ import {
 	waitForTurnCommit,
 	waitForVisibleTurnContent,
 } from "../util/turn-probe";
+import { startTurnQualificationTrace } from "../util/turn-qualification-trace";
 
 // Every mode/book/gesture has its own unchanged 20s local / 60s CI deadline.
 // Full Chromium also uses the desktop rendering path locally; archive hardware
@@ -38,6 +39,36 @@ test.use({
 test.describe.configure({ retries: 0 });
 test.skip(({ isMobile }) => isMobile, "Desktop Chrome/Edge regression profile");
 const TURN_DIAGNOSTICS = ".playwright-report/perf/diagnostics/sefer-turns";
+const originalTraces = new Map<
+	string,
+	{
+		trace: Awaited<ReturnType<typeof startTurnQualificationTrace>>;
+		path: string;
+	}
+>();
+
+async function finishOriginalTrace(testInfo: TestInfo, keep: boolean) {
+	const original = originalTraces.get(testInfo.testId);
+	if (!original) return;
+	originalTraces.delete(testInfo.testId);
+	try {
+		await original.trace.finish(keep ? original.path : undefined);
+	} catch (error) {
+		// Diagnostic collection must preserve the original timing failure.
+		await testInfo.attach("original-turn-trace-error", {
+			body: String(error),
+			contentType: "text/plain",
+		});
+	}
+}
+
+// biome-ignore lint/correctness/noEmptyPattern: Playwright requires fixture destructuring before testInfo.
+test.afterEach(async ({}, testInfo) => {
+	await finishOriginalTrace(
+		testInfo,
+		testInfo.status !== testInfo.expectedStatus,
+	);
+});
 
 for (const [chapter, bookmarks] of [
 	[125, 36],
@@ -51,6 +82,12 @@ for (const [chapter, bookmarks] of [
 				browser,
 			}, testInfo) => {
 				test.skip(isMobile, "Desktop Chrome/Edge regression profile");
+				if (process.env.CI || process.env.SEFER_TURN_TRACE === "1") {
+					originalTraces.set(testInfo.testId, {
+						trace: await startTurnQualificationTrace(browser),
+						path: `.playwright-report/perf/diagnostics/sefer-turn-traces/${chapter}-${mode}-${gesture}.original.trace.json`,
+					});
+				}
 				await page.addInitScript((attachment) => {
 					localStorage.setItem(
 						"seferBookmarks",
@@ -215,6 +252,8 @@ for (const [chapter, bookmarks] of [
 					path: qualificationPath,
 					contentType: "application/json",
 				});
+				// Close the original recording before the independent diagnostic replay.
+				await finishOriginalTrace(testInfo, failures.length > 0);
 				if (failures.length) {
 					try {
 						await captureTurnFailureTrace(

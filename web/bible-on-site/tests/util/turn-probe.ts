@@ -34,6 +34,7 @@ declare global {
 export async function startTurnProbe(page: Page, gesture: "drag" | "toolbar") {
 	await page.evaluate((inputGesture) => {
 		if (window.__seferTurns) throw new Error("Turn probe already running");
+		performance.mark("sefer-qualification:begin");
 		const probe = {
 			inputs: [] as TurnInput[],
 			frames: [] as number[],
@@ -139,6 +140,7 @@ export async function stopTurnProbe(page: Page): Promise<TurnSamples> {
 		const probe = window.__seferTurns;
 		if (!probe) throw new Error("Turn probe missing");
 		probe.stoppedAt = performance.now();
+		performance.mark("sefer-qualification:end");
 		const stoppedVisibility = document.visibilityState;
 		const stoppedFocused = document.hasFocus();
 		window.__seferTurns = undefined;
