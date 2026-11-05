@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -1326,5 +1326,171 @@ test("a fresh upload is not verified when Apple reports no checksum and no file 
 		);
 	} finally {
 		cleanup(dir);
+	}
+});
+
+// ---------- #2794: reuse across nondeterministic archive rebuilds ----------
+
+test("planPack reuses via the receipt's producer MD5 when the container changed", () => {
+	// The 5.0.232 failure: identical content, rebuilt .aar, Apple reports MD5 —
+	// the receipt tie must compare MD5 to the producer's archiveMd5, never to
+	// archiveSha256.
+	const pack = { id: "p", archiveSha256: sha256("repacked"), contentSha256: "c".repeat(64) };
+	const remote = remotePack("p", [
+		appleVersion("v1", 30, "COMPLETE", { checksum: checksumOf("original", "md5") }),
+	]);
+	const receipt = {
+		versionId: "v1",
+		contentSha256: pack.contentSha256,
+		archiveSha256: sha256("original"),
+		archiveMd5: md5("original"),
+	};
+	assert.equal(planPack(pack, remote, receipt, md5("repacked")).action, "reuse");
+});
+
+test("planPack uploads new content even when the MD5 receipt tie is consistent", () => {
+	const pack = { id: "p", archiveSha256: sha256("new"), contentSha256: "d".repeat(64) };
+	const remote = remotePack("p", [
+		appleVersion("v1", 30, "COMPLETE", { checksum: checksumOf("original", "md5") }),
+	]);
+	const receipt = {
+		versionId: "v1",
+		contentSha256: "c".repeat(64),
+		archiveSha256: sha256("original"),
+		archiveMd5: md5("original"),
+	};
+	const decision = planPack(pack, remote, receipt, md5("new"));
+	assert.equal(decision.action, "upload");
+	assert.equal(decision.evidence, "receipt-differs");
+});
+
+test("planPack cannot reuse a receipt that contradicts the remote checksum", () => {
+	const pack = { id: "p", archiveSha256: sha256("repacked"), contentSha256: "c".repeat(64) };
+	const remote = remotePack("p", [
+		appleVersion("v1", 30, "COMPLETE", { checksum: checksumOf("original", "md5") }),
+	]);
+	const receipt = {
+		versionId: "v1",
+		contentSha256: pack.contentSha256,
+		archiveSha256: sha256("original"),
+		archiveMd5: md5("tampered"),
+	};
+	const decision = planPack(pack, remote, receipt, md5("repacked"));
+	assert.equal(decision.action, "upload");
+	assert.equal(decision.evidence, "unverifiable");
+});
+
+test("a legacy receipt without the remote checksum's algorithm cannot prove reuse", () => {
+	// Receipts written before archiveMd5 existed cannot verify an MD5-only
+	// remote: the first post-fix release uploads once and its new receipt
+	// self-heals the missing algorithm for every later release.
+	const pack = { id: "p", archiveSha256: sha256("repacked"), contentSha256: "c".repeat(64) };
+	const remote = remotePack("p", [
+		appleVersion("v1", 30, "COMPLETE", { checksum: checksumOf("original", "md5") }),
+	]);
+	const receipt = {
+		versionId: "v1",
+		contentSha256: pack.contentSha256,
+		archiveSha256: sha256("original"),
+	};
+	const decision = planPack(pack, remote, receipt, md5("repacked"));
+	assert.equal(decision.action, "upload");
+	assert.equal(decision.evidence, "unverifiable");
+});
+
+test("release A uploads then releases B and C reuse despite differing archive containers", async () => {
+	// The reopened-issue scenario end to end: Apple's remote checksum is MD5,
+	// every release rebuilds a byte-different .aar over identical content.
+	// A uploads; B and C must prove reuse through the chained producer proof
+	// with zero uploads.
+	const remote = {
+		"perushim-notes": {
+			pack: { type: "backgroundAssets", id: "apple-pack-perushim-notes", attributes: { assetPackIdentifier: "perushim-notes" } },
+			versions: [],
+		},
+		"recitation-1": {
+			pack: { type: "backgroundAssets", id: "apple-pack-recitation-1", attributes: { assetPackIdentifier: "recitation-1" } },
+			versions: [],
+		},
+	};
+	const receipts = new Map();
+	let receiptTag = null;
+	const github = {
+		findReceiptAsset: async () => receiptTag,
+		downloadReceipt: async (repo, tag, directory) =>
+			writeFileSync(
+				path.join(directory, "asset-pack-publication.json"),
+				receipts.get(tag),
+			),
+		uploadReceipt: async (repo, tag, file) => {
+			receipts.set(tag, readFileSync(file, "utf8"));
+			receiptTag = tag;
+		},
+	};
+	const xcrunCalls = [];
+	const runRelease = async (tag, containers) => {
+		const ids = ["perushim-notes", "recitation-1"];
+		const entries = ids.map((id, index) => plannedPack(id, containers[index]));
+		const dir = packDir(entries);
+		try {
+			return await uploadAssetPacks(
+				{
+					directory: dir,
+					bundle: "com.tanah.daily929",
+					credentials,
+					releaseTag: tag,
+					repository: "o/r",
+					github,
+					exec: (command, args) => {
+						assert.equal(command, "xcrun");
+						xcrunCalls.push(args[2]);
+						// altool's commit lands a new live version carrying exactly
+						// the uploaded bytes; Apple reports their MD5.
+						const entry = entries.find(
+							(e) => e.archive === path.basename(args[2]),
+						);
+						const versions = remote[entry.id].versions;
+						versions.push({
+							id: `v${versions.length + 1}-${entry.id}`,
+							number: versions.length + 1,
+							state: "COMPLETE",
+							beta: "READY_FOR_TESTING",
+							files: [assetFile(md5(entry.archiveContent), "MD5")],
+						});
+						return { status: 0, stdout: "Asset pack uploaded" };
+					},
+					sleep: () => Promise.resolve(),
+				},
+				remoteReader(remote),
+			);
+		} finally {
+			cleanup(dir);
+		}
+	};
+
+	const runA = await runRelease("app-v5.0.230", ["container-A-notes", "container-A-audio"]);
+	assert.equal(runA.uploaded, 2);
+	const runB = await runRelease("app-v5.0.232", ["container-B-notes", "container-B-audio"]);
+	assert.equal(runB.uploaded, 0);
+	assert.equal(runB.reused, 2);
+	const runC = await runRelease("app-v5.0.233", ["container-C-notes", "container-C-audio"]);
+	assert.equal(runC.uploaded, 0);
+	assert.equal(runC.reused, 2);
+	// Only release A ever ran altool.
+	assert.equal(xcrunCalls.length, 2);
+
+	// B's receipt must keep the ORIGINAL producer's archive proof (container
+	// A's checksums and release), not B's rebuilt container — that proof is
+	// what let C verify the same live version again.
+	for (const [tag, container] of [
+		["app-v5.0.232", "container-A-notes"],
+		["app-v5.0.233", "container-A-notes"],
+	]) {
+		const entry = JSON.parse(receipts.get(tag)).packs["perushim-notes"];
+		assert.equal(entry.versionId, "v1-perushim-notes");
+		assert.equal(entry.archiveSha256, sha256(container));
+		assert.equal(entry.archiveMd5, md5(container));
+		assert.equal(entry.producedBy.release, "app-v5.0.230");
+		assert.equal(entry.consumedBy.release, tag);
 	}
 });

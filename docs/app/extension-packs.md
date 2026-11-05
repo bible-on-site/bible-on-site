@@ -111,7 +111,10 @@ The mechanism, end to end:
    checksums of the live (newest `COMPLETE`) version plus anything in flight.
    Reuse requires *all* of: live version exists, its checksum (or a prior
    receipt's version+content tie) matches this pack, and its internal beta
-   release is `READY_FOR_TESTING`. Proven differences — missing pack, a receipt
+   release is `READY_FOR_TESTING`. The receipt tie compares Apple's checksum
+   to the receipt's producer archive proof *in the algorithm Apple reports* —
+   SHA-256 or MD5 — because rebuilt `.aar` containers are not byte-identical
+   even over identical content. Proven differences — missing pack, a receipt
    tying the live version to other content, wrong platform — upload a fresh
    version. Remote bytes that are *unverifiable* (checksum differs or is absent
    with no receipt tie) upload only when receipt evidence is complete: a
@@ -130,9 +133,12 @@ The mechanism, end to end:
    testing. The step reports `uploaded / reused / reconciled / blocked` per
    pack; "reused" is never reported as "uploaded".
 5. **Publication receipt** (`asset-pack-publication.json` on the release):
-   per pack it records the content fingerprint, archive digest, Apple pack and
-   version ids/numbers, all three channel release linkages, the action taken,
-   and `producedBy`/`consumedBy` provenance — so a reused pack's original
+   per pack it records the content fingerprint, the producer archive proof
+   (SHA-256 *and* MD5 of the bytes the recorded Apple version carries —
+   chained across reuses from the original producing release, never the
+   current run's rebuilt container), Apple pack and version ids/numbers, all
+   three channel release linkages, the action taken, and
+   `producedBy`/`consumedBy` provenance — so a reused pack's original
    producer release stays visible and a later deploy can prove reuse even when
    Apple exposes no checksum for a version. Discovery scans release pages via
    `gh api --jq` (bounded output regardless of payload size — #2842 ENOBUFS),
