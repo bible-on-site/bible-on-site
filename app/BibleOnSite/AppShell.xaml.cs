@@ -120,7 +120,7 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 	internal bool IsFlyoutOverlayOpen => !_navPane.Locked && FlyoutIsPresented;
 
 	/// <summary>
-	/// Windows-only entry point from <see cref="DesktopWindowChrome"/> on
+	/// Windows-only entry point from the desktop window chrome layer on
 	/// window size changes: pins the flyout into a nav pane above the
 	/// breakpoint and releases it below, preserving the collapse choice and
 	/// never popping an overlay on a narrow transition.
