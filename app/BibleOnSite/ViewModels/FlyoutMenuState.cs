@@ -11,9 +11,7 @@ namespace BibleOnSite.ViewModels;
 /// this type exists to make that binding reactive (INotifyPropertyChanged)
 /// and unit-testable without a live Shell.
 /// </summary>
-// ReSharper disable once PartialTypeWithSinglePart — the other declaration
-// is the CommunityToolkit [ObservableProperty] generator output.
-public partial class FlyoutMenuState : ObservableObject
+public class FlyoutMenuState : ObservableObject
 {
     private static readonly Lazy<FlyoutMenuState> _instance =
         new(() => new FlyoutMenuState(PreferencesService.Instance));
@@ -43,18 +41,32 @@ public partial class FlyoutMenuState : ObservableObject
     /// on Windows the pinned nav pane always shows it, so the rail works like
     /// the Fluent navigation's selected indicator.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsAlHaperekCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsTanahpediaCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsLearningCalendarCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsMasoraCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsParashaCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsAuthorsCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsDailyBulletinCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsTermsCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsPreferencesCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsContactCurrent))]
-    [NotifyPropertyChangedFor(nameof(IsDonationsCurrent))]
+    public FlyoutDestination CurrentDestination
+    {
+        get => _currentDestination;
+        set
+        {
+            if (!SetProperty(ref _currentDestination, value))
+            {
+                return;
+            }
+
+            // Every row flag repaints — the newly selected row and the one
+            // that just lost the marker.
+            OnPropertyChanged(nameof(IsAlHaperekCurrent));
+            OnPropertyChanged(nameof(IsTanahpediaCurrent));
+            OnPropertyChanged(nameof(IsLearningCalendarCurrent));
+            OnPropertyChanged(nameof(IsMasoraCurrent));
+            OnPropertyChanged(nameof(IsParashaCurrent));
+            OnPropertyChanged(nameof(IsAuthorsCurrent));
+            OnPropertyChanged(nameof(IsDailyBulletinCurrent));
+            OnPropertyChanged(nameof(IsTermsCurrent));
+            OnPropertyChanged(nameof(IsPreferencesCurrent));
+            OnPropertyChanged(nameof(IsContactCurrent));
+            OnPropertyChanged(nameof(IsDonationsCurrent));
+        }
+    }
+
     private FlyoutDestination _currentDestination;
 
     public bool IsAlHaperekCurrent => CurrentDestination == FlyoutDestination.AlHaperek;

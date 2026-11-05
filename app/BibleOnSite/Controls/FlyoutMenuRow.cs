@@ -31,7 +31,7 @@ public sealed class FlyoutMenuRow : ContentView
 	/// </summary>
 	public static readonly BindableProperty IsSelectedProperty =
 		BindableProperty.Create(nameof(IsSelected), typeof(bool), typeof(FlyoutMenuRow), false,
-			propertyChanged: static (b, _, v) => ((FlyoutMenuRow)b).ApplySelectedVisual((bool)v));
+			propertyChanged: static (b, _, _) => ((FlyoutMenuRow)b).ApplySelectedVisual());
 
 	public string Icon
 	{
@@ -148,14 +148,12 @@ public sealed class FlyoutMenuRow : ContentView
 	/// touch flyouts keep their unselected look (#2766). No-ops in unit tests
 	/// where no application resources exist.
 	/// </summary>
-	private void ApplySelectedVisual(bool selected)
+	private void ApplySelectedVisual()
 	{
-		if (!OperatingSystem.IsWindows())
-		{
-			return;
-		}
-
-		if (!selected)
+#if !WINDOWS
+		// Windows-only repaint (#2766); touch rows keep their default chrome.
+#else
+		if (!IsSelected)
 		{
 			_rowGrid.BackgroundColor = Colors.Transparent;
 			SetThemeColor(_iconLabel, Label.TextColorProperty, "Gray600", "Gray300");
@@ -176,11 +174,14 @@ public sealed class FlyoutMenuRow : ContentView
 		_iconLabel.SetAppThemeColor(Label.TextColorProperty, light, dark);
 		_titleLabel.SetAppThemeColor(Label.TextColorProperty, light, dark);
 		_chevron.SetAppThemeColor(Label.TextColorProperty, light, dark);
+#endif
 	}
 
+#if WINDOWS
 	private static Color? ThemeColor(string key) =>
 		Application.Current?.Resources.TryGetValue(key, out var value) == true
 			&& value is Color color ? color : null;
+#endif
 
 	/// <summary>
 	/// Applies the same light/dark color pair the XAML rows declared via

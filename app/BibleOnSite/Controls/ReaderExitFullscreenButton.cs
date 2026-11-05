@@ -17,8 +17,9 @@ public class ReaderExitFullscreenButton : Border
 #pragma warning restore S3264
 
     /// <summary>
-    /// Raises <see cref="ExitRequested"/>. Called by the Windows platform
-    /// Button (#2766); invoked directly by tests on every platform.
+    /// Raises <see cref="ExitRequested"/>. Every exit path — the Windows
+    /// platform Button click (#2766), the touch tap, the native Android
+    /// touch-up — funnels through here.
     /// </summary>
     internal void SendExitRequested() => ExitRequested?.Invoke(this, EventArgs.Empty);
 
@@ -78,7 +79,7 @@ public class ReaderExitFullscreenButton : Border
         };
 #elif !WINDOWS
         var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+        tap.Tapped += (_, _) => SendExitRequested();
         GestureRecognizers.Add(tap);
 
         var pan = new PanGestureRecognizer();
@@ -154,7 +155,7 @@ public class ReaderExitFullscreenButton : Border
             case Android.Views.MotionEventActions.Up:
                 if (!_isDragging)
                 {
-                    ExitRequested?.Invoke(this, EventArgs.Empty);
+                    SendExitRequested();
                 }
                 e.Handled = true;
                 break;

@@ -215,6 +215,50 @@ public class FlyoutMenuStateTests : IDisposable
         changes.Should().Contain(nameof(FlyoutMenuState.IsDonationsCurrent));
     }
 
+    [Fact]
+    public void CurrentDestination_ExactlyOneRowFlagIsSet()
+    {
+        // Every row reads its own Is*Current flag — all eleven getters must
+        // agree with the destination on every value, not just the ones other
+        // tests happened to read.
+        var state = new FlyoutMenuState(_service);
+
+        foreach (var destination in Enum.GetValues<FlyoutDestination>())
+        {
+            state.CurrentDestination = destination;
+
+            var flags = new[]
+            {
+                state.IsAlHaperekCurrent,
+                state.IsTanahpediaCurrent,
+                state.IsLearningCalendarCurrent,
+                state.IsMasoraCurrent,
+                state.IsParashaCurrent,
+                state.IsAuthorsCurrent,
+                state.IsDailyBulletinCurrent,
+                state.IsTermsCurrent,
+                state.IsPreferencesCurrent,
+                state.IsContactCurrent,
+                state.IsDonationsCurrent,
+            };
+
+            flags.Count(f => f).Should().Be(destination == FlyoutDestination.None ? 0 : 1,
+                $"exactly one row may claim {destination}");
+        }
+    }
+
+    [Fact]
+    public void AppRoutes_ArticleRoutes_StayRegisteredButUnselected()
+    {
+        // Registered in AppShell for navigation but deliberately absent from
+        // RouteDestinations — articles clear the highlight instead of
+        // claiming a flyout row. Pins both the route names and that mapping.
+        AppRoutes.Articles.Should().Be("ArticlesPage");
+        AppRoutes.ArticleDetail.Should().Be("articleDetail");
+        FlyoutMenuState.DestinationFor(AppRoutes.Articles).Should().Be(FlyoutDestination.None);
+        FlyoutMenuState.DestinationFor(AppRoutes.ArticleDetail).Should().Be(FlyoutDestination.None);
+    }
+
     // Literal route names — the test pins the values registered in AppShell,
     // so a route rename breaks here instead of silently unselecting a row.
     [Theory]

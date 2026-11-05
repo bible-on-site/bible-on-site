@@ -34,6 +34,20 @@ public class ReaderExitFullscreenButtonTests
     }
 
     [Fact]
+    public void SendExitRequested_RaisesExitRequested()
+    {
+        // The Windows platform Button invokes this seam directly on Click —
+        // it is the same funnel the touch tap uses.
+        var button = new ReaderExitFullscreenButton();
+        var raised = 0;
+        button.ExitRequested += (_, _) => raised++;
+
+        button.SendExitRequested();
+
+        raised.Should().Be(1);
+    }
+
+    [Fact]
     public void Tap_WithoutSubscribers_IsSafe()
     {
         var button = new ReaderExitFullscreenButton();
