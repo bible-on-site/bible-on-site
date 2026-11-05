@@ -1,7 +1,9 @@
+pub mod article_relationships_service;
 pub mod article_search;
 pub mod articles_service;
 pub mod authors_service;
 pub mod dedications_service;
+pub mod moed_service;
 pub mod perakim_service;
 pub mod reading_metrics_service;
 pub mod sefarim_service;

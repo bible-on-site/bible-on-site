@@ -66,7 +66,11 @@ describe("article distribution eligibility", () => {
 		expect(created.distributable).toBe(true);
 		// First tx write is the INSERT; approval flag travels in its params.
 		expect(mocks.txExecute.mock.calls[0][2]).toContain(true);
-		expect(await getArticle({ data: 7 })).toEqual({ ...article, id: 7 });
+		expect(await getArticle({ data: 7 })).toEqual({
+			...article,
+			id: 7,
+			moedIds: [],
+		});
 		expect(mocks.queryOne.mock.calls[0][0]).toContain("distributable");
 	});
 	it("persists revocation and requires a boolean approval for old clients", async () => {

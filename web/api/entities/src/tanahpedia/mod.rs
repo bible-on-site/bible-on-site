@@ -20,6 +20,7 @@ pub mod lookup_parent_child_type;
 pub mod lookup_parent_role;
 pub mod lookup_union_end_reason;
 pub mod lookup_union_type;
+pub mod mention_decoration;
 pub mod nation;
 pub mod nation_source_nation;
 pub mod nation_territory;

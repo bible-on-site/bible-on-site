@@ -22,6 +22,10 @@ COPY api/src ./src
 COPY api/Cargo.toml ./Cargo.toml
 COPY api/Cargo.lock ./Cargo.lock
 COPY api/entities ./entities
+# The shared article-relationship registry is compiled into the binary —
+# article_relationships_service.rs anchors it at CARGO_MANIFEST_DIR/../shared,
+# which is /shared inside this image.
+COPY shared/article-relationships /shared/article-relationships
 
 # Build the application in release mode.
 RUN cargo build --locked --release && \
