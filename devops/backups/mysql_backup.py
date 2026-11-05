@@ -55,11 +55,9 @@ def fingerprint(value):
 
 
 def diagnostics(phase, stderr):
-    """Report only the failed phase and the server's numeric error code.
-
-    Raw client stderr may contain credentials, SQL or data fragments, so only
-    the standard ``ERROR <code>`` number is propagated into the job log.
-    """
+    """Return a phase-labeled error carrying only the numeric client error code."""
+    # Raw client stderr may contain credentials, SQL or data fragments; only
+    # the standard ``ERROR <code>`` number is propagated into the job log.
     match = re.search(rb"ERROR (\d+)", stderr or b"", re.IGNORECASE)
     if match:
         return BackupError(
@@ -322,11 +320,11 @@ def dump_archive(database, path, directory):
             "--databases",
             database.name,
         ]
-        # Absolute allowlisted CLI, fixed flags, validated schema and private options.
-        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
         with open(
             errors, "xb", opener=lambda p, flags: os.open(p, flags, 0o600)
         ) as log:
+            # Absolute allowlisted CLI, fixed flags, validated schema and private options.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
             with subprocess.Popen(  # nosec B603 # Argv only; no shell interpretation.
                 args, stdout=subprocess.PIPE, stderr=log, shell=False
             ) as process:
@@ -366,11 +364,11 @@ def restore_archive(database, path, directory, source_uuid, sha256):
     config = database.defaults(directory)
     errors = error_path(directory, "mysql-import")
     try:
-        # Absolute allowlisted CLI; the archived SQL flows through stdin only.
-        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
         with open(
             errors, "xb", opener=lambda p, flags: os.open(p, flags, 0o600)
         ) as log:
+            # Absolute allowlisted CLI; the archived SQL flows through stdin only.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
             with subprocess.Popen(  # nosec B603 # Fixed CLI, private options, no shell.
                 # Fixed executable/flags, private defaults file; dump is stdin, never argv.
                 # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
