@@ -16,6 +16,7 @@
 	"tanahpedia_alter_child_birth_order.sql",
 	"tanahpedia_alter_entry_revision_history.sql",
 	"tanahpedia_alter_saying_date.sql",
+	"tanahpedia_alter_today_anniversary_month_day.sql",
 	"tanahpedia_alter_mention_decoration.sql",
 	"tanahpedia_alter_entry_synonym.sql",
 	"tanahpedia_remove_simchat_torah_placeholder.sql",
