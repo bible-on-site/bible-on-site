@@ -138,12 +138,28 @@ aggregate CPU benefit and mixed response results. The original failures remain
 preserved, and three complete passing hosted executions at a repaired head are
 still required before delivery.
 
+An additional browser regression catches active chapter panels forcing
+`visibility: visible` inside a dormant pane whose visibility is hidden. Active
+panels now inherit their ancestor's visibility; inactive panels keep their own
+hidden state. The regression fails before the correction and passes with the
+source-equivalent stylesheet. Covered controls remain unfocusable and current
+panels remain visible. All original Native interaction masks are retained.
+The 24-pose comparison changes zero pixels and all eight character-position and
+font/color comparisons match. A bounded twelve-sequence comparison retains all
+72 completion callbacks: total Style CPU is about 18% lower, while response
+results remain mixed. This fixes a concrete masking conflict; it does not alone
+establish that every original hosted pause is repaired.
+
 The [registry validation record](sefer-turn-performance.registry-validation.json)
-retains every case's metrics and links the package, compiled assets, visual
-proof and three stability runs by hash. The runtime was compiled at `f2b8120a3`;
-the production source tree is identical at the validated guard commit. Only
-tests, documentation and evidence changed afterward. Hosted CI/review, normal
-deployment and live verification remain pending before delivery.
+retains the earlier runtime's metrics, compiled assets, visual proof and three
+stability runs by hash. That runtime was compiled at `f2b8120a3`. The current
+visibility correction changes its production CSS and requires a new source-bound
+build and hosted acceptance. CI also merges newer master changes, including
+Tanahpedia sources and Next 16.4.5, whereas the local diagnostic build used Next
+16.4.3. The reader and turn harness git objects match, but the complete source and
+dependencies do not; hosted qualifications apply to their actual merge checkout.
+Do not treat those builds as identical. Hosted CI/review, normal deployment and
+live verification remain pending before delivery.
 
 | Before: oblique-only cache | After: stable pane cache |
 | --- | --- |
