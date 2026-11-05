@@ -34,8 +34,10 @@ test.describe("מועדים על הפרק", () => {
 		await expect(
 			index.getByRole("link", { name: /חנוכה/ }),
 		).toBeVisible();
+		// Exact name — fixture moed 92 is named "מועד בדיקה קישור" and would
+		// match a bare substring regex alongside moed 90.
 		await expect(
-			index.getByRole("link", { name: /מועד בדיקה/ }),
+			index.getByRole("link", { name: "מועד בדיקה", exact: true }),
 		).toBeVisible();
 		const href = await index
 			.getByRole("link", { name: /פסח/ })
@@ -110,7 +112,7 @@ test.describe("מועדים על הפרק", () => {
 		await page.goto(MOADIM_ROOT);
 		await page
 			.getByRole("navigation", { name: "רשימת המועדים" })
-			.getByRole("link", { name: /מועד בדיקה/ })
+			.getByRole("link", { name: "מועד בדיקה", exact: true })
 			.click();
 		await page.waitForURL(
 			`**${MOADIM_ROOT}/${encodeURIComponent("מועד-בדיקה")}`,
