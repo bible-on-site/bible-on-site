@@ -12,12 +12,12 @@
 -- keywords literally in this file, including in comments.
 
 -- One moed row per catalogue entry. `slug` is the canonical Hebrew name-based
--- URL segment (spaces -> ASCII hyphen, quote marks dropped); it stays stable
+-- URL segment (spaces -> ASCII hyphen, quote marks dropped). It stays stable
 -- across display-name edits so existing links survive. `annual_order` is the
 -- placement of the moed inside the מעגל השנה wheel — an ordering number, NOT a
 -- Hebrew-calendar rule, a Gregorian month, or a leap-year month ordinal.
 -- `hebrew_month`/`date_label` are honest display metadata for the wheel and
--- detail page; they never drive date computation.
+-- detail page. They never drive date computation.
 SET @moedSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_moed (
     id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
     slug VARCHAR(191) NOT NULL COMMENT ''Canonical Hebrew URL segment for /moadim/{slug}'',
@@ -58,7 +58,7 @@ EXECUTE moedSectionUpgrade;
 DEALLOCATE PREPARE moedSectionUpgrade;
 
 -- One inclusive canonical range inside a section. Multiple rows per section
--- express noncontiguous ranges (and jumps across sefarim) in display order;
+-- express noncontiguous ranges (and jumps across sefarim) in display order,
 -- both bound perek ids are FK checked against the canonical corpus so every range is
 -- renderable. Pasuk upper bounds are validated against tanah_perek.pasuk_count
 -- by the write paths (MySQL has no per-row dynamic CHECK).
@@ -90,7 +90,7 @@ DEALLOCATE PREPARE moedRangeUpgrade;
 
 -- Optional many-to-many article <-> moed link: a moed may carry zero/one/many
 -- articles and an article may link to several moadim. The composite primary
--- key rejects duplicate pairs; both FK cascades remove links without touching
+-- key rejects duplicate pairs. Both FK cascades remove links without touching
 -- the article or the moed row.
 SET @articleMoedSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_article_moed (
     article_id MEDIUMINT NOT NULL,

@@ -1,6 +1,6 @@
 -- Database selection handled by the executing tool (db-populator, Lambda, etc.)
 --
--- This file MUST be self-contained: every table referenced by the website's
+-- This file MUST be self-contained: every table referenced by website
 -- e2e tests must have representative rows here.  When you add a new DB table
 -- that the website queries, add test data here too — otherwise e2e tests will
 -- silently get empty results and fail with confusing "element not found" errors.
@@ -99,8 +99,8 @@ VALUES (
 <p>זהו מאמר לדוגמא עם תמונה מ-S3:</p>
 <img src="https://bible-on-site-assets-test.s3.amazonaws.com/rabbis/test-rabbi.jpg" alt="תמונת רב לדוגמא" />
 <p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>',
-        -- Bulletin approval is not website visibility. This author's only
-        -- valid article must still appear on the website and in public search.
+        -- Bulletin approval is not website visibility. The only valid
+        -- article of this author must still appear on the website and in public search.
         FALSE
     ),
     -- Invalid chapter row: public article routes and search must exclude it.
@@ -166,12 +166,12 @@ VALUES
 --   articles 2-4 - range-matched only: unverified coverage falls back to
 --              their primary perek (1), which overlaps the stored range
 --   article 5 - linked but never listed: its primary perek (5000) is not a
---              routable public chapter, so the union's 1-929 bound keeps it
+--              routable public chapter, so the union 1-929 bound keeps it
 --              out — an explicit link alone cannot resurrect a dead route
 --   article 3 - the explicit-only case on moed 92: its primary perek (1)
---              never intersects moed 92's stored range, so it renders by
+--              never intersects the stored range of moed 92, so it renders by
 --              the link alone (no range match claims pasuk precision)
--- Moed 91 stays unpublished so the detail route's 404 path is exercised.
+-- Moed 91 stays unpublished so the detail route 404 path is exercised.
 -- ---------------------------------------------------------------------------
 -- The moed tables are CREATE IF NOT EXISTS (never drop-recreated), so
 -- these fixtures must stay idempotent like the seed guards above them.
@@ -199,7 +199,7 @@ SELECT id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasu
 FROM (SELECT 90011 AS id, 9001 AS section_id, 1 AS position,
              1 AS perek_id_start, 1 AS pasuk_start, 1 AS perek_id_end, 3 AS pasuk_end
       UNION ALL
-      -- בראשית ב carries no fixture article, so moed 92's range matches
+      -- בראשית ב carries no fixture article, so the range of moed 92 matches
       -- nothing and its article list is the explicit link alone.
       SELECT 90021, 9002, 1, 2, 1, 2, 3) seed
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range WHERE tanah_moed_range.id = seed.id);
