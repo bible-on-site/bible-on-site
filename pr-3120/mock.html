@@ -1,0 +1,124 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<style>
+	* { box-sizing: border-box; margin: 0; padding: 0; }
+	body {
+		font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+		background: #0e1621;
+		background-image: linear-gradient(#0e1621, #0e1621);
+		padding: 24px;
+		direction: rtl;
+	}
+	.label {
+		color: #7f91a4;
+		font-size: 13px;
+		font-weight: 600;
+		margin: 18px 0 8px;
+		letter-spacing: 0.5px;
+	}
+	.chat {
+		width: 430px;
+	}
+	.bubble {
+		background: #182533;
+		border-radius: 12px;
+		overflow: hidden;
+		box-shadow: 0 1px 2px rgba(0,0,0,.4);
+	}
+	.doc {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 12px;
+	}
+	.doc-icon {
+		width: 42px;
+		height: 54px;
+		border-radius: 8px;
+		background: #e2574c;
+		color: #fff;
+		font-size: 11px;
+		font-weight: 700;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	.doc-meta { min-width: 0; }
+	.doc-name {
+		color: #fff;
+		font-size: 14px;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 330px;
+	}
+	.doc-size { color: #7f91a4; font-size: 12.5px; margin-top: 3px; }
+	.caption {
+		color: #fff;
+		font-size: 14.5px;
+		line-height: 1.45;
+		padding: 4px 12px 10px;
+		white-space: pre-line;
+	}
+	.caption a { color: #50a8eb; text-decoration: none; }
+	.time {
+		float: left;
+		color: #6d8296;
+		font-size: 11.5px;
+		padding: 0 12px 8px;
+	}
+	.ikb {
+		border-top: 1px solid #0e1621;
+		background: #23303f;
+		text-align: center;
+		padding: 10px;
+	}
+	.ikb span {
+		color: #7fb3e8;
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.ikb .ext { margin-inline-start: 6px; }
+</style>
+</head>
+<body>
+	<div class="label">BEFORE — message in channel (master)</div>
+	<div class="chat" id="before">
+		<div class="bubble">
+			<div class="doc">
+				<div class="doc-icon">PDF</div>
+				<div class="doc-meta">
+					<div class="doc-name">306_מלכים א יט - 306 - אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה' אליו.pdf</div>
+					<div class="doc-size">182.4 KB</div>
+				</div>
+			</div>
+			<div class="caption">הושע ב
+לימוד יומי בתנ"ך על הפרק
+<a href="#">https://xn--febl3a.co.il/929/502</a></div>
+			<div class="time">14:02</div>
+			<div class="ikb"><span>להורדת העלון<span class="ext">↗</span></span></div>
+		</div>
+	</div>
+
+	<div class="label">AFTER — message in channel (this PR)</div>
+	<div class="chat" id="after">
+		<div class="bubble">
+			<div class="doc">
+				<div class="doc-icon">PDF</div>
+				<div class="doc-meta">
+					<div class="doc-name">306_מלכים א יט - 306 - אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה' אליו.pdf</div>
+					<div class="doc-size">182.4 KB</div>
+				</div>
+			</div>
+			<div class="caption">הושע ב
+לימוד יומי בתנ"ך על הפרק
+<a href="#">https://xn--febl3a.co.il/929/502</a></div>
+			<div class="time">14:02</div>
+		</div>
+	</div>
+</body>
+</html>
