@@ -19,7 +19,18 @@ public class PreferencesPageTests : IDisposable
 {
     public void Dispose() => PreferencesService.ResetForTesting();
 
-    private static (PreferencesPage Page, View Overview, PreferencesViewModel Settings, ExtensionPacksViewModel Packs) CreatePage()
+    /// <summary>Exposes the protected appearing lifecycle the Shell normally raises.</summary>
+    private sealed class AppearablePage : PreferencesPage
+    {
+        public AppearablePage(PreferencesViewModel viewModel, Func<ExtensionPacksViewModel> packsFactory)
+            : base(viewModel, packsFactory)
+        {
+        }
+
+        public void Appear() => OnAppearing();
+    }
+
+    private static (AppearablePage Page, View Overview, PreferencesViewModel Settings, ExtensionPacksViewModel Packs) CreatePage()
     {
         var storage = new InMemoryPreferencesStorage();
         // PreferencesPageBase resolves the persisted Back-chrome policy from the
@@ -28,10 +39,43 @@ public class PreferencesPageTests : IDisposable
         var settings = new PreferencesViewModel(
             PreferencesService.CreateForTesting(storage));
         var packs = new ExtensionPacksViewModel();
-        var page = new PreferencesPage(settings, () => packs);
+        var page = new AppearablePage(settings, () => packs);
         var overview = new ContentView();
         page.Content = overview; // stands in for the XAML-built overview
         return (page, overview, settings, packs);
+    }
+
+    [Fact]
+    public void ParameterlessCtor_UsesTheSettingsOverview()
+    {
+        PreferencesService.Initialize(new InMemoryPreferencesStorage());
+
+        var page = new PreferencesPage();
+
+        page.BindingContext.Should().BeOfType<PreferencesViewModel>();
+    }
+
+    [Fact]
+    public void OnAppearing_InOverview_RefreshesTheSettingsViewModel()
+    {
+        var (page, overview, settings, _) = CreatePage();
+
+        page.Appear();
+
+        page.Content.Should().BeSameAs(overview);
+        page.BindingContext.Should().BeSameAs(settings);
+    }
+
+    [Fact]
+    public void OnAppearing_InPacks_RefreshesThePacksViewModel()
+    {
+        var (page, _, _, packs) = CreatePage();
+        page.ApplyQueryAttributes(new Dictionary<string, object> { ["section"] = "packs" });
+
+        page.Appear();
+
+        page.Content.Should().BeOfType<ExtensionPacksView>();
+        page.BindingContext.Should().BeSameAs(packs);
     }
 
     [Fact]
