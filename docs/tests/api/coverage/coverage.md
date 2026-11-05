@@ -72,7 +72,9 @@ The API exposes a `/api/shutdown` endpoint in non-production profiles to enable 
 ### Server-Side Implementation ([app.rs](../../../../web/api/src/startup/app.rs))
 
 ```rust
-if env::var("PROFILE").unwrap_or_default() != "prod" {
+// dev_tools is `profile.dev_tools_enabled()` — true only for an explicit
+// `PROFILE=dev`/`test`; missing, blank or unknown values fail closed.
+if dev_tools {
     cfg.service(web::resource("/api/shutdown").guard(guard::Post()).to({
         let shutdown_signal = shutdown_signal.clone();
         move || {
@@ -90,7 +92,7 @@ if env::var("PROFILE").unwrap_or_default() != "prod" {
 ```
 
 Key points:
-- Only available when `PROFILE != "prod"` (safety guard)
+- Only available for an explicit `PROFILE=dev`/`test` (fail-closed safety guard)
 - Uses `AtomicBool` to signal shutdown across threads
 - 1-second delay allows response to be sent before shutdown
 - The main server loop polls this flag and exits gracefully
