@@ -74,8 +74,11 @@ public sealed class FlyoutMenuRow : ContentView
 	private readonly Label _iconLabel;
 	private readonly Label _titleLabel;
 	private readonly Label _subtitleLabel;
+#if WINDOWS
+	// Selection-repaint targets (#2766) — stored only where the repaint runs.
 	private readonly Label _chevron;
 	private readonly Grid _rowGrid;
+#endif
 
 	public FlyoutMenuRow()
 	{
@@ -96,14 +99,14 @@ public sealed class FlyoutMenuRow : ContentView
 		_subtitleLabel = new Label { FontSize = 12, IsVisible = false };
 		SetThemeColor(_subtitleLabel, Label.TextColorProperty, "Gray500", "Gray400");
 
-		_chevron = new Label
+		var chevron = new Label
 		{
 			Text = Fonts.FluentUI.chevron_circle_left_12_regular,
 			FontFamily = "FluentIcons",
 			FontSize = 20,
 			VerticalOptions = LayoutOptions.Center,
 		};
-		SetThemeColor(_chevron, Label.TextColorProperty, "Gray400", "Gray500");
+		SetThemeColor(chevron, Label.TextColorProperty, "Gray400", "Gray500");
 
 		var textColumn = new VerticalStackLayout
 		{
@@ -112,18 +115,22 @@ public sealed class FlyoutMenuRow : ContentView
 		};
 		Grid.SetColumn(_iconLabel, 0);
 		Grid.SetColumn(textColumn, 1);
-		Grid.SetColumn(_chevron, 2);
+		Grid.SetColumn(chevron, 2);
 
-		_rowGrid = new Grid
+		var rowGrid = new Grid
 		{
 			Padding = new Thickness(16, 12),
 			ColumnDefinitions = new ColumnDefinitionCollection(
 				new ColumnDefinition(GridLength.Auto),
 				new ColumnDefinition(GridLength.Star),
 				new ColumnDefinition(GridLength.Auto)),
-			Children = { _iconLabel, textColumn, _chevron },
+			Children = { _iconLabel, textColumn, chevron },
 		};
-		Content = _rowGrid;
+#if WINDOWS
+		_chevron = chevron;
+		_rowGrid = rowGrid;
+#endif
+		Content = rowGrid;
 
 #if !WINDOWS
 		// Touch platforms activate through the gesture recognizer; on Windows
