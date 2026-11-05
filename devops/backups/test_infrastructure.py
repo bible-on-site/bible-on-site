@@ -126,7 +126,8 @@ class InfrastructureTests(unittest.TestCase):
         steps = job["steps"]
         # The setup action launches mysqld bound to all interfaces, so the
         # workflow must firewall port 3306 to loopback before it starts and
-        # prove non-loopback connections are refused before trusting it.
+        # prove off-loopback refusal through a real interface — a peer network
+        # namespace, since the runner's own addresses route over lo.
         firewall = next(
             i for i, s in enumerate(steps) if "iptables" in s.get("run", "")
         )
@@ -149,6 +150,7 @@ class InfrastructureTests(unittest.TestCase):
         self.assertLess(verify, check)
         self.assertLess(check, grant)
         self.assertIn("3306", steps[firewall]["run"])
+        self.assertIn("netns", steps[verify]["run"])
         self.assertIn("127.0.0.1", steps[verify]["run"])
         self.assertEqual(steps[-1]["if"], "${{ always() }}")
         self.assertIn("rds-build-access.mjs cleanup", steps[-1]["run"])
