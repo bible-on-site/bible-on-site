@@ -7,8 +7,9 @@ namespace BibleOnSite.Controls;
 /// content. The no-flash contract (#2451) now lives in one template instead
 /// of three page copies that could drift apart.
 /// </summary>
-// 'partial' is required — the XAML codegen partial declares InitializeComponent.
-public partial class InlinePerushimView : VerticalStackLayout //NOSONAR — S2333 false positive on code-behind.
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
+public partial class InlinePerushimView : VerticalStackLayout
+#pragma warning restore S2333
 {
     /// <summary>The <see cref="Models.PerushNoteDisplay"/> items to render.</summary>
     public static readonly BindableProperty ItemsSourceProperty = BindableProperty.Create(
