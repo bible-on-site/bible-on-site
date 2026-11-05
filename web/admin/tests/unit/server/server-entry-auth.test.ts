@@ -7,23 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // can classify; page navigations keep the Cognito redirect.
 
 const {
-	handleDocumentMock,
 	handlerFetchMock,
 	verifyIdTokenMock,
 	verifyServiceTokenMock,
 	parseCookieMock,
 	getLoginUrlMock,
 } = vi.hoisted(() => ({
-	handleDocumentMock: vi.fn(),
 	handlerFetchMock: vi.fn(),
 	verifyIdTokenMock: vi.fn(),
 	verifyServiceTokenMock: vi.fn(),
 	parseCookieMock: vi.fn(),
 	getLoginUrlMock: vi.fn(),
-}));
-
-vi.mock("~/server/bulletin-document.server", () => ({
-	handleBulletinDocument: handleDocumentMock,
 }));
 
 vi.mock("@tanstack/react-start/server-entry", () => ({
@@ -73,34 +67,6 @@ function serverFnRequest(): Request {
 }
 
 describe("server entry auth boundary", () => {
-	it("dispatches only the document prefix to the restricted public PDF handler", async () => {
-		handleDocumentMock.mockResolvedValue(
-			new Response("pdf fixture", {
-				headers: { "Content-Type": "application/pdf" },
-			}),
-		);
-		const entry = await loadEntry();
-		const request = new Request(
-			"https://admin.test/api/bulletin-documents/2026-11-01/test.pdf",
-		);
-		const response = await entry.fetch(request);
-		expect(await response.text()).toBe("pdf fixture");
-		expect(handleDocumentMock).toHaveBeenCalledWith(request);
-		expect(handlerFetchMock).not.toHaveBeenCalled();
-		expect(verifyIdTokenMock).not.toHaveBeenCalled();
-	});
-	it("does not fall through to privileged handlers when a public document is missing", async () => {
-		handleDocumentMock.mockResolvedValue(null);
-		const entry = await loadEntry();
-		expect(
-			(
-				await entry.fetch(
-					new Request("https://admin.test/api/bulletin-documents/invalid"),
-				)
-			).status,
-		).toBe(404);
-		expect(handlerFetchMock).not.toHaveBeenCalled();
-	});
 	beforeEach(() => {
 		handlerFetchMock
 			.mockReset()
@@ -174,5 +140,74 @@ describe("server entry auth boundary", () => {
 
 		expect(response.status).toBe(200);
 		expect(handlerFetchMock).toHaveBeenCalledOnce();
+	});
+
+	// #3069: /api/bulletin-documents/{date}/{sha256}.pdf was a pre-auth,
+	// content-addressed PDF download. The route no longer exists — every
+	// variant of it now sits behind the normal admin boundary like any
+	// other path, and never dispatches to a privileged handler.
+	describe("former public bulletin download route", () => {
+		it.each([
+			"https://admin.test/api/bulletin-documents/2026-11-01/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.pdf",
+			"https://admin.test/api/bulletin-documents/invalid",
+			"https://admin.test/api/bulletin-documents/2026-11-01/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.pdf?override=file",
+		])(
+			"redirects unauthenticated %s to login without dispatching",
+			async (target) => {
+				const entry = await loadEntry();
+				const response = await entry.fetch(new Request(target));
+
+				expect(response.status).toBe(302);
+				expect(response.headers.get("location")).toBe(
+					"https://cognito.test/login",
+				);
+				expect(await response.text()).toBe("");
+				expect(handlerFetchMock).not.toHaveBeenCalled();
+			},
+		);
+
+		it.each(["GET", "HEAD", "POST"])(
+			"serves no PDF bytes anonymously on %s requests to the former URL",
+			async (method) => {
+				const entry = await loadEntry();
+				const response = await entry.fetch(
+					new Request(
+						"https://admin.test/api/bulletin-documents/2026-11-01/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.pdf",
+						{ method },
+					),
+				);
+
+				expect(response.status).toBe(302);
+				expect(handlerFetchMock).not.toHaveBeenCalled();
+			},
+		);
+
+		it("returns a classifiable 401 for server-function calls to the former URL", async () => {
+			const entry = await loadEntry();
+			const response = await entry.fetch(
+				new Request(
+					"https://admin.test/api/bulletin-documents/2026-11-01/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.pdf",
+					{ headers: { "x-tsr-serverFn": "true" } },
+				),
+			);
+
+			expect(response.status).toBe(401);
+			expect(await response.text()).toContain("SESSION_EXPIRED");
+			expect(handlerFetchMock).not.toHaveBeenCalled();
+		});
+
+		it("treats the former path as an ordinary route for an authorized admin", async () => {
+			parseCookieMock.mockReturnValue("valid-session");
+			verifyIdTokenMock.mockResolvedValue(true);
+			const entry = await loadEntry();
+			const response = await entry.fetch(
+				new Request(
+					"https://admin.test/api/bulletin-documents/2026-11-01/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.pdf",
+				),
+			);
+
+			expect(handlerFetchMock).toHaveBeenCalledOnce();
+			expect(response.status).toBe(200);
+		});
 	});
 });
