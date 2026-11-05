@@ -111,18 +111,17 @@
 		{
 			"key": "moadim",
 			"label": "מועדים",
-			"meaning": "Optional article-to-moed associations (#3101): a moed may carry zero/one/many articles, and an article may link to several moadim.",
+			"meaning": "Optional article-to-moed associations (#3101): a moed may carry zero/one/many articles, and an article may link to several moadim. Explicit links are the editorially approved set — unapproved #3103 proposals never land here.",
 			"targetKind": "moed",
 			"cardinality": "many",
 			"linkMetadata": [],
 			"ownership": "article",
 			"permission": "ARTICLE_API_KEY",
-			"operations": [],
-			"writeContract": "Pending — the #3101 schema has not landed on master. Integrate through this contract when the table exists; never fabricate moed targets.",
-			"readContract": "Pending schema.",
-			"invalidates": "to be defined by #3101",
-			"status": "pending-schema",
-			"pendingIssue": 3101
+			"operations": ["read", "replace", "clear"],
+			"writeContract": "updateArticleRelationships.moedIds — every id must reference an existing tanah_moed row and be unique; omitted leaves the set untouched, an explicit empty list clears it. The moed catalogue itself is managed by upsertMoed/deleteMoed under the same key.",
+			"readContract": "Public: Moed.articles (deduplicated union of explicit links and range-overlap matches), moadim/moed(slug). Admin: articleRelationships.moadim.",
+			"invalidates": "article entity change plus one moed entity change per old ∪ new linked moed slug",
+			"status": "supported"
 		}
 	],
 	"internalDerivedTables": [

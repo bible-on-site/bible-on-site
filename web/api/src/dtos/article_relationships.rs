@@ -117,6 +117,18 @@ pub struct ArticleMentionAnnotation {
     pub current_content: bool,
 }
 
+/// One moed link of the article — the `moadim` relationship (#3101). The
+/// link itself carries no metadata; the moed fields are for picker display.
+#[derive(SimpleObject, Debug, Clone, PartialEq)]
+pub struct ArticleMoedLink {
+    /// tanah_moed.id — the value `updateArticleRelationships.moedIds` takes.
+    pub moed_id: i32,
+    /// The moed's canonical slug (its public /moadim/{slug} identity).
+    pub slug: String,
+    /// Hebrew display name for pickers/lists.
+    pub name: String,
+}
+
 /// The article-centric relationship read: every DB-supported link with its
 /// current state, stable ids and the freshness tokens the mutation checks.
 #[derive(SimpleObject, Debug, Clone)]
@@ -138,6 +150,8 @@ pub struct ArticleRelationships {
     pub dedications: Vec<ArticleDedicationLink>,
     /// `mentionAnnotations` — pipeline-owned annotations (all states).
     pub mention_annotations: Vec<ArticleMentionAnnotation>,
+    /// `moadim` — the article's explicit moed links (#3101).
+    pub moadim: Vec<ArticleMoedLink>,
 }
 
 /// The result of `updateArticleRelationships`: the post-write state, the
@@ -166,6 +180,8 @@ pub enum ArticleRelationshipTargetKind {
     /// Dedications — matched by subject substring (for pickers that choose
     /// which dedication an article assignment belongs to).
     Dedication,
+    /// Moadim — matched by Hebrew name or slug substring (#3101).
+    Moed,
 }
 
 /// One lookup hit for a relationship target picker.
@@ -197,6 +213,10 @@ pub struct UpdateArticleRelationshipsInput {
     /// `author` replacement — must be an existing author id; cannot be
     /// cleared.
     pub author_id: Option<i32>,
+    /// Full `moadim` link-set replacement (#3101): every id must reference an
+    /// existing moed and be unique; omitted leaves links untouched, an
+    /// explicit empty list clears them.
+    pub moed_ids: Option<Vec<i32>>,
     /// Full `coveringSources` replacement set; omit to keep the stored set.
     /// An explicit empty list clears the set and marks coverage unknown.
     pub covering_sources: Option<Vec<CoveringSourceInput>>,

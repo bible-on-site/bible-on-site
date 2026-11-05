@@ -54,6 +54,7 @@ function renderPanel(
 const details = {
 	articleId: 7,
 	contentHash: "abcdef0123",
+	moadim: [{ id: 1, slug: "פסח", name: "פסח" }],
 	dedications: [
 		{
 			dedicationId: 5,
@@ -142,11 +143,21 @@ describe("ArticleRelationshipsPanel", () => {
 
 	it("surfaces pending-schema relationships with their owning issue", async () => {
 		renderPanel();
+		// מועדים (#3101) graduated to a live managed section; only the
+		// recurring Hebrew date (#3098) still waits on its schema.
 		expect(
 			await screen.findAllByText(/ממתין לסכמה — יוטמע דרך חוזה זה/),
-		).toHaveLength(2);
+		).toHaveLength(1);
 		expect(screen.getByText(/3098/)).toBeInTheDocument();
-		expect(screen.getByText(/3101/)).toBeInTheDocument();
+	});
+
+	it("lists the article's linked moadim inside the managed section", async () => {
+		renderPanel();
+		expect(await screen.findByText("פסח")).toBeInTheDocument();
+		expect(screen.getByText("(פסח)")).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "דף המועדים" }),
+		).toHaveAttribute("href", "/moadim");
 	});
 
 	it("shows the annotation schema as undeployed, not empty", async () => {

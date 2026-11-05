@@ -59,6 +59,15 @@ function stubDb(handlers: {
 	entityRefPereks?: number[];
 	entityTypes?: string[];
 	linkedSynonyms?: string[];
+	moedRanges?: {
+		moed_id: number;
+		slug: string;
+		perek_id_start: number;
+		pasuk_start: number;
+		perek_id_end: number;
+		pasuk_end: number;
+	}[];
+	linkedMoedSlugs?: string[];
 }) {
 	mockQuery.mockImplementation(async (sql: string) => {
 		if (/FROM tanah_author/.test(sql))
@@ -93,6 +102,10 @@ function stubDb(handlers: {
 			}));
 		if (/FROM tanahpedia_entry_synonym s/.test(sql))
 			return (handlers.linkedSynonyms ?? []).map((name) => ({ name }));
+		if (/FROM tanah_moed m\s+JOIN tanah_moed_section/.test(sql))
+			return handlers.moedRanges ?? [];
+		if (/FROM tanah_article_moed am\s+JOIN tanah_moed/.test(sql))
+			return (handlers.linkedMoedSlugs ?? []).map((slug) => ({ slug }));
 		throw new Error(`unstubbed SQL: ${sql}`);
 	});
 }
@@ -137,6 +150,92 @@ describe("resolveEntityChanges", () => {
 			]),
 		);
 		expect(out.urls).toEqual(out.paths);
+	});
+
+	it("expires a moed's detail and the wheel on a moed change, including the old slug", async () => {
+		const out = await resolveEntityChanges([
+			{ kind: "moed", id: 3, slug: "חנוכה", oldSlug: "חנוכה-ישן" },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining(["moadim", "moed:חנוכה", "moed:חנוכה-ישן"]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining([
+				"/מועדים",
+				"/מועדים/חנוכה",
+				"/מועדים/חנוכה-ישן",
+			]),
+		);
+	});
+
+	it("expires the moeds whose ranges an article's coverage intersects", async () => {
+		stubDb({
+			moedRanges: [
+				{
+					moed_id: 1,
+					slug: "פסח",
+					perek_id_start: 9,
+					pasuk_start: 1,
+					perek_id_end: 9,
+					pasuk_end: 5,
+				},
+				{
+					moed_id: 2,
+					slug: "סוכות",
+					perek_id_start: 400,
+					pasuk_start: 1,
+					perek_id_end: 401,
+					pasuk_end: 10,
+				},
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
+			},
+		]);
+		expect(out.tags).toEqual(expect.arrayContaining(["moed:פסח"]));
+		expect(out.tags).not.toContain("moed:סוכות");
+		expect(out.paths).toContain("/מועדים/פסח");
+	});
+
+	it("expires the moeds explicitly linked to a changed article", async () => {
+		stubDb({ linkedMoedSlugs: ["חנוכה"] });
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [],
+			},
+		]);
+		expect(out.tags).toContain("moed:חנוכה");
+		expect(out.paths).toContain("/מועדים/חנוכה");
+	});
+
+	it("expires moeds reached through an author's articles", async () => {
+		stubDb({
+			authorArticles: [{ id: 7, perek_id: 9 }],
+			moedRanges: [
+				{
+					moed_id: 1,
+					slug: "פסח",
+					perek_id_start: 9,
+					pasuk_start: 1,
+					perek_id_end: 9,
+					pasuk_end: 20,
+				},
+			],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toContain("moed:פסח");
 	});
 
 	it("expires the articles collection for an unlocatable article", async () => {

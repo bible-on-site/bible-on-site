@@ -24,6 +24,9 @@ jest.mock("@/lib/seo/perek-images-data", () => ({
 /** `/pedia` landing entry plus one entry per Hebrew category slug. */
 const PEDIA_STATIC_COUNT = 1 + Object.keys(CATEGORY_SLUGS).length;
 const PARASHA_STATIC_COUNT = 55;
+// The /מועדים landing entry always ships (#3101); published moed detail
+// pages add one URL each on top of it.
+const MOADIM_STATIC_COUNT = 1;
 
 describe("sitemap", () => {
 	const mockConfig: SitemapConfig = {
@@ -331,7 +334,8 @@ describe("sitemap", () => {
 				TOTAL_PERAKIM +
 				1 +
 				PEDIA_STATIC_COUNT +
-				PARASHA_STATIC_COUNT;
+				PARASHA_STATIC_COUNT +
+				MOADIM_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 		});
 
@@ -426,13 +430,17 @@ describe("sitemap", () => {
 				1 +
 				3 +
 				PEDIA_STATIC_COUNT +
-				PARASHA_STATIC_COUNT;
+				PARASHA_STATIC_COUNT +
+				MOADIM_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
 			// Author pages come right before the pedia landing/category block
-			// The Parasha hub/readings follow the pedia block.
+			// The מועדים block, then the Parasha hub/readings, follow it.
 			const authorEnd =
-				result.length - PEDIA_STATIC_COUNT - PARASHA_STATIC_COUNT;
+				result.length -
+				PEDIA_STATIC_COUNT -
+				PARASHA_STATIC_COUNT -
+				MOADIM_STATIC_COUNT;
 			expect(result[authorEnd - 1].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ג")}`,
 			);
@@ -462,7 +470,8 @@ describe("sitemap", () => {
 				1 +
 				2 +
 				PEDIA_STATIC_COUNT +
-				PARASHA_STATIC_COUNT;
+				PARASHA_STATIC_COUNT +
+				MOADIM_STATIC_COUNT;
 			expect(result).toHaveLength(expectedLength);
 
 			// Check articles are present
@@ -490,15 +499,34 @@ describe("sitemap", () => {
 				pediaNames,
 			);
 
-			// Pedia URLs sit just before the Parasha hub and readings.
-			const pediaEnd = result.length - PARASHA_STATIC_COUNT;
+			// Pedia URLs sit just before the מועדים landing and the
+			// Parasha hub and readings that close the sitemap.
+			const pediaEnd =
+				result.length - PARASHA_STATIC_COUNT - MOADIM_STATIC_COUNT;
 			expect(result[pediaEnd - 2].url).toBe(
 				`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
 			);
 			expect(result[pediaEnd - 1].url).toBe(
 				`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
 			);
-			expect(result[pediaEnd].url).toBe("https://example.com/פרשה");
+			expect(result[pediaEnd].url).toBe("https://example.com/מועדים");
+		});
+
+		it("appends one canonical URL per published moed after the landing", () => {
+			const result = generateSitemapEntries(
+				mockConfig,
+				[],
+				[],
+				[],
+				[],
+				{},
+				["פסח", "חנוכה"],
+			);
+
+			const tail = result.length - PARASHA_STATIC_COUNT;
+			expect(result[tail - 3].url).toBe("https://example.com/מועדים");
+			expect(result[tail - 2].url).toBe("https://example.com/מועדים/פסח");
+			expect(result[tail - 1].url).toBe("https://example.com/מועדים/חנוכה");
 		});
 
 		it("omits pedia entry URLs when no unique names provided", () => {

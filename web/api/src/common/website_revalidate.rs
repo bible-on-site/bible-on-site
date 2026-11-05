@@ -90,6 +90,15 @@ enum EntityChange<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
         covering_spans: Option<&'a [ArticleCoveringSpan]>,
     },
+    /// A moed create/update/delete or a link-set change touching it (#3101)
+    /// — `old_slug` expires the pre-rename route on slug edits and deletes.
+    #[serde(rename = "moed", rename_all = "camelCase")]
+    Moed {
+        id: i32,
+        slug: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        old_slug: Option<&'a str>,
+    },
     /// A dedication create/update/delete — assignment sets are old ∪ new.
     #[serde(rename = "dedication", rename_all = "camelCase")]
     Dedication {
@@ -170,24 +179,6 @@ impl WebsiteRevalidator {
         .await
     }
 
-    /// Expires every surface an article change touches: the article's own
-    /// page/tag, its old and new perek listings, the old and new author
-    /// pages/lists, the reading units its (live ∪ destroyed) covering spans
-    /// feed, and the article collection index (#3102).
-    pub async fn invalidate_article(
-        &self,
-        id: i32,
-        associations: &ArticleAssociations,
-    ) -> Revalidation {
-        self.post_changes(vec![EntityChange::Article {
-            id,
-            perek_ids: &associations.perek_ids,
-            author_ids: non_empty(&associations.author_ids),
-            covering_spans: non_empty(&associations.covering_spans),
-        }])
-        .await
-    }
-
     /// Expires every scoped page/tag a dedication's old ∪ new assignments
     /// render on — perek ranges, sefer/helek/parasha/article/entry scopes and
     /// the masora feature (#2731, #3102).
@@ -205,6 +196,48 @@ impl WebsiteRevalidator {
             article_ids: non_empty(&assignments.article_ids),
             entry_ids: non_empty(&assignments.entry_ids),
             masora: assignments.masora.then_some(true),
+        }])
+        .await
+    }
+
+    /// Posts an article change — the same `{changes}` body the admin server
+    /// sends (article page/tag, old ∪ new perek listings, old ∪ new author
+    /// pages and the destroyed covering spans, #3102) — plus, for a
+    /// `updateArticleRelationships.moedIds` write, one moed change per
+    /// affected moed so every touched moed page expires atomically (#3101).
+    pub async fn invalidate_article_with_moadim(
+        &self,
+        id: i32,
+        associations: &ArticleAssociations,
+        moadim: &[(i32, String)],
+    ) -> Revalidation {
+        let mut changes = vec![EntityChange::Article {
+            id,
+            perek_ids: &associations.perek_ids,
+            author_ids: non_empty(&associations.author_ids),
+            covering_spans: non_empty(&associations.covering_spans),
+        }];
+        changes.extend(moadim.iter().map(|(moed_id, slug)| EntityChange::Moed {
+            id: *moed_id,
+            slug: slug.as_str(),
+            old_slug: None,
+        }));
+        self.post_changes(changes).await
+    }
+
+    /// Expires the surfaces one moed change touches: its detail page/tag
+    /// under the current slug, the catalogue and — on rename/delete — the
+    /// old slug's prerendered route (`old_slug`, #3101).
+    pub async fn invalidate_moed(
+        &self,
+        id: i32,
+        slug: &str,
+        old_slug: Option<&str>,
+    ) -> Revalidation {
+        self.post_changes(vec![EntityChange::Moed {
+            id,
+            slug,
+            old_slug,
         }])
         .await
     }
@@ -349,6 +382,45 @@ mod tests {
         assert!(request.contains(
             r#"{"changes":[{"kind":"pedia-entries","uniqueNames":["משה","משה-רבנו"]}]}"#
         ));
+    }
+
+    #[tokio::test]
+    async fn posts_moed_changes_with_old_slug_and_link_pairs() {
+        let (base, rx) = serve_once("200 OK");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+
+        let outcome = revalidator
+            .invalidate_moed(3, "סוכות", Some("סוכות-ישן"))
+            .await;
+
+        assert_eq!(outcome, Revalidation::Applied);
+        let request = rx.recv().unwrap();
+        assert!(request.contains(
+            r#"{"changes":[{"kind":"moed","id":3,"slug":"סוכות","oldSlug":"סוכות-ישן"}]}"#
+        ), "{request}");
+
+        // A link edit batches one moed change per affected moed after the
+        // article change — no `oldSlug` on link updates (#3101).
+        let (base, rx) = serve_once("200 OK");
+        let revalidator = WebsiteRevalidator::new(Some(base), Some("sekret".to_string()));
+        let outcome = revalidator
+            .invalidate_article_with_moadim(
+                7,
+                &ArticleAssociations {
+                    perek_ids: vec![1],
+                    author_ids: vec![2],
+                    covering_spans: Vec::new(),
+                },
+                &[(1, "פסח".to_string()), (2, "סוכות".to_string())],
+            )
+            .await;
+        assert_eq!(outcome, Revalidation::Applied);
+        let request = rx.recv().unwrap();
+        assert!(request.contains(
+            r#"{"kind":"article","id":7,"perekIds":[1],"authorIds":[2]}"#
+        ), "{request}");
+        assert!(request.contains(r#"{"kind":"moed","id":1,"slug":"פסח"}"#), "{request}");
+        assert!(request.contains(r#"{"kind":"moed","id":2,"slug":"סוכות"}"#), "{request}");
     }
 
     #[tokio::test]

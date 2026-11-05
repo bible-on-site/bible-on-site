@@ -243,6 +243,28 @@ mod tests {
                 .into_iter()
                 .collect::<BTreeMap<String, DbValue>>(),
             ]])
+            .append_query_results::<entities::article_moed::Model, Vec<_>, _>([vec![
+                entities::article_moed::Model {
+                    article_id: 7,
+                    moed_id: 3,
+                    created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                },
+            ]])
+            .append_query_results::<entities::moed::Model, Vec<_>, _>([vec![
+                entities::moed::Model {
+                    id: 3,
+                    slug: "ראש-השנה".to_string(),
+                    name: "ראש השנה".to_string(),
+                    summary: None,
+                    hebrew_month: Some("תשרי".to_string()),
+                    date_label: None,
+                    annual_order: 1,
+                    published: true,
+                },
+            ]])
     }
 
     #[tokio::test]
@@ -321,6 +343,18 @@ mod tests {
         );
         assert_eq!(capabilities[5]["status"], "pending-schema");
         assert_eq!(capabilities[5]["pendingIssue"], 3098);
+        // #3101 landed — moadim is supported with replace/clear operations.
+        assert_eq!(capabilities[6]["status"], "supported");
+        assert!(capabilities[6]["pendingIssue"].is_null());
+        assert_eq!(
+            capabilities[6]["operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|op| op.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["read", "replace", "clear"]
+        );
     }
 
     #[tokio::test]
@@ -329,7 +363,7 @@ mod tests {
         let response = schema(db)
             .execute(
                 Request::new(
-                    "{ articleRelationships(articleId: 7) { articleId perekId authorId coverageVerified contentHash coveringSources { perekId pasuk } dedications { dedicationId subject expiresAt dedicationExpiresAt } mentionAnnotations { id intendedName entityType confidence acceptance spanStart spanEnd surface contentHash currentContent } } }",
+                    "{ articleRelationships(articleId: 7) { articleId perekId authorId coverageVerified contentHash coveringSources { perekId pasuk } dedications { dedicationId subject expiresAt dedicationExpiresAt } mentionAnnotations { id intendedName entityType confidence acceptance spanStart spanEnd surface contentHash currentContent } moadim { moedId slug name } } }",
                 )
                 .data(auth(Some("article-key"))),
             )
@@ -354,6 +388,10 @@ mod tests {
         assert_eq!(annotation["acceptance"], "manual");
         assert_eq!(annotation["currentContent"], true);
         assert_eq!(annotation["confidence"], "0.92");
+        let moed = &aggregate["moadim"][0];
+        assert_eq!(moed["moedId"], 3);
+        assert_eq!(moed["slug"], "ראש-השנה");
+        assert_eq!(moed["name"], "ראש השנה");
     }
 
     #[tokio::test]

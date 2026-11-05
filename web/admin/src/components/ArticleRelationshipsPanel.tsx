@@ -138,6 +138,35 @@ export function ArticleRelationshipsPanel({
 					</p>
 				</RelationshipSection>
 
+				{/* Article-owned moed links (#3101) — managed in the form. */}
+				<RelationshipSection entry={requireEntry(registry, "moadim")}>
+					{isLoading ? (
+						<p className="text-sm text-gray-400">טוען…</p>
+					) : isError ? null : data?.moadim === undefined ? (
+						<p className="text-sm text-gray-400">
+							סכמת המועדים עוד לא נפרסה
+						</p>
+					) : data.moadim.length > 0 ? (
+						<ul className="text-sm text-gray-700 space-y-1">
+							{data.moadim.map((moed) => (
+								<li key={moed.id}>
+									<span className="font-medium">{moed.name}</span>{" "}
+									<span className="text-xs text-gray-400">({moed.slug})</span>
+								</li>
+							))}
+						</ul>
+					) : (
+						<p className="text-sm text-gray-500">אין מועדים משויכים</p>
+					)}
+					<p className="mt-2 text-xs text-gray-400">
+						המאמר הוא הבעלים של סט המועדים שלו — נערך בטופס המאמר; ניהול
+						הקטלוג מתבצע ב
+						<Link to="/moadim" className="text-blue-600 hover:text-blue-700">
+							דף המועדים
+						</Link>
+					</p>
+				</RelationshipSection>
+
 				{/* Pipeline-owned mention annotations — read-only. */}
 				<RelationshipSection
 					entry={requireEntry(registry, "mentionAnnotations")}

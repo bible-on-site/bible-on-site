@@ -71,6 +71,21 @@ pub async fn find_by_perek_id(db: &Database, perek_id: i32) -> Result<Vec<Model>
     Ok(articles)
 }
 
+/// Returns full article rows for a set of ids — one IN query for consumers
+/// that already hold the ordered id list (e.g. the moed union read, #3101).
+pub async fn find_by_ids(db: &Database, ids: &[i32]) -> Result<Vec<Model>, ServiceError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    Entity::find()
+        .filter(Column::Id.is_in(ids.iter().copied()))
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })
+}
+
 pub async fn find_by_author_id(db: &Database, author_id: i32) -> Result<Vec<Model>, ServiceError> {
     tracing::info_span!("articles_service::find_by_author_id", %author_id);
     let articles = Entity::find()

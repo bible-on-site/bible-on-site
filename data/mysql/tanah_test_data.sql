@@ -156,6 +156,48 @@ VALUES
     (3, 1, 2, 0, 'וארעא הות צדיא וריקניא');
 
 -- ---------------------------------------------------------------------------
+-- Representative test data for מועדים על הפרק (issue #3101).
+--
+-- The production catalogue seeds from tanah_moed_data.sql BEFORE this file
+-- (db-populator order), so these fixtures only add a deterministic test moed
+-- plus link rows covering every union branch of the article list:
+--   article 1 - linked AND range-matched via its verified covering rows
+--              (בראשית א 1-2 sit inside the stored בראשית א 1-3 range)
+--   articles 2-4 - range-matched only: unverified coverage falls back to
+--              their primary perek (1), which overlaps the stored range
+--   article 5 - explicitly linked only: its primary perek (5000) is outside
+--              the canonical corpus and it has no covering rows, so it
+--              proves explicit links show without any scripture overlap
+-- Moed 91 stays unpublished so the detail route's 404 path is exercised.
+-- ---------------------------------------------------------------------------
+-- The moed tables are CREATE IF NOT EXISTS (never drop-recreated), so
+-- these fixtures must stay idempotent like the seed guards above them.
+INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
+SELECT id, slug, name, summary, hebrew_month, date_label, annual_order, published
+FROM (SELECT 90 AS id, 'מועד-בדיקה' AS slug, 'מועד בדיקה' AS name,
+             'מועד לבדיקות אוטומטיות' AS summary, NULL AS hebrew_month,
+             NULL AS date_label, 90 AS annual_order, TRUE AS published
+      UNION ALL
+      SELECT 91, 'מועד-לא-מפורסם', 'מועד לא מפורסם', NULL, NULL, NULL, 91, FALSE) seed
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE tanah_moed.id = seed.id);
+
+INSERT INTO tanah_moed_section (id, moed_id, label, position)
+SELECT 9001, 90, 'סעיף בדיקה', 1 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_section WHERE id = 9001);
+
+INSERT INTO tanah_moed_range (id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT 90011, 9001, 1, 1, 1, 1, 3 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range WHERE id = 90011);
+
+INSERT INTO tanah_article_moed (article_id, moed_id)
+SELECT article_id, moed_id
+FROM (SELECT 1 AS article_id, 90 AS moed_id UNION ALL SELECT 5, 90) seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM tanah_article_moed existing
+    WHERE existing.article_id = seed.article_id AND existing.moed_id = seed.moed_id
+);
+
+-- ---------------------------------------------------------------------------
 -- Mention-decoration fixtures (issue #2516) live in
 -- tanah_mention_test_data.sql instead. Never insert tanahpedia_entry rows in
 -- this file: it runs BEFORE the Tanahpedia seed chain, and the legacy
