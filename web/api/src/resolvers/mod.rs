@@ -1,3 +1,4 @@
+pub mod article_relationships_resolver;
 pub mod articles_resolver;
 pub mod authors_resolver;
 pub mod dedications_resolver;

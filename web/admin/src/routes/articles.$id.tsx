@@ -6,6 +6,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
+import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPanel";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
@@ -89,6 +90,9 @@ function ArticleEditPage() {
 
 	const selectedPerek = perakim?.find(
 		(perek) => perek.id === formData.perek_id,
+	);
+	const selectedAuthor = authors?.find(
+		(author) => author.id === formData.author_id,
 	);
 
 	// Initialize form with article data
@@ -412,6 +416,19 @@ function ArticleEditPage() {
 					</button>
 				</div>
 			</form>
+
+			{/* Full relationship picture (#3102) — every registry entry, each
+			    managed through its owning workflow. Only for persisted articles. */}
+			{articleId !== null && (
+				<ArticleRelationshipsPanel
+					articleId={articleId}
+					perekId={formData.perek_id}
+					authorId={formData.author_id}
+					authorName={selectedAuthor?.name}
+					coveringCount={formData.coveringSources?.length}
+					coverageVerified={formData.coverageVerified === true}
+				/>
+			)}
 		</div>
 	);
 }

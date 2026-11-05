@@ -1,4 +1,5 @@
 pub mod article;
+pub mod article_relationships;
 pub mod author;
 pub mod dedication;
 pub mod perek;

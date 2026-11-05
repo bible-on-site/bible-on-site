@@ -1,3 +1,4 @@
+pub mod article_relationships_service;
 pub mod article_search;
 pub mod articles_service;
 pub mod authors_service;
