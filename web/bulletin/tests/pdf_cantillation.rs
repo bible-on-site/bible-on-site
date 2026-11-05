@@ -51,7 +51,7 @@ fn melachim_article() -> String {
          <p>דגש: <strong>הַכֵּ֣ינִי נָ֑א</strong> וגם \
          <span style='font-style:italic'>כֹּ֥ה אָמַ֣ר</span> ועוד \
          <span style='font-weight:bold'>וַיֹּאמֶ֞ר אֵלָ֑יו</span> תמיד.</p>\
-         <p>סימנים: {specimen} — perek 307 (2026) עַל־יָדוֹ הָאָֽרֶץ׃.</p>"
+         <p>סימנים: {specimen} — perek 307 (2026) הָאָֽרֶץ׃.</p>"
     )
 }
 
