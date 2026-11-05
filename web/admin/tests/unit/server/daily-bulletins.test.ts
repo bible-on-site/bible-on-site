@@ -266,6 +266,49 @@ describe("Hebrew-date article override (#3098)", () => {
 		expect(mocks.queryOne.mock.calls[2]?.[1]).toEqual([11, 12]);
 	});
 
+	it("rejects an assigned article with a null body", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 700 })
+			.mockResolvedValueOnce({ ...assigned, content: null });
+		await expect(prepareBulletin("2024-08-13")).rejects.toThrow(
+			"אינו זמין להפצה",
+		);
+	});
+
+	it("falls back to ordinary selection when the date schema is not deployed", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockRejectedValueOnce(
+				Object.assign(new Error("no such table"), {
+					code: "ER_NO_SUCH_TABLE",
+				}),
+			)
+			.mockResolvedValueOnce(row);
+		mocks.query
+			.mockResolvedValueOnce([
+				{ id: 7, name: "מאמר", author: "מחבר", content: "<p>תוכן</p>" },
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(deliveries);
+		const result = await prepareBulletin(input.date);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("Hebrew-date schema"),
+		);
+		expect(result.input.article?.id).toBe(7);
+		warn.mockRestore();
+	});
+
+	it("rethrows a non-schema failure from the assignment lookup", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockRejectedValueOnce(new Error("deadlock"));
+		await expect(prepareBulletin(input.date)).rejects.toThrow("deadlock");
+	});
+
 	it("keeps ordinary chapter selection when the date has no assignment", async () => {
 		mocks.queryOne
 			.mockResolvedValueOnce(null)

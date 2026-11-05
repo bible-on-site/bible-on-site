@@ -72,4 +72,72 @@ describe("hebrewBulletinMonthDay (#3098)", () => {
 			hebrewDay: 1,
 		});
 	});
+
+	it("maps ordinal months through the Metonic cycle when ICU emits numbers", async () => {
+		const { hebrewBulletinMonthDay } = await import("~/lib/daily-bulletin");
+		const realDateTimeFormat = Intl.DateTimeFormat;
+		const forParts = (month: string, year: string, day: string) =>
+			[
+				{ type: "month", value: month },
+				{ type: "year", value: year },
+				{ type: "day", value: day },
+			] as Intl.DateTimeFormatPart[];
+		let parts: Intl.DateTimeFormatPart[] = [];
+		vi.stubGlobal("Intl", {
+			...Intl,
+			DateTimeFormat: class {
+				formatToParts() {
+					return parts;
+				}
+				format() {
+					return "";
+				}
+			} as unknown as typeof Intl.DateTimeFormat,
+		});
+		try {
+			// 5787 is a leap year ((7·5787+1) mod 19 = 2 < 7): 6→Adar I,
+			// 7→Adar II, later ordinals shift by one.
+			for (const [month, year, expected] of [
+				["1", "5787", 1],
+				["5", "5787", 5],
+				["6", "5787", 13],
+				["7", "5787", 14],
+				["8", "5787", 7],
+				["13", "5787", 12],
+				// 5785 is a non-leap year ((7·5785+1) mod 19 = 7): ordinals pass.
+				["6", "5785", 6],
+				["7", "5785", 7],
+			] as const) {
+				parts = forParts(month, year, "9");
+				expect(hebrewBulletinMonthDay("2024-08-13").hebrewMonth).toBe(expected);
+			}
+		} finally {
+			vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: realDateTimeFormat });
+		}
+	});
+
+	it("handles empty parts defensively in the ordinal path", async () => {
+		const { hebrewBulletinMonthDay } = await import("~/lib/daily-bulletin");
+		const realDateTimeFormat = Intl.DateTimeFormat;
+		vi.stubGlobal("Intl", {
+			...Intl,
+			DateTimeFormat: class {
+				formatToParts() {
+					return [];
+				}
+				format() {
+					return "";
+				}
+			} as unknown as typeof Intl.DateTimeFormat,
+		});
+		try {
+			// Empty month parses as NaN → ordinal<=5 is false and !leap decides.
+			const result = hebrewBulletinMonthDay("2024-08-13");
+			expect(Number.isNaN(result.hebrewMonth) || result.hebrewMonth >= 0).toBe(
+				true,
+			);
+		} finally {
+			vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: realDateTimeFormat });
+		}
+	});
 });

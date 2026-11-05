@@ -1236,6 +1236,91 @@ mod tests {
         ));
     }
 
+    /// Happy path and failure mode for the recurring-date override list
+    /// (#3098) — the starter payload ships every assignment to native clients.
+    #[tokio::test]
+    async fn find_all_hebrew_date_overrides_returns_rows_and_maps_db_errors() {
+        use entities::article_hebrew_date;
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article_hebrew_date::Model, Vec<_>, _>([vec![
+                    article_hebrew_date::Model {
+                        hebrew_month: 11,
+                        hebrew_day: 9,
+                        article_id: 2199,
+                        created_at: chrono::Utc::now(),
+                    },
+                ]])
+                .into_connection(),
+        );
+
+        let overrides = find_all_hebrew_date_overrides(&db)
+            .await
+            .expect("overrides should load");
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(overrides[0].article_id, 2199);
+
+        let failing = create_mock_db_with_query_error("date table missing");
+        assert!(matches!(
+            find_all_hebrew_date_overrides(&failing).await.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
+    }
+
+    /// The single assigned article resolves through the date join (#3098):
+    /// a row with its related article, a bare row, an empty result, and the
+    /// DB-failure arm all map onto the service contract.
+    #[tokio::test]
+    async fn find_article_by_hebrew_date_resolves_assignment_and_errors() {
+        type Pair = (entities::article_hebrew_date::Model, Option<Model>);
+        let assigned = |article: Option<Model>| {
+            Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<Pair, Vec<Pair>, _>([vec![(
+                        entities::article_hebrew_date::Model {
+                            hebrew_month: 11,
+                            hebrew_day: 9,
+                            article_id: 2199,
+                            created_at: chrono::Utc::now(),
+                        },
+                        article,
+                    )]])
+                    .into_connection(),
+            )
+        };
+
+        let found = find_article_by_hebrew_date(&assigned(Some(article_model(2199, 1, 1))), 11, 9)
+            .await
+            .expect("lookup should succeed");
+        assert_eq!(found.map(|m| m.id), Some(2199));
+
+        // An assignment row without its article resolves to no override.
+        let orphan = find_article_by_hebrew_date(&assigned(None), 11, 9)
+            .await
+            .expect("lookup should succeed");
+        assert!(orphan.is_none());
+
+        let empty = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<Pair, Vec<Pair>, _>([Vec::new()])
+                .into_connection(),
+        );
+        assert!(
+            find_article_by_hebrew_date(&empty, 8, 5)
+                .await
+                .expect("empty result")
+                .is_none()
+        );
+
+        let failing = create_mock_db_with_query_error("date join failed");
+        assert!(matches!(
+            find_article_by_hebrew_date(&failing, 11, 9)
+                .await
+                .unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
+    }
+
     #[test]
     fn article_covering_source_relations_generate_the_canonical_table_join() {
         use sea_orm::{QueryTrait, Related};

@@ -360,6 +360,56 @@ mod tests {
         assert!(res.data.into_json().unwrap()["articleByHebrewDate"].is_null());
     }
 
+    /// `articleByHebrewDate` attaches metrics and covering sources on demand
+    /// like every other article field (#3098) — the override article renders
+    /// the same badges as a canonical perek article.
+    #[tokio::test]
+    async fn article_by_hebrew_date_attaches_metrics_and_covering_sources() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<(entities::article_hebrew_date::Model, Option<article::Model>), Vec<_>, _>([
+                    vec![(
+                        entities::article_hebrew_date::Model {
+                            hebrew_month: 11,
+                            hebrew_day: 9,
+                            article_id: 2199,
+                            created_at: chrono::Utc::now(),
+                        },
+                        Some(article_model(2199)),
+                    )],
+                ])
+                .append_query_results::<entities::tanah_article_metric::Model, Vec<_>, _>([
+                    Vec::new(),
+                ])
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    covering_source(2199, 3, 1),
+                ]])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            ArticlesQuery,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema
+            .execute(
+                "{ articleByHebrewDate(hebrewMonth: 11, hebrewDay: 9) { id readingMetric { wordCount } coveringSources { perekId pasuk } } }",
+            )
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let data = res.data.into_json().unwrap();
+        let article = &data["articleByHebrewDate"];
+        assert!(article["readingMetric"].is_null());
+        assert_eq!(
+            article["coveringSources"].as_array().unwrap()[0]["perekId"].as_i64(),
+            Some(3)
+        );
+    }
+
     /// Out-of-range uniform months and impossible month/day pairs are a
     /// client error (#3098) — including day 30 for months that never have 30.
     #[tokio::test]
