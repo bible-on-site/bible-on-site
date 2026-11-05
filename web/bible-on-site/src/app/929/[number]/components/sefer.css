@@ -16,11 +16,12 @@
    scroll at the root (e.g. /dev/sefer). On perek pages the reader scrolls
    inside .perekContainer and the root shows no scrollbar, so a lock-time
    gutter would itself add/remove ~15px of width per toggle and become the
-   shift it was meant to prevent. */
+   shift it was meant to prevent. The route marker is a direct body child;
+   restrict that check so reader descendant changes do not invalidate it. */
 html[data-sefer-view] {
 	overflow: hidden;
 }
-html[data-sefer-view]:not(:has(.perek-layout)) {
+html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	scrollbar-gutter: stable;
 }
 
@@ -32,6 +33,20 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	width: 100%;
 	overflow: hidden;
 	position: relative;
+}
+
+/* Prepare the covered back face before the next turn starts. Keep the hint
+   off the current spread and hover folds to preserve their text antialiasing.
+   Leaf owns the inline hint throughout an active drag or animation. */
+.he-book .page--paper.even:not(.current-page):not(.page--folded) {
+	will-change: transform, clip-path;
+}
+
+/* Skip covered pane painting while retaining its layout and existing masks.
+   Keep page boxes available for back-face preparation; the library clears
+   the pane mask before exposing its content. */
+.he-book .flipbook-page-scrollport.flipbook-layout-dormant {
+	visibility: hidden !important;
 }
 
 /* Sefer pages are app-like panels — fixed headers/footers with inner
@@ -62,8 +77,10 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 	color: #0f172a;
 }
 
-.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
-	border-color: rgb(255 255 255 / 0.4);
+@media (hover: hover) {
+	.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
+		border-color: rgb(255 255 255 / 0.4);
+	}
 }
 
 .flipbook-toolbar input.flipbook-toolbar-indicator:focus {
@@ -99,8 +116,10 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
 		color: #f0ebe3;
 	}
 
-	.toc-link:hover {
-		background-color: rgba(255, 255, 255, 0.06);
+	@media (hover: hover) {
+		.toc-link:hover {
+			background-color: rgba(255, 255, 255, 0.06);
+		}
 	}
 
 	.toc-dots {
@@ -120,7 +139,6 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
  * .he-book scope would stop matching exactly when the tab is expanded.
  * =================================================================== */
 
-
 /* ===================================================================
  * Sefer chapter tabs (issue #2543) — one tab per perek, tinted with the
  * sefer's cover color like the hard cover itself. --cover-color is set
@@ -130,27 +148,36 @@ html[data-sefer-view]:not(:has(.perek-layout)) {
  * without global theming.
  * =================================================================== */
 
-/* The provider's className lands on the library's layer element itself
-   (class="flipbook-bookmarks sefer-bookmarks"), so the .flipbook-bookmarks
-   compound is both accurate and needed: it keeps these selectors at or
-   above the specificity of the slot-scoped .flipbook-bookmark rules in
-   the library stylesheet. */
-.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark {
+/* The provider's className follows a tab from its resting layer to a moving
+   surface. Keep the same theme and selector specificity in both parents so
+   reparenting a tab cannot replace the book colors with library defaults. */
+.he-book
+	.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+	.flipbook-bookmark {
 	background: var(--cover-color, #333);
 	border-color: rgb(255 255 255 / 0.25);
 	color: rgb(255 255 255 / 0.95);
 }
 
-.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark:hover,
 .he-book
-	.sefer-bookmarks.flipbook-bookmarks
+	.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
 	.flipbook-bookmark[aria-current="page"] {
 	background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
 }
 
+@media (hover: hover) {
+	.he-book
+		.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+		.flipbook-bookmark:hover {
+		background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
+	}
+}
+
 /* White inner frame — the same convention the cover's inset border uses —
    stays visible on every cover color, light and dark. */
-.he-book .sefer-bookmarks.flipbook-bookmarks .flipbook-bookmark:focus-visible {
+.he-book
+	.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+	.flipbook-bookmark:focus-visible {
 	outline: 2px solid #fff;
 	outline-offset: -3px;
 }

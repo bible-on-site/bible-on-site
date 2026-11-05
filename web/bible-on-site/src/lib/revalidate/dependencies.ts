@@ -34,6 +34,7 @@ import {
 	parashaDedicationsTag,
 	perekArticlesTag,
 	perekDedicationsTag,
+	pediaCategoryTag,
 	seferDedicationsTag,
 	seferPerekDedicationsTag,
 } from "@/lib/revalidate/tags";
@@ -48,7 +49,8 @@ import type { CategoryKey } from "@/lib/tanahpedia/types";
  *   collects the tags of the caches it read, the tag also expires the
  *   rendered pages of those entries.
  * - `paths` expire prerendered routes directly — needed where the page's
- *   data is not tag-cached (every `/pedia/*` view reads the DB plainly).
+ *   data is not tag-cached (the pedia entry/category views still read
+ *   most of the DB plainly).
  * - `patterns` cover the fallback case where precise enumeration is
  *   impossible (a dynamic route pattern is expired whole rather than
  *   losing the update).
@@ -107,6 +109,8 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.authors,
 		COLLECTION_TAGS.pediaEntityRefs,
 		COLLECTION_TAGS.pediaMentionRefs,
+		COLLECTION_TAGS.pediaLanding,
+		COLLECTION_TAGS.pediaEntries,
 		COLLECTION_TAGS.dedications,
 	]);
 	sink.patterns.add("/pedia/[slug]");
@@ -420,10 +424,16 @@ function addPediaEntryDeps(
 	for (const name of names) {
 		addPath(sink, `/pedia/${name}`);
 	}
+	// The landing page's cached counts/recents/anniversaries, and the
+	// entry-page sibling/category summaries. Category tags are per entity
+	// type so an entry change expires only the categories it belongs to.
 	addPath(sink, "/pedia");
+	addTag(sink, COLLECTION_TAGS.pediaLanding);
+	addTag(sink, COLLECTION_TAGS.pediaEntries);
 	for (const entityType of entityTypes) {
 		const path = categoryPath(entityType);
 		if (path) addPath(sink, path);
+		addTag(sink, pediaCategoryTag(entityType));
 	}
 	for (const perekId of refPerekIds) {
 		addTag(sink, entityRefsTag(perekId));
@@ -443,15 +453,19 @@ async function resolveArticle(
 		addPath(sink, `/929/${perekId}`);
 		addPath(sink, `/929/${perekId}/${change.id}`);
 	}
-	for (const authorId of change.authorIds ?? []) {
+	const authorIds = change.authorIds ?? [];
+	for (const authorId of authorIds) {
 		addTag(sink, authorArticlesTag(authorId));
-		const author = await query<{ name: string }>(
-			`SELECT name FROM tanah_author WHERE id = ?`,
-			[authorId],
+	}
+	if (authorIds.length > 0) {
+		const authors = await query<{ name: string }>(
+			`SELECT name FROM tanah_author
+			 WHERE id IN (${placeholders(authorIds.length)})`,
+			authorIds,
 		);
-		if (author[0]) {
-			addTag(sink, authorTag(normalizeAuthorName(author[0].name)));
-			addPath(sink, `/929/authors/${authorNameToSlug(author[0].name)}`);
+		for (const author of authors) {
+			addTag(sink, authorTag(normalizeAuthorName(author.name)));
+			addPath(sink, `/929/authors/${authorNameToSlug(author.name)}`);
 		}
 	}
 	// The supplied spans are the destroyed side; the live rows complete the
@@ -641,25 +655,33 @@ async function resolveDedication(
 		addPath(sink, `/parasha/${parashaId}`);
 		scoped = true;
 	}
-	for (const articleId of change.articleIds ?? []) {
+	const articleIds = change.articleIds ?? [];
+	for (const articleId of articleIds) {
 		addTag(sink, articleDedicationsTag(articleId));
-		const article = await query<{ perek_id: number }>(
-			`SELECT perek_id FROM tanah_article WHERE id = ?`,
-			[articleId],
+	}
+	if (articleIds.length > 0) {
+		const articles = await query<{ id: number; perek_id: number }>(
+			`SELECT id, perek_id FROM tanah_article
+			 WHERE id IN (${placeholders(articleIds.length)})`,
+			articleIds,
 		);
-		if (article[0]) {
-			addPath(sink, `/929/${article[0].perek_id}/${articleId}`);
+		for (const article of articles) {
+			addPath(sink, `/929/${article.perek_id}/${article.id}`);
 		}
 		scoped = true;
 	}
-	for (const entryId of change.entryIds ?? []) {
+	const entryIds = change.entryIds ?? [];
+	for (const entryId of entryIds) {
 		addTag(sink, entryDedicationsTag(entryId));
-		const entry = await query<{ unique_name: string }>(
-			`SELECT unique_name FROM tanahpedia_entry WHERE id = ?`,
-			[entryId],
+	}
+	if (entryIds.length > 0) {
+		const entries = await query<{ unique_name: string }>(
+			`SELECT unique_name FROM tanahpedia_entry
+			 WHERE id IN (${placeholders(entryIds.length)})`,
+			entryIds,
 		);
-		if (entry[0]) {
-			addPath(sink, `/pedia/${entry[0].unique_name}`);
+		for (const entry of entries) {
+			addPath(sink, `/pedia/${entry.unique_name}`);
 		}
 		scoped = true;
 	}

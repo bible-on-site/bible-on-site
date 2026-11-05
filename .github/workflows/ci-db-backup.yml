@@ -1,0 +1,41 @@
+name: Database backup tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - name: Install test dependencies
+        run: python -m pip install -r devops/backups/requirements-test.txt
+      - name: Check infrastructure schema
+        run: cfn-lint docs/aws/cloudformation/db-backups.yaml
+      - name: Check backup security audit patterns
+        # Match the subprocess, SQL, temp-path and credential patterns from review.
+        run: bandit -r devops/backups -t B106,B108,B310,B404,B603,B607,B608
+      - name: Test backup and failure recovery contracts
+        run: |
+          coverage run --rcfile=devops/backups/.coveragerc -m unittest discover -s devops/backups -p 'test_*.py'
+      - name: Exercise real MySQL export and isolated restoration
+        run: |
+          coverage run --append --rcfile=devops/backups/.coveragerc devops/backups/integration_test.py
+          coverage report --rcfile=devops/backups/.coveragerc
+          coverage lcov --rcfile=devops/backups/.coveragerc -o .coverage/db-backup/lcov.info
+      # The parent workflow combines this with the existing module reports;
+      # never publish a competing partial report to Codacy for the same commit.
+      - name: Store backup code coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: database-backup-coverage-${{ github.run_id }}
+          path: .coverage/db-backup/lcov.info
+          if-no-files-found: error
+          retention-days: 7

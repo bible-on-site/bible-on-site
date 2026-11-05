@@ -2,7 +2,9 @@ import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
+import { cache } from "react";
 import { JsonLd } from "@/app/components/JsonLd";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
 import { ReadingTime } from "@/app/components/ReadingTime";
 import {
 	DedicationLines,
@@ -10,15 +12,19 @@ import {
 } from "@/app/components/dedications/DedicationLines";
 import { getEntryDedications } from "@/lib/dedications/loaders";
 import { demoteHeadings } from "@/lib/html-headings";
+import { getEntryProgressUnits, metricOrFallback } from "@/lib/reading-metrics";
 import { plainText } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
+import { sameAsFor } from "@/lib/seo/same-as";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import {
+	getCachedEntityTypeEntrySummaries,
+} from "@/lib/tanahpedia/loaders";
 import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
-	getEntries,
-	getEntriesByEntityType,
+	getAllEntrySummaries,
 	getEntryByUniqueName,
 	getEntryOccurrences,
 	getPersonFamilySummary,
@@ -40,9 +46,17 @@ import {
 	disambiguationMetadata,
 } from "./disambiguation-view";
 
+/* React cache() memoizes per request, so generateMetadata and EntryView share
+   one entry fetch (3 queries) and one JSDOM/DOMPurify normalization pass over
+   the full content instead of paying both twice per render. */
+const getEntry = cache(getEntryByUniqueName);
+const prepareEntryContentHtml = cache((content: string) =>
+	DOMPurify.sanitize(normalizeFootnoteHtml(demoteHeadings(content))),
+);
+
 export async function entryMetadata(slug: string): Promise<Metadata> {
 	const name = normalizedUniqueNameFromParam(slug);
-	const entry = await getEntryByUniqueName(name);
+	const entry = await getEntry(name);
 	if (!entry) {
 		const resolution = await resolveSynonymSlug(name);
 		if (resolution.kind === "disambiguation") {
@@ -56,7 +70,7 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 	/* Stored footnote markers are decorative — normalized HTML keeps them
 	   out of the extracted description (#2615). */
 	const fromContent = entry.content
-		? plainText(normalizeFootnoteHtml(entry.content), 200)
+		? plainText(prepareEntryContentHtml(entry.content), 200)
 		: "";
 	return pageMetadata({
 		title: `${entry.title} | תנכפדיה`,
@@ -67,7 +81,7 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 
 export async function EntryView({ slug }: { slug: string }) {
 	const name = normalizedUniqueNameFromParam(slug);
-	const entry = await getEntryByUniqueName(name);
+	const entry = await getEntry(name);
 	if (!entry) {
 		const resolution = await resolveSynonymSlug(name);
 		if (resolution.kind === "alias") {
@@ -88,34 +102,46 @@ export async function EntryView({ slug }: { slug: string }) {
 	// A load failure rejects the render rather than caching a page missing
 	// its breadcrumb/family/map/occurrence sections — the last good page
 	// keeps serving and the next request retries against a recovered DB.
-	const siblingEntries = (
-		primaryEntityType
-			? await getEntriesByEntityType(primaryEntityType as EntityType)
-			: await getEntries(500, 0)
-	).map((e) => ({
+	// All five loaders are independent once the entry row is loaded, so
+	// issue them in one batch instead of serial round-trips.
+	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
+	const primaryEntity = entry.entities[0] ?? null;
+	const [siblingEntries, personFamily, placeMapMarkers, occurrences, entryDedications] =
+		await Promise.all([
+			primaryEntityType
+				? getCachedEntityTypeEntrySummaries(primaryEntityType as EntityType)
+				: getAllEntrySummaries(500, 0),
+			personEntity
+				? getPersonFamilySummary(
+						personEntity.entityId,
+						personEntity.entityName,
+					)
+				: Promise.resolve(null),
+			getPlaceMapMarkersForEntry(entry.id),
+			getEntryOccurrences(entry.id),
+			// Entry-scoped dedications (#2731): targeted by the canonical
+			// entry id, never inferred from prose mentions.
+			getEntryDedications(entry.id),
+		]);
+	const siblingNav = siblingEntries.map((e) => ({
 		uniqueName: e.uniqueName,
 		title: e.title,
 	}));
-
-	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
-	const personFamily = personEntity
-		? await getPersonFamilySummary(
-				personEntity.entityId,
-				personEntity.entityName,
-			)
-		: null;
-
-	const placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
-
-	const primaryEntity = entry.entities[0] ?? null;
-	const occurrences = await getEntryOccurrences(entry.id);
-	// Entry-scoped dedications (#2731): targeted by the canonical entry id,
-	// never inferred from prose mentions.
-	const entryDedications = dedicationLines(
-		await getEntryDedications(entry.id),
+	const dedicationLinesResult = dedicationLines(entryDedications);
+	const sameAsByEntityId = Object.fromEntries(
+		await Promise.all(
+			entry.entities.map(
+				async (ee) =>
+					[
+						ee.entityId,
+						await sameAsFor("TANAHPEDIA_ENTITY", ee.entityId),
+					] as const,
+			),
+		),
 	);
 	const entryGraph = buildEntryGraph({
 		entry,
+		sameAsByEntityId,
 		personFamily,
 		placeMarkers: placeMapMarkers,
 		category: primaryEntity
@@ -126,17 +152,29 @@ export async function EntryView({ slug }: { slug: string }) {
 			: null,
 	});
 
+	const entryProgressUnits = await metricOrFallback(
+		`tanahpedia entry ${entry.id} progress`,
+		[],
+		() => getEntryProgressUnits(entry.id),
+	);
+
 	return (
 		<div className={styles.tanahpediaPage}>
 			<JsonLd data={entryGraph} />
+			<ReadingProgress
+				units={entryProgressUnits}
+				scope={`.${styles.tanahpediaPage}`}
+				content={`.${styles.entryContent}`}
+				stickyTop="72px"
+			/>
 			<TanahpediaBreadcrumb
 				currentCategory={primaryEntityType}
 				currentEntryTitle={entry.title}
 				currentEntryUniqueName={entry.uniqueName}
-				siblingEntries={siblingEntries}
+				siblingEntries={siblingNav}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
-			<DedicationLines lines={entryDedications} />
+			<DedicationLines lines={dedicationLinesResult} />
 			<ReadingTime
 				estimatedSeconds={entry.metric?.estimatedSeconds}
 				className={styles.readingTime}
@@ -174,9 +212,7 @@ export async function EntryView({ slug }: { slug: string }) {
 				<article
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
-						__html: DOMPurify.sanitize(
-							normalizeFootnoteHtml(demoteHeadings(entry.content)),
-						),
+						__html: prepareEntryContentHtml(entry.content), // nosemgrep -- DOMPurify-sanitized via prepareEntryContentHtml
 					}}
 					className={styles.entryContent}
 				/>

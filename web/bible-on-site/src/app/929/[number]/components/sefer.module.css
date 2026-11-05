@@ -60,6 +60,13 @@
 	--scrollbarBG: #cfd8dc;
 }
 
+/* Lay out covered chapters at their scrollable width in one pass. The reader
+   restores auto overflow before revealing a page, so short chapters keep their
+   original full width and long chapters keep the same visible scrollbar. */
+:global(.flipbook-layout-dormant) .perekTextScrollWrapper {
+	overflow-y: scroll;
+}
+
 .perekTextScrollWrapper::-webkit-scrollbar {
 	width: 11px;
 }
@@ -90,6 +97,14 @@
 
 .pageHeaderPerek {
 	flex-shrink: 0;
+}
+
+/* Perek reading-time estimate inside the book page header (#2607). */
+.pageHeaderMetric {
+	flex-shrink: 0;
+	font-size: 0.7rem;
+	font-weight: 400;
+	color: #8b7355;
 }
 
 .perekHeader {
@@ -216,10 +231,8 @@
 	line-height: 1.3;
 }
 
-.backToPerekInBook.backToPerekInBook {
-	margin-top: 8px;
-	padding-top: 8px;
-}
+/* The bottom-only back row was removed in #2786 — return now lives in the
+   unified article command row at the top of the article. */
 
 /* Perush full view in book: fill container, header fixed, notes scroll.
    Doubled selector for specificity over .perushimSection from perushim-section.module.css */
@@ -397,8 +410,7 @@
 .pasukNum[data-pasuk-selected] {
 	background: var(--pasuk-num-color, #1c2c5d);
 	border-radius: var(--radius-sm);
-	box-shadow:
-		0 0 0 2px
+	box-shadow: 0 0 0 2px
 		color-mix(in srgb, var(--pasuk-num-color, #1c2c5d) 30%, transparent);
 	color: var(--surface-elevated, #fff);
 	padding: 0 2px;
@@ -445,12 +457,14 @@
 	height: 44px;
 	transform: translateY(-50%);
 }
-.pasukSelectionButton:hover {
-	background: color-mix(
-		in srgb,
-		var(--pasuk-num-color, #1c2c5d) 8%,
-		transparent
-	);
+@media (hover: hover) {
+	.pasukSelectionButton:hover {
+		background: color-mix(
+			in srgb,
+			var(--pasuk-num-color, #1c2c5d) 8%,
+			transparent
+		);
+	}
 }
 /* Destination verse after perush→perek pasuk navigation (same look as the
    reader's hash-selected verse). Division book pages anchor pesukim by id
@@ -474,7 +488,7 @@
 	margin: 0.1em 0 1em;
 	text-align: justify;
 }
-.qri label::before {
+.qri span:where([data-qri-label])::before {
 	color: var(--muted-text, #637598);
 	content: "קְרִי:";
 	cursor: text;
@@ -491,9 +505,11 @@
 	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
-.tanahpediaLink:hover {
-	border-bottom-style: solid;
-	border-bottom-color: var(--link-accent-hover);
+@media (hover: hover) {
+	.tanahpediaLink:hover {
+		border-bottom-style: solid;
+		border-bottom-color: var(--link-accent-hover);
+	}
 }
 
 @media (prefers-color-scheme: dark) {
@@ -514,8 +530,7 @@
 
 	.pasukNum[data-pasuk-selected] {
 		background: var(--pasuk-num-color, #a8b9ff);
-		box-shadow:
-			0 0 0 2px
+		box-shadow: 0 0 0 2px
 			color-mix(in srgb, var(--pasuk-num-color, #a8b9ff) 35%, transparent);
 		color: var(--surface-elevated, #1a1f2e);
 	}
@@ -535,12 +550,14 @@
 		color: var(--pasuk-num-color, #a8b9ff);
 	}
 
-	.pasukSelectionButton:hover {
-		background: color-mix(
-			in srgb,
-			var(--pasuk-num-color, #a8b9ff) 12%,
-			transparent
-		);
+	@media (hover: hover) {
+		.pasukSelectionButton:hover {
+			background: color-mix(
+				in srgb,
+				var(--pasuk-num-color, #a8b9ff) 12%,
+				transparent
+			);
+		}
 	}
 
 	.perekText [data-sefer-pasuk][data-pasuk-highlight],
@@ -552,7 +569,7 @@
 	.perekHeader,
 	.perekIllustrationFigure figcaption,
 	.blankPageDate,
-	.qri label::before {
+	.qri span:where([data-qri-label])::before {
 		color: var(--muted-text, #9aa0a6);
 	}
 
@@ -560,8 +577,10 @@
 		color: var(--hc-accent, #b7adf0);
 	}
 
-	.tanahpediaLink:hover {
-		border-bottom-color: var(--link-accent-hover);
+	@media (hover: hover) {
+		.tanahpediaLink:hover {
+			border-bottom-color: var(--link-accent-hover);
+		}
 	}
 }
 

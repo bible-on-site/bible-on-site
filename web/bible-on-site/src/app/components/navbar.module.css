@@ -80,8 +80,10 @@
   transition: right 0.25s ease-in-out;
 }
 
-.menuBtn:hover {
-  opacity: 0.7;
+@media (hover: hover) {
+  .menuBtn:hover {
+    opacity: 0.7;
+  }
 }
 
 .menuBtn:focus-visible {
@@ -257,4 +259,8 @@
   .menuBox::before {
     background: linear-gradient(to right, #000 -100%, #1a1f2e 100%);
   }
+}
+
+.menuBtn:active {
+  scale: var(--press-scale);
 }

@@ -14,7 +14,10 @@ const union = (...arrays) => [...new Set(arrays.flat())].sort();
 
 // Locates one downloaded artifact directory per planned shard, keyed by the
 // shard number in its name (app-mobile-e2e-shard.<run>.ios-shard<N>).
+// download-artifact extracts a pattern matching exactly one artifact straight
+// into its path, so a single-shard plan may find its files in inputsDir itself.
 export function discoverShardInputs(inputsDir, plan) {
+  if (plan.shards.length === 1 && readdirSync(inputsDir).includes("case-manifest.json")) return [inputsDir];
   const byShard = new Map();
   for (const name of readdirSync(inputsDir)) {
     const match = /ios-shard(\d+)$/.exec(name);

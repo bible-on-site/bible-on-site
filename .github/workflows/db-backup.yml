@@ -1,0 +1,74 @@
+name: Production database backup
+
+on:
+  schedule:
+    - cron: "23 2 * * 0"
+    - cron: "43 2 1 * *"
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: Retention tier
+        type: choice
+        options: [weekly, monthly]
+        default: weekly
+
+permissions:
+  contents: read
+
+# Share the existing data-deployment mutex so normal schema migrations do not
+# race the snapshot. Content edits continue under mysqldump's InnoDB snapshot.
+concurrency:
+  group: ${{ github.repository }}-cd-data
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  backup:
+    if: ${{ github.ref == 'refs/heads/master' && vars.PRODUCTION_BACKUPS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: il-central-1
+      RDS_BUILD_ACCESS_ROLE: arn:aws:iam::250598594267:role/bible-on-site-db-backup
+      RDS_SECURITY_GROUP: sg-09268677e2b65f448
+      BACKUP_SCRATCH_URL: mysql://root:backup-scratch-only@127.0.0.1:3306/tanah
+      BACKUP_TIER: ${{ inputs.tier || (github.event.schedule == '43 2 1 * *' && 'monthly' || 'weekly') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - name: Install backup SDK
+        run: python -m pip install -r devops/backups/requirements.txt
+      - name: Start isolated restore server and matching MySQL tools
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: backup-scratch-only
+          my-cnf: |
+            event_scheduler=OFF
+            local_infile=OFF
+            bind-address=127.0.0.1
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.RDS_BUILD_ACCESS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: "250598594267"
+          role-session-name: db-backup-${{ github.run_id }}
+      - name: Verify the database and bucket before opening network access
+        run: python devops/backups/mysql_backup.py check
+      - name: Open this job's owned RDS access lease
+        run: RDS_BUILD_ACCESS_LEASE="$RUNNER_TEMP/backup-rds-lease.json" node devops/github/ci/rds-build-access.mjs grant
+      - name: Export, restore, verify and publish retained backup
+        run: python devops/backups/mysql_backup.py "$BACKUP_TIER"
+      - name: Remove only this job's RDS access lease
+        if: ${{ always() }}
+        run: RDS_BUILD_ACCESS_LEASE="$RUNNER_TEMP/backup-rds-lease.json" node devops/github/ci/rds-build-access.mjs cleanup

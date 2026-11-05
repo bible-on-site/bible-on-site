@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "authors",
     "mysql/db-populator",
+    "reading-metrics",
     "s3/s3-populator",
     "sefaria/setup-and-population",
     "sefaria/pipelines/tanah-view",
@@ -31,5 +32,7 @@ rusqlite = { version = "0.41", features = ["bundled"] }
 flate2 = "1"
 unicode-normalization = "0.1"
 unicode_categories = "0.1"
+sha2 = "0.11"
+reading-metrics = { path = "reading-metrics" }
 bson = "3"
 sunrise = "3"

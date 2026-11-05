@@ -9,18 +9,34 @@ use entities::article::{Column, Entity, Model};
 use entities::article_covering_source::{
     Column as CoveringSourceColumn, Entity as CoveringSourceEntity, Model as CoveringSourceModel,
 };
-use sea_orm::{ColumnTrait, DbErr, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, DbErr, DerivePartialModel, EntityTrait, QueryFilter, QueryOrder};
 
-/// Returns all articles from the database
-pub async fn find_all(db: &Database) -> Result<Vec<Model>, ServiceError> {
-    tracing::info_span!("articles_service::find_all");
+/// Starter-list projection of `tanah_article`: every column except `content`,
+/// whose full HTML body starter clients never read (bodies load via `article(id)`).
+#[derive(Debug, Clone, DerivePartialModel)]
+#[sea_orm(entity = "Entity")]
+pub struct ArticleSummary {
+    pub id: i32,
+    pub perek_id: i16,
+    pub author_id: i16,
+    pub article_abstract: Option<String>,
+    pub name: String,
+    pub priority: i8,
+    pub coverage_verified: bool,
+}
+
+/// Returns every article's display metadata for the `starter` list, without
+/// transferring each row's full HTML `content` MySQL→API on each app launch.
+pub async fn find_all_summaries(db: &Database) -> Result<Vec<ArticleSummary>, ServiceError> {
+    tracing::info_span!("articles_service::find_all_summaries");
     let articles = Entity::find()
+        .into_partial_model::<ArticleSummary>()
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
-    tracing::info!("Found {} articles", articles.len());
+    tracing::info!("Found {} article summaries", articles.len());
     Ok(articles)
 }
 
@@ -95,11 +111,50 @@ pub async fn find_covering_sources_by_article_id(
     Ok(sources)
 }
 
-/// Returns a 929-element vector where each index i contains the count of articles for perek (i + 1)
-pub async fn count_by_perek(db: &Database) -> Result<Vec<i64>, ServiceError> {
-    use sea_orm::{FromQueryResult, QuerySelect};
+/// Batch variant of `find_covering_sources_by_article_id`: one IN query for
+/// many articles, grouped by article_id with the same per-article ordering
+/// (perek_id, pasuk). Articles without rows are absent from the map.
+pub async fn find_covering_sources_by_article_ids(
+    db: &Database,
+    article_ids: &[i32],
+) -> Result<std::collections::HashMap<i32, Vec<CoveringSourceModel>>, ServiceError> {
+    use std::collections::HashMap;
 
-    tracing::info_span!("articles_service::count_by_perek");
+    if article_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = CoveringSourceEntity::find()
+        .filter(CoveringSourceColumn::ArticleId.is_in(article_ids.iter().copied()))
+        .order_by_asc(CoveringSourceColumn::ArticleId)
+        .order_by_asc(CoveringSourceColumn::PerekId)
+        .order_by_asc(CoveringSourceColumn::Pasuk)
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+
+    let mut grouped: HashMap<i32, Vec<CoveringSourceModel>> = HashMap::new();
+    for row in rows {
+        grouped.entry(row.article_id).or_default().push(row);
+    }
+    Ok(grouped)
+}
+
+/// Returns article counts grouped by perek for a set of perek ids — one
+/// GROUP BY query instead of one COUNT per perek (list-field N+1 fix).
+/// Perakim without articles are absent from the map.
+pub async fn count_by_perek_ids(
+    db: &Database,
+    perek_ids: &[i32],
+) -> Result<std::collections::HashMap<i32, i64>, ServiceError> {
+    use sea_orm::{FromQueryResult, QuerySelect};
+    use std::collections::HashMap;
+
+    if perek_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
 
     #[derive(FromQueryResult)]
     struct PerekCount {
@@ -111,6 +166,7 @@ pub async fn count_by_perek(db: &Database) -> Result<Vec<i64>, ServiceError> {
         .select_only()
         .column_as(Column::PerekId, "perek_id")
         .column_as(Column::Id.count(), "count")
+        .filter(Column::PerekId.is_in(perek_ids.iter().map(|id| *id as i16)))
         .group_by(Column::PerekId)
         .into_model::<PerekCount>()
         .all(db.get_connection())
@@ -119,17 +175,24 @@ pub async fn count_by_perek(db: &Database) -> Result<Vec<i64>, ServiceError> {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
 
+    Ok(counts
+        .into_iter()
+        .map(|pc| (pc.perek_id as i32, pc.count))
+        .collect())
+}
+
+/// Returns a 929-element vector where each index i contains the count of articles for perek (i + 1).
+/// Derived from rows the caller already fetched, so the starter payload pays no extra aggregate scan.
+pub fn count_by_perek(articles: &[ArticleSummary]) -> Vec<i64> {
     // Build a 929-element vector, initialized to 0
     let mut result = vec![0i64; 929];
-    for pc in counts {
-        let idx = (pc.perek_id as usize).saturating_sub(1);
+    for article in articles {
+        let idx = (article.perek_id as usize).saturating_sub(1);
         if idx < 929 {
-            result[idx] = pc.count;
+            result[idx] += 1;
         }
     }
-
-    tracing::info!("Counted articles for 929 perakim");
-    Ok(result)
+    result
 }
 
 /// Returns the count of articles for a specific author
@@ -275,6 +338,8 @@ pub async fn search_articles(
                 score: scored.score,
                 semantic_score: scored.semantic,
                 lexical_score: scored.lexical,
+                // Filled by the resolver via one batched metric lookup (#2607).
+                reading_metric: None,
             }
         })
         .collect::<Vec<_>>();
@@ -309,39 +374,14 @@ async fn article_ids_by_author(
         .map(|ids| ids.into_iter().collect())
 }
 
-/// Returns a map of author_id → article count for all authors with articles
-pub async fn count_by_author(
-    db: &Database,
-) -> Result<std::collections::HashMap<i32, i64>, ServiceError> {
-    use sea_orm::{FromQueryResult, QuerySelect};
-
-    tracing::info_span!("articles_service::count_by_author");
-
-    #[derive(FromQueryResult)]
-    struct AuthorCount {
-        author_id: i16,
-        count: i64,
+/// Returns a map of author_id → article count for all authors with articles,
+/// derived from rows the caller already fetched.
+pub fn count_by_author(articles: &[ArticleSummary]) -> std::collections::HashMap<i32, i64> {
+    let mut result = std::collections::HashMap::new();
+    for article in articles {
+        *result.entry(article.author_id as i32).or_insert(0) += 1;
     }
-
-    let counts: Vec<AuthorCount> = Entity::find()
-        .select_only()
-        .column_as(Column::AuthorId, "author_id")
-        .column_as(Column::Id.count(), "count")
-        .group_by(Column::AuthorId)
-        .into_model::<AuthorCount>()
-        .all(db.get_connection())
-        .await
-        .map_err(|db_err| {
-            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-        })?;
-
-    let result: std::collections::HashMap<i32, i64> = counts
-        .into_iter()
-        .map(|ac| (ac.author_id as i32, ac.count))
-        .collect();
-
-    tracing::info!("Counted articles for {} authors", result.len());
-    Ok(result)
+    result
 }
 
 /// Returns the count of articles for a specific perek
@@ -393,6 +433,18 @@ mod tests {
             name: format!("Article {id}"),
             priority: 1,
             content: Some(format!("content-{id}")),
+            coverage_verified: false,
+        }
+    }
+
+    fn article_summary(id: i32, perek_id: i16, author_id: i16) -> ArticleSummary {
+        ArticleSummary {
+            id,
+            perek_id,
+            author_id,
+            article_abstract: Some(format!("abstract-{id}")),
+            name: format!("Article {id}"),
+            priority: 1,
             coverage_verified: false,
         }
     }
@@ -450,34 +502,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn count_by_perek_returns_internal_server_error_on_db_failure() {
-        let db = create_mock_db_with_query_error("Connection refused");
-
-        let result = count_by_perek(&db).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ServiceError::InternalServerError(_)));
-        assert_eq!(err.to_string(), "Internal Server Error");
-    }
-
-    #[tokio::test]
     async fn count_by_author_id_returns_internal_server_error_on_db_failure() {
         let db = create_mock_db_with_query_error("Network error");
 
         let result = count_by_author_id(&db, 1).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ServiceError::InternalServerError(_)));
-        assert_eq!(err.to_string(), "Internal Server Error");
-    }
-
-    #[tokio::test]
-    async fn count_by_author_returns_internal_server_error_on_db_failure() {
-        let db = create_mock_db_with_query_error("Socket closed");
-
-        let result = count_by_author(&db).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -515,15 +543,65 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn find_all_returns_articles_from_database() {
-        let db =
-            create_mock_db_with_articles(vec![article_model(1, 10, 20), article_model(2, 11, 20)]);
+    async fn find_all_summaries_returns_articles_without_content() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![
+                        mock_row([
+                            ("id", 1_i32.into()),
+                            ("perek_id", 10_i16.into()),
+                            ("author_id", 20_i16.into()),
+                            ("article_abstract", "abstract-1".into()),
+                            ("name", "Article 1".into()),
+                            ("priority", 1_i8.into()),
+                            ("coverage_verified", false.into()),
+                        ]),
+                        mock_row([
+                            ("id", 2_i32.into()),
+                            ("perek_id", 11_i16.into()),
+                            ("author_id", 20_i16.into()),
+                            ("article_abstract", Value::String(None)),
+                            ("name", "Article 2".into()),
+                            ("priority", 2_i8.into()),
+                            ("coverage_verified", true.into()),
+                        ]),
+                    ],
+                ])
+                .into_connection(),
+        );
 
-        let result = find_all(&db).await.expect("articles should load");
+        let result = find_all_summaries(&db)
+            .await
+            .expect("article summaries should load");
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "Article 1");
+        assert_eq!(result[0].article_abstract.as_deref(), Some("abstract-1"));
         assert_eq!(result[1].perek_id, 11);
+        assert_eq!(result[1].article_abstract, None);
+        assert!(result[1].coverage_verified);
+
+        // The projection must not select the heavy `content` column.
+        let statement = Entity::find()
+            .into_partial_model::<ArticleSummary>()
+            .into_statement(DatabaseBackend::MySql)
+            .to_string();
+        assert!(!statement.contains("content"));
+        assert!(statement.contains("abstract"));
+    }
+
+    #[tokio::test]
+    async fn find_all_summaries_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Connection lost");
+
+        let result = find_all_summaries(&db).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
     }
 
     #[tokio::test]
@@ -569,20 +647,20 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn count_by_perek_maps_counts_into_the_929_slot_vector() {
-        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                vec![
-                    mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
-                    mock_row([("perek_id", 929_i16.into()), ("count", 4_i64.into())]),
-                    mock_row([("perek_id", 930_i16.into()), ("count", 9_i64.into())]),
-                ],
-            ])
-            .into_connection();
-        let db = Database::from_connection(mock_db);
+    #[test]
+    fn count_by_perek_maps_counts_into_the_929_slot_vector() {
+        let articles = vec![
+            article_summary(1, 1, 3),
+            article_summary(2, 1, 4),
+            article_summary(3, 929, 5),
+            article_summary(4, 929, 5),
+            article_summary(5, 929, 5),
+            article_summary(6, 929, 5),
+            // Out-of-range perek ids are dropped, matching the old GROUP BY mapping.
+            article_summary(7, 930, 9),
+        ];
 
-        let result = count_by_perek(&db).await.expect("counts should load");
+        let result = count_by_perek(&articles);
 
         assert_eq!(result.len(), 929);
         assert_eq!(result[0], 2);
@@ -590,22 +668,20 @@ mod tests {
         assert_eq!(result.iter().sum::<i64>(), 6);
     }
 
-    #[tokio::test]
-    async fn count_by_author_returns_author_count_map() {
-        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                vec![
-                    mock_row([("author_id", 3_i16.into()), ("count", 2_i64.into())]),
-                    mock_row([("author_id", 7_i16.into()), ("count", 5_i64.into())]),
-                ],
-            ])
-            .into_connection();
-        let db = Database::from_connection(mock_db);
+    #[test]
+    fn count_by_author_returns_author_count_map() {
+        let articles = vec![
+            article_summary(1, 1, 3),
+            article_summary(2, 2, 3),
+            article_summary(3, 3, 7),
+            article_summary(4, 4, 7),
+            article_summary(5, 5, 7),
+        ];
 
-        let result = count_by_author(&db).await.expect("counts should load");
+        let result = count_by_author(&articles);
 
         assert_eq!(result.get(&3), Some(&2));
-        assert_eq!(result.get(&7), Some(&5));
+        assert_eq!(result.get(&7), Some(&3));
     }
 
     #[tokio::test]
@@ -668,6 +744,51 @@ mod tests {
                 .expect("missing count should become zero"),
             0
         );
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_ids_returns_count_map() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![
+                    mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
+                    mock_row([("perek_id", 42_i16.into()), ("count", 7_i64.into())]),
+                ],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let result = count_by_perek_ids(&db, &[1, 42, 43])
+            .await
+            .expect("counts should load");
+
+        assert_eq!(result.get(&1), Some(&2));
+        assert_eq!(result.get(&42), Some(&7));
+        assert_eq!(result.get(&43), None);
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_ids_empty_input_skips_the_query() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        let result = count_by_perek_ids(&db, &[])
+            .await
+            .expect("empty input should return an empty map");
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn count_by_perek_ids_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("Timeout");
+
+        let result = count_by_perek_ids(&db, &[1]).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServiceError::InternalServerError(_)));
+        assert_eq!(err.to_string(), "Internal Server Error");
     }
 
     #[tokio::test]
@@ -951,6 +1072,61 @@ mod tests {
             .expect("unmapped article should return an empty set");
 
         assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_groups_and_orders_rows() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<CoveringSourceModel, Vec<CoveringSourceModel>, _>([vec![
+                    covering_source_model(7, 1, 5),
+                    covering_source_model(8, 3, 1),
+                    covering_source_model(7, 1, 9),
+                ]])
+                .into_connection(),
+        );
+
+        let grouped = find_covering_sources_by_article_ids(&db, &[7, 8, 9])
+            .await
+            .expect("covering sources should load");
+
+        assert_eq!(grouped.len(), 2);
+        let article_7 = grouped.get(&7).expect("article 7 has rows");
+        assert_eq!(
+            article_7
+                .iter()
+                .map(|source| (source.perek_id, source.pasuk))
+                .collect::<Vec<_>>(),
+            vec![(1, 5), (1, 9)]
+        );
+        let article_8 = grouped.get(&8).expect("article 8 has rows");
+        assert_eq!(article_8.len(), 1);
+        assert!(!grouped.contains_key(&9));
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_empty_input_skips_the_query() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        let grouped = find_covering_sources_by_article_ids(&db, &[])
+            .await
+            .expect("empty input should return an empty map");
+
+        assert!(grouped.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_ids_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("covering table missing");
+
+        let result = find_covering_sources_by_article_ids(&db, &[7]).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
     }
 
     #[tokio::test]

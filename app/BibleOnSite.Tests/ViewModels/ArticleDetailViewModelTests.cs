@@ -449,4 +449,62 @@ public class ArticleDetailViewModelTests
     }
 
     #endregion
+
+    #region ReadingTimeBadge Tests (issue #2607)
+
+    [Fact]
+    public void ReadingTimeBadge_WithMetric_FormatsTheStoredEstimate()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        var article = new Article
+        {
+            Id = 1,
+            Name = "Test",
+            Abstract = "Test",
+            ArticleContent = "<p>Content</p>",
+            AuthorId = 1,
+            PerekId = 123,
+            ReadingMetric = new ReadingMetric
+            {
+                WordCount = 880,
+                EstimatedSeconds = 240,
+                WordsPerMinute = 220,
+                CalcVersion = 1,
+                SourceHash = "hash",
+            },
+        };
+
+        viewModel.SetArticle(article);
+
+        viewModel.ReadingTimeBadge.Should().Be("זמן קריאה משוער: 4 דקות");
+    }
+
+    [Fact]
+    public void ReadingTimeBadge_WithoutMetric_Hides()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        var article = new Article
+        {
+            Id = 1,
+            Name = "Test",
+            Abstract = "Test",
+            ArticleContent = "<p>Content</p>",
+            AuthorId = 1,
+            PerekId = 123,
+        };
+
+        viewModel.SetArticle(article);
+
+        viewModel.ReadingTimeBadge.Should().BeNull();
+    }
+
+    [Fact]
+    public void ReadingTimeBadge_WithNoArticle_Hides()
+    {
+        var viewModel = new ArticleDetailViewModel();
+
+        viewModel.ReadingTimeBadge.Should().BeNull();
+    }
+
+    #endregion
 }

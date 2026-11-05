@@ -12,6 +12,9 @@ describe("GET /api/health/ready", () => {
 	let mockPerek: jest.Mock;
 	let mockRecitation: jest.Mock;
 	let mockSanitize: jest.Mock;
+	let mockPerekIndex: jest.Mock;
+	let mockPasukIndex: jest.Mock;
+	let mockPages: jest.Mock;
 	beforeEach(() => {
 		jest.resetModules();
 		mockQuery = jest
@@ -20,6 +23,16 @@ describe("GET /api/health/ready", () => {
 		mockPerek = jest.fn();
 		mockRecitation = jest.fn();
 		mockSanitize = jest.fn((html: string) => html);
+		mockPerekIndex = jest.fn();
+		mockPasukIndex = jest.fn();
+		mockPages = jest.fn().mockResolvedValue(undefined);
+		jest.doMock("@/lib/server-page-readiness", () => ({
+			warmServerPages: mockPages,
+		}));
+		jest.doMock("@/lib/search/corpus", () => ({
+			getPerekIndex: mockPerekIndex,
+			getPasukIndex: mockPasukIndex,
+		}));
 		jest.doMock("isomorphic-dompurify", () => ({
 			__esModule: true,
 			default: { sanitize: mockSanitize },
@@ -43,6 +56,29 @@ describe("GET /api/health/ready", () => {
 		});
 		expect(mockQuery.mock.calls[0][0]).not.toContain("distributable");
 	});
+	test("withholds readiness until page rendering completes and rejects failure", async () => {
+		let finish!: () => void;
+		mockPages.mockReturnValueOnce(
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			}),
+		);
+		const { GET } = await import("@/app/api/health/ready/route");
+		let admitted = false;
+		const pending = GET().then((response) => {
+			admitted = true;
+			return response;
+		});
+		await Promise.resolve();
+		expect(admitted).toBe(false);
+		finish();
+		expect((await pending).status).toBe(200);
+		mockPages.mockRejectedValueOnce(new Error("Page renderer unavailable"));
+		const failed = await GET();
+		expect(failed.status).toBe(503);
+		expect((await failed.json()).message).toBe("Page renderer unavailable");
+		expect((await GET()).status).toBe(200);
+	});
 	test("rechecks the database even after canonical data has warmed", async () => {
 		const { GET } = await import("@/app/api/health/ready/route");
 		await GET();
@@ -50,7 +86,25 @@ describe("GET /api/health/ready", () => {
 		expect((await GET()).status).toBe(503);
 		expect(mockPerek).toHaveBeenCalledTimes(2);
 		expect(mockSanitize).toHaveBeenCalledTimes(1);
+		expect(mockPerekIndex).toHaveBeenCalledTimes(1);
+		expect(mockPasukIndex).toHaveBeenCalledTimes(1);
 		expect(mockQuery).toHaveBeenCalledTimes(2);
+	});
+	test("requires complete search indexes before admission and recovers from preparation failure", async () => {
+		mockPasukIndex.mockImplementationOnce(() => {
+			throw new Error("Verse search index unavailable");
+		});
+		const { GET } = await import("@/app/api/health/ready/route");
+		const failed = await GET();
+		expect(failed.status).toBe(503);
+		expect((await failed.json()).message).toBe(
+			"Verse search index unavailable",
+		);
+		expect(mockQuery).not.toHaveBeenCalled();
+		expect(mockRecitation).not.toHaveBeenCalled();
+		expect((await GET()).status).toBe(200);
+		expect(mockPerekIndex).toHaveBeenCalledTimes(2);
+		expect(mockPasukIndex).toHaveBeenCalledTimes(2);
 	});
 	test("requires a working HTML sanitizer before admitting traffic and can recover", async () => {
 		mockSanitize.mockReturnValueOnce("");

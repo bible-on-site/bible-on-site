@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { ChildProcess, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -22,13 +24,17 @@ import {
 	type PreparedAPIArchives,
 	prepareAPIArchives,
 	publishAPIImages,
+	pushArchiveWithCrane,
 	validateAPIImageOptions,
 } from "./api-images.mts";
+import { PublicAPIMonitor } from "./api-public-monitor.mjs";
+import { HTTP_BUDGET_MS } from "./api-public-transport.mjs";
 import { ECRDeployerBase } from "./ecr-deployer-base.mts";
 import {
 	publishWebsiteImages,
 	WEBSITE_MUTABLE_TAGS,
 } from "./website-images.mts";
+import { SOCI_TYPE } from "./website-soci.mts";
 
 const sourceRef = "a".repeat(40);
 const version = "0.1.96";
@@ -73,6 +79,7 @@ function dockerArchive(
 		revision?: string;
 		version?: string;
 		wrongLayer?: boolean;
+		sociDelivery?: boolean;
 		extra?: { name: string; bytes: Buffer; type?: string }[];
 	} = {},
 ): Buffer {
@@ -85,6 +92,9 @@ function dockerArchive(
 				Labels: {
 					"org.opencontainers.image.revision": overrides.revision ?? sourceRef,
 					"org.opencontainers.image.version": overrides.version ?? version,
+					...(overrides.sociDelivery
+						? { "io.bible-on-site.image-delivery": "soci-v2" }
+						: {}),
 				},
 			},
 			rootfs: {
@@ -120,6 +130,7 @@ async function fixture(
 		prepared: PreparedAPIArchives,
 		paths: { amd64: string; arm64: string },
 	) => Promise<void>,
+	sociDelivery = false,
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "api-publisher-test-"));
 	let prepared: PreparedAPIArchives | undefined;
@@ -128,8 +139,11 @@ async function fixture(
 			amd64: join(directory, "amd64 image.tar"),
 			arm64: join(directory, "arm64 image.tar.gz"),
 		};
-		await writeFile(paths.amd64, dockerArchive("amd64"));
-		await writeFile(paths.arm64, gzipSync(dockerArchive("arm64")));
+		await writeFile(paths.amd64, dockerArchive("amd64", { sociDelivery }));
+		await writeFile(
+			paths.arm64,
+			gzipSync(dockerArchive("arm64", { sociDelivery })),
+		);
 		prepared = await prepareAPIArchives({
 			amd64ArchivePath: paths.amd64,
 			arm64ArchivePath: paths.arm64,
@@ -342,6 +356,174 @@ test("validates both native configs and privately decompresses without modifying
 			(await readFile(prepared.images[0].path)).toString(),
 			"changed after validation",
 		);
+	}));
+
+test("marked website replay builds the bound four-descriptor index without a new conversion", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry("bible-on-site");
+		registry.exclusions = WEBSITE_MUTABLE_TAGS.map((filter) => ({
+			filterType: "WILDCARD",
+			filter,
+		}));
+		const mediaType = "application/vnd.oci.image.manifest.v1+json";
+		for (const image of prepared.images) {
+			assert.ok(image.ociSource);
+			const layer = {
+				mediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+				digest: digest(`compressed-${image.architecture}`),
+				size: 33,
+			};
+			const artifactManifest = JSON.stringify({
+				schemaVersion: 2,
+				mediaType,
+				config: { mediaType: SOCI_TYPE, digest: digest("{}"), size: 2 },
+				layers: [
+					{
+						mediaType: "application/octet-stream",
+						digest: digest(`ztoc-${image.architecture}`),
+						size: 4,
+						annotations: {
+							"com.amazon.soci.image-layer-digest": layer.digest,
+							"com.amazon.soci.image-layer-mediaType": layer.mediaType,
+							"com.amazon.soci.span-size": "4194304",
+						},
+					},
+				],
+			});
+			const artifact = {
+				manifest: artifactManifest,
+				mediaType,
+				digest: digest(artifactManifest),
+			};
+			registry.images.set(`fixture-artifact-${image.architecture}`, artifact);
+			const manifest = JSON.stringify({
+				schemaVersion: 2,
+				mediaType,
+				config: {
+					mediaType: "application/vnd.oci.image.config.v1+json",
+					digest: image.configDigest,
+					size: image.ociSource.config.size,
+				},
+				layers: [layer],
+				annotations: { "com.amazon.soci.index-digest": artifact.digest },
+			});
+			registry.images.set(`v${version}-${image.architecture}`, {
+				manifest,
+				mediaType,
+				digest: digest(manifest),
+			});
+		}
+		const options = {
+			...registry.options(prepared, true),
+			pushArchive: undefined,
+		};
+		const result = await publishWebsiteImages(prepared, options);
+		assert.equal(result.children.length, 4);
+		assert.deepEqual(
+			result.children.map((x) => x.platform.architecture),
+			["amd64", "arm64", "amd64", "arm64"],
+		);
+		for (const [index, arch] of ["amd64", "arm64"].entries()) {
+			assert.equal(
+				result.children[index].annotations?.["com.amazon.soci.index-digest"],
+				result.children[index + 2].digest,
+			);
+			assert.equal(
+				result.children[index + 2].annotations?.[
+					"com.amazon.soci.image-manifest-digest"
+				],
+				result.children[index].digest,
+			);
+			assert.equal(result.children[index + 2].artifactType, SOCI_TYPE);
+			assert.equal(result.children[index].platform.architecture, arch);
+		}
+		assert.deepEqual(registry.pushed, []);
+		assert.deepEqual(registry.puts, [`v${version}`, "latest"]);
+		registry.puts = [];
+		assert.equal(
+			(await publishWebsiteImages(prepared, options)).canonicalDigest,
+			result.canonicalDigest,
+		);
+		assert.deepEqual(registry.puts, []);
+	}, true));
+
+test("only marked, fully validated archives expose OCI config and layer ranges", async () => {
+	await fixture(async (prepared) => {
+		assert.ok(prepared.images.every((image) => image.ociSource === undefined));
+	});
+	await fixture(async (prepared) => {
+		for (const image of prepared.images) {
+			const source = image.ociSource;
+			assert.ok(source);
+			const raw = await readFile(image.path),
+				config = raw.subarray(
+					source.config.offset,
+					source.config.offset + source.config.size,
+				);
+			assert.equal(digest(config), image.configDigest);
+			assert.equal(
+				JSON.parse(config.toString()).config.Labels[
+					"io.bible-on-site.image-delivery"
+				],
+				"soci-v2",
+			);
+			assert.equal(source.layers.length, image.layerCount);
+			assert.deepEqual(
+				source.diffIds,
+				JSON.parse(config.toString()).rootfs.diff_ids,
+			);
+			for (const [index, entry] of source.layers.entries())
+				assert.equal(
+					digest(raw.subarray(entry.offset, entry.offset + entry.size)),
+					source.diffIds[index],
+				);
+		}
+	}, true);
+});
+test("SOCI marked archives reject legacy mode, mixed pairs and publisher overrides before writes", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry("bible-on-site"),
+			options = { ...registry.options(prepared, true), pushArchive: undefined };
+		await assert.rejects(
+			publishWebsiteImages(prepared, { ...options, publishIndex: false }),
+			/SOCI publication/,
+		);
+		await assert.rejects(
+			publishWebsiteImages(prepared, {
+				...options,
+				pushArchive: async () => {
+					throw new Error("caller publisher must not run");
+				},
+			}),
+			/SOCI publication/,
+		);
+		await assert.rejects(
+			publishWebsiteImages(prepared, {
+				...options,
+				indexManifests: async (children) => children,
+			}),
+			/SOCI publication/,
+		);
+		prepared.images[1].ociSource = undefined;
+		await assert.rejects(
+			publishWebsiteImages(prepared, options),
+			/SOCI publication/,
+		);
+		assert.deepEqual(registry.puts, []);
+		assert.deepEqual(registry.pushed, []);
+	}, true));
+test("a custom index factory cannot be used in single-manifest mode", async () =>
+	fixture(async (prepared) => {
+		const registry = new Registry();
+		await assert.rejects(
+			publishAPIImages(prepared, {
+				...registry.options(prepared, false),
+				indexManifests: async (children) => children,
+			}),
+			/Custom index descriptors/,
+		);
+		assert.deepEqual(registry.puts, []);
+		assert.deepEqual(registry.pushed, []);
 	}));
 
 for (const publishIndex of [false, true]) {
@@ -909,6 +1091,94 @@ test("default credential setup refuses a mismatched registry before invoking cra
 		assert.deepEqual(registry.puts, []);
 		await assert.rejects(access(join(prepared.directory, "config.json")));
 	}));
+
+test("archive uploads keep live public probes within the unchanged request deadline", async () => {
+	const server = createServer((_request, response) => {
+		response.setHeader("content-type", "application/json");
+		response.end(JSON.stringify({ status: "ok", version }));
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	try {
+		const address = server.address();
+		assert.ok(address && typeof address === "object");
+		const url = `http://127.0.0.1:${address.port}/health`;
+		const monitor = new PublicAPIMonitor({
+			versions: [version],
+			request: (_url: string, options: RequestInit) => fetch(url, options),
+		});
+		const directory = join(tmpdir(), "private crane config");
+		const archive = join(directory, "image with spaces.tar");
+		const reference = `${repositoryUri}:v${version}-amd64`;
+		const sample = monitor.sample(0);
+		let closed = false;
+		await pushArchiveWithCrane(
+			archive,
+			reference,
+			directory,
+			(command, args, options) => {
+				assert.equal(command, "crane");
+				assert.deepEqual(args, ["push", archive, reference]);
+				assert.equal(options.env?.DOCKER_CONFIG, directory);
+				assert.equal(options.stdio, "inherit");
+				assert.equal(options.shell, undefined);
+				const child = spawn(
+					process.execPath,
+					["-e", `setTimeout(() => {}, ${HTTP_BUDGET_MS + 100})`],
+					options,
+				);
+				child.once("close", () => {
+					closed = true;
+				});
+				return child;
+			},
+		);
+		assert.equal(closed, true, "Publication must await upload completion");
+		const row = await sample;
+		assert.equal(HTTP_BUDGET_MS, 2000);
+		assert.equal(row.passed, true);
+		assert.ok(row.elapsedMs <= HTTP_BUDGET_MS);
+		monitor.assertHealthy();
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
+test("archive subprocess launch failures, unsuccessful exits and signals remain fatal", async () => {
+	await assert.rejects(
+		pushArchiveWithCrane(
+			"image.tar",
+			repositoryUri,
+			tmpdir(),
+			(_command, _args, options) =>
+				spawn(`${process.execPath}.missing`, [], options),
+		),
+		(error: Error & { cause?: { code?: string } }) => {
+			assert.match(error.message, /crane archive push failed/);
+			assert.equal(error.cause?.code, "ENOENT");
+			return true;
+		},
+	);
+	await assert.rejects(
+		pushArchiveWithCrane(
+			"image.tar",
+			repositoryUri,
+			tmpdir(),
+			(_command, _args, options) =>
+				spawn(process.execPath, ["-e", "process.exit(7)"], options),
+		),
+		/crane archive push failed \(7\)/,
+	);
+	await assert.rejects(
+		pushArchiveWithCrane("image.tar", repositoryUri, tmpdir(), () => {
+			const child = new ChildProcess();
+			queueMicrotask(() => child.emit("close", null, "SIGTERM"));
+			return child;
+		}),
+		/crane archive push failed \(SIGTERM\)/,
+	);
+});
 
 function completeIndex(prepared: PreparedAPIArchives): Image {
 	const manifest = JSON.stringify({

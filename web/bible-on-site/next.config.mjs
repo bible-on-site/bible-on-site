@@ -9,6 +9,10 @@ const KB = 1024;
 const MB = KB * KB;
 
 const isProduction = process.env.NODE_ENV === "production";
+const localAssetEndpoint = [
+	"http://localhost:4566",
+	"http://127.0.0.1:4566",
+].includes(process.env.S3_ENDPOINT ?? "");
 const productionBulletinClient = path.resolve(
 	import.meta.dirname,
 	"src/lib/download/bulletin-client-local.production.ts",
@@ -47,6 +51,10 @@ const parashaSeferFirstSlugs = Object.entries(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	// Route handlers and SSR have separate bundle runtimes. Use Node's shared
+	// module cache so readiness warms the same sanitizer used by public pages,
+	// rather than constructing a second JSDOM window on their first request.
+	serverExternalPackages: ["isomorphic-dompurify"],
 	// Route-cache keys are built from decoded pathnames, so quoted Hebrew slugs
 	// like רש"י produce filenames NTFS rejects. The handler subclasses the
 	// default filesystem cache and encodes unsafe filesystem path segments,
@@ -102,6 +110,9 @@ const nextConfig = {
 	images: {
 		unoptimized: !isProduction,
 		dangerouslyAllowSVG: true,
+		// Production-mode tests use the same explicitly configured local store
+		// as development. Public S3 endpoints keep Next's default IP restriction.
+		dangerouslyAllowLocalIP: localAssetEndpoint,
 		remotePatterns: [
 			// MinIO for development (all buckets)
 			{

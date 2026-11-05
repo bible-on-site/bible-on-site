@@ -4,7 +4,7 @@ import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { supervise } from "./supervise.mjs";
+import { MAX_PILOT_TIMEOUT_MS, PILOT_TIMEOUT_MS, pilotTimeoutMs, supervise } from "./supervise.mjs";
 
 for (const code of [0, 7]) {
   test(`preserves a completed harness exit ${code}`, async () => {
@@ -18,11 +18,14 @@ for (const code of [0, 7]) {
 // this also catches the mistake of canceling escalation when only it has died.
 const stubbornTree = `
 const {spawn} = require('node:child_process');
-const {writeFileSync} = require('node:fs');
+const {writeFileSync, renameSync} = require('node:fs');
 const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); process.send('ready'); setInterval(() => {}, 1000)"], {stdio:['ignore','ignore','ignore','ipc']});
 process.on('SIGTERM', () => process.exit(0));
 child.once('message', () => {
-  writeFileSync(process.argv[1], JSON.stringify([process.pid, child.pid]));
+  // Existence signals readiness to the test reader; publish complete JSON.
+  const temporary = process.argv[1] + '.tmp';
+  writeFileSync(temporary, JSON.stringify([process.pid, child.pid]));
+  renameSync(temporary, process.argv[1]);
   if (process.argv[2] === "block") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
 });
 setInterval(() => {}, 1000);
@@ -146,4 +149,12 @@ test("the production clock expires without waiting for child progress", async ()
     try { process.kill(run.child.pid, "SIGKILL"); }
     catch (error) { if (error.code !== "ESRCH") throw error; }
   }
+});
+
+test("a planned shard's deadline scales with its estimate within fixed bounds", () => {
+  assert.equal(pilotTimeoutMs(undefined), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(0), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(5 * 60_000), PILOT_TIMEOUT_MS);
+  assert.equal(pilotTimeoutMs(25 * 60_000), 42.5 * 60_000);
+  assert.equal(pilotTimeoutMs(60 * 60_000), MAX_PILOT_TIMEOUT_MS);
 });
