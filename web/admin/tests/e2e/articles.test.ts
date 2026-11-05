@@ -27,6 +27,28 @@ test.describe("Articles Management", () => {
 		await expect(page.getByLabel("עדיפות")).toBeVisible();
 	});
 
+	test("article edit page shows every relationship-registry section (#3102)", async ({
+		page,
+	}) => {
+		await page.goto("/articles/1");
+		await expect(page.locator("h1")).toContainText("עריכת מאמר");
+
+		// One section per registry entry: managed single-valued fields,
+		// verified coverage, dedication assignments, read-only mention
+		// annotations and the pending-schema entries.
+		await expect(
+			page.getByRole("heading", { name: /קשרי המאמר/ }),
+		).toBeVisible();
+		await expect(page.getByText("פרק ראשי")).toBeVisible();
+		await expect(page.getByText("כיסוי פסוקים מאומת")).toBeVisible();
+		await expect(
+			page.getByRole("heading", { name: "הקדשות", exact: true }),
+		).toBeVisible();
+		await expect(page.getByText("אנוטציות תנכפדיה")).toBeVisible();
+		await expect(page.getByText("תאריך עברי חוזר")).toBeVisible();
+		await expect(page.getByText("מועדים")).toBeVisible();
+	});
+
 	test("quick navigation to perek works", async ({ page }) => {
 		await page.goto("/articles");
 
