@@ -100,6 +100,49 @@ test.describe("Sefer view", () => {
 	test.beforeEach(({ skipOnNotWideEnough }) => {
 		void skipOnNotWideEnough;
 	});
+	test("covered chapter panels inherit the pane visibility mask", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto("/929/125?book", { waitUntil: "load" });
+		await waitForVisibleTurnContent(page);
+		const covered = page.locator(
+			'.he-book .flipbook-page-scrollport.flipbook-layout-dormant [data-active="true"]',
+		);
+		const masks = await covered.evaluateAll((panels) =>
+			panels.map((panel) => {
+				const pane = panel.closest(".flipbook-page-scrollport");
+				return {
+					pane: pane ? getComputedStyle(pane).visibility : null,
+					panel: getComputedStyle(panel).visibility,
+				};
+			}),
+		);
+		expect(masks.length).toBeGreaterThan(0);
+		expect(masks).toEqual(
+			masks.map(() => ({ pane: "hidden", panel: "hidden" })),
+		);
+		expect(
+			await covered
+				.locator("button")
+				.first()
+				.evaluate((button) => {
+					button.focus();
+					return document.activeElement === button;
+				}),
+		).toBe(false);
+		const current = page.locator(
+			'.he-book .page.current-page [data-active="true"]',
+		);
+		expect(await current.count()).toBeGreaterThan(0);
+		expect(
+			await current.evaluateAll((panels) =>
+				panels.every(
+					(panel) => getComputedStyle(panel).visibility === "visible",
+				),
+			),
+		).toBe(true);
+	});
 	for (const mode of ["leaf", "pinned", "hidden"] as const) {
 		test(`inactive listening controls preserve held page pixels with ${mode} bookmarks`, async ({
 			page,

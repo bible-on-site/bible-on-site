@@ -1,11 +1,325 @@
 # Sefer turn performance guard
 
 `web/bible-on-site/tests/perf/sefer-consecutive-turns.test.ts` exercises the
-first turn and immediate consecutive turns independently. It covers Numbers and
-Kings, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
+first turn and immediate consecutive turns independently. It covers במדבר and
+מלכים, moving/pinned/hidden bookmarks, and native drag/toolbar input. Moving
 bookmarks must pass on their first turn as well as after a previous turn.
 
-The reader now pins published `0.0.0-alpha.106`. Its
+The candidate reader consumes the normally published alpha.111 packages and
+reuses stable paper-pane rendering while the crease moves. Unchanged bookmark-label children
+are reused as well. A matched diagnostic reduces painting work by 11-15% at 6x
+CPU slowdown; that experiment is not release qualification. All eight resting
+images and eight character-position comparisons are exact. Text styles, colors
+and controls stay intact; motion font smoothing is accepted by Dorad.
+
+A normal-speed comparison uses the same desktop Chrome, graphics driver,
+1440x900 viewport, six native turns and zero retries for the live 0.2.620 reader
+and the candidate. The public version stayed 0.2.620 throughout. All original
+samples are retained in the [desktop baseline](sefer-turn-performance.desktop-baseline.json).
+
+| Normal desktop measurement | Live 0.2.620 | Candidate |
+| --- | --- | --- |
+| Worst response p95 | 115.1ms | 71.7ms |
+| Worst first-turn frame-gap p95 | 50ms | 16.9ms |
+| Worst consecutive-turn frame-gap p95 | 49.9ms | 16.8ms |
+| Cases rejected by the new desktop guard, by replay | 12/12 | 0/12 |
+
+The old 200/100/50ms limits passed all twelve bad-reader cases at normal speed.
+The desktop guard now requires 100ms response p95, 100ms maximum frame gap and
+25ms frame-gap p95 at fixed 1x CPU. This rejects the recorded repeat frame misses,
+including moving-bookmark first turns, without fitting a 50.1ms overrun into a
+50ms budget. The historical stress limits and reducer remain available unchanged.
+These are rAF render opportunities, not measurements of physical presentation.
+
+The [#3090](https://github.com/bible-on-site/bible-on-site/issues/3090) investigation
+restores all twelve CI scenarios and distinguishes presentation from software
+rendering work using Chrome's primary device, renderer and acceleration facts.
+
+| Profile | Fixed CPU rate | Response p95 | Maximum frame gap | Frame-gap p95 | Browser blocking maximum |
+| --- | --- | --- | --- | --- | --- |
+| Desktop graphics | 1x | 100ms | 100ms | 25ms | 50ms |
+| Software rendering work | 4x | 200ms | Diagnostic | Diagnostic | 50ms |
+
+Both profiles guard the first turn, consecutive turns and complete sequence.
+Software raster/vsync timing does not establish hardware presentation cadence.
+Its complete frame samples and original 200/100/50ms budget misses remain
+reported diagnostics. SwiftShader stays a software profile even when emulated
+GPU features are enabled. Missing graphics/API evidence and any background
+visibility interval fail qualification. The profile never scales by measured
+host speed or refresh rate. Existing interaction deadlines, workloads, worker
+count and retry settings remain unchanged.
+
+The browser's [blocking-duration record](https://developer.chrome.com/docs/web-platform/long-animation-frames)
+adds a separate work guard. Complete replay rejects all twelve recorded bad
+4x public cases (97-184ms blocking maxima) and accepts the twelve current Linux
+work records. A real 250ms input-handler stall is detected through response
+timing; a separate 250ms animation callback verifies the blocking guard. The
+animation control fails without collecting the final pending browser record.
+Frame/input sampling closes before that collection, so no measured window grows.
+Visibility is observed without filtering slow frames. Fixed-budget benchmark
+ratios have separate rendering/CPU namespaces and do not use a noisy relative
+threshold on zero blocking.
+
+The original stress failures remain evidence: the earlier cache build failed
+11/35 Linux checks and 9/13 Windows checks; the rebuilt source failed all twelve
+4x Windows reader cases, with visibility and focus intact. A matched comparison
+also fails the previous build that had passed earlier on this PC. The narrower
+cache is worse in the matched desktop comparison, so it is rejected. These
+results are not relabelled as stress passes. Software cadence misses remain
+diagnostics, including a 50.1ms miss in one of the final fixed repeats.
+
+The complete production build retains 20,504 routes / 20,497 prerenders, and
+actual HTTP assets and all 153 package distribution files match the producer.
+All 57 reader behavior checks pass with one existing conditional skip, including
+all held-page/color guards. The original 109 metric unit tests and TypeScript pass.
+At guard commit `ec0a8e247`, all 15 desktop checks pass: twelve reader cases and
+three probe controls. Its worst response p95 is 33ms, with zero recorded blocking.
+Three predeclared full software-work runs at that same commit each pass all
+37 checks; across them the worst response p95 is 109.9ms and blocking is 7.2ms.
+No samples are selected to make those results pass.
+
+Hosted repeatability is still failing. At `e3d4574c8`, the first complete CI
+workflow passes, including all twelve reader scenarios and three controls.
+The second predeclared execution fails the first moving-bookmark drag case:
+Chrome records a 238ms frame with 187.9ms blocking, no script attribution, and
+visible/focused state throughout. Its response p95 is only 103.5ms, so the
+separate blocking guard catches a pause that response alone would miss.
+The independent after-failure trace does not reproduce that pause (5.9ms
+maximum blocking); it cannot identify the original cause. The complete raw
+records from both attempts are retained in the
+[hosted repeatability fixture](sefer-turn-performance.hosted-repeatability.json),
+including the failure. Twenty-four additional fixture replays keep that failure
+in the guard's 133 passing unit checks. The third execution is not requested.
+
+CI now records the original sequence from before navigation and retains that
+trace when qualification or setup fails. Main-thread wall/CPU task timings,
+rendering events and the probe's timing marks can locate the original stall.
+Recording ends before the independent replay; successful traces are closed
+without keeping their bulk data. `SEFER_TURN_TRACE=1` enables the same recording
+locally. No CPU profiler, input wait, new retry, timeout or budget adjustment is
+added to the measured sequence. This is additional diagnosis, not a repair of
+the hosted stall or completed release qualification.
+
+At diagnostic head `d72c0e032`, the second execution also fails: the moving-tab
+drag records 50.1ms blocking and the pinned-tab toolbar turn records 85.6ms.
+Their original traces locate the pauses at turn completion, with 95.992ms and
+133.951ms main-thread CPU and substantial Style/Layout/PrePaint work. These
+traces rule out treating those two frames as pure host descheduling; they do not
+explain the older, untraced 238ms first-turn frame. The three complete diagnostic
+datasets are retained separately: [first execution](sefer-turn-performance.hosted-diagnostic-1.json),
+[failed second execution](sefer-turn-performance.hosted-diagnostic-2.json), and
+[maintainer-triggered third execution](sefer-turn-performance.hosted-diagnostic-3.json).
+The third passes, but the earlier failure still invalidates repeatability.
+All 36 records replay through the unchanged profile and blocking guards,
+including both failures, in the 169-test metric suite. No third unchanged
+execution was requested by this agent.
+
+Read-only lifecycle recording also identifies a separate React scheduling race:
+an optional covered chapter can commit after a new turn starts because cancelling
+its animation frame does not cancel an already queued transition. The repair in
+[flip-book #393](https://github.com/doradsoft/html-flip-book/pull/393) cancels that
+queued plan and releases its preparation hold. Four regression cases cover
+mounting and retirement interrupted by pointer or animation input. The actual
+built-source consumer passes all 37 performance checks and 57 functional checks
+with one existing conditional skip. All 24 appearance poses and eight character
+comparisons match exactly. The normal release published alpha.112 from merge
+`1cdbe14d1`; both registry tarballs verify against their published integrity and
+source revision, and all 153 distribution files match the validated source build.
+The consumer pins both React and transitive vanilla alpha.112 and updates the
+local/npm toggle and exact-version freshness exceptions. Full registry consumer
+delivery and hosted acceptance remain separate requirements.
+
+The lifecycle records contain no cold mount or preparation inside the 24 measured
+completion tasks, so the scheduling race does not establish the cause of those
+completion stalls. The paper endpoint experiment in
+[flip-book #392](https://github.com/doradsoft/html-flip-book/pull/392) was closed
+without merging: the stronger 36-case source-build comparison had only about 1.3%
+aggregate CPU benefit and mixed response results. The original failures remain
+preserved, and three complete passing hosted executions at a repaired head are
+still required before delivery.
+
+An additional browser regression catches active chapter panels forcing
+`visibility: visible` inside a dormant pane whose visibility is hidden. Active
+panels now inherit their ancestor's visibility; inactive panels keep their own
+hidden state. The regression fails before the correction and passes with the
+source-equivalent stylesheet. Covered controls remain unfocusable and current
+panels remain visible. All original Native interaction masks are retained.
+The 24-pose comparison changes zero pixels and all eight character-position and
+font/color comparisons match. A bounded twelve-sequence comparison retains all
+72 completion callbacks: total Style CPU is about 18% lower, while response
+results remain mixed. This fixes a concrete masking conflict; it does not alone
+establish that every original hosted pause is repaired.
+
+The [registry validation record](sefer-turn-performance.registry-validation.json)
+retains the earlier runtime's metrics, compiled assets, visual proof and three
+stability runs by hash. That runtime was compiled at `f2b8120a3`. The current
+visibility correction changes its production CSS and requires a new source-bound
+build and hosted acceptance. CI also merges newer master changes, including
+Tanahpedia sources and Next 16.4.5, whereas the local diagnostic build used Next
+16.4.3. The reader and turn harness git objects match, but the complete source and
+dependencies do not; hosted qualifications apply to their actual merge checkout.
+Do not treat those builds as identical. Hosted CI/review, normal deployment and
+live verification remain pending before delivery.
+
+| Before: oblique-only cache | After: stable pane cache |
+| --- | --- |
+| ![Held Kings page before the broader cache](images/sefer-turn-lag/reader-stable-pane-before.png) | ![Same held page with stable pane rendering](images/sefer-turn-lag/reader-stable-pane-after.png) |
+
+
+The following records retain the earlier oblique-only candidate and its results.
+
+The follow-up [engine marker](https://github.com/doradsoft/html-flip-book/pull/390)
+identifies an oblique reflected paper face directly from its geometry. Sefer
+uses a separate content layer only for that face, so the crease can move while
+the text rendering is reused. Straight and resting faces retain their original
+rasterization. This avoids matching an animated style attribute on every frame.
+Two before-failing lifecycle guards cover both reading directions, straight
+folds, resting pages and reverse previews. The producer passes all 892 unit
+tests, formatting/lint and its production build. Its existing mutation guard
+still requires two class writes at fold entry/exit and zero during steady poses.
+
+The actual local integration passes all 13 original Windows desktop timing
+checks and all 35 Linux desktop checks. All 24 page images and eight
+character-position comparisons are exact, with the layer verified active on
+oblique backs and absent on straight faces. These are explicit local-copy
+results. The merged engine is normally published as alpha.111, with both
+package integrities and all 153 producer distribution files verified. Registry
+consumer CI and public qualification remain required. The pre-layer hosted head fails all
+twelve cadence cases, reaching 66.7ms p95 against the unchanged 50ms limit.
+Its 4,025 unit tests, 327 end-to-end tests and both package builds pass; its
+uploaded website coverage contains 11,575/11,585 covered lines (99.91%).
+
+| Before angled-back layer | Actual local integration |
+| --- | --- |
+| ![Held Kings page before the layer](images/sefer-turn-lag/reader-angled-back-before.png) | ![Identical held Kings page with the layer](images/sefer-turn-lag/reader-angled-back-after.png) |
+
+The bookmark-label repair reuses immutable children while their
+visible text and cover color are unchanged. The native provider still refreshes
+on navigation; fresh equivalent bookmark objects no longer recreate all the
+React children. Before-failing guards count 16/96 new compact and expanded nodes
+before the repair and zero afterward. Changed references, titles and provider
+colors still update. All 58 related unit tests pass, and the new helper has
+100% line, statement, function and branch coverage.
+
+The full registry production build preserves all 24 page-image comparisons and
+eight character-position comparisons exactly. The actual HTTP-loaded provider
+also reuses all 36 compact and expanded tab nodes. All 35 Linux performance
+checks pass. Windows passes 12/13 checks: the first Numbers moving-bookmark drag
+still reaches 50.1ms cadence p95 against the unchanged 50ms limit. Every
+consecutive-turn scope passes. This miss remains a failure, with its original
+samples and separate profile retained; these results do not replace hosted CI
+or establish public delivery.
+
+| Before static-label reuse | After static-label reuse |
+| --- | --- |
+| ![Held Kings page before label reuse](images/sefer-turn-lag/reader-static-bookmarks-before.png) | ![Identical held Kings page after label reuse](images/sefer-turn-lag/reader-static-bookmarks-after.png) |
+
+The [latest hosted run before that site repair](https://github.com/bible-on-site/bible-on-site/actions/runs/41848253815/job/126638364228)
+fails 11 cadence cases and passes 26 checks. Its deliberate-stall control passes.
+All failed scopes and samples remain in the evidence record. The public site
+still serves 0.2.620; its fresh full baseline fails all twelve reader cases,
+including moving bookmarks on their first turn.
+
+The [normal master run after #2943](https://github.com/bible-on-site/bible-on-site/actions/runs/41769850982/job/126384514699)
+failed two first-turn cadence checks: moving-bookmark dragging in Numbers and
+hidden-bookmark dragging in Kings each reached 50.1ms against the unchanged
+50ms limit. The release was blocked. Its passing PR checks and local results
+remain separate evidence and do not replace that failure.
+
+The [initial hosted run for #3070](https://github.com/bible-on-site/bible-on-site/actions/runs/41840423759/job/126610452362)
+fails five cadence cases: Numbers moving drag/toolbar and pinned drag, and
+Kings moving/pinned drag. Response p95 stays within 106.8ms, while first-turn
+cadence reaches 66.7ms and other failing scopes reach 50.1ms. All original
+samples and separate failure traces are retained. The public 0.2.620 reader
+fails all twelve reader cases in a fresh original desktop profile; the
+250ms deliberate-stall control passes. These results remain separate from
+local candidate passes.
+
+The [follow-up engine repair](https://github.com/doradsoft/html-flip-book/pull/381)
+stops reconciling every page holder when one mounted chapter changes. After
+initialization it visits the previous and next visibility windows, cover boards,
+moving faces and underlays, and explicitly refreshed slots. A before-failing
+guard compared 128 and 1,000 page holders touched in those book sizes; both now
+must touch the same number and fewer than 64. The cheap leaf-state scan remains.
+Compatibility checks preserve complete visibility and accessibility behavior
+through distant forward/backward jumps, fractional buffers and replaced slots.
+
+The subsequent [bookmark repair](https://github.com/doradsoft/html-flip-book/pull/383)
+targets moving bookmarks independently of the pause after a preceding turn.
+It reads a moving button's computed style once per capture instead of three
+times, without retaining that style across captures. For an adjacent turn with
+stable bookmark ordering and geometry, it updates only the tab changing sides.
+Before-failing guards measure 16 and 96 stack slots before the repair and one
+slot in either book afterward, for both moving and pinned bookmarks. Reordering,
+removal and geometry changes retain the full layout path and its exact output.
+Provider/model scans and navigation attributes still update; this is a bound
+on stack-geometry DOM work, not the entire navigation operation.
+
+The library passes 886 unit tests and 370 browser tests, with 31 unchanged
+conditional skips. Changed-line coverage is 100%. Eleven native benchmarks
+report no regression; 1,000-page resize remains inconclusive because its 70.6ms
+A/A noise floor exceeds the unchanged 40ms budget. No timing speedup is claimed
+from that result. Both published `0.0.0-alpha.108` packages match all 153 files
+of the tested producer build.
+
+The [bounded-visibility record](sefer-turn-performance.bounded-visibility.json)
+retains every candidate and registry-consumer timing result, including failures.
+The alpha.108 registry reader failed 11/13 Windows checks and 2/35 Linux checks.
+After the user closed unused applications, it failed 4/13 Windows checks and
+4/35 Linux checks. Memory pressure was observed but does not establish the sole
+cause or excuse a failed sample. All raw measurements remain intact.
+
+The follow-up [optional-mount lifecycle repair](https://github.com/doradsoft/html-flip-book/pull/386)
+pauses optional React page mounts throughout active turns, including overlapping
+leaves and pointer release during animation. Required moving faces and underlays
+remain available. This holds optional content work while preserving live page
+appearance. Four before-failing guards cover the lifecycle boundaries.
+All 24 library checks pass, with 890 unit tests, 370 browser tests, unchanged
+conditional skips and 100% changed-line coverage. All twelve native benchmarks
+report no regression, with no invalid samples. Both published alpha.109 packages
+match all 153 files of the tested producer build.
+
+The combined copied-source reader preserves all 24 appearance comparisons and
+eight character-position comparisons exactly. It passes 12/13 Windows checks
+and 34/35 Linux checks. Windows moving-bookmark dragging in Numbers still has
+50.1ms consecutive-turn cadence p95; Linux pinned-bookmark toolbar turns in
+Numbers reach a 116.7ms maximum gap and 50.1ms cadence p95. These are failures
+under the unchanged limits. Registry, hosted and public qualification remain
+required. An earlier adapter-pause prototype was rejected under a different
+source combination; that earlier result also remains in the record.
+
+A separate reading-progress defect reread its scroller geometry for every text
+fragment. Before-failing operation guards reduce 20/100 reads for 16/96 fragments
+to two per remeasure-and-paint, preserving progress through scroll and layout
+changes. Cleanup prevents retired font-ready callbacks from reading geometry.
+All 26 component tests pass. Neither timing fixture contains this progress bar,
+so this independent repair is not claimed as their lag fix.
+
+The restored alpha.109 registry build generates all 20,504 routes / 20,497
+prerenders, and the actual HTTP-loaded renderer matches the compiled source.
+All 35 Linux performance checks pass. Windows passes 12/13, retaining one
+first-turn Numbers moving-bookmark drag failure: frame-gap p95 50.1ms, maximum
+gap 66.5ms and response 90.9ms. Every consecutive-turn scope passes. The
+250ms deliberate-stall control passes in both profiles. All 24 image pairs
+and eight character-position comparisons remain exact. These measurements
+retain the original 4x slowdown, one worker, zero retries and fixed limits.
+The Windows miss remains open; hosted and public verification are still required.
+
+With diagnostic serialization deferred, all twelve Windows reader cases pass
+at the original limits. The first full run failed only the new diagnostic
+control's assumption that a supported browser always delivers an optional long
+frame. That assumption is removed: two labelled diagnostic stubs make export
+ordering deterministic, and the corrected control passes with real native input
+and the unchanged 250ms stall. The earlier control failure and all reader samples
+are retained. The application's source tree and production build are unchanged;
+this result does not establish a runtime speedup. Revised Linux and hosted
+qualification remain required.
+
+| Before bounded visibility work | Local prototype after |
+| --- | --- |
+| ![Previous held Kings page](images/sefer-turn-lag/reader-bounded-visibility-before.png) | ![Unchanged held Kings page](images/sefer-turn-lag/reader-bounded-visibility-after.png) |
+
+This branch pins published `0.0.0-alpha.111`. Its earlier
 [bookmark setup repair](https://github.com/doradsoft/html-flip-book/pull/379)
 assembles the first moving surface before inserting it into the live book.
 Before-failing LTR/RTL operation guards require zero changed style writes on
@@ -15,7 +329,7 @@ operations; paired timing differences were mixed and do not establish a
 consistent millisecond gain. Published-package and hosted timing gates remain
 independent requirements.
 
-The latest [retained-layout repair](https://github.com/doradsoft/html-flip-book/pull/376)
+The earlier [retained-layout repair](https://github.com/doradsoft/html-flip-book/pull/376)
 keeps the engine's bounded layout window aligned with the chapters React still
 mounts through a turn and its staged retirement. Previously the engine discarded
 that layout at completion. Moving bookmarks also capture their host coordinate
@@ -23,7 +337,7 @@ system once per turn instead of reading it separately for every tab part.
 Both defects have unit regressions that fail against the prior implementation;
 the bookmark guard preserves independent scales and border offsets.
 
-The [complete candidate qualification](sefer-turn-performance.retained-layout.json)
+The historical [candidate qualification](sefer-turn-performance.retained-layout.json)
 preserves all twelve scenarios, including the prior failures. The full reader
 with the exact repaired library source passes all 13 original Windows 4x checks,
 all 35 Linux checks and 57 functional checks with one existing conditional skip.
@@ -279,10 +593,10 @@ evidence, and every earlier failed run remains failed.
 The desktop has GPU compositing enabled; Linux uses SwiftShader software
 rendering. Keep their raw GPU metadata with the timing samples.
 
-The reader now prepares the covered paper back faces before another turn
-starts, using `will-change: transform, clip-path` within its bounded page buffer.
-The current spread and hover folds retain their original rasterization;
-the library continues to own inline hints during a drag or animation.
+The earlier reader candidate prepared the covered paper back faces before
+another turn started, using `will-change: transform, clip-path` within its bounded page buffer.
+Its current spread and hover folds retained their original rasterization;
+the library continued to own inline hints during a drag or animation.
 A matched control/candidate/candidate/control diagnostic at 6x CPU slowdown
 reduced the first hidden-bookmark toolbar cadence p95 from 66.7/50ms in the
 controls to 33.4/33.4ms in the candidates. Other stress cases still failed;
@@ -387,7 +701,13 @@ rendering work without enabling a profiler during qualification. These records
 are optional; their absence is not a timing pass. The native response and
 cadence samples remain authoritative, including
 the deliberate 250ms stall control. Diagnostic records do not filter or adjust
-any timing sample.
+any timing sample. Browser records are retained without converting their
+script attribution while the timing window is open; serialization runs only
+after observation stops. A before-failing browser guard counts two in-window
+conversions before the repair and zero afterward; both labelled records are
+still exported. Native diagnostic delivery remains optional. The original 250ms stall remains detected, and all 39 metric
+unit tests pass. This measurement correction changes no production runtime,
+threshold, retry or deadline; revised qualification remains required.
 After a cadence failure, a separate sequence also captures a Chromium trace and
 CPU profile under `diagnostics/sefer-turn-traces`. These profiled samples are
 labelled diagnostic-only and never replace the failed qualification samples.
