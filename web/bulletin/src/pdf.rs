@@ -282,6 +282,60 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
     decode_html_entity(&entity)
 }
 
+/// Bundled Frank-Rühl face that covers the whole Hebrew block, including all
+/// taamim — used for scripture runs inside articles (#2961). Its four faces
+/// keep real bold/italic emphasis intact.
+const CANTILLATION_FONT: &str = "Taamey Frank CLM";
+
+/// Combining marks that Frank Ruhl Libre does not cover: all taamim
+/// (U+0591–U+05AF) plus the rare upper/lower marks U+05C4–U+05C6.
+fn needs_cantillation_face(c: char) -> bool {
+    matches!(c, '\u{0591}'..='\u{05AF}' | '\u{05C4}'..='\u{05C6}')
+}
+
+/// Characters that belong to a Hebrew text run: the whole Hebrew block
+/// (letters, marks, maqaf, sof pasuq, geresh/gershayim) plus whitespace, so a
+/// quoted phrase of several words is detected as one run.
+fn is_hebrew_run_char(c: char) -> bool {
+    matches!(c, '\u{0590}'..='\u{05FF}') || c.is_whitespace()
+}
+
+/// Emit article text as Typst markup. When `cantillation_font` is set, maximal
+/// Hebrew runs containing marks the article font lacks are wrapped in
+/// `#text(font: …)[…]` so every base-plus-combining-mark cluster shapes in that
+/// single bundled font — Typst's per-glyph fallback would instead re-shape the
+/// cluster in a second font while also keeping the original base glyph (#2961).
+/// Runs without such marks, and every non-Hebrew char, keep the article font.
+fn push_article_text(out: &mut String, text: &str, cantillation_font: Option<&str>) {
+    let Some(font) = cantillation_font else {
+        out.push_str(&typst_escape(text));
+        return;
+    };
+    let mut rest = text;
+    while !rest.is_empty() {
+        let hebrew = rest.chars().next().is_some_and(is_hebrew_run_char);
+        let end = rest
+            .find(|c: char| is_hebrew_run_char(c) != hebrew)
+            .unwrap_or(rest.len());
+        let (chunk, tail) = rest.split_at(end);
+        rest = tail;
+        let core = chunk.trim();
+        if hebrew && core.chars().any(needs_cantillation_face) {
+            let lead = chunk.len() - chunk.trim_start().len();
+            let end = chunk.trim_end().len();
+            out.push_str(&chunk[..lead]);
+            out.push_str("#text(font: ");
+            out.push_str(&typst_string(font));
+            out.push_str(")[");
+            out.push_str(&typst_escape(&chunk[lead..end]));
+            out.push(']');
+            out.push_str(&chunk[end..]);
+        } else {
+            out.push_str(&typst_escape(chunk));
+        }
+    }
+}
+
 /// Convert article HTML to Typst markup, preserving semantic structure.
 ///
 /// Supported tags:
@@ -295,23 +349,33 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
 ///   li       → bullet item
 ///   Other tags are silently consumed (content preserved).
 fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
-    html_to_typst_with_headings(html, files, false)
+    html_to_typst_with_headings(html, files, false, None)
 }
 
 fn daily_html_to_typst(html: &str, files: &mut TypstFiles) -> String {
-    html_to_typst_with_headings(html, files, true)
+    html_to_typst_with_headings(html, files, true, Some(CANTILLATION_FONT))
 }
 
-fn html_to_typst_with_headings(html: &str, files: &mut TypstFiles, daily_headings: bool) -> String {
+fn html_to_typst_with_headings(
+    html: &str,
+    files: &mut TypstFiles,
+    daily_headings: bool,
+    cantillation_font: Option<&str>,
+) -> String {
     let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
     let mut bold_open = false;
     let mut italic_open = false;
     let mut underline_open = false;
     let mut span_closures = Vec::new();
+    // Raw decoded text between tags; runs needing the cantillation face are
+    // wrapped when the buffer is flushed at the next tag or at the end.
+    let mut text_buf = String::new();
 
     while let Some(c) = chars.next() {
         if c == '<' {
+            push_article_text(&mut out, &text_buf, cantillation_font);
+            text_buf.clear();
             let mut tag_content = String::new();
             for tc in chars.by_ref() {
                 if tc == '>' {
@@ -489,18 +553,12 @@ fn html_to_typst_with_headings(html: &str, files: &mut TypstFiles, daily_heading
             continue;
         }
         if c == '&' {
-            let decoded = consume_html_entity(&mut chars);
-            out.push_str(&typst_escape(&decoded));
+            text_buf.push_str(&consume_html_entity(&mut chars));
             continue;
         }
-        match c {
-            '#' | '*' | '_' | '`' | '<' | '>' | '@' | '$' | '\\' | '~' | '/' | '[' | ']' => {
-                out.push('\\');
-                out.push(c);
-            }
-            _ => out.push(normalize_unsupported_dash(c)),
-        }
+        text_buf.push(c);
     }
+    push_article_text(&mut out, &text_buf, cantillation_font);
 
     for count in span_closures.into_iter().rev() {
         for _ in 0..count {
@@ -1007,6 +1065,74 @@ mod tests {
             to_typst("</span>סוף<span style='font-weight:400; font-style:normal'>רגיל"),
             "סוף#text(weight: 400, style: \"normal\")[רגיל];"
         );
+    }
+
+    #[test]
+    fn daily_article_taamim_runs_use_bundled_cantillation_face() {
+        // #2961: Frank Ruhl Libre (the daily article face) has no glyphs for
+        // U+0591–U+05AF — cantillated quotes must be wrapped in a bundled
+        // cantillation-capable face so marks stay attached to their bases.
+        let daily = daily_html_to_typst(
+            "<p>אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו (מלכים א כ לה) ועוד</p>",
+            &mut Vec::new(),
+        );
+        // The maximal Hebrew phrase containing taamim is wrapped as one run —
+        // marks are never isolated from their bases.
+        assert!(
+            daily.contains("#text(font: \"Taamey Frank CLM\")[אמר הכתוב וַיֹּאמֶ֞ר אֵלָ֑יו]"),
+            "{daily}"
+        );
+        // The source reference and following prose keep the article font.
+        assert!(daily.contains("(מלכים א כ לה) ועוד"));
+
+        // Nikud-only Hebrew renders fine in Frank Ruhl Libre — no wrap.
+        let daily = daily_html_to_typst("<p>אָמַר שָׁלוֹם תָּמִיד</p>", &mut Vec::new());
+        assert!(!daily.contains("Taamey Frank CLM"));
+
+        // The sefer-export path keeps its (Taamey D, Frank Ruhl Libre) stack
+        // untouched — Taamey D already covers taamim.
+        assert!(!to_typst("<p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>").contains("Taamey Frank CLM"));
+    }
+
+    #[test]
+    fn daily_article_taamim_runs_cross_inline_markup_and_rare_marks() {
+        let daily = daily_html_to_typst(
+            "<p>\"וַיֹּאמֶר <strong>דָּבָ֖ר</strong>\" <span style='font-weight:bold'>אֵלָ֑יו</span> <i>כֹּ֥ה</i> וַיֹּאמֶ֣ר׃</p>",
+            &mut Vec::new(),
+        );
+        // Each fragment keeps its marks with their bases; emphasis still
+        // applies (the CLM family has real bold/italic faces). וַיֹּאמֶר is
+        // nikud-only — it correctly stays on the article font.
+        assert!(!daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶר]"));
+        assert!(daily.contains("#strong[#text(font: \"Taamey Frank CLM\")[דָּבָ֖ר]]"));
+        assert!(daily.contains("#text(weight: 700)[#text(font: \"Taamey Frank CLM\")[אֵלָ֑יו]]"));
+        assert!(daily.contains("#emph[#text(font: \"Taamey Frank CLM\")[כֹּ֥ה]]"));
+        assert!(daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֣ר׃]"));
+        // Meteg (U+05BD) and shin/sin dots are covered by Frank Ruhl Libre —
+        // they don't trigger a wrap on their own.
+        assert!(!daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new()).contains("Taamey Frank CLM"));
+
+        // Rare marks missing from Frank Ruhl Libre (U+05C4–U+05C6) also wrap.
+        let daily = daily_html_to_typst("<p>א\u{05C4}ב\u{05C5}ג\u{05C6} דבר</p>", &mut Vec::new());
+        assert!(
+            daily.contains("#text(font: \"Taamey Frank CLM\")[א\u{05C4}ב\u{05C5}ג\u{05C6} דבר]")
+        );
+
+        // A run that is only marks still wraps rather than emitting tofu.
+        let daily = daily_html_to_typst("<p>֑֒֓</p>", &mut Vec::new());
+        assert!(daily.contains("#text(font: \"Taamey Frank CLM\")[֑֒֓]"));
+    }
+
+    #[test]
+    fn daily_article_headings_and_header_h1_keep_taamim() {
+        let daily = daily_html_to_typst(
+            "<p>גוף</p><h3>עַל־פָּס֥וּק מְסֻיָּ֖ם</h3><p>המשך</p>",
+            &mut Vec::new(),
+        );
+        // The whole heading phrase (maqaf included) is one cantillation run.
+        assert!(daily.contains(
+            "#heading(level: 3, numbering: none)[#text(font: \"Taamey Frank CLM\")[עַל־פָּס֥וּק מְסֻיָּ֖ם]]"
+        ));
     }
 
     #[test]
