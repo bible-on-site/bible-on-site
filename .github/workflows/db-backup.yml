@@ -66,10 +66,22 @@ jobs:
             local_infile=OFF
             bind-address=127.0.0.1
       - name: Verify the scratch listener accepts only loopback connections
+        # The runner's own addresses route over lo, so the probe must arrive
+        # through a real interface: a peer network namespace reaching this
+        # host's end of a veth pair exercises the ! -i lo rule exactly like
+        # traffic from another host on the network.
         run: |
-          global_ip="$(ip -4 -o addr show scope global | awk '{split($4, a, "/"); print a[1]; exit}')"
-          if [ -n "$global_ip" ] && timeout 5 bash -c "exec 3<>/dev/tcp/${global_ip}/3306"; then
-            echo "::error::Scratch MySQL port 3306 is reachable on a non-loopback interface"
+          set -euo pipefail
+          sudo ip netns add scratch-probe
+          sudo ip link add veth-host type veth peer name veth-probe
+          sudo ip link set veth-probe netns scratch-probe
+          sudo ip addr add 192.168.253.1/30 dev veth-host
+          sudo ip link set veth-host up
+          sudo ip netns exec scratch-probe ip addr add 192.168.253.2/30 dev veth-probe
+          sudo ip netns exec scratch-probe ip link set veth-probe up
+          sudo ip netns exec scratch-probe ip link set lo up
+          if sudo ip netns exec scratch-probe timeout 5 bash -c 'exec 3<>/dev/tcp/192.168.253.1/3306'; then
+            echo "::error::Scratch MySQL port 3306 is reachable off-loopback"
             exit 1
           fi
           timeout 5 bash -c "exec 3<>/dev/tcp/127.0.0.1/3306"

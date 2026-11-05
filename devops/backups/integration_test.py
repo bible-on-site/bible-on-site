@@ -218,6 +218,9 @@ def run():
         docker("network", "create", "--internal", network)
         try:
             for name in [source_name, scratch_name]:
+                health = "mysqladmin ping -h127.0.0.1 -pfixture-only --silent"
+                if name == scratch_name:
+                    health = "mysqladmin ping -hlocalhost -ufixture_probe -pprobe-only --silent"
                 args = [
                     "run",
                     "--rm",
@@ -233,12 +236,7 @@ def run():
                     "-e",
                     "MYSQL_ROOT_HOST=%",
                     "--health-cmd",
-                    (
-                        "mysqladmin ping -h127.0.0.1 -pfixture-only --silent"
-                        if name == source_name
-                        else "mysqladmin ping -hlocalhost -ufixture_probe"
-                        " -pprobe-only --silent"
-                    ),
+                    health,
                     "--health-interval",
                     "2s",
                     "--health-timeout",
