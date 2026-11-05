@@ -19,6 +19,7 @@ const result = spawnSync(
 		"--test-coverage-include=devops/github/ci/verify-api-native.mjs",
 		"--test-coverage-include=devops/github/ci/native-api-fixture.mjs",
 		"--test-coverage-include=devops/github/ci/rds-build-access.mjs",
+		"--test-coverage-include=devops/rds-sync-access.mts",
 		"--test-coverage-include=web/api/tests/coverage-file.mjs",
 		"--test-coverage-include=web/bible-on-site/scripts/start-server.mjs",
 		"--test-coverage-exclude=**/*.test.*",
@@ -48,6 +49,7 @@ const result = spawnSync(
 		"devops/github/ci/verify-api-native.test.mjs",
 		"devops/github/ci/native-api-fixture.test.mjs",
 		"devops/github/ci/rds-build-access.test.mjs",
+		"devops/rds-sync-access.test.mts",
 		"web/api/tests/coverage-file.test.mjs",
 		"web/bible-on-site/scripts/start-server.test.mjs",
 	],
@@ -82,6 +84,7 @@ if (result.status === 0) {
 		"devops/github/ci/verify-api-native.mjs",
 		"devops/github/ci/native-api-fixture.mjs",
 		"devops/github/ci/rds-build-access.mjs",
+		"devops/rds-sync-access.mts",
 		"web/api/tests/coverage-file.mjs",
 		"web/bible-on-site/scripts/start-server.mjs",
 	]) {

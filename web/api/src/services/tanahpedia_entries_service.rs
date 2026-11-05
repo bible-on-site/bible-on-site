@@ -543,29 +543,22 @@ pub async fn get_today_entities(
            WHERE EXISTS (
              SELECT 1 FROM tanahpedia_event ev
              JOIN tanahpedia_event_date_range d ON d.event_id = ev.id
-             WHERE ev.entity_id = e.id AND (
-               (d.start_date > 0 AND d.start_date <> 99991229 AND d.start_date % 10000 = ?)
-               OR (d.end_date > 0 AND d.end_date <> 99991229 AND d.end_date % 10000 = ?)
-             )
+             WHERE ev.entity_id = e.id AND (d.start_month_day = ? OR d.end_month_day = ?)
            ) OR EXISTS (
              SELECT 1 FROM tanahpedia_saying s
-             WHERE s.entity_id = e.id
-               AND s.saying_date > 0 AND s.saying_date <> 99991229 AND s.saying_date % 10000 = ?
+             WHERE s.entity_id = e.id AND s.month_day = ?
            ) OR EXISTS (
              SELECT 1 FROM tanahpedia_person p
              WHERE p.entity_id = e.id AND (
                EXISTS (
                  SELECT 1 FROM tanahpedia_person_birth_date d WHERE d.person_id = p.id
-                 AND d.birth_date > 0 AND d.birth_date <> 99991229 AND d.birth_date % 10000 = ?
+                 AND d.month_day = ?
                ) OR EXISTS (
                  SELECT 1 FROM tanahpedia_person_death_date d WHERE d.person_id = p.id
-                 AND d.death_date > 0 AND d.death_date <> 99991229 AND d.death_date % 10000 = ?
+                 AND d.month_day = ?
                ) OR EXISTS (
                  SELECT 1 FROM tanahpedia_person_union u
-                 WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (
-                   (u.start_date > 0 AND u.start_date <> 99991229 AND u.start_date % 10000 = ?)
-                   OR (u.end_date > 0 AND u.end_date <> 99991229 AND u.end_date % 10000 = ?)
-                 )
+                 WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (u.start_month_day = ? OR u.end_month_day = ?)
                )
              )
            )
