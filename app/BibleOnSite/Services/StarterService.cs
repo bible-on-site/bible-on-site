@@ -226,15 +226,13 @@ public class StarterService : BaseGraphQLService
     }
 
     /// <summary>
-    /// <summary>
     /// Articles for the daily reading surface (#3098). When the viewed perek
     /// is the resolved daily perek of a Hebrew date carrying an assignment,
     /// that article alone replaces the ordinary per-perek list — even when
     /// its primary perek_id is unrelated. Two date contexts apply: today
     /// (always active — the daily surface stays overridden on any entry path)
-    /// and <paramref name="selectedDateNum"/>, the calendar-selected date the
-    /// reader was opened for (YYYYMMDD or null). Everywhere else falls back
-    /// to the unchanged per-perek list.
+    /// and the optional calendar-selected date the reader was opened for
+    /// (YYYYMMDD). Everywhere else falls back to the unchanged per-perek list.
     /// </summary>
     public List<Article> GetDailyArticles(int perekId) => GetDailyArticles(perekId, null);
 
@@ -302,6 +300,7 @@ public class StarterService : BaseGraphQLService
         }
     }
 
+    /// <summary>
     /// Number of articles attached to a perek, read from the startup counters
     /// (index = perekId - 1). Returns 0 when starter data is not loaded yet or
     /// the id is out of range — callers treat that as "no badge".
