@@ -11,6 +11,7 @@
 	"tanah_article_covering_source_upgrade.sql",
 	"tanah_article_content_hash_upgrade.sql",
 	"tanah_article_index_upgrade.sql",
+	"tanah_article_link_proposal_upgrade.sql",
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_alter_child_birth_order.sql",

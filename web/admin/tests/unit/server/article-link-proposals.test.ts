@@ -1,0 +1,875 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => {
+	const conn = { marker: "tx-conn" };
+	return {
+		conn,
+		execute: vi.fn(),
+		query: vi.fn(),
+		queryOne: vi.fn(),
+		txExecute: vi.fn(),
+		txQueryOne: vi.fn(),
+		transaction: vi.fn(async (fn: (c: typeof conn) => unknown) => fn(conn)),
+		updateApi: vi.fn(),
+		applyDed: vi.fn(),
+		llmCall: vi.fn(),
+		apiConfigured: vi.fn(() => true),
+		llmIsConfigured: vi.fn(() => true),
+	};
+});
+
+vi.mock("@tanstack/react-start", () => ({
+	createServerFn: () => ({
+		validator: (validate: (data: unknown) => unknown) => ({
+			handler:
+				(fn: (args: { data: unknown }) => unknown) =>
+				(args: { data: unknown }) =>
+					fn({ data: validate(args.data) }),
+		}),
+		handler: (fn: unknown) => fn,
+	}),
+}));
+vi.mock("~/server/db", () => ({
+	execute: mocks.execute,
+	query: mocks.query,
+	queryOne: mocks.queryOne,
+	transaction: mocks.transaction,
+	txExecute: mocks.txExecute,
+	txQueryOne: mocks.txQueryOne,
+}));
+vi.mock("~/server/article-relationships-api", () => ({
+	articleApiConfigured: mocks.apiConfigured,
+	updateArticleRelationships: mocks.updateApi,
+}));
+vi.mock("~/server/dedication-targets.server", () => ({
+	applyArticleDedicationLink: mocks.applyDed,
+}));
+vi.mock("~/server/editor-identity", () => ({
+	resolveEditorIdentity: async () => ({ id: "editor-test" }),
+}));
+vi.mock("~/server/llm-json", () => ({
+	callOpenAiJson: mocks.llmCall,
+	llmConfigured: mocks.llmIsConfigured,
+}));
+
+import {
+	_resetLinkSchemaCache,
+	_setLinkLlmCaller,
+} from "~/server/article-link-pipeline";
+import {
+	applyLinkProposals,
+	generateLinkProposals,
+	getLinkPipelineStatus,
+	getLinkProposal,
+	listLinkProposals,
+	listLinkRuns,
+	reviewLinkProposal,
+} from "~/server/article-link-proposals";
+
+const HASH = "abcdef0123456789abcdef0123456789";
+
+const articleRow = {
+	id: 7,
+	perek_id: 1,
+	author_id: 2,
+	name: "מאמר בדיקה",
+	abstract: null,
+	content: "<p>המאמר דן בבראשית יח, ב ובשמואל ב ה, ז.</p>",
+	coverage_verified: 1,
+	content_hash: HASH,
+};
+
+const perakimRows = [
+	{
+		id: 1,
+		sefer_name: "בראשית",
+		additional_letter: null,
+		perek_in_context: 1,
+		pasuk_count: 31,
+	},
+	{
+		id: 18,
+		sefer_name: "בראשית",
+		additional_letter: null,
+		perek_in_context: 18,
+		pasuk_count: 33,
+	},
+	{
+		id: 605,
+		sefer_name: "שמואל",
+		additional_letter: "ב",
+		perek_in_context: 5,
+		pasuk_count: 25,
+	},
+];
+
+function dispatchQuery(sql: string): unknown[] {
+	if (sql.includes("tanah_perek_view")) return perakimRows;
+	if (sql.includes("FROM tanah_author")) return [{ id: 2, name: "הרב קוק" }];
+	if (sql.includes("FROM tanah_dedication"))
+		return [{ id: 5, subject: "לעילוי נשמת" }];
+	if (sql.includes("tanah_article_covering_source"))
+		return [{ perekId: 1, pasuk: 1 }];
+	if (sql.includes("tanah_article_dedication")) return [];
+	if (sql.includes("tanah_article_link_proposal")) return proposalRows;
+	if (sql.includes("tanah_article_link_checkpoint")) return [];
+	if (sql.includes("FROM tanah_article WHERE id")) return [];
+	return [];
+}
+
+function dispatchQueryOne(sql: string): unknown {
+	if (sql.includes("AS h FROM tanah_article")) return { h: HASH };
+	if (sql.includes("FROM tanah_article WHERE id")) return articleRow;
+	if (sql.includes("tanah_article_link_checkpoint")) return null;
+	if (sql.includes("tanah_article_link_proposal")) return proposalRow;
+	return null;
+}
+
+let proposalRows: unknown[] = [];
+let proposalRow: Record<string, unknown> | null = null;
+
+function makeProposalRow(overrides: Record<string, unknown> = {}) {
+	return {
+		id: "prop-1",
+		run_id: "run-1",
+		article_id: 7,
+		relationship_key: "coveringSources",
+		action: "add",
+		target_json: JSON.stringify({
+			pasukCoordinates: [{ perekId: 18, pasuk: 2 }],
+		}),
+		target_label: "בראשית יח ב",
+		evidence_json: JSON.stringify([
+			{ quote: "בראשית יח, ב", spanStart: 20, spanEnd: 34 },
+		]),
+		rationale: null,
+		confidence: null,
+		conflict: null,
+		status: "approved",
+		dedupe_key: "d".repeat(64),
+		decision_key: "e".repeat(64),
+		generator: "heuristic-citations:v1",
+		model: null,
+		prompt_version: "linking-v1",
+		base_content_hash: HASH,
+		base_snapshot_json: null,
+		prompt_tokens: null,
+		completion_tokens: null,
+		review_patch_json: null,
+		review_notes: null,
+		reviewer: "editor-test",
+		reviewed_at: null,
+		applied_at: null,
+		applied_snapshot_json: null,
+		created_at: "2026-01-01 00:00:00",
+		updated_at: "2026-01-01 00:00:00",
+		live_hash: HASH,
+		...overrides,
+	};
+}
+
+const apiResult = {
+	revalidation: "APPLIED",
+	relationships: {
+		perekId: 1,
+		authorId: 2,
+		coverageVerified: true,
+		contentHash: HASH,
+		coveringSources: [
+			{ perekId: 1, pasuk: 1 },
+			{ perekId: 18, pasuk: 2 },
+		],
+	},
+	previous: {
+		perekId: 1,
+		authorId: 2,
+		coverageVerified: true,
+		contentHash: HASH,
+		coveringSources: [{ perekId: 1, pasuk: 1 }],
+	},
+};
+
+describe("article link proposals server", () => {
+	beforeEach(() => {
+		for (const mock of [
+			mocks.execute,
+			mocks.query,
+			mocks.queryOne,
+			mocks.txExecute,
+			mocks.txQueryOne,
+			mocks.updateApi,
+			mocks.applyDed,
+			mocks.llmCall,
+			mocks.apiConfigured,
+			mocks.llmIsConfigured,
+		])
+			mock.mockReset();
+		mocks.apiConfigured.mockReturnValue(true);
+		mocks.llmIsConfigured.mockReturnValue(true);
+		mocks.execute.mockResolvedValue({ affectedRows: 0 });
+		mocks.txExecute.mockResolvedValue({ affectedRows: 1, insertId: 1 });
+		mocks.query.mockImplementation(async (sql: string) => dispatchQuery(sql));
+		mocks.queryOne.mockImplementation(async (sql: string) =>
+			dispatchQueryOne(sql),
+		);
+		mocks.updateApi.mockResolvedValue(apiResult);
+		mocks.applyDed.mockResolvedValue({ changed: true });
+		proposalRows = [];
+		proposalRow = null;
+		_resetLinkSchemaCache();
+		_setLinkLlmCaller(null);
+	});
+
+	describe("generateLinkProposals", () => {
+		it("inserts heuristic drafts and a checkpoint in one transaction", async () => {
+			const result = await generateLinkProposals({
+				data: { articleIds: [7] },
+			});
+			expect(result.outcomes[0].outcome).toBe("generated");
+			expect(result.outcomes[0].proposals.length).toBeGreaterThan(0);
+			const sqls = mocks.txExecute.mock.calls.map((c) => String(c[1]));
+			expect(
+				sqls.some((s) =>
+					s.includes("INSERT IGNORE INTO tanah_article_link_proposal"),
+				),
+			).toBe(true);
+			expect(
+				sqls.some((s) => s.includes("tanah_article_link_checkpoint")),
+			).toBe(true);
+		});
+
+		it("persists nothing on dry-run", async () => {
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], dryRun: true },
+			});
+			expect(result.outcomes[0].outcome).toBe("dry-run");
+			expect(
+				mocks.txExecute.mock.calls.some((c) =>
+					String(c[1]).includes("tanah_article_link_proposal"),
+				),
+			).toBe(false);
+		});
+
+		it("produces drafts through the injected LLM caller", async () => {
+			_setLinkLlmCaller(async () => ({
+				content: JSON.stringify({
+					proposals: [
+						{
+							relationshipKey: "coveringSources",
+							action: "add",
+							target: {
+								citations: [
+									{ sefer: "שמואל", additional: "ב", perek: "ה", pasuk: "ז" },
+								],
+							},
+							evidence: [{ quote: "שמואל ב ה, ז" }],
+							confidence: 0.8,
+						},
+					],
+				}),
+				model: "mock-model",
+				promptTokens: 10,
+				completionTokens: 5,
+			}));
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "llm" },
+			});
+			expect(result.outcomes[0].outcome).toBe("generated");
+			const llmDrafts = result.outcomes[0].proposals.filter(
+				(d) => d.confidence !== null,
+			);
+			expect(llmDrafts.length).toBeGreaterThan(0);
+		});
+	});
+
+	describe("reviewLinkProposal", () => {
+		it("approves a pending proposal and records the reviewer", async () => {
+			proposalRow = makeProposalRow({ status: "pending" });
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await reviewLinkProposal({
+				data: { id: "prop-1", decision: "approve" },
+			});
+			expect(result.status).toBe("approved");
+			const update = mocks.txExecute.mock.calls.find((c) =>
+				String(c[1]).includes("SET status = 'approved'"),
+			);
+			expect(update).toBeTruthy();
+			expect(update?.[2]?.[0]).toBe("editor-test");
+		});
+
+		it("rejects and keeps the row in history", async () => {
+			proposalRow = makeProposalRow({ status: "pending" });
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await reviewLinkProposal({
+				data: { id: "prop-1", decision: "reject", reviewNotes: "לא רלוונטי" },
+			});
+			expect(result.status).toBe("rejected");
+		});
+
+		it("refuses approving a held proposal without a patch", async () => {
+			proposalRow = makeProposalRow({ status: "held" });
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			await expect(
+				reviewLinkProposal({
+					data: { id: "prop-1", decision: "approve" },
+				}),
+			).rejects.toThrow(/מוקפאת|תיקון/);
+		});
+
+		it("refuses approving when the article changed since generation", async () => {
+			proposalRow = makeProposalRow({ status: "pending" });
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("HEX(content_hash)")) return { h: "0".repeat(32) };
+				return dispatchQueryOne(sql);
+			});
+			await expect(
+				reviewLinkProposal({
+					data: { id: "prop-1", decision: "approve" },
+				}),
+			).rejects.toThrow(/השתנה/);
+		});
+	});
+
+	describe("applyLinkProposals", () => {
+		it("applies an approved covering add through the API contract", async () => {
+			proposalRow = makeProposalRow();
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("applied");
+			expect(mocks.updateApi).toHaveBeenCalledOnce();
+			const input = mocks.updateApi.mock.calls[0][1] as {
+				coveringSources?: { perekId: number; pasuk: number }[];
+				expectedContentHash?: string;
+			};
+			expect(input.coveringSources).toContainEqual({ perekId: 18, pasuk: 2 });
+			expect(input.expectedContentHash).toBe(HASH);
+			expect(
+				mocks.txExecute.mock.calls.some((c) =>
+					String(c[1]).includes("SET status = 'applied'"),
+				),
+			).toBe(true);
+		});
+
+		it("marks the proposal stale when content changed", async () => {
+			proposalRow = makeProposalRow();
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("HEX(content_hash)")) return { h: "0".repeat(32) };
+				return dispatchQueryOne(sql);
+			});
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("stale");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+
+		it("returns already-applied on repeat apply", async () => {
+			proposalRow = makeProposalRow({ status: "applied" });
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("already-applied");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+
+		it("completes the record when the live state already matches", async () => {
+			// Retry after a crash between the write and the mark: the covering
+			// set already contains the proposed coordinate.
+			proposalRow = makeProposalRow();
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_covering_source")) {
+					return [
+						{ perekId: 1, pasuk: 1 },
+						{ perekId: 18, pasuk: 2 },
+					];
+				}
+				return dispatchQuery(sql);
+			});
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("already-applied");
+		});
+
+		it("refuses applying a non-approved proposal", async () => {
+			proposalRow = makeProposalRow({ status: "pending" });
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("error");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("listLinkProposals", () => {
+		it("maps rows and flags stale proposals", async () => {
+			proposalRows = [
+				makeProposalRow({ live_hash: "0".repeat(32) }),
+				makeProposalRow({ id: "prop-2", status: "pending" }),
+			];
+			const rows = await listLinkProposals({ data: {} });
+			expect(rows).toHaveLength(2);
+			expect(rows[0].staleNow).toBe(true);
+			expect(rows[1].staleNow).toBe(false);
+		});
+
+		it("applies status/article/run filters and a bounded limit", async () => {
+			await listLinkProposals({
+				data: {
+					status: "pending",
+					articleId: 7,
+					runId: "run-1",
+					limit: 9000,
+				},
+			});
+			const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+			expect(sql).toContain("p.status = ?");
+			expect(sql).toContain("p.article_id = ?");
+			expect(sql).toContain("p.run_id = ?");
+			expect(params).toEqual(["pending", 7, "run-1", 500]);
+		});
+	});
+
+	describe("generateLinkProposals validation", () => {
+		it("rejects an empty article list", () => {
+			expect(() =>
+				generateLinkProposals({ data: { articleIds: [] } }),
+			).toThrow(/מאמר/);
+		});
+
+		it("rejects a run above the per-run cap", () => {
+			expect(() =>
+				generateLinkProposals({
+					data: { articleIds: Array.from({ length: 501 }, (_, i) => i + 1) },
+				}),
+			).toThrow(/מאמרים/);
+		});
+	});
+
+	describe("generateLinkProposals outcomes", () => {
+		it("reports an error for a missing article", async () => {
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("FROM tanah_article WHERE id")) return null;
+				return dispatchQueryOne(sql);
+			});
+			const result = await generateLinkProposals({
+				data: { articleIds: [7] },
+			});
+			expect(result.outcomes[0].outcome).toBe("error");
+			expect(result.outcomes[0].error).toBe("article not found");
+		});
+
+		it("skips an article whose checkpoint is fresh", async () => {
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_link_checkpoint"))
+					return { article_id: 7 };
+				return dispatchQueryOne(sql);
+			});
+			const result = await generateLinkProposals({
+				data: { articleIds: [7] },
+			});
+			expect(result.outcomes[0].outcome).toBe("skipped-checkpoint");
+		});
+
+		it("regenerates over a fresh checkpoint when forced", async () => {
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_link_checkpoint"))
+					return { article_id: 7 };
+				return dispatchQueryOne(sql);
+			});
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], force: true },
+			});
+			expect(result.outcomes[0].outcome).toBe("generated");
+		});
+
+		it("reports the missing key for an llm engine without credentials", async () => {
+			mocks.llmIsConfigured.mockReturnValue(false);
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "llm" },
+			});
+			expect(result.outcomes[0].outcome).toBe("error");
+			expect(result.outcomes[0].error).toContain("OPENAI_API_KEY");
+		});
+
+		it("records invalid model JSON as a per-article error", async () => {
+			_setLinkLlmCaller(async () => ({
+				content: "not json at all",
+				model: "mock",
+				promptTokens: null,
+				completionTokens: null,
+			}));
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "llm" },
+			});
+			expect(result.outcomes[0].outcome).toBe("error");
+			expect(result.outcomes[0].error).toContain("JSON");
+		});
+
+		it("notes the dedupe count when INSERT IGNORE swallows rows", async () => {
+			mocks.txExecute.mockResolvedValue({ affectedRows: 0, insertId: 0 });
+			const result = await generateLinkProposals({
+				data: { articleIds: [7] },
+			});
+			expect(result.outcomes[0].error).toContain("dedupe");
+		});
+	});
+
+	describe("reviewLinkProposal edge paths", () => {
+		it("throws when the proposal does not exist", async () => {
+			mocks.txQueryOne.mockResolvedValue(null);
+			await expect(
+				reviewLinkProposal({ data: { id: "nope", decision: "approve" } }),
+			).rejects.toThrow(/לא נמצאה/);
+		});
+
+		it("refuses to review an applied proposal", async () => {
+			mocks.txQueryOne.mockResolvedValue(
+				makeProposalRow({ status: "applied" }),
+			);
+			await expect(
+				reviewLinkProposal({ data: { id: "prop-1", decision: "reject" } }),
+			).rejects.toThrow(/יושמה/);
+		});
+
+		it("treats a repeat reject as idempotent", async () => {
+			mocks.txQueryOne.mockResolvedValue(
+				makeProposalRow({ status: "rejected" }),
+			);
+			const result = await reviewLinkProposal({
+				data: { id: "prop-1", decision: "reject" },
+			});
+			expect(result.status).toBe("rejected");
+		});
+
+		it("stores a normalized human patch on approve", async () => {
+			mocks.txQueryOne.mockResolvedValue(
+				makeProposalRow({ status: "held" }),
+			);
+			const result = await reviewLinkProposal({
+				data: {
+					id: "prop-1",
+					decision: "approve",
+					reviewPatch: {
+						pasukCoordinates: [{ perekId: 18, pasuk: 2 }],
+					},
+				},
+			});
+			expect(result.status).toBe("approved");
+			const update = mocks.txExecute.mock.calls.find((c) =>
+				String(c[1]).includes("review_patch_json = ?"),
+			);
+			expect(update?.[2]?.[0]).toBe("editor-test");
+			expect(update?.[2]?.[1]).toBe(
+				JSON.stringify({ pasukCoordinates: [{ perekId: 18, pasuk: 2 }] }),
+			);
+		});
+
+		it("rejects an invalid human patch", async () => {
+			mocks.txQueryOne.mockResolvedValue(
+				makeProposalRow({ status: "held" }),
+			);
+			await expect(
+				reviewLinkProposal({
+					data: {
+						id: "prop-1",
+						decision: "approve",
+						reviewPatch: {
+							pasukCoordinates: [{ perekId: 9999, pasuk: 1 }],
+						},
+					},
+				}),
+			).rejects.toThrow(/אינו חוקי/);
+		});
+	});
+
+	describe("applyLinkProposals edge paths", () => {
+		it("requires the API write path to be configured", async () => {
+			mocks.apiConfigured.mockReturnValue(false);
+			await expect(
+				applyLinkProposals({ data: { ids: ["prop-1"] } }),
+			).rejects.toThrow(/ARTICLE_API_KEY/);
+		});
+
+		it("rejects an empty id list at the validator", () => {
+			expect(() => applyLinkProposals({ data: { ids: [] } })).toThrow(
+				/הצעות/,
+			);
+		});
+
+		it("reports a missing proposal row", async () => {
+			mocks.txQueryOne.mockResolvedValue(null);
+			const result = await applyLinkProposals({
+				data: { ids: ["nope"] },
+			});
+			expect(result.outcomes[0]).toEqual({
+				id: "nope",
+				outcome: "error",
+				detail: "not found",
+			});
+		});
+
+		it("marks a conflict when the plan cannot apply", async () => {
+			proposalRow = makeProposalRow({
+				relationship_key: "primaryPerek",
+				action: "add",
+				target_json: JSON.stringify({ perekId: 18 }),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("conflict");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+
+		it("marks a conflict when the API rejects the write", async () => {
+			proposalRow = makeProposalRow();
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			mocks.updateApi.mockRejectedValue(new Error("freshness mismatch"));
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("conflict");
+			expect(result.outcomes[0].detail).toContain("freshness mismatch");
+		});
+
+		it("applies a dedication assignment through the aggregate", async () => {
+			proposalRow = makeProposalRow({
+				relationship_key: "dedicationAssignments",
+				target_json: JSON.stringify({ dedicationId: 5 }),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("applied");
+			expect(mocks.applyDed).toHaveBeenCalledWith(
+				expect.objectContaining({
+					dedicationId: 5,
+					articleId: 7,
+					op: "add",
+				}),
+			);
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+
+		it("completes a dedication retry when the link already exists", async () => {
+			proposalRow = makeProposalRow({
+				relationship_key: "dedicationAssignments",
+				target_json: JSON.stringify({ dedicationId: 5 }),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			mocks.applyDed.mockResolvedValue({ changed: false });
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_dedication"))
+					return [{ dedication_id: 5 }];
+				return dispatchQuery(sql);
+			});
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("already-applied");
+		});
+
+		it("marks a conflict when the dedication write is refused", async () => {
+			proposalRow = makeProposalRow({
+				relationship_key: "dedicationAssignments",
+				target_json: JSON.stringify({ dedicationId: 5 }),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			mocks.applyDed.mockResolvedValue({
+				changed: false,
+				reason: "dedication retired",
+			});
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("conflict");
+			expect(result.outcomes[0].detail).toContain("dedication retired");
+		});
+	});
+
+	describe("getLinkProposal / listLinkRuns / status", () => {
+		it("returns the detail view with the live snapshot", async () => {
+			proposalRow = makeProposalRow();
+			mocks.queryOne.mockImplementation(async (sql: string) =>
+				sql.includes("SELECT name FROM tanah_article")
+					? { name: "מאמר בדיקה" }
+					: dispatchQueryOne(sql),
+			);
+			const detail = await getLinkProposal({ data: "prop-1" });
+			expect(detail?.articleName).toBe("מאמר בדיקה");
+			expect(detail?.liveContentHash).toBe(HASH);
+			expect(detail?.liveSnapshot.coveringSources).toEqual([
+				{ perekId: 1, pasuk: 1 },
+			]);
+		});
+
+		it("returns null for a missing proposal", async () => {
+			mocks.queryOne.mockImplementation(async () => null);
+			expect(await getLinkProposal({ data: "nope" })).toBeNull();
+		});
+
+		it("maps run summaries", async () => {
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("GROUP BY run_id")) {
+					return [
+						{
+							run_id: "run-9",
+							generator: "heuristic-citations:v1",
+							proposals: 3,
+							pending: 1,
+							held: 1,
+							approved: 1,
+							applied: 0,
+							rejected: 0,
+							started_at: "2026-01-01 00:00:00",
+						},
+					];
+				}
+				return dispatchQuery(sql);
+			});
+			const runs = await listLinkRuns({ data: {} });
+			expect(runs).toHaveLength(1);
+			expect(runs[0].runId).toBe("run-9");
+			expect(runs[0].pending).toBe(1);
+		});
+
+		it("surfaces pipeline capability", async () => {
+			const status = await getLinkPipelineStatus({ data: {} });
+			expect(status.schemaReady).toBe(true);
+			expect(status.llmEnabled).toBe(true);
+			expect(status.articleApiConfigured).toBe(true);
+			expect(status.supportedKeys).toContain("coveringSources");
+			expect(status.pendingKeys).toContain("moadim");
+		});
+
+		it("reports the schema as not deployed when ensure fails", async () => {
+			mocks.execute.mockRejectedValue(
+				Object.assign(new Error("missing"), {
+					code: "ER_NO_SUCH_TABLE",
+				}),
+			);
+			const status = await getLinkPipelineStatus({ data: {} });
+			expect(status.schemaReady).toBe(false);
+		});
+	});
+
+	describe("schema-missing and parse fallbacks", () => {
+		it("generates when the covering-source columns are absent", async () => {
+			const schemaErr = Object.assign(new Error("bad column"), {
+				code: "ER_BAD_FIELD_ERROR",
+			});
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("HEX(content_hash)")) throw schemaErr;
+				if (sql.includes("0 AS coverage_verified")) return articleRow;
+				return dispatchQueryOne(sql);
+			});
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_covering_source")) throw schemaErr;
+				return dispatchQuery(sql);
+			});
+			const result = await generateLinkProposals({
+				data: { articleIds: [7] },
+			});
+			expect(result.outcomes[0].outcome).toBe("generated");
+		});
+
+		it("survives an unparseable stored JSON column", async () => {
+			proposalRows = [
+				makeProposalRow({ target_json: "{broken", evidence_json: "[" }),
+			];
+			const rows = await listLinkProposals({ data: {} });
+			expect(rows).toHaveLength(1);
+			expect(rows[0].target).toEqual({});
+		});
+	});
+
+	describe("applyLinkProposals idempotency", () => {
+		it("completes a covering remove the live state already satisfies", async () => {
+			proposalRow = makeProposalRow({
+				action: "remove",
+				target_json: JSON.stringify({
+					pasukCoordinates: [{ perekId: 18, pasuk: 9 }],
+				}),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("already-applied");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+
+		it("marks a conflict for a dedication target without an id", async () => {
+			proposalRow = makeProposalRow({
+				relationship_key: "dedicationAssignments",
+				target_json: JSON.stringify({ dedicationId: "x" }),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("conflict");
+		});
+
+		it("marks a conflict for a dedication action outside add/remove", async () => {
+			proposalRow = makeProposalRow({
+				relationship_key: "dedicationAssignments",
+				action: "replace",
+				target_json: JSON.stringify({ dedicationId: 5 }),
+			});
+			mocks.txQueryOne.mockResolvedValue(proposalRow);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1"] },
+			});
+			expect(result.outcomes[0].outcome).toBe("conflict");
+		});
+
+		it("processes every id in the batch", async () => {
+			mocks.txQueryOne
+				.mockResolvedValueOnce(makeProposalRow())
+				.mockResolvedValueOnce(
+					makeProposalRow({ id: "prop-2", status: "applied" }),
+				);
+			const result = await applyLinkProposals({
+				data: { ids: ["prop-1", "prop-2"] },
+			});
+			expect(result.outcomes).toHaveLength(2);
+			expect(result.outcomes[1].outcome).toBe("already-applied");
+		});
+	});
+
+	describe("LLM generation fallbacks", () => {
+		it("labels catalogue misses with raw identifiers", async () => {
+			_setLinkLlmCaller(async () => ({
+				content: JSON.stringify({ proposals: [] }),
+				model: "mock",
+				promptTokens: null,
+				completionTokens: null,
+			}));
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("FROM tanah_article WHERE id"))
+					return { ...articleRow, perek_id: 999 };
+				return dispatchQueryOne(sql);
+			});
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_covering_source"))
+					return [{ perekId: 999, pasuk: 1 }];
+				return dispatchQuery(sql);
+			});
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "llm" },
+			});
+			expect(result.outcomes[0].outcome).toBe("generated");
+		});
+	});
+});

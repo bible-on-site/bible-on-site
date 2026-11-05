@@ -86,3 +86,7 @@ assignments link to the dedications workflow, mention annotations render
 read-only with their staleness flag, and pending-schema entries name their
 owning issue. `getArticleRelationshipDetails` (server fn) aggregates the
 non-form links with the same SQL and semantics as the API projection.
+
+Relationship changes proposed by the LLM/heuristic linking pipeline are
+drafted, reviewed and applied through this contract — see
+[link-proposals.md](./link-proposals.md).

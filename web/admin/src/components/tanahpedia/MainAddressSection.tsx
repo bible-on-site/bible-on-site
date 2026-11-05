@@ -226,7 +226,9 @@ export function MainAddressSection({
 							{otherOldTargets.length > 0 &&
 								` השם משותף גם עם ${otherOldTargets
 									.map((t) => `«${t.title}»`)
-									.join(", ")} - לאחר השינוי היא תציג דף פירושונים שכולל גם את ערך זה.`}
+									.join(
+										", ",
+									)} - לאחר השינוי היא תציג דף פירושונים שכולל גם את ערך זה.`}
 						</p>
 					) : otherOldTargets.length > 0 ? (
 						// No self association survives the rename — the shared old
