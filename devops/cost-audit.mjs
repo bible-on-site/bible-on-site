@@ -39,7 +39,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const ACCOUNT_ID = "250598594267";
+export const ACCOUNT_ID = "250598594267"; // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 export const REGION = "il-central-1";
 // Cost Explorer, AWS Budgets and AWS/Billing metrics are global surfaces
 // served from us-east-1 regardless of where the resources live.

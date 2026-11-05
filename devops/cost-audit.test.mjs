@@ -245,7 +245,7 @@ test("audit verifies identity first and passes global calls through us-east-1", 
 
 test("audit refuses any account but the verified production account", async () => {
 	const calls = [];
-	const wrong = { ...HEALTHY, "get-caller-identity": { Account: "985796087238" } };
+	const wrong = { ...HEALTHY, "get-caller-identity": { Account: "985796087238" } }; // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	await assert.rejects(() => audit({ profile: "ops" }, { execute: fakeAws(wrong, calls) }), /Refusing to audit account 985796087238/);
 	assert.equal(calls.length, 1);
 });
