@@ -1125,13 +1125,14 @@ mod tests {
 
     #[test]
     fn daily_article_headings_and_header_h1_keep_taamim() {
+        // Real pasuk fragment (מלכים א כ לה) — canonical maqaf, not invented text.
         let daily = daily_html_to_typst(
-            "<p>גוף</p><h3>עַל־פָּס֥וּק מְסֻיָּ֖ם</h3><p>המשך</p>",
+            "<p>גוף</p><h3>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h3><p>המשך</p>",
             &mut Vec::new(),
         );
         // The whole heading phrase (maqaf included) is one cantillation run.
         assert!(daily.contains(
-            "#heading(level: 3, numbering: none)[#text(font: \"Taamey Frank CLM\")[עַל־פָּס֥וּק מְסֻיָּ֖ם]]"
+            "#heading(level: 3, numbering: none)[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]]"
         ));
     }
 

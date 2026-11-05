@@ -237,13 +237,12 @@ mod tests {
         // #2961: article titles (leading h1s) print in Frank Ruhl Libre too —
         // a cantillated quote in the heading needs the same wrapped face.
         let mut req = request();
-        req.perakim[0].articles[0].2 = "<h1>עַל פָּס֥וּק מְסֻיָּ֖ם</h1><p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>".into();
+        // Real pasuk fragment (מלכים א כ לה) — canonical maqaf, not invented text.
+        req.perakim[0].articles[0].2 = "<h1>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h1><p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>".into();
         let (source, _) = markup(&req, "כא חשוון תשפז", &[]);
-        assert!(
-            source.contains(
-                "fill: rgb(\"173E52\"))[#text(font: \"Taamey Frank CLM\")[עַל פָּס֥וּק מְסֻיָּ֖ם]]"
-            )
-        );
+        assert!(source.contains(
+            "fill: rgb(\"173E52\"))[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]]"
+        ));
         assert!(source.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֞ר אֵלָ֑יו]"));
     }
 
