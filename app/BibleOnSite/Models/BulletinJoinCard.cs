@@ -28,12 +28,12 @@ public sealed record BulletinJoinCard(
 /// <summary>
 /// The three daily-bulletin join channels, mirroring the website's public join
 /// surface (#2942). Every card points at the website's stable first-party
-/// join route (#2939/#2940): /join/telegram and /join/whatsapp answer 307 to
-/// the current admin-managed destination and /join/email is the shared public
-/// signup page, so a destination or invitation change in admin reaches
-/// installed app versions without an app release. Only these first-party
-/// routes belong here: never rotating provider invitations, private test
-/// destinations or API keys.
+/// join route (#2939/#2940): /bulletin/telegram/join and
+/// /bulletin/whatsapp/join answer 307 to the current admin-managed
+/// destination and /bulletin/email/join is the shared public signup page, so
+/// a destination or invitation change in admin reaches installed app versions
+/// without an app release. Only these first-party routes belong here: never
+/// rotating provider invitations, private test destinations or API keys.
 /// </summary>
 public static class BulletinJoinCards
 {
@@ -47,7 +47,7 @@ public static class BulletinJoinCards
     /// app always hands the OS the same stable URL.
     /// </summary>
     private static Uri JoinRoute(string channel) =>
-        new($"{AppConfig.Instance.WebsiteUrl}/join/{channel}");
+        new($"{AppConfig.Instance.WebsiteUrl}/bulletin/{channel}/join");
 
     /// <summary>Card order matches the website carousel: Telegram, WhatsApp, email.</summary>
     public static IReadOnlyList<BulletinJoinCard> All { get; } =

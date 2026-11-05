@@ -9,8 +9,8 @@ namespace BibleOnSite.ViewModels;
 /// <summary>
 /// עלון יומי join cards (#2806, links #2942): the three public bulletin
 /// channels — Telegram, WhatsApp and email — in the website's card order.
-/// Each card hands the OS the website's stable first-party /join/{channel}
-/// route through <see cref="ILauncher"/>: provider destinations resolve
+/// Each card hands the OS the website's stable first-party
+/// /bulletin/{channel}/join route through <see cref="ILauncher"/>: provider destinations resolve
 /// server-side, an admin-disabled channel lands on the site's own
 /// unavailable page, and an actual launch failure shows the card's Hebrew
 /// alert rather than failing silently.

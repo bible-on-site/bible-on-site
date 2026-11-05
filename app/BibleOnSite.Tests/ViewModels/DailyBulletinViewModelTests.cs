@@ -11,7 +11,7 @@ namespace BibleOnSite.Tests.ViewModels;
 /// <summary>
 /// עלון יומי join cards (#2806, links #2942): exactly the website's three
 /// public channels — Telegram, WhatsApp and email — bound to the stable
-/// first-party /join/{channel} routes, launching through ILauncher and
+/// first-party /bulletin/{channel}/join routes, launching through ILauncher and
 /// surfacing failures visibly.
 /// </summary>
 public class DailyBulletinViewModelTests
@@ -76,9 +76,9 @@ public class DailyBulletinViewModelTests
         var site = AppConfig.Instance.WebsiteUrl;
         site.Should().Be("https://xn--febl3a.com");
         vm.Cards.Select(card => card.JoinUri.AbsoluteUri).Should().Equal(
-            $"{site}/join/telegram",
-            $"{site}/join/whatsapp",
-            $"{site}/join/email");
+            $"{site}/bulletin/telegram/join",
+            $"{site}/bulletin/whatsapp/join",
+            $"{site}/bulletin/email/join");
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class DailyBulletinViewModelTests
 
         await vm.JoinCommand.ExecuteAsync(vm.Cards[0]);
 
-        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/join/telegram"));
+        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/bulletin/telegram/join"));
     }
 
     [Fact]
@@ -129,9 +129,10 @@ public class DailyBulletinViewModelTests
 
         await vm.JoinCommand.ExecuteAsync(vm.Cards[1]);
 
-        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/join/whatsapp"));
+        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/bulletin/whatsapp/join"));
         // The rotating chat.whatsapp.com invitation must never ship in the
-        // app — only the admin-managed destination behind /join/whatsapp.
+        // app — only the admin-managed destination behind
+        // /bulletin/whatsapp/join.
         opened()!.Host.Should().Be(new Uri(AppConfig.Instance.WebsiteUrl).Host);
     }
 
@@ -144,7 +145,7 @@ public class DailyBulletinViewModelTests
         await vm.JoinCommand.ExecuteAsync(vm.Cards[2]);
 
         opened()!.Scheme.Should().Be("https");
-        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/join/email"));
+        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/bulletin/email/join"));
     }
 
     [Fact]
