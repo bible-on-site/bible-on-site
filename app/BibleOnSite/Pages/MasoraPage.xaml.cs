@@ -184,7 +184,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 Carousel = MasoraCarousel,
                 LoadingOverlay = CarouselLoadingOverlay,
                 FanMenu = FanMenu,
-                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton],
+                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton, MasoraUnitPickerPopup],
             },
             new ReaderCarouselActions
             {

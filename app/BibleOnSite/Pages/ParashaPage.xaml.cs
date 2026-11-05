@@ -240,7 +240,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 Carousel = ParashaCarousel,
                 LoadingOverlay = CarouselLoadingOverlay,
                 FanMenu = FanMenu,
-                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton],
+                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton, ParashaUnitPickerPopup],
                 PressExcluded = [FanMenu.ToggleButton, SelectionBar],
             },
             new ReaderCarouselActions
