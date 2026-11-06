@@ -11,6 +11,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import type { Pasuk } from "@/data/db/tanah-view-types";
 import {
@@ -19,7 +20,6 @@ import {
 	type Recitation,
 	type RecitationWord,
 	resumeRanges,
-	verseRange,
 	wordAtPosition,
 } from "@/lib/recitation";
 import { RecitationAudio } from "@/lib/recitation-audio";
@@ -40,13 +40,13 @@ export function stopRecitation() {
 }
 interface RecitationTextState {
 	enabled: boolean;
-	words: RecitationWord[];
-	activeWord: string | null;
+	wordByKey: Map<string, RecitationWord>;
+	rangesByPasuk: Map<number, { startMs: number; endMs: number }>;
+	subscribeActive: (listener: () => void) => () => void;
+	isActive: (key: string) => boolean;
 	play: (start: number, end: number) => void;
 }
 
-const NO_RECITATION_WORDS: RecitationWord[] = [];
-const ignoreRecitation = () => {};
 const RecitationTextContext = createContext<RecitationTextState | null>(null);
 const RecitationEnabledContext = createContext(false);
 const RecitationContext = createContext<
@@ -61,6 +61,8 @@ const RecitationContext = createContext<
 export function useRecitationEnabled() {
 	return useContext(RecitationEnabledContext);
 }
+
+const noopSubscribe = () => () => {};
 
 export function RecitationHeader({ title }: { title: string }) {
 	const context = useContext(RecitationContext);
@@ -101,18 +103,23 @@ export function RecitationWordControl({
 	plainWhenInactive?: boolean;
 }) {
 	const context = useContext(RecitationTextContext);
-	const word = context?.enabled
-		? context.words.find((w) => w.pasuk === pasuk && w.segment === segment)
-		: undefined;
+	const key = `${pasuk}:${segment}`;
+	const word = context?.enabled ? context.wordByKey.get(key) : undefined;
+	// The active word lives outside the context value so a word-boundary change
+	// re-renders only the two controls whose highlight flips.
+	const pressed = useSyncExternalStore(
+		context?.subscribeActive ?? noopSubscribe,
+		() => context?.isActive(key) ?? false,
+		() => false,
+	);
 	// Keep the text-node boundaries: joining adjacent words changes Hebrew
 	// shaping. Listening still restores the original inline control and events.
 	if (plainWhenInactive && !word) return <>{children}</>;
-	const key = `${pasuk}:${segment}`;
 	return (
 		<InlineRecitationControl
 			className={styles.word}
 			label={word ? `השמעת המילה ${word.text}` : undefined}
-			pressed={context?.activeWord === key}
+			pressed={pressed}
 			onActivate={
 				word && context
 					? () => context.play(word.startMs, word.endMs)
@@ -138,7 +145,9 @@ export function RecitationPasukControl({
 	onNavigate?: () => void;
 }) {
 	const context = useContext(RecitationTextContext);
-	const range = context?.enabled ? verseRange(context.words, pasuk) : null;
+	const range = context?.enabled
+		? (context.rangesByPasuk.get(pasuk) ?? null)
+		: null;
 	const label = onNavigate
 		? `מעבר לפירוש על פסוק ${toLetters(pasuk)}`
 		: `השמעת פסוק ${toLetters(pasuk)}`;
@@ -274,10 +283,13 @@ export default function RecitationPlayer({
 	const [data, setData] = useState<Recitation | null>(null);
 	const [message, setMessage] = useState("");
 	const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
-	const [activeWord, setActiveWord] = useState<string | null>(null);
 	const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">(
 		"idle",
 	);
+	// Word-highlight state lives in a mutable store subscribed per word control;
+	// updating it re-renders only the affected controls, not the whole column.
+	const activeWord = useRef<string | null>(null);
+	const activeListeners = useRef(new Set<() => void>());
 	const precise = useRef<RecitationAudio | null>(null);
 	const settings = useRef<RecitationSettings>(getRecitationSettings());
 	const preparing = useRef(false);
@@ -303,6 +315,16 @@ export default function RecitationPlayer({
 			window.removeEventListener("storage", stored);
 		};
 	}, []);
+	const setActive = useCallback((key: string | null) => {
+		if (activeWord.current === key) return;
+		activeWord.current = key;
+		for (const listener of activeListeners.current) listener();
+	}, []);
+	const subscribeActive = useCallback((listener: () => void) => {
+		activeListeners.current.add(listener);
+		return () => activeListeners.current.delete(listener);
+	}, []);
+	const isActive = useCallback((key: string) => activeWord.current === key, []);
 	const request = useRef(0);
 	const createAudio = useCallback((recitation: Recitation) => {
 		const player: RecitationAudio = new RecitationAudio(
@@ -325,8 +347,8 @@ export default function RecitationPlayer({
 			precise.current = null;
 		}
 		setState("idle");
-		setActiveWord(null);
-	}, []);
+		setActive(null);
+	}, [setActive]);
 
 	useEffect(() => {
 		const onStop = (event: Event) => {
@@ -405,24 +427,25 @@ export default function RecitationPlayer({
 		};
 	}, [open, hasRecording, perekId, pesukim, stop, id, createAudio]);
 
-	function finish() {
+	const finish = useCallback(() => {
 		previewActive.current = false;
 		setState("idle");
-		setActiveWord(null);
-	}
-	function fail() {
+		setActive(null);
+	}, [setActive]);
+	const fail = useCallback(() => {
 		stop();
 		setMessage("ההקלטה לא נטענה. נסו שוב.");
-	}
+	}, [stop]);
 
-	async function play(startMs?: number, endMs?: number) {
+	const play = useCallback(async (startMs?: number, endMs?: number) => {
+		/* istanbul ignore next: play is only reachable from enabled controls, which require a loaded manifest */
 		if (!data) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const generation = ++request.current;
 		setMessage("");
 		setState("loading");
 		setDownloadProgress(null);
-		setActiveWord(null);
+		setActive(null);
 		// A tapped word or pasuk previews just that interval and marks where the
 		// next continuous playback resumes, even if Play is pressed mid-preview.
 		const preview = startMs !== undefined && endMs !== undefined;
@@ -458,9 +481,9 @@ export default function RecitationPlayer({
 		} catch {
 			if (request.current === generation) fail();
 		}
-	}
+	}, [data, id, createAudio, finish, fail, setActive]);
 
-	async function togglePlayback() {
+	const togglePlayback = useCallback(async () => {
 		if (state === "loading") return;
 		if (state === "playing" || state === "paused") {
 			// A bounded word/pasuk preview is not the chapter's playback: Play
@@ -493,25 +516,43 @@ export default function RecitationPlayer({
 			return;
 		}
 		await play();
-	}
+	}, [state, play, finish, fail]);
 
 	const alignedWords = useMemo(() => playableWords(data), [data]);
 	const textEnabled = open && alignedWords.length > 0;
-	const controlWords = textEnabled ? alignedWords : NO_RECITATION_WORDS;
-	const controlPlay: (start: number, end: number) => void = textEnabled
-		? play
-		: ignoreRecitation;
+	// O(1) lookup structures shared by every word/pasuk control via context.
+	const wordByKey = useMemo(
+		() =>
+			new Map(
+				alignedWords.map((word) => [
+					`${word.pasuk}:${word.segment}`,
+					word,
+				]),
+			),
+		[alignedWords],
+	);
+	const rangesByPasuk = useMemo(() => {
+		const ranges = new Map<number, { startMs: number; endMs: number }>();
+		for (const word of alignedWords) {
+			const range = ranges.get(word.pasuk);
+			if (range) range.endMs = word.endMs;
+			else ranges.set(word.pasuk, { startMs: word.startMs, endMs: word.endMs });
+		}
+		return ranges;
+	}, [alignedWords]);
 	// Loading/progress/header updates must not invalidate every scripture word.
 	// Keep the original word elements and highlight state while sharing only
 	// changes that text controls actually consume.
 	const textState = useMemo<RecitationTextState>(
 		() => ({
 			enabled: textEnabled,
-			words: controlWords,
-			activeWord,
-			play: (start, end) => void controlPlay(start, end),
+			wordByKey,
+			rangesByPasuk,
+			subscribeActive,
+			isActive,
+			play: (start, end) => void play(start, end),
 		}),
-		[textEnabled, controlWords, activeWord, controlPlay],
+		[textEnabled, wordByKey, rangesByPasuk, subscribeActive, isActive, play],
 	);
 	useEffect(() => {
 		if (state !== "playing" || alignedWords.length === 0) return;
@@ -521,25 +562,29 @@ export default function RecitationPlayer({
 				alignedWords,
 				precise.current?.positionMs ?? null,
 			);
-			setActiveWord(word ? `${word.pasuk}:${word.segment}` : null);
+			setActive(word ? `${word.pasuk}:${word.segment}` : null);
 			frame = requestAnimationFrame(update);
 		};
 		update();
 		return () => cancelAnimationFrame(frame);
-	}, [state, alignedWords]);
-	const loading = open && (message === LOADING_MESSAGE || state === "loading");
-	const status =
-		message ||
-		(state === "loading"
-			? LOADING_MESSAGE
-			: state === "playing"
-				? "משמיע…"
-				: state === "paused"
-					? "מושהה"
-					: data && alignedWords.length > 0
-						? "בחרו אות פסוק או מילה להקראה"
-						: "");
-	const controls = perekId > 0 && (
+	}, [state, alignedWords, setActive]);
+	// Memoized so unrelated renders keep the context value (and consumers) stable.
+	const controls = useMemo(() => {
+		const loading =
+			open && (message === LOADING_MESSAGE || state === "loading");
+		const status =
+			message ||
+			(state === "loading"
+				? LOADING_MESSAGE
+				: state === "playing"
+					? "משמיע…"
+					: state === "paused"
+						? "מושהה"
+						: data && alignedWords.length > 0
+							? "בחרו אות פסוק או מילה להקראה"
+							: "");
+		return (
+			perekId > 0 && (
 		<span className={styles.controls}>
 			{open && data && (
 				<button
@@ -599,7 +644,7 @@ export default function RecitationPlayer({
 				onClick={() => setOpen((value) => !value)}
 			>
 				<ListenIcon />
-				{loading && (
+					{loading && (
 					<svg
 						className={styles.progress}
 						viewBox="0 0 36 36"
@@ -636,15 +681,29 @@ export default function RecitationPlayer({
 				</span>
 			)}
 		</span>
+			)
+		);
+	}, [
+		perekId,
+		open,
+		data,
+		state,
+		message,
+		downloadProgress,
+		hasRecording,
+		alignedWords,
+		togglePlayback,
+	]);
+	const value = useMemo(
+		() => ({
+			...textState,
+			controls,
+			playChapter: open && data ? () => void togglePlayback() : null,
+		}),
+		[textState, controls, open, data, togglePlayback],
 	);
 	return (
-		<RecitationContext.Provider
-			value={{
-				...textState,
-				controls,
-				playChapter: open && data ? () => void togglePlayback() : null,
-			}}
-		>
+		<RecitationContext.Provider value={value}>
 			<RecitationTextContext.Provider value={textState}>
 				<RecitationEnabledContext.Provider value={textEnabled}>
 					{children}
