@@ -114,6 +114,11 @@ import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
 
+// Memoized so a per-navigation rebuild of panelPages re-renders only the
+// panel whose props actually changed (isActive / initialSlug), not every
+// mounted panel in the book.
+const MemoSeferPanel = React.memo(SeferPanel);
+
 // A page element is cheap to create. Its verse tree is built only when the
 // FlipBook mounts that page inside its buffer, including pages revealed later.
 const EMPTY_ENTITY_REF_LOOKUP = buildEntityRefLookup([]);
@@ -631,7 +636,7 @@ const Sefer = (props: {
 				const blankKey = `blank-${perekKeyBase}`;
 				return (
 					<React.Fragment key={blankKey}>
-						<SeferPanel
+						<MemoSeferPanel
 							isActive={
 								isVisible &&
 								pagePerekId != null &&
