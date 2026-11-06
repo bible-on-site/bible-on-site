@@ -1,0 +1,22 @@
+{
+  "issue": 3145,
+  "classification": "Diagnostic delivery repair; not a calendar or website latency repair",
+  "original": {
+    "run": 42237757836,
+    "job": 127964050486,
+    "finding": "Original calendar lookup lost its session; LLDB launch/stack collection and screenshot capture were terminated without retained native thread evidence. All original diagnostics remain preserved."
+  },
+  "question": "Can the operating system sampler retain the original pinned process's native thread report under the existing 10-second command and 15-second handoff limits when debugger startup is unavailable?",
+  "method": {
+    "healthyPath": "Unchanged: passive device log identity and existing frame observation only; no native sampler or process inspection before an actual failed scenario.",
+    "failedPath": "Keep the existing kernel ownership check and independent screenshot capture. Collect a one-second native sample of that same PID, validating its reported PID, executable path and native call graph. Retain raw output and errors.",
+    "budgets": "Ownership 5000 ms; screenshot 5000 ms; native stack collector 10000 ms; common original handoff deadline at most 15000 ms. No deadline, retry, sleep, polling, workload or watchdog increase.",
+    "controls": "Recorded debugger-start failure regression; wrong PID/path and empty report rejection; original ownership/deadline/handoff regressions; a real disposable native process control on macOS, with no CoreSimulator RPC or app launch. Its intentionally unavailable screenshot must still fail the diagnostic result."
+  },
+  "hostedAllocations": 1,
+  "allocation": "One automatic normal CI workflow on the pushed diagnostic head. Inspect every actual macOS control result and every original mobile outcome; preserve complete reports, archives and logs before any further push.",
+  "stop": "Stop after that complete workflow, whether it passes or fails. No unchanged manual rerun or merging solely to create another measurement. A healthy control or non-reproducing calendar run does not explain or erase the original stall.",
+  "acceptanceCredit": 0,
+  "calendarRootCauseEstablished": false,
+  "unchanged": "Application source and appearance, accessible content, interaction deadlines, mobile recovery policy, all reader scenarios/controls/legacy guard, and seven separate panel quarantines. No Store or AWS mutations."
+}

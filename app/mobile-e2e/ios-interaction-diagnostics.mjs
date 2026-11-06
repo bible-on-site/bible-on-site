@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync, fstatSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readFileSync, readSync, fstatSync, writeFileSync } from 'node:fs';
 import { posix, resolve } from 'node:path';
 import { iosAppLogPids } from './ios-processes.mjs';
 import { ownedIosTestAppProcesses } from './ios-app-cleanup.mjs';
@@ -21,6 +21,18 @@ function errorDetails(error) {
     signal: error.signal, stdout: error.stdout, stderr: error.stderr };
 }
 
+function validateNativeSample(report, pid, executable) {
+  const processId = report.match(/^Process:\s+[^\r\n]*\[(\d+)\]\s*$/m)?.[1];
+  const processPath = report.match(/^Path:[ \t]+([^\r\n]+)$/m)?.[1]?.trim();
+  const graphStart = report.indexOf('\nCall graph:');
+  const imagesStart = report.indexOf('\nBinary Images:', graphStart);
+  const graph = graphStart >= 0 && imagesStart > graphStart ? report.slice(graphStart, imagesStart) : '';
+  if (Number(processId) !== pid || processPath !== executable ||
+      !/^\s+\d+\s+Thread_\d+/m.test(graph) || !/\[0x[0-9a-f]+\]/i.test(graph)) {
+    throw new Error('Native sample did not retain the pinned process identity and a native thread call graph.');
+  }
+}
+
 export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execute, inspectorPath, devicesRoot,
   now = Date.now, signal: handoffSignal }) {
   const remaining = Math.min(15000, Date.parse(deadlineUtc) - now());
@@ -40,20 +52,24 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
       { timeout: 5000, signal, windowsHide: true });
     if (listing.stderr?.trim()) throw new Error(`App process inspection failed: ${listing.stderr.trim()}`);
     writeFileSync(`${prefix}-processes.txt`, listing.stdout);
-    const observedPids = ownedIosTestAppProcesses(listing.stdout, udid, devicesRoot)
-      .filter(record => !record.state.startsWith('Z')).map(record => record.pid);
+    const ownedProcesses = ownedIosTestAppProcesses(listing.stdout, udid, devicesRoot)
+      .filter(record => !record.state.startsWith('Z'));
+    const observedPids = ownedProcesses.map(record => record.pid);
     if (!observedPids.includes(pid)) {
       return { status: 'exited', pid, observedPids,
         reason: 'Pinned process is no longer this device\'s running app; no replacement sampled.' };
     }
     writeFileSync(`${prefix}-process-${pid}.txt`, listing.stdout);
+    const stackPath = `${prefix}-stack-${pid}.txt`;
+    if (existsSync(stackPath)) throw new Error('Refuse to overwrite an earlier native sample.');
     let frameError;
     signal.throwIfAborted();
-    // Existing 10s debugger cap, within the same 15s overall failure budget.
+    // Keep the existing 10s stack cap and 15s overall failure budget. The OS
+    // sampler avoids starting/attaching a debugger when LLDB cannot initialize.
     // This branch runs only after the test has actually failed and while its
     // request/ack handoff prevents the following scenario from relaunching.
     // Capture the frame and stack independently: a stuck screenshot must not
-    // consume the debugger's budget. Both finish before acknowledging failure.
+    // consume the stack collector's budget. Both finish before acknowledging failure.
     const [frame, stack] = await Promise.allSettled([
       (async () => {
         try {
@@ -65,12 +81,14 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
         }
       })(),
       (async () => {
-        const captured = await execute('sudo', ['-n', 'xcrun', 'lldb', '--no-lldbinit', '--batch',
-          '--one-line-before-file', 'settings set target.preload-symbols false',
-          '--one-line-before-file', 'settings set target.detach-on-error true',
-          '--attach-pid', String(pid), '--one-line', 'thread backtrace -c 40 all',
-          '--one-line', 'process detach'], { timeout: 10000, signal });
-        writeFileSync(`${prefix}-stack-${pid}.txt`, captured.stdout + captured.stderr);
+        writeFileSync(`${prefix}-sampler.json`, JSON.stringify({ tool: '/usr/bin/sample', pid,
+          executable: ownedProcesses.find(record => record.pid === pid).executable,
+          durationSeconds: 1, intervalMilliseconds: 1, commandLimitMs: 10000, deadlineUtc }, null, 2), { flag: 'wx' });
+        const captured = await execute('sudo', ['-n', '/usr/bin/sample', String(pid), '1', '1',
+          '-file', stackPath], { timeout: 10000, signal });
+        writeFileSync(`${prefix}-sampler-output.txt`, captured.stdout + captured.stderr, { flag: 'wx' });
+        validateNativeSample(readFileSync(stackPath, 'utf8'), pid,
+          ownedProcesses.find(record => record.pid === pid).executable);
       })(),
     ]);
     if (stack.status === 'rejected') throw stack.reason;
