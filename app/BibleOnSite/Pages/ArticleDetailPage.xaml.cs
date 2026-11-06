@@ -171,15 +171,16 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
     }
 
     /// <summary>
-    /// Article HTML links perakim and articles with site-relative hrefs such as
-    /// <c>/929/125/337</c>; those navigate natively (#1227).
+    /// Article HTML links perakim, pesukim, articles and Tanahpedia entries
+    /// with site-relative hrefs such as <c>/929/125/337</c>; those navigate
+    /// natively (#1227).
     /// </summary>
     private async void OnArticleLinkTapped(object? sender, LinkTappedEventArgs e)
     {
         e.Handled = true;
         try
         {
-            await AppLinkHelper.FollowContentLinkAsync(e.Url, uri => Launcher.OpenAsync(uri));
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
         catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
