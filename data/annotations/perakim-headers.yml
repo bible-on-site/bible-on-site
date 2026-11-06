@@ -1853,3 +1853,28 @@
   perek: 13
   header: משא בבל
   qualified: false
+- id: 348
+  sefer: ישעיה
+  perek: 14
+  header: נבואת נחמה על הגאולה, משא על אחרית בבל, שבועת ה' על קיום דבריו, משא פלשתים
+  qualified: false
+- id: 349
+  sefer: ישעיה
+  perek: 15
+  header: משא מואב
+  qualified: false
+- id: 350
+  sefer: ישעיה
+  perek: 16
+  header: נבואת פורענות למואב כעונש על יחסם הרע ליהודה המושפלת
+  qualified: false
+- id: 351
+  sefer: ישעיה
+  perek: 17
+  header: נבואת פורענות לארם ולישראל על עוון ע"ז נבואה על והצלת יהודה (מידי סנחריב)
+  qualified: false
+- id: 352
+  sefer: ישעיה
+  perek: 18
+  header: נבואה על תגובת הגוים לנס ההצלה של יהודה מסנחריב או עם ישראל בעת קיבוץ הגלויות
+  qualified: false
