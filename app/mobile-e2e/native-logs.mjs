@@ -70,3 +70,20 @@ export function startNativeLog(command, args, destination) {
     },
   };
 }
+
+// Keep automation-side events on the same explicit simulator, in their own
+// artifact. Mixing them into the app-only stream could evict the app's last
+// identity from the failure collector's bounded tail.
+export function iosAutomationLogArguments(udid) {
+  return ["simctl", "spawn", udid, "log", "stream", "--style", "compact", "--level", "info",
+    "--predicate", 'process BEGINSWITH "WebDriverAgent" OR process == "testmanagerd"'];
+}
+
+// Stop every owned reader even when one failed. Each retains the existing
+// five-second stop cap; concurrent joins do not add another shutdown allowance.
+export async function stopNativeLogStreams(streams) {
+  const results = await Promise.allSettled(streams.filter(Boolean)
+    .map(stream => Promise.resolve().then(() => stream.stop())));
+  const errors = results.filter(result => result.status === "rejected").map(result => result.reason);
+  if (errors.length) throw new AggregateError(errors, "Native log streams failed");
+}

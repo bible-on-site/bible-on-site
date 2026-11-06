@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
+import * as nativeLogs from "./native-logs.mjs";
 
 function withArtifact(run) {
   const directory = mkdtempSync(join(tmpdir(), "mobile-native-log-test-"));
@@ -108,4 +109,75 @@ test("a failed observation retains diagnostics without failing a successfully co
       message: "simulator probe failed", code: 143, killed: true,
     });
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+for (const firstExit of [null, 7]) {
+  test(`joins both original and automation streams when the first stream ${firstExit === null ? "is alive" : "failed"}`, async () => {
+    const directory = mkdtempSync(join(tmpdir(), "mobile-automation-stream-test-"));
+    const appFile = join(directory, "app.log"), automationFile = join(directory, "automation.log");
+    const source = (label, exit) => `process.stdout.write('${label} live log'); ${exit === null
+      ? "setInterval(() => {}, 1000)" : `process.exit(${exit})`}`;
+    const app = startNativeLog(process.execPath, ["-e", source("app", firstExit)], appFile);
+    const automation = startNativeLog(process.execPath, ["-e", source("automation", null)], automationFile);
+    let automationExited = false;
+    let shutdownAttempted = false;
+    void automation.completion.then(() => { automationExited = true; });
+    // The prior runner closes only its original stream. Keep that real behavior
+    // as the red control until the joint stop operation exists.
+    const stop = nativeLogs.stopNativeLogStreams ?? (async ([first]) => first.stop());
+    try {
+      await Promise.all([waitForLog(appFile), waitForLog(automationFile)]);
+      if (firstExit !== null) await app.completion;
+      let failure;
+      shutdownAttempted = true;
+      try { await stop([app, automation]); } catch (error) { failure = error; }
+      assert.equal(automationExited, true, "the owned automation process must exit before shutdown finishes");
+      assert.equal(readFileSync(appFile, "utf8"), "app live log");
+      assert.equal(readFileSync(automationFile, "utf8"), "automation live log");
+      if (firstExit === null) assert.equal(failure, undefined);
+      else {
+        assert.ok(failure instanceof AggregateError);
+        assert.ok(failure.errors.some(error => error.message.includes("code 7")));
+      }
+    } finally {
+      await Promise.allSettled([
+        ...(!shutdownAttempted ? [app.stop()] : []),
+        ...(!automationExited ? [automation.stop()] : []),
+      ]);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+test("automation logging stays on the explicit simulator and does not replace the app stream", () => {
+  const argumentsFor = nativeLogs.iosAutomationLogArguments ?? ((udid) => [
+    "simctl", "spawn", udid, "log", "stream", "--style", "compact", "--level", "info",
+    "--predicate", 'process == "BibleOnSite"',
+  ]);
+  for (const udid of ["24E299B4-C77B-4426-AC2B-71243825F07C", "BA92BF1D-FB36-472C-8917-683A2BF212EE"]) {
+    const args = argumentsFor(udid);
+    assert.deepEqual(args.slice(0, 9), ["simctl", "spawn", udid, "log", "stream", "--style", "compact", "--level", "info"]);
+    assert.equal(args[9], "--predicate");
+    assert.equal(args.length, 11);
+    assert.match(args[10], /process BEGINSWITH "WebDriverAgent"/);
+    assert.match(args[10], /process == "testmanagerd"/);
+    assert.ok(!args[10].includes("BibleOnSite"), "keep the app-only identity stream separate");
+  }
+});
+
+test("an automation-start failure still closes the original stream", async () => {
+  await withStreamArtifact(async (artifact) => {
+    const stream = startNativeLog(process.execPath,
+      ["-e", "process.stdout.write('live log'); setInterval(() => {}, 1000)"], artifact);
+    let exited = false;
+    void stream.completion.then(() => { exited = true; });
+    let stopped = false;
+    try {
+      await waitForLog(artifact);
+      await nativeLogs.stopNativeLogStreams([stream, undefined]);
+      stopped = true;
+      assert.equal(exited, true);
+      assert.equal(readFileSync(artifact, "utf8"), "live log");
+    } finally { if (!stopped) await stream.stop(); }
+  });
 });
