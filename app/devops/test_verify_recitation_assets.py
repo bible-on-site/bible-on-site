@@ -28,22 +28,87 @@ class ReleaseArtifactTests(unittest.TestCase):
                    "perekIds": [1], "sha256": hashlib.sha256(audio).hexdigest()}]}
         return audio, catalog
 
-    def test_windows_requires_root_catalog_and_exact_packaged_archives(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            audio, metadata = self.book()
-            catalog = root / "catalog.json"
-            catalog.write_text(json.dumps(metadata))
-            for content in [audio, b"corrupt"]:
-                package = root / "app.msix"
-                with zipfile.ZipFile(package, "w") as archive:
-                    archive.writestr("recitation-catalog.json", catalog.read_bytes())
-                    archive.writestr("recitation_1.zip", content)
-                if content == audio:
-                    verify_module.verify(package, catalog, "Windows")
+    @staticmethod
+    def windows_manifest(package_name, main_name, publisher, dependency=True):
+        related = (f'<uap3:MainPackageDependency Name="{main_name}" />' if dependency else "")
+        return f"""<?xml version="1.0" encoding="utf-8"?>
+            <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+                     xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3">
+              <Identity Name="{package_name}" Publisher="{publisher}" Version="5.1.8.0" />
+              <Dependencies>{related}</Dependencies>
+            </Package>"""
+
+    def _write_windows_fixture(self, root, audio, catalog_path, catalog, problems=()):
+        catalog_path.write_text(json.dumps(catalog))
+        main_name, publisher = "54181DoradSoft.929-", "CN=DoradSoft"
+        package = root / "app.msix"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("recitation-catalog.json", catalog_path.read_bytes())
+            archive.writestr("AppxManifest.xml", self.windows_manifest(
+                main_name, main_name, publisher, dependency=False))
+            if "bundled-audio" in problems:
+                archive.writestr("recitation_1.zip", audio)
+            if "bundled-notes" in problems:
+                archive.writestr("sefaria-dump-5784-sivan-4.perushim_notes.sqlite", b"notes")
+        pack_dir = root / "ExtensionPacks" / "recitation_1"
+        pack_dir.mkdir(parents=True)
+        archive_dir = root / "extension-packs"
+        archive_dir.mkdir()
+        payload_dir = root / "payloads"
+        payload_dir.mkdir()
+        package_name = ("Other.Name.recitation-1" if "wrong-package-name" in problems
+                        else "54181DoradSoft.929-.recitation-1")
+        manifest = self.windows_manifest(
+            package_name, main_name,
+            "CN=Other" if "publisher-mismatch" in problems else publisher,
+            dependency="no-main-dependency" not in problems)
+        if "no-msix" not in problems:
+            with zipfile.ZipFile(archive_dir / "recitation_1.msix", "w") as archive:
+                archive.writestr("AppxManifest.xml", manifest)
+                archive.writestr("recitation_1.zip",
+                                 b"corrupt" if "corrupt-payload" in problems else audio)
+        if "no-payload" not in problems:
+            (payload_dir / "recitation_1.zip").write_bytes(
+                b"corrupt" if "staged-mismatch" in problems else audio)
+        if any(p.startswith("perushim") for p in problems):
+            notes_dir = root / "ExtensionPacks" / "perushim_notes"
+            notes_dir.mkdir()
+            notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+            index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
+            (notes_dir / notes).write_bytes(b"notes bytes")
+            (notes_dir / index).write_bytes(b"index bytes")
+            with zipfile.ZipFile(archive_dir / "perushim_notes.msix", "w") as archive:
+                archive.writestr("AppxManifest.xml", self.windows_manifest(
+                    "54181DoradSoft.929-.perushim-notes", main_name, publisher))
+                archive.writestr(notes, b"notes bytes")
+                archive.writestr(index, b"corrupt" if "perushim-mismatch" in problems else b"index bytes")
+        return package, pack_dir.parent, archive_dir, payload_dir
+
+    def test_windows_requires_a_clean_base_msix_and_matching_optional_packages(self):
+        for problem in [None, "bundled-audio", "bundled-notes", "no-msix", "corrupt-payload",
+                        "wrong-package-name", "no-main-dependency", "publisher-mismatch",
+                        "no-payload", "staged-mismatch", "perushim", "perushim-mismatch"]:
+            with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                audio, catalog = self.book()
+                package, packs, archives, payloads = self._write_windows_fixture(
+                    root, audio, root / "catalog.json", catalog, {problem} - {None})
+                if problem in (None, "perushim"):
+                    verify_module.verify(package, root / "catalog.json", "Windows",
+                                         packs, archives, payloads)
                 else:
                     with self.assertRaises(ValueError):
-                        verify_module.verify(package, catalog, "Windows")
+                        verify_module.verify(package, root / "catalog.json", "Windows",
+                                             packs, archives, payloads)
+
+    def test_windows_requires_the_extension_pack_arguments(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, catalog = self.book()
+            package, _, _, _ = self._write_windows_fixture(
+                root, audio, root / "catalog.json", catalog)
+            with self.assertRaisesRegex(ValueError, "asset-pack-dir"):
+                verify_module.verify(package, root / "catalog.json", "Windows")
 
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
