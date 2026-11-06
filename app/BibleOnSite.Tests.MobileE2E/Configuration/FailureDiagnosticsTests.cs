@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using BibleOnSite.Tests.MobileE2E.Platforms;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
 
@@ -174,6 +175,78 @@ public sealed class FailureDiagnosticsTests : IDisposable
     }
 
     [Fact]
+    public async Task StartupFailureWaitsForCaptureBeforeSavingDiagnosticsAndRethrowsOriginal()
+    {
+        var artifacts = Path.Join(_directory, "startup-artifacts");
+        var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var supervisor = new Supervisor(_directory, async (id, stream, cancellation) =>
+        {
+            observed.TrySetResult(Path.Join(_directory, $"{id}.request.json"));
+            await release.Task.WaitAsync(cancellation);
+            Acknowledge(Path.Join(_directory, $"{id}.request.json"));
+            await ReplyAsync(id, stream, cancellation);
+        });
+        Environment.SetEnvironmentVariable(FailureDiagnostics.DirectoryVariable, _directory);
+        Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, supervisor.Port);
+        var original = new WebDriverTimeoutException("original startup condition expired");
+        var device = new StartupDeviceTest(new ListOutput(_log), new FakeSession(artifacts), original);
+        var continuation = StartClient(() => Assert.Throws<WebDriverTimeoutException>(() => device.Start().GetAwaiter().GetResult()));
+
+        Assert.Same(observed.Task, await Task.WhenAny(observed.Task, continuation).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.False(continuation.IsCompleted);
+        Assert.Equal(1, device.Connects);
+        Assert.False(Directory.Exists(artifacts));
+        using var request = JsonDocument.Parse(File.ReadAllText(await observed.Task));
+        Assert.EndsWith(".SessionStartup", request.RootElement.GetProperty("test").GetString());
+        Assert.Equal(TimeSpan.FromSeconds(15), request.RootElement.GetProperty("deadlineUtc").GetDateTimeOffset()
+            - request.RootElement.GetProperty("failedAtUtc").GetDateTimeOffset());
+        release.SetResult();
+        Assert.Same(original, await continuation.WaitAsync(TimeSpan.FromSeconds(5)));
+        await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Single(Directory.GetFiles(artifacts, "*-failed-diagnostics-error.txt"));
+    }
+
+    [Fact]
+    public async Task RecoverableStartupDeathWaitsForCaptureBeforeTheExistingSingleRebuild()
+    {
+        var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var supervisor = new Supervisor(_directory, async (id, stream, cancellation) =>
+        {
+            observed.SetResult();
+            await release.Task.WaitAsync(cancellation);
+            Acknowledge(Path.Join(_directory, $"{id}.request.json"));
+            await ReplyAsync(id, stream, cancellation);
+        });
+        Environment.SetEnvironmentVariable(FailureDiagnostics.DirectoryVariable, _directory);
+        Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, supervisor.Port);
+        var device = new StartupDeviceTest(new ListOutput(_log), new FakeSession(Path.Join(_directory, "artifacts")),
+            new WebDriverException("A session is either terminated or not started"), recover: true);
+        var continuation = StartClient(() => device.Start().GetAwaiter().GetResult());
+
+        Assert.Same(observed.Task, await Task.WhenAny(observed.Task, continuation).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, device.Connects);
+        release.SetResult();
+        await continuation.WaitAsync(TimeSpan.FromSeconds(5));
+        await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, device.Connects);
+    }
+
+    [Fact]
+    public void StartupArtifactWriteFailureCannotReplaceTheOriginalFailure()
+    {
+        var artifacts = Path.Join(_directory, "occupied-startup-artifacts");
+        File.WriteAllText(artifacts, "existing evidence");
+        var original = new WebDriverTimeoutException("original startup condition expired");
+        var device = new StartupDeviceTest(new ListOutput(_log), new FakeSession(artifacts), original);
+
+        Assert.Same(original, Assert.Throws<WebDriverTimeoutException>(() => device.Start().GetAwaiter().GetResult()));
+        Assert.Equal("existing evidence", File.ReadAllText(artifacts));
+        Assert.Contains(_log, message => message.Contains("Failure diagnostics failed"));
+    }
+
+    [Fact]
     public void OutputErrorsDoNotEscapeTheDiagnosticBoundary()
     {
         FailureDiagnostics.WaitForCapture(Path.Join(_directory, "absent"), "test", null,
@@ -332,5 +405,20 @@ public sealed class FailureDiagnosticsTests : IDisposable
         : MobileDeviceTest(output, session)
     {
         public void Execute(Action body) => Scenario(body);
+    }
+
+    private sealed class StartupDeviceTest(ITestOutputHelper output, IMobileDeviceSession session,
+        Exception failure, bool recover = false) : MobileDeviceTest(output, session)
+    {
+        public int Connects { get; private set; }
+        protected override void Connect()
+        {
+            Connects++;
+            if (!recover || Connects == 1)
+            {
+                throw failure;
+            }
+        }
+        public ValueTask Start() => InitializeAsync();
     }
 }
