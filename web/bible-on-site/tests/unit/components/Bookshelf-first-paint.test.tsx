@@ -73,7 +73,11 @@ it("keeps responding to viewport changes after mounting", () => {
 it("hydrates the deterministic server shelf before adopting the viewport", async () => {
 	setWidth(600);
 	const container = document.createElement("div");
-	container.innerHTML = renderToString(<Bookshelf />);
+	const serverDocument = new DOMParser().parseFromString(
+		renderToString(<Bookshelf />),
+		"text/html",
+	);
+	container.replaceChildren(...serverDocument.body.childNodes);
 	document.body.append(container);
 	expect(layout(container)).toHaveLength(1);
 	const serverRoot = container.firstChild;
