@@ -6,6 +6,7 @@ import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
 import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
 import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
 import {
+	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
 	saveLighthouseReport,
 	writePerformanceIndex,
@@ -556,16 +557,22 @@ test.describe("Lighthouse", () => {
 
 						// Use 'cls_ratio' for CLS (unitless), 'time_ms' for timing metrics
 						const measure = webVitalsMeasure(metric.name);
-						reportBenchmark({
-							name: lighthouseBenchmarkName(
-								path,
-								strategy,
-								`metric: ${metric.name}`,
+						reportBenchmark(
+							lighthouseBenchmarkEntry(
+								{
+									name: lighthouseBenchmarkName(
+										path,
+										strategy,
+										`metric: ${metric.name}`,
+									),
+									measure,
+									value,
+									upperValue: metric.threshold,
+								},
+								metric.id,
+								metricThresholds.tbt,
 							),
-							measure,
-							value: value,
-							upperValue: metric.threshold,
-						});
+						);
 
 						expect(
 							value,
@@ -617,15 +624,21 @@ test.describe("Lighthouse", () => {
 								: getLighthouseMeasure(audit.numericUnit);
 						const benchmarkValue =
 							audit.numericValue !== undefined ? audit.numericValue : score;
-						reportBenchmark({
-							name: lighthouseBenchmarkName(
-								path,
-								strategy,
-								`audit: ${auditId}`,
+						reportBenchmark(
+							lighthouseBenchmarkEntry(
+								{
+									name: lighthouseBenchmarkName(
+										path,
+										strategy,
+										`audit: ${auditId}`,
+									),
+									measure,
+									value: benchmarkValue,
+								},
+								auditId,
+								metricThresholds.tbt,
 							),
-							measure,
-							value: benchmarkValue,
-						});
+						);
 
 						// Use test.step for per-audit visibility in the report
 						await test.step(`audit: ${auditId}`, async () => {
