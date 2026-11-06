@@ -56,7 +56,8 @@
                                FontAttributes="Bold" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" AutomationId="FocusedPerushName"/>
                         <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
                                            FontSize="{DynamicResource PerushContentFontSize}"
-                                           TextAlignment="Justify" TextDirection="Rtl" LineHeight="1.4"/>
+                                           TextAlignment="Justify" TextDirection="Rtl" LineHeight="1.4"
+                                           LinkTapped="OnContentLinkTapped"/>
                     </VerticalStackLayout>
                 </VerticalStackLayout>
             </DataTemplate>
