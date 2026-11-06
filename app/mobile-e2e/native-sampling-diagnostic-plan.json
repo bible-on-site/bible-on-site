@@ -1,0 +1,29 @@
+{
+  "issue": 3145,
+  "classification": "Diagnostic delivery repair; not a calendar or website latency repair",
+  "original": {
+    "run": 42237757836,
+    "job": 127964050486,
+    "finding": "Original calendar lookup lost its session; LLDB launch/stack collection and screenshot capture were terminated without retained native thread evidence. All original diagnostics remain preserved."
+  },
+  "question": "Can the operating system sampler retain the original pinned process's native thread report under the existing 10-second command and 15-second handoff limits when debugger startup is unavailable?",
+  "method": {
+    "healthyPath": "Unchanged: passive device log identity and existing frame observation only; no native sampler or process inspection before an actual failed scenario.",
+    "failedPath": "Keep independent screenshot capture. Inspect only the pinned PID through kernel metadata before and after the one-second native sample. Both checks must retain the same full owned executable and kernel launch timestamp. Validate the report's exact PID and native call graph. An exact executable path or a single whole-component privacy mask consistent with that full kernel path is accepted; unbounded, partial-component, multiple or mismatching masks fail. Preserve raw output, both kernel rows, identity proof and errors.",
+    "budgets": "Each kernel inspection 5000 ms; screenshot 5000 ms; native stack collector 10000 ms; all operations share the original handoff deadline at most 15000 ms. The second inspection is one bounded attribution check, not polling or a retry. No deadline, retry, sleep, polling, workload or watchdog increase.",
+    "controls": "Recorded debugger-start failure regression; exact raw macOS 27 privacy-redacted report replay; reused PID/same path/different launch rejection; exited, other-device and missing-launch rejection; wrong PID/path and empty report rejection; original ownership/deadline/handoff regressions; a real disposable native process control on macOS, with no CoreSimulator RPC or app launch. Its intentionally unavailable screenshot must still fail the diagnostic result."
+  },
+  "completedAllocation": {
+    "head": "26de8b4d08a0f69637e1e4adab2586e183a10d24",
+    "run": 42256482876,
+    "conclusion": "failure",
+    "finding": "Both actual macOS native controls retained real native thread samples within the cap. The validator rejected the operating system's privacy-redacted temporary executable path, and an unsafe frame-error assertion hid that diagnostic result. Neither iOS scenario suite started. This allocation is exhausted, not a passing collector or calendar acceptance.",
+    "preservation": "All 13 complete diagnostic/report/coverage archives and nine job logs retained with archive and 234 decoded-entry SHA256 hashes. Two large app binaries are metadata/digest-only. Both original raw native reports and errors are retained."
+  },
+  "nextHeadHostedAllocations": 1,
+  "allocation": "One automatic normal CI workflow on the concrete corrective head, after local red/green replay of the actual macOS report and process-instance rejection tests. No additional unchanged allocation on the exhausted head. Inspect every actual macOS control result and original mobile outcome; preserve complete reports, archives and logs before any further push.",
+  "stop": "Stop after the corrective head's one complete workflow, whether it passes or fails. No unchanged manual rerun or merging solely to create another measurement. A healthy control or non-reproducing calendar run does not explain or erase the original stall. This correction only addresses the observed report-attribution defect; a genuine stalled app may still defeat collection.",
+  "acceptanceCredit": 0,
+  "calendarRootCauseEstablished": false,
+  "unchanged": "Application source and appearance, accessible content, interaction deadlines, mobile recovery policy, all reader scenarios/controls/legacy guard, and seven separate panel quarantines. No Store or AWS mutations."
+}
