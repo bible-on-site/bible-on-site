@@ -280,68 +280,63 @@ pub async fn get_category_counts(
         .map(|key| ((*key).to_string(), 0))
         .collect();
 
-    let entity_rows = CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        r#"SELECT e.entity_type AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_entry_entity ee
-           JOIN tanahpedia_entity e ON e.id = ee.entity_id
-           GROUP BY e.entity_type"#,
-        [],
-    ))
-    .all(db.get_connection())
-    .await
-    .map_err(db_error)?;
-
-    let role_rows = CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        r#"SELECT 'PROPHET' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_person_role_prophet pr
-           JOIN tanahpedia_person p ON p.id = pr.person_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
-           UNION ALL
-           SELECT 'KING' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_person_role_king pk
-           JOIN tanahpedia_person p ON p.id = pk.person_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id"#,
-        [],
-    ))
-    .all(db.get_connection())
-    .await
-    .map_err(db_error)?;
-
-    let animal_rows = CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        r#"SELECT ak.kind AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_animal_kind ak
-           JOIN tanahpedia_animal a ON a.id = ak.animal_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
-           GROUP BY ak.kind
-           UNION ALL
-           SELECT ap.purity AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_animal_purity ap
-           JOIN tanahpedia_animal a ON a.id = ap.animal_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
-           GROUP BY ap.purity"#,
-        [],
-    ))
-    .all(db.get_connection())
-    .await
+    // The four aggregates are independent; run them concurrently so the
+    // request waits for the slowest scan instead of the sum of all four.
+    let (entity_rows, role_rows, animal_rows, place_rows) = tokio::try_join!(
+        CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"SELECT e.entity_type AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_entry_entity ee
+               JOIN tanahpedia_entity e ON e.id = ee.entity_id
+               GROUP BY e.entity_type"#,
+            [],
+        ))
+        .all(db.get_connection()),
+        CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"SELECT 'PROPHET' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_person_role_prophet pr
+               JOIN tanahpedia_person p ON p.id = pr.person_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
+               UNION ALL
+               SELECT 'KING' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_person_role_king pk
+               JOIN tanahpedia_person p ON p.id = pk.person_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id"#,
+            [],
+        ))
+        .all(db.get_connection()),
+        CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"SELECT ak.kind AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_animal_kind ak
+               JOIN tanahpedia_animal a ON a.id = ak.animal_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
+               GROUP BY ak.kind
+               UNION ALL
+               SELECT ap.purity AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_animal_purity ap
+               JOIN tanahpedia_animal a ON a.id = ap.animal_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
+               GROUP BY ap.purity"#,
+            [],
+        ))
+        .all(db.get_connection()),
+        // Places without a linked entry still count as content on the website
+        // (demo / partially populated state).
+        PlaceCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "SELECT COUNT(*) AS c FROM tanahpedia_place",
+            [],
+        ))
+        .all(db.get_connection()),
+    )
     .map_err(db_error)?;
 
     for row in entity_rows.into_iter().chain(role_rows).chain(animal_rows) {
         counts.insert(row.category, row.cnt);
     }
 
-    // Places without a linked entry still count as content on the website
-    // (demo / partially populated state).
-    let place_rows = PlaceCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        "SELECT COUNT(*) AS c FROM tanahpedia_place",
-        [],
-    ))
-    .all(db.get_connection())
-    .await
-    .map_err(db_error)?;
     let place_total = place_rows.first().map(|row| row.c).unwrap_or(0);
     if counts.get("PLACE").copied().unwrap_or(0) == 0 && place_total > 0 {
         counts.insert("PLACE".to_string(), place_total);
