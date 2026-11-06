@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import catalog from "@/data/db/client-catalog.generated.json";
 import { getTodaysPerekId } from "@/data/perek-calendar";
 import { isTreiAsar } from "@/data/sefer-colors";
@@ -65,9 +65,7 @@ function generateSpectrumColor(
 }
 
 function lightenColor(hslColor: string, amount: number): string {
-	const match = hslColor.match(
-		/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/,
-	);
+	const match = hslColor.match(/hsl\(([^,]+),\s*([^,]+)%,\s*([^)]+)%\)/);
 	if (!match) return hslColor;
 	const [, h, s, l] = match;
 	const newL = Math.min(100, Number.parseFloat(l) + amount);
@@ -569,18 +567,21 @@ function SingleShelf({
 	);
 }
 
-// Window width; starts at a fixed default so SSR and the first client render match
+const subscribeToWindowWidth = (onChange: () => void) => {
+	window.addEventListener("resize", onChange);
+	return () => window.removeEventListener("resize", onChange);
+};
+const getWindowWidth = () => window.innerWidth;
+const getServerWindowWidth = () => 1200;
+
+// Hydration keeps the deterministic server width. Client-only mounts use the
+// real viewport immediately, avoiding a second full shelf layout after paint.
 function useWindowWidth(): number {
-	const [width, setWidth] = useState(1200);
-
-	useEffect(() => {
-		const handleResize = () => setWidth(window.innerWidth);
-		handleResize();
-		window.addEventListener("resize", handleResize);
-		return () => window.removeEventListener("resize", handleResize);
-	}, []);
-
-	return width;
+	return useSyncExternalStore(
+		subscribeToWindowWidth,
+		getWindowWidth,
+		getServerWindowWidth,
+	);
 }
 
 // Calculate responsive sqSize based on available width and required shelf width
