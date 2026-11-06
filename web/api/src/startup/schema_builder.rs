@@ -53,6 +53,10 @@ pub fn build_schema(
     database: &Database,
     index: &ArticleSearchIndex,
 ) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+    // Introspection policy: `__schema`/`__type` stay enabled. The schema is
+    // public source in this repository and anonymous POST reads are already
+    // permitted, so disabling it would add no protection; access control
+    // stays on mutations via `ApiAuth`.
     Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
@@ -82,6 +86,9 @@ pub async fn graphql_request(
     schema.execute(gql_req.into_inner().data(auth)).await.into()
 }
 
+/// Development tooling only — `build_app_config` registers this route
+/// exclusively for explicit dev/test profiles; production leaves GET /
+/// unregistered so the root stays a POST-only GraphQL endpoint.
 pub async fn graphql_playground() -> Result<HttpResponse> {
     let source = playground_source(GraphQLPlaygroundConfig::new("/"));
     Ok(HttpResponse::Ok()
