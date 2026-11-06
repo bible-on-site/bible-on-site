@@ -165,7 +165,8 @@
                                                                                               FontSize="{DynamicResource PerushContentFontSize}"
                                                                                               TextAlignment="Justify"
                                                                                               TextDirection="Rtl"
-                                                                                              LineHeight="1.4"/>
+                                                                                              LineHeight="1.4"
+                                                                                              LinkTapped="OnContentLinkTapped"/>
                                                                         </VerticalStackLayout>
                                                                     </VerticalStackLayout>
                                                                 </DataTemplate>

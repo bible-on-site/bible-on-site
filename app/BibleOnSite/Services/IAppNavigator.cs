@@ -126,6 +126,13 @@ public static class AppRoutes
     public static string Parasha => "ParashaPage";
 
     /// <summary>
+    /// A תנכפדיה entry page pushed above the caller — the page resolves
+    /// synonyms and ambiguous names itself.
+    /// </summary>
+    public static string TanahpediaEntry(string uniqueName) =>
+        $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}";
+
+    /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
     /// Preserve search-reader history so Back returns to the chapter being read.
     /// </summary>
