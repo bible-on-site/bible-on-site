@@ -136,6 +136,7 @@ export function summarizeLighthouse(
 	};
 }
 
+/** @returns {ReturnType<typeof summarizeLighthouse> & {rawReport: string, htmlReport?: string}} */
 export function saveLighthouseReport(directory, lhr, options, html) {
 	mkdirSync(directory, { recursive: true });
 	const summary = summarizeLighthouse(lhr, options);
@@ -157,6 +158,19 @@ export function saveLighthouseReport(directory, lhr, options, html) {
 		writeFileSync(join(directory, summary.htmlReport), html);
 	}
 	return summary;
+}
+
+/** Persist the original gatherer's data after every measured audit has ended. */
+export function saveLighthouseArtifacts(directory, bufferedArtifacts) {
+	mkdirSync(directory, { recursive: true });
+	for (const { rawReport, artifacts } of bufferedArtifacts) {
+		const filename = rawReport.replace(/\.json$/, ".artifacts.json");
+		writeFileSync(
+			join(directory, filename),
+			JSON.stringify({ rawReport, artifacts }),
+			{ flag: "wx" },
+		);
+	}
 }
 
 function median(values) {

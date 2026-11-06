@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,10 +10,91 @@ import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
 	performanceMarkdown,
+	saveLighthouseArtifacts,
 	saveLighthouseReport,
 	summarizeLighthouse,
 	writePerformanceIndex,
 } from "./performance-report.mjs";
+
+test("original Lighthouse traces and network records survive a failed audit unchanged", () => {
+	const dir = mkdtempSync(join(tmpdir(), "original-lighthouse-"));
+	try {
+		const rawReport = "_929_686-desktop-1-original.json";
+		const artifacts = {
+			Trace: {
+				traceEvents: [
+					{
+						name: "RunTask",
+						pid: 15,
+						tid: 23,
+						ts: 1234567,
+						dur: 72412,
+						tdur: 35987,
+						args: { data: { scripts: [] } },
+					},
+				],
+			},
+			DevtoolsLog: [
+				{
+					method: "Network.responseReceived",
+					params: {
+						requestId: "r1",
+						timestamp: 123.456,
+						response: { status: 500 },
+					},
+				},
+			],
+			PageLoadError: { code: "FAILED_DOCUMENT_REQUEST" },
+			settings: { throttlingMethod: "simulate" },
+		};
+		const buffered = [{ rawReport, artifacts }];
+		const original = JSON.stringify(buffered);
+		const output = join(dir, "diagnostics");
+		// Adding an audit to the buffer performs no serialization or disk writes.
+		assert.equal(existsSync(output), false);
+		saveLighthouseArtifacts(output, buffered);
+		assert.deepEqual(
+			JSON.parse(
+				readFileSync(
+					join(output, "_929_686-desktop-1-original.artifacts.json"),
+				),
+			),
+			buffered[0],
+		);
+		assert.equal(JSON.stringify(buffered), original);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("Lighthouse artifact files bind each original report and cannot overwrite evidence", () => {
+	const dir = mkdtempSync(join(tmpdir(), "lighthouse-bindings-"));
+	try {
+		const reports = ["home-mobile.json", "home-desktop.json"].map(
+			(rawReport, index) => ({
+				rawReport,
+				artifacts: { Trace: { traceEvents: [{ ts: index }] } },
+			}),
+		);
+		saveLighthouseArtifacts(dir, reports);
+		for (const report of reports) {
+			const file = join(
+				dir,
+				report.rawReport.replace(/\.json$/, ".artifacts.json"),
+			);
+			assert.deepEqual(JSON.parse(readFileSync(file)), report);
+		}
+		assert.throws(() => saveLighthouseArtifacts(dir, reports), {
+			code: "EEXIST",
+		});
+		assert.deepEqual(
+			JSON.parse(readFileSync(join(dir, "home-mobile.artifacts.json"))),
+			reports[0],
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
 
 test("both TBT reporting paths preserve the existing browser blocking budget", () => {
 	// PR #3005: 7ms exceeded a 6.43ms history-derived limit even though the
