@@ -474,6 +474,78 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
+    public async Task YearView_CellsCarryTheSourcesTheTemplateShows()
+    {
+        // #2975: the grouped cell template now binds a visible source line +
+        // חזרה badge to PerekSource/HasVisibleSource/ShowsReviewBadge — the
+        // same canonical assignments the month grid and the PDFs show.
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+
+        var cells = vm.MonthGroups.SelectMany(g => g.Cells).ToList();
+        var study = cells.Single(c => c.DateNumber == 57750329); // כט כסלו - perek 1
+        study.IsReview.Should().BeFalse();
+        study.PerekSource.Should().Be("בראשית א");
+        study.HasVisibleSource.Should().BeTrue();
+        study.ShowsReviewBadge.Should().BeFalse();
+
+        var friday = cells.Single(c => c.DateNumber == 57750404);
+        friday.IsReview.Should().BeTrue();
+        friday.PerekSource.Should().Be("בראשית א-ג");
+        friday.HasVisibleSource.Should().BeTrue();
+        friday.ShowsReviewBadge.Should().BeTrue();
+
+        // The merged Friday block keeps its whole-week range visible too.
+        var merged = vm.MonthGroups
+            .SelectMany(g => g.Weeks)
+            .SelectMany(w => w.Cells)
+            .Single(c => c.DateNumber == 57750404);
+        merged.PerekSource.Should().Be("בראשית א-ג");
+        merged.HasVisibleSource.Should().BeTrue();
+        merged.ShowsReviewBadge.Should().BeTrue();
+
+        // Days before cycle 1 (Kislev's first weeks) stay source-less.
+        var unscheduled = cells.First(c => c.DateNumber == 57750301);
+        unscheduled.PerekSource.Should().BeEmpty();
+        unscheduled.HasVisibleSource.Should().BeFalse();
+        unscheduled.ShowsReviewBadge.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CycleView_DimmedOutOfCycleCellsHideTheirSources()
+    {
+        // #2975: boundary months of the cycle view hold another cycle's days —
+        // they stay dimmed and date-only, like the PDF's unlabeled dimmed cells.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+
+        var cells = vm.MonthGroups.SelectMany(g => g.Cells)
+            .Where(c => !c.IsBlank)
+            .ToList();
+        // In-cycle study days show their source; review days add the badge.
+        var study = cells.First(c => !c.IsDimmed && !c.IsReview && c.PerekId != null);
+        study.HasVisibleSource.Should().BeTrue();
+        study.PerekSource.Should().NotBeEmpty();
+        var review = cells.First(c => !c.IsDimmed && c.IsReview);
+        review.HasVisibleSource.Should().BeTrue();
+        review.ShowsReviewBadge.Should().BeTrue();
+
+        var dimmed = cells.Where(c => c.IsDimmed).ToList();
+        dimmed.Should().NotBeEmpty();
+        // Another cycle's scheduled days still know their real assignment —
+        // it just must not render while the cell is dimmed.
+        dimmed.Should().Contain(c => c.PerekId != null && c.PerekSource.Length > 0);
+        dimmed.Should().OnlyContain(c => !c.HasVisibleSource && !c.ShowsReviewBadge);
+    }
+
+    [Fact]
     public async Task YearView_GroupsEveryMonthOfTheYear()
     {
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);

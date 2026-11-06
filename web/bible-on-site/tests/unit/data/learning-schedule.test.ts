@@ -10,6 +10,7 @@ import {
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getDaySourceLabel,
 	getCycleName,
 	getCycleNumeral,
 	getCycleStartMonth,
@@ -531,6 +532,50 @@ describe("getPerekRangeLabel", () => {
 
 	it("returns an empty label for an empty set", () => {
 		expect(getPerekRangeLabel([])).toBe("");
+	});
+});
+
+describe("getDaySourceLabel", () => {
+	it("returns the chapter source on a study day", () => {
+		// ז אלול תשפ"ה — cycle 4's first day.
+		expect(getDaySourceLabel(day(57851207))).toBe("בראשית א");
+	});
+
+	it("returns the whole studied week's range on a review day", () => {
+		// יב אלול תשפ"ה reviews perakim 1-5 (#2365).
+		expect(getDaySourceLabel(day(57851212))).toBe("בראשית א-ה");
+	});
+
+	it("keeps the cross-sefer spelling of a review range", () => {
+		const review = {
+			...day(57851212),
+			reviewPerekIds: [50, 51],
+		};
+		expect(getDaySourceLabel(review)).toBe("בראשית נ - שמות א");
+	});
+
+	it("preserves two-part sefer names and multi-letter perakim", () => {
+		const shmuel2 = catalog.volumes.find((v) => v.name === "שמואל ב");
+		const divrei = catalog.volumes.find((v) => v.name === "דברי הימים ב");
+		const tehillim = catalog.volumes.find((v) => v.name === "תהילים");
+		if (shmuel2 === undefined || divrei === undefined || tehillim === undefined) {
+			throw new Error("catalog is missing a required volume");
+		}
+		const study = day(57851207);
+		expect(getDaySourceLabel({ ...study, perekId: shmuel2.perekFrom + 4 })).toBe(
+			"שמואל ב ה",
+		);
+		expect(getDaySourceLabel({ ...study, perekId: divrei.perekFrom + 6 })).toBe(
+			"דברי הימים ב ז",
+		);
+		expect(
+			getDaySourceLabel({ ...study, perekId: tehillim.perekFrom + 118 }),
+		).toBe("תהילים קיט");
+	});
+
+	it("returns an empty label on unscheduled days", () => {
+		// Before cycle 1 (programme starts 29 Kislev 5775).
+		expect(getDaySourceLabel(day(57750328))).toBe("");
 	});
 });
 

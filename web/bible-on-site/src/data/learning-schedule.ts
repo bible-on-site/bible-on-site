@@ -546,6 +546,22 @@ export function getPerekRangeLabel(perekIds: readonly number[]): string {
 }
 
 /**
+ * The visible source line a calendar day carries (#2975): the whole studied
+ * week's range on review days, the chapter source on study days, empty when
+ * nothing is scheduled. One contract for the monthly cells, the grouped
+ * mini-month cells and the calendar-PDF day labels — identical text
+ * everywhere the source is shown.
+ */
+export function getDaySourceLabel(day: CalendarDay): string {
+	if (day.perekId === undefined) {
+		return "";
+	}
+	return day.status === "review" && day.reviewPerekIds?.length
+		? getPerekRangeLabel(day.reviewPerekIds)
+		: getPerekSource(day.perekId);
+}
+
+/**
  * True when `friday` and `shabbat` are the adjacent review cells of one
  * merged block (#2365): both review days of the same cycle covering the
  * identical studied set, sitting at week columns 5 and 6.
