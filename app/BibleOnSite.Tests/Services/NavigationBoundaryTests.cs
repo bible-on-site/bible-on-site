@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
@@ -305,6 +306,69 @@ public class NavigationBoundaryTests
             shell.Navigation.NavigationStack.Should().HaveCount(2,
                 "the contextual shortcut adds one preferences entry above its caller");
             Shell.SetBackButtonBehavior(preferences, new BackButtonBehavior { IsVisible = false });
+
+            ((IWindow)window).BackButtonClicked().Should().BeTrue();
+            await Task.Yield();
+
+            shell.CurrentPage.Should().BeSameAs(reader);
+            shell.Navigation.NavigationStack.Should().ContainSingle();
+        }
+        finally
+        {
+            Routing.UnRegisterRoute("PreferencesPage");
+            DispatcherProvider.SetCurrent(null);
+            Application.Current = previous;
+        }
+    }
+
+    /// <summary>
+    /// #2926: after the packs shortcut, the flyout's העדפות entry targets the
+    /// same location (locations drop the ?section=packs query) — MAUI fires
+    /// Navigating but never Navigated for it. A Back-consume flag armed on
+    /// Navigating alone would swallow every later press, so the settle watch
+    /// must ignore it — and the re-navigation must still reach the page so it
+    /// can restore its overview.
+    /// </summary>
+    [Fact]
+    public async Task PreferencesReentry_SameLocationTap_KeepsBackWorking()
+    {
+        var previous = Application.Current;
+        var dispatcher = new Mock<IDispatcher>();
+        dispatcher.SetupGet(d => d.IsDispatchRequired).Returns(false);
+        dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>())).Returns((Action action) => { action(); return true; });
+        var provider = new Mock<IDispatcherProvider>();
+        provider.Setup(p => p.GetForCurrentThread()).Returns(dispatcher.Object);
+        DispatcherProvider.SetCurrent(provider.Object);
+        Routing.RegisterRoute("PreferencesPage", typeof(ContextualPreferencesPage));
+        try
+        {
+            var reader = new ContentPage();
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = AppRoutes.Perek, Content = reader });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            var window = ((IApplication)application).CreateWindow(null!);
+            var watch = new NavigationSettleWatch();
+            var navigated = 0;
+            shell.Navigating += (_, e) =>
+                watch.Begin(e.Current?.Location, e.Target?.Location, DateTimeOffset.UtcNow);
+            shell.Navigated += (_, _) => { navigated++; watch.Complete(); };
+            await shell.GoToAsync($"//{AppRoutes.Perek}");
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
+            var preferences = shell.CurrentPage.Should().BeOfType<ContextualPreferencesPage>().Subject;
+            watch.Complete(); // AppShell disarms on Navigated — even if this host skips it
+
+            var afterPush = navigated;
+            // The exact route the drawer's העדפות entry produces at this spot.
+            await ShellAppNavigator.Instance.GoToAsync(
+                AppRoutes.FlyoutPage("PreferencesPage", shell.CurrentState.Location.OriginalString));
+
+            navigated.Should().Be(afterPush,
+                "a same-location navigation performs no transition and reports no Navigated — the #2926 wedge");
+            preferences.Section.Should().BeNull(
+                "the re-navigation delivers an empty query so the real page restores its overview");
+            watch.OwnsBack(DateTimeOffset.UtcNow).Should().BeFalse(
+                "a same-location proposal must not arm the Back-consume window");
 
             ((IWindow)window).BackButtonClicked().Should().BeTrue();
             await Task.Yield();

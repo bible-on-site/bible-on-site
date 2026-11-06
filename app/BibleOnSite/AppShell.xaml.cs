@@ -76,14 +76,18 @@ public partial class AppShell : Shell
 	}
 
 	/// <summary>
-	/// True while a Shell navigation transition is still settling. Back presses
-	/// that land inside that window are consumed rather than fed back into the
-	/// base pipeline — a second pass can pop the page beneath the one already
-	/// transitioning out and leave an empty surface after "stay" (#2460).
+	/// The Navigating→Navigated window that owns Back presses. Back presses that
+	/// land inside it are consumed rather than fed back into the base pipeline —
+	/// a second pass can pop the page beneath the one already transitioning out
+	/// and leave an empty surface after "stay" (#2460). Proposals that cannot
+	/// change the location never report Navigated, so they must not arm the
+	/// watch — the packs shortcut leaves a <c>PreferencesPage</c> entry on top
+	/// and the flyout's העדפות entry targets that same location (#2926).
 	/// </summary>
-	private bool _navigationInFlight;
+	private readonly NavigationSettleWatch _settleWatch = new();
 
-	private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e) => _navigationInFlight = true;
+	private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e) =>
+		_settleWatch.Begin(e.Current?.Location, e.Target?.Location, DateTimeOffset.UtcNow);
 
 	internal void CompleteStartup()
 	{
@@ -240,7 +244,7 @@ public partial class AppShell : Shell
 			return true;
 		}
 
-		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented,
+		return BackExitPlan.Evaluate(_settleWatch.OwnsBack(DateTimeOffset.UtcNow), base.OnBackButtonPressed, FlyoutIsPresented,
 			Navigation.NavigationStack.Count > 1, RootBackMayExitApp) switch
 		{
 			BackExitAction.Consume => true,
@@ -263,7 +267,7 @@ public partial class AppShell : Shell
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
 		ApplyBackChrome();
-		_navigationInFlight = false;
+		_settleWatch.Complete();
 #if IOS || MACCATALYST
 		GateIosInteractiveBack();
 		// The pushed page's native controller can lag the Navigated event.
