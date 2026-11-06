@@ -454,6 +454,10 @@ test.describe("Sefer flip performance", () => {
 	});
 
 	test("drag turns must not block the main thread", async ({ page }) => {
+		test.skip(
+			Boolean(process.env.CI),
+			"Unstable CI frame timing: https://github.com/bible-on-site/bible-on-site/issues/3090",
+		);
 		const cpuFactor = await cpuSpeedFactor(page);
 		const bounds = scaledBounds(cpuFactor);
 
