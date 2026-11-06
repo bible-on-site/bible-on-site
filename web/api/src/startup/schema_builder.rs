@@ -9,7 +9,6 @@ use crate::common::auth::ApiAuth;
 use crate::providers::Database;
 use crate::resolvers::article_relationships_resolver;
 use crate::resolvers::articles_resolver;
-use crate::resolvers::authors_resolver;
 use crate::resolvers::dedications_resolver;
 use crate::resolvers::moed_resolver;
 use crate::resolvers::perakim_resolver;
@@ -26,7 +25,6 @@ use crate::services::article_search::ArticleSearchIndex;
 pub struct QueryRoot(
     article_relationships_resolver::ArticleRelationshipsQuery,
     articles_resolver::ArticlesQuery,
-    authors_resolver::AuthorsQuery,
     dedications_resolver::DedicationsQuery,
     moed_resolver::MoedQuery,
     perakim_resolver::PerakimQuery,

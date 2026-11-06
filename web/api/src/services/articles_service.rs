@@ -208,33 +208,6 @@ pub fn count_by_perek(articles: &[ArticleSummary]) -> Vec<i64> {
     result
 }
 
-/// Returns the count of articles for a specific author
-pub async fn count_by_author_id(db: &Database, author_id: i32) -> Result<i64, ServiceError> {
-    use sea_orm::{FromQueryResult, QuerySelect};
-
-    tracing::info_span!("articles_service::count_by_author_id", %author_id);
-
-    #[derive(FromQueryResult)]
-    struct CountResult {
-        count: i64,
-    }
-
-    let result = Entity::find()
-        .select_only()
-        .column_as(Column::Id.count(), "count")
-        .filter(Column::AuthorId.eq(author_id as i16))
-        .into_model::<CountResult>()
-        .one(db.get_connection())
-        .await
-        .map_err(|db_err| {
-            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-        })?;
-
-    let count = result.map(|r| r.count).unwrap_or(0);
-    tracing::info!("Author {} has {} articles", author_id, count);
-    Ok(count)
-}
-
 /// Upper bound for a search phrase — beyond it the request is rejected rather
 /// than truncated so abuse is visible.
 pub const MAX_SEARCH_PHRASE_CHARS: usize = 256;
@@ -515,18 +488,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn count_by_author_id_returns_internal_server_error_on_db_failure() {
-        let db = create_mock_db_with_query_error("Network error");
-
-        let result = count_by_author_id(&db, 1).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ServiceError::InternalServerError(_)));
-        assert_eq!(err.to_string(), "Internal Server Error");
-    }
-
-    #[tokio::test]
     async fn count_by_perek_id_returns_internal_server_error_on_db_failure() {
         let db = create_mock_db_with_query_error("Timeout");
 
@@ -695,37 +656,6 @@ mod tests {
 
         assert_eq!(result.get(&3), Some(&2));
         assert_eq!(result.get(&7), Some(&3));
-    }
-
-    #[tokio::test]
-    async fn count_by_author_id_returns_count_or_zero() {
-        let db_with_count = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![mock_row([("count", 3_i64.into())])],
-                ])
-                .into_connection(),
-        );
-        assert_eq!(
-            count_by_author_id(&db_with_count, 9)
-                .await
-                .expect("count should load"),
-            3
-        );
-
-        let db_without_count = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![],
-                ])
-                .into_connection(),
-        );
-        assert_eq!(
-            count_by_author_id(&db_without_count, 9)
-                .await
-                .expect("missing count should become zero"),
-            0
-        );
     }
 
     #[tokio::test]
