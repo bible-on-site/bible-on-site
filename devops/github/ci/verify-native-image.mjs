@@ -7,6 +7,12 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
+	BULLETIN_DOCUMENT_PATH,
+	BULLETIN_MISSING_PATH,
+	createAdminFixture,
+	FIXTURE_BULLETIN,
+} from "./native-admin-fixture.mjs";
+import {
 	apiPackageVersion,
 	assertPlainVersion,
 	verifyApiRuntime,
@@ -64,6 +70,15 @@ export function assertAdminResponses(result) {
 	assert.match(result.serverFnBody, /^SESSION_EXPIRED:/);
 }
 
+// The anonymous document route must serve the exact isolated fixture row from
+// MySQL: a 200 alone could come from a fallback, cache, or stubbed connection.
+export function assertAdminDbRead(result) {
+	assert.equal(result.documentStatus, 200);
+	assert.equal(result.documentType, "application/pdf");
+	assert.equal(result.documentBody, FIXTURE_BULLETIN.pdfText);
+	assert.equal(result.missingStatus, 404);
+}
+
 function runDocker(args, { input } = {}) {
 	return execFileSync("docker", args, {
 		encoding: "utf8",
@@ -77,7 +92,9 @@ function runDocker(args, { input } = {}) {
 const adminProbe = `
 const r = await fetch('http://127.0.0.1:3101/', { redirect: 'manual', signal: AbortSignal.timeout(2000) });
 const f = await fetch('http://127.0.0.1:3101/', { headers: { 'x-tsr-serverFn': 'true' }, redirect: 'manual', signal: AbortSignal.timeout(2000) });
-console.log(JSON.stringify({ status: r.status, location: r.headers.get('location'), serverFnStatus: f.status, serverFnBody: await f.text() }));
+const d = await fetch('http://127.0.0.1:3101${BULLETIN_DOCUMENT_PATH}', { signal: AbortSignal.timeout(2000) });
+const m = await fetch('http://127.0.0.1:3101${BULLETIN_MISSING_PATH}', { signal: AbortSignal.timeout(2000) });
+console.log(JSON.stringify({ status: r.status, location: r.headers.get('location'), serverFnStatus: f.status, serverFnBody: await f.text(), documentStatus: d.status, documentType: d.headers.get('content-type'), documentBody: Buffer.from(await d.arrayBuffer()).toString('utf8'), missingStatus: m.status }));
 `;
 
 // A single fixed budget catches a startup regression; it is not a production
@@ -183,6 +200,7 @@ export async function verifyImage(options, dependencies = {}) {
 		};
 	}
 	let created = false;
+	let fixtureCleanup;
 	let failure;
 	try {
 		if (service === "website") {
@@ -205,9 +223,17 @@ export async function verifyImage(options, dependencies = {}) {
 			]);
 			evidence.nativeDependencies = JSON.parse(output.split("\n").at(-1));
 		} else {
+			// The document probe needs an isolated, owned MySQL: no production
+			// database, published ports, credentials, or outbound route.
+			const fixture = await (
+				dependencies.createAdminFixture ?? createAdminFixture
+			)(docker, { arch, now, sleep });
+			fixtureCleanup = fixture.cleanup;
 			const env = [
 				"--network",
-				"none",
+				fixture.network,
+				"-e",
+				`DB_URL=${fixture.databaseUrl}`,
 				"-e",
 				"SKIP_AUTH=false",
 				"-e",
@@ -243,6 +269,7 @@ export async function verifyImage(options, dependencies = {}) {
 				sleep,
 			);
 			assertAdminResponses(result);
+			assertAdminDbRead(result);
 			evidence.auth = result;
 		}
 	} catch (error) {
@@ -261,6 +288,17 @@ export async function verifyImage(options, dependencies = {}) {
 			} catch (cleanupError) {
 				console.error(
 					`Could not remove smoke container ${name}: ${cleanupError.message}`,
+				);
+				failure ??= cleanupError;
+			}
+		}
+		// The smoke container must leave the fixture network before it is removed.
+		if (fixtureCleanup) {
+			try {
+				fixtureCleanup();
+			} catch (cleanupError) {
+				console.error(
+					`Could not clean the admin fixture: ${cleanupError.message}`,
 				);
 				failure ??= cleanupError;
 			}

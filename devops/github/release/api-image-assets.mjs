@@ -9,7 +9,7 @@ export function verifyAPIImageAssets(
 	{ version, sourceRef, directory, moduleName = "api" },
 ) {
 	if (
-		!["api", "website"].includes(moduleName) ||
+		!["api", "website", "admin"].includes(moduleName) ||
 		!/^\d+\.\d+\.\d+$/.test(version ?? "") ||
 		!/^[a-f0-9]{40}$/.test(sourceRef ?? "") ||
 		typeof directory !== "string" ||
@@ -34,7 +34,11 @@ export function verifyAPIImageAssets(
 	)
 		throw new Error("API archive source differs from the approved release");
 	const image =
-		moduleName === "website" ? "bible-on-site" : "bible-on-site-api";
+		moduleName === "api"
+			? "bible-on-site-api"
+			: moduleName === "website"
+				? "bible-on-site"
+				: "bible-on-site-admin";
 	const names = [
 		`${image}-v${version}.tar.gz`,
 		`${image}-v${version}-arm64.tar.gz`,
@@ -62,7 +66,7 @@ export function verifyAPIImageAssets(
 export function main(env = process.env, lookup = findRelease) {
 	const version = env.MODULE_VERSION;
 	const moduleName = env.MODULE_NAME ?? "api";
-	if (!["api", "website"].includes(moduleName))
+	if (!["api", "website", "admin"].includes(moduleName))
 		throw new Error("Invalid native image module");
 	if (!/^\d+\.\d+\.\d+$/.test(version ?? ""))
 		throw new Error("Invalid API release version");

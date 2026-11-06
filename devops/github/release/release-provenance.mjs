@@ -35,7 +35,9 @@ export function nativeImageArtifacts(payload) {
 			? "bible-on-site-api"
 			: payload.module_name === "website"
 				? "bible-on-site"
-				: undefined;
+				: payload.module_name === "admin"
+					? "bible-on-site-admin"
+					: undefined;
 	const amd64 = `${image}-docker-${payload.ci_run_id}`;
 	const arm64 = `${amd64}-arm64`;
 	if (
