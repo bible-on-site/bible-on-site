@@ -27,7 +27,7 @@ baseline emits — that difference is what the harness measures).
 | `golden/encoder-metrics/*.json` | Recorded encoder-comparison reports (one per candidate) — documented artifact, NOT a CI gate; model weights are not fetched in CI |
 | `golden_eval.py` | Loader, gold→source resolution, scorer, report + CLI |
 | `encoders.py` | Encoder adapter: HF token-classification → contract rows, candidate registry with pinned revisions + licenses, `detect` and `retype` (hybrid) modes, comparison CLI |
-| `publish.py` | Publish stage: lexical detection → encoder re-type → the rows JSON `devops/import-tanahpedia-mentions.mts` upserts; model load stays opt-in (`entities_fn` injection) |
+| `publish.py` | Publish stage: lexical detection → encoder re-type → the rows JSON `devops/import-tanahpedia-mentions.mts` upserts; model load stays opt-in (`entities_fn` injection); resumable per-unit checkpoints via `--checkpoint-dir` |
 | `requirements-encoders.txt` | Optional torch/transformers pins for re-running the comparison and for `--retype` publish runs |
 | `test_golden_eval.py` | Scoring/resolution unit tests (no corpus needed) |
 | `test_golden_set.py` | Gold-vs-source consistency + recorded-metrics drift check |
@@ -51,8 +51,10 @@ python encoders.py --all --out golden/encoder-metrics  # regenerate the artifact
 
 # Publish (the measured hybrid: lexical detect + dictabert-ner re-type;
 # encoder run needs the same torch+transformers install):
-python publish.py --pasuk-out /tmp/mentions-pasuk.json
-python publish.py --articles /tmp/articles.json --article-out /tmp/mentions-article.json
+python publish.py --pasuk-out /tmp/mentions-pasuk.json \
+    --checkpoint-dir .cache/mentions   # resumable: cached units skip the model
+python publish.py --articles /tmp/articles.json --article-out /tmp/mentions-article.json \
+    --checkpoint-dir .cache/mentions
 python publish.py --pasuk-out p.json --no-retype       # deterministic lexical rows
 node ../../devops/import-tanahpedia-mentions.mts --decorations /tmp/mentions-pasuk.json --dry-run
 ```
