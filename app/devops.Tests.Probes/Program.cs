@@ -11,6 +11,8 @@ internal static class Program
     {
         if (args is ["msstore-output", var code])
         {
+            // Match the UTF-8 stream contract used by NUKE's CLI reader.
+            Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine("Command status on stdout");
             Console.Error.WriteLine("Deleting Flight");
             Console.Error.WriteLine("✅ \u001b[1;38;5;2mDeleted Flight\u001b[0m");
