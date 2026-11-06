@@ -1,5 +1,4 @@
 import "@tanstack/react-start/server-only";
-import { bulletinDocumentUrl } from "./bulletin-document.server";
 
 export interface TelegramClientConfig {
 	token: string;
@@ -25,7 +24,6 @@ interface DocumentRequest extends TargetRequest {
 	pdf: Uint8Array;
 	filename: string;
 	caption: string;
-	bulletinDate?: string;
 	beforeSend?: () => Promise<void>;
 }
 
@@ -400,25 +398,11 @@ export class TelegramClient {
 			audience: input.audience,
 		};
 		const filename = input.filename;
-		let downloadUrl: string | undefined;
-		if (input.bulletinDate !== undefined) {
-			try {
-				downloadUrl = bulletinDocumentUrl(input.bulletinDate, pdf);
-			} catch {
-				return reject();
-			}
-		}
 		const document = new FormData();
 		document.append("chat_id", String(target.chatId));
 		document.append("caption", input.caption);
-		if (downloadUrl) {
-			document.append(
-				"reply_markup",
-				JSON.stringify({
-					inline_keyboard: [[{ text: "להורדת העלון", url: downloadUrl }]],
-				}),
-			);
-		}
+		// Attachment-only delivery (#3069): the frozen PDF travels inside the
+		// sendDocument multipart payload — never an admin-origin URL or button.
 		document.append(
 			"document",
 			new Blob([pdf], { type: "application/pdf" }),
