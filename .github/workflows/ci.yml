@@ -192,7 +192,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
 
   determine_baseline_availability:
-    name: Determine Baseline Availability
+    name: Coverage / Baseline availability detection
     permissions:
       contents: read
       actions: read
@@ -265,7 +265,7 @@ jobs:
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
   determine_docker_image_availability:
-    name: Determine Docker Image Availability
+    name: Docker / Image availability detection
     permissions:
       contents: read
       packages: read
@@ -298,7 +298,7 @@ jobs:
           fi
 
   determine_changes:
-    name: Determine Changes
+    name: Modules / Changes detection
     runs-on: ubuntu-latest
     permissions:
       contents: read
