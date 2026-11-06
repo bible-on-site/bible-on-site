@@ -10,7 +10,7 @@ import { iosInteractionDiagnostics, readLoggedIosAppPid, sampleIosFallback, samp
 import { listenScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
-import { captureNativeFrame, exportNativeLog, iosAutomationLogArguments, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
+import { exportNativeLog, iosAutomationLogArguments, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
