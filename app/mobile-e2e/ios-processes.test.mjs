@@ -18,6 +18,7 @@ const devicesRoot = "/Users/runner with spaces/Library/Developer/CoreSimulator/D
 const inspectorPath = "/owned/native-inspector";
 const appPath = device => devicesRoot + "/" + device + "/data/Containers/Bundle/Application/51DBBA3D-91A6-4E0F-BE84-D779BCE6C0F3/BibleOnSite.app/BibleOnSite";
 const OWNED = "8421 L " + appPath(udid) + "\n";
+const IDENTIFIED = OWNED.replace(" L ", " L@1234.000001 ");
 const samplePinnedIosApp = options => samplePinned({ devicesRoot, inspectorPath, ...options });
 const iosInteractionDiagnostics = options => makeDiagnostics({ devicesRoot, inspectorPath, ...options });
 
@@ -72,7 +73,7 @@ function diagnosticFixture(t) {
   const calls = [];
   const execute = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+    if (command === inspectorPath) return { stdout: IDENTIFIED, stderr: "" };
     if (args.includes("screenshot")) writeFileSync(args.at(-1), "frame");
     if (args.includes("/usr/bin/sample")) writeFileSync(args.at(-1), nativeSampleReport());
     return { stdout: "captured", stderr: "" };
@@ -98,6 +99,31 @@ Binary Images:
 `;
 }
 
+test("recorded macOS privacy-redacted report remains attributable to the same kernel process instance", async t => {
+  const f = diagnosticFixture(t);
+  const report = readFileSync(new URL("./fixtures/native-sample-macos27.txt", import.meta.url), "utf8");
+  const kernel = readFileSync(new URL("./fixtures/native-sample-macos27-kernel.txt", import.meta.url), "utf8");
+  // This replay token is synthetic. The old kernel fixture did not record start time.
+  const identified = kernel.replace(" L ", " L@1234.000001 ");
+  const replayDevices = kernel.slice(kernel.indexOf("/"), kernel.indexOf(`/Devices/${udid}/`)) + "/Devices";
+  const prefix = join(f.directory, "recorded-macos27");
+  const result = await samplePinnedIosApp({ udid, pid: 12849, prefix, devicesRoot: replayDevices,
+    deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      f.calls.push({ command, args, options });
+      if (command === inspectorPath) return { stdout: identified, stderr: "" };
+      if (args.includes("/usr/bin/sample")) writeFileSync(args.at(-1), report);
+      return { stdout: "", stderr: "" };
+    } });
+  assert.equal(result.status, "captured", JSON.stringify(result));
+  assert.equal(readFileSync(`${prefix}-stack-12849.txt`, "utf8"), report);
+  assert.deepEqual(f.calls.filter(call => call.command === inspectorPath).map(call => call.args),
+    [["--identity", "12849"], ["--identity", "12849"]]);
+  const identity = JSON.parse(readFileSync(`${prefix}-kernel-identity.json`, "utf8"));
+  assert.equal(identity.verified, true);
+  assert.equal(identity.before.state, identity.after.state);
+});
+
 test("failed debugger startup still retains native thread evidence without hiding a failed frame", async t => {
   const f = diagnosticFixture(t);
   const prefix = join(f.directory, "native-evidence");
@@ -105,7 +131,7 @@ test("failed debugger startup still retains native thread evidence without hidin
     deadlineUtc: failureSignal().deadlineUtc, now: f.now,
     execute: async (command, args, options) => {
       f.calls.push({ command, args, options });
-      if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+      if (command === inspectorPath) return { stdout: IDENTIFIED, stderr: "" };
       if (args.includes("screenshot")) throw Object.assign(new Error("original simulator frame unavailable"), { killed: true, signal: "SIGTERM" });
       if (args.includes("lldb")) throw Object.assign(new Error("recorded debugger startup timeout"), { killed: true, signal: "SIGTERM" });
       assert.ok(args.includes("/usr/bin/sample"));
@@ -115,7 +141,7 @@ test("failed debugger startup still retains native thread evidence without hidin
   assert.equal(readFileSync(`${prefix}-stack-8421.txt`, "utf8"), nativeSampleReport());
   assert.equal(result.status, "error", "a retained stack must not hide the failed screenshot");
   assert.equal(result.frameError.signal, "SIGTERM");
-  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 10000, 5000]);
   assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
 });
 
@@ -123,6 +149,10 @@ for (const [label, report] of [
   ["wrong PID", nativeSampleReport(9912)],
   ["other executable", nativeSampleReport(8421, appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"))],
   ["empty thread graph", nativeSampleReport().replace("    + 1000 native_sampling_control_frame (in BibleOnSite) + 24 [0x100001234]", "")],
+  ["redacted wrong root", nativeSampleReport(8421, "/private/var/folders/*/BibleOnSite.app/BibleOnSite")],
+  ["unbounded redaction", nativeSampleReport(8421, "/*/BibleOnSite.app/BibleOnSite")],
+  ["partial component redaction", nativeSampleReport(8421, "/Us*ers/BibleOnSite.app/BibleOnSite")],
+  ["multiple redactions", nativeSampleReport(8421, "/Users/*/*/BibleOnSite.app/BibleOnSite")],
 ]) {
   test(`native sample rejects ${label} while preserving the original report`, async t => {
     const f = diagnosticFixture(t);
@@ -141,6 +171,52 @@ for (const [label, report] of [
     assert.equal(readFileSync(`${prefix}-stack-8421.txt`, "utf8"), report);
   });
 }
+
+for (const [label, after] of [
+  ["reused PID at the same path", IDENTIFIED.replace("1234.000001", "1234.000002")],
+  ["another device", IDENTIFIED.replace(udid, "B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7")],
+  ["exited process", ""],
+  ["missing launch identity", OWNED],
+]) {
+  test(`retained native report cannot qualify after ${label}`, async t => {
+    const f = diagnosticFixture(t);
+    const prefix = join(f.directory, "replaced-during-sample");
+    let inspected = false;
+    const report = nativeSampleReport(8421, "/Users/*/BibleOnSite.app/BibleOnSite");
+    const result = await samplePinnedIosApp({ udid, pid: 8421, prefix,
+      deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+      execute: async (command, args, options) => {
+        if (command === inspectorPath) {
+          const stdout = inspected ? after : IDENTIFIED;
+          inspected = true;
+          return { stdout, stderr: "" };
+        }
+        if (args.includes("/usr/bin/sample")) {
+          writeFileSync(args.at(-1), report);
+          return { stdout: "", stderr: "" };
+        }
+        return f.execute(command, args, options);
+      } });
+    assert.equal(result.status, "error");
+    assert.match(result.error.message, /kernel process instance changed/);
+    assert.equal(readFileSync(`${prefix}-stack-8421.txt`, "utf8"), report);
+    assert.equal(readFileSync(`${prefix}-process-after-8421.txt`, "utf8"), after);
+    assert.equal(JSON.parse(readFileSync(`${prefix}-kernel-identity.json`, "utf8")).verified, false);
+  });
+}
+
+test("a kernel row without process start time cannot begin native sampling", async t => {
+  const f = diagnosticFixture(t);
+  const result = await samplePinnedIosApp({ udid, pid: 8421, prefix: join(f.directory, "missing-start"),
+    deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      f.calls.push({ command, args, options });
+      return { stdout: OWNED, stderr: "" };
+    } });
+  assert.equal(result.status, "error");
+  assert.match(result.error.message, /process launch identity/);
+  assert.equal(f.calls.length, 1);
+});
 
 test("native sample cannot overwrite earlier original thread evidence", async t => {
   const f = diagnosticFixture(t);
@@ -211,14 +287,20 @@ test("Darwin sampler retains a real owned process stack when debugger startup is
     } });
   writeFileSync(join(controlArtifacts, "result.json"), JSON.stringify(result, null, 2), { flag: "wx" });
   assert.equal(result.status, "error", "the deliberately unavailable frame must still fail diagnostics");
-  assert.equal(result.frameError.message, "Native process control has no simulator screenshot");
+  assert.equal(result.frameError?.message, "Native process control has no simulator screenshot", JSON.stringify(result));
   const report = readFileSync(`${prefix}-stack-${child.pid}.txt`, "utf8");
   assert.ok(report.includes(`[${child.pid}]`));
-  assert.ok(report.includes(binary));
+  const identity = JSON.parse(readFileSync(`${prefix}-kernel-identity.json`, "utf8"));
+  assert.equal(identity.verified, true);
+  assert.equal(identity.before.pid, child.pid);
+  assert.equal(identity.before.executable, binary);
+  assert.equal(identity.after.executable, binary);
+  assert.match(identity.before.state, /^L@[1-9]\d*\.\d{6}$/);
+  assert.equal(identity.before.state, identity.after.state);
   assert.ok(report.includes("native_sampling_control_frame"), "retain the real blocked native frame");
   writeFileSync(join(controlArtifacts, "verified.json"), JSON.stringify({
     pid: child.pid, executable: binary, nativeFrameRetained: true, failedFrameStillRejected: true,
-    stackCommandCapMs: 10000, overallFailureCapMs: 15000, acceptanceCredit: 0,
+    kernelIdentityBeforeAndAfter: identity, stackCommandCapMs: 10000, overallFailureCapMs: 15000, acceptanceCredit: 0,
   }, null, 2), { flag: "wx" });
 });
 
@@ -263,11 +345,11 @@ test("failure handoff samples the pinned process while all existing caps remain 
   request.pending = false; request.status = 500;
   f.calls.length = 0;
   assert.deepEqual(await diagnostics.failure(failureSignal()), { status: "captured", pid: 8421 });
-  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", "sudo"]);
-  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", "sudo", inspectorPath]);
+  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 10000, 5000]);
   assert.ok(f.calls.every(x => x.options.signal === f.calls[0].options.signal));
-  assert.ok(f.calls.at(-1).args.includes("8421"));
-  assert.deepEqual(f.calls.at(-1).args.slice(0, 5), ["-n", "/usr/bin/sample", "8421", "1", "1"]);
+  assert.deepEqual(f.calls.at(-1).args, ["--identity", "8421"]);
+  assert.deepEqual(f.calls[2].args.slice(0, 5), ["-n", "/usr/bin/sample", "8421", "1", "1"]);
   const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
   assert.equal(evidence.request.test, "Preferences scenario");
   assert.equal(evidence.observation.request.status, 500);
@@ -281,7 +363,7 @@ for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3D
       execute: async (command, args, options) => { f.calls.push({ command, args, options }); return { stdout: listing }; } });
     assert.equal(result.status, "exited"); assert.equal(result.pid, 8421);
     assert.equal(f.calls.length, 1); assert.equal(f.calls[0].command, inspectorPath);
-    assert.deepEqual(f.calls[0].args, ["8421"]);
+    assert.deepEqual(f.calls[0].args, ["--identity", "8421"]);
   });
 }
 
@@ -339,7 +421,7 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
     prefix: join(f.directory, "stuck-frame"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
     execute: async (command, args, options) => {
       f.calls.push({ command, args, options });
-      if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+      if (command === inspectorPath) return { stdout: IDENTIFIED, stderr: "" };
       if (args.includes("screenshot")) return frame;
       assert.equal(command, "sudo");
       assert.ok(f.calls.some(call => call.args.includes("screenshot")));
@@ -350,7 +432,7 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
   assert.equal(result.status, "error", "the failed frame remains an error");
   assert.equal(result.frameError.signal, "SIGTERM");
   assert.equal(readFileSync(join(f.directory, "stuck-frame-stack-8421.txt"), "utf8"), nativeSampleReport());
-  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 10000, 5000]);
   assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.every(call => !call.args.includes("spawn") && call.command !== "ps"));
 });
@@ -363,7 +445,7 @@ test("a failed native sampler still waits for frame capture before releasing the
   const sampling = samplePinnedIosApp({ udid, pid: 8421,
     prefix: join(f.directory, "failed-debugger"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
     execute: async (command, args) => {
-      if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+      if (command === inspectorPath) return { stdout: IDENTIFIED, stderr: "" };
       if (args.includes("screenshot")) {
         await frame;
         writeFileSync(args.at(-1), "completed frame");
@@ -405,7 +487,7 @@ test("handoff deadline cancellation stops before another native command or debug
     execute: async (command, args, options) => {
       f.calls.push({ command, args, options });
       cancellation.abort(new Error("failure handoff deadline expired"));
-      return { stdout: OWNED, stderr: "" };
+      return { stdout: IDENTIFIED, stderr: "" };
     } });
   assert.equal(result.status, "error");
   assert.equal(result.error.message, "failure handoff deadline expired");

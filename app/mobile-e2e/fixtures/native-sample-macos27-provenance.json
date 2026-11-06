@@ -1,0 +1,15 @@
+{
+  "run": 42256482876,
+  "head": "26de8b4d08a0f69637e1e4adab2586e183a10d24",
+  "actualCheckout": "32d2ade62252435a24bf52e2c9ef8eae46b5deb4",
+  "job": 128029965021,
+  "artifact": 13523526972,
+  "reportEntry": ".artifacts/mobile-e2e/ios-shard1/native-sampling-control-12795-12849/original-stack-12849.txt",
+  "kernelEntry": ".artifacts/mobile-e2e/ios-shard1/native-sampling-control-12795-12849/original-process-12849.txt",
+  "reportSHA256": "62132eff6a5505fbc9888436ba66db265621d7619d54cb878c8bf3ca353cffba",
+  "kernelSHA256": "7cda445a20b831b3dbaa10d97b9b770c7d232b556426c414014484ce4ee23b01",
+  "classification": "Exact unmodified disposable-host control data from the failed diagnostic allocation; no iOS calendar or presentation acceptance credit",
+  "replay": "The original kernel row has only live state L. Unit replay adds a synthetic L@1234.000001 launch token; it is not historical launch-time evidence.",
+  "kernelFields": "pbi_start_tvsec and pbi_start_tvusec are process launch time from kernel proc_bsdinfo, inspected before and after capture",
+  "kernelSource": "https://github.com/apple/darwin-xnu/blob/main/bsd/kern/proc_info.c"
+}
