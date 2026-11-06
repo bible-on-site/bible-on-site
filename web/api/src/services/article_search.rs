@@ -101,6 +101,13 @@ struct Snapshot {
     postings: HashMap<u32, Vec<(u32, u32)>>,
     doc_lens: Vec<u32>,
     avg_len: f32,
+    /// Character length of each vocab term (indexed by term id).
+    vocab_lens: Vec<u32>,
+    /// Term ids ordered by term text — prefix expansions binary-search this.
+    vocab_sorted: Vec<u32>,
+    /// Term ids ordered by `(char length, tid)` — fuzzy expansions only scan
+    /// the length band `token_len ± max_edits` instead of the whole vocab.
+    vocab_by_len: Vec<u32>,
 }
 
 impl Snapshot {
@@ -120,6 +127,9 @@ impl Snapshot {
             postings: HashMap::new(),
             doc_lens: Vec::new(),
             avg_len: 1.0,
+            vocab_lens: Vec::new(),
+            vocab_sorted: Vec::new(),
+            vocab_by_len: Vec::new(),
         }
     }
 
@@ -136,26 +146,46 @@ impl Snapshot {
                 *acc.entry(tid).or_insert(0.0) += 1.0;
                 continue;
             }
+            let token_len = token.chars().count();
             let mut matched = false;
-            if token.chars().count() >= PREFIX_MIN_LEN {
-                let mut added = 0usize;
-                for (i, term) in self.model.vocab.iter().enumerate() {
-                    if term != token && term.starts_with(token.as_str()) {
-                        *acc.entry(i as u32).or_insert(0.0) += PREFIX_WEIGHT;
-                        added += 1;
-                        if added >= PREFIX_CAP {
-                            break;
-                        }
-                    }
+            if token_len >= PREFIX_MIN_LEN {
+                // Binary-search the sorted vocab for the term range sharing
+                // this prefix, then take the lowest term ids — identical to
+                // scanning `vocab` in order, minus the full pass.
+                let start = self
+                    .vocab_sorted
+                    .partition_point(|&tid| self.model.vocab[tid as usize] < *token);
+                let mut cands: Vec<u32> = self.vocab_sorted[start..]
+                    .iter()
+                    .take_while(|&&tid| self.model.vocab[tid as usize].starts_with(token.as_str()))
+                    .filter(|&&tid| self.model.vocab[tid as usize] != *token)
+                    .copied()
+                    .collect();
+                cands.sort_unstable();
+                for tid in cands.into_iter().take(PREFIX_CAP) {
+                    *acc.entry(tid).or_insert(0.0) += PREFIX_WEIGHT;
+                    matched = true;
                 }
-                matched = added > 0;
             }
             let max_dist = max_edits(token);
-            if !matched && max_dist > 0 && token.chars().count() >= FUZZY_MIN_LEN {
+            if !matched && max_dist > 0 && token_len >= FUZZY_MIN_LEN {
+                // A match within max_dist must sit inside the length band
+                // `token_len ± max_dist`; only that slice of the vocab is
+                // worth the Levenshtein pass.
+                let lo = token_len.saturating_sub(max_dist) as u32;
+                let hi = (token_len + max_dist) as u32;
+                let start = self
+                    .vocab_by_len
+                    .partition_point(|&tid| self.vocab_lens[tid as usize] < lo);
+                let end = self.vocab_by_len[start..]
+                    .partition_point(|&tid| self.vocab_lens[tid as usize] <= hi)
+                    + start;
+                let mut cands: Vec<u32> = self.vocab_by_len[start..end].to_vec();
+                cands.sort_unstable();
                 let mut added = 0usize;
-                for (i, term) in self.model.vocab.iter().enumerate() {
-                    if distance(token, term, max_dist) <= max_dist {
-                        *acc.entry(i as u32).or_insert(0.0) += FUZZY_WEIGHT;
+                for tid in cands {
+                    if distance(token, &self.model.vocab[tid as usize], max_dist) <= max_dist {
+                        *acc.entry(tid).or_insert(0.0) += FUZZY_WEIGHT;
                         added += 1;
                         if added >= FUZZY_CAP {
                             break;
@@ -189,15 +219,16 @@ impl Snapshot {
         sparse
     }
 
-    /// Scores every document; returns hits above `MIN_SCORE`, best first.
-    fn search(&self, phrase: &str) -> Vec<ScoredDoc> {
+    /// Scores every document; returns hits above `MIN_SCORE` (best first)
+    /// plus the expanded term ids, so callers never expand the phrase twice.
+    fn search(&self, phrase: &str) -> (Vec<ScoredDoc>, Vec<u32>) {
         let tokens = tokenize(phrase);
         if tokens.is_empty() {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
         let expanded = self.expand_query(&tokens);
         if expanded.is_empty() {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
         let query_vector = if self.model.dims > 0 {
             self.model.embed(&self.query_sparse(&expanded))
@@ -239,8 +270,19 @@ impl Snapshot {
                 .total_cmp(&a.score)
                 .then(a.article_id.cmp(&b.article_id))
         });
-        out
+        (out, expanded.iter().map(|&(tid, _)| tid).collect())
     }
+}
+
+/// Query-expansion indexes derived once per snapshot: term char lengths,
+/// tids sorted by term text, and tids sorted by `(len, tid)`.
+fn vocab_indexes(vocab: &[String]) -> (Vec<u32>, Vec<u32>, Vec<u32>) {
+    let vocab_lens: Vec<u32> = vocab.iter().map(|t| t.chars().count() as u32).collect();
+    let mut vocab_sorted: Vec<u32> = (0..vocab.len() as u32).collect();
+    vocab_sorted.sort_unstable_by(|&a, &b| vocab[a as usize].cmp(&vocab[b as usize]));
+    let mut vocab_by_len = vocab_sorted.clone();
+    vocab_by_len.sort_unstable_by_key(|&tid| (vocab_lens[tid as usize], tid));
+    (vocab_lens, vocab_sorted, vocab_by_len)
 }
 
 /// A scored page of hits plus the total match count before pagination.
@@ -248,6 +290,10 @@ impl Snapshot {
 pub struct SearchPage {
     pub hits: Vec<ScoredDoc>,
     pub total: usize,
+    /// Vocabulary terms the phrase expanded to — used for excerpt
+    /// highlighting. Computed by the same expansion pass that scored the
+    /// hits, so a request pays for `expand_query` exactly once.
+    pub expanded_terms: Vec<String>,
 }
 
 /// Process-shared article search index. Clones share one snapshot.
@@ -340,6 +386,7 @@ impl ArticleSearchIndex {
         } else {
             doc_lens.iter().map(|&l| l as f64).sum::<f64>() as f32 / doc_lens.len() as f32
         };
+        let (vocab_lens, vocab_sorted, vocab_by_len) = vocab_indexes(&model.vocab);
         *self.inner.write().await = Snapshot {
             initialized: true,
             epoch: state.model_epoch,
@@ -349,6 +396,9 @@ impl ArticleSearchIndex {
             postings,
             doc_lens,
             avg_len: avg_len.max(1.0),
+            vocab_lens,
+            vocab_sorted,
+            vocab_by_len,
         };
         Ok(())
     }
@@ -397,27 +447,20 @@ impl ArticleSearchIndex {
             warn!(error = %err, "article search refresh probe failed; serving warm snapshot");
         }
         let snapshot = self.inner.read().await;
-        let mut hits = snapshot.search(phrase);
+        let (mut hits, expanded_tids) = snapshot.search(phrase);
         if let Some(ids) = author_ids {
             hits.retain(|hit| ids.contains(&hit.article_id));
         }
         let total = hits.len();
+        let expanded_terms = expanded_tids
+            .iter()
+            .filter_map(|&tid| snapshot.model.vocab.get(tid as usize).cloned())
+            .collect();
         Ok(SearchPage {
             hits: hits.into_iter().skip(offset).take(limit).collect(),
             total,
+            expanded_terms,
         })
-    }
-
-    /// The vocabulary terms a phrase expanded to — used by the resolver to
-    /// build excerpts that highlight expanded (prefix/fuzzy) matches too.
-    pub async fn expanded_terms(&self, phrase: &str) -> Vec<String> {
-        let snapshot = self.inner.read().await;
-        let tokens = tokenize(phrase);
-        snapshot
-            .expand_query(&tokens)
-            .into_iter()
-            .filter_map(|(tid, _)| snapshot.model.vocab.get(tid as usize).cloned())
-            .collect()
     }
 
     /// Current number of indexed documents — exposed for health/diagnostics.
@@ -1105,6 +1148,7 @@ mod tests {
         }
         let avg =
             doc_lens.iter().map(|&l| l as f64).sum::<f64>() as f32 / doc_lens.len().max(1) as f32;
+        let (vocab_lens, vocab_sorted, vocab_by_len) = vocab_indexes(&model.vocab);
         Snapshot {
             initialized: true,
             epoch: 1,
@@ -1114,6 +1158,9 @@ mod tests {
             postings,
             doc_lens,
             avg_len: avg.max(1.0),
+            vocab_lens,
+            vocab_sorted,
+            vocab_by_len,
         }
     }
 
@@ -1207,13 +1254,13 @@ mod tests {
         );
 
         // Empty and unexpandable phrases short-circuit.
-        assert!(snapshot.search("").is_empty());
-        assert!(snapshot.search("!!!").is_empty());
-        assert!(snapshot.search("unrelated").is_empty());
+        assert!(snapshot.search("").0.is_empty());
+        assert!(snapshot.search("!!!").0.is_empty());
+        assert!(snapshot.search("unrelated").0.is_empty());
 
         // All docs share the latent direction; the doc actually containing
         // "alpha" additionally earns the lexical component and ranks first.
-        let hits = snapshot.search("alpha");
+        let hits = snapshot.search("alpha").0;
         assert_eq!(hits.len(), 3);
         assert_eq!(hits[0].article_id, 7);
         assert!(hits[0].semantic > 0.9);
@@ -1236,7 +1283,7 @@ mod tests {
 
         // dims=0 → no semantic component; a single weak term stays under
         // MIN_SCORE while the two-term doc survives.
-        let hits = snapshot.search("alpha beta");
+        let hits = snapshot.search("alpha beta").0;
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].article_id, 1);
         assert_eq!(hits[0].semantic, 0.0);
@@ -1506,10 +1553,21 @@ mod tests {
         let index = index_on(conn);
         *index.inner.write().await = make_snapshot(toy_model(), Vec::new());
 
-        let terms = index.expanded_terms("alpha alp gama").await;
+        let terms = index
+            .search("alpha alp gama", 10, 0, None)
+            .await
+            .expect("search")
+            .expanded_terms;
         assert!(terms.contains(&"alpha".to_string()));
         assert!(terms.contains(&"gamma".to_string())); // reached via fuzzy expansion
-        assert!(index.expanded_terms("zzz").await.is_empty());
+        assert!(
+            index
+                .search("zzz", 10, 0, None)
+                .await
+                .expect("search")
+                .expanded_terms
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -2775,7 +2833,7 @@ mod tests {
         let index = index_on(conn);
         worker_tick(&index, 1).await;
         assert_eq!(index.doc_count().await, 1);
-        assert_eq!(index.inner.read().await.search("alpha")[0].article_id, 7);
+        assert_eq!(index.inner.read().await.search("alpha").0[0].article_id, 7);
     }
 
     #[tokio::test]
