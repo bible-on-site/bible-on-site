@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
@@ -105,6 +106,28 @@ public sealed class PerushimNotesServiceTests : IDisposable
         await service.InitializeAsync();
 
         service.IsAvailable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OperationCompleted_Reaches_the_reader_availability_seam()
+    {
+        // #2573: the shared display-sync coordinator consumes the materialization
+        // completion only through IReaderNotesAvailability — the explicit event
+        // must forward the same signal the internal one publishes.
+        var dataDir = Path.Join(_tempRoot, nameof(OperationCompleted_Reaches_the_reader_availability_seam));
+        Directory.CreateDirectory(dataDir);
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+        var fired = 0;
+        Action handler = () => fired++;
+        var seam = (IReaderNotesAvailability)service;
+
+        seam.OperationCompleted += handler;
+        await service.InitializeAsync();
+        seam.OperationCompleted -= handler;
+        await service.InitializeAsync();
+
+        fired.Should().Be(1,
+            "the seam fires once per settle and an unsubscribed handler stays silent");
     }
 
     [Fact]
