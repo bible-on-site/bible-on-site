@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 jest.mock("next/navigation", () => ({
@@ -11,8 +11,12 @@ jest.mock("next/navigation", () => ({
 
 import { LearningCalendar } from "@/app/calendar/components/LearningCalendar";
 import {
+	buildMonth,
 	getCycle,
 	getCycleStartMonth,
+	getDateLabel,
+	getDaySourceLabel,
+	getMonthOrder,
 	nextMonth,
 } from "@/data/learning-schedule";
 import { resetCalendarPdfAssetCache } from "@/lib/download/calendar-pdf-client";
@@ -791,6 +795,157 @@ describe("LearningCalendar", () => {
 			fireEvent.click(studyDay as Element);
 
 			expect(mockPush).toHaveBeenCalledWith("/929/1");
+		});
+	});
+
+	describe("grouped views show perek sources (#2975)", () => {
+		/** The MiniMonth section whose h3 title matches. */
+		function miniMonth(container: HTMLElement, title: RegExp): HTMLElement {
+			const section = [...container.querySelectorAll("section")].find((s) =>
+				title.test(s.querySelector("h3")?.textContent ?? ""),
+			);
+			if (section === undefined) {
+				throw new Error(`mini-month not found: ${title}`);
+			}
+			return section;
+		}
+
+		it.each(["year", "cycle"] as const)(
+			"shows the study-day source under its date in %s view and opens that perek",
+			(view) => {
+				setSearchParam(
+					"578512",
+					view === "cycle" ? { view, cycle: "4" } : { view },
+				);
+				const { container } = render(
+					<LearningCalendar {...cycleStartProps} />,
+				);
+
+				// י"א אלול תשפ"ה = בראשית ה (perek 5), a Thursday study day.
+				// Yearly titles are plain month names; cycle titles add the year.
+				const elul = miniMonth(
+					container,
+					view === "cycle" ? /אלול ה'תשפ"ה/ : /^אלול$/,
+				);
+				const cell = elul.querySelector("button[aria-label*='י\"א אלול']");
+				if (cell === null) {
+					throw new Error("study cell for י\"א אלול not rendered");
+				}
+				// The date stays; the canonical source is a visible text node,
+				// not only the aria-label — jsdom renders fail this on the old
+				// date-only template.
+				expect(
+					within(cell as HTMLElement).getByText('י"א'),
+				).toBeInTheDocument();
+				expect(
+					within(cell as HTMLElement).getByText("בראשית ה"),
+				).toBeInTheDocument();
+
+				fireEvent.click(cell);
+				expect(mockPush).toHaveBeenCalledWith("/929/5");
+			},
+		);
+
+		it.each(["year", "cycle"] as const)(
+			"keeps the merged review block's dates, חזרה badge and range visible in %s view",
+			(view) => {
+				setSearchParam(
+					"578512",
+					view === "cycle" ? { view, cycle: "4" } : { view },
+				);
+				const { container } = render(
+					<LearningCalendar {...cycleStartProps} />,
+				);
+
+				const elul = miniMonth(
+					container,
+					view === "cycle" ? /אלול ה'תשפ"ה/ : /^אלול$/,
+				);
+				const merged = elul.querySelector(
+					'button[aria-label*="חזרה: בראשית א-ה"]',
+				);
+				if (merged === null) {
+					throw new Error("merged review block not rendered");
+				}
+				expect(
+					within(merged as HTMLElement).getByText('י"ב - י"ג'),
+				).toBeInTheDocument();
+				expect(
+					within(merged as HTMLElement).getByText("חזרה"),
+				).toBeInTheDocument();
+				expect(
+					within(merged as HTMLElement).getByText("בראשית א-ה"),
+				).toBeInTheDocument();
+			},
+		);
+
+		it("shows a cross-sefer weekly review range in full in the yearly view", () => {
+			// Every cycle crosses every sefer boundary; cycle 4's early years
+			// hold the ויקרא/במדבר transition week, so a " - " review label
+			// exists in 5786.
+			let range = "";
+			for (const month of getMonthOrder(5786)) {
+				const hit = buildMonth(5786, month)
+					.map((cell) => cell.day)
+					.find(
+						(d) =>
+							d?.status === "review" &&
+							getDaySourceLabel(d).includes(" - "),
+					);
+				if (hit) {
+					range = getDaySourceLabel(hit);
+					break;
+				}
+			}
+			expect(range).toContain(" - ");
+
+			setSearchParam("578609", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(screen.getAllByText(range).length).toBeGreaterThan(0);
+		});
+
+		it("shows sources in a leap year's Adar II mini-month", () => {
+			// 5784 is a leap year; most of it lies inside cycle 3.
+			const adar2 = buildMonth(5784, 14)
+				.map((cell) => cell.day)
+				.find((d) => d?.status === "study");
+			if (adar2?.perekId === undefined) {
+				throw new Error("expected a study day in Adar II 5784");
+			}
+			const source = getDaySourceLabel(adar2);
+
+			setSearchParam("578414", { view: "year" });
+			const { container } = render(
+				<LearningCalendar {...cycleStartProps} />,
+			);
+
+			const section = miniMonth(container, /אדר ב/);
+			const cells = [...section.querySelectorAll("button")].filter(
+				(b) => within(b as HTMLElement).queryByText(source) !== null,
+			);
+			expect(cells.length).toBeGreaterThan(0);
+		});
+
+		it("keeps out-of-cycle cells date-only and non-interactive in the cycle view", () => {
+			// The last months of the cycle-4 view hold cycle-5 days: dimmed and
+			// rendered as plain cells (the PDF prints no label on dimmed cells).
+			const nextStart = getCycle(5).start;
+			const expectedLabel = `${getDateLabel(nextStart)} - בראשית א`;
+
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			// The sr-only copy still announces the real assignment; its cell
+			// must not invent a visible source for the neighbouring cycle.
+			const srOnly = screen.getByText(expectedLabel);
+			const cell = srOnly.parentElement;
+			if (cell === null) {
+				throw new Error("dimmed cell not found");
+			}
+			expect(cell.tagName).toBe("SPAN");
+			expect(within(cell).queryByText("בראשית א")).toBeNull();
+			expect(within(cell).queryByText("חזרה")).toBeNull();
 		});
 	});
 
