@@ -13,7 +13,11 @@ import {
 const sourceRef = "a".repeat(40);
 function fixture(t, moduleName = "api") {
 	const image =
-		moduleName === "website" ? "bible-on-site" : "bible-on-site-api";
+		moduleName === "website"
+			? "bible-on-site"
+			: moduleName === "admin"
+				? "bible-on-site-admin"
+				: "bible-on-site-api";
 	const directory = mkdtempSync(join(tmpdir(), "api-release-assets-"));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const payload = {
@@ -90,9 +94,10 @@ test("website archives retain their own module, CI provenance and canonical file
 		release.assets.map((asset) => asset.name),
 	);
 	assert.throws(
-		() => main({ MODULE_NAME: "admin" }),
+		() => main({ MODULE_NAME: "bulletin" }),
 		/Invalid native image module/,
 	);
+	// A published website payload cannot be relabeled as another module.
 	assert.throws(
 		() => nativeImageArtifacts({ ...payload, module_name: "admin" }),
 		/published CI provenance/,
@@ -102,6 +107,45 @@ test("website archives retain their own module, CI provenance and canonical file
 			() => nativeImageArtifacts({ ...payload, module_name }),
 			/published CI provenance/,
 		);
+});
+
+test("admin archives bind their own module, CI provenance and canonical filenames", (t) => {
+	const { release, payload, options } = fixture(t, "admin");
+	assert.deepEqual(
+		verifyAPIImageAssets(release, options),
+		release.assets.map((asset) => asset.name),
+	);
+	assert.deepEqual(nativeImageArtifacts(payload), {
+		amd64: "bible-on-site-admin-docker-10",
+		arm64: "bible-on-site-admin-docker-10-arm64",
+	});
+	assert.throws(() => apiImageArtifacts(payload), /API platform/);
+	assert.throws(
+		() => verifyAPIImageAssets(release, { ...options, moduleName: "api" }),
+		/published canonical/,
+	);
+	// Admin names are not interchangeable with website or API archives.
+	for (const module_name of ["website", "api"])
+		assert.throws(
+			() =>
+				verifyAPIImageAssets(release, { ...options, moduleName: module_name }),
+			/published canonical|release asset|API archive/,
+		);
+	assert.deepEqual(
+		main(
+			{
+				MODULE_NAME: "admin",
+				MODULE_VERSION: "1.2.3",
+				IMAGE_RELEASE_SOURCE: sourceRef,
+				DOCKER_IMAGE_OUTPUT_DIR: options.directory,
+			},
+			(_repo, tag) => {
+				assert.equal(tag, "admin-v1.2.3");
+				return release;
+			},
+		),
+		release.assets.map((asset) => asset.name),
+	);
 });
 
 test("the CLI entry binds lookup to the canonical API version", (t) => {
