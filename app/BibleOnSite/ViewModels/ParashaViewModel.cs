@@ -339,8 +339,11 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         _hasPerekAudio = hasPerekAudio;
 #endif
 
-        // Sync FontFactor from preferences and listen for changes
-        _fontFactor = _preferencesService.FontFactor;
+        // Sync FontFactor from preferences and listen for changes. Rows
+        // resolve pasuk text sizes, so the effective פסוקים factor (master ×
+        // category percent) applies here like on the perek and masora
+        // readers (#2461) — not the bare master.
+        _fontFactor = _preferencesService.PasukFontFactor;
         _divineNameMaskingRevision = DivineNameMasking.Revision;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
@@ -913,10 +916,10 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
 
     private void RefreshPreferences()
     {
-        var rebuild = Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001;
+        var rebuild = Math.Abs(_fontFactor - _preferencesService.PasukFontFactor) > 0.001;
         if (rebuild)
         {
-            FontFactor = _preferencesService.FontFactor;
+            FontFactor = _preferencesService.PasukFontFactor;
         }
         if (_divineNameMaskingRevision != DivineNameMasking.Revision)
         {

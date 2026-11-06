@@ -100,10 +100,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
 
+            // EffectiveFontSize carries the FontFactor the other platforms
+            // honor — a raw FontSize would leave factored views unscaled
+            // here (#2461).
             var paragraph = new Paragraph
             {
-                FontSize = VirtualView.FontSize,
-                LineHeight = VirtualView.FontSize * VirtualView.LineHeight,
+                FontSize = VirtualView.EffectiveFontSize,
+                LineHeight = VirtualView.EffectiveFontSize * VirtualView.LineHeight,
                 TextAlignment = VirtualView.TextAlignment switch
                 {
                     HtmlTextAlignment.Center => Microsoft.UI.Xaml.TextAlignment.Center,
@@ -137,7 +140,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
 #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"HtmlViewHandler Windows error: {ex.Message}");
             // Fallback to plain text
-            var paragraph = new Paragraph { FontSize = VirtualView.FontSize };
+            var paragraph = new Paragraph { FontSize = VirtualView.EffectiveFontSize };
             paragraph.Inlines.Add(new Run { Text = html });
             PlatformView.Blocks.Add(paragraph);
         }
@@ -224,12 +227,12 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                     {
                         FontSize = tagName switch
                         {
-                            "H1" => VirtualView.FontSize * (VirtualView.H1FontSizeMultiplier > 0 ? VirtualView.H1FontSizeMultiplier : 1.8),
-                            "H2" => VirtualView.FontSize * (VirtualView.H2FontSizeMultiplier > 0 ? VirtualView.H2FontSizeMultiplier : 1.5),
-                            "H3" => VirtualView.FontSize * (VirtualView.H3FontSizeMultiplier > 0 ? VirtualView.H3FontSizeMultiplier : 1.3),
-                            "H4" => VirtualView.FontSize * 1.15,
-                            "H5" => VirtualView.FontSize * 1.1,
-                            _ => VirtualView.FontSize * 1.05
+                            "H1" => VirtualView.EffectiveFontSize * (VirtualView.H1FontSizeMultiplier > 0 ? VirtualView.H1FontSizeMultiplier : 1.8),
+                            "H2" => VirtualView.EffectiveFontSize * (VirtualView.H2FontSizeMultiplier > 0 ? VirtualView.H2FontSizeMultiplier : 1.5),
+                            "H3" => VirtualView.EffectiveFontSize * (VirtualView.H3FontSizeMultiplier > 0 ? VirtualView.H3FontSizeMultiplier : 1.3),
+                            "H4" => VirtualView.EffectiveFontSize * 1.15,
+                            "H5" => VirtualView.EffectiveFontSize * 1.1,
+                            _ => VirtualView.EffectiveFontSize * 1.05
                         }
                     };
                     ParseNode(child, headerSpan.Inlines, inFootnotes);
@@ -432,13 +435,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
     /// generated note markers alike.</summary>
     private Microsoft.UI.Xaml.Controls.TextBlock RaisedTextBlock(WinBrush? foreground = null)
     {
-        var size = VirtualView.FontSize * ScriptScale;
+        var size = VirtualView.EffectiveFontSize * ScriptScale;
         return new Microsoft.UI.Xaml.Controls.TextBlock
         {
             FontSize = size,
             Foreground = foreground ?? PlatformView.Foreground,
             FontFamily = PlatformView.FontFamily,
-            RenderTransform = new TranslateTransform { Y = -(VirtualView.FontSize * ScriptRaise) }
+            RenderTransform = new TranslateTransform { Y = -(VirtualView.EffectiveFontSize * ScriptRaise) }
         };
     }
 
