@@ -140,6 +140,7 @@ impl TanahpediaEntriesQuery {
         let month_day = hebrew_month * 100 + hebrew_day;
         tanahpedia_entries_service::get_today_entities(ctx.data::<Database>()?, month_day)
             .await
+            .map(|entities| (*entities).clone())
             .map_err(|e| e.extend())
     }
 
