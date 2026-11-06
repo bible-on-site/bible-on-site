@@ -27,7 +27,15 @@ function validateNativeSample(report, pid, executable) {
   const graphStart = report.indexOf('\nCall graph:');
   const imagesStart = report.indexOf('\nBinary Images:', graphStart);
   const graph = graphStart >= 0 && imagesStart > graphStart ? report.slice(graphStart, imagesStart) : '';
-  if (Number(processId) !== pid || processPath !== executable ||
+  // macOS 27 privacy-redacts temporary directories in otherwise valid reports.
+  // Only one entire directory segment may be masked; kernel identity checks
+  // before and after the sample still establish the full executable and launch.
+  const masked = processPath?.match(/^(\/[^*]+\/)\*(\/[^*]+)$/);
+  const pathMatches = processPath === executable || (masked &&
+    masked[1].length > 1 && masked[2].endsWith('/BibleOnSite.app/BibleOnSite') &&
+    executable.startsWith(masked[1]) && executable.endsWith(masked[2]) &&
+    executable.length > masked[1].length + masked[2].length);
+  if (Number(processId) !== pid || !pathMatches ||
       !/^\s+\d+\s+Thread_\d+/m.test(graph) || !/\[0x[0-9a-f]+\]/i.test(graph)) {
     throw new Error('Native sample did not retain the pinned process identity and a native thread call graph.');
   }
@@ -48,16 +56,20 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
     // The simulator may be the stalled component. Confirm only the pinned
     // PID through the host kernel, without another CoreSimulator RPC or ps's
     // Mach task inspection. The executable path proves this device owns it.
-    const listing = await execute(inspectorPath, [String(pid)],
+    const listing = await execute(inspectorPath, ['--identity', String(pid)],
       { timeout: 5000, signal, windowsHide: true });
     if (listing.stderr?.trim()) throw new Error(`App process inspection failed: ${listing.stderr.trim()}`);
     writeFileSync(`${prefix}-processes.txt`, listing.stdout);
     const ownedProcesses = ownedIosTestAppProcesses(listing.stdout, udid, devicesRoot)
       .filter(record => !record.state.startsWith('Z'));
     const observedPids = ownedProcesses.map(record => record.pid);
-    if (!observedPids.includes(pid)) {
+    const before = ownedProcesses.find(record => record.pid === pid);
+    if (!before) {
       return { status: 'exited', pid, observedPids,
         reason: 'Pinned process is no longer this device\'s running app; no replacement sampled.' };
+    }
+    if (!/^L@[1-9]\d*\.\d{6}$/.test(before.state)) {
+      throw new Error('Kernel inspection did not retain the pinned process launch identity.');
     }
     writeFileSync(`${prefix}-process-${pid}.txt`, listing.stdout);
     const stackPath = `${prefix}-stack-${pid}.txt`;
@@ -82,13 +94,26 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
       })(),
       (async () => {
         writeFileSync(`${prefix}-sampler.json`, JSON.stringify({ tool: '/usr/bin/sample', pid,
-          executable: ownedProcesses.find(record => record.pid === pid).executable,
+          executable: before.executable,
           durationSeconds: 1, intervalMilliseconds: 1, commandLimitMs: 10000, deadlineUtc }, null, 2), { flag: 'wx' });
         const captured = await execute('sudo', ['-n', '/usr/bin/sample', String(pid), '1', '1',
           '-file', stackPath], { timeout: 10000, signal });
         writeFileSync(`${prefix}-sampler-output.txt`, captured.stdout + captured.stderr, { flag: 'wx' });
-        validateNativeSample(readFileSync(stackPath, 'utf8'), pid,
-          ownedProcesses.find(record => record.pid === pid).executable);
+        validateNativeSample(readFileSync(stackPath, 'utf8'), pid, before.executable);
+        // A single second kernel read strengthens attribution without extending
+        // any command cap or the common 15s deadline. No retries or polling.
+        signal.throwIfAborted();
+        const afterListing = await execute(inspectorPath, ['--identity', String(pid)],
+          { timeout: 5000, signal, windowsHide: true });
+        writeFileSync(`${prefix}-process-after-${pid}.txt`, afterListing.stdout, { flag: 'wx' });
+        if (afterListing.stderr?.trim()) throw new Error(`App process inspection failed: ${afterListing.stderr.trim()}`);
+        const after = ownedIosTestAppProcesses(afterListing.stdout, udid, devicesRoot)
+          .find(record => record.pid === pid);
+        const verified = after?.state === before.state && after.executable === before.executable;
+        writeFileSync(`${prefix}-kernel-identity.json`, JSON.stringify({ before, after: after ?? null,
+          verified }, null, 2), { flag: 'wx' });
+        if (!verified) throw new Error('Pinned kernel process instance changed during native sampling.');
+        signal.throwIfAborted();
       })(),
     ]);
     if (stack.status === 'rejected') throw stack.reason;

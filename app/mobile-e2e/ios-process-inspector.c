@@ -10,11 +10,13 @@
 // Read kernel process metadata only. Avoid Mach task/thread inspection and
 // argument snapshots: even ps restricted to three PIDs exceeded five seconds.
 int main(int argc, char **argv) {
-    if (argc < 2) {
+    int identity = argc > 1 && strcmp(argv[1], "--identity") == 0;
+    int first = identity ? 2 : 1;
+    if (argc <= first) {
         fprintf(stderr, "Require explicit candidate PIDs.\n");
         return EXIT_FAILURE;
     }
-    for (int index = 1; index < argc; index++) {
+    for (int index = first; index < argc; index++) {
         char *end = NULL;
         errno = 0;
         long value = strtol(argv[index], &end, 10);
@@ -45,8 +47,20 @@ int main(int argc, char **argv) {
             fprintf(stderr, "Invalid kernel executable path for %d.\n", pid);
             return EXIT_FAILURE;
         }
-        // L denotes a live process; zombies were excluded above.
-        printf("%d L %s\n", pid, path);
+        // Keep the cleanup API unchanged. Failure sampling additionally pins
+        // the kernel launch time, so a reused PID cannot qualify a report.
+        if (identity) {
+            if (info.pbi_start_tvsec == 0 || info.pbi_start_tvusec >= 1000000) {
+                fprintf(stderr, "Invalid kernel process launch time for %d.\n", pid);
+                return EXIT_FAILURE;
+            }
+            printf("%d L@%llu.%06llu %s\n", pid,
+                (unsigned long long)info.pbi_start_tvsec,
+                (unsigned long long)info.pbi_start_tvusec, path);
+        } else {
+            // L denotes a live process; zombies were excluded above.
+            printf("%d L %s\n", pid, path);
+        }
     }
     return EXIT_SUCCESS;
 }
