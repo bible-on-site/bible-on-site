@@ -1,0 +1,25 @@
+{
+  "kind": "Bounded diagnosis, not a startup repair or delivery acceptance",
+  "productionBase": "a48bca0cadd83dacc3bf1a19ef896d7bd7e6b00d",
+  "originalSource": "963d2377298883346538d1adca1119488ebe2602",
+  "originalRun": 42220273595,
+  "originalPerformanceJob": 127900565275,
+  "originalFailure": {
+    "route": "/929/686",
+    "device": "desktop",
+    "modeledTbtMs": 13.994209289550781,
+    "retainedBoundaryMs": 0,
+    "observedTasksOver50Ms": 0,
+    "modeledTask": "Unattributable, 72ms; not proof of an observed 72ms CPU task",
+    "evidence": "All three original performance ZIPs, reports, logs, entry hashes and raw reader records retained in hosted1076-42220273595-attempt1. The normal fixture retained LHRs but not their original traces. Twelve reader cases, three controls and the legacy drag case passed; the retained Lighthouse gate did not."
+  },
+  "rejectedHypothesis": "Inactive word-control subscriptions cannot explain this startup: SeferScriptureText already omits every RecitationWordControl while listening is closed. No proposed inactive-control production change is included.",
+  "experiment": {
+    "allocations": 1,
+    "execution": "One automatic current-head Website Performance execution, including the unchanged four Lighthouse page/device audits. No second unchanged execution, regardless of outcome.",
+    "capture": "Retain the original Lighthouse runner artifacts, including Trace, DevtoolsLog, script resources and settings. Keep references in memory during the four audits; serialize after all audits and browser close, including completed audit artifacts on an early failure. No additional navigation or collection is introduced.",
+    "limits": "Existing flags, calibration, browser, rendering profiles, workloads, warmup, CPU/memory caps, timeouts and thresholds remain unchanged. One worker. Lighthouse retries explicitly zero; reader scenario retries remain zero. All twelve reader scenarios, three controls, legacy drag and the separate seven panel quarantines remain as before.",
+    "source": "Production source and dependencies are unchanged from the actual current base. New base differs from original963d only in release version metadata. Bind the actual CI checkout and inspect any newer base before interpreting results.",
+    "stop": "Preserve complete archives/logs/entry digests and independently inspect the original trace and network records against the LHR timestamps. A passing diagnostic does not explain or erase the retained original failure and earns no acceptance credit. Do not retry until green. Use new facts to identify and measure a concrete repair before restarting three same-head hosted acceptance executions."
+  }
+}

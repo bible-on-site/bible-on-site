@@ -2,12 +2,18 @@ import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
-import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
+import lighthouse, {
+	desktopConfig,
+	type Flags,
+	type Result,
+	type RunnerResult,
+} from "lighthouse";
 import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
 import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
 import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
+	saveLighthouseArtifacts,
 	saveLighthouseReport,
 	writePerformanceIndex,
 } from "../../scripts/performance-report.mjs";
@@ -66,6 +72,10 @@ const test = base.extend<
 		async ({ lighthousePort }, use) => {
 			const results: LighthouseResultsMap = new Map();
 			const reports: ReturnType<typeof saveLighthouseReport>[] = [];
+			const bufferedArtifacts: {
+				rawReport: string;
+				artifacts: RunnerResult["artifacts"];
+			}[] = [];
 
 			// Launch browser once for all audits
 			const context = await chromium.launchPersistentContext(
@@ -97,19 +107,32 @@ const test = base.extend<
 						await page.close();
 
 						// Run Lighthouse
-						const lhr = await runLighthouseAudit(
+						const audit = await runLighthouseAudit(
 							url,
 							strategy,
 							lighthousePort,
 							cpuIndex,
 						);
-						reports.push(saveReport(lhr, strategy));
+						const lhr = audit.lhr;
+						const report = saveReport(lhr, strategy);
+						reports.push(report);
+						bufferedArtifacts.push({
+							rawReport: report.rawReport,
+							artifacts: audit.artifacts,
+						});
 						writePerformanceIndex(REPORTS_DIR, reports);
 						results.set(getResultKey(path, strategy), lhr);
 					}
 				}
 			} finally {
-				await context.close();
+				try {
+					await context.close();
+				} finally {
+					// These are the original gatherer's traces and network records.
+					// Flush after all audits, including on an early setup/close failure;
+					// a later diagnostic navigation cannot explain the original sample.
+					saveLighthouseArtifacts(REPORTS_DIR, bufferedArtifacts);
+				}
 			}
 
 			await use(results);
@@ -134,7 +157,7 @@ const test = base.extend<
 	},
 });
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", retries: 0 });
 
 /**
  * Lighthouse scoreDisplayMode values that indicate the audit has a measurable score.
@@ -446,7 +469,7 @@ async function runLighthouseAudit(
 	strategy: DeviceStrategy,
 	port: number,
 	hostBenchmarkIndex: number,
-): Promise<Result> {
+): Promise<RunnerResult> {
 	const cpuProfile = lighthouseCpuProfile(hostBenchmarkIndex, strategy);
 	const flags: Flags = {
 		logLevel: "error",
@@ -467,7 +490,8 @@ async function runLighthouseAudit(
 		throw new Error("Lighthouse audit failed - no result returned");
 	}
 
-	return Object.assign(runnerResult.lhr, { cpuCalibration: cpuProfile });
+	Object.assign(runnerResult.lhr, { cpuCalibration: cpuProfile });
+	return runnerResult;
 }
 
 function saveReport(lhr: Result, strategy: DeviceStrategy) {
