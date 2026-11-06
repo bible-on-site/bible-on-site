@@ -607,6 +607,25 @@ def load_entities_fn(spec):
     return entities_fn
 
 
+def lazy_entities_fn(spec):
+    """Defer `load_entities_fn` until the first inference call.
+
+    A publish run whose checkpoint covers every unit never touches the
+    model: weights stay unfetched and torch/transformers unimported. The
+    first call builds the real pipeline once and memoizes it.
+    """
+    loaded = None
+
+    def entities_fn(text):
+        nonlocal loaded
+        # `not loaded`: the built pipeline callable is always truthy.
+        if not loaded:
+            loaded = load_entities_fn(spec)
+        return loaded(text)
+
+    return entities_fn
+
+
 def spec_revision_tag(spec):
     """model_revision stamp, matching the baseline's name@sha+contract form."""
     return f"{spec['name']}@{spec['revision'][:8]}+contract1"
