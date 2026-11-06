@@ -27,14 +27,14 @@
             </controls:SharedTopBar.CenterContent>
         </controls:SharedTopBar>
 
-        <!-- Join cards (#2806): three channel-branded cards mirroring the
-             website's עלון יומי surface — Telegram, WhatsApp and email, in
-             that order. The wrapping row stacks the cards one above the
-             other on small screens and lays them side by side on tablet
-             and desktop widths, like the website's join surface. -->
+        <!-- Join cards (#2806, links #2942): three channel-branded cards
+             mirroring the website's עלון יומי surface — Telegram, WhatsApp
+             and email, in that order. The wrapping row stacks the cards one
+             above the other on small screens and lays them side by side on
+             tablet and desktop widths, like the website's join surface. -->
         <Grid Grid.Row="1" RowDefinitions="Auto,*" Padding="0,12,0,16">
             <Label Grid.Row="0"
-                   Text="לימוד הפרק היומי במייל, בטלגרם ובווטסאפ"
+                   Text="קבלו את הלימוד היומי ישירות אליכם"
                    FontSize="16"
                    HorizontalTextAlignment="Center"
                    Padding="24,4"
