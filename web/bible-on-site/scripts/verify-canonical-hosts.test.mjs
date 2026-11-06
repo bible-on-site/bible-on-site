@@ -9,6 +9,10 @@ const DOMAIN = "xn--febl3a.co.il";
 const BARE = `https://${DOMAIN}`;
 const WWW = `https://www.${DOMAIN}`;
 
+// The deployed app answers every miss with its branded Hebrew 404 — the
+// mocks mirror that so the /www/ fallback probe has a body to assert.
+const BRANDED_404 = "<title>העמוד לא נמצא</title>";
+
 /** Serve `redirects`/`pages` as a fake origin: map url -> 301 target or body. */
 const fetchFrom =
 	({ redirects = {}, pages = {} }) =>
@@ -22,7 +26,7 @@ const fetchFrom =
 		}
 		const path = new URL(url).pathname;
 		const body = pages[path];
-		return new Response(body ?? "<h1>Not found</h1>", {
+		return new Response(body ?? BRANDED_404, {
 			status: body === undefined ? 404 : 200,
 		});
 	};
@@ -33,8 +37,17 @@ const healthyRedirects = {
 	[`http://www.${DOMAIN}/`]: `${BARE}/`,
 	[`http://${DOMAIN}/`]: `${BARE}/`,
 	[`${WWW}/929/1?book`]: `${BARE}/929/1?book`,
+	[`${BARE}/sitemap_www.xml`]: `${BARE}/sitemap.xml`,
+	// The supplied URL starts on the www host (#2935): host normalization
+	// preserves the path, then the alias redirects into the canonical doc.
+	[`${WWW}/sitemap_www.xml`]: `${BARE}/sitemap_www.xml`,
 };
-const healthyPages = { "/": "home", "/929/1": "chapter" };
+const healthyPages = {
+	"/": "home",
+	"/929/1": "chapter",
+	"/sitemap.xml":
+		'<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',
+};
 
 test("all scheme/host combinations reach the canonical bare host", async () => {
 	await verifyCanonicalHosts(DOMAIN, {
@@ -78,7 +91,7 @@ const redirectTo = (location) =>
 	new Response(null, { status: 301, headers: { location } });
 const pageAt = (url) => {
 	const path = new URL(url).pathname;
-	return new Response(healthyPages[path] ?? "x", {
+	return new Response(healthyPages[path] ?? BRANDED_404, {
 		status: healthyPages[path] === undefined ? 404 : 200,
 	});
 };
@@ -134,7 +147,7 @@ test("the seed crawler UA is used for its own request", async () => {
 				});
 			}
 			const path = new URL(url).pathname;
-			return new Response(healthyPages[path] ?? "x", {
+			return new Response(healthyPages[path] ?? BRANDED_404, {
 				status: healthyPages[path] === undefined ? 404 : 200,
 			});
 		},
@@ -142,15 +155,86 @@ test("the seed crawler UA is used for its own request", async () => {
 	assert.ok(seenAgents.some((agent) => agent.includes("AhrefsSiteAudit")));
 });
 
+/** Healthy host responses with one injectable override per test. */
+const healthyWith = (override) => async (url) => {
+	const path = new URL(url).pathname;
+	const special = override?.(url, path);
+	if (special !== undefined) return special;
+	const target = healthyRedirects[url];
+	if (target !== undefined) return redirectTo(target);
+	return pageAt(url);
+};
+
+test("sitemap_www.xml falling through to a 404 fails — the reported defect (#2935)", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: fetchFrom({
+				redirects: Object.fromEntries(
+					Object.entries(healthyRedirects).filter(
+						([from]) => from !== `${BARE}/sitemap_www.xml`,
+					),
+				),
+				pages: healthyPages,
+			}),
+		}),
+		/sitemap_www\.xml: expected 200 at .*sitemap\.xml.*got 404/,
+	);
+});
+
+test("a non-permanent sitemap alias redirect fails", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((url) =>
+				url === `${BARE}/sitemap_www.xml`
+					? new Response(null, {
+							status: 302,
+							headers: { location: `${BARE}/sitemap.xml` },
+						})
+					: undefined,
+			),
+		}),
+		/non-permanent HTTP 302/,
+	);
+});
+
+test("nginx's stock 404 on a /www/ miss fails — the branded page must answer (#2935)", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((url, path) =>
+				url.startsWith(BARE) && path.startsWith("/www/")
+					? new Response("<html><body><h1>404 Not Found</h1></body></html>", {
+							status: 404,
+						})
+					: undefined,
+			),
+		}),
+		/did not render the branded Hebrew 404/,
+	);
+});
+
+test("a soft-200 on a /www/ miss fails", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((url, path) =>
+				url.startsWith(BARE) && path.startsWith("/www/")
+					? new Response("<html>index</html>", { status: 200 })
+					: undefined,
+			),
+		}),
+		/expected 404, got 200/,
+	);
+});
+
+const ROUTER_CONF = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../../../docs/aws/cloudformation/ec2-nginx/router/router.conf",
+);
+
 // Static guard for the deployed nginx config: www must be a named server
 // on both ports for both TLDs, redirecting to the bare host — otherwise
 // it falls into the catch-all that 301s to /404 (#2377).
 test("router.conf redirects www to the bare host on 80 and 443", () => {
-	const confPath = path.resolve(
-		path.dirname(fileURLToPath(import.meta.url)),
-		"../../../docs/aws/cloudformation/ec2-nginx/router/router.conf",
-	);
-	const conf = readFileSync(confPath, "utf8");
+	const conf = readFileSync(ROUTER_CONF, "utf8");
 	const blocks = conf.match(/server \{[^}]+\}/gs) ?? [];
 	for (const host of ["xn--febl3a.co.il", "xn--febl3a.com"]) {
 		for (const port of ["80", "443"]) {
@@ -168,5 +252,24 @@ test("router.conf redirects www to the bare host on 80 and 443", () => {
 				`www.${host} on :${port} does not redirect to the bare host`,
 			);
 		}
+	}
+});
+
+// The router-owned /www/ static tree must not leak nginx's stock English
+// 404 — every website-facing server block re-dispatches a missing file
+// through the app proxy so the shared branded page answers (issue #2935).
+test("router.conf routes missing /www/ files to the branded app 404", () => {
+	const conf = readFileSync(ROUTER_CONF, "utf8");
+	const wwwBlocks = conf.match(/location \/www\/ \{[^}]+\}/g) ?? [];
+	assert.equal(
+		wwwBlocks.length,
+		2,
+		`expected a location /www/ block in both TLD servers, found ${wwwBlocks.length}`,
+	);
+	for (const block of wwwBlocks) {
+		assert.ok(
+			block.includes("error_page 404 /404"),
+			"location /www/ missing the branded-404 error_page fallback",
+		);
 	}
 });

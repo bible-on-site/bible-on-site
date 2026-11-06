@@ -62,6 +62,31 @@ describe("next.config.mjs", () => {
 		expect(cssChunking("")).toBe(true);
 	});
 
+	it("keeps legacy public URLs permanently redirected to their canonical targets", async () => {
+		// #2935: /sitemap_www.xml was a public sitemap URL external consumers
+		// still fetch. It must stay a permanent redirect into the canonical
+		// document, not fall through to the missing-page 404 — and no other
+		// *.xml path may be claimed by the alias.
+		const redirects = await nativeJson(
+			`const { default: configure } = await import(${JSON.stringify(configUrl)});
+			 const { PHASE_DEVELOPMENT_SERVER } = await import("next/constants.js");
+			 const config = configure(PHASE_DEVELOPMENT_SERVER, { defaultConfig: { experimental: { cpus: 1 } } });
+			 console.log(JSON.stringify(await config.redirects()));`,
+		);
+		expect(redirects).toContainEqual({
+			source: "/sitemap_www.xml",
+			destination: "/sitemap.xml",
+			permanent: true,
+		});
+		expect(
+			redirects.filter(({ source }: { source: string }) =>
+				source.includes(".xml"),
+			),
+		).toEqual([
+			expect.objectContaining({ source: "/sitemap_www.xml" }),
+		]);
+	});
+
 	it.each(["linux", "darwin", "win32"])(
 		"budgets only production builds on %s and preserves other options",
 		(platform) => {
