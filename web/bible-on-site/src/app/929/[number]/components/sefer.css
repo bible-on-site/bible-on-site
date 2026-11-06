@@ -52,9 +52,11 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 
 /* Skip covered pane painting while retaining its layout and existing masks.
    Keep page boxes available for back-face preparation; the library clears
-   the pane mask before exposing its content. */
+   the pane mask before exposing its content. Dormancy is marked only by the
+   class — the library never writes inline visibility — so no !important is
+   needed to win the cascade here. */
 .he-book .flipbook-page-scrollport.flipbook-layout-dormant {
-	visibility: hidden !important;
+	visibility: hidden;
 }
 
 /* Sefer pages are app-like panels — fixed headers/footers with inner
