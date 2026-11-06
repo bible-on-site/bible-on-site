@@ -1,0 +1,21 @@
+{
+  "issue": 3145,
+  "classification": "Repair of a proven diagnostic handoff gap; not an application startup, calendar or website performance repair",
+  "evidence": {
+    "run": 42263462538,
+    "head": "eb7cc2cacd96a2dee57703f88979636c5f1df40e",
+    "actualCheckout": "899b5c2bbf761c8bcab74be29e53dd6efa8ebbee",
+    "job": 128052238131,
+    "finding": "The first startup condition failed before Scenario.Run. InitializeAsync saved a screenshot/source without notifying the failure supervisor. Its original process was7574; the later post-suite fallback sampled35534. The later sample cannot explain the original failure.",
+    "preservation": "All15complete diagnostic/report/coverageZIPs,9completejoblogs,622decoded-entrySHA256 hashes and both actual Mac controls retained. Two large app binaries are metadata/digest-only. The actual CI tree equals the tested head."
+  },
+  "question": "Does each failed startup notify the existing supervisor before diagnostic queries or the existing recovery attempt, preserving the original failure and session identity?",
+  "method": "Use the existing FailureDiagnostics.BeforeFailure protocol in every startup exception path, before recovery or diagnostic queries. Keep the existing diagnostic15s cap, startup45s condition, Appium120000ms command deadline, pilot limits and recovery counts. Artifact failures must not replace the original startup exception. Healthy startup is unchanged.",
+  "controls": "Real loopback supervisor blocks completion until acknowledgement; assert no diagnostic artifact is written before acknowledgement and the exact original exception is rethrown. A recoverable startup session death must wait before its existing single rebuild. An occupied artifact path must preserve both earlier bytes and the original exception.",
+  "hostedAllocations": 1,
+  "allocation": "One automatic normal workflow on this concrete C# handoff correction after local red/green controls. This is an independent owned branch from current master, not an unchanged rerun of either exhausted Native3146 allocation. Retain every original mobile outcome, source binding, report/archive/log and entry digest before advancing.",
+  "stop": "Stop after this complete workflow, green or red. No unchanged manual rerun or merge solely to create another measurement. A passing control or later passing app scenario does not explain or erase the original failure. Actual failed-app native collection remains unproved; Native3146/Store3143 and original3145 remain held by their own findings and gates.",
+  "unchanged": "Application source, appearance, accessible content, dependencies, interaction deadlines, retries, sleeps, polling budgets, recovery attempts, all reader scenarios/controls/legacy guard and seven panel quarantines. No AWS/Store changes or operations.",
+  "rootCauseCredit": 0,
+  "readerAcceptanceCredit": 0
+}

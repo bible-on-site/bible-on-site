@@ -60,6 +60,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
+            BeforeStartupFailure();
             // The session's own recovery already ran inside Acquire, so this
             // retry only fires when it exhausted its one rebuild. Any other
             // startup failure — and a second death — fails below.
@@ -72,20 +73,22 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception))
         {
+            BeforeStartupFailure();
             // A lost adb transport is ambiguous — the failed creation may still
             // be settling server-side — so the retry runs only after adb
             // confirms a booted device with a responsive package manager, and
             // the session still re-attempts teardown before creating anything.
             if (!TransportRecovery(exception))
             {
-                SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+                SaveStartupFailure(exception);
                 throw;
             }
             Output.WriteLine($"{Configuration.Platform}: adb transport recovered; acquiring the session once more.");
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            BeforeStartupFailure();
+            SaveStartupFailure(exception);
             throw;
         }
         try
@@ -94,11 +97,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            BeforeStartupFailure();
+            SaveStartupFailure(exception);
             throw;
         }
         return default;
     }
+
+    // Startup runs before Scenario's failure boundary. Notify while this
+    // session still identifies the failing app, before recovery or teardown.
+    private void BeforeStartupFailure() => FailureDiagnostics.BeforeFailure(
+        $"{GetType().FullName}.SessionStartup", Driver?.SessionId?.ToString(), Output.WriteLine);
+
+    private void SaveStartupFailure(Exception exception) => FailureDiagnostics.PreserveFailure(
+        () => SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception), Output.WriteLine);
 
     // The collection fixture owns the driver's lifetime, so a finished test
     // has nothing to release. The next scenario's acquire restarts the app.
