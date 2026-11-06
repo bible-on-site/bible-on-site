@@ -135,6 +135,9 @@ entry CRUD and entity links, entry-revision approval/restore, and entity /
 person / place / family structural edits. Each mutation reports the exact
 public URLs it changed — including the old URL after a rename/move and the
 removed URL after a delete — so notification covers stale URLs too.
+Article, author and Tanahpedia entry changes also expire the prerendered
+`/sitemap.xml`, which lists those entities from uncached DB reads and would
+otherwise keep build-time URLs until the next deploy.
 
 **Limits**: invalidation is local to the website instance that receives the
 call — the service normally runs a single task (`DesiredCount: 1`), but
