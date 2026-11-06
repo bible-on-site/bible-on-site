@@ -295,7 +295,7 @@ pub async fn search_articles(
             hits: Vec::new(),
         });
     }
-    let terms = index.expanded_terms(phrase).await;
+    let terms = page.expanded_terms;
     let ids: Vec<i32> = page.hits.iter().map(|hit| hit.article_id).collect();
     let rows = store::fetch_hit_rows(db.get_connection(), &ids)
         .await
