@@ -406,9 +406,9 @@ describe("TopNavAccessibility", () => {
 		// docking at the gear offset would leave an unexplained void.
 		for (const pathname of [
 			"/929/authors",
-			"/929/authors/1",
+			"/929/authors/הרב לדוגמא שליטא",
 			"/929/rabbis",
-			"/929/rabbis/1",
+			"/929/rabbis/הרב לדוגמא שליטא",
 			"/929",
 		]) {
 			mockPathname = pathname;
