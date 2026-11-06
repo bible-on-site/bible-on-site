@@ -72,9 +72,9 @@ export function validateAPIImageOptions(options: APIImageOptions): void {
 		!/^\d+\.\d+\.\d+$/.test(options.version) ||
 		semver.valid(options.version) !== options.version
 	)
-		throw new Error("API image version must be plain major.minor.patch");
+		throw new Error("Image version must be plain major.minor.patch");
 	if (!options.amd64ArchivePath || !options.arm64ArchivePath)
-		throw new Error("Both API Docker archives are required");
+		throw new Error("Both Docker archives are required");
 }
 
 function limitedStream() {
@@ -578,11 +578,11 @@ async function assertNewest(
 	const tags = await getRemoteImageTags(client, repositoryName);
 	if (tags.some((tag) => semver.gt(tag.slice(1), version)))
 		throw new Error(
-			"A newer canonical API version exists; refusing a latest downgrade",
+			"A newer canonical version exists; refusing a latest downgrade",
 		);
 }
 
-/** Once latest is an index, every ordinary API release must retain that contract. */
+/** Once latest is an index, every ordinary release must retain that contract. */
 export async function assertAPILatestMode(
 	client: ECRClient,
 	repositoryName: string,
@@ -605,7 +605,7 @@ export async function assertAPILatestMode(
 		].includes(latest.mediaType)
 	) {
 		throw new Error(
-			"API latest is already an index; every subsequent release requires both native archives and publish-index",
+			"The latest tag is already an index; every subsequent release requires both native archives and publish-index",
 		);
 	}
 	const manifest = JSON.parse(latest.manifest);
@@ -619,7 +619,7 @@ export async function assertAPILatestMode(
 			manifest.mediaType !== latest.mediaType)
 	)
 		throw new Error(
-			"API latest has an unsupported image manifest; refusing a publication mode change",
+			"The latest tag has an unsupported image manifest; refusing a publication mode change",
 		);
 }
 export type APIPublishOptions = {
@@ -683,7 +683,7 @@ export async function publishAPIImages(
 		prepared.images[1].architecture !== "arm64"
 	)
 		throw new Error(
-			"Publication must use the exact validated API version and architecture pair",
+			"Publication must use the exact validated version and architecture pair",
 		);
 	await assertAPIRepositoryPolicy(client, repositoryName, options.mutableTags);
 	await assertAPILatestMode(client, repositoryName, publishIndex);
