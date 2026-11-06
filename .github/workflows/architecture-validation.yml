@@ -57,6 +57,7 @@ jobs:
         run: >-
           node --test devops/github/ci/verify-native-image.test.mjs
           devops/github/ci/native-api-fixture.test.mjs
+          devops/github/ci/native-admin-fixture.test.mjs
           devops/github/ci/verify-api-native.test.mjs
 
       - name: Setup Docker Buildx
@@ -76,8 +77,8 @@ jobs:
           cache-from: type=gha,scope=native-validation-${{ inputs.service }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=native-validation-${{ inputs.service }}-${{ matrix.arch }}
 
-      - name: Pull the isolated API fixture image
-        if: ${{ inputs.service == 'api' }}
+      - name: Pull the isolated database fixture image
+        if: ${{ inputs.service == 'api' || inputs.service == 'admin' }}
         run: docker pull mysql:8.4
 
       - name: Verify the native image at deployed resource limits

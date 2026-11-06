@@ -27,6 +27,7 @@ import {
 	pushArchiveWithCrane,
 	validateAPIImageOptions,
 } from "./api-images.mts";
+import { publishAdminImages } from "./admin-images.mts";
 import { PublicAPIMonitor } from "./api-public-monitor.mjs";
 import { HTTP_BUDGET_MS } from "./api-public-transport.mjs";
 import { ECRDeployerBase } from "./ecr-deployer-base.mts";
@@ -663,6 +664,117 @@ test("website deployer validates both archives and retains the API option bounda
 		);
 	}));
 
+for (const publishIndex of [false, true]) {
+	test(`admin publishes both verified children with index mode ${publishIndex}`, async () =>
+		fixture(async (prepared) => {
+			const registry = new Registry("bible-on-site-admin");
+			const result = await publishAdminImages(
+				prepared,
+				registry.options(prepared, publishIndex),
+			);
+			assert.deepEqual(
+				result.children.map((entry) => entry.platform.architecture),
+				["amd64", "arm64"],
+			);
+			assert.equal(
+				registry.images.get("latest")?.digest,
+				result.canonicalDigest,
+			);
+			assert.equal(
+				registry.images.get(`v${version}`)?.mediaType,
+				publishIndex ? OCI_INDEX : childType,
+			);
+			assert.deepEqual(registry.pushed, [
+				`v${version}-amd64`,
+				`v${version}-arm64`,
+			]);
+		}));
+}
+
+test("admin cannot publish to another repository or downgrade latest after index activation", async () =>
+	fixture(async (prepared) => {
+		const wrong = new Registry();
+		await assert.rejects(
+			publishAdminImages(prepared, wrong.options(prepared)),
+			/existing bible-on-site-admin repository/,
+		);
+		assert.deepEqual(wrong.puts, []);
+		const registry = new Registry("bible-on-site-admin");
+		await publishAdminImages(prepared, registry.options(prepared, true));
+		const writes = [...registry.puts];
+		await assert.rejects(
+			publishAdminImages(prepared, registry.options(prepared)),
+			/already an index/,
+		);
+		assert.deepEqual(registry.puts, writes);
+	}));
+
+test("admin deployer validates both archives and retains the API/website option boundaries", async () =>
+	fixture(async (prepared, paths) => {
+		const registry = new Registry("bible-on-site-admin");
+		for (const archive of prepared.images)
+			registry.images.set(
+				`v${version}-${archive.architecture}`,
+				child(archive),
+			);
+		const deployer = new ExistingRelease(
+			"admin",
+			"bible-on-site-admin",
+			"bible-on-site-admin",
+			registry.client,
+			{ region: "test", accountId: "test" },
+		);
+		assert.throws(
+			() => deployer.setAdminImageOptions({ sourceRef }),
+			/requires/,
+		);
+		deployer.setDockerImagePath(paths.amd64);
+		assert.throws(
+			() =>
+				deployer.setAPIImageOptions({
+					arm64ArchivePath: paths.arm64,
+					sourceRef,
+				}),
+			/only for API/,
+		);
+		assert.throws(
+			() =>
+				deployer.setWebsiteImageOptions({
+					arm64ArchivePath: paths.arm64,
+					sourceRef,
+				}),
+			/website deployer/,
+		);
+		deployer.setAdminImageOptions({
+			arm64ArchivePath: paths.arm64,
+			sourceRef,
+			publishIndex: true,
+		});
+		await deployer.run();
+		assert.equal(registry.images.get("latest")?.mediaType, OCI_INDEX);
+		const legacy = new ExistingRelease(
+			"admin",
+			"bible-on-site-admin",
+			"bible-on-site-admin",
+			registry.client,
+			{ region: "test", accountId: "test" },
+		);
+		const writes = [...registry.puts];
+		await assert.rejects(legacy.run(), /already an index/);
+		assert.deepEqual(registry.puts, writes);
+		const api = new ExistingRelease(
+			"api",
+			repositoryName,
+			repositoryName,
+			registry.client,
+			{ region: "test", accountId: "test" },
+		);
+		assert.throws(
+			() => api.setAdminImageOptions({ sourceRef }),
+			/admin deployer/,
+		);
+	}));
+
 for (const [name, archive] of [
 	["wrong architecture", dockerArchive("amd64")],
 	["wrong OS", dockerArchive("arm64", { os: "windows" })],
@@ -962,8 +1074,8 @@ test("legacy single-archive retry remains compatible with immutable versions/lat
 
 for (const args of [
 	["--module-name", "website", "--publish-index"],
-	["--module-name", "admin", "--publish-index=false"],
-	["--module-name", "admin", "--no-publish-index"],
+	["--module-name", "admin", "--publish-index"],
+	["--module-name", "admin", "--docker-image-arm64", "b"],
 	["--module-name", "api", "--publish-index"],
 	[
 		"--module-name",
@@ -976,7 +1088,7 @@ for (const args of [
 		"short",
 	],
 ])
-	test(`CLI rejects invalid API options before AWS setup: ${args.join(" ")}`, () => {
+	test(`CLI rejects invalid native options before AWS setup: ${args.join(" ")}`, () => {
 		const result = spawnSync(
 			process.execPath,
 			[fileURLToPath(new URL("./index.mts", import.meta.url)), ...args],
