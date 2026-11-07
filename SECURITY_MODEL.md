@@ -35,5 +35,5 @@ Vulnerability reporting is in [SECURITY.md](SECURITY.md).
 **Controls.** Bearer keys on mutations; Cognito JWT verification via JWKS (`jose`); revalidate secret checked before side effects; CodeQL, Codacy, dependency review, Renovate; Biome lint bans `innerHTML`/`dangerouslySetInnerHTML`.
 
 ## Deployment facts
-- bible-on-site admin `SKIP_AUTH` is never set in production; the bypass is dev-only.
+- bible-on-site admin `SKIP_AUTH`/`MEASURE_COV` are dev/test-only flags, ignored when `NODE_ENV=production` so a stray deployment flag fails closed (`web/admin/src/server/environment.server.ts`). The former anonymous `/api/bulletin-documents/` route was removed (#3069): every admin path requires an authorized Cognito session or scoped service token.
 - bible-on-site CI: fork PRs get no secrets (no `pull_request_target`/self-hosted secret exposure to forks).
