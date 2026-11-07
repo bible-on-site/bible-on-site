@@ -132,13 +132,33 @@ announced, all CI quiet.
 
 ```bash
 WORK=/path/to/scratch && cd "$WORK"
+SOURCE_URL=https://github.com/bible-on-site/bible-on-site.git
+
+# ── 0. Write the strip list the filter actually reads ──────────────────────
+# Core set, plus the extension entries only if that scope was approved:
+cat > "$WORK/strip-paths.txt" <<'EOF'
+web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json
+glob:app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.perushim_notes.sqlite.gz
+glob:app/BibleOnSite/Resources/Raw/sefaria-dump-*.tanah_view.sqlite
+data/recitation/recitation.sqlite
+web/bulletin/data/tanach-text.json
+actionlint
+EOF
+test -s "$WORK/strip-paths.txt" && cat "$WORK/strip-paths.txt"
+# The file must exist and list exactly the approved scope before continuing.
 
 # ── 1. Preservation ────────────────────────────────────────────────────────
-git clone --mirror https://github.com/bible-on-site/bible-on-site.git backup.git
+git clone --mirror "$SOURCE_URL" backup.git
 git -C backup.git bundle create bos-backup-pre-rewrite-$(date +%F).bundle --all
 git -C backup.git for-each-ref \
   --format='%(objectname) %(refname)' > ref-manifest-pre-rewrite.txt
-# Save the current contents of the files that must survive at HEAD:
+# Refresh the preservation inventory against the master being rewritten — the
+# dated dump filenames drift between planning and execution, so re-list rather
+# than trusting the names recorded here:
+git -C backup.git ls-tree -r --name-only refs/heads/master | grep -E \
+  'tanah_view\.json|perushim_notes.*sqlite\.gz|tanah_view\.sqlite|recitation\.sqlite|tanach-text\.json'
+# Save the current contents of the files that must survive at HEAD (use the
+# inventory above; the loop below shows today's names):
 mkdir -p keep
 for f in \
   web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json \
@@ -154,13 +174,22 @@ done
 # preservation (owner decision — needs a repo to push to).
 
 # ── 2. Rewrite ─────────────────────────────────────────────────────────────
-git clone --mirror https://github.com/bible-on-site/bible-on-site.git rewrite.git
+git clone --mirror "$SOURCE_URL" rewrite.git
 cd rewrite.git
 # Drop GitHub-internal pull refs — they cannot be pushed and are auto-managed.
 git for-each-ref --format='%(refname)' refs/pull/ | while read -r r; do
   git update-ref -d "$r"
 done
 git filter-repo --invert-paths --paths-from-file ../strip-paths.txt
+# filter-repo removes the 'origin' remote; restore it now so the publish step
+# later can reach GitHub:
+git remote add origin "$SOURCE_URL"
+# Prove the strip worked before anything is restored — every rewritten ref
+# must be free of the removed paths (this check is meaningless once the dumps
+# are re-committed in step 3):
+git rev-list --objects --all | grep -E \
+  'tanah_view\.json|sqlite\.gz|tanah_view\.sqlite|recitation\.sqlite|tanach-text\.json' \
+  | grep -v 'actionlint.yaml'    # expect no output
 
 # ── 3. Restore current files on master ─────────────────────────────────────
 cd "$WORK" && git clone rewrite.git restore-wt && cd restore-wt
@@ -174,9 +203,8 @@ git push ../rewrite.git master:master   # or push via file:// path
 cd "$WORK/rewrite.git"
 git count-objects -vH            # expect size-pack ≈ 180–195 MiB
 git fsck --connectivity-only
-git rev-list --objects --all | grep -E \
-  'tanah_view\.json|sqlite\.gz|tanah_view\.sqlite|recitation\.sqlite|tanach-text\.json' \
-  | grep -v 'actionlint.yaml'    # expect no output
+# The strip check already ran in step 2, before restoration; do not repeat it
+# here — the five restored dumps legitimately appear in history now.
 # Confirm restored blobs are identical to the saved manifest:
 git rev-parse refs/heads/master:web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json
 #   …repeat per file; must match keep/sha-manifest.txt
@@ -222,3 +250,21 @@ pack re-bloats toward today's size within months. Options to revisit later (out
 of scope here): reduce dump-commit frequency, or adopt Option B (host dumps
 externally and fetch them in dev setup / CI / packaging). The `check-added-large-files`
 pre-commit hook already blocks new large files outside the excluded generated paths.
+
+## Appendix — rehearsal preservation evidence
+
+Blob SHAs recorded by `keep/sha-manifest.txt` in the rehearsal (pre-rewrite
+HEAD at rehearsal time). The same SHAs are re-derivable from `master` as long
+as the dumps have not been regenerated since:
+
+| Path | Blob SHA |
+|---|---|
+| `web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json` | `0c3aea8cfcf5b22a7c15a12eb1af4d828cf58768` |
+| `app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz` | `4a497d46b411a97ae0f218f2c946affb055d1d77` |
+| `app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite` | `01bad7304fe3f00158e929ee1507daec936279c8` |
+| `data/recitation/recitation.sqlite` | `730e7c68b0e593cf298c3dbc220234684d2dbba7` |
+| `web/bulletin/data/tanach-text.json` | `dd2541935a78b71a3f63e60981477c79da409650` |
+
+A later execution regenerates the manifest in step 1 and compares these values
+against it; a mismatch means the dump was republished since the rehearsal and
+the preservation loop needs the refreshed names from the `ls-tree` inventory.
