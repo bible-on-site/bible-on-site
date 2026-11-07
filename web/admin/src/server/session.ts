@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { verifyIdTokenClaims } from "./auth";
+import { skipAuthEnabled } from "./environment.server";
 
 /**
  * The authenticated editor's stable account identity (the Cognito `sub`).
@@ -13,7 +14,7 @@ import { verifyIdTokenClaims } from "./auth";
  */
 export const getEditorIdentity = createServerFn({ method: "GET" }).handler(
 	async () => {
-		if (process.env.SKIP_AUTH === "true") {
+		if (skipAuthEnabled()) {
 			return { id: "local" };
 		}
 		const token = getCookie("admin_session");
