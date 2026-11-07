@@ -109,7 +109,7 @@ request.
 
 | Option | What it actually buys | Why / why not for us |
 | --- | --- | --- |
-| **A. Query/resource budgets** (schema depth+complexity limits, alias control, introspection off, body cap, timeout, resolver-cost awareness) | Converts "unbounded work per request" into a hard ceiling; kills the cheapest DoS vectors with **zero client changes** | **Adopt first.** async-graphql `Schema::build().limit_depth(d).limit_complexity(c)`; pick ceilings from the app's real queries (measure, then set e.g. depth ~8–10, complexity a few hundred). Disable introspection behind `PROFILE=prod` (land via/alongside #3065). Add `HttpServer::keep_alive`/request timeout middleware. |
+| **A. Query/resource budgets** (schema depth+complexity limits, alias control, introspection off, body cap, timeout, resolver-cost awareness) | Converts "unbounded work per request" into a hard ceiling; kills the cheapest DoS vectors with **zero client changes** | **Adopt first.** async-graphql `Schema::build().limit_depth(d).limit_complexity(c)`; pick ceilings from the app's real queries (measure, then set e.g. depth ~8–10, complexity a few hundred). Disable introspection behind `PROFILE=prod` (land via/alongside #3065). Bound execution with `tokio::time::timeout` around `schema.execute` in `graphql_request` (or a request timeout middleware) — `HttpServer::keep_alive` only bounds idle connections and does not cap resolver duration. |
 | **B. Edge rate limiting on api.* NGINX blocks** | Per-IP + global request ceilings independent of query cost; absorbs startup bursts gracefully if thresholds are right | **Adopt early, observe-first.** Mirror the website pattern: `limit_req_zone $remote_addr` (per-IP) + a global zone, `burst` sized for app cold-start bursts (`starter` + perek prefetch), `limit_req_status 429`. Start generous and log-driven; mobile carrier-NAT means per-IP must be lenient. No code change in app or API. |
 | **C. Static shared app key in the binary** | A public client identifier; coarse partitioning; a tiny hurdle for the laziest curl | **Do not adopt as a control.** Extractable/replayable; it authenticates a *distribution*, not a call. Optional later as a low-value telemetry header (`x-app-channel`) — never a quota or authorization boundary. |
 | **D. Anonymous short-lived session tokens** (open issuance endpoint → signed token → metered reads) | Per-installation metering, expiry, revocation without user accounts | **Defer.** An open bootstrap is itself scriptable, so tokens meter honest clients more than they stop abusers; adds issuance/refresh/offline-retry complexity to every app release train. Revisit only if A+B insufficient. If built: opaque signed token (HMAC or JWT, `aud=api-read`, expiry ~hours), issuance itself rate-limited, renewal idempotent, never sent per-verse. |
@@ -155,9 +155,11 @@ authorization.
 - Schema budgets: over-depth, over-complexity, alias fan-out, introspection
   on/off by `PROFILE`, oversized JSON body (MultipartOptions vs JSON path —
   remember `read_to_end` ignores `max_file_size`), array batch still 400.
-- AuthZ matrix unchanged: valid/invalid/expired bearer per scope; `api-read`-type
-  credential must fail `*_manager` checks; anonymous fails mutations,
-  `dedicationsAdmin`, `tanahpediaEntryRevisions`.
+- AuthZ matrix unchanged: valid/invalid/missing bearer per scope — the current
+  keys are static env secrets with no expiry, so expired-credential cases apply
+  only to the deferred D/E token design; `api-read`-type credential must fail
+  `*_manager` checks; anonymous fails mutations, `dedicationsAdmin`,
+  `tanahpediaEntryRevisions`.
 - Compatibility: app client without new headers works; both api domains; HEAD/GET
   `/health` + `/health/ready` unchanged; compression unchanged.
 - NGINX (staging): burst tolerance ≥ app cold-start pattern; shared-NAT
@@ -178,8 +180,11 @@ authorization.
    (or very high limits); emit redacted metrics (op name hash, cost bucket,
    429 counts — never tokens/bodies in logs).
 2. **Tighten** — lower limits to ~95–99th percentile of observed legitimate
-   traffic; keep an env/config kill switch per control (schema limits are
-   build-time, NGINX limits are config-reload — document both).
+   traffic; keep an env/config kill switch per control. `build_schema` runs
+   at server startup, so hardcoded schema limits can only change via a binary
+   rebuild + redeploy — make them env-configurable so tightening/rollback is
+   an env change + task restart; NGINX limits are config-reload — document
+   both.
 3. **Adoption gate for anything client-facing** — only if a later phase adds
    headers/tokens: ship app support first, monitor adoption; enforcement
    requires a separate product decision and must never strand old builds
