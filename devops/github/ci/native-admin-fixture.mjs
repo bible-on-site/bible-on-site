@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-// One synthetic row powers the anonymous bulletin-document DB-read probe.
-// The URL hash binds the exact served bytes, so these constants are the single
-// source of truth for the inserted row and the verifier's expected answer.
+// One synthetic row keeps the document-path probe honest: the auth boundary
+// must redirect a recorded hash exactly like an unrecorded one, so the URLs
+// below are the single source of truth for the inserted row and the probe.
 export const FIXTURE_BULLETIN = Object.freeze({
 	date: "2001-02-03",
 	filename: "native-fixture.pdf",
