@@ -85,7 +85,9 @@ origin-request changes:
 
 Plus: pin `HttpVersion` in `devops/assets-cdn.test.mjs` so a future revert is
 caught; save the complete current distribution config privately before the
-approved update for exact rollback (restore `http2` with the saved ETag).
+approved update for exact rollback. A successful `update-distribution`
+rotates the ETag, so rollback submits the saved config body with a freshly
+fetched ETag (`get-distribution-config`), not the pre-update one.
 
 ## Why not the whole site / direct nginx h3 now
 
@@ -106,14 +108,19 @@ approved update for exact rollback (restore `http2` with the saved ETag).
 
 - Verify real h3 negotiation with an h3-capable client and browser protocol
   evidence; confirm the distribution's HTTPS DNS record/`Alt-Svc` appears.
+- Verify h2 and HTTP/1.1 fallback explicitly per protocol (e.g. an h3-capable
+  `curl` with `--http2`/`--http1.1`, or the browser devtools protocol column):
+  the paired checks below use `fetch`, which negotiates ALPN automatically and
+  neither selects nor records a protocol, so they prove functional parity only.
 - Re-run `devops/assets-cdn-check.mjs --candidate https://dpcnux643agl3.cloudfront.net`:
-  all 19 paired checks must stay green over h2 and HTTP/1.1 fallback.
+  all 19 paired checks must stay green.
 - Compare equal-resource downloads h2 vs h3 (build-download path is the live
   consumer); predefined sample count and error criteria, recorded per the
   issue's measurement plan.
-- Rollback: restore `HttpVersion: http2` via saved config/ETag, wait for
-  deploy, verify asset access. Clients may retain `Alt-Svc` briefly; TCP
-  service and public URLs never change.
+- Rollback: restore `HttpVersion: http2` via `update-distribution` with the
+  saved config body and the then-current ETag (re-fetched after the pilot
+  update rotated it), wait for deploy, verify asset access. Clients may
+  retain `Alt-Svc` briefly; TCP service and public URLs never change.
 
 ## Related
 
