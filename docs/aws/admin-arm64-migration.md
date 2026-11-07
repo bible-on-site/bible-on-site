@@ -67,6 +67,14 @@ Dorad's approval, then enable `ADMIN_MULTIARCH_RELEASES` and let an ordinary
 release publish the pair — a fresh release version only, never an overwrite of
 an existing immutable tag.
 
+The scoped repair for that prerequisite is `bun run deploy:admin-ecr-policy`
+from `devops/` (`--verify` is read-only; `--rollback` restores the recorded
+`MUTABLE` baseline). It only writes `PutImageTagMutability` on
+`bible-on-site-admin`, only after the live policy matches the recorded
+baseline or already converged target, and re-verifies the result through the
+publisher's own `assertAPIRepositoryPolicy` guard. Any other observed live
+state refuses the transition.
+
 ## Rollback prerequisites
 
 Before any AWS-side change, record the previous registry mutability/lifecycle

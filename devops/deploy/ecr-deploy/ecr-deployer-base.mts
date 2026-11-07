@@ -20,7 +20,10 @@ import {
 	withRetry,
 } from "./ecr-client.mts";
 import { resumePublishedImage } from "./resume-image.mts";
-import { publishWebsiteImages } from "./website-images.mts";
+import {
+	WEBSITE_MUTABLE_TAGS,
+	publishWebsiteImages,
+} from "./website-images.mts";
 
 export const Diff = {
 	LocalNewer: "LocalNewer",
@@ -282,10 +285,12 @@ export abstract class ECRDeployerBase extends DeployerBase {
 		}
 		if (["api", "website", "admin"].includes(this.moduleName))
 			await assertAPILatestMode(this.client, this.ecrRepositoryName, false);
-		// Ensure repository exists
+		// Ensure repository exists; a newly created repository must satisfy the
+		// same tag policy the immutable publication path asserts.
 		const repositoryUri = await ensureRepositoryExists(
 			this.client,
 			this.ecrRepositoryName,
+			this.moduleName === "website" ? WEBSITE_MUTABLE_TAGS : ["latest"],
 		);
 		this.info(`Using ECR repository: ${repositoryUri}`);
 
