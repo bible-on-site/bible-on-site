@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FIXTURE_BULLETIN } from "./native-admin-fixture.mjs";
 import {
-	assertAdminDbRead,
+	assertAdminDocumentGuard,
 	assertAdminResponses,
 	parseOptions,
 	verifyImage,
@@ -79,25 +78,34 @@ test("admin checks the actual SSO redirect and server-function protection", () =
 	);
 });
 
-test("admin document read requires the exact isolated fixture bytes", () => {
+test("admin document paths must redirect to the Cognito login", () => {
+	const login = new URL("https://login.example.invalid/oauth2/authorize");
+	login.searchParams.set("redirect_uri", "http://127.0.0.1:3101/auth/callback");
 	const result = {
-		documentStatus: 200,
-		documentType: "application/pdf",
-		documentBody: FIXTURE_BULLETIN.pdfText,
-		missingStatus: 404,
+		documentStatus: 302,
+		documentLocation: login.href,
+		missingStatus: 302,
+		missingLocation: login.href,
 	};
-	assertAdminDbRead(result);
-	assert.throws(() => assertAdminDbRead({ ...result, documentStatus: 302 }));
+	assertAdminDocumentGuard(result);
 	assert.throws(() =>
-		assertAdminDbRead({ ...result, documentType: "text/html" }),
+		assertAdminDocumentGuard({ ...result, documentStatus: 200 }),
 	);
 	assert.throws(() =>
-		assertAdminDbRead({ ...result, documentBody: "%PDF-1.4\n% forged\n" }),
+		assertAdminDocumentGuard({ ...result, missingStatus: 404 }),
 	);
-	assert.throws(() => assertAdminDbRead({ ...result, missingStatus: 200 }));
+	assert.throws(() =>
+		assertAdminDocumentGuard({ ...result, documentLocation: null }),
+	);
+	assert.throws(() =>
+		assertAdminDocumentGuard({
+			...result,
+			missingLocation: "https://unrelated.invalid/",
+		}),
+	);
 });
 
-const adminDockerSuccess = (commands, documentBody) => (args) => {
+const adminDockerSuccess = (commands, documentStatus) => (args) => {
 	commands.push(args);
 	if (args[0] === "image")
 		return JSON.stringify({
@@ -106,7 +114,9 @@ const adminDockerSuccess = (commands, documentBody) => (args) => {
 			Id: "sha256:test",
 		});
 	if (args[0] === "exec" && args[2] === "uname") return "aarch64";
-	if (args[0] === "exec") {
+	if (args[0] === "run" && args.includes("--rm")) {
+		const script = args[args.indexOf("-e") + 1];
+		const host = script.match(/http:\/\/([^:/]+):3101\//)[1];
 		const location = new URL(
 			"https://login.example.invalid/oauth2/authorize",
 		);
@@ -114,17 +124,17 @@ const adminDockerSuccess = (commands, documentBody) => (args) => {
 		location.searchParams.set("identity_provider", "AWSSSO");
 		location.searchParams.set(
 			"redirect_uri",
-			"http://127.0.0.1:3101/auth/callback",
+			`http://${host}:3101/auth/callback`,
 		);
 		return JSON.stringify({
 			status: 302,
 			location: location.href,
 			serverFnStatus: 401,
 			serverFnBody: "SESSION_EXPIRED: admin session expired",
-			documentStatus: 200,
-			documentType: "application/pdf",
-			documentBody: documentBody ?? FIXTURE_BULLETIN.pdfText,
-			missingStatus: 404,
+			documentStatus: documentStatus ?? 302,
+			documentLocation: location.href,
+			missingStatus: 302,
+			missingLocation: location.href,
 		});
 	}
 	return "";
@@ -151,16 +161,29 @@ test("admin verifies auth probes plus the isolated MySQL document read", async (
 		},
 	);
 	assert.equal(evidence.service, "admin");
-	assert.equal(evidence.auth.documentStatus, 200);
+	assert.equal(evidence.auth.documentStatus, 302);
 	const run = commands.find((args) => args[0] === "run");
 	assert.equal(run[run.indexOf("--network") + 1], "fixture-network");
 	assert.ok(
 		run.includes("DB_URL=mysql://root:x@db:3306/native_image_smoke"),
 		"admin must connect to the owned fixture database",
 	);
+	const probe = commands.find(
+		(args) => args[0] === "run" && args.includes("--rm"),
+	);
+	assert.equal(
+		probe[probe.indexOf("--network") + 1],
+		"fixture-network",
+		"probe runs in a sibling container, not inside the capped smoke cgroup",
+	);
+	assert.deepEqual(
+		commands.filter((args) => args[0] === "exec").map((args) => args[2]),
+		["uname"],
+		"only the architecture check may exec into the capped container",
+	);
 });
 
-test("admin verification fails when the served document is not the fixture row", async (t) => {
+test("admin verification fails when a document path serves content anonymously", async (t) => {
 	const commands = [];
 	t.mock.method(console, "error", () => {});
 	await assert.rejects(
@@ -170,7 +193,7 @@ test("admin verification fails when the served document is not the fixture row",
 				runnerArch: "arm64",
 				runnerPlatform: "linux",
 				createAdminFixture: adminFixture(commands),
-				docker: adminDockerSuccess(commands, "%PDF-1.4\n% forged\n"),
+				docker: adminDockerSuccess(commands, 200),
 			},
 		),
 		assert.AssertionError,
@@ -243,7 +266,8 @@ test("failed container startup retains logs and cleans up the isolated container
 							Id: "sha256:test",
 						});
 					if (args[0] === "exec" && args[2] === "uname") return "aarch64";
-					if (args[0] === "exec") throw new Error("connection refused");
+					if (args[0] === "run" && args.includes("--rm"))
+						throw new Error("connection refused");
 					if (args[0] === "inspect") return "false";
 					return "";
 				},
