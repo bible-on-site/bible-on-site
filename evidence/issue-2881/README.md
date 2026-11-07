@@ -67,7 +67,81 @@ optimized header-logo request already removed in #2871).
   measured ad hoc. Expected cold read ~0.1 s instead of ~1 s; small warm cost.
   Touches the standalone tracing include, the image contents and the
   build-verification script, so it needs a maintainer decision.
+  (Landed as #2914.)
 - Loading the file at server boot would hide it from the first request but is
   the warmup the issue rules out.
 
 No timeout, retry, sleep, warmup, preload flag or workload change was made.
+
+---
+
+# Follow-up at `ab4fe9cc` (post-#2914 Brotli corpus, post-#2982 readiness)
+
+Same machine class (12 logical CPUs / 32 GB, Windows, Node 24.21.0,
+Bun 1.4.4, local MySQL `tanah_test`, Defender real-time protection enabled).
+Driver: `measure-cold.mjs` (spawns `.next/standalone/server.js` with the
+`--require` hook in `require-hook.cjs`, launches Chromium, and times the same
+phases the test pays inside its 20 s window). `contend.mjs` + `burn.mjs`
+generate load (CPU burners + a multi-GB streaming write — watch free space).
+The scripts are attached to the #2881 issue comment rather than committed.
+
+## Standard test (`tests/perf/sefer-flip-lag.test.ts`, Desktop, 1 worker)
+
+| Conditions | Click test | Drag test |
+| --- | --- | --- |
+| First run after fresh `bun install` + first `bun run build` (fresh worktree) | **FAIL — timeout 20.4 s** (during 4th click batch) | pass 15.6 s |
+| Same build, ~20 min later (warm) | pass 12.2 s | pass 15.2 s |
+| Immediately after a second `bun run build` | pass 13.5 s | pass 13.0 s |
+| Same warm build + induced contention (10 CPU burners + streaming disk writer) | **FAIL — timeout >20 s** | **FAIL — timeout >20 s** |
+
+Flake signature reproduces (timeout mid-`rapidFlips`), but only when ambient
+load is high; a fully warm suite has ~7.5 s of slack.
+
+## Request timeline (fresh worktree, first run after `bun install` + build)
+
+| Phase | cold (first postbuild run) | warm (later runs) |
+| --- | --- | --- |
+| server spawn → port open | 573 ms | 545–557 ms |
+| readiness `GET /` (server-side) | 731 ms | 159–881 ms |
+| Chromium launch | **1,377 ms** | 90–103 ms |
+| `GET /dev/sefer/125` TTFB | 807 ms | 707 ms–1,172 ms |
+| `GET /dev/sefer/125` full nav (client `load`) | 1,039 ms | 897–1,378 ms |
+| `GET /929/125?book` | 31–144 ms | 26–124 ms |
+| `waitForFlipBook` per nav | 452–699 ms | 344–656 ms |
+| click batch (6 clicks + settle) | ~1.9–2.2 s | ~1.9–2.2 s |
+
+The 1.4 s cold Chromium launch matches the issue's retained 1,413 ms sample.
+Everything else on the cold path is bounded one-time process work:
+
+- server boot `require`s ≈ 450 ms (Next internals; none per-route — the route
+  bundles load on the `GET /` readiness hit via the shared SSR chunk);
+- canonical corpus `brotliDecompressSync`+`JSON.parse`: 77–84 ms + 470–536 ms
+  synchronous, once per process, on the first dynamic request;
+- mysql pool + 2 queries on `/dev/sefer`: small;
+- `isomorphic-dompurify` → jsdom `require` chain: ~2.0–2.3 s, but only on the
+  `/api/health/ready` path (that call itself takes 3.7–6.7 s cold) — it is not
+  on the sefer test path.
+
+Client-observed first navigation = server TTFB + ~25 static chunk/CSS/font
+fetches + parse/exec + hydration start; `waitForFlipBook` then covers book
+init. Under ambient load every component inflates roughly uniformly (~1.7–2×)
+— no single blocking call dominates; the induced-contention run fails purely
+by multiplying fixed work past the fixed deadline.
+
+## Negative result: `NODE_COMPILE_CACHE`
+
+Evaluated for the standalone server: first spawn is *slower*
+(port 2,558 ms, `GET /` 3,249 ms, `/dev/sefer` 2,880 ms — cache write cost),
+and Playwright kills the webServer before Node's exit-time cache flush runs
+(the cache dir stayed empty — 0 bytes), so later spawns see no benefit.
+
+## Host observations
+
+- `C:` was at ~0–18 GB free of 953 GB during these sessions (multiple
+  worktrees + `.next` outputs). Near-full NTFS plus real-time protection is a
+  plausible amplifier of the post-build variance window; not proven causal.
+- The genuine cold recurrence needs post-build timing *and* ambient load; a
+  fresh worktree's first run alone passed at ~15 s.
+
+No timeout, retry, sleep, warmup, preload flag or workload change was made.
+
