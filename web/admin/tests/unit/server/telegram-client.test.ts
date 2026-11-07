@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start/server-only", () => ({}));
@@ -611,44 +610,35 @@ describe("Telegram configuration and target verification", () => {
 });
 
 describe("one frozen PDF upload", () => {
-	it("adds an original-name download button bound to the frozen PDF and date", async () => {
+	// #3069: bulletin delivery is attachment-only. The former "להורדת העלון"
+	// inline button pointed at an anonymous admin-origin URL; neither the
+	// button nor any admin link may ride along in the upload payload.
+	it("attaches the PDF without an admin download URL or inline button", async () => {
 		const fetchMock = provider();
-		const input = {
-			...documentRequest,
-			bulletinDate: "2026-11-01",
-			beforeSend: async () => {
-				input.bulletinDate = "2026-11-02";
-			},
-		};
-		await new TelegramClient(config, fetchMock).sendDocument(input);
+		await new TelegramClient(config, fetchMock).sendDocument(
+			documentRequest,
+		);
 		const body = fetchMock.mock.calls[4][1]?.body as FormData;
-		expect(JSON.parse(String(body.get("reply_markup")))).toEqual({
-			inline_keyboard: [
-				[
-					{
-						text: "להורדת העלון",
-						url: `https://admin.xn--febl3a.co.il/api/bulletin-documents/2026-11-01/${createHash("sha256").update(PDF).digest("hex")}.pdf`,
-					},
-				],
-			],
-		});
+		expect(body.get("reply_markup")).toBeNull();
+		for (const value of body.values()) {
+			expect(String(value)).not.toMatch(/admin\.xn--febl3a|bulletin-documents/);
+		}
 		expect(body.get("caption")).toBe(documentRequest.caption);
 		expect(fetchMock).toHaveBeenCalledTimes(5);
 	});
-	it.each(["2026-02-30", "../private", "2026-1-1", null, 7])(
-		"rejects malformed download dates before contacting Telegram (%s)",
-		async (date) => {
-			const fetchMock = provider();
-			await outcome(
-				new TelegramClient(config, fetchMock).sendDocument({
-					...documentRequest,
-					bulletinDate: date as string,
-				}),
-				"failed",
-			);
-			expect(fetchMock).not.toHaveBeenCalled();
-		},
-	);
+	it("keeps attachment-only delivery when the caller passes a date", async () => {
+		const fetchMock = provider();
+		await new TelegramClient(config, fetchMock).sendDocument({
+			...documentRequest,
+			bulletinDate: "2026-11-01",
+		} as unknown as typeof documentRequest);
+		const body = fetchMock.mock.calls[4][1]?.body as FormData;
+		expect(body.get("reply_markup")).toBeNull();
+		for (const value of body.values()) {
+			expect(String(value)).not.toMatch(/admin\.xn--febl3a|bulletin-documents/);
+		}
+		expect(fetchMock).toHaveBeenCalledTimes(5);
+	});
 	it.each([
 		"306_מלכים_א_יט_306_אליהו_הנביא_בורח_מאיזבל,_מבקש_למות,_התגלו.pdf",
 		"306_מלכים_א_יט_306_אליהו_הנביא_בורח_מאיזבל,_מבקש_למות,_התגלות_ה'.pdf",
