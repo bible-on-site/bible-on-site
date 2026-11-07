@@ -34,7 +34,13 @@ media). **No production setting or client requirement was changed.**
 | API article JSON | 71,935 | 21,759 | 21,000 | 20,190 | 18,851 | 22,961 (+6%) | 19,805 |
 | API sefarim JSON | 1,916 | 597 | 565 | 551 | 505 | 628 (+5%) | 596 |
 | API perakim JSON | 6,165 | 1,708 | 1,517 | — | — | 1,728 | — |
-| **13-file aggregate** | **4,106,352** | **317,652** | **266,150 (−16.2%)** | **252,320 (−20.6%)** | — | **301,480 (−5.1%)** | **249,059 (−21.6%)** |
+| **9-file aggregate** | **3,846,537** | **237,856** | **190,106 (−20.1%)** | **175,919 (−25.5%)¹** | **154,652 (−34.5%)¹** | **218,389 (−8.2%)** | **173,372 (−26.6%)¹** |
+
+¹ The round measured thirteen live payloads; the four not listed above
+(259,815 identity bytes) are excluded from this aggregate, which therefore
+covers exactly the nine published rows. br-9, br-11 and zstd-19 were also not
+measured for API perakim (`—` in its row), so those columns aggregate the
+other eight files against their gzip-6 total (236,148 bytes).
 
 Pattern: brotli wins on every text type at every size; zstd-3 is *worse than
 gzip* below ~100 KB and only wins on large repetitive payloads (sitemap,
@@ -78,10 +84,10 @@ Notes:
    the two-sided fix on real responses: article JSON 71.9 KB → 21.8 KB
    (−70%), perakim list 6.2 KB → 1.7 KB (−72%), sefarim 1.9 KB → 0.6 KB
    (−69%). Every curl/monitoring/native call today transfers ~3–4× the bytes.
-2. **Website brotli headroom**: −16% (dynamic, br-5) to −21% (precompressed
-   br-9/11) on compressed bytes vs. the current gzip baseline; −25% on the
-   largest perek page; −48% on sitemap. Negotiated — gzip-only and identity
-   clients unaffected.
+2. **Website brotli headroom**: −20% (dynamic, br-5) to −26–35% (precompressed
+   br-9/11) on the nine published payloads vs. the current gzip baseline;
+   −25% on the largest perek page; −48% on sitemap. Negotiated — gzip-only
+   and identity clients unaffected.
 3. **zstd**: aggregate ≈ br-9 at level 19, worse than gzip at level 3 on
    small text. Useful only as an optional negotiated third encoding or for
    controlled build/data consumers — matches the Baseline-Newly-Available
