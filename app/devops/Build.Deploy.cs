@@ -360,7 +360,7 @@ partial class Build
                 Serilog.Log.Warning("Deploying to PRODUCTION - will require Microsoft review");
             }
 
-            // msstore CLI is installed via: microsoft/setup-msstore-cli GitHub Action
+            // msstore CLI is installed via: microsoft/microsoft-store-apppublisher GitHub Action
             ProcessTasks.StartProcess("msstore", arguments)
                 .AssertZeroExitCode();
 
@@ -590,13 +590,12 @@ partial class Build
 
     bool TryDeleteFlight(string flightId)
     {
-        var deleteProcess = ProcessTasks.StartProcess(
+        var exitCode = MsStoreCommand.Run(
             "msstore",
             $"flights delete \"{MsStoreAppId}\" \"{flightId}\"",
-            logInvocation: true
+            Serilog.Log.Logger
         );
-        deleteProcess.WaitForExit();
-        if (deleteProcess.ExitCode != 0)
+        if (exitCode != 0)
         {
             Serilog.Log.Warning($"Could not delete flight {flightId}");
             return false;
