@@ -4,8 +4,9 @@ use std::path::Path;
 use anyhow::{Result, ensure};
 
 use super::{
-    PdfRequest, TypstFiles, compile_pdf, daily_html_to_typst, pasuk_markup, split_article_header,
-    strip_taamim, to_hebrew_letter, typst_escape, typst_string,
+    CANTILLATION_FONT, PdfRequest, TypstFiles, compile_pdf, daily_html_to_typst, pasuk_markup,
+    push_article_text, split_article_header, strip_taamim, to_hebrew_letter, typst_escape,
+    typst_string,
 };
 
 const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header-bfaa157e34c2.jpg");
@@ -107,9 +108,13 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
         for (title, author, html) in &perek.articles {
             let (heading, body) = split_article_header(html);
             let heading = heading.unwrap_or_else(|| title.trim().to_string());
+            // A heading may quote scripture too — cantillated runs need the
+            // bundled cantillation face, like the body (#2961).
+            let mut heading_markup = String::new();
+            push_article_text(&mut heading_markup, &heading, Some(CANTILLATION_FONT));
             out.push_str(&format!(
                 "#block(sticky: true, above: 0.4em, below: 0.45em)[#text(font: \"Frank Ruhl Libre\", size: 15.5pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}]",
-                typst_escape(&heading),
+                heading_markup,
             ));
             if !author.trim().is_empty() {
                 out.push_str(&format!(
@@ -225,6 +230,20 @@ mod tests {
         let (source, _) = markup(&req, "יח חשוון תשפז", &[]);
         assert!(source.contains("כותרת חלופית"));
         assert!(!source.contains("#linebreak()#text(size: 10pt"));
+    }
+
+    #[test]
+    fn article_heading_and_body_wrap_cantillated_runs() {
+        // #2961: article titles (leading h1s) print in Frank Ruhl Libre too —
+        // a cantillated quote in the heading needs the same wrapped face.
+        let mut req = request();
+        // Real pasuk fragment (מלכים א כ לה) — canonical maqaf, not invented text.
+        req.perakim[0].articles[0].2 = "<h1>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h1><p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>".into();
+        let (source, _) = markup(&req, "כא חשוון תשפז", &[]);
+        assert!(source.contains(
+            "fill: rgb(\"173E52\"))[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]]"
+        ));
+        assert!(source.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֞ר אֵלָ֑יו]"));
     }
 
     #[test]
