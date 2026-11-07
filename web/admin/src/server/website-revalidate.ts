@@ -154,9 +154,7 @@ async function postRevalidate(
 			method: "POST",
 			headers: {
 				"x-revalidate-secret": secret,
-				...(hasChanges
-					? { "content-type": "application/json" }
-					: {}),
+				...(hasChanges ? { "content-type": "application/json" } : {}),
 			},
 			...(hasChanges
 				? { body: JSON.stringify({ changes: request.changes }) }
@@ -273,9 +271,7 @@ async function drain(): Promise<void> {
 	let includeRetry = true;
 	try {
 		while (queued.length > 0 || (includeRetry && pendingRetry.length > 0)) {
-			const batch = includeRetry
-				? [...pendingRetry, ...queued]
-				: [...queued];
+			const batch = includeRetry ? [...pendingRetry, ...queued] : [...queued];
 			includeRetry = false;
 			pendingRetry = [];
 			queued = [];
@@ -460,9 +456,7 @@ export function articleChange(input: {
 				id: input.id,
 				perekIds: input.perekIds,
 				...(input.authorIds ? { authorIds: input.authorIds } : {}),
-				...(input.coveringSpans
-					? { coveringSpans: input.coveringSpans }
-					: {}),
+				...(input.coveringSpans ? { coveringSpans: input.coveringSpans } : {}),
 			},
 		],
 	};
@@ -515,7 +509,9 @@ export function dedicationChange(input: {
 			{
 				kind: "dedication",
 				id: input.id,
-				...(input.perekRanges?.length ? { perekRanges: input.perekRanges } : {}),
+				...(input.perekRanges?.length
+					? { perekRanges: input.perekRanges }
+					: {}),
 				...(input.seferIds?.length ? { seferIds: input.seferIds } : {}),
 				...(input.helekIds?.length ? { helekIds: input.helekIds } : {}),
 				...(input.parashaIds?.length ? { parashaIds: input.parashaIds } : {}),
@@ -539,18 +535,10 @@ export function pediaEntryChange(input: {
 			{
 				kind: "pedia-entry",
 				uniqueName: input.uniqueName,
-				...(input.oldUniqueName
-					? { oldUniqueName: input.oldUniqueName }
-					: {}),
-				...(input.entityTypes
-					? { entityTypes: input.entityTypes }
-					: {}),
-				...(input.synonymNames
-					? { synonymNames: input.synonymNames }
-					: {}),
-				...(input.refPerekIds
-					? { refPerekIds: input.refPerekIds }
-					: {}),
+				...(input.oldUniqueName ? { oldUniqueName: input.oldUniqueName } : {}),
+				...(input.entityTypes ? { entityTypes: input.entityTypes } : {}),
+				...(input.synonymNames ? { synonymNames: input.synonymNames } : {}),
+				...(input.refPerekIds ? { refPerekIds: input.refPerekIds } : {}),
 			},
 		],
 	};

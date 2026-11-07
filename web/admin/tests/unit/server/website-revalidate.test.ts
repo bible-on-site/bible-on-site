@@ -73,9 +73,9 @@ describe("revalidateWebsite", () => {
 	}
 
 	it("POSTs the tag with the secret in a header, never the URL", async () => {
-		await expect(
-			flush(revalidateWebsite([{ tag: "articles" }])),
-		).resolves.toBe(true);
+		await expect(flush(revalidateWebsite([{ tag: "articles" }]))).resolves.toBe(
+			true,
+		);
 
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
 		const [input, init] = fetchSpy.mock.calls[0];
@@ -165,9 +165,9 @@ describe("revalidateWebsite", () => {
 		delete process.env.REVALIDATE_SECRET;
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-		await expect(
-			flush(revalidateWebsite([{ tag: "articles" }])),
-		).resolves.toBe(false);
+		await expect(flush(revalidateWebsite([{ tag: "articles" }]))).resolves.toBe(
+			false,
+		);
 		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(warnSpy).toHaveBeenCalled();
 		// Unconfigured still leaves unapplied work — the editor must see the
@@ -187,9 +187,9 @@ describe("revalidateWebsite", () => {
 
 		process.env.VITE_WEBSITE_URL = "https://site.test/";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
-		await expect(
-			flush(revalidateWebsite([{ tag: "authors" }])),
-		).resolves.toBe(true);
+		await expect(flush(revalidateWebsite([{ tag: "authors" }]))).resolves.toBe(
+			true,
+		);
 
 		// The backlog post precedes the new one.
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -202,9 +202,9 @@ describe("revalidateWebsite", () => {
 		fetchSpy.mockResolvedValue(new Response("no", { status: 401 }));
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		await expect(
-			flush(revalidateWebsite([{ tag: "articles" }])),
-		).resolves.toBe(false);
+		await expect(flush(revalidateWebsite([{ tag: "articles" }]))).resolves.toBe(
+			false,
+		);
 		expect(errorSpy).toHaveBeenCalled();
 		errorSpy.mockRestore();
 	});
@@ -213,9 +213,9 @@ describe("revalidateWebsite", () => {
 		fetchSpy.mockRejectedValue(new Error("connect refused"));
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		await expect(
-			flush(revalidateWebsite([{ tag: "articles" }])),
-		).resolves.toBe(false);
+		await expect(flush(revalidateWebsite([{ tag: "articles" }]))).resolves.toBe(
+			false,
+		);
 		expect(errorSpy).toHaveBeenCalled();
 		errorSpy.mockRestore();
 	});
@@ -227,25 +227,18 @@ describe("revalidateWebsite", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
 		await expect(
-			flush(
-				revalidateWebsite([{ tag: "authors" }, { path: "/929/3" }]),
-			),
+			flush(revalidateWebsite([{ tag: "authors" }, { path: "/929/3" }])),
 		).resolves.toBe(false);
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
 	});
 
 	it("forwards each changed public url as a repeated url parameter", async () => {
 		await flush(
-			revalidateWebsite([
-				{ tag: "articles", urls: ["/929/5/12", "/929/7/3"] },
-			]),
+			revalidateWebsite([{ tag: "articles", urls: ["/929/5/12", "/929/7/3"] }]),
 		);
 
 		const url = calledUrls()[0];
-		expect(url.searchParams.getAll("url")).toEqual([
-			"/929/5/12",
-			"/929/7/3",
-		]);
+		expect(url.searchParams.getAll("url")).toEqual(["/929/5/12", "/929/7/3"]);
 	});
 
 	it("sends no url parameter when the change reports none", async () => {
@@ -261,15 +254,11 @@ describe("revalidateWebsite", () => {
 				.mockResolvedValueOnce(new Response("no", { status: 500 }));
 			vi.spyOn(console, "error").mockImplementation(() => {});
 
-			await flush(
-				revalidateWebsite([{ tag: "authors" }, { path: "/929/3" }]),
-			);
+			await flush(revalidateWebsite([{ tag: "authors" }, { path: "/929/3" }]));
 
 			const failure = lastRevalidationFailure();
 			expect(failure?.requests).toEqual([{ path: "/929/3" }]);
-			expect(Number.isNaN(Date.parse(failure?.failedAt ?? ""))).toBe(
-				false,
-			);
+			expect(Number.isNaN(Date.parse(failure?.failedAt ?? ""))).toBe(false);
 		});
 
 		it("retries undelivered requests on the next flush", async () => {
@@ -282,12 +271,8 @@ describe("revalidateWebsite", () => {
 
 			// The retried articles post precedes the new authors post.
 			expect(fetchSpy).toHaveBeenCalledTimes(3);
-			expect(
-				calledUrls()[1].searchParams.get("tag"),
-			).toBe("articles");
-			expect(
-				calledUrls()[2].searchParams.get("tag"),
-			).toBe("authors");
+			expect(calledUrls()[1].searchParams.get("tag")).toBe("articles");
+			expect(calledUrls()[2].searchParams.get("tag")).toBe("authors");
 			expect(lastRevalidationFailure()).toBeNull();
 		});
 
@@ -307,9 +292,7 @@ describe("revalidateWebsite", () => {
 			);
 
 			expect(fetchSpy).toHaveBeenCalledTimes(2);
-			const body = JSON.parse(
-				String(fetchSpy.mock.calls[1]?.[1]?.body),
-			);
+			const body = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body));
 			expect(body.changes).toEqual([
 				{ kind: "author", id: 1, name: "a" },
 				{ kind: "author", id: 2, name: "b" },
@@ -322,9 +305,7 @@ describe("revalidateWebsite", () => {
 			await flush(revalidateWebsite([{ tag: "articles" }]));
 
 			const status = await getWebsiteRevalidationStatus();
-			expect(status.lastFailure?.requests).toEqual([
-				{ tag: "articles" },
-			]);
+			expect(status.lastFailure?.requests).toEqual([{ tag: "articles" }]);
 		});
 	});
 });
@@ -352,18 +333,16 @@ describe("typed-change builders", () => {
 	});
 
 	it("authorChange carries the pre-rename name for the old slug", () => {
-		expect(authorChange({ id: 3, name: "רשי", oldName: "רבנו שלמה" })).toEqual(
-			{
-				changes: [
-					{
-						kind: "author",
-						id: 3,
-						name: "רשי",
-						oldName: "רבנו שלמה",
-					},
-				],
-			},
-		);
+		expect(authorChange({ id: 3, name: "רשי", oldName: "רבנו שלמה" })).toEqual({
+			changes: [
+				{
+					kind: "author",
+					id: 3,
+					name: "רשי",
+					oldName: "רבנו שלמה",
+				},
+			],
+		});
 		expect(authorChange({ id: 3, name: "רשי" })).toEqual({
 			changes: [{ kind: "author", id: 3, name: "רשי" }],
 		});

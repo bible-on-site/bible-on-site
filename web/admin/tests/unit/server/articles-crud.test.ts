@@ -880,9 +880,7 @@ describe("website cache invalidation", () => {
 
 		const change = sentChanges()[0];
 		expect(change).toMatchObject({ kind: "article", id: 7 });
-		expect([...((change?.perekIds ?? []) as number[])].sort()).toEqual([
-			5, 9,
-		]);
+		expect([...((change?.perekIds ?? []) as number[])].sort()).toEqual([5, 9]);
 		expect(change?.authorIds).toEqual([2]);
 	});
 
@@ -897,9 +895,7 @@ describe("website cache invalidation", () => {
 
 		const change = sentChanges()[0];
 		expect(change?.perekIds).toEqual([1]);
-		expect([...((change?.authorIds ?? []) as number[])].sort()).toEqual([
-			2, 3,
-		]);
+		expect([...((change?.authorIds ?? []) as number[])].sort()).toEqual([2, 3]);
 	});
 
 	it("carries the destroyed coverage spans after a coverage replace", async () => {

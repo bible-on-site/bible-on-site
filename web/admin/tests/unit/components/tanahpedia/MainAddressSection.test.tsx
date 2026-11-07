@@ -291,7 +291,9 @@ describe("MainAddressSection", () => {
 		expect(
 			screen.getByText(/דף פירושונים שכולל גם את ערך זה/),
 		).toBeInTheDocument();
-		expect(screen.getByText(/כבר רשומה כשם חלופי של ערך זה/)).toBeInTheDocument();
+		expect(
+			screen.getByText(/כבר רשומה כשם חלופי של ערך זה/),
+		).toBeInTheDocument();
 		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 
@@ -318,7 +320,9 @@ describe("MainAddressSection", () => {
 		expect(
 			await screen.findByText(/הכתובת הישנה תוביל אליהם בלבד/),
 		).toBeInTheDocument();
-		expect(screen.getByText(/הוסף אותו במקטע «כתובות נוספות»/)).toBeInTheDocument();
+		expect(
+			screen.getByText(/הוסף אותו במקטע «כתובות נוספות»/),
+		).toBeInTheDocument();
 		expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 	});
 

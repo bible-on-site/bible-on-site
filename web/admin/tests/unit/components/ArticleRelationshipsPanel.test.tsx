@@ -33,9 +33,7 @@ import {
 import { supportedRelationships } from "~/lib/article-relationships";
 
 function renderPanel(
-	props: Partial<
-		React.ComponentProps<typeof ArticleRelationshipsPanel>
-	> = {},
+	props: Partial<React.ComponentProps<typeof ArticleRelationshipsPanel>> = {},
 ) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
@@ -129,10 +127,10 @@ describe("ArticleRelationshipsPanel", () => {
 
 	it("lists dedication assignments with a link to the workflow", async () => {
 		renderPanel();
+		expect(await screen.findByText("לעילוי נשמת אבי מורי")).toBeInTheDocument();
 		expect(
-			await screen.findByText("לעילוי נשמת אבי מורי"),
+			screen.getByText(/הקצאה עד 2030-01-02 03:04:05/),
 		).toBeInTheDocument();
-		expect(screen.getByText(/הקצאה עד 2030-01-02 03:04:05/)).toBeInTheDocument();
 		const link = screen.getByRole("link", { name: "דף ההקדשות" });
 		expect(link).toHaveAttribute("href", "/dedications");
 	});
@@ -223,9 +221,7 @@ describe("ArticleRelationshipsPanel", () => {
 	});
 
 	it("reports a load error on the managed sections", async () => {
-		mocks.getArticleRelationshipDetails.mockRejectedValue(
-			new Error("db down"),
-		);
+		mocks.getArticleRelationshipDetails.mockRejectedValue(new Error("db down"));
 		renderPanel();
 		expect(
 			await screen.findByText(/שגיאה בטעינה: db down/),

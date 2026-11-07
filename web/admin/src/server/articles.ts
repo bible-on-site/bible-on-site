@@ -310,7 +310,11 @@ export const createArticle = createServerFn({ method: "POST" })
 			}
 			// Same-transaction reading metrics (#2607): the stored decoration
 			// commits atomically with the content it describes.
-			await recomputeArticleMetrics(conn, newArticle.id, newArticle.content ?? null);
+			await recomputeArticleMetrics(
+				conn,
+				newArticle.id,
+				newArticle.content ?? null,
+			);
 			// Same-transaction enqueue: the index update request commits atomically
 			// with the article row.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [newArticle.id]);
@@ -365,8 +369,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 			previousAuthorId = prev?.author_id ?? null;
 			// Captured unconditionally: a coverage replace OR a verified→false
 			// flip both destroy the previously-effective coverage surfaces.
-			previousCovering =
-				(await txLoadCoveringSources(conn, data.id)) ?? [];
+			previousCovering = (await txLoadCoveringSources(conn, data.id)) ?? [];
 			await txExecute(
 				conn,
 				"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, distributable = ?, content = ? WHERE id = ?",

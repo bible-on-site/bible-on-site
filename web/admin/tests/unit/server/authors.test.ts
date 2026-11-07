@@ -181,9 +181,7 @@ describe("author saves invalidate the website", () => {
 
 		await updateAuthor({ data: { id: 3, name: 'רד"ק', details: "ד" } });
 
-		expect(sentChanges()).toEqual([
-			{ kind: "author", id: 3, name: 'רד"ק' },
-		]);
+		expect(sentChanges()).toEqual([{ kind: "author", id: 3, name: 'רד"ק' }]);
 	});
 
 	it("carries the pre-rename name so the stale slug expires", async () => {
@@ -205,9 +203,7 @@ describe("author saves invalidate the website", () => {
 
 		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
 
-		expect(sentChanges()).toEqual([
-			{ kind: "author", id: 3, name: "חדש" },
-		]);
+		expect(sentChanges()).toEqual([{ kind: "author", id: 3, name: "חדש" }]);
 	});
 
 	it("carries the removed author's name after a delete", async () => {
@@ -215,9 +211,7 @@ describe("author saves invalidate the website", () => {
 
 		await deleteAuthor({ data: 3 });
 
-		expect(sentChanges()).toEqual([
-			{ kind: "author", id: 3, name: "נמחק" },
-		]);
+		expect(sentChanges()).toEqual([{ kind: "author", id: 3, name: "נמחק" }]);
 	});
 
 	it("sends nothing when the deleted author row was already gone", async () => {
