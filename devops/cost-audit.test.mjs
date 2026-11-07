@@ -56,9 +56,14 @@ test("month boundaries stay on the exclusive-end convention", () => {
 	assert.ok(daily.args.includes("Start=2026-11-01,End=2026-12-01"));
 	assert.ok(daily.args.includes("DAILY"));
 	assert.ok(!daily.args.includes("--filter"));
+	// Service-grouped rows mix incompatible units, so quantity is only
+	// requested for the single-service usage-type view.
+	assert.ok(!monthly.args.includes("UsageQuantity"));
+	assert.ok(!daily.args.includes("UsageQuantity"));
 
 	const [, s3Daily] = spendQueries({ months: 1, service: "Amazon Simple Storage Service", today });
 	assert.ok(s3Daily.args.includes("Type=DIMENSION,Key=USAGE_TYPE"));
+	assert.ok(s3Daily.args.includes("UsageQuantity"));
 	const filter = s3Daily.args[s3Daily.args.indexOf("--filter") + 1];
 	assert.deepEqual(JSON.parse(filter), { Dimensions: { Key: "SERVICE", Values: ["Amazon Simple Storage Service"] } });
 });
@@ -121,15 +126,15 @@ test("ecs-capacity evaluator enforces admin-only Spot and desired counts", () =>
 	const check = GUARD_CHECKS.find((c) => c.id === "ecs-capacity");
 	const baseline = {
 		services: [
-			{ serviceName: "bible-on-site-website", launchType: "FARGATE", desiredCount: 1 },
-			{ serviceName: "bible-on-site-api", launchType: "FARGATE", desiredCount: 1 },
-			{ serviceName: "bible-on-site-admin", capacityProviderStrategy: [{ capacityProvider: "FARGATE_SPOT", weight: 1 }], desiredCount: 1 },
+			{ serviceName: "bible-on-site-website", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-api", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-admin", capacityProviderStrategy: [{ capacityProvider: "FARGATE_SPOT", weight: 1 }], desiredCount: 1, runningCount: 1 },
 		],
 	};
 	assert.equal(check.evaluate(baseline).ok, true);
 
 	const adminOnDemand = structuredClone(baseline);
-	adminOnDemand.services[2] = { serviceName: "bible-on-site-admin", launchType: "FARGATE", desiredCount: 1 };
+	adminOnDemand.services[2] = { serviceName: "bible-on-site-admin", launchType: "FARGATE", desiredCount: 1, runningCount: 1 };
 	assert.equal(check.evaluate(adminOnDemand).ok, false);
 
 	const websiteSpot = structuredClone(baseline);
@@ -141,6 +146,65 @@ test("ecs-capacity evaluator enforces admin-only Spot and desired counts", () =>
 	const scaledResult = check.evaluate(scaled);
 	assert.equal(scaledResult.ok, false);
 	assert.match(scaledResult.observed, /api=FARGATE desired=3/);
+});
+
+test("ecs-capacity reads placement from weights and bases, not membership", () => {
+	const check = GUARD_CHECKS.find((c) => c.id === "ecs-capacity");
+	const baseline = {
+		services: [
+			{ serviceName: "bible-on-site-website", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-api", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-admin", capacityProviderStrategy: [{ capacityProvider: "FARGATE_SPOT", weight: 1 }], desiredCount: 1, runningCount: 1 },
+		],
+	};
+
+	// A zero-weight Spot entry places no tasks; the admin strategy below is
+	// effectively on-demand and must fail the exclusively-Spot guardrail.
+	const inertSpot = structuredClone(baseline);
+	inertSpot.services[2].capacityProviderStrategy = [
+		{ capacityProvider: "FARGATE", weight: 1 },
+		{ capacityProvider: "FARGATE_SPOT", weight: 0 },
+	];
+	assert.equal(check.evaluate(inertSpot).ok, false);
+
+	// A nonzero on-demand base also places tasks before weighted ones.
+	const basedOnDemand = structuredClone(baseline);
+	basedOnDemand.services[2].capacityProviderStrategy = [
+		{ capacityProvider: "FARGATE", base: 1, weight: 0 },
+		{ capacityProvider: "FARGATE_SPOT", weight: 1 },
+	];
+	assert.equal(check.evaluate(basedOnDemand).ok, false);
+
+	// Mixed Spot and on-demand weights are not exclusive either.
+	const mixed = structuredClone(baseline);
+	mixed.services[2].capacityProviderStrategy = [
+		{ capacityProvider: "FARGATE", weight: 1 },
+		{ capacityProvider: "FARGATE_SPOT", weight: 1 },
+	];
+	assert.equal(check.evaluate(mixed).ok, false);
+});
+
+test("ecs-capacity fails public services with no running task but tolerates Spot interruption on admin", () => {
+	const check = GUARD_CHECKS.find((c) => c.id === "ecs-capacity");
+	const baseline = {
+		services: [
+			{ serviceName: "bible-on-site-website", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-api", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-admin", capacityProviderStrategy: [{ capacityProvider: "FARGATE_SPOT", weight: 1 }], desiredCount: 1, runningCount: 1 },
+		],
+	};
+
+	const websiteDown = structuredClone(baseline);
+	websiteDown.services[0].runningCount = 0;
+	websiteDown.services[0].pendingCount = 1;
+	const downResult = check.evaluate(websiteDown);
+	assert.equal(downResult.ok, false);
+	assert.match(downResult.observed, /website=FARGATE desired=1 running=0 pending=1/);
+
+	// Spot interruptions on admin are reported, not failed.
+	const adminPaused = structuredClone(baseline);
+	adminPaused.services[2].runningCount = 0;
+	assert.equal(check.evaluate(adminPaused).ok, true);
 });
 
 test("router, endpoint and CDN evaluators pin the audited state", () => {
@@ -203,9 +267,9 @@ const HEALTHY = {
 	},
 	"describe-services": {
 		services: [
-			{ serviceName: "bible-on-site-website", launchType: "FARGATE", desiredCount: 1 },
-			{ serviceName: "bible-on-site-api", launchType: "FARGATE", desiredCount: 1 },
-			{ serviceName: "bible-on-site-admin", capacityProviderStrategy: [{ capacityProvider: "FARGATE_SPOT" }], desiredCount: 1 },
+			{ serviceName: "bible-on-site-website", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-api", launchType: "FARGATE", desiredCount: 1, runningCount: 1 },
+			{ serviceName: "bible-on-site-admin", capacityProviderStrategy: [{ capacityProvider: "FARGATE_SPOT", weight: 1 }], desiredCount: 1, runningCount: 1 },
 		],
 	},
 	"describe-instances": { Reservations: [{ Instances: [{ State: { Name: "running" }, InstanceType: "t3.small" }] }] },
@@ -272,6 +336,77 @@ test("guardrail call errors fail the audit too", async () => {
 	const report = await audit({ profile: "ops", skipSpend: true }, { execute: fakeAws(broken) });
 	assert.equal(report.ok, false);
 	assert.equal(report.checks.find((c) => c.id === "ecs-capacity").status, "error");
+});
+
+test("--skip-spend issues no Cost Explorer call at all", async () => {
+	const calls = [];
+	await audit({ profile: "ops", skipSpend: true }, { execute: fakeAws(HEALTHY, calls) });
+	assert.equal(calls.filter((call) => call.args[0] === "ce").length, 0);
+});
+
+test("spend queries follow NextPageToken and merge groups per period", async () => {
+	const calls = [];
+	// fakeAws matches on substring; emulate two pages via a stateful execute.
+	let pageCalls = 0;
+	const execute = async (command, args) => {
+		calls.push({ command, args });
+		const joined = args.join(" ");
+		if (joined.includes("get-cost-and-usage")) {
+			pageCalls++;
+			const first = pageCalls % 2 === 1;
+			return {
+				stdout: JSON.stringify(
+					first
+						? {
+								NextPageToken: "next",
+								ResultsByTime: [
+									{
+										TimePeriod: { Start: "2026-10-01", End: "2026-11-01" },
+										Groups: [{ Keys: ["Amazon S3"], Metrics: { UnblendedCost: { Amount: "10", Unit: "USD" } } }],
+									},
+								],
+							}
+						: {
+								ResultsByTime: [
+									{
+										TimePeriod: { Start: "2026-10-01", End: "2026-11-01" },
+										Groups: [{ Keys: ["Amazon EC2"], Metrics: { UnblendedCost: { Amount: "5", Unit: "USD" } } }],
+									},
+								],
+							},
+				),
+			};
+		}
+		for (const [match, response] of Object.entries(HEALTHY)) {
+			if (joined.includes(match)) return { stdout: JSON.stringify(response) };
+		}
+		throw new Error(`unexpected aws call: ${joined}`);
+	};
+	const report = await audit({ profile: "ops", months: 1 }, { execute });
+	const tokenCalls = calls.filter((call) => call.args.includes("--next-page-token"));
+	assert.equal(tokenCalls.length, 2); // one per query (monthly + daily)
+	const groups = report.spend.monthly.rows.map((row) => row.group).sort();
+	assert.deepEqual(groups, ["Amazon EC2", "Amazon S3"]);
+});
+
+test("formatReport prints every spend row without truncation", () => {
+	const rows = Array.from({ length: 60 }, (_, i) => ({
+		start: "2026-10-01",
+		group: `svc-${i}`,
+		costUsd: i,
+		usageAmount: null,
+		usageUnit: null,
+	}));
+	const text = formatReport({
+		generatedAt: "2026-11-09T00:00:00.000Z",
+		account: ACCOUNT_ID,
+		region: REGION,
+		profile: "ops",
+		ok: true,
+		checks: [],
+		spend: { monthly: { rows } },
+	});
+	assert.equal((text.match(/svc-/g) ?? []).length, 60);
 });
 
 test("formatReport renders guardrail, observability and spend sections", () => {

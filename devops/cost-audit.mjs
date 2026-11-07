@@ -9,10 +9,11 @@
  *   1. Identity guard - refuses to audit any account but the verified
  *      production account (the wrong-account incident is documented in
  *      docs/aws/cost-risk-audit-2026-10-23.md).
- *   2. Spend - Cost Explorer UnblendedCost/UsageQuantity by service, monthly
- *      completed months plus a daily current-month view. --service switches
- *      the daily view to USAGE_TYPE for one service (the S3 drill-down used
- *      in docs/aws/s3-delivery-cost-2026-11-01.md).
+ *   2. Spend - Cost Explorer UnblendedCost by service, monthly completed
+ *      months plus a daily current-month view. UsageQuantity is only read
+ *      for the --service USAGE_TYPE drill-down (the S3 breakdown used in
+ *      docs/aws/s3-delivery-cost-2026-11-01.md): CE sums quantity across a
+ *      group, so service-level rows have no meaningful unit to report.
  *   3. Guardrails - the cost-relevant live settings that must not drift:
  *      log retention (180/365/365 days), per-service capacity (admin-only
  *      FARGATE_SPOT, website/API on-demand, desired 1), the sole nginx
@@ -25,7 +26,7 @@
  *
  * Every call is a read-only `aws` CLI invocation. Cost Explorer charges a
  * small per-request fee for its API; pass --skip-spend to audit guardrails
- * only.
+ * only, which skips every `ce` call including the anomaly-monitor check.
  *
  * Usage:
  *   node devops/cost-audit.mjs [--profile NAME] [--months N] [--service NAME]
@@ -125,9 +126,11 @@ function isoDate(date) {
  * completed months grouped by service; daily covers the current month to
  * date. --service retargets the daily query to that service's usage types,
  * matching the S3 breakdown in docs/aws/s3-delivery-cost-2026-11-01.md.
+ * UsageQuantity is only requested for the usage-type view: service groups
+ * span incompatible units and CE adds them into a meaningless total.
  */
 export function spendQueries({ months = 3, service = null, today = new Date() } = {}) {
-	const ce = ({ timePeriod, granularity, groupKey, filter }) => {
+	const ce = ({ timePeriod, granularity, groupKey, filter, withUsage = false }) => {
 		const args = [
 			"ce",
 			"get-cost-and-usage",
@@ -137,10 +140,9 @@ export function spendQueries({ months = 3, service = null, today = new Date() } 
 			granularity,
 			"--metrics",
 			"UnblendedCost",
-			"UsageQuantity",
-			"--group-by",
-			`Type=DIMENSION,Key=${groupKey}`,
 		];
+		if (withUsage) args.push("UsageQuantity");
+		args.push("--group-by", `Type=DIMENSION,Key=${groupKey}`);
 		if (filter) args.push("--filter", filter);
 		return args;
 	};
@@ -160,6 +162,7 @@ export function spendQueries({ months = 3, service = null, today = new Date() } 
 			granularity: "DAILY",
 			groupKey: service ? "USAGE_TYPE" : "SERVICE",
 			filter: service ? JSON.stringify({ Dimensions: { Key: "SERVICE", Values: [service] } }) : null,
+			withUsage: Boolean(service),
 		}),
 	};
 	return [monthly, daily];
@@ -203,10 +206,16 @@ export function summarizeUsage(rows) {
 	return totals;
 }
 
-/** Effective launch providers for one ECS service description. */
+/**
+ * Providers that actually place tasks for one ECS service description.
+ * A capacity-provider entry only places tasks when its weight or base is
+ * nonzero (base tasks are placed before weighted tasks); a zero-weight,
+ * zero-base entry is inert. When no strategy exists, launchType applies.
+ */
 function providersOf(service) {
-	const strategy = (service.capacityProviderStrategy ?? []).map((entry) => entry.capacityProvider);
-	return strategy.length > 0 ? strategy : [service.launchType].filter(Boolean);
+	const strategy = service.capacityProviderStrategy ?? [];
+	if (strategy.length === 0) return [service.launchType].filter(Boolean);
+	return strategy.filter((entry) => (entry.weight ?? 0) > 0 || (entry.base ?? 0) > 0).map((entry) => entry.capacityProvider);
 }
 
 /**
@@ -233,7 +242,7 @@ export const GUARD_CHECKS = [
 	},
 	{
 		id: "ecs-capacity",
-		title: "Service sizes: admin-only Spot, desired 1 each",
+		title: "Service sizes: admin-only Spot, desired 1 each, public services running",
 		region: REGION,
 		args: ["ecs", "describe-services", "--cluster", ECS_CLUSTER, "--services", ...EXPECTED_SERVICES.map((s) => s.name)],
 		evaluate(json) {
@@ -242,18 +251,27 @@ export const GUARD_CHECKS = [
 			let ok = true;
 			for (const { name, provider } of EXPECTED_SERVICES) {
 				const service = byName.get(name);
+				const short = name.replace("bible-on-site-", "");
 				if (!service) {
-					parts.push(`${name.replace("bible-on-site-", "")}=missing`);
+					parts.push(`${short}=missing`);
 					ok = false;
 					continue;
 				}
 				const providers = providersOf(service);
 				const desired = service.desiredCount;
-				const good = desired === 1 && (provider === "FARGATE_SPOT" ? providers.includes("FARGATE_SPOT") : providers.includes("FARGATE") && !providers.includes("FARGATE_SPOT"));
+				const running = service.runningCount ?? 0;
+				const pending = service.pendingCount ?? 0;
+				// The baseline is exclusive placement: admin tasks all on Spot,
+				// public tasks all on-demand. Public services must also have a
+				// running task; admin Spot interruptions are tolerated but still
+				// reported so a stuck replacement is visible.
+				const exclusive = providers.length > 0 && providers.every((p) => p === provider);
+				const publicServing = provider !== "FARGATE_SPOT" ? running === 1 : true;
+				const good = desired === 1 && exclusive && publicServing;
 				ok &&= good;
-				parts.push(`${name.replace("bible-on-site-", "")}=${providers.join("+") || "?"} desired=${desired}`);
+				parts.push(`${short}=${providers.join("+") || "?"} desired=${desired} running=${running} pending=${pending}`);
 			}
-			return { ok, expected: "website/api FARGATE, admin FARGATE_SPOT, desired=1", observed: parts.join(" ") };
+			return { ok, expected: "website/api FARGATE running=1, admin FARGATE_SPOT, desired=1", observed: parts.join(" ") };
 		},
 	},
 	{
@@ -356,6 +374,29 @@ async function awsJson(execute, args, profile, region) {
 	return JSON.parse(stdout);
 }
 
+/**
+ * GetCostAndUsage is not auto-paginated by the CLI: a response carrying
+ * NextPageToken has more Groups for the same periods. Follow the token and
+ * merge groups per period so no charges are silently dropped.
+ */
+async function awsJsonPaginated(execute, args, profile, region) {
+	const merged = await awsJson(execute, args, profile, region);
+	const byPeriod = new Map((merged.ResultsByTime ?? []).map((entry) => [entry.TimePeriod?.Start, entry]));
+	let token = merged.NextPageToken;
+	while (token) {
+		const page = await awsJson(execute, [...args, "--next-page-token", token], profile, region);
+		for (const entry of page.ResultsByTime ?? []) {
+			const start = entry.TimePeriod?.Start;
+			const existing = byPeriod.get(start);
+			if (existing) existing.Groups = [...(existing.Groups ?? []), ...(entry.Groups ?? [])];
+			else byPeriod.set(start, entry);
+		}
+		token = page.NextPageToken;
+	}
+	merged.ResultsByTime = [...byPeriod.values()];
+	return merged;
+}
+
 async function runCheck(execute, check, profile) {
 	try {
 		const json = await awsJson(execute, check.args, profile, check.region);
@@ -374,12 +415,17 @@ export async function audit({ profile = DEFAULT_PROFILE, months = 3, service = n
 	}
 	const checks = [];
 	for (const check of GUARD_CHECKS) checks.push(await runCheck(execute, check, profile));
-	for (const check of OBSERVABILITY_CHECKS) checks.push(await runCheck(execute, check, profile));
+	for (const check of OBSERVABILITY_CHECKS) {
+		// --skip-spend promises zero Cost Explorer calls; anomaly monitors are
+		// a CE surface too, so the check is skipped rather than failed.
+		if (skipSpend && check.args[0] === "ce") continue;
+		checks.push(await runCheck(execute, check, profile));
+	}
 
 	const spend = {};
 	if (!skipSpend) {
 		for (const query of spendQueries({ months, service })) {
-			const json = await awsJson(execute, query.args, profile, GLOBAL_REGION);
+			const json = await awsJsonPaginated(execute, query.args, profile, GLOBAL_REGION);
 			spend[query.label] = { rows: parseCostAndUsage(json) };
 		}
 	}
@@ -418,7 +464,7 @@ export function formatReport(report) {
 	for (const [label, section] of Object.entries(report.spend)) {
 		lines.push(`\n## Spend - ${label} UnblendedCost`);
 		lines.push("| period | group | cost | usage |", "| --- | --- | ---: | --- |");
-		for (const row of section.rows.slice(0, 40)) {
+		for (const row of section.rows) {
 			const usage = row.usageUnit ? `${row.usageAmount} ${row.usageUnit}` : "-";
 			lines.push(`| ${row.start} | ${row.group} | ${money(row.costUsd)} | ${usage} |`);
 		}
