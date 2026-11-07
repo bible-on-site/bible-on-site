@@ -12,8 +12,10 @@ import {
 } from "./server/auth";
 import { rescanDedicationExpiries } from "./server/dedication-expiry";
 import { ensureEmailWorkerStarted } from "./server/email-worker-runtime.server";
+import { measureCovEnabled, skipAuthEnabled } from "./server/environment.server";
 
-const SKIP_AUTH = process.env.SKIP_AUTH === "true";
+// Local dev/test escape hatch only — fails closed in production (#3069).
+const SKIP_AUTH = skipAuthEnabled();
 
 // Boot catch-up for expiry-instant invalidations (#2731): arms timers for
 // future dedication expiries and flushes ones that elapsed while the admin
@@ -63,22 +65,10 @@ export default createServerEntry({
 	async fetch(request) {
 		await ensureEmailWorkerStarted();
 		const url = new URL(request.url);
-		if (url.pathname.startsWith("/api/bulletin-documents/")) {
-			const { handleBulletinDocument } = await import(
-				"./server/bulletin-document.server"
-			);
-			return (
-				(await handleBulletinDocument(request)) ??
-				new Response("Not found", { status: 404 })
-			);
-		}
 
 		// E2E coverage drain: instrumented SSR modules write istanbul coverage to
 		// this realm's globalThis; the Playwright fixture fetches it per test.
-		if (
-			process.env.MEASURE_COV === "1" &&
-			url.pathname === "/api/dev/coverage"
-		) {
+		if (measureCovEnabled() && url.pathname === "/api/dev/coverage") {
 			const g = globalThis as { __coverage__?: unknown };
 			const coverage = g.__coverage__ ?? {};
 			g.__coverage__ = {};

@@ -7,6 +7,12 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
+	BULLETIN_DOCUMENT_PATH,
+	BULLETIN_MISSING_PATH,
+	createAdminFixture,
+	FIXTURE_BULLETIN,
+} from "./native-admin-fixture.mjs";
+import {
 	apiPackageVersion,
 	assertPlainVersion,
 	verifyApiRuntime,
@@ -49,7 +55,7 @@ export function parseOptions(args) {
 	return values;
 }
 
-export function assertAdminResponses(result) {
+export function assertAdminResponses(result, origin = "http://127.0.0.1:3101") {
 	assert.equal(result.status, 302);
 	const location = new URL(result.location);
 	assert.equal(location.origin, "https://login.example.invalid");
@@ -58,10 +64,31 @@ export function assertAdminResponses(result) {
 	assert.equal(location.searchParams.get("identity_provider"), "AWSSSO");
 	assert.equal(
 		location.searchParams.get("redirect_uri"),
-		"http://127.0.0.1:3101/auth/callback",
+		`${origin}/auth/callback`,
 	);
 	assert.equal(result.serverFnStatus, 401);
 	assert.match(result.serverFnBody, /^SESSION_EXPIRED:/);
+}
+
+// Since #3069 the bulletin-document path sits behind the Cognito boundary
+// like every other admin route, so both a recorded and an unrecorded hash
+// must redirect to the same login challenge as `/` — no anonymous read.
+export function assertAdminDocumentGuard(
+	result,
+	origin = "http://127.0.0.1:3101",
+) {
+	for (const locationHeader of [result.documentLocation, result.missingLocation]) {
+		assert.ok(locationHeader, "document paths must redirect, not serve");
+		const location = new URL(locationHeader);
+		assert.equal(location.origin, "https://login.example.invalid");
+		assert.equal(location.pathname, "/oauth2/authorize");
+		assert.equal(
+			location.searchParams.get("redirect_uri"),
+			`${origin}/auth/callback`,
+		);
+	}
+	assert.equal(result.documentStatus, 302);
+	assert.equal(result.missingStatus, 302);
 }
 
 function runDocker(args, { input } = {}) {
@@ -74,10 +101,21 @@ function runDocker(args, { input } = {}) {
 	}).trim();
 }
 
-const adminProbe = `
-const r = await fetch('http://127.0.0.1:3101/', { redirect: 'manual', signal: AbortSignal.timeout(2000) });
-const f = await fetch('http://127.0.0.1:3101/', { headers: { 'x-tsr-serverFn': 'true' }, redirect: 'manual', signal: AbortSignal.timeout(2000) });
-console.log(JSON.stringify({ status: r.status, location: r.headers.get('location'), serverFnStatus: f.status, serverFnBody: await f.text() }));
+// The probe runs in a sibling container on the fixture network, not via
+// docker exec: an exec'd node would share the smoke container's tiny cgroup
+// (0.25 CPU) and starve the very server it measures.
+// Per-fetch deadlines bound a hung connection, not response speed: cold
+// requests under the 0.25-CPU cap legitimately take seconds, and aborting
+// them strands server-side work that queues ahead of the next probe, so a
+// tight per-request timeout starves the server into never answering. The
+// 30s startup budget remains the regression bound for overall startup.
+const adminFetchDeadlineMs = 10_000;
+const adminProbe = (host) => `
+const r = await fetch('http://${host}:3101/', { redirect: 'manual', signal: AbortSignal.timeout(${adminFetchDeadlineMs}) });
+const f = await fetch('http://${host}:3101/', { headers: { 'x-tsr-serverFn': 'true' }, redirect: 'manual', signal: AbortSignal.timeout(${adminFetchDeadlineMs}) });
+const d = await fetch('http://${host}:3101${BULLETIN_DOCUMENT_PATH}', { redirect: 'manual', signal: AbortSignal.timeout(${adminFetchDeadlineMs}) });
+const m = await fetch('http://${host}:3101${BULLETIN_MISSING_PATH}', { redirect: 'manual', signal: AbortSignal.timeout(${adminFetchDeadlineMs}) });
+console.log(JSON.stringify({ status: r.status, location: r.headers.get('location'), serverFnStatus: f.status, serverFnBody: await f.text(), documentStatus: d.status, documentLocation: d.headers.get('location'), missingStatus: m.status, missingLocation: m.headers.get('location') }));
 `;
 
 // A single fixed budget catches a startup regression; it is not a production
@@ -183,6 +221,7 @@ export async function verifyImage(options, dependencies = {}) {
 		};
 	}
 	let created = false;
+	let fixtureCleanup;
 	let failure;
 	try {
 		if (service === "website") {
@@ -205,9 +244,17 @@ export async function verifyImage(options, dependencies = {}) {
 			]);
 			evidence.nativeDependencies = JSON.parse(output.split("\n").at(-1));
 		} else {
+			// The document probe needs an isolated, owned MySQL: no production
+			// database, published ports, credentials, or outbound route.
+			const fixture = await (
+				dependencies.createAdminFixture ?? createAdminFixture
+			)(docker, { arch, now, sleep });
+			fixtureCleanup = fixture.cleanup;
 			const env = [
 				"--network",
-				"none",
+				fixture.network,
+				"-e",
+				`DB_URL=${fixture.databaseUrl}`,
 				"-e",
 				"SKIP_AUTH=false",
 				"-e",
@@ -229,12 +276,18 @@ export async function verifyImage(options, dependencies = {}) {
 				() =>
 					JSON.parse(
 						docker([
-							"exec",
-							name,
+							"run",
+							"--rm",
+							"--platform",
+							`linux/${arch}`,
+							"--network",
+							fixture.network,
+							"--entrypoint",
 							"node",
+							image,
 							"--input-type=module",
 							"-e",
-							adminProbe,
+							adminProbe(name),
 						]),
 					),
 				docker,
@@ -242,7 +295,8 @@ export async function verifyImage(options, dependencies = {}) {
 				now,
 				sleep,
 			);
-			assertAdminResponses(result);
+			assertAdminResponses(result, `http://${name}:3101`);
+			assertAdminDocumentGuard(result, `http://${name}:3101`);
 			evidence.auth = result;
 		}
 	} catch (error) {
@@ -261,6 +315,17 @@ export async function verifyImage(options, dependencies = {}) {
 			} catch (cleanupError) {
 				console.error(
 					`Could not remove smoke container ${name}: ${cleanupError.message}`,
+				);
+				failure ??= cleanupError;
+			}
+		}
+		// The smoke container must leave the fixture network before it is removed.
+		if (fixtureCleanup) {
+			try {
+				fixtureCleanup();
+			} catch (cleanupError) {
+				console.error(
+					`Could not clean the admin fixture: ${cleanupError.message}`,
 				);
 				failure ??= cleanupError;
 			}

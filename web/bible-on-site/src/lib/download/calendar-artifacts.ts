@@ -20,18 +20,16 @@
 
 import {
 	buildMonth,
-	type CalendarDay,
 	compareMonths,
 	getConfirmedCycleCount,
 	getCycle,
 	getCycleNumeral,
 	getCycleRangeLabel,
 	getCycleStartMonth,
+	getDaySourceLabel,
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
-	getPerekRangeLabel,
-	getPerekSource,
 	getYearLabel,
 	type MonthCell,
 	type MonthRef,
@@ -257,16 +255,8 @@ export function resolveCalendarArtifactRequest(
 	};
 }
 
-function dayLabel(day: CalendarDay): string {
-	/* istanbul ignore next -- dayLabel is only invoked for scheduled days (perekId set) */
-	if (day.perekId === undefined) {
-		return "";
-	}
-	if (day.status === "review" && day.reviewPerekIds?.length) {
-		return getPerekRangeLabel(day.reviewPerekIds);
-	}
-	return getPerekSource(day.perekId);
-}
+// The visible day label is the shared getDaySourceLabel contract (#2975) —
+// the same text the calendar's monthly and grouped cells render.
 
 /**
  * Cell grids are pure data — a month/year/cycle artifact often covers the
@@ -344,7 +334,7 @@ export function buildCalendarPdfInput(
 				subtitle: getCycleRangeLabel(getCycle(parsed.cycle)),
 				months: monthsForCycle(parsed.cycle, cellsCache),
 				dimmed: (day) => day.cycle !== parsed.cycle,
-				dayLabel,
+				dayLabel: getDaySourceLabel,
 				linkBase,
 			};
 		}
@@ -358,7 +348,7 @@ export function buildCalendarPdfInput(
 					month,
 					cells: buildCachedMonth(parsed.year, month, cellsCache),
 				})),
-				dayLabel,
+				dayLabel: getDaySourceLabel,
 				linkBase,
 			};
 		}
@@ -375,7 +365,7 @@ export function buildCalendarPdfInput(
 						cells: buildCachedMonth(parsed.year, parsed.month, cellsCache),
 					},
 				],
-				dayLabel,
+				dayLabel: getDaySourceLabel,
 				linkBase,
 			};
 		}

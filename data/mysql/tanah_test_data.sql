@@ -1,6 +1,6 @@
 -- Database selection handled by the executing tool (db-populator, Lambda, etc.)
 --
--- This file MUST be self-contained: every table referenced by the website's
+-- This file MUST be self-contained: every table referenced by website
 -- e2e tests must have representative rows here.  When you add a new DB table
 -- that the website queries, add test data here too — otherwise e2e tests will
 -- silently get empty results and fail with confusing "element not found" errors.
@@ -99,8 +99,8 @@ VALUES (
 <p>זהו מאמר לדוגמא עם תמונה מ-S3:</p>
 <img src="https://bible-on-site-assets-test.s3.amazonaws.com/rabbis/test-rabbi.jpg" alt="תמונת רב לדוגמא" />
 <p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>',
-        -- Bulletin approval is not website visibility. This author's only
-        -- valid article must still appear on the website and in public search.
+        -- Bulletin approval is not website visibility. The only valid
+        -- article of this author must still appear on the website and in public search.
         FALSE
     ),
     -- Invalid chapter row: public article routes and search must exclude it.
@@ -154,6 +154,65 @@ VALUES
     (2, 1, 2, 0, 'תהו ובהו - תהו הוא דבר שאין בו ממש, ובהו דבר שיש בו ממש'),
     (3, 1, 1, 0, 'בקדמין ברא ה׳ ית שמיא וית ארעא'),
     (3, 1, 2, 0, 'וארעא הות צדיא וריקניא');
+
+-- ---------------------------------------------------------------------------
+-- Representative test data for מועדים על הפרק (issue #3101).
+--
+-- The production catalogue seeds from tanah_moed_data.sql BEFORE this file
+-- (db-populator order), so these fixtures only add deterministic test moadim
+-- plus link rows covering every union branch of the article list:
+--   article 1 - linked AND range-matched via its verified covering rows
+--              (בראשית א 1-2 sit inside the stored בראשית א 1-3 range)
+--   articles 2-4 - range-matched only: unverified coverage falls back to
+--              their primary perek (1), which overlaps the stored range
+--   article 5 - linked but never listed: its primary perek (5000) is not a
+--              routable public chapter, so the union 1-929 bound keeps it
+--              out — an explicit link alone cannot resurrect a dead route
+--   article 3 - the explicit-only case on moed 92: its primary perek (1)
+--              never intersects the stored range of moed 92, so it renders by
+--              the link alone (no range match claims pasuk precision)
+-- Moed 91 stays unpublished so the detail route 404 path is exercised.
+-- ---------------------------------------------------------------------------
+-- The moed tables are CREATE IF NOT EXISTS (never drop-recreated), so
+-- these fixtures must stay idempotent like the seed guards above them.
+INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
+SELECT id, slug, name, summary, hebrew_month, date_label, annual_order, published
+FROM (SELECT 90 AS id, 'מועד-בדיקה' AS slug, 'מועד בדיקה' AS name,
+             'מועד לבדיקות אוטומטיות' AS summary, NULL AS hebrew_month,
+             NULL AS date_label, 90 AS annual_order, TRUE AS published
+      UNION ALL
+      SELECT 91, 'מועד-לא-מפורסם', 'מועד לא מפורסם', NULL, NULL, NULL, 91, FALSE
+      UNION ALL
+      SELECT 92, 'מועד-בדיקה-קישור', 'מועד בדיקה קישור',
+             'מועד לבדיקת קישור ידני בלבד', NULL, NULL, 92, TRUE) seed
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE tanah_moed.id = seed.id);
+
+INSERT INTO tanah_moed_section (id, moed_id, label, position)
+SELECT id, moed_id, label, position
+FROM (SELECT 9001 AS id, 90 AS moed_id, 'סעיף בדיקה' AS label, 1 AS position
+      UNION ALL
+      SELECT 9002, 92, 'סעיף קריאה בלי מאמרים', 1) seed
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_section WHERE tanah_moed_section.id = seed.id);
+
+INSERT INTO tanah_moed_range (id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT id, section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end
+FROM (SELECT 90011 AS id, 9001 AS section_id, 1 AS position,
+             1 AS perek_id_start, 1 AS pasuk_start, 1 AS perek_id_end, 3 AS pasuk_end
+      UNION ALL
+      -- בראשית ב carries no fixture article, so the range of moed 92 matches
+      -- nothing and its article list is the explicit link alone.
+      SELECT 90021, 9002, 1, 2, 1, 2, 3) seed
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_range WHERE tanah_moed_range.id = seed.id);
+
+INSERT INTO tanah_article_moed (article_id, moed_id)
+SELECT article_id, moed_id
+FROM (SELECT 1 AS article_id, 90 AS moed_id UNION ALL
+      SELECT 5, 90 UNION ALL
+      SELECT 3, 92) seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM tanah_article_moed existing
+    WHERE existing.article_id = seed.article_id AND existing.moed_id = seed.moed_id
+);
 
 -- ---------------------------------------------------------------------------
 -- Mention-decoration fixtures (issue #2516) live in
