@@ -204,6 +204,9 @@ public sealed class PreferencesSyncService : IDisposable
 
     private async Task RunSyncSafelyAsync(TimeSpan delay, CancellationTokenSource cts)
     {
+        // Disposed at scope exit — after the finally below detaches it from
+        // _scheduledCts, so a racing Cancel cannot land on a disposed source.
+        using var _ = cts;
         var cancellationToken = cts.Token;
         try
         {
@@ -242,7 +245,6 @@ public sealed class PreferencesSyncService : IDisposable
                     _scheduledCts = null;
                 }
             }
-            cts.Dispose();
         }
     }
 
