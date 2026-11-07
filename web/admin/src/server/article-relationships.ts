@@ -56,6 +56,11 @@ export interface ArticleRelationshipDetails {
 	contentHash: string;
 	dedications: ArticleDedicationLink[];
 	/**
+	 * The moadim explicitly linked to the article (#3101); `undefined`
+	 * when the moed schema is not deployed — never "linked to nothing".
+	 */
+	moadim?: { id: number; slug: string; name: string }[];
+	/**
 	 * Stored mention annotations; `undefined` when the annotation schema is
 	 * not deployed — never "the article has no annotations".
 	 */
@@ -159,5 +164,25 @@ export const getArticleRelationshipDetails = createServerFn({ method: "GET" })
 			if (!isCoveringSourceSchemaMissing(error)) throw error;
 		}
 
-		return { articleId, contentHash, dedications, mentionAnnotations };
+		let moadim: { id: number; slug: string; name: string }[] | undefined;
+		try {
+			moadim = await query<{ id: number; slug: string; name: string }>(
+				`SELECT m.id, m.slug, m.name
+				 FROM tanah_article_moed am
+				 JOIN tanah_moed m ON m.id = am.moed_id
+				 WHERE am.article_id = ? ORDER BY m.annual_order`,
+				[articleId],
+			);
+		} catch (error) {
+			// Moed schema not deployed — unavailable, not empty.
+			if (!isCoveringSourceSchemaMissing(error)) throw error;
+		}
+
+		return {
+			articleId,
+			contentHash,
+			dedications,
+			moadim,
+			mentionAnnotations,
+		};
 	});

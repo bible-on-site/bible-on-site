@@ -48,6 +48,8 @@ exclude_paths:
   - "data/mysql/tanah_web_push_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
   - "data/mysql/tanah_perek_pasuk_count_data.sql"
+  - "data/mysql/tanah_moed_upgrade.sql"
+  - "data/mysql/tanah_moed_data.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
   - "data/mysql/tanahpedia_alter_saying_date.sql"
   - "data/mysql/tanahpedia_alter_person_source_citation.sql"
@@ -106,6 +108,10 @@ exclude_paths:
   # taint pattern is a systemic false positive for a URL-diffing tool — the
   # repo's own codacy-gate/precommit still lint this file.
   - "devops/edge-compat-check.mjs"
+  # Same T-SQL-dialect false positive as the data/mysql files: this MySQL
+  # fixture uses UNSIGNED/MEDIUMBLOB/ENGINE clauses the SQL parser rejects.
+  # It is exercised against a real MySQL 8.4 server by the native verifier.
+  - "devops/github/ci/native-admin-fixture.sql"
   # Coverage-universe builder: its whole job is walking the website's src/
   # tree and reading each file to build the canonical instrument map, so
   # non-literal-fs-filename is the same systemic false positive as the

@@ -56,6 +56,7 @@ function renderPanel(
 const details = {
 	articleId: 7,
 	contentHash: "abcdef0123",
+	moadim: [{ id: 1, slug: "פסח", name: "פסח" }],
 	dedications: [
 		{
 			dedicationId: 5,
@@ -144,11 +145,50 @@ describe("ArticleRelationshipsPanel", () => {
 
 	it("surfaces pending-schema relationships with their owning issue", async () => {
 		renderPanel();
+		// מועדים (#3101) graduated to a live managed section; only the
+		// recurring Hebrew date (#3098) still waits on its schema.
 		expect(
 			await screen.findAllByText(/ממתין לסכמה — יוטמע דרך חוזה זה/),
-		).toHaveLength(2);
+		).toHaveLength(1);
 		expect(screen.getByText(/3098/)).toBeInTheDocument();
-		expect(screen.getByText(/3101/)).toBeInTheDocument();
+	});
+
+	it("lists the article's linked moadim inside the managed section", async () => {
+		renderPanel();
+		expect(await screen.findByText("פסח")).toBeInTheDocument();
+		expect(screen.getByText("(פסח)")).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "דף המועדים" })).toHaveAttribute(
+			"href",
+			"/moadim",
+		);
+	});
+
+	it("shows the moed loading, missing-schema and empty states", async () => {
+		// Loading — the query has not resolved yet (every managed section
+		// shows the same spinner text, so at least one must render).
+		mocks.getArticleRelationshipDetails.mockReturnValue(new Promise(() => {}));
+		renderPanel();
+		expect(screen.getAllByText("טוען…").length).toBeGreaterThan(0);
+		document.body.replaceChildren();
+
+		// Schema undeployed — undefined is not an empty link set.
+		mocks.getArticleRelationshipDetails.mockResolvedValue({
+			...details,
+			moadim: undefined,
+		});
+		renderPanel();
+		expect(
+			await screen.findByText(/סכמת המועדים עוד לא נפרסה/),
+		).toBeInTheDocument();
+		document.body.replaceChildren();
+
+		// Schema live, no links.
+		mocks.getArticleRelationshipDetails.mockResolvedValue({
+			...details,
+			moadim: [],
+		});
+		renderPanel();
+		expect(await screen.findByText("אין מועדים משויכים")).toBeInTheDocument();
 	});
 
 	it("falls back to the raw author id when no name is provided", () => {
@@ -193,9 +233,7 @@ describe("ArticleRelationshipsPanel", () => {
 			dedications: [],
 		});
 		renderPanel();
-		expect(
-			await screen.findByText(/אין הקדשות משויכות/),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/אין הקדשות משויכות/)).toBeInTheDocument();
 	});
 
 	it("shows an explicit empty state when no annotations are stored", async () => {

@@ -39,13 +39,15 @@ describe("article relationship registry", () => {
 		expect(
 			ARTICLE_RELATIONSHIP_REGISTRY.freshness.expectedCoveringSources,
 		).toContain("perekId");
+		expect(ARTICLE_RELATIONSHIP_REGISTRY.freshness.expectedMoedIds).toContain(
+			"moed",
+		);
 	});
 
-	it("marks #3098 and #3101 as pending-schema without operations", () => {
+	it("marks #3098 as pending-schema without operations", () => {
 		const pending = pendingRelationships();
 		expect(pending.map((r) => [r.key, r.pendingIssue])).toEqual([
 			["recurringHebrewDate", 3098],
-			["moadim", 3101],
 		]);
 		for (const entry of pending) {
 			expect(entry.operations).toEqual([]);
@@ -61,6 +63,7 @@ describe("article relationship registry", () => {
 			"coveringSources",
 			"dedicationAssignments",
 			"mentionAnnotations",
+			"moadim",
 		]);
 		for (const entry of supported) {
 			expect(entry.operations).toContain("read");

@@ -898,6 +898,102 @@ describe("website cache invalidation", () => {
 		expect([...((change?.authorIds ?? []) as number[])].sort()).toEqual([2, 3]);
 	});
 
+	it("expires the moadim an article links to on create", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_moed") && text.includes("slug"))
+				return Promise.resolve([{ id: 3, slug: "פסח" }]);
+			if (text.includes("FROM tanah_moed")) return Promise.resolve([{ id: 3 }]);
+			if (text.includes("FROM tanah_article_moed")) return Promise.resolve([]);
+			return Promise.resolve([]);
+		});
+		mocks.txQueryOne.mockResolvedValue({
+			id: 7,
+			name: "מאמר",
+			perek_id: 5,
+			author_id: 2,
+		});
+
+		await createArticle({ data: { ...article, moedIds: [3] } });
+
+		expect(
+			mocks.txExecute.mock.calls.some(([, sql]) =>
+				String(sql).includes("INSERT INTO tanah_article_moed"),
+			),
+		).toBe(true);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+			{ kind: "moed", id: 3, slug: "פסח" },
+		]);
+	});
+
+	it("expires the old and new moadim after a link-set replace on update", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_article_moed"))
+				// The article currently links to moed 2.
+				return Promise.resolve([{ id: 2, slug: "ישן" }]);
+			if (text.includes("slug"))
+				// Slug resolution for the added moed.
+				return Promise.resolve([{ id: 5, slug: "חדש" }]);
+			if (text.includes("FROM tanah_moed")) return Promise.resolve([{ id: 5 }]);
+			return Promise.resolve([]);
+		});
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7, moedIds: [5] } });
+
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [1], authorIds: [2] },
+			{ kind: "moed", id: 2, slug: "ישן" },
+			{ kind: "moed", id: 5, slug: "חדש" },
+		]);
+	});
+
+	it("leaves the moed change list empty when the link set did not move", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_article_moed"))
+				return Promise.resolve([{ id: 3, slug: "פסח" }]);
+			if (text.includes("FROM tanah_moed")) return Promise.resolve([{ id: 3 }]);
+			return Promise.resolve([]);
+		});
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7, moedIds: [3] } });
+
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [1], authorIds: [2] },
+		]);
+	});
+
+	it("expires the moeds whose links cascaded with the deleted article", async () => {
+		mocks.queryOne.mockResolvedValue({ perek_id: 5, author_id: 2 });
+		mocks.query.mockImplementation((sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_article_moed"))
+				return Promise.resolve([{ moed_id: 3 }]);
+			if (text.includes("FROM tanah_moed"))
+				return Promise.resolve([{ id: 3, slug: "פסח" }]);
+			return Promise.resolve([]);
+		});
+		mocks.txExecute.mockResolvedValue({});
+
+		await deleteArticle({ data: 7 });
+
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+			{ kind: "moed", id: 3, slug: "פסח" },
+		]);
+	});
+
 	it("carries the destroyed coverage spans after a coverage replace", async () => {
 		mocks.txExecute.mockResolvedValue({});
 		mocks.txQuery.mockResolvedValue([

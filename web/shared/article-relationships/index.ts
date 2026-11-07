@@ -69,6 +69,7 @@ export interface ArticleRelationshipRegistry {
 	freshness: {
 		expectedContentHash: string;
 		expectedCoveringSources: string;
+		expectedMoedIds: string;
 	};
 	relationships: ArticleRelationshipEntry[];
 	/** Referencing tables that are NOT user-editable content relationships. */

@@ -2,6 +2,7 @@ pub mod article;
 pub mod article_relationships;
 pub mod author;
 pub mod dedication;
+pub mod moed;
 pub mod perek;
 pub mod reading_metric;
 pub mod sefer;

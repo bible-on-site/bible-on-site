@@ -1,5 +1,6 @@
 import { getCookie } from "@tanstack/react-start/server";
 import { verifyIdTokenClaims } from "./auth";
+import { skipAuthEnabled } from "./environment.server";
 
 /**
  * The request-scoped editor identity — callable from other server functions
@@ -14,7 +15,7 @@ import { verifyIdTokenClaims } from "./auth";
  * wrapper lives in ./session.
  */
 export async function resolveEditorIdentity(): Promise<{ id: string }> {
-	if (process.env.SKIP_AUTH === "true") {
+	if (skipAuthEnabled()) {
 		return { id: "local" };
 	}
 	const token = getCookie("admin_session");

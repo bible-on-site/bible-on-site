@@ -1,13 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
 import {
-	assertCoveringSourcesExist,
 	type CoveringSource,
 	isCoveringSourceSchemaMissing,
 	normalizeCoveringSources,
+} from "./covering-sources";
+import {
+	assertCoveringSourcesExist,
 	replaceCoveringSources,
 	updateCoverageVerified,
-} from "./covering-sources";
+} from "./covering-sources-store.server";
 import {
 	execute,
 	query,
@@ -17,10 +19,15 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import {
+	loadArticleMoedIds,
+	txReplaceArticleMoadim,
+} from "./moadim-links.server";
 import { recomputeArticleMetrics } from "./reading-metrics";
 import {
 	articleChange,
 	mergeCoveringSpans,
+	moedChange,
 	revalidateWebsite,
 } from "./website-revalidate";
 
@@ -92,6 +99,11 @@ export interface Article {
 	 * review badges; `undefined` when the schema is not deployed.
 	 */
 	covering_count?: number;
+	/**
+	 * The moadim explicitly linked to this article (#3101). `undefined`
+	 * means the moed schema is not deployed — never "linked to nothing".
+	 */
+	moedIds?: number[];
 	content?: string | null;
 	author_name?: string; // Populated when joined with authors table
 }
@@ -116,6 +128,13 @@ export interface ArticleFormData {
 	 */
 	coveringSources?: CoveringSource[];
 	coverageVerified?: boolean;
+	/**
+	 * Article↔moed link semantics (#3101): omitted preserves the stored
+	 * link set; a supplied array (including []) atomically replaces it
+	 * after id validation — the shared relationship contract's `replace`
+	 * semantics for the `moadim` entry.
+	 */
+	moedIds?: number[];
 }
 
 const ARTICLE_COLUMNS =
@@ -250,7 +269,11 @@ export const getArticle = createServerFn({ method: "GET" })
 			throw new Error("Article not found");
 		}
 
-		return { ...article, coveringSources: await loadCoveringSources(id) };
+		return {
+			...article,
+			coveringSources: await loadCoveringSources(id),
+			moedIds: await loadArticleMoedIds(id),
+		};
 	});
 
 // Create article
@@ -267,6 +290,7 @@ export const createArticle = createServerFn({ method: "POST" })
 				: normalizeCoveringSources(data.coveringSources);
 
 		await ensureArticleSearchQueue();
+		const affectedMoadim: { id: number; slug: string }[] = [];
 		const created = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
@@ -297,6 +321,16 @@ export const createArticle = createServerFn({ method: "POST" })
 					conn,
 					result.insertId,
 					data.coverageVerified,
+				);
+			}
+
+			if (data.moedIds !== undefined) {
+				affectedMoadim.push(
+					...((await txReplaceArticleMoadim(
+						conn,
+						result.insertId,
+						data.moedIds,
+					)) ?? []),
 				);
 			}
 
@@ -331,6 +365,11 @@ export const createArticle = createServerFn({ method: "POST" })
 				perekIds: [created.perek_id],
 				authorIds: [created.author_id],
 			}),
+			// One moed change per explicitly-linked moed — those detail pages
+			// now list the new article in their union result.
+			...affectedMoadim.map((moed) =>
+				moedChange({ id: moed.id, slug: moed.slug }),
+			),
 		]);
 		return created;
 	});
@@ -353,6 +392,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 		// The covering rows destroyed by a replace — the website unions them
 		// with the live rows to expire every touched reading unit.
 		let previousCovering: CoveringSource[] = [];
+		const affectedMoadim: { id: number; slug: string }[] = [];
 		const updatedArticle = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
@@ -396,6 +436,13 @@ export const updateArticle = createServerFn({ method: "POST" })
 				await updateCoverageVerified(conn, data.id, data.coverageVerified);
 			}
 
+			if (data.moedIds !== undefined) {
+				affectedMoadim.push(
+					...((await txReplaceArticleMoadim(conn, data.id, data.moedIds)) ??
+						[]),
+				);
+			}
+
 			const updated = await queryArticleRow(
 				(sql, params) => txQueryOne<ArticleRow>(conn, sql, params),
 				data.id,
@@ -426,6 +473,10 @@ export const updateArticle = createServerFn({ method: "POST" })
 					? { coveringSpans: mergeCoveringSpans(previousCovering) }
 					: {}),
 			}),
+			// old ∪ new explicit link set — every touched moed page expires.
+			...affectedMoadim.map((moed) =>
+				moedChange({ id: moed.id, slug: moed.slug }),
+			),
 		]);
 		return updatedArticle;
 	});
@@ -442,6 +493,16 @@ export const deleteArticle = createServerFn({ method: "POST" })
 			[data],
 		);
 		const deletedCovering = (await loadCoveringSources(data)) ?? [];
+		// The article's moed links cascade with the row — capture the moed
+		// slugs now so those detail pages expire their union lists.
+		const deletedMoedIds = (await loadArticleMoedIds(data)) ?? [];
+		const deletedMoeds =
+			deletedMoedIds.length > 0
+				? await query<{ id: number; slug: string }>(
+						`SELECT id, slug FROM tanah_moed WHERE id IN (${deletedMoedIds.map(() => "?").join(",")})`,
+						deletedMoedIds,
+					)
+				: [];
 		await transaction(async (conn) => {
 			// Coverage rows are removed with the article — explicitly (the FK
 			// ON DELETE CASCADE is the backstop) so cleanup does not depend on
@@ -473,6 +534,10 @@ export const deleteArticle = createServerFn({ method: "POST" })
 						? { coveringSpans: mergeCoveringSpans(deletedCovering) }
 						: {}),
 				}),
+				// The cascaded article↔moed links expire the moed union lists.
+				...deletedMoeds.map((moed) =>
+					moedChange({ id: moed.id, slug: moed.slug }),
+				),
 			]);
 		}
 		return { success: true };

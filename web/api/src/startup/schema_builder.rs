@@ -9,8 +9,8 @@ use crate::common::auth::ApiAuth;
 use crate::providers::Database;
 use crate::resolvers::article_relationships_resolver;
 use crate::resolvers::articles_resolver;
-use crate::resolvers::authors_resolver;
 use crate::resolvers::dedications_resolver;
+use crate::resolvers::moed_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
@@ -25,8 +25,8 @@ use crate::services::article_search::ArticleSearchIndex;
 pub struct QueryRoot(
     article_relationships_resolver::ArticleRelationshipsQuery,
     articles_resolver::ArticlesQuery,
-    authors_resolver::AuthorsQuery,
     dedications_resolver::DedicationsQuery,
+    moed_resolver::MoedQuery,
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
     starter_resolver::StarterQuery,
@@ -41,6 +41,7 @@ pub struct QueryRoot(
 pub struct MutationRoot(
     article_relationships_resolver::ArticleRelationshipsMutation,
     dedications_resolver::DedicationsMutation,
+    moed_resolver::MoedMutation,
     tanahpedia_aliases_resolver::TanahpediaAliasesMutation,
     tanahpedia_family_resolver::TanahpediaFamilyMutation,
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
@@ -50,6 +51,10 @@ pub fn build_schema(
     database: &Database,
     index: &ArticleSearchIndex,
 ) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+    // Introspection policy: `__schema`/`__type` stay enabled. The schema is
+    // public source in this repository and anonymous POST reads are already
+    // permitted, so disabling it would add no protection; access control
+    // stays on mutations via `ApiAuth`.
     Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
@@ -79,6 +84,9 @@ pub async fn graphql_request(
     schema.execute(gql_req.into_inner().data(auth)).await.into()
 }
 
+/// Development tooling only — `build_app_config` registers this route
+/// exclusively for explicit dev/test profiles; production leaves GET /
+/// unregistered so the root stays a POST-only GraphQL endpoint.
 pub async fn graphql_playground() -> Result<HttpResponse> {
     let source = playground_source(GraphQLPlaygroundConfig::new("/"));
     Ok(HttpResponse::Ok()

@@ -749,7 +749,8 @@ describe("article link proposals server", () => {
 			expect(status.llmEnabled).toBe(true);
 			expect(status.articleApiConfigured).toBe(true);
 			expect(status.supportedKeys).toContain("coveringSources");
-			expect(status.pendingKeys).toContain("moadim");
+			expect(status.supportedKeys).toContain("moadim");
+			expect(status.pendingKeys).toContain("recurringHebrewDate");
 		});
 
 		it("reports the schema as not deployed when ensure fails", async () => {

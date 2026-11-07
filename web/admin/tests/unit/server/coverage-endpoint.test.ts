@@ -97,4 +97,27 @@ describe("/api/dev/coverage", () => {
 		expect(await response.text()).toBe("app");
 		expect(appFetchMock).toHaveBeenCalledOnce();
 	});
+
+	// #3069: MEASURE_COV and SKIP_AUTH are local test tools — a stray flag in
+	// a production deployment must not expose the drain or disable auth.
+	it("does not drain coverage in production even when the flags are set", async () => {
+		vi.stubEnv("MEASURE_COV", "1");
+		vi.stubEnv("NODE_ENV", "production");
+		(globalThis as { __coverage__?: unknown }).__coverage__ = {
+			"src/example.ts": { path: "src/example.ts" },
+		};
+		const { default: entry } = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("http://localhost:3101/api/dev/coverage", {
+				headers: { "x-tsr-serverFn": "true" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect((globalThis as { __coverage__?: unknown }).__coverage__).toEqual({
+			"src/example.ts": { path: "src/example.ts" },
+		});
+		expect(appFetchMock).not.toHaveBeenCalled();
+	});
 });

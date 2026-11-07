@@ -3,7 +3,11 @@
 //! `tanahpedia_entry_revision`, a separate admin workflow; everything here
 //! reads the live tables only and requires no authentication.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock, Mutex},
+    time::{Duration, Instant},
+};
 
 use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
@@ -280,68 +284,63 @@ pub async fn get_category_counts(
         .map(|key| ((*key).to_string(), 0))
         .collect();
 
-    let entity_rows = CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        r#"SELECT e.entity_type AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_entry_entity ee
-           JOIN tanahpedia_entity e ON e.id = ee.entity_id
-           GROUP BY e.entity_type"#,
-        [],
-    ))
-    .all(db.get_connection())
-    .await
-    .map_err(db_error)?;
-
-    let role_rows = CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        r#"SELECT 'PROPHET' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_person_role_prophet pr
-           JOIN tanahpedia_person p ON p.id = pr.person_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
-           UNION ALL
-           SELECT 'KING' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_person_role_king pk
-           JOIN tanahpedia_person p ON p.id = pk.person_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id"#,
-        [],
-    ))
-    .all(db.get_connection())
-    .await
-    .map_err(db_error)?;
-
-    let animal_rows = CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        r#"SELECT ak.kind AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_animal_kind ak
-           JOIN tanahpedia_animal a ON a.id = ak.animal_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
-           GROUP BY ak.kind
-           UNION ALL
-           SELECT ap.purity AS category, COUNT(DISTINCT ee.entry_id) AS cnt
-           FROM tanahpedia_animal_purity ap
-           JOIN tanahpedia_animal a ON a.id = ap.animal_id
-           JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
-           GROUP BY ap.purity"#,
-        [],
-    ))
-    .all(db.get_connection())
-    .await
+    // The four aggregates are independent; run them concurrently so the
+    // request waits for the slowest scan instead of the sum of all four.
+    let (entity_rows, role_rows, animal_rows, place_rows) = tokio::try_join!(
+        CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"SELECT e.entity_type AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_entry_entity ee
+               JOIN tanahpedia_entity e ON e.id = ee.entity_id
+               GROUP BY e.entity_type"#,
+            [],
+        ))
+        .all(db.get_connection()),
+        CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"SELECT 'PROPHET' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_person_role_prophet pr
+               JOIN tanahpedia_person p ON p.id = pr.person_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id
+               UNION ALL
+               SELECT 'KING' AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_person_role_king pk
+               JOIN tanahpedia_person p ON p.id = pk.person_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = p.entity_id"#,
+            [],
+        ))
+        .all(db.get_connection()),
+        CategoryCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            r#"SELECT ak.kind AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_animal_kind ak
+               JOIN tanahpedia_animal a ON a.id = ak.animal_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
+               GROUP BY ak.kind
+               UNION ALL
+               SELECT ap.purity AS category, COUNT(DISTINCT ee.entry_id) AS cnt
+               FROM tanahpedia_animal_purity ap
+               JOIN tanahpedia_animal a ON a.id = ap.animal_id
+               JOIN tanahpedia_entry_entity ee ON ee.entity_id = a.entity_id
+               GROUP BY ap.purity"#,
+            [],
+        ))
+        .all(db.get_connection()),
+        // Places without a linked entry still count as content on the website
+        // (demo / partially populated state).
+        PlaceCountRow::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::MySql,
+            "SELECT COUNT(*) AS c FROM tanahpedia_place",
+            [],
+        ))
+        .all(db.get_connection()),
+    )
     .map_err(db_error)?;
 
     for row in entity_rows.into_iter().chain(role_rows).chain(animal_rows) {
         counts.insert(row.category, row.cnt);
     }
 
-    // Places without a linked entry still count as content on the website
-    // (demo / partially populated state).
-    let place_rows = PlaceCountRow::find_by_statement(Statement::from_sql_and_values(
-        DatabaseBackend::MySql,
-        "SELECT COUNT(*) AS c FROM tanahpedia_place",
-        [],
-    ))
-    .all(db.get_connection())
-    .await
-    .map_err(db_error)?;
     let place_total = place_rows.first().map(|row| row.c).unwrap_or(0);
     if counts.get("PLACE").copied().unwrap_or(0) == 0 && place_total > 0 {
         counts.insert("PLACE".to_string(), place_total);
@@ -530,8 +529,43 @@ pub async fn get_entities_with_entries(
 pub async fn get_today_entities(
     db: &Database,
     month_day: i32,
-) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
+) -> Result<Arc<Vec<TanahpediaEntityWithEntries>>, ServiceError> {
     tracing::info_span!("tanahpedia_entries_service::get_today_entities", %month_day);
+    let now = Instant::now();
+    {
+        let cache = today_entities_cache_entry();
+        if let Some((key, loaded_at, entities)) = cache.as_ref()
+            && *key == month_day
+            && now.duration_since(*loaded_at) < TODAY_ENTITIES_TTL
+        {
+            return Ok(Arc::clone(entities));
+        }
+    }
+    let entities = Arc::new(fetch_today_entities(db, month_day).await?);
+    *today_entities_cache_entry() = Some((month_day, Instant::now(), Arc::clone(&entities)));
+    Ok(entities)
+}
+
+/// One cached "today" result: the whole query is the same for every request
+/// of the same calendar day, so repeat calls in the app share one DB round
+/// trip for a short TTL instead of re-running it per request.
+type TodayEntitiesCache = Option<(i32, Instant, Arc<Vec<TanahpediaEntityWithEntries>>)>;
+
+static TODAY_ENTITIES_CACHE: LazyLock<Mutex<TodayEntitiesCache>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn today_entities_cache_entry() -> std::sync::MutexGuard<'static, TodayEntitiesCache> {
+    TODAY_ENTITIES_CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+const TODAY_ENTITIES_TTL: Duration = Duration::from_secs(300);
+
+async fn fetch_today_entities(
+    db: &Database,
+    month_day: i32,
+) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
     let rows = TodayEntityRow::find_by_statement(Statement::from_sql_and_values(
         DatabaseBackend::MySql,
         r#"SELECT DISTINCT
@@ -1171,7 +1205,7 @@ mod tests {
                 .into_connection(),
         );
 
-        let entities = get_today_entities(&db, 925).await.unwrap();
+        let entities = get_today_entities(&db, 9999).await.unwrap();
 
         assert_eq!(entities.len(), 2);
         assert_eq!(entities[0].entity_type, "PERSON");
@@ -1179,6 +1213,57 @@ mod tests {
         assert_eq!(entities[0].linked_entries[0].unique_name, "מתתיהו-החשמונאי");
         assert_eq!(entities[1].entity_type, "EVENT");
         assert!(entities[1].linked_entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_today_entities_caches_results_per_day() {
+        // Unique month_day values so the shared cache cannot leak between tests.
+        let today = 9801;
+        let tomorrow = 9802;
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("entity_id", "entity-today".into()),
+                        ("entity_name", "מתתיהו".into()),
+                        ("entity_type", "PERSON".into()),
+                        ("entry_id", Value::String(None)),
+                        ("entry_unique_name", Value::String(None)),
+                        ("entry_title", Value::String(None)),
+                    ])] as Vec<BTreeMap<String, Value>>,
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("entity_id", "entity-tomorrow".into()),
+                        ("entity_name", "יהודה".into()),
+                        ("entity_type", "PERSON".into()),
+                        ("entry_id", Value::String(None)),
+                        ("entry_unique_name", Value::String(None)),
+                        ("entry_title", Value::String(None)),
+                    ])] as Vec<BTreeMap<String, Value>>,
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    Vec::<BTreeMap<String, Value>>::new(),
+                ])
+                .into_connection(),
+        );
+
+        let first = get_today_entities(&db, today).await.unwrap();
+        let second = get_today_entities(&db, today).await.unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].entity_name, "מתתיהו");
+        assert!(Arc::ptr_eq(&first, &second));
+
+        // A different day is a cache miss and queries the database.
+        let other_day = get_today_entities(&db, tomorrow).await.unwrap();
+        assert_eq!(other_day.len(), 1);
+        assert_eq!(other_day[0].entity_name, "יהודה");
+
+        // `tomorrow` replaced the cached `today` entry, so going back to
+        // `today` queries again — the third (empty) result set answers it.
+        let back = get_today_entities(&db, today).await.unwrap();
+        assert!(back.is_empty());
+        assert!(!Arc::ptr_eq(&first, &back));
     }
 
     #[tokio::test]

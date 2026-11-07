@@ -36,9 +36,9 @@ describe("getArticleRelationshipDetails", () => {
 
 	it("rejects when the article does not exist", async () => {
 		queryOneMock.mockResolvedValueOnce(null);
-		await expect(getArticleRelationshipDetails({ data: 999 })).rejects.toThrow(
-			"Article not found",
-		);
+		await expect(
+			getArticleRelationshipDetails({ data: 999 }),
+		).rejects.toThrow("Article not found");
 	});
 
 	it("aggregates dedication links and mention annotations", async () => {
@@ -96,22 +96,24 @@ describe("getArticleRelationshipDetails", () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: 7 })
 			.mockResolvedValueOnce({ h: "aa" });
-		queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
-			{
-				id: "ann-2",
-				intended_name: "משה",
-				entity_type: "PERSON",
-				disambiguation: "הור הקדש",
-				confidence: null,
-				acceptance: "held",
-				model_revision: "rev-2",
-				span_start: null,
-				span_end: null,
-				surface: "משה רבנו",
-				content_hash: "d".repeat(64),
-				current_content: 0,
-			},
-		]);
+		queryMock
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([
+				{
+					id: "ann-2",
+					intended_name: "משה",
+					entity_type: "PERSON",
+					disambiguation: "הור הקדש",
+					confidence: null,
+					acceptance: "held",
+					model_revision: "rev-2",
+					span_start: null,
+					span_end: null,
+					surface: "משה רבנו",
+					content_hash: "d".repeat(64),
+					current_content: 0,
+				},
+			]);
 		const details = await getArticleRelationshipDetails({ data: 7 });
 		expect(details.mentionAnnotations?.[0].currentContent).toBe(false);
 	});
@@ -162,8 +164,8 @@ describe("getArticleRelationshipDetails", () => {
 		queryOneMock
 			.mockResolvedValueOnce({ id: 7 })
 			.mockRejectedValueOnce(new Error("connection lost"));
-		await expect(getArticleRelationshipDetails({ data: 7 })).rejects.toThrow(
-			"connection lost",
-		);
+		await expect(
+			getArticleRelationshipDetails({ data: 7 }),
+		).rejects.toThrow("connection lost");
 	});
 });
