@@ -1152,7 +1152,7 @@ describe("Sefer component", () => {
 		});
 
 		it("toggles the tabs from the toolbar through the shared persisted state", () => {
-			saveSeferBookmarkSettings({ placement: "top", upcomingOnly: true });
+			saveSeferBookmarkSettings({ attachment: "pinned" });
 			render(
 				<Sefer
 					perekObj={minimalPerek}
@@ -1167,11 +1167,10 @@ describe("Sefer component", () => {
 
 			fireEvent.click(hide);
 			// One persisted state drives the preference, the toolbar control and
-			// the library flag — and the display options survive the toggle.
+			// the library flag — and the attachment choice survives the toggle.
 			expect(getSeferBookmarkSettings()).toMatchObject({
 				enabled: false,
-				placement: "top",
-				upcomingOnly: true,
+				attachment: "pinned",
 			});
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 
@@ -1203,14 +1202,8 @@ describe("Sefer component", () => {
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 		});
 
-		it("applies stored display preferences to the provider", () => {
-			saveSeferBookmarkSettings({
-				placement: "top",
-				orientation: "parallel",
-				attachment: "pinned",
-				order: "title",
-				upcomingOnly: true,
-			});
+		it("applies the stored attachment over the fixed presentation contract (#2974)", () => {
+			saveSeferBookmarkSettings({ attachment: "pinned" });
 			render(
 				<Sefer
 					perekObj={minimalPerek}
@@ -1220,16 +1213,18 @@ describe("Sefer component", () => {
 				/>,
 			);
 			const p = provider();
-			expect(p.placement).toBe("top");
-			expect(p.orientation).toBe("parallel");
+			// Placement/orientation/order are retired reader constants — only
+			// attachment still flows from the persisted preference.
+			expect(p.placement).toBe("sides");
+			expect(p.orientation).toBe("perpendicular");
+			expect(p.order).toBe("page");
 			expect(p.attachment).toBe("pinned");
-			expect(typeof p.order).toBe("function");
-			// upcomingOnly filters out tabs before the current page; the perek
-			// sits at page 3 so it is still listed from the book's front cover.
+			// The upcoming-only filter is retired too: a tab behind the current
+			// page stays listed (the perek sits at page 3, the reader at 4).
 			expect(
 				p.getBookmarks({
-					currentPageIndex: 3,
-					currentLeafIndex: 1,
+					currentPageIndex: 4,
+					currentLeafIndex: 2,
 					direction: "rtl",
 				}),
 			).toHaveLength(1);

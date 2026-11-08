@@ -235,6 +235,18 @@ describe("perush tag selection and persistence", () => {
 		expect(screen.queryByText(/\d+ פסוקים/)).toBeNull();
 	});
 
+	it("renders chips without a checkmark glyph — selection shows through aria-pressed only (#2994)", async () => {
+		await renderPanel(<SeferPanel {...PROPS} />);
+		const chip = screen.getByRole("button", { name: 'בחירת רש"י' });
+		expect(chip.textContent).not.toContain("✓");
+		expect(chip).toHaveAttribute("aria-pressed", "false");
+		fireEvent.click(chip);
+		await flushAsync();
+		const selected = screen.getByRole("button", { name: 'בחירת רש"י' });
+		expect(selected).toHaveAttribute("aria-pressed", "true");
+		expect(selected.textContent).not.toContain("✓");
+	});
+
 	it("writes toggles to the Tanach-wide default while inheriting", async () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
 		fireEvent.click(screen.getByRole("button", { name: 'בחירת רש"י' }));
